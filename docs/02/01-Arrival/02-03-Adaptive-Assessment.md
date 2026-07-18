@@ -5,161 +5,131 @@
 | Field | Value |
 |--------|-------|
 | Document ID | PD-002.03 |
-| Version | 2.0.0 |
+| Version | 2.1.0 |
 | Status | Approved |
 | Category | World System |
 | Depends On | 02-02 - Arrival Protocol |
-| Related Systems | 02-04 - Transportation, 02-05 - Awakening, 02-20 - Knowledge System, 02-21 - Skill System, 02-41 - Dream System |
+| Related Systems | 02-04 - Transportation, 02-05 - Awakening, 02-20 - Knowledge System, 02-21 - Skill System |
 
 ---
 
 # Purpose
 
-This document defines the Adaptive Assessment, the evaluation performed by the Overseer before every Chronicle begins.
+This document defines the Adaptive Assessment, the conversational evaluation performed by the Overseer during the Arrival Protocol.
 
-Unlike traditional character creation, the Adaptive Assessment does not ask the player to build a character.
+The Adaptive Assessment does not create a character.
 
-Instead, it observes the Incoming Soul through natural conversation in order to establish the opening conditions of the Chronicle and create an initial understanding of the person entering the world.
+It does not determine a profession.
 
-The assessment is observational rather than judgmental.
+It does not assign abilities.
+
+It observes the Incoming Soul before their Chronicle begins.
 
 ---
 
 # Design Philosophy
 
-The Adaptive Assessment should feel like an authentic conversation.
+The Adaptive Assessment should feel like a conversation rather than a system.
 
-The Incoming Soul should never feel like they are completing a questionnaire or configuring a game character.
+The Incoming Soul should never feel like they are completing a questionnaire.
 
-The Overseer is interested in understanding the individual rather than categorizing them.
+The Overseer is attempting to understand the individual, not categorize them.
 
-There are no right answers.
+There are no correct answers.
 
-There are no wrong answers.
+There are no incorrect answers.
 
-Only honest answers.
-
-Every assessment should feel unique.
+Every response provides insight.
 
 ---
 
 # Overview
 
-The Adaptive Assessment is a dynamic conversation that takes place during the Arrival Protocol.
+The Adaptive Assessment is a dynamic conversation between the Overseer and the Incoming Soul.
 
-Questions are generated based on previous responses.
+Questions adapt based on previous responses.
 
-The Overseer adapts naturally, asking follow-up questions whenever additional understanding is needed.
+The conversation develops naturally.
 
-The assessment concludes when sufficient context has been gathered.
+No two assessments should be identical.
 
-Its duration is determined by the conversation itself rather than a fixed number of questions.
-
----
-
-# Objectives
-
-The assessment exists to establish the opening context of a Chronicle.
-
-Information gathered may influence:
-
-- clothing transported from Earth;
-- starting location conditions;
-- environmental context;
-- opening narrative details;
-- symbolic dream imagery;
-- future narrative references.
-
-The assessment must never determine:
-
-- profession;
-- class;
-- attributes;
-- levels;
-- talents;
-- skills;
-- destiny;
-- morality.
-
-Identity is created through living, not through selection.
+The assessment ends when sufficient understanding has been achieved.
 
 ---
 
-# Evaluation Philosophy
+# Purpose of Evaluation
 
-The Overseer observes patterns rather than isolated answers.
+The assessment gathers information about:
 
-Examples include:
+- reasoning patterns;
+- decision-making tendencies;
+- observational habits;
+- communication style;
+- personality tendencies.
 
-- curiosity;
-- caution;
-- adaptability;
-- creativity;
-- patience;
-- resilience;
-- empathy;
-- decisiveness;
-- practicality;
-- willingness to take risks.
-
-These observations exist only within the world's narrative systems.
-
-No values are displayed to the player.
-
-No hidden score determines success.
-
-The assessment simply forms an initial understanding of the Incoming Soul.
+The assessment does not determine destiny.
 
 ---
 
-# Conversation Structure
+# Adaptive Questioning
 
-Every assessment begins with a broad, open-ended question.
+Questions are not selected from a fixed sequence.
 
-Each response determines what should be explored next.
+The Overseer adapts based on:
 
-Questions should feel like a genuine conversation rather than a branching dialogue tree.
+- previous responses;
+- uncertainty;
+- contradictions;
+- incomplete information.
 
-Developers should prioritize natural conversational flow over predetermined sequences.
+A response may lead to:
+
+- deeper questions;
+- clarification;
+- different topics.
 
 ---
 
 # Assessment Length
 
-The Adaptive Assessment does not have a fixed number of questions.
+The Adaptive Assessment does not use a fixed number of questions.
 
-Instead, it follows an adaptive range.
+Recommended range:
 
-Recommended target:
+15-25 questions.
 
-**15–25 questions**
+The exact number depends on the conversation.
 
-The conversation ends naturally once the Overseer has gathered sufficient understanding.
+A thoughtful Incoming Soul may require fewer questions.
 
-Simple and consistent responses may shorten the assessment.
-
-Complex, ambiguous, or contradictory responses may generate additional follow-up questions.
-
-No two assessments should be identical.
+A complex or uncertain response pattern may require more.
 
 ---
 
-# What Is Evaluated
+# Narrative Context
 
-The assessment may observe:
+Information gathered may influence:
 
-- reasoning style;
-- communication style;
-- observational habits;
-- decision-making tendencies;
-- curiosity;
-- consistency between responses.
+- the circumstances surrounding awakening;
+- narrative descriptions;
+- symbolic themes;
+- future interactions.
 
-These observations are descriptive rather than prescriptive.
+The assessment does not control the world.
 
-They do not define the Chronicle.
+The world remains autonomous.
 
-They merely describe its beginning.
+---
+
+# Clothing and Earth Possessions
+
+The assessment may help establish contextual understanding of what the Incoming Soul was wearing before transportation.
+
+However:
+
+The assessment does not grant equipment.
+
+Only physically worn clothing from Earth accompanies transportation.
 
 ---
 
@@ -167,44 +137,43 @@ They merely describe its beginning.
 
 The Adaptive Assessment must never assign:
 
-- professions;
-- occupations;
 - classes;
+- professions;
 - skills;
 - abilities;
-- starting equipment beyond transported clothing;
-- reputation;
+- levels;
+- attributes;
 - relationships;
-- factions;
-- permanent traits.
+- reputation;
+- destiny.
 
-Everything meaningful is earned after awakening.
+A Chronicle is created through action after awakening.
 
 ---
 
-# Narrative Profile
+# Hidden Evaluation
 
-At the conclusion of the assessment, the world creates an internal narrative profile of the Incoming Soul.
+The Overseer observes patterns such as:
 
-This profile exists only to improve future storytelling.
+- curiosity;
+- caution;
+- creativity;
+- patience;
+- resilience;
+- empathy;
+- adaptability.
 
-Possible applications include:
+These observations remain hidden.
 
-- symbolic dreams;
-- recurring themes;
-- contextual narration;
-- personalized dialogue;
-- subtle Overseer observations.
+No score exists.
 
-The profile must never permanently restrict player freedom.
-
-Players remain capable of changing throughout their Chronicle.
+No morality system exists.
 
 ---
 
 # Player Experience
 
-The intended emotional progression is:
+The intended emotional progression:
 
 Curiosity
 
@@ -226,9 +195,9 @@ Anticipation
 
 ↓
 
-Silence
+Awakening
 
-Players should leave the conversation wondering why those questions mattered.
+The Incoming Soul should wonder why the questions mattered.
 
 ---
 
@@ -236,88 +205,68 @@ Players should leave the conversation wondering why those questions mattered.
 
 ## Arrival Protocol
 
-The Adaptive Assessment forms the central portion of the Arrival Protocol.
+The Adaptive Assessment is part of the Arrival Protocol.
 
 ---
 
 ## Transportation
 
-Transportation begins immediately after the conversation concludes.
+Transportation begins after the assessment concludes.
 
 ---
 
 ## Awakening
 
-The information gathered influences the opening circumstances without revealing the underlying system.
-
----
-
-## Dream System
-
-Future dreams may reference themes established during the assessment.
-
-These references should feel symbolic rather than literal.
-
----
-
-## Knowledge System
-
-No knowledge, skills, or abilities are granted during the assessment.
-
-Everything must be learned after awakening.
+The assessment influences context, not destiny.
 
 ---
 
 # Developer Notes
 
-The assessment system should support adaptive dialogue generation.
+The Adaptive Assessment should support conversational evolution.
 
-The implementation may evolve over time.
-
-Possible implementations include:
+Implementation may use:
 
 - handcrafted dialogue;
-- AI-generated conversations;
-- hybrid systems.
+- AI-assisted generation;
+- hybrid approaches.
 
-Regardless of implementation, the experience should always feel personal and conversational.
+Regardless of implementation, the Overseer's personality must remain consistent.
 
 ---
 
 # Edge Cases
 
-Every Chronicle must complete an Adaptive Assessment.
+The assessment:
 
-The assessment cannot be skipped.
+- cannot be skipped;
+- cannot fail;
+- cannot punish answers;
+- cannot reward answers.
 
-The assessment cannot fail.
-
-The assessment cannot directly reward or punish any response.
-
-The conversation should conclude naturally rather than reaching an arbitrary limit.
+It exists only to understand.
 
 ---
 
 # Future Expansion
 
-Future versions may introduce:
+Potential future additions:
 
-- richer conversational memory;
-- symbolic references across multiple Chronicles;
-- deeper narrative personalization;
-- additional contextual dialogue.
+- deeper personality modeling;
+- Chronicle-to-Chronicle symbolic references;
+- advanced conversational memory.
 
-These additions should strengthen immersion while preserving player freedom.
+These systems must never restrict player freedom.
 
 ---
 
 # Final Statement
 
-The Adaptive Assessment does not decide who the Incoming Soul will become.
+The Adaptive Assessment does not decide who an Awakened Soul becomes.
 
-It simply observes who they are at the moment they arrive.
+It only records who they were when they arrived.
 
-Every Chronicle writes the rest of the answer.
+The Chronicle decides everything after.
 
 ---
 
@@ -325,4 +274,4 @@ Every Chronicle writes the rest of the answer.
 
 | Version | Date | Description |
 |----------|------|-------------|
-| 2.0.0 | July 2026 | Rewritten to define the Adaptive Assessment as a dynamic conversational evaluation that creates a narrative profile instead of a character profile. |
+| 2.1.0 | July 2026 | Revised to align with Silent Arrival philosophy and world-first design principles. |
