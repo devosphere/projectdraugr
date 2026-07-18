@@ -5,8 +5,8 @@
 | Field | Value |
 |--------|-------|
 | Document ID | PD-002 |
-| Version | 0.1.0 |
-| Status | Draft |
+| Version | 2.0.0 |
+| Status | Approved |
 | Owner | Project Draugr Development Team |
 | Last Updated | July 2026 |
 
@@ -14,170 +14,253 @@
 
 # Purpose
 
-The Game Design Document (GDD) is the primary gameplay specification for Project Draugr.
+The Game Design Document (GDD) defines every gameplay and world system that governs Project Draugr.
 
-Rather than containing every gameplay mechanic in a single document, this file serves as the master index for the complete design documentation.
+Unlike the Vision Bible, which establishes the philosophy of the project, this document specifies how that philosophy is translated into mechanics, simulation, and player experience.
 
-Each gameplay system is documented in its own file under the `/docs/02/` directory.
+To keep the documentation maintainable, every major system is documented independently under the `/docs/02/` directory.
 
-This modular structure allows systems to evolve independently while maintaining consistency across the project.
+This document serves as the master index and roadmap for the complete design of Project Draugr.
 
 ---
 
 # Relationship to Other Documents
 
-This document should be read after:
+The recommended reading order is:
 
-- `00-Project-Overview.md`
-- `01-Vision-Bible.md`
+```
+README.md
+    ↓
+00 - Project Overview
+    ↓
+01 - Vision Bible
+    ↓
+02 - Game Design Document
+    ↓
+Individual World Systems
+    ↓
+03 - Technical Requirements
+    ↓
+04 - System Architecture
+```
 
-Implementation details are described in:
-
-- `03-Technical-Requirements.md`
-- `04-System-Architecture.md`
+Each document builds upon the understanding established by the previous one.
 
 ---
 
-# Character Lifecycle
+# Design Philosophy
 
-Every character progresses through the following lifecycle.
+Every system described within this document must reinforce the principles defined in the Vision Bible.
+
+When designing or implementing a feature, developers should always ask:
+
+> **"Would this make sense if this world actually existed?"**
+
+Simulation takes priority over convenience.
+
+Logic takes priority over tradition.
+
+Consistency takes priority over spectacle.
+
+---
+
+# World-First Design
+
+Project Draugr is designed from the perspective of the world rather than the player.
+
+The world does not react because the player exists.
+
+Instead, the player enters an already living world and must adapt to it.
+
+Every system should be designed under the assumption that:
+
+- the world existed before the player's arrival;
+- the world continues after the player's death; and
+- the world continues while the player is absent.
+
+---
+
+# Documentation Standards
+
+Every World System document must follow the same structure.
+
+1. Purpose
+2. Design Philosophy
+3. Overview
+4. Core Rules
+5. Gameplay Flow
+6. System Components
+7. Interactions with Other Systems
+8. Player Experience
+9. Developer Notes
+10. Edge Cases
+11. Future Expansion
+
+This structure ensures every document remains implementation-ready while maintaining consistency across the project.
+
+---
+
+# Chronicle Lifecycle
+
+Every Chronicle follows the same lifecycle.
 
 ```
 Earth
-    ↓
-The Observer
-    ↓
+
+↓
+
+The Overseer
+
+↓
+
+Arrival Protocol
+
+↓
+
 Adaptive Assessment
-    ↓
+
+↓
+
 Transportation
-    ↓
+
+↓
+
 Awakening
-    ↓
+
+↓
+
 Observation
-    ↓
+
+↓
+
 Learning
-    ↓
+
+↓
+
 Survival
-    ↓
-Discovery
-    ↓
-Mastery
-    ↓
+
+↓
+
+Civilization
+
+↓
+
 Legacy
-    ↓
+
+↓
+
 Death
-    ↓
+
+↓
+
 The World Continues
 ```
 
-Every gameplay system exists to support one or more stages of this lifecycle.
+Every World System supports one or more stages of this lifecycle.
 
 ---
 
-# Design Principles
+# World Systems
 
-The gameplay systems documented within this section must always uphold the following principles:
-
-- The world exists independently of the player.
-- Actions define identity.
-- Knowledge is progression.
-- Freedom is preferred over scripted outcomes.
-- Consequences should persist whenever practical.
-- AI narrates events but does not determine game state.
-- Every mechanic should create opportunities for emergent storytelling.
+The following documents collectively define Project Draugr.
 
 ---
-
-# Gameplay Systems
 
 ## Part I — Arrival
 
-| ID | Document | Purpose |
-|----|----------|---------|
-| 02.01 | The Observer | Defines the hidden observer system and evaluations. |
-| 02.02 | Adaptive Assessment | Dynamic introduction and personality assessment. |
-| 02.03 | Transportation | Rules governing transportation from Earth. |
-| 02.04 | Awakening | Initial player experience after arrival. |
+These systems govern the beginning of every Chronicle.
+
+| ID | Document |
+|----|----------|
+| 02.01 | The Overseer |
+| 02.02 | Arrival Protocol |
+| 02.03 | Adaptive Assessment |
+| 02.04 | Transportation |
+| 02.05 | Awakening |
 
 ---
 
-## Part II — First Days
+## Part II — The Living World
 
-| ID | Document | Purpose |
-|----|----------|---------|
-| 02.05 | Observation | Looking, examining, sensing the environment. |
-| 02.06 | Player Actions | Natural language action system. |
-| 02.07 | Time System | Time progression and schedules. |
-| 02.08 | Weather System | Environmental conditions. |
-| 02.09 | Survival Needs | Hunger, thirst, fatigue, body condition. |
-| 02.10 | Exploration | Discovery and movement. |
+These systems define how the world exists independently of the player.
+
+| ID | Document |
+|----|----------|
+| 02.06 | Real-Time System |
+| 02.07 | World Continuity System |
+| 02.08 | Weather System |
+| 02.09 | World Structure |
+| 02.10 | Regions |
+| 02.11 | Zones |
+| 02.12 | Locations |
+| 02.13 | Ecosystem |
+| 02.14 | Corruption |
+| 02.15 | World Events |
 
 ---
 
-## Part III — Learning
+## Part III — The Human
 
-| ID | Document | Purpose |
-|----|----------|---------|
-| 02.11 | Knowledge System | Knowledge acquisition and retention. |
-| 02.12 | Skill System | Action-based progression. |
-| 02.13 | Discovery System | First-time discoveries and insights. |
-| 02.14 | Research System | Experimentation and analysis. |
-| 02.15 | Experimentation | Learning through trial and error. |
+These systems govern the player's physical existence within the world.
+
+| ID | Document |
+|----|----------|
+| 02.16 | Observation System |
+| 02.17 | Player Action System |
+| 02.18 | Survival Needs |
+| 02.19 | Health System |
+| 02.20 | Knowledge System |
+| 02.21 | Skill System |
+| 02.22 | Discovery System |
+| 02.23 | Research System |
+| 02.24 | Experimentation System |
 
 ---
 
 ## Part IV — Survival
 
-| ID | Document | Purpose |
-|----|----------|---------|
-| 02.16 | Resources | Materials found in the world. |
-| 02.17 | Inventory System | Item storage and management. |
-| 02.18 | Equipment System | Wearable items and durability. |
-| 02.19 | Crafting System | Creating tools, weapons, and structures. |
-| 02.20 | Shelter System | Protection and resting places. |
-| 02.21 | Farming System | Cultivation and food production. |
-| 02.22 | Hunting System | Tracking and harvesting wildlife. |
-| 02.23 | Fishing System | Aquatic food gathering. |
-| 02.24 | Cooking System | Food preparation and preservation. |
+These systems define how humans survive and shape the world.
+
+| ID | Document |
+|----|----------|
+| 02.25 | Resources |
+| 02.26 | Inventory System |
+| 02.27 | Equipment System |
+| 02.28 | Crafting System |
+| 02.29 | Shelter System |
+| 02.30 | Farming System |
+| 02.31 | Hunting System |
+| 02.32 | Fishing System |
+| 02.33 | Cooking System |
 
 ---
 
-## Part V — The Living World
+## Part V — Civilization
 
-| ID | Document | Purpose |
-|----|----------|---------|
-| 02.25 | World | Global world structure. |
-| 02.26 | Regions | Large geographical divisions. |
-| 02.27 | Zones | Subdivisions within regions. |
-| 02.28 | Locations | Individual explorable places. |
-| 02.29 | Creatures | Wildlife and monsters. |
-| 02.30 | NPC System | Artificial intelligence for inhabitants. |
-| 02.31 | Corruption | Environmental corruption mechanics. |
-| 02.32 | World Events | Dynamic world events. |
-| 02.33 | Ecosystem | Flora, fauna, and ecological simulation. |
+These systems describe society and interaction.
 
----
-
-## Part VI — Society
-
-| ID | Document | Purpose |
-|----|----------|---------|
-| 02.34 | Relationships | Social interactions and trust. |
-| 02.35 | Reputation | How the world perceives the character. |
-| 02.36 | Companions | Allies and followers. |
-| 02.37 | Settlements | Villages and player-built communities. |
-| 02.38 | Trade | Commerce and exchange. |
+| ID | Document |
+|----|----------|
+| 02.34 | Creatures |
+| 02.35 | NPC System |
+| 02.36 | Relationships |
+| 02.37 | Reputation |
+| 02.38 | Companions |
+| 02.39 | Settlements |
+| 02.40 | Trade |
 
 ---
 
-## Part VII — Legacy
+## Part VI — Legacy
 
-| ID | Document | Purpose |
-|----|----------|---------|
-| 02.39 | Dream System | Symbolic dreams and Observer encounters. |
-| 02.40 | Death | Character death and its consequences. |
-| 02.41 | Chronicle System | Recording the history of each life. |
-| 02.42 | World Persistence | Permanent changes across generations. |
+These systems preserve history across generations.
+
+| ID | Document |
+|----|----------|
+| 02.41 | Dream System |
+| 02.42 | Chronicle System |
+| 02.43 | World Persistence |
+| 02.44 | Death |
 
 ---
 
@@ -186,14 +269,58 @@ The gameplay systems documented within this section must always uphold the follo
 The recommended implementation sequence is:
 
 1. Arrival
-2. First Days
-3. Learning
+2. The Living World
+3. The Human
 4. Survival
-5. Living World
-6. Society
-7. Legacy
+5. Civilization
+6. Legacy
 
 Each phase builds upon the systems implemented before it.
+
+---
+
+# Documentation Rules
+
+Every World System must answer the following questions.
+
+- Why does this system exist?
+- What problem does it solve?
+- How does it support the Vision Bible?
+- How does it interact with other systems?
+- What are its governing rules?
+- What happens in exceptional situations?
+- How can it evolve without breaking previous systems?
+
+If these questions cannot be answered, the document is incomplete.
+
+---
+
+# Design Principles
+
+Every World System should satisfy the following principles.
+
+- The world exists independently of the player.
+- Every Chronicle lives only once.
+- Every life leaves a mark.
+- The world never waits.
+- Actions define identity.
+- Knowledge is progression.
+- Preparation is rewarded.
+- Simulation is authoritative.
+- Narrative supports simulation.
+- Mystery should remain mysterious.
+
+---
+
+# Final Statement
+
+Project Draugr is not a collection of gameplay mechanics.
+
+It is the specification of a living world.
+
+Every document within this section should contribute to one illusion:
+
+> **That another world truly exists alongside our own, and that every Chronicle is simply another life lived within it.**
 
 ---
 
@@ -201,4 +328,4 @@ Each phase builds upon the systems implemented before it.
 
 | Version | Date | Description |
 |----------|------|-------------|
-| 0.1.0 | July 2026 | Initial Game Design Document index created. |
+| 2.0.0 | July 2026 | Complete rewrite of the Game Design Document to support the final world-first design philosophy. |
