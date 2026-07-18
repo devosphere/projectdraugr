@@ -1,291 +1,195 @@
 # Project Draugr
 
-> **AI-Driven Emergent Survival RPG**
-
-Version: 0.1.0 Alpha  
-Status: Draft  
-Last Updated: July 2026
+> **Every life leaves a mark.**  
+> *The world remembers. The Overseer never forgets.*
 
 ---
 
-# Overview
+## Overview
 
-Project Draugr is a browser-based AI-driven survival RPG that emphasizes **player freedom**, **emergent storytelling**, and **action-based progression**.
+Project Draugr is a browser-based, persistent survival RPG set in a mysterious world existing parallel to Earth.
 
-Unlike traditional RPGs, Project Draugr contains:
+Players begin as ordinary people from modern-day Earth who are suddenly transported into another universe. There are no chosen heroes, predefined classes, or scripted destinies. Every player arrives with nothing except the clothes they were wearing at the moment of transportation.
 
-- No predefined classes
-- No fixed professions
-- No scripted main quest
-- No chosen hero
+The world does not exist for the player.
 
-Instead, every player begins as an ordinary human from Earth who suddenly awakens in a mysterious apocalyptic world.
-
-Who they become is determined entirely by the choices they make.
+The player becomes part of a world that has existed long before their arrival and will continue long after their death.
 
 ---
 
-# Vision
+## Vision
 
-Project Draugr aims to create a living world where every player's journey is unique.
+Project Draugr aims to create a living world where stories emerge naturally through player decisions, environmental simulation, and the passage of real time.
 
-Players are not guided through a story.
+Rather than following quests or predefined narratives, players create their own Chronicle through survival, exploration, learning, and the consequences of their actions.
 
-Instead, they create one.
+Every Chronicle is unique.
 
-The world reacts to actions rather than scripted events.
-
-Skills are learned through experience.
-
-Identity is earned through repeated behavior.
-
-The player is never told who they should become.
+Every life leaves a permanent mark.
 
 ---
 
-# Core Design Philosophy
+## Core Principles
 
-Project Draugr follows six fundamental principles.
+### One Persistent World
 
-## 1. Freedom Before Story
+Project Draugr contains a single canonical world shared by every Chronicle.
 
-The player should rarely encounter artificial restrictions.
+Mountains do not move.
 
-Whenever technically possible, the game should answer:
+Rivers do not change location.
 
-> "You may try."
+Ancient ruins remain where history placed them.
 
-rather than
-
-> "You cannot."
+Only the state of the world changes over time.
 
 ---
 
-## 2. Actions Define Identity
+### One Chronicle
+
+Each player may have only one active Chronicle.
+
+When a character dies, that Chronicle permanently concludes.
+
+Death cannot be undone.
+
+A new Chronicle begins as another transported human entering the same persistent world.
+
+---
+
+### History Is Permanent
+
+Buildings.
+
+Roads.
+
+Graves.
+
+Journals.
+
+Settlements.
+
+Discoveries.
+
+These remain part of the world's history whenever technically possible.
+
+Future Chronicles may discover evidence left behind by previous ones.
+
+---
+
+### Actions Define Identity
 
 Players never choose:
 
-- Class
-- Profession
-- Skill Tree
+- Classes
+- Professions
+- Backgrounds
+- Skill Trees
 
-Instead, they become those things naturally through gameplay.
+Identity emerges naturally through repeated actions.
 
-Examples:
+A person becomes a farmer by farming.
 
-Repeated Farming
+A builder by building.
 
-↓
+A hunter by hunting.
 
-Farmer
-
-Repeated Hunting
-
-↓
-
-Hunter
-
-Repeated Research
-
-↓
-
-Scholar
-
-Repeated Construction
-
-↓
-
-Builder
+The world recognizes experience—not character creation choices.
 
 ---
 
-## 3. The World Exists Independently
+### Real-Time Continuity
 
-The player is not the center of the universe.
+Project Draugr progresses alongside the real world.
 
-The world existed before them.
+The in-game calendar and clock mirror real-world date and time.
 
-It will continue evolving regardless of their choices.
+The world continues evolving even while players are away.
 
----
+Before leaving, players are responsible for preparing their lives for their absence.
 
-## 4. Consequences Matter
+A well-prepared home may survive weeks.
 
-Meaningful actions should leave lasting effects.
-
-Examples include:
-
-- Destroying forests
-- Saving strangers
-- Building structures
-- Creating settlements
-
-Whenever possible, the world should remember.
+A camp in a dangerous forest may not survive a single night.
 
 ---
 
-## 5. Discovery is Gameplay
+### The Overseer
 
-Information is rarely given freely.
+An unseen entity known only as **The Overseer** silently watches every transported human.
 
-Players learn by:
+The Overseer does not command.
 
-- Experimentation
-- Observation
-- Exploration
-- Failure
+It does not reward.
 
-Knowledge itself is progression.
+It does not punish.
 
----
+It simply observes, remembers, and evaluates humanity through the lives players choose to live.
 
-## 6. The Observer Watches
-
-Throughout the player's journey, an unseen intelligence silently observes.
-
-The Observer:
-
-- never explains itself
-- never gives quests
-- never rewards morality
-
-It simply watches.
+Its true purpose remains unknown.
 
 ---
 
-# Story Premise
+## What Makes Project Draugr Different?
 
-An ordinary person living in the year 2026 suddenly disappears.
-
-The player awakens in an unfamiliar world consumed by corruption.
-
-There is no explanation.
-
-No prophecy.
-
-No destiny.
-
-Only survival.
-
-Unknown to the player, their arrival was not an accident.
+- 🌍 One persistent world shared across every Chronicle.
+- 💀 Permanent death with no save reloading.
+- ⏰ Real-world synchronized time.
+- 🏡 Responsibility-based offline survival.
+- 📖 Emergent storytelling instead of scripted quests.
+- 🧠 Knowledge-driven progression rather than experience levels.
+- 👁 The Overseer silently observing every life.
+- 🪦 Previous Chronicles become part of the world's history.
 
 ---
 
-# MVP Goals
+## Project Philosophy
 
-Version 0.1 aims to validate the core gameplay philosophy.
+Project Draugr is not about saving the world.
 
-Included features:
+It is about living within it.
 
-- Dynamic introduction
-- Adaptive personality assessment
-- Procedural spawn location
-- Survival mechanics
-- Gathering
-- Crafting
-- Equipment
-- Inventory
-- Action-based skills
-- AI narration
-- Save system
+The game asks one question:
 
-Excluded features:
+> **Who do you become when everything familiar is taken away?**
 
-- Multiplayer
-- Magic
-- Kingdom management
-- Large-scale economy
-- Politics
-- Massive world generation
+The answer is never given.
+
+It is discovered through the choices each player makes.
 
 ---
 
-# Technology Stack
+## Documentation
 
-## Frontend
-
-- React
-- TypeScript
-- TailwindCSS
-
-## Backend
-
-- Python
-- FastAPI
-
-## Database
-
-- PostgreSQL
-
-## AI
-
-- OpenAI API (initial implementation)
-
-## Hosting
-
-- Vercel
-- Railway
-- Supabase
-
----
-
-# Repository Structure
-
-```
-projectdraugr/
-
-├── backend/
-├── frontend/
-├── database/
-├── docs/
-├── assets/
-├── tests/
-├── README.md
-```
-
----
-
-# Documentation
+Project documentation is organized under the `/docs` directory.
 
 | Document | Description |
-|-----------|-------------|
-| 00-Project-Overview.md | Project vision and philosophy |
-| 01-Game-Design-Document.md | Complete gameplay design |
-| 02-Technical-Requirements.md | Functional and technical requirements |
-| 03-System-Architecture.md | Software architecture |
-| 04-Gameplay-Systems.md | Gameplay mechanics |
-| 05-World-Lore.md | Lore and world-building |
-| 06-Observer-System.md | Observer design |
-| 07-Database-Design.md | Database schema |
-| 08-API-Specification.md | Backend endpoints |
-| 09-Development-Roadmap.md | Milestones |
-| 10-Coding-Standards.md | Development conventions |
+|----------|-------------|
+| `00-Project-Overview.md` | Executive overview of the project. |
+| `01-Vision-Bible.md` | Creative vision and design philosophy. |
+| `02-Game-Design-Document.md` | Gameplay design index and system references. |
+| `03-Technical-Requirements.md` | Technical requirements and implementation goals. |
+| `04-System-Architecture.md` | High-level software architecture. |
+| `05+` | Additional design and engineering documentation. |
 
 ---
 
-# Development Philosophy
+## Current Status
 
-Every new feature must satisfy three questions before implementation.
+Project Draugr is currently in the **Blueprint Phase**.
 
-1. Does this increase player freedom?
-2. Does this encourage emergent storytelling?
-3. Does this preserve the core philosophy of the game?
-
-If the answer to any question is **No**, the feature should be reconsidered.
+The focus is on designing a cohesive world simulation before gameplay implementation begins.
 
 ---
 
-# Current Development Status
+## License
 
-Current Phase:
+This repository is private.
 
-**Documentation & Planning**
-
-Next Milestone:
-
-**Game Design Document (GDD)**
+All concepts, documentation, artwork, source code, and assets are proprietary and may not be copied, redistributed, or reused without explicit permission from the project owner.
 
 ---
 
-© 2026 Project Draugr
-All Rights Reserved.
+> **Project Draugr**
+>
+> **Every life leaves a mark.**
