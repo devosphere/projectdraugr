@@ -3,530 +3,408 @@
 # 00 - Project Overview
 
 | Field | Value |
-|-------|--------|
+|--------|-------|
 | Document ID | PD-000 |
 | Version | 0.1.0 |
 | Status | Draft |
-| Author | Project Draugr Team |
+| Owner | Project Draugr Development Team |
 | Last Updated | July 2026 |
 
 ---
 
 # Table of Contents
 
-1. Purpose
+1. Introduction
 2. Vision
 3. Mission
-4. Core Philosophy
-5. Design Pillars
-6. Player Experience Goals
-7. Story Premise
-8. Project Scope
-9. Target Audience
-10. High-Level Gameplay Loop
-11. Core Systems
-12. Technology Overview
-13. Development Principles
-14. Milestones
-15. Related Documents
+4. The Ten Commandments
+5. Core Philosophy
+6. Design Pillars
+7. One World Principle
+8. Player Experience
+9. Project Scope
+10. Technical Philosophy
+11. Documentation Structure
+12. Revision History
 
 ---
 
-# 1. Purpose
+# 1. Introduction
 
-This document establishes the vision, philosophy, and high-level direction of Project Draugr.
+Project Draugr is an AI-assisted browser-based survival RPG focused on emergent storytelling.
 
-It serves as the primary reference for every future design and technical decision.
+Rather than delivering a predefined story, Project Draugr provides a persistent world where stories naturally emerge from the player's decisions, the world's simulation, and the passage of time.
 
-If a proposed feature contradicts this document, the feature should be redesigned before implementation.
+Every player begins as an ordinary human transported from Earth into an unfamiliar world.
+
+The player is not the protagonist of the world's story.
+
+They are merely another chapter within it.
 
 ---
 
 # 2. Vision
 
-Project Draugr aims to become an AI-driven survival RPG where every player's story is unique.
+Create a living world that exists independently of any individual player.
 
-Unlike traditional RPGs, the game does not contain:
+The world should continue evolving whether the player succeeds, fails, survives, or dies.
 
-- predefined classes
-- predefined professions
-- predetermined destiny
-- scripted main quest
+The player's objective is not to complete a story.
 
-The player's identity is shaped entirely through actions.
-
-The world is designed to react rather than direct.
+The objective is to live one.
 
 ---
 
 # 3. Mission
 
-To create a living world where players discover who they become instead of choosing who they are.
+Project Draugr exists to explore one question:
 
-Project Draugr seeks to encourage:
+> **Who does a person become when everything familiar is taken away?**
 
-- Curiosity
-- Experimentation
-- Freedom
-- Consequences
-- Discovery
-- Emergent storytelling
+The game should never answer that question.
 
-Every session should produce a different story.
+It should allow the player to answer it through their actions.
 
 ---
 
-# 4. Core Philosophy
+# 4. The Ten Commandments
 
-## 4.1 The World Comes First
+Every feature, mechanic, and line of code should respect these principles.
 
-The world exists independently of the player.
+## I.
+The world comes first.
 
-It has:
+The player exists within the world.
 
-- ecosystems
-- ruins
-- corruption
-- weather
-- creatures
-- history
-
-The player enters an already existing world.
+The world never exists for the player.
 
 ---
 
-## 4.2 Actions Create Identity
+## II.
+Characters are temporary.
 
-Identity is earned.
-
-Never selected.
-
-Examples
-
-Player repeatedly fishes
-
-↓
-
-Fishing improves
-
-↓
-
-Discovers better techniques
-
-↓
-
-Eventually becomes known as a Fisher
-
-The game never asks:
-
-"What class do you want?"
+The world is permanent.
 
 ---
 
-## 4.3 Freedom Before Content
+## III.
+History is permanent.
 
-The player should never feel limited by dialogue options.
-
-Instead of selecting choices from a menu,
-
-the player writes their intentions.
-
-Example
-
-Instead of
-
-> Attack
-
-the player types
-
-> Throw sand into the creature's eyes before running.
-
-The engine interprets intent.
+Every meaningful action should leave evidence whenever technically possible.
 
 ---
 
-## 4.4 Discovery is Progression
+## IV.
+Actions define identity.
 
-Players should learn through:
+Players never choose classes.
 
-- observation
-- experimentation
-- failure
-- exploration
+Players become something through repeated actions.
 
+---
+
+## V.
 Knowledge is progression.
 
----
-
-## 4.5 Consequences Persist
-
-Actions should leave permanent changes whenever practical.
-
-Examples
-
-Destroy bridge
-
-↓
-
-Travel route changes
-
-Save survivor
-
-↓
-
-Future ally
-
-Ignore settlement
-
-↓
-
-Settlement may disappear
+Learning is more valuable than leveling.
 
 ---
 
-## 4.6 The Observer Watches
+## VI.
+Freedom is more important than scripted content.
 
-A mysterious intelligence continuously evaluates the player.
+Whenever possible,
 
-It is never introduced as a god.
+replace
 
-It never explains itself.
+"You cannot."
 
-It appears through dreams, whispers, places, creatures, or ordinary people.
+with
 
-Its purpose is observation.
+"You may try."
 
 ---
 
-# 5. Design Pillars
+## VII.
+Consequences create stories.
 
-Every feature should strengthen at least one of these pillars.
+Success and failure should both produce meaningful outcomes.
+
+---
+
+## VIII.
+The Observer watches.
+
+The Observer never commands.
+
+---
+
+## IX.
+Artificial Intelligence narrates.
+
+The simulation decides reality.
+
+---
+
+## X.
+Every mechanic must create stories.
+
+If a mechanic does not encourage memorable experiences,
+
+it should be reconsidered.
+
+---
+
+# 5. Core Philosophy
+
+Project Draugr rejects traditional RPG conventions.
+
+There are no:
+
+- Classes
+- Professions
+- Skill Trees
+- Main Quests
+- Chosen Heroes
+
+Instead,
+
+the player's identity naturally emerges through interaction with the world.
+
+The simulation determines consequences.
+
+The AI transforms those consequences into immersive storytelling.
+
+---
+
+# 6. Design Pillars
+
+Every feature should strengthen one or more of these pillars.
 
 ## Freedom
 
-Players choose their own objectives.
-
----
-
-## Immersion
-
-Minimal game-like interfaces.
-
-The world should feel believable.
-
----
-
-## Consistency
-
-Rules should remain predictable.
-
-Players should understand outcomes over time.
-
----
-
-## Replayability
-
-Every new game should create a different story.
+Players create their own objectives.
 
 ---
 
 ## Emergence
 
-Interesting stories should arise naturally from systems.
-
-Not scripted events.
+Stories arise from interacting systems rather than scripted events.
 
 ---
 
-# 6. Player Experience Goals
+## Persistence
 
-The player should feel:
-
-Lost
-
-↓
-
-Curious
-
-↓
-
-Hopeful
-
-↓
-
-Confident
-
-↓
-
-Responsible
-
-↓
-
-Attached to their story
-
-The emotional journey matters more than winning.
+The world remembers.
 
 ---
 
-# 7. Story Premise
+## Discovery
 
-An ordinary person from Earth suddenly disappears.
-
-No warning.
-
-No explanation.
-
-They awaken in an unfamiliar world corrupted by unknown forces.
-
-The player has only the clothes they wore during the moment of transportation.
-
-Everything else must be earned.
-
-Unknown to the player,
-
-their arrival was intentionally orchestrated by an unseen Observer.
+Knowledge must be earned.
 
 ---
 
-# 8. Initial Assessment
+## Immersion
 
-Before awakening,
-
-the player experiences darkness.
-
-A mysterious voice begins asking questions.
-
-The questions are adaptive.
-
-Each answer influences the next question.
-
-The assessment determines:
-
-- personality tendencies
-- starting clothing
-- probable spawn conditions
-- narrative flavor
-
-The player never sees the calculated values.
+The interface should disappear behind the experience.
 
 ---
 
-# 9. Core Gameplay Loop
+## Replayability
 
-Observe surroundings
-
-↓
-
-Think
-
-↓
-
-Perform action
-
-↓
-
-World simulation updates
-
-↓
-
-AI narrates result
-
-↓
-
-Experience gained
-
-↓
-
-Skills improve
-
-↓
-
-New opportunities appear
-
-↓
-
-Repeat
+Each new character should produce a different life story within the same world.
 
 ---
 
-# 10. Core Systems
+# 7. One World Principle
 
-Project Draugr is composed of several interconnected systems.
+Project Draugr contains only one canonical world.
 
-- World Simulation
+New games do not generate new maps.
+
+Instead,
+
+every new character begins somewhere different within the same persistent world.
+
+The geography remains constant.
+
+Examples
+
+- Mountains remain in place.
+- Rivers follow the same paths.
+- Ancient ruins never relocate.
+- Regions maintain their identities.
+
+Only the state of the world changes.
+
+Examples
+
+- Trees grow and are cut.
+- Buildings collapse and are rebuilt.
+- Settlements expand or disappear.
+- Ecosystems evolve.
+
+The world itself becomes a persistent character.
+
+---
+
+# 8. Player Experience
+
+The intended emotional progression is:
+
+Confusion
+
+↓
+
+Curiosity
+
+↓
+
+Experimentation
+
+↓
+
+Discovery
+
+↓
+
+Confidence
+
+↓
+
+Responsibility
+
+↓
+
+Legacy
+
+Winning is not the objective.
+
+Creating a meaningful life is.
+
+---
+
+# 9. Project Scope
+
+## Version 0.1
+
+Objectives
+
+- Dynamic introduction
+- Adaptive assessment
+- Persistent world
 - Survival
-- Time
-- Weather
+- Skills through actions
 - Crafting
-- Construction
-- Inventory
-- Equipment
+- AI narration
+- Observer encounters
+- Saving
+
+Not Included
+
+- Multiplayer
+- Kingdom management
+- Magic
+- Politics
+- Large-scale economy
+
+---
+
+# 10. Technical Philosophy
+
+Project Draugr separates simulation from narration.
+
+Simulation Engine
+
+Responsible for:
+
+- World state
+- NPCs
+- Time
+- Items
 - Skills
-- Knowledge
-- NPC Behavior
-- Observer Evaluation
-- Dreams
-- AI Narration
+- Combat
+- Crafting
+- Persistence
 
-Each system remains independent while interacting with others.
+Artificial Intelligence
 
----
+Responsible for:
 
-# 11. Artificial Intelligence
+- Narration
+- Intent interpretation
+- Dialogue
+- Flavor text
 
-Artificial Intelligence is responsible for:
-
-- interpreting player intent
-- narrating events
-- generating immersive descriptions
-- contextual dialogue
-
-Artificial Intelligence is NOT responsible for:
-
-- world simulation
-- player statistics
-- inventories
-- crafting rules
-- combat calculations
-
-Game logic always belongs to the game engine.
+The AI never owns game state.
 
 ---
 
-# 12. Technology Overview
+# 11. Documentation Structure
 
-Frontend
+PD-000
 
-React
+Project Overview
 
-TypeScript
+↓
 
-TailwindCSS
+PD-001
 
-Backend
+Game Design Document
 
-Python
+↓
 
-FastAPI
+PD-002
 
-Database
+Technical Requirements
 
-PostgreSQL
+↓
 
-AI
+PD-003
 
-OpenAI API
+System Architecture
 
-Deployment
+↓
 
-Frontend
+PD-004
 
-Vercel
+Gameplay Systems
 
-Backend
+↓
 
-Railway
+PD-005
 
-Database
+World Lore
 
-Supabase
+↓
 
----
+PD-006
 
-# 13. Development Principles
+Database Design
 
-Every feature proposal should answer:
+↓
 
-Does this increase freedom?
+PD-007
 
-Does this create interesting stories?
+API Specification
 
-Does this preserve immersion?
+↓
 
-Does this introduce meaningful consequences?
+PD-008
 
-If any answer is "No",
+Development Roadmap
 
-the feature should be reconsidered.
+↓
 
----
+PD-009
 
-# 14. Project Milestones
-
-Phase 1
-
-Planning
-
-Documentation
-
-Architecture
-
----
-
-Phase 2
-
-World Simulation
-
-Player
-
-Inventory
-
-Crafting
-
----
-
-Phase 3
-
-Observer
-
-Dreams
-
-Narration
-
----
-
-Phase 4
-
-Public Alpha
-
-Player Testing
-
-Feedback
-
-Iteration
-
----
-
-# 15. Related Documents
-
-Next Document
-
-01 - Game Design Document
-
-Future Documents
-
-02 - Technical Requirements
-
-03 - System Architecture
-
-04 - Gameplay Systems
-
-05 - World Lore
-
-06 - Observer System
-
-07 - Database Design
-
-08 - API Specification
-
-09 - Development Roadmap
-
-10 - Coding Standards
+Coding Standards
 
 ---
 
 # Revision History
 
-| Version | Date | Changes |
-|----------|------|----------|
-| 0.1.0 | July 2026 | Initial document created |
+| Version | Date | Description |
+|----------|------|-------------|
+| 0.1.0 | July 2026 | Initial project blueprint |
