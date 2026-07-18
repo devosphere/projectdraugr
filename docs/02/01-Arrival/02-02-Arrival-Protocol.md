@@ -8,71 +8,84 @@
 | Version | 1.0.0 |
 | Status | Approved |
 | Category | World System |
-| Depends On | 02-01-The-Overseer.md |
-| Related Systems | Adaptive Assessment, Transportation, Awakening, Chronicle System |
+| Depends On | 02-01 - The Overseer |
+| Related Systems | 02-03 - Adaptive Assessment, 02-04 - Transportation, 02-05 - Awakening |
 
 ---
 
 # Purpose
 
-This document defines the Arrival Protocol, the universal process that begins every Chronicle in Project Draugr.
+This document defines the Arrival Protocol, the universal process that governs how every Incoming Soul enters the world of Project Draugr.
 
-The Arrival Protocol governs the transition between Earth and the parallel world, establishing the player's first interaction with the Overseer before their new life begins.
+The Arrival Protocol establishes the transition between Earth and the new world while preserving the mystery surrounding the Overseer and the true nature of the migration.
 
-Every Chronicle follows the same protocol.
+Every Chronicle begins with the Arrival Protocol.
 
-No Chronicle experiences the exact same journey.
+No Chronicle may bypass it.
 
 ---
 
 # Design Philosophy
 
-The Arrival Protocol is not a cinematic introduction.
+The Arrival Protocol is not a tutorial.
 
-It is a metaphysical process.
+It is not a cinematic sequence.
 
-The player should feel uncertain, vulnerable, and unable to distinguish memory from reality.
+It is a universal law of the world.
 
-The purpose of the protocol is to reinforce one idea:
+Players should immediately feel that something impossible has happened.
 
-> Something has happened that cannot be explained.
+The Arrival Protocol exists to establish mystery rather than provide answers.
 
-Players should begin their Chronicle with questions, not answers.
+When it ends, players should understand only one thing:
+
+**There is no going back.**
 
 ---
 
 # Overview
 
-Every transported human passes through the Arrival Protocol exactly once.
+Every Chronicle begins with an ordinary human living somewhere on Earth.
 
-The sequence occurs outside normal space and time.
+At an unknown moment, without warning or explanation, that human loses consciousness.
 
-From the player's perspective, it lasts only moments.
+The individual enters a state outside ordinary space and time.
 
-Its true duration is unknowable.
+Within this state, they become known only as an **Incoming Soul**.
 
-The Arrival Protocol prepares a human consciousness for entry into the world while allowing the Overseer to conduct an initial evaluation.
+The Arrival Protocol begins.
 
-The player never fully remembers the process after awakening.
+During this process:
 
-Only fragments remain.
+- The physical body no longer exists.
+- Time has no meaning.
+- Normal senses cease.
+- Memory becomes fragmented.
+- The Overseer makes first contact.
+- The Adaptive Assessment is conducted.
+
+Once complete, the Incoming Soul is transported into the new world.
 
 ---
 
 # Sequence
 
-Every Arrival Protocol follows the same high-level sequence.
+Every Arrival Protocol follows the same universal sequence.
 
-```
-Earth
-
-↓
-
-Loss of Conscious Awareness
+```text
+Human (Earth)
 
 ↓
 
-Darkness
+Loss of Consciousness
+
+↓
+
+Incoming Soul
+
+↓
+
+Arrival Protocol
 
 ↓
 
@@ -89,78 +102,98 @@ Transportation
 ↓
 
 Awakening
+
+↓
+
+Awakened Soul
 ```
 
-The details within each stage may differ between Chronicles.
+While the overall sequence never changes, every Chronicle experiences a unique journey through it.
 
 ---
 
-# Consciousness
+# Incoming Soul
 
-During the Arrival Protocol:
+An Incoming Soul is the state between earthly existence and awakening in the new world.
 
-- the player retains no physical body;
-- normal senses no longer function;
-- time becomes meaningless;
-- memories become fragmented.
+The term is used only within the project's internal documentation.
 
-The player exists only as awareness.
+Players are never directly shown or told this terminology.
 
-This state ends immediately before transportation.
+At this stage:
 
----
+- Identity still exists.
+- Memories still exist.
+- Personality still exists.
+- The physical body no longer exists.
 
-# Memory
-
-After awakening, most of the Arrival Protocol fades from memory.
-
-Players should remember only:
-
-- isolated words;
-- emotions;
-- sensations;
-- recurring symbols;
-- impossible dreams.
-
-Later encounters with the Overseer may trigger partial recollections.
-
-The complete protocol is never remembered.
+The soul is aware but cannot interact with its surroundings.
 
 ---
 
 # The Overseer's Role
 
-During the Arrival Protocol, the Overseer:
+During the Arrival Protocol, the Overseer performs three responsibilities.
 
-- acknowledges the incoming consciousness;
-- begins observation;
-- initiates the Adaptive Assessment.
+1. Welcome the Incoming Soul.
+2. Begin silent observation.
+3. Initiate the Adaptive Assessment.
 
-The Overseer does not explain the world.
+The Overseer never:
 
-The Overseer does not reveal its identity.
+- explains the world;
+- reveals its identity;
+- promises safety;
+- answers questions truthfully or completely.
 
-The Overseer offers no promises.
+Its purpose is observation.
+
+Not guidance.
+
+---
+
+# Memory
+
+Very little of the Arrival Protocol remains after awakening.
+
+Most memories become fragmented.
+
+Players may later recall:
+
+- isolated words;
+- emotions;
+- symbols;
+- dreams;
+- impossible sensations.
+
+These fragments should feel incomplete.
+
+The Arrival Protocol should never become fully understandable.
 
 ---
 
 # Rules
 
-Every Chronicle must obey the following rules:
+The following rules apply to every Chronicle.
 
 - Every human arrives alone.
-- No earthly possessions accompany the player except the clothing being worn.
-- Modern electronic devices never function after transportation.
-- No Chronicle may bypass the Arrival Protocol.
-- No Chronicle begins directly inside gameplay.
+- Only the clothing worn at the moment of transportation accompanies the Incoming Soul.
+- Modern technology cannot function after transportation.
+- The Arrival Protocol cannot be interrupted.
+- The Arrival Protocol cannot fail.
+- Every Chronicle must complete the Arrival Protocol before gameplay begins.
 
 ---
 
 # Player Experience
 
-The intended emotions are:
+The Arrival Protocol should evoke the following emotions.
 
 Confusion
+
+↓
+
+Silence
 
 ↓
 
@@ -176,78 +209,92 @@ Wonder
 
 ↓
 
-Anticipation
+Acceptance
 
-Players should feel they have crossed an irreversible threshold.
+By the time the player awakens, they should feel that an irreversible event has already occurred.
 
 ---
 
 # Integration With Other Systems
 
+## The Overseer
+
+The Overseer initiates every Arrival Protocol.
+
+---
+
 ## Adaptive Assessment
 
-Immediately follows the Overseer's first contact.
+The Arrival Protocol naturally transitions into the Adaptive Assessment.
+
+The player does not perceive a clear separation between the two.
 
 ---
 
 ## Transportation
 
-Occurs only after the Arrival Protocol concludes.
+Transportation begins immediately after the assessment concludes.
 
 ---
 
 ## Awakening
 
-Represents the player's first conscious experience inside the world.
+The Arrival Protocol ends the moment the Incoming Soul regains consciousness within the new world.
+
+At that moment, the individual becomes known to the inhabitants of the world as an **Awakened Soul**.
 
 ---
 
 # Developer Notes
 
-The Arrival Protocol should remain concise.
+The Arrival Protocol should remain brief.
 
-Its purpose is to establish tone, not provide exposition.
+Its purpose is atmosphere rather than exposition.
 
-The player should begin asking questions within the first few minutes rather than receiving explanations.
+Developers should resist adding unnecessary dialogue or lengthy cinematic sequences.
 
-Future updates may expand presentation while preserving the same sequence.
+The mystery is strongest when the player understands very little.
 
 ---
 
 # Edge Cases
 
-No gameplay mechanics should occur during the Arrival Protocol.
+The Arrival Protocol always occurs.
 
-Players cannot fail.
+It cannot be skipped.
 
-Players cannot die.
+It cannot be repeated.
 
-Players cannot alter the process.
+It cannot be influenced by player choices.
 
-The protocol exists outside ordinary gameplay.
+Players cannot fail, die, or alter the process.
+
+Its outcome is always the beginning of a new Chronicle.
 
 ---
 
 # Future Expansion
 
-Possible additions include:
+Future versions may include:
 
-- symbolic visual sequences;
-- recurring motifs between Chronicles;
-- hidden dialogue variations;
-- subtle foreshadowing of future discoveries.
+- additional dialogue variations;
+- symbolic imagery;
+- recurring motifs;
+- hidden references connecting multiple Chronicles.
 
-These additions should deepen the mystery without explaining it.
+These additions must deepen the mystery without revealing the true nature of the Arrival Protocol or the Overseer.
 
 ---
 
 # Final Statement
 
-Every Chronicle begins in darkness.
+Every Chronicle begins with silence.
 
-Every Chronicle begins with questions.
+Every Chronicle begins with mystery.
 
-Only after the Arrival Protocol ends does another life truly begin.
+The Arrival Protocol is not the beginning of the story.
+
+It is the moment one life ends and another quietly begins.
 
 ---
 
@@ -255,4 +302,4 @@ Only after the Arrival Protocol ends does another life truly begin.
 
 | Version | Date | Description |
 |----------|------|-------------|
-| 1.0.0 | July 2026 | Initial Arrival Protocol World System. |
+| 1.0.0 | July 2026 | Initial implementation of the Arrival Protocol World System. |
