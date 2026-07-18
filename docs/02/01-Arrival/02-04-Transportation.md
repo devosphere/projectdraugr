@@ -5,7 +5,7 @@
 | Field | Value |
 |--------|-------|
 | Document ID | PD-002.04 |
-| Version | 1.0.0 |
+| Version | 2.0.0 |
 | Status | Approved |
 | Category | World System |
 | Depends On | 02-03 - Adaptive Assessment |
@@ -15,13 +15,13 @@
 
 # Purpose
 
-This document defines the Transportation System, the universal process by which an Incoming Soul transitions from Earth into the world of Project Draugr.
+This document defines the Transportation System, the process through which an Incoming Soul transitions from the Arrival Protocol into the world of Project Draugr.
 
-Transportation is one of the world's immutable laws.
+Transportation represents the boundary between two realities.
+
+It is one of the universe's immutable laws.
 
 Every Chronicle undergoes transportation exactly once.
-
-The process itself is intentionally beyond human understanding.
 
 ---
 
@@ -29,234 +29,312 @@ The process itself is intentionally beyond human understanding.
 
 Transportation should remain mysterious.
 
-The game should define its rules without explaining its true mechanism.
+The world defines the consequences and rules of transportation, but not its true mechanism.
 
-Players should know **what happens**, but never fully understand **how** or **why** it happens.
+The purpose of transportation is not spectacle.
 
-Mystery is a permanent part of the world, not a puzzle intended to be solved.
+There are:
+
+- no portals;
+- no visible energy;
+- no supernatural announcement;
+- no interruption of the world.
+
+The transition happens beyond ordinary perception.
+
+The only experience that matters is awakening.
 
 ---
 
 # Overview
 
-Transportation occurs immediately after the Adaptive Assessment concludes.
+Transportation occurs after the Adaptive Assessment concludes.
 
-The Incoming Soul is transferred into a physical body within the parallel world.
+The Incoming Soul transitions into a physical existence within the new world.
 
-The transition is instantaneous from the player's perspective.
+The process itself is not experienced directly.
 
-No loading screens, countdowns, or visible transition effects should interrupt the experience.
+From the Incoming Soul's perspective, awareness moves from the Arrival Protocol into awakening.
 
-The next conscious moment is awakening.
+No reliable measurement exists for the duration of transportation.
 
----
+It may feel instantaneous.
 
-# Universal Rules
+It may feel endless.
 
-Transportation follows the same universal rules for every Chronicle.
-
-## Rule I — Every Arrival Is Individual
-
-Every Incoming Soul arrives alone.
-
-No two people are transported together.
+The truth remains unknown.
 
 ---
 
-## Rule II — Only Worn Clothing Travels
+# Universal Laws
+
+Transportation follows fundamental rules that apply to every Chronicle.
+
+---
+
+# Law I — Individual Arrival
+
+Every Incoming Soul arrives independently.
+
+No two Incoming Souls share the same transportation event.
+
+No individual can observe another's transportation.
+
+---
+
+# Law II — No Physical Transportation of Earth Objects
 
 Only clothing physically worn at the moment of transportation accompanies the Incoming Soul.
 
-Examples include:
+Examples:
 
-- hats;
+Allowed:
+
 - shirts;
-- jackets;
 - pants;
-- belts;
+- jackets;
+- shoes;
+- hats;
 - gloves;
-- footwear;
-- accessories being worn.
+- worn accessories.
 
-Objects being carried, held, or stored elsewhere remain on Earth.
+Not allowed:
+
+- bags;
+- carried objects;
+- stored belongings;
+- vehicles;
+- electronic devices being held;
+- items located elsewhere.
+
+The world receives the person, not their possessions.
 
 ---
 
-## Rule III — Modern Technology Becomes Inert
+# Law III — Modern Technology Does Not Function
 
-Objects transported from Earth retain their physical form but lose any functionality that depends on modern technology.
+Objects transported from Earth retain their physical existence but lose functionality dependent on modern infrastructure.
 
-Examples include:
+Examples:
 
-- mobile phones;
+- smartphones;
 - smart watches;
-- wireless earphones;
-- digital watches;
-- electronic keys.
+- wireless devices;
+- electronic payment cards.
 
-These items become ordinary objects unless repurposed through future gameplay.
+These objects become ordinary physical items.
 
----
-
-## Rule IV — No Duplicate Existence
-
-Transportation never creates copies.
-
-The Incoming Soul exists in only one place.
-
-The previous earthly existence permanently ceases.
+Their future value depends entirely on how an Awakened Soul uses them.
 
 ---
 
-## Rule V — Every Arrival Is Unique
+# Law IV — No Duplicate Existence
 
-No two Chronicles begin in exactly the same circumstances.
+Transportation does not create a copy of an individual.
 
-Initial surroundings are determined by world conditions and the Adaptive Assessment.
+The Incoming Soul continues as a single existence.
 
-The system should maximize variety while remaining believable.
-
----
-
-# Spawn Principles
-
-Transportation places the Incoming Soul into an existing location within the world.
-
-Spawn locations must satisfy the following principles.
-
-- They already exist within the world.
-- They are not generated specifically for the player.
-- They follow the same environmental rules as every other location.
-- They may be safe, neutral, or dangerous.
-- They must always be survivable through rational decision-making.
-
-The world does not guarantee comfort.
-
-Only possibility.
+There is no alternate version created within the new world.
 
 ---
 
-# Environmental Context
+# Law V — The World Does Not Wait
 
-Transportation considers existing world conditions.
+Transportation does not pause or alter the world.
 
-Examples include:
+The world continues according to its own rules.
 
-- current season;
+During transportation:
+
+- time continues;
+- weather continues;
+- creatures continue their behavior;
+- civilizations continue their activities.
+
+The world does not prepare for an arrival.
+
+---
+
+# The Law of Silent Arrival
+
+The exact moment an Incoming Soul enters the world cannot be perceived by any living being.
+
+No creature witnesses the arrival itself.
+
+No magical disturbance occurs.
+
+No environmental reaction happens.
+
+No signal announces a new arrival.
+
+The world simply continues.
+
+Only after consciousness returns does the individual become an Awakened Soul.
+
+To everyone else, the Awakened Soul is simply someone who already exists within the world.
+
+---
+
+# Awakening Location
+
+Transportation does not create a new location.
+
+Every Awakened Soul regains consciousness in a place that already existed.
+
+This location is known as the Awakening Location.
+
+The Awakening Location:
+
+- already existed before arrival;
+- follows normal world rules;
+- is affected by current world conditions;
+- may be safe or dangerous;
+- provides no guaranteed protection.
+
+The world does not place an Awakened Soul somewhere convenient.
+
+It places them somewhere possible.
+
+---
+
+# Environmental Conditions
+
+The Awakening Location is influenced by the current state of the world.
+
+Possible factors include:
+
+- date and time;
 - weather;
-- time of day;
-- local wildlife;
-- nearby settlements;
+- terrain;
+- nearby resources;
 - corruption level;
-- available natural resources.
+- wildlife activity;
+- civilization proximity.
 
-The world is never rearranged to accommodate a new arrival.
+The world is not adjusted for the Awakened Soul.
 
-The Incoming Soul must adapt to the world as it already exists.
+The Awakened Soul must adapt to the world.
 
 ---
 
-# Initial Equipment
+# Initial State
 
-Every Chronicle begins with only:
+Upon transportation completion:
 
-- transported clothing;
-- the physical condition of a healthy adult human.
+The Awakened Soul possesses:
 
-No starter weapons.
+- their transported clothing;
+- their memories from Earth;
+- their physical body;
+- their personal knowledge.
 
-No starter food.
+The Awakened Soul does not possess:
 
-No starter tools.
+- tools;
+- weapons;
+- food;
+- water;
+- skills from a chosen profession;
+- artificial advantages.
 
-No tutorial items.
-
-The world provides opportunity, not gifts.
+Survival begins after awakening.
 
 ---
 
 # Integration With Other Systems
 
+## Arrival Protocol
+
+Transportation is the final stage of the Arrival Protocol.
+
+---
+
 ## Adaptive Assessment
 
-The assessment provides contextual information that influences the opening circumstances without determining the player's future.
+The assessment concludes before transportation begins.
+
+It provides context but does not control the world.
 
 ---
 
 ## Awakening
 
-Transportation concludes the instant consciousness returns.
-
-Awakening is the player's first true interaction with the world.
+Awakening is the first moment the Awakened Soul consciously experiences the new world.
 
 ---
 
 ## Real-Time System
 
-Transportation always occurs according to the world's current date and time.
+Transportation occurs within the continuous timeline of the world.
 
-There are no separate tutorial timelines or isolated starting instances.
+There is no isolated tutorial timeline.
 
 ---
 
 ## World Continuity System
 
-New Chronicles enter a world that has been continuously progressing.
+The world continues existing regardless of arrivals.
 
-Nothing pauses or resets for their arrival.
+New Awakened Souls enter a world with its own history.
 
 ---
 
 # Developer Notes
 
-Transportation should be nearly invisible to the player.
+Transportation should avoid unnecessary visual explanations.
 
-The focus should remain on awakening rather than visual effects.
+Avoid:
 
-Avoid dramatic portals, magical animations, or lengthy cinematic sequences unless they preserve the intended mystery.
+- magical portals;
+- dramatic arrival effects;
+- divine intervention displays;
+- obvious supernatural events.
 
-The player's imagination is often more powerful than explicit explanation.
+The mystery is more valuable than spectacle.
+
+The player should question what happened.
+
+Not immediately understand it.
 
 ---
 
 # Edge Cases
 
-Transportation always succeeds.
+Transportation:
 
-It cannot be interrupted.
+- cannot fail;
+- cannot be interrupted;
+- cannot be reversed;
+- cannot be repeated.
 
-It cannot be repeated.
-
-It cannot be reversed.
-
-No gameplay occurs during transportation.
-
-The player gains control only after awakening.
+The first controllable moment occurs after awakening.
 
 ---
 
 # Future Expansion
 
-Future versions may introduce:
+Possible future additions:
 
-- additional symbolic imagery;
+- historical records of previous arrivals;
 - rare transportation anomalies;
-- subtle variations based on future world events;
-- historical records describing past arrivals.
+- ancient theories about transportation;
+- conflicting beliefs among civilizations.
 
-These additions must never fully explain the mechanism behind transportation.
+These should expand mystery rather than reveal the truth.
 
 ---
 
 # Final Statement
 
-Every Chronicle crosses the boundary between worlds only once.
-
-No path leads back.
-
 The world does not welcome the Incoming Soul.
 
-It simply continues to exist.
+The world does not reject the Incoming Soul.
+
+The world simply continues.
+
+The Awakened Soul opens their eyes.
+
+And the Chronicle begins.
 
 ---
 
@@ -264,4 +342,4 @@ It simply continues to exist.
 
 | Version | Date | Description |
 |----------|------|-------------|
-| 1.0.0 | July 2026 | Initial implementation of the Transportation World System. |
+| 2.0.0 | July 2026 | Revised to establish Silent Arrival, Awakening Locations, and world autonomy principles. |
