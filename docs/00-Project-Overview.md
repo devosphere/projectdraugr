@@ -1,410 +1,270 @@
-# Project Draugr
+# 00 – Project Overview
 
-# 00 - Project Overview
-
-| Field | Value |
-|--------|-------|
-| Document ID | PD-000 |
-| Version | 0.1.0 |
-| Status | Draft |
-| Owner | Project Draugr Development Team |
-| Last Updated | July 2026 |
+> **Project Draugr**
+>
+> *Persistent World Simulation*
 
 ---
 
-# Table of Contents
+# Executive Summary
 
-1. Introduction
-2. Vision
-3. Mission
-4. The Ten Commandments
-5. Core Philosophy
-6. Design Pillars
-7. One World Principle
-8. Player Experience
-9. Project Scope
-10. Technical Philosophy
-11. Documentation Structure
-12. Revision History
+Project Draugr is a browser-based persistent survival RPG that simulates a single evolving world shared across every player.
 
----
+Unlike traditional MMORPGs, Project Draugr contains no predefined human civilization, quest-givers, or player-centric narrative.
 
-# 1. Introduction
+The world exists independently.
 
-Project Draugr is an AI-assisted browser-based survival RPG focused on emergent storytelling.
+Players arrive as ordinary humans transported from modern-day Earth into an ancient world that has existed for countless ages.
 
-Rather than delivering a predefined story, Project Draugr provides a persistent world where stories naturally emerge from the player's decisions, the world's simulation, and the passage of time.
+Human civilization begins only through player actions.
 
-Every player begins as an ordinary human transported from Earth into an unfamiliar world.
-
-The player is not the protagonist of the world's story.
-
-They are merely another chapter within it.
+Every structure, settlement, kingdom, and empire is created by players and permanently becomes part of the world's history.
 
 ---
 
-# 2. Vision
+# Project Goal
 
-Create a living world that exists independently of any individual player.
+The goal of Project Draugr is to create a believable persistent world where history emerges naturally through player interaction with a living simulation.
 
-The world should continue evolving whether the player succeeds, fails, survives, or dies.
+Players are not guided through scripted stories.
 
-The player's objective is not to complete a story.
+Instead, they write their own Chronicle through:
 
-The objective is to live one.
+- Survival
+- Exploration
+- Construction
+- Discovery
+- Cooperation
+- Conflict
+- Adaptation
 
----
-
-# 3. Mission
-
-Project Draugr exists to explore one question:
-
-> **Who does a person become when everything familiar is taken away?**
-
-The game should never answer that question.
-
-It should allow the player to answer it through their actions.
+Every action permanently contributes to the evolution of the world.
 
 ---
 
-# 4. The Ten Commandments
+# Core Identity
 
-Every feature, mechanic, and line of code should respect these principles.
+Project Draugr is fundamentally a:
 
-## I.
-The world comes first.
+- Persistent World Simulator
+- Survival RPG
+- Emergent Storytelling Sandbox
+- Civilization Building Simulation
+- Historical World Archive
 
-The player exists within the world.
+The project is **not** designed around traditional MMORPG conventions such as:
 
-The world never exists for the player.
-
----
-
-## II.
-Characters are temporary.
-
-The world is permanent.
-
----
-
-## III.
-History is permanent.
-
-Every meaningful action should leave evidence whenever technically possible.
+- NPC quest hubs
+- predefined kingdoms
+- scripted progression
+- class systems
+- experience grinding
+- theme park gameplay
 
 ---
 
-## IV.
-Actions define identity.
+# World Structure
 
-Players never choose classes.
+The world contains:
 
-Players become something through repeated actions.
+- Forests
+- Rivers
+- Lakes
+- Mountains
+- Plains
+- Swamps
+- Oceans
+- Wildlife
+- Monsters
+- Ancient ruins
+- Forgotten civilizations
+- Dungeons
+- Dangerous regions
+- Natural resources
 
----
+No living human civilization exists when players first enter the world.
 
-## V.
-Knowledge is progression.
-
-Learning is more valuable than leveling.
-
----
-
-## VI.
-Freedom is more important than scripted content.
-
-Whenever possible,
-
-replace
-
-"You cannot."
-
-with
-
-"You may try."
+The environment is alive, ancient, and continuously evolving.
 
 ---
 
-## VII.
-Consequences create stories.
+# Civilization
 
-Success and failure should both produce meaningful outcomes.
+Every human settlement originates from players.
 
----
+Players build:
 
-## VIII.
-The Observer watches.
+- Camps
+- Farms
+- Roads
+- Bridges
+- Villages
+- Towns
+- Cities
+- Kingdoms
 
-The Observer never commands.
+When civilizations collapse, their remains persist within the world.
 
----
-
-## IX.
-Artificial Intelligence narrates.
-
-The simulation decides reality.
-
----
-
-## X.
-Every mechanic must create stories.
-
-If a mechanic does not encourage memorable experiences,
-
-it should be reconsidered.
+Future players may rediscover them years later.
 
 ---
 
-# 5. Core Philosophy
-
-Project Draugr rejects traditional RPG conventions.
-
-There are no:
-
-- Classes
-- Professions
-- Skill Trees
-- Main Quests
-- Chosen Heroes
-
-Instead,
-
-the player's identity naturally emerges through interaction with the world.
-
-The simulation determines consequences.
-
-The AI transforms those consequences into immersive storytelling.
-
----
-
-# 6. Design Pillars
-
-Every feature should strengthen one or more of these pillars.
-
-## Freedom
-
-Players create their own objectives.
-
----
-
-## Emergence
-
-Stories arise from interacting systems rather than scripted events.
-
----
-
-## Persistence
-
-The world remembers.
-
----
-
-## Discovery
-
-Knowledge must be earned.
-
----
-
-## Immersion
-
-The interface should disappear behind the experience.
-
----
-
-## Replayability
-
-Each new character should produce a different life story within the same world.
-
----
-
-# 7. One World Principle
+# Persistent World
 
 Project Draugr contains only one canonical world.
 
-New games do not generate new maps.
+Its geography never resets.
 
-Instead,
+Only its state evolves.
 
-every new character begins somewhere different within the same persistent world.
+Examples:
 
-The geography remains constant.
+- forests grow
+- rivers flood
+- monsters migrate
+- settlements expand
+- buildings decay
+- roads appear
+- kingdoms collapse
 
-Examples
-
-- Mountains remain in place.
-- Rivers follow the same paths.
-- Ancient ruins never relocate.
-- Regions maintain their identities.
-
-Only the state of the world changes.
-
-Examples
-
-- Trees grow and are cut.
-- Buildings collapse and are rebuilt.
-- Settlements expand or disappear.
-- Ecosystems evolve.
-
-The world itself becomes a persistent character.
+The world remembers every meaningful event whenever technically possible.
 
 ---
 
-# 8. Player Experience
+# Chronicle System
 
-The intended emotional progression is:
+Every player possesses one Chronicle.
 
-Confusion
+Chronicles represent a complete life.
 
-↓
+Death permanently concludes that Chronicle.
 
-Curiosity
+A new player—or a returning player after death—begins a completely new Chronicle as another transported human.
 
-↓
+History continues.
 
-Experimentation
-
-↓
-
-Discovery
-
-↓
-
-Confidence
-
-↓
-
-Responsibility
-
-↓
-
-Legacy
-
-Winning is not the objective.
-
-Creating a meaningful life is.
+The world does not reset.
 
 ---
 
-# 9. Project Scope
+# Player Progression
 
-## Version 0.1
+Players do not select:
 
-Objectives
+- classes
+- professions
+- races
+- skill trees
 
-- Dynamic introduction
-- Adaptive assessment
-- Persistent world
-- Survival
-- Skills through actions
-- Crafting
-- AI narration
-- Observer encounters
-- Saving
+Identity emerges naturally through repeated actions.
 
-Not Included
+Knowledge replaces experience.
 
-- Multiplayer
-- Kingdom management
-- Magic
-- Politics
-- Large-scale economy
+Practice replaces levels.
+
+Capability replaces character classes.
 
 ---
 
-# 10. Technical Philosophy
+# Simulation First
 
-Project Draugr separates simulation from narration.
+Project Draugr prioritizes world simulation above player progression.
 
-Simulation Engine
+The simulation continuously updates:
 
-Responsible for:
+- ecology
+- weather
+- wildlife
+- monsters
+- structures
+- civilization
+- environmental changes
 
-- World state
-- NPCs
-- Time
-- Items
-- Skills
-- Combat
-- Crafting
-- Persistence
+Players participate in the simulation.
 
-Artificial Intelligence
-
-Responsible for:
-
-- Narration
-- Intent interpretation
-- Dialogue
-- Flavor text
-
-The AI never owns game state.
+They do not control it.
 
 ---
 
-# 11. Documentation Structure
+# Invisible World
 
-PD-000
+Beyond the physical world exist unseen principles that shape existence.
 
-Project Overview
+The Overseer silently observes every Chronicle without intervention.
 
-↓
+Creation and Destruction remain in eternal balance, giving rise to existence itself.
 
-PD-001
+Players are generally unaware of these forces.
 
-Game Design Document
-
-↓
-
-PD-002
-
-Technical Requirements
-
-↓
-
-PD-003
-
-System Architecture
-
-↓
-
-PD-004
-
-Gameplay Systems
-
-↓
-
-PD-005
-
-World Lore
-
-↓
-
-PD-006
-
-Database Design
-
-↓
-
-PD-007
-
-API Specification
-
-↓
-
-PD-008
-
-Development Roadmap
-
-↓
-
-PD-009
-
-Coding Standards
+They experience only the consequences manifested within the world.
 
 ---
 
-# Revision History
+# Technology Philosophy
 
-| Version | Date | Description |
-|----------|------|-------------|
-| 0.1.0 | July 2026 | Initial project blueprint |
+Project Draugr is designed around progressive evolution.
+
+The initial versions focus on building a believable persistent simulation.
+
+Artificial intelligence is considered a future enhancement rather than a prerequisite.
+
+The simulation itself must remain engaging even without advanced AI.
+
+Future iterations may gradually introduce increasingly intelligent autonomous existences while preserving the project's core philosophy.
+
+---
+
+# Development Priorities
+
+The project follows these priorities:
+
+1. Persistent World
+2. World Simulation
+3. Historical Continuity
+4. Emergent Civilization
+5. Knowledge-Based Progression
+6. Intelligent Existence (Future)
+
+Every future system should reinforce these priorities.
+
+---
+
+# Design Principles
+
+Every feature should satisfy the following question:
+
+> **Does this make the world feel more alive without making it revolve around the player?**
+
+If the answer is yes, the feature aligns with Project Draugr.
+
+If not, it should be reconsidered.
+
+---
+
+# Current Development Phase
+
+**Blueprint Phase**
+
+Current objectives:
+
+- Finalize creative vision.
+- Finalize gameplay systems.
+- Design persistent simulation architecture.
+- Define technical implementation.
+- Establish MVP scope.
+
+Implementation begins only after the simulation design is cohesive.
+
+---
+
+# Long-Term Vision
+
+Project Draugr is intended to evolve for many years.
+
+The project ultimately aims to become a living world where every Chronicle permanently contributes to a shared history.
+
+Technology will continue improving.
+
+The world's philosophy will not.
+
+> **Every life leaves a mark.**
