@@ -1,357 +1,376 @@
-# Project Draugr
+# 01 – Vision Bible
 
-# 01 - Vision Bible
-
-| Field | Value |
-|--------|-------|
-| Document ID | PD-001 |
-| Version | 2.0.0 |
-| Status | Approved |
-| Owner | Project Draugr Development Team |
-| Last Updated | July 2026 |
+> **Project Draugr**
+>
+> *Every life leaves a mark.*
 
 ---
 
-# Motto
+# Purpose
 
-> **Every life leaves a mark.**
+This document defines the immutable creative vision of Project Draugr.
 
-> *The world remembers. The Overseer never forgets.*
+Every future design decision, gameplay system, technical implementation, and content expansion must remain faithful to the principles documented here.
 
----
+Technology may evolve.
 
-# Table of Contents
-
-1. Purpose
-2. Vision
-3. Mission
-4. The Core Question
-5. World Philosophy
-6. Player Philosophy
-7. The Seven Pillars
-8. The Emotional Journey
-9. Anti-Goals
-10. Definition of Success
-11. Final Statement
+The vision must not.
 
 ---
 
-# 1. Purpose
+# Vision Statement
 
-The Vision Bible defines the philosophy of Project Draugr.
+Project Draugr is a persistent world simulation where human civilization begins with the players.
 
-It exists to ensure every gameplay mechanic, software system, narrative decision, artistic direction, and technical implementation contributes toward a single creative vision.
+The world existed long before humanity arrived.
 
-Whenever implementation conflicts with vision, the vision takes priority.
+It will continue existing long after every Chronicle has ended.
 
-Every contributor should understand this document before contributing to the project.
+Players are not heroes.
 
----
+They are not chosen.
 
-# 2. Vision
+They are ordinary humans suddenly transported into an unknown world where survival, adaptation, and consequence define their existence.
 
-Project Draugr is a persistent browser-based survival RPG that allows players to live another life in a world existing parallel to modern-day Earth.
+The purpose of Project Draugr is not to tell stories.
 
-Players begin as ordinary people unexpectedly transported into an unfamiliar universe.
-
-There are no heroes.
-
-There is no prophecy.
-
-There is no predetermined purpose.
-
-The player is simply another human attempting to survive inside a world that neither needs nor waits for them.
-
-Every Chronicle becomes part of the world's history.
-
-Every death concludes one life and makes room for another.
+It is to create a world where stories naturally emerge.
 
 ---
 
-# 3. Mission
+# The World Is The Protagonist
 
-To build a believable world that continues existing independently of every player.
+Unlike traditional RPGs, Project Draugr is not centered around the player.
 
-The player's objective is not to complete a story.
+The player is only one existence within a much larger world.
 
-The objective is to live one.
+The mountains do not exist because players explore them.
 
-Every mechanic should encourage meaningful experiences rather than optimized gameplay.
+The forests do not exist because players gather wood.
 
----
+The rivers do not flow because players need water.
 
-# 4. The Core Question
+The world exists independently.
 
-Project Draugr explores one philosophical question.
+Players simply become part of it.
 
-> **Who are you when everything that once defined you has been taken away?**
-
-Without your profession.
-
-Without your possessions.
-
-Without your social status.
-
-Without your achievements.
-
-Without modern civilization.
-
-The game never answers this question.
-
-Every Chronicle becomes the player's own answer.
+Every design decision should reinforce this philosophy.
 
 ---
 
-# 5. World Philosophy
+# Humanity Begins With The Player
 
-The world is the primary character.
+Project Draugr contains no existing human civilization.
 
-It existed before the player arrived.
+There are:
 
-It continues after the player dies.
+- no kingdoms
+- no villages
+- no merchants
+- no blacksmiths
+- no quest givers
+- no political factions
 
-The world is not generated for the player.
+Human civilization begins only when transported humans decide to create it.
 
-The player enters an already existing world.
+Every settlement, road, bridge, farm, city, kingdom, and empire originates from player actions.
 
-The geography remains constant.
-
-History accumulates.
-
-Civilizations rise and fall.
-
-Nature changes.
-
-The player participates in history.
-
-They do not become its center.
+Civilization itself is emergent gameplay.
 
 ---
 
-# 6. Player Philosophy
+# The Ancient World
 
-Players never choose who they are.
+Although humanity is absent, the world is not empty.
 
-They discover who they become.
+It contains:
 
-Identity emerges through repeated behavior.
+- forests
+- rivers
+- lakes
+- mountains
+- caves
+- swamps
+- plains
+- oceans
+- wildlife
+- monsters
+- forgotten ruins
+- abandoned structures
+- relics
+- mysterious artifacts
 
-Knowledge creates experience.
+Evidence suggests that intelligent civilizations once existed.
 
-Experience creates mastery.
+Their disappearance remains one of the world's greatest mysteries.
 
-Mastery creates reputation.
+The player is not arriving at the beginning of history.
 
-Reputation becomes legacy.
-
-The game should never force an identity onto the player.
-
----
-
-# 7. The Seven Pillars
-
-## I. The Living World
-
-The world exists independently of every Chronicle.
-
-Everything follows logical rules instead of player convenience.
-
----
-
-## II. One Chronicle
-
-Each player has exactly one active Chronicle.
-
-A Chronicle ends permanently upon death.
-
-History cannot be rewritten.
+They are arriving after countless forgotten ages.
 
 ---
 
-## III. Every Life Leaves a Mark
+# One Persistent World
 
-Meaningful actions should leave permanent evidence whenever technically practical.
+There is only one canonical world.
 
-Buildings.
+Every Chronicle shares this world.
 
-Roads.
+Its geography never resets.
 
-Graves.
+Its history is cumulative.
 
-Journals.
+Its ecosystems continue evolving.
 
-Settlements.
+Buildings remain.
 
-Knowledge.
+Roads remain.
 
-History grows through successive generations.
+Settlements remain.
+
+Graves remain.
+
+Ruins remain.
+
+Whenever technically possible, the world remembers everything players leave behind.
 
 ---
 
-## IV. The World Never Waits
+# One Chronicle
 
-Project Draugr progresses alongside the real world.
+Each player possesses only one active Chronicle.
 
-The game follows the same calendar and clock as Earth.
+Death permanently concludes that Chronicle.
 
-The world continues even while the player is absent.
+There are no save reloads.
+
+No resurrection.
+
+No alternate timelines.
+
+A new Chronicle begins as another transported human entering the same persistent world.
+
+History continues.
+
+---
+
+# Identity Through Action
+
+Project Draugr rejects predefined identities.
+
+Players never choose:
+
+- classes
+- professions
+- races
+- skill trees
+- backgrounds
+
+Identity emerges through repetition.
+
+Those who hunt become hunters.
+
+Those who farm become farmers.
+
+Those who build become builders.
+
+Knowledge replaces experience points.
+
+Practice replaces levels.
+
+The world recognizes capability—not labels.
+
+---
+
+# Persistence Over Progression
+
+Traditional RPG progression focuses on character growth.
+
+Project Draugr focuses on world growth.
+
+The most important progression belongs to the world itself.
+
+Forests mature.
+
+Settlements expand.
+
+Roads connect distant places.
+
+Kingdoms rise.
+
+Kingdoms collapse.
+
+Ruins accumulate.
+
+History grows.
+
+Players contribute to this evolution.
+
+They do not control it.
+
+---
+
+# The Living Simulation
+
+Project Draugr is fundamentally a simulation.
+
+The world continues evolving regardless of player presence.
+
+Wildlife migrates.
+
+Monsters establish territories.
+
+Vegetation spreads.
+
+Resources regenerate.
+
+Weather changes.
+
+Seasons progress.
+
+Civilizations built by players evolve through time.
+
+The player experiences a world already in motion.
+
+---
+
+# Real-Time Continuity
+
+Time within Project Draugr progresses alongside reality.
+
+Real-world date and time define the world's calendar.
 
 Players are responsible for preparing their lives before leaving.
 
-Preparation—not attendance—determines survival.
+Food spoils.
+
+Fires extinguish.
+
+Animals wander.
+
+Structures deteriorate.
+
+A well-managed settlement may thrive.
+
+An abandoned camp may disappear.
+
+The world never pauses.
 
 ---
 
-## V. Actions Define Identity
+# Invisible Existence
 
-There are no classes.
+Not every existence belongs to the physical world.
 
-No professions.
+Beyond ordinary perception exist ancient primordial beings.
 
-No skill trees.
+These entities embody the fundamental principles of existence.
 
-Players become what they consistently do.
+Examples include:
 
-Identity is recognized by the world rather than selected from a menu.
+- Growth
+- Decay
+- Flame
+- Water
+- Silence
+- Memory
+- Balance
+- Entropy
 
----
+They are not gods.
 
-## VI. Knowledge Is Progression
+They are not moral judges.
 
-Observation.
+They do not reward virtue.
 
-Experimentation.
+They do not punish wickedness.
 
-Failure.
+Instead, they influence reality according to the evolving state of the world.
 
-Curiosity.
+Players experience only their effects.
 
-Discovery.
-
-These are the true progression systems.
-
-Knowledge is more valuable than levels.
-
----
-
-## VII. The Overseer
-
-An unseen entity known as the Overseer silently observes every transported human.
-
-The Overseer does not command.
-
-The Overseer does not interfere with ordinary life.
-
-The Overseer does not judge according to human morality.
-
-It simply watches.
-
-Occasionally it evaluates.
-
-Its true intentions remain unknown.
+Their existence remains one of the world's deepest mysteries.
 
 ---
 
-# 8. The Emotional Journey
+# The Overseer
 
-The intended emotional progression is:
+Above every Chronicle exists only one observer.
 
-Confusion
+The Overseer.
 
-↓
+The Overseer never intervenes.
 
-Curiosity
+It never commands.
 
-↓
+It never rescues.
 
-Experimentation
+It never condemns.
 
-↓
+It remembers.
 
-Discovery
+Every Chronicle.
 
-↓
+Every discovery.
 
-Confidence
+Every settlement.
 
-↓
+Every failure.
 
-Responsibility
+Every death.
 
-↓
-
-Attachment
-
-↓
-
-Loss
-
-↓
-
-Legacy
-
-Players should remember the experiences they lived rather than the objectives they completed.
+The true purpose of the Overseer remains unknown.
 
 ---
 
-# 9. Anti-Goals
+# History Is The Greatest Treasure
 
-Project Draugr intentionally avoids:
+The greatest reward in Project Draugr is not equipment.
 
-- Chosen One narratives
-- Main quest dependency
-- Character classes
-- Skill trees
-- Artificial level grinding
-- Save scumming
-- Theme-park world design
-- Daily login rewards
-- Fear of Missing Out (FOMO) mechanics
-- Pay-to-win systems
-- Progress driven by repetitive chores instead of meaningful actions
+It is legacy.
 
-Whenever possible, systems should encourage intrinsic motivation through curiosity, responsibility, and discovery.
+A forgotten cabin.
 
----
+An abandoned journal.
 
-# 10. Definition of Success
+A ruined fortress.
 
-Project Draugr succeeds when players naturally tell stories such as:
+An ancient bridge.
 
-"I spent three evenings preparing my home before leaving for a week."
+A weathered grave.
 
-"I returned to discover my neighbors had protected my farm."
+These become historical artifacts for future Chronicles.
 
-"I found the journal written by one of my previous Chronicles."
+Every player inherits the world created by those before them.
 
-"I survived winter because I finally understood food preservation."
-
-"I built a bridge that travelers still use years later."
-
-These stories should emerge naturally from simulation rather than scripted content.
+Every player leaves the world changed for those who come after.
 
 ---
 
-# 11. Final Statement
+# Design Philosophy
 
-Project Draugr is not about saving the world.
+When designing any feature, always ask:
 
-It is about belonging to one.
+**Does this make the world feel more alive without depending on the player?**
 
-Every Chronicle begins with an ordinary person.
+If the answer is yes, it belongs in Project Draugr.
 
-Every Chronicle ends with history.
+If it merely makes the player stronger, richer, or more convenient while weakening the world's independence, it should be reconsidered.
 
-The world remembers.
-
-The Overseer never forgets.
-
-Every life leaves a mark.
+The world always comes first.
 
 ---
 
-# Revision History
+# Long-Term Vision
 
-| Version | Date | Description |
-|----------|------|-------------|
-| 2.0.0 | July 2026 | Vision Bible rewritten to reflect the final project philosophy and foundational world systems. |
+Project Draugr is designed to evolve over many years.
+
+Its first versions will focus on persistent world simulation.
+
+Future iterations may introduce increasingly intelligent existences, richer ecological systems, deeper civilization simulation, and more sophisticated world interactions.
+
+Regardless of technological evolution, one principle must never change:
+
+> **The world does not exist for the player.**
+
+> **The player becomes part of the world.**
