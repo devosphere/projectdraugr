@@ -1,0 +1,36 @@
+17-History-System.md
+18-UI-UX.md
+19-Multiplayer.md
+20-Future-AI-Existence.md
+
+18-UI-UX.md
+│
+├── 18.1-Main-UI.md
+│   └── Overall browser layout, narration, composer, panels, header
+│
+├── 18.2-Body-HUD.md
+│   └── Physical awareness, survival states, body conditions
+│
+├── 18.3-Equipment-UI.md
+│   └── Body equipment, worn items, held items, physical placement
+│
+├── 18.4-Storage-UI.md
+│   └── Bags, containers, crates, racks, carts, inaccessible storage
+│
+├── 18.5-Crafting-UI.md
+│   └── Recipe discovery, materials, crafting workflow
+│
+├── 18.6-Construction-UI.md
+│   └── Building, structures, placement, maintenance
+│
+├── 18.7-Knowledge-UI.md
+│   └── Player understanding, discoveries, learned information
+│
+├── 18.8-Chronicle-UI.md
+│   └── Personal history, achievements, legacy records
+│
+├── 18.9-Map-UI.md
+│   └── Exploration, discovered geography, mapping limitations
+│
+└── 18.10-Settings-UI.md
+    └── Account, preferences, accessibility
