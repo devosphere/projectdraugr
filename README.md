@@ -5,7 +5,7 @@
 
 ---
 
-## Overview
+# Overview
 
 Project Draugr is a browser-based, persistent survival RPG set in a mysterious world existing parallel to Earth.
 
@@ -17,7 +17,7 @@ The player becomes part of a world that has existed long before their arrival an
 
 ---
 
-## Vision
+# Vision
 
 Project Draugr aims to create a living world where stories emerge naturally through player decisions, environmental simulation, and the passage of real time.
 
@@ -37,11 +37,17 @@ The transported humans are not arriving in an established fantasy civilization.
 
 There are no kingdoms waiting to be ruled.
 
-No villages filled with quest givers.
+No villages.
+
+No towns.
+
+No cities.
 
 No merchants.
 
 No blacksmiths.
+
+No rulers.
 
 No human empires.
 
@@ -62,15 +68,17 @@ Instead, the world is an ancient, living ecosystem containing:
 
 The evidence of intelligent civilizations exists only through ruins, relics, abandoned architecture, and forgotten history.
 
-What destroyed them—or whether they simply disappeared—remains unknown.
+What destroyed them—or whether they simply disappeared—remains one of the world's greatest mysteries.
 
-Human civilization begins again only when transported humans choose to build it.
+Human civilization begins only when transported humans choose to build it.
 
 ---
 
 ## Civilization Is Player-Created
 
 Every settlement within Project Draugr originates from player actions.
+
+Every camp.
 
 Every bridge.
 
@@ -88,11 +96,11 @@ Every empire.
 
 Exists because one or more Chronicles built it.
 
-If civilization flourishes, it is because players made it flourish.
+If civilization flourishes, players created it.
 
 If civilization collapses, the world simply remembers.
 
-Future Chronicles may rediscover forgotten settlements created by players years earlier.
+Future Chronicles may rediscover forgotten settlements built years earlier by players who are long gone.
 
 ---
 
@@ -102,43 +110,49 @@ Project Draugr is not designed around fairness.
 
 Nature is neither cruel nor kind.
 
-The world does not protect players.
+The world does not exist to help the player.
 
-Nor does it deliberately seek to destroy them.
+Nor does it exist to destroy them.
 
-Players survive by understanding the world—not by expecting it to accommodate them.
+The world simply exists.
+
+Players survive only by understanding it.
 
 ---
 
 # Core Principles
 
-### One Persistent World
+## One Persistent World
 
-Project Draugr contains a single canonical world shared by every Chronicle.
+Project Draugr contains a single canonical world shared across every Chronicle.
 
-Mountains do not move.
+Mountains never move.
 
-Rivers do not change location.
+Rivers never change location.
 
 Ancient ruins remain where history placed them.
 
-Only the state of the world changes over time.
+Only the world's state evolves.
 
 ---
 
-### One Chronicle
+## One Chronicle
 
-Each player may have only one active Chronicle.
+Each player may possess only one active Chronicle.
 
 When a character dies, that Chronicle permanently concludes.
 
 Death cannot be undone.
 
+There are no save reloads.
+
 A new Chronicle begins as another transported human entering the same persistent world.
+
+History continues.
 
 ---
 
-### History Is Permanent
+## History Is Permanent
 
 Buildings.
 
@@ -152,13 +166,13 @@ Settlements.
 
 Discoveries.
 
-These remain part of the world's history whenever technically possible.
+These become part of the world's history whenever technically possible.
 
-Future Chronicles may discover evidence left behind by previous ones.
+Future Chronicles inherit the consequences of those who came before them.
 
 ---
 
-### Actions Define Identity
+## Actions Define Identity
 
 Players never choose:
 
@@ -169,17 +183,21 @@ Players never choose:
 
 Identity emerges naturally through repeated actions.
 
-A person becomes a farmer by farming.
+A farmer becomes a farmer through farming.
 
-A builder by building.
+A builder through building.
 
-A hunter by hunting.
+A hunter through hunting.
 
-The world recognizes experience—not character creation choices.
+Knowledge replaces experience points.
+
+Practice replaces levels.
+
+The world recognizes capability—not labels.
 
 ---
 
-### Real-Time Continuity
+## Real-Time Continuity
 
 Project Draugr progresses alongside the real world.
 
@@ -189,9 +207,11 @@ The world continues evolving even while players are away.
 
 Before leaving, players are responsible for preparing their lives for their absence.
 
-A well-prepared home may survive weeks.
+A well-managed settlement may survive weeks.
 
-A camp in a dangerous forest may not survive a single night.
+A poorly prepared camp may not survive a single night.
+
+The world never pauses.
 
 ---
 
@@ -209,56 +229,55 @@ It does not punish.
 
 It does not intervene.
 
-It simply observes, remembers, and preserves every Chronicle.
+It simply observes.
+
+Remembers.
+
+Records.
+
+Every Chronicle.
+
+Every discovery.
+
+Every settlement.
+
+Every failure.
+
+Every death.
 
 Its true purpose remains unknown.
 
 ---
 
-## Primordial Beings
+## The Primordial Principles
 
-Beyond the visible world exist ancient primordial entities.
+Beyond the visible world exist two primordial principles.
 
-They are not gods.
+**Creation**
 
-They are not allies.
+**Destruction**
 
-They are not enemies.
+Whether these are beings, intelligences, forces, or something beyond mortal understanding has never been confirmed.
 
-They embody fundamental aspects of existence itself.
+No player knows they exist.
 
-Examples include concepts such as:
+Most never will.
 
-- Growth
-- Decay
-- Flame
-- Water
-- Silence
-- Memory
-- Balance
-- Entropy
+Creation is not good.
 
-These beings are never directly explained to players.
+Destruction is not evil.
 
-Most players may never know they exist.
+Neither seeks dominance.
 
-They do not judge morality.
+For if either were to completely overcome the other, existence itself would cease.
 
-They do not reward virtue.
+Creation expands existence.
 
-They do not punish evil.
+Destruction renews existence.
 
-Instead, they influence reality according to the changing state of the world.
+The world remains alive only because neither primordial principle ever truly triumphs.
 
-A flourishing forest may strengthen Growth.
-
-Unchecked fires may empower Flame.
-
-The extinction of predators may alter Balance.
-
-Their influence is subtle, systemic, and mysterious.
-
-Players experience only the consequences—not the cause.
+Everything that exists is born from their eternal balance.
 
 ---
 
@@ -268,21 +287,27 @@ The world evolves independently of player presence.
 
 Wildlife migrates.
 
-Monsters expand or retreat.
+Monsters establish territories.
 
-Vegetation spreads or dies.
+Vegetation grows.
 
-Weather patterns shift.
+Vegetation dies.
 
-Settlements rise and fall.
+Weather changes.
 
-Ecosystems respond naturally to accumulated changes.
+Resources regenerate.
 
-Players are participants within this simulation—not its center.
+Civilizations built by players rise and fall.
+
+The simulation never waits for the player.
+
+The player participates within it.
+
+They are never its center.
 
 ---
 
-## What Makes Project Draugr Different?
+# What Makes Project Draugr Different?
 
 - 🌍 One persistent world shared across every Chronicle.
 - 🌲 A living ecosystem without existing human civilization.
@@ -291,22 +316,24 @@ Players are participants within this simulation—not its center.
 - ⏰ Real-world synchronized time.
 - 🏡 Responsibility-based offline survival.
 - 📖 Emergent storytelling instead of scripted quests.
-- 🧠 Knowledge-driven progression rather than experience levels.
-- 👁 The Overseer silently preserving history.
-- 🌌 Invisible primordial forces subtly influencing reality.
+- 🧠 Knowledge-driven progression instead of experience levels.
+- 👁 The Overseer silently preserving every Chronicle.
+- ⚖️ A world sustained by the eternal balance of Creation and Destruction.
 - 🪦 Previous Chronicles permanently shape future ones.
 
 ---
 
-## Project Philosophy
+# Project Philosophy
 
 Project Draugr is not about saving the world.
 
 It is not about becoming the chosen one.
 
+It is not about defeating an ultimate evil.
+
 It is about existing within a world that neither knows nor needs you.
 
-The game asks one question:
+The game asks only one question:
 
 > **Who do you become when everything familiar is taken away?**
 
@@ -317,3 +344,46 @@ It is discovered through the choices each player makes.
 Every life leaves a mark.
 
 The world remembers.
+
+The Overseer never forgets.
+
+---
+
+# Documentation
+
+Project documentation is organized under the `/docs` directory.
+
+| Document | Description |
+|----------|-------------|
+| `00-Project-Overview.md` | Executive overview of the project. |
+| `01-Vision-Bible.md` | Creative vision and design philosophy. |
+| `02-Game-Design-Document.md` | Gameplay systems and mechanics. |
+| `03-Technical-Requirements.md` | Technical requirements and implementation goals. |
+| `04-System-Architecture.md` | High-level software architecture. |
+| `05+` | Additional design and engineering documentation. |
+
+---
+
+# Current Status
+
+Project Draugr is currently in the **Blueprint Phase**.
+
+The immediate objective is to build a believable persistent world simulation.
+
+Artificial intelligence is considered an evolutionary enhancement—not the foundation of the project.
+
+The world must feel alive before it becomes intelligent.
+
+---
+
+# License
+
+This repository is private.
+
+All concepts, documentation, artwork, source code, and assets are proprietary and may not be copied, redistributed, or reused without explicit permission from the project owner.
+
+---
+
+> **Project Draugr**
+>
+> **Every life leaves a mark.**
