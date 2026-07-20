@@ -29,7 +29,88 @@ Every life leaves a permanent mark.
 
 ---
 
-## Core Principles
+# World Philosophy
+
+## The World Exists Without Humanity
+
+The transported humans are not arriving in an established fantasy civilization.
+
+There are no kingdoms waiting to be ruled.
+
+No villages filled with quest givers.
+
+No merchants.
+
+No blacksmiths.
+
+No human empires.
+
+Instead, the world is an ancient, living ecosystem containing:
+
+- Forests
+- Rivers
+- Lakes
+- Mountains
+- Plains
+- Swamps
+- Oceans
+- Wildlife
+- Monsters
+- Ancient ruins
+- Forgotten structures
+- Lost civilizations
+
+The evidence of intelligent civilizations exists only through ruins, relics, abandoned architecture, and forgotten history.
+
+What destroyed them—or whether they simply disappeared—remains unknown.
+
+Human civilization begins again only when transported humans choose to build it.
+
+---
+
+## Civilization Is Player-Created
+
+Every settlement within Project Draugr originates from player actions.
+
+Every bridge.
+
+Every farm.
+
+Every road.
+
+Every village.
+
+Every city.
+
+Every kingdom.
+
+Every empire.
+
+Exists because one or more Chronicles built it.
+
+If civilization flourishes, it is because players made it flourish.
+
+If civilization collapses, the world simply remembers.
+
+Future Chronicles may rediscover forgotten settlements created by players years earlier.
+
+---
+
+## The World Is Indifferent
+
+Project Draugr is not designed around fairness.
+
+Nature is neither cruel nor kind.
+
+The world does not protect players.
+
+Nor does it deliberately seek to destroy them.
+
+Players survive by understanding the world—not by expecting it to accommodate them.
+
+---
+
+# Core Principles
 
 ### One Persistent World
 
@@ -114,7 +195,9 @@ A camp in a dangerous forest may not survive a single night.
 
 ---
 
-### The Overseer
+# Invisible Forces
+
+## The Overseer
 
 An unseen entity known only as **The Overseer** silently watches every transported human.
 
@@ -124,22 +207,94 @@ It does not reward.
 
 It does not punish.
 
-It simply observes, remembers, and evaluates humanity through the lives players choose to live.
+It does not intervene.
+
+It simply observes, remembers, and preserves every Chronicle.
 
 Its true purpose remains unknown.
+
+---
+
+## Primordial Beings
+
+Beyond the visible world exist ancient primordial entities.
+
+They are not gods.
+
+They are not allies.
+
+They are not enemies.
+
+They embody fundamental aspects of existence itself.
+
+Examples include concepts such as:
+
+- Growth
+- Decay
+- Flame
+- Water
+- Silence
+- Memory
+- Balance
+- Entropy
+
+These beings are never directly explained to players.
+
+Most players may never know they exist.
+
+They do not judge morality.
+
+They do not reward virtue.
+
+They do not punish evil.
+
+Instead, they influence reality according to the changing state of the world.
+
+A flourishing forest may strengthen Growth.
+
+Unchecked fires may empower Flame.
+
+The extinction of predators may alter Balance.
+
+Their influence is subtle, systemic, and mysterious.
+
+Players experience only the consequences—not the cause.
+
+---
+
+# Emergent World Simulation
+
+The world evolves independently of player presence.
+
+Wildlife migrates.
+
+Monsters expand or retreat.
+
+Vegetation spreads or dies.
+
+Weather patterns shift.
+
+Settlements rise and fall.
+
+Ecosystems respond naturally to accumulated changes.
+
+Players are participants within this simulation—not its center.
 
 ---
 
 ## What Makes Project Draugr Different?
 
 - 🌍 One persistent world shared across every Chronicle.
+- 🌲 A living ecosystem without existing human civilization.
+- 🏛 Civilization is entirely player-created.
 - 💀 Permanent death with no save reloading.
 - ⏰ Real-world synchronized time.
 - 🏡 Responsibility-based offline survival.
 - 📖 Emergent storytelling instead of scripted quests.
 - 🧠 Knowledge-driven progression rather than experience levels.
-- 👁 The Overseer silently observing every life.
-- 🪦 Previous Chronicles become part of the world's history.
+- 👁 The Overseer silently preserving history.
+- 🌌 Invisible primordial forces subtly influencing reality.
+- 🪦 Previous Chronicles permanently shape future ones.
 
 ---
 
@@ -147,7 +302,9 @@ Its true purpose remains unknown.
 
 Project Draugr is not about saving the world.
 
-It is about living within it.
+It is not about becoming the chosen one.
+
+It is about existing within a world that neither knows nor needs you.
 
 The game asks one question:
 
@@ -157,39 +314,6 @@ The answer is never given.
 
 It is discovered through the choices each player makes.
 
----
+Every life leaves a mark.
 
-## Documentation
-
-Project documentation is organized under the `/docs` directory.
-
-| Document | Description |
-|----------|-------------|
-| `00-Project-Overview.md` | Executive overview of the project. |
-| `01-Vision-Bible.md` | Creative vision and design philosophy. |
-| `02-Game-Design-Document.md` | Gameplay design index and system references. |
-| `03-Technical-Requirements.md` | Technical requirements and implementation goals. |
-| `04-System-Architecture.md` | High-level software architecture. |
-| `05+` | Additional design and engineering documentation. |
-
----
-
-## Current Status
-
-Project Draugr is currently in the **Blueprint Phase**.
-
-The focus is on designing a cohesive world simulation before gameplay implementation begins.
-
----
-
-## License
-
-This repository is private.
-
-All concepts, documentation, artwork, source code, and assets are proprietary and may not be copied, redistributed, or reused without explicit permission from the project owner.
-
----
-
-> **Project Draugr**
->
-> **Every life leaves a mark.**
+The world remembers.
