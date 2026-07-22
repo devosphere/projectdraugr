@@ -1,502 +1,329 @@
-# 10 – Resources
-
-> **Project Draugr**
->
-> *Everything taken from the world comes from somewhere.*
-
----
-
-# Purpose
-
-This document defines the resource system of Project Draugr.
-
-Resources are naturally occurring materials that exist within the world and support survival, construction, crafting, and civilization.
-
-Resources are not generated to satisfy player demand.
-
-They originate from the world's geography, ecology, and natural processes.
-
----
-
-# Design Philosophy
-
-Resources are part of the world.
-
-They are not rewards.
-
-They are not loot.
-
-They are not spawned because players need them.
-
-Players must locate, harvest, transport, preserve, and responsibly use resources.
-
-Scarcity and abundance emerge naturally through the world's simulation.
-
----
-
-# Resource Categories
-
-Resources are organized into the following major groups.
-
----
-
-# Plant Resources
-
-Materials originating from vegetation.
-
-Examples include:
-
-- Logs
-- Branches
-- Sticks
-- Saplings
-- Bark
-- Leaves
-- Vines
-- Grass
-- Reeds
-- Bamboo (region dependent)
-- Fibers
-- Resin
-- Sap
-
-Plant resources naturally regenerate through ecological growth.
-
----
-
-# Stone Resources
-
-Naturally occurring mineral materials.
-
-Examples include:
-
-- Small Stones
-- River Stones
-- Limestone
-- Granite
-- Slate
-- Sandstone
-- Flint
-- Clay
-
-Stone resources regenerate primarily through geological permanence rather than biological growth.
-
-Large stone formations remain essentially permanent.
-
-Loose materials may gradually accumulate through natural processes.
-
----
-
-# Metal Resources
-
-Rare geological resources.
-
-Examples include:
-
-- Iron Ore
-- Copper Ore
-- Tin Ore
-- Silver Ore
-- Gold Ore
-
-Metals should be uncommon and require exploration and extraction.
-
-They are intended to represent significant technological advancement.
-
----
-
-# Soil Resources
-
-Ground materials useful for construction and agriculture.
-
-Examples include:
-
-- Topsoil
-- Clay Soil
-- Sand
-- Gravel
-- Silt
-
-Soil quality varies naturally by region.
-
----
-
-# Water Resources
-
-Water exists in multiple forms.
-
-Examples include:
-
-- Freshwater
-- Spring Water
-- River Water
-- Lake Water
-- Rainwater
-
-Water quality depends upon environmental conditions.
-
-Not every water source is immediately safe to drink.
-
----
-
-# Animal Resources
-
-Resources obtained from wildlife and monsters.
-
-Examples include:
-
-- Meat
-- Fat
-- Bones
-- Antlers
-- Horns
-- Teeth
-- Fur
-- Hide
-- Leather
-- Feathers
-- Tendons
-
-Animal resources require hunting, trapping, scavenging, or natural death.
-
----
-
-# Botanical Resources
-
-Plants collected primarily for specialized uses.
-
-Examples include:
-
-- Herbs
-- Medicinal Plants
-- Flowers
-- Seeds
-- Fruits
-- Nuts
-- Mushrooms
-
-Botanical resources support medicine, cooking, farming, and future alchemy systems.
-
----
-
-# Geological Resources
-
-Unique materials found within specific environments.
-
-Examples include:
-
-- Salt
-- Sulfur
-- Crystal Deposits
-- Obsidian
-- Volcanic Rock
-
-These resources exist only in suitable geographical conditions.
-
----
-
-# Resource Distribution
-
-Resources are distributed according to geography.
-
+10 – Materials
+Project Draugr
+Civilizations are not built from items. They are built from materials.
+
+Purpose
+This document defines the material system used throughout Project Draugr.
+Materials represent raw and processed substances that can be gathered, harvested, refined, transformed, and consumed during crafting and construction.
+Materials are the foundation of every manufactured object.
+Unlike Items, Materials are resources rather than unique world entities.
+Design Philosophy
+Project Draugr distinguishes three different concepts:
+Materials
+Resources used to create physical objects.
 Examples:
+Stone
+Clay
+Timber
+Plant Fiber
+Leather
+Items
+Finished physical objects created from materials.
+Examples:
+Stone Axe
+Wooden Bowl
+Rope
+Backpack
+Spear
+Items are defined in:
+14.2 – Item System
+Infrastructure
+Permanent structures built using items and materials.
+Examples:
+Cabin
+Workshop
+Storage Rack
+Bridge
+Infrastructure is defined in:
+15 – Infrastructure
+Material Lifecycle
+Every material follows a natural progression.
+Natural Resource
+        │
+        ▼
+Gathered Material
+        │
+        ▼
+Processed Material
+        │
+        ▼
+Crafted Item
+        │
+        ▼
+Infrastructure
+Example:
+Tree
 
-Forests provide wood.
+↓
 
-Mountains provide stone and ore.
+Log
 
-Rivers provide freshwater and fish.
+↓
 
-Swamps provide reeds and medicinal plants.
+Prepared Timber
 
-No region should contain every resource.
+↓
 
-Exploration is essential.
+Wooden Plank
 
----
+↓
 
-# Resource Quality
+Workbench
 
-Resources may exist in different qualities.
+↓
 
+Workshop
+Material Categories
+Materials are grouped according to their origin.
+Plant Materials
+Examples:
+Branches
+Logs
+Timber
+Bark
+Leaves
+Grass
+Reeds
+Bamboo
+Plant Fiber
+Cotton
+Hemp
+Flax
+Straw
+Stone Materials
+Examples:
+Rock
+Flint
+Granite
+Limestone
+Sandstone
+Obsidian
+Earth Materials
+Examples:
+Clay
+Mud
+Sand
+Gravel
+Soil
+Animal Materials
+Examples:
+Leather
+Fur
+Bone
+Antler
+Horn
+Sinew
+Tendon
+Feather
+Fat
+Hide
+Teeth
+Shell
+Metal Materials
+Examples:
+Copper Ore
+Iron Ore
+Tin Ore
+Silver Ore
+Gold Ore
+Processed:
+Copper Ingot
+Iron Ingot
+Steel
+Bronze
+Organic Materials
+Examples:
+Resin
+Sap
+Charcoal
+Ash
+Wax
+Pitch
+Textile Materials
+Examples:
+Thread
+Yarn
+Rope
+Cloth
+Linen
+Wool
+Silk
+Liquid Materials
+Examples:
+Fresh Water
+Salt Water
+Oil
+Resin
+Animal Fat
+Material States
+Materials may exist in different processing states.
+Examples:
+Raw
+Log
+Stone
+Clay
+Processed
+Prepared Timber
+Sharpened Stone
+Refined Fiber
+Refined
+Iron Ingot
+Bronze Plate
+Steel Rod
+Manufactured
+Rope
+Cloth
+Leather Sheet
+Material Properties
+Every material possesses physical properties.
+These properties influence crafting, construction, durability, and environmental behavior.
 Examples include:
-
+Weight
+Volume
+Density
+Hardness
+Flexibility
+Brittleness
+Elasticity
+Combustibility
+Water Resistance
+Corrosion Resistance
+Thermal Conductivity
+The exact values are internal simulation data and are not shown directly to players.
+Material Quality
+Materials may vary in quality depending on their source and processing.
+Examples:
 Poor
-
 Common
-
-Fine
-
-Exceptional
-
-Legendary
-
-Quality influences crafting results rather than resource identity.
-
----
-
-# Resource Availability
-
-Resources are classified according to abundance.
-
-## Common
-
-Readily available throughout suitable environments.
-
+Good
+Excellent
+Masterwork
+Quality influences the final result of crafted items.
+Higher-quality materials generally produce higher-quality equipment.
+Material Acquisition
+Materials enter the world through realistic activities.
 Examples:
-
-- sticks
-- grass
-- small stones
-
----
-
-## Uncommon
-
-Require exploration but remain reasonably obtainable.
-
-Examples:
-
-- flint
-- clay
-- medicinal herbs
-
----
-
-## Rare
-
-Require deliberate effort to locate.
-
-Examples:
-
-- high-quality timber
-- metal ores
-- crystals
-
----
-
-## Exceptional
-
-Unique or extremely limited resources.
-
-These should remain uncommon enough to preserve long-term value.
-
----
-
-# Harvesting
-
-Resources require appropriate harvesting methods.
-
-Examples include:
-
-Collecting
-
 Gathering
-
+Branches
+Grass
+Stones
+Clay
+Harvesting
+Trees
+Crops
+Herbs
 Mining
-
-Logging
-
-Digging
-
+Stone
+Ore
+Salt
+Hunting
+Hide
+Bone
+Meat
+Fat
 Fishing
-
-Trapping
-
-Skinning
-
-Harvesting should reflect the physical characteristics of the resource.
-
----
-
-# Regeneration
-
-Different resources regenerate differently.
-
-Plants regrow.
-
-Animals reproduce.
-
-Fish populations recover.
-
-Water cycles naturally.
-
-Trees mature over long periods.
-
-Stone and mountains remain largely permanent.
-
-Resources should regenerate according to believable natural processes.
-
----
-
-# Transportation
-
-Resources possess physical characteristics.
-
-Examples include:
-
-Weight.
-
-Volume.
-
-Length.
-
-Fragility.
-
-Transportation becomes an important survival challenge.
-
-Players must decide:
-
-- what to carry
-- how much to transport
-- what to leave behind
-
----
-
-# Storage
-
-Resources require appropriate storage.
-
-Examples include:
-
-Dry storage.
-
-Covered storage.
-
-Cold storage.
-
-Protected storage.
-
-Poor storage leads to deterioration.
-
-Proper preservation extends usefulness.
-
----
-
-# Resource Degradation
-
-Some resources naturally deteriorate.
-
-Examples include:
-
-Food spoiling.
-
-Wood rotting.
-
-Leather drying.
-
-Seeds losing viability.
-
-Other resources remain essentially permanent.
-
+Fish
+Scales
+Bones
+Salvaging
+Broken Furniture
+Ruins
+Abandoned Structures
+Material Processing
+Raw materials often require refinement before use.
 Examples:
+Log
+↓
 
-Stone.
+Prepared Timber
 
-Metal.
+↓
 
-Clay.
+Wooden Planks
+Plant Fiber
+↓
 
-Degradation encourages continual interaction with the world.
+Twisted Fiber
 
----
+↓
 
-# Human Influence
+Cordage
 
-Player activity alters resource availability.
+↓
 
-Examples include:
+Rope
+Iron Ore
+↓
 
-Deforestation.
+Smelting
 
-Mining.
+↓
 
-Agriculture.
-
-Overhunting.
-
-Overfishing.
-
-Nature gradually responds to these changes.
-
-Resources should never feel infinite.
-
----
-
-# Resource Knowledge
-
-Knowing where resources exist is valuable knowledge.
-
-Players gradually build understanding through:
-
-Exploration.
-
-Observation.
-
-Experience.
-
-Maps.
-
-Journals.
-
-Shared discoveries.
-
-Knowledge itself becomes a valuable resource.
-
----
-
-# Design Principles
-
-Every resource should satisfy the following principles.
-
-## Physical
-
-Resources exist within the world.
-
----
-
-## Persistent
-
-Resources obey natural rules.
-
----
-
-## Meaningful
-
-Every resource has purpose.
-
----
-
-## Regional
-
-Resources belong to specific environments.
-
----
-
-## Finite
-
-Unlimited extraction should not exist.
-
----
-
-## Renewable
-
-Where appropriate, nature replenishes itself over time.
-
----
-
-# Final Principle
-
-Resources are not items waiting to be collected.
-
-They are parts of a living world.
-
-Every log once stood as a tree.
-
-Every stone rested within the earth.
-
-Every meal came from a living creature or growing plant.
-
-Players do not manufacture abundance.
-
-They learn to live within what the world provides.
+Iron Ingot
+Processing requires:
+knowledge
+tools
+workstation
+time
+energy
+Material Consumption
+Crafting and construction consume materials.
+Consumed materials are permanently removed from available resources.
+Example:
+Craft:
+Stone Axe
+Consumes:
+Stone ×1
+Wooden Handle ×1
+Plant Fiber ×2
+After crafting:
+The materials no longer exist as independent resources.
+They become part of the newly created Item.
+Material Recovery
+Destroyed items may return some materials to the world.
+Example:
+Broken Wooden Chair
+Recovered:
+Timber ×2
+Charcoal ×1 (if burned)
+Recovery depends on:
+item condition
+destruction method
+player skill
+available tools
+Recovery is not guaranteed.
+Material Storage
+Materials may exist:
+on the ground
+inside containers
+inside infrastructure
+carried by a Chronicle
+Unlike Items, common materials may be represented as quantities rather than individually tracked entities during the MVP.
+Future versions may optionally support unique material batches where provenance and quality become significant.
+Relationship with Other Systems
+Materials interact with:
+Crafting
+Construction
+Infrastructure
+Item System
+Storage System
+Economy
+Knowledge Progression
+They serve as the foundation for technological advancement.
+Future Expansion
+Future versions may introduce:
+Moisture content
+Grain direction in wood
+Material fatigue
+Aging
+Weathering
+Chemical reactions
+Purity
+Alloy composition
+Biological decay
+Radioactive materials
+Magical materials (if discovered naturally within the world's lore)
+Final Principle
+Materials are not finished products.
+They are the building blocks from which civilizations emerge.
+Every tool, weapon, shelter, document, and machine ultimately begins as a collection of materials shaped through knowledge, labor, and time.

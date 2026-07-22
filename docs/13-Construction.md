@@ -2,7 +2,7 @@
 
 > **Project Draugr**
 >
-> *Civilization begins with the first shelter.*
+> *Construction is the deliberate transformation of the world into civilization.*
 
 ---
 
@@ -10,478 +10,401 @@
 
 This document defines the construction system of Project Draugr.
 
-Construction allows transported humans to reshape small parts of the world through knowledge, labor, and resources.
+Construction allows Chronicles to permanently modify the world by creating infrastructure.
 
-Every structure built becomes a permanent contribution to the world's history whenever technically possible.
+Unlike crafting, which creates portable objects, construction creates structures that become part of the world itself.
 
-Construction is the foundation of civilization.
+Construction is persistent.
+
+It survives:
+
+- player logout
+- Chronicle death
+- multiplayer sessions
+- passage of time
+
+until physically destroyed.
 
 ---
 
 # Design Philosophy
 
-Nothing is constructed instantly.
+Construction follows one principle:
 
-Every structure requires:
+> **Every structure should have a believable purpose.**
+
+Construction is never instantaneous.
+
+Every project requires:
 
 - planning
-- resources
-- transportation
+- materials
 - labor
+- tools
+- workstation (when applicable)
 - time
-- knowledge
 
-Construction is a physical process rather than a placement mechanic.
-
-Players build because they understand how.
-
-Not because a menu allows them to.
+The world remembers every completed structure.
 
 ---
 
-# Construction Progression
+# Construction Lifecycle
 
-Construction evolves naturally.
+Every construction project progresses through distinct stages.
 
-Humanity begins with primitive structures.
+```text
+Idea
+        │
+        ▼
+Planning
+        │
+        ▼
+Material Gathering
+        │
+        ▼
+Site Preparation
+        │
+        ▼
+Construction
+        │
+        ▼
+Completed Infrastructure
+```
 
-Knowledge gradually enables increasingly advanced architecture.
+Incomplete projects remain in the world.
 
-Progress reflects accumulated understanding rather than technology levels.
-
----
-
-# Construction Stages
-
-## Primitive
-
-Examples include:
-
-- campfires
-- lean-tos
-- drying racks
-- storage piles
-- simple fences
-
-Constructed primarily from natural materials.
-
----
-
-## Early Settlements
-
-Examples include:
-
-- cabins
-- wells
-- bridges
-- workshops
-- watchtowers
-- barns
-
-Require greater planning and cooperation.
+They do not disappear simply because work stops.
 
 ---
 
-## Villages
+# Construction Requirements
 
-Permanent communities containing multiple specialized structures.
+Every construction project may require one or more of the following:
 
-Examples include:
+## Materials
 
-- homes
-- communal storage
-- farming areas
-- defensive works
+Examples:
 
----
-
-## Towns
-
-Organized settlements supporting larger populations.
-
-Construction begins reflecting long-term planning.
+- Timber
+- Stone
+- Clay
+- Rope
+- Fiber
+- Leather
+- Nails (future)
 
 ---
 
-## Cities
+## Tools
 
-Large-scale human achievements requiring generations of accumulated work.
+Examples:
 
-Cities are historical landmarks rather than progression milestones.
+- Stone Axe
+- Hammer
+- Chisel
+- Saw
+- Shovel
+- Pickaxe
 
 ---
 
-# Construction Materials
+## Knowledge
 
-Structures require physical materials.
+Construction requires appropriate knowledge.
 
-Examples include:
+Example:
 
-Wood
+A Chronicle without roofing knowledge cannot properly construct a weatherproof cabin.
 
-Stone
+Knowledge determines:
 
-Clay
+- available designs
+- construction efficiency
+- structural quality
+- failure probability
 
-Fiber
+---
 
-Leather
+## Workstations
 
-Metal
+Certain components require workstations before construction can begin.
 
-Glass (future)
+Examples:
 
-Material choice influences:
+Workbench
 
-- durability
-- maintenance
-- appearance
-- environmental resistance
+Produces:
+
+- beams
+- planks
+- handles
+
+Stone Workbench
+
+Produces:
+
+- cut stone
+- stone blocks
+
+Weaving Workbench
+
+Produces:
+
+- cloth
+- rope
+- woven components
+
+Construction itself happens at the construction site.
+
+Workstations prepare the required components.
 
 ---
 
 # Construction Sites
 
-Every structure occupies a real location.
+Construction occurs at a physical location.
 
-Terrain influences construction suitability.
+Every site exists within the world.
 
-Examples include:
+Example:
 
-Ground stability.
+```text
+Forest Clearing
 
-Elevation.
+↓
 
-Drainage.
+Cabin Construction Site
+```
 
-Flood risk.
+The site records:
 
-Nearby resources.
-
-Construction respects geography.
-
----
-
-# Labor
-
-Building requires work.
-
-Construction progresses through physical effort.
-
-Larger projects require proportionally greater labor investment.
-
-Labor becomes one of civilization's greatest resources.
+- progress
+- stored materials
+- assigned workers (future)
+- unfinished components
 
 ---
 
-# Time
+# Construction Progress
 
-Construction consumes time.
+Progress is continuous.
 
-Some projects require:
+Projects may be interrupted.
 
-Hours.
+Examples:
 
-Days.
+- lack of materials
+- exhaustion
+- weather
+- attacks
+- player decision
 
-Weeks.
+Construction resumes from the previous state.
 
-Months.
-
-Years.
-
-Civilization develops gradually.
-
----
-
-# Knowledge
-
-Players cannot construct what they do not understand.
-
-Knowledge may be acquired through:
-
-Observation.
-
-Experimentation.
-
-Teaching.
-
-Discovery.
-
-Documentation.
-
-Construction capability grows alongside human understanding.
-
----
-
-# Structural Integrity
-
-Every structure possesses physical integrity.
-
-Factors include:
-
-Material quality.
-
-Construction quality.
-
-Foundation.
-
-Weather exposure.
-
-Maintenance.
-
-Poor construction eventually fails.
-
----
-
-# Maintenance
-
-Structures naturally deteriorate.
-
-Causes include:
-
-Weather.
-
-Age.
-
-Neglect.
-
-Natural disasters.
-
-Maintenance preserves civilization.
-
-Abandonment returns it to nature.
-
----
-
-# Environmental Interaction
-
-Buildings influence surrounding environments.
-
-Examples include:
-
-Deforestation.
-
-Road formation.
-
-Wildlife displacement.
-
-Agricultural expansion.
-
-Water usage.
-
-Human construction becomes another ecological force.
-
----
-
-# Persistence
-
-Structures remain after their builders die.
-
-Cabins.
-
-Bridges.
-
-Walls.
-
-Roads.
-
-Entire settlements.
-
-Future Chronicles inherit these creations.
-
-History becomes visible through architecture.
-
----
-
-# Ownership
-
-Ownership belongs to the Chronicle that created a structure.
-
-Upon death:
-
-The structure remains.
-
-History remembers its builder.
-
-The world no longer recognizes ownership.
-
-Future Chronicles may:
-
-Restore it.
-
-Reuse it.
-
-Expand it.
-
-Abandon it.
-
-Destroying history should always carry meaningful consequences.
+No progress is lost unless the structure is damaged.
 
 ---
 
 # Construction Categories
 
-Possible structure groups include:
+## Shelter
 
-Shelter
+Examples:
 
-Storage
-
-Agriculture
-
-Transportation
-
-Crafting
-
-Defense
-
-Infrastructure
-
-Public Works
-
-Monuments
-
-Future expansions may introduce additional categories.
+- Lean-to
+- Tent
+- Cabin
+- Longhouse
+- Stone House
 
 ---
 
-# Construction Scale
+## Infrastructure
 
-Structures exist at multiple scales.
+Examples:
 
-Individual objects.
-
-Buildings.
-
-Compounds.
-
-Settlements.
-
-Cities.
-
-Civilizations.
-
-Every level contributes to humanity's history.
+- Bridge
+- Road
+- Stairway
+- Dock
+- Well
 
 ---
 
-# Roads
+## Production
 
-Roads are among humanity's greatest achievements.
+Examples:
 
-Roads:
-
-Improve travel.
-
-Connect settlements.
-
-Influence trade.
-
-Guide future expansion.
-
-A simple trail may eventually become the foundation of a kingdom.
+- Workshop
+- Forge
+- Kiln
+- Loom House
+- Smokehouse
 
 ---
 
-# Bridges
+## Storage
 
-Bridges permanently reshape exploration.
+Examples:
 
-They transform geographical barriers into connections.
-
-A single bridge may influence future civilizations for generations.
-
----
-
-# Fire
-
-Controlled fire becomes humanity's first engineered technology.
-
-Fire enables:
-
-Cooking.
-
-Warmth.
-
-Protection.
-
-Crafting.
-
-Construction.
-
-Its responsible use marks one of civilization's earliest milestones.
+- Warehouse
+- Storage Rack
+- Granary
+- Root Cellar
 
 ---
 
-# Ruins
+## Agriculture
 
-Abandoned structures gradually become ruins.
+Examples:
 
-Nature slowly reclaims civilization.
-
-Ruins remain part of the world's history.
-
-Future players may discover them without ever knowing who originally built them.
-
----
-
-# Design Principles
-
-Construction systems should satisfy the following principles.
-
-## Physical
-
-Every structure occupies real space.
+- Farm Plot
+- Irrigation Channel
+- Animal Pen
+- Compost Area
 
 ---
 
-## Persistent
+## Defensive
 
-Buildings remain unless naturally destroyed or intentionally dismantled.
+Examples:
 
----
-
-## Historical
-
-Every structure contributes to the world's history.
-
----
-
-## Gradual
-
-Civilization develops through accumulated effort.
+- Fence
+- Palisade
+- Watch Tower
+- Gate
+- Wall
 
 ---
 
-## Knowledge-Based
+## Utility
 
-Construction reflects understanding rather than unlock trees.
+Examples:
+
+- Fire Pit
+- Cooking Area
+- Water Collection Basin
+- Drying Rack
 
 ---
 
-## Meaningful
+# Construction Quality
 
-Every building changes the surrounding world.
+Construction quality depends upon:
+
+- Chronicle knowledge
+- material quality
+- tool quality
+- environmental conditions
+- workmanship
+
+Possible results:
+
+- Poor
+- Common
+- Good
+- Excellent
+- Masterwork
+
+Higher-quality construction generally provides:
+
+- greater durability
+- improved efficiency
+- reduced maintenance
+
+---
+
+# Maintenance
+
+Infrastructure naturally deteriorates.
+
+Factors include:
+
+- weather
+- fire
+- flooding
+- neglect
+- heavy use
+- age
+
+Without maintenance, structures gradually lose integrity.
+
+Eventually they may collapse.
+
+---
+
+# Destruction
+
+Structures may be destroyed through:
+
+- fire
+- storms
+- combat
+- demolition
+- natural collapse
+
+Destroyed structures may yield recoverable materials depending on their remaining integrity.
+
+---
+
+# World Persistence
+
+Every completed structure becomes part of the world.
+
+Future Chronicles may discover:
+
+- abandoned settlements
+- ruined buildings
+- forgotten roads
+- collapsed bridges
+- ancient workshops
+
+Construction permanently changes history.
+
+---
+
+# Relationship with Other Systems
+
+Construction depends upon:
+
+- Materials
+- Crafting
+- Infrastructure
+- Knowledge Progression
+- World Entity System
+- Item System
+
+Construction produces Infrastructure.
+
+Infrastructure is documented separately in:
+
+**15 – Infrastructure**
+
+---
+
+# Future Expansion
+
+Future versions may introduce:
+
+- structural engineering
+- load-bearing simulation
+- construction teams
+- NPC labor
+- blueprints
+- modular buildings
+- architectural styles
+- automated production buildings
+- siege damage
+- seasonal construction penalties
 
 ---
 
 # Final Principle
 
-Construction is not decorating a map.
+Construction is one of the primary ways a Chronicle leaves a permanent mark upon the world.
 
-It is humanity's attempt to leave something behind.
+Items may be lost.
 
-Every cabin.
+Chronicles may die.
 
-Every bridge.
-
-Every road.
-
-Every city.
-
-Began with someone deciding to build rather than merely survive.
-
-That decision becomes history.
-
-And the world remembers.
+Civilizations endure through the structures they leave behind.

@@ -1,421 +1,829 @@
-# 15 – Knowledge Progression
+# 16 – Knowledge Progression
 
 > **Project Draugr**
 >
-> *Knowledge is humanity's greatest survival tool.*
+> *Knowledge is not granted. It is accumulated.*
 
 ---
 
 # Purpose
 
-This document defines the progression philosophy of Project Draugr.
+This document defines the Knowledge Progression System of Project Draugr.
 
-Project Draugr contains no traditional character levels.
+Knowledge represents what a Chronicle understands about the world.
 
-No experience points.
+It is not:
 
-No class advancement.
+- a level system
+- an experience bar
+- a skill tree
+- a collection of unlocked abilities
 
-No skill trees.
+Knowledge represents the gradual improvement of human capability through:
 
-Progression emerges through the acquisition, application, preservation, and transmission of knowledge.
-
----
-
-# Design Philosophy
-
-Human beings arrive in the world with one unique advantage.
-
-They possess knowledge accumulated from life on Earth.
-
-Knowledge allows humanity to survive.
-
-Knowledge allows civilization to grow.
-
-Knowledge—not numerical levels—is the true measure of progression.
+- observation
+- repetition
+- experimentation
+- mistakes
+- teaching
+- documentation
+- survival experience
 
 ---
 
-# No Experience System
+# Core Philosophy
 
-Project Draugr does not use:
+The Knowledge System follows one immutable principle:
 
-- Character Levels
-- Experience Points
-- Skill Points
-- Talent Trees
-- Automatic Ability Unlocks
+> **The Chronicle knows only what the Chronicle has learned.**
 
-Characters improve because they learn.
+The simulation does not grant knowledge because it would be convenient.
 
-Not because invisible numbers increase.
+A Chronicle cannot:
 
----
+- craft advanced tools without understanding
+- build complex structures without learning
+- identify unknown materials without experience
+- perform techniques never encountered
 
-# Knowledge
-
-Knowledge represents understanding.
-
-Examples include:
-
-Fire making.
-
-Shelter construction.
-
-Fishing.
-
-Tracking.
-
-Medicine.
-
-Agriculture.
-
-Metallurgy.
-
-Navigation.
-
-Animal behavior.
-
-Weather observation.
-
-Construction techniques.
-
-Knowledge changes how players interact with the world.
+Knowledge must have a source.
 
 ---
 
-# Learning
+# Knowledge Is Not an Item
 
-Knowledge is acquired naturally.
+Knowledge exists internally within the Chronicle.
 
-Examples include:
+It is not a physical object.
 
-Observation.
+Example:
 
-Practice.
+The Chronicle learns:
 
-Experimentation.
+```
+How to sharpen stone blades
+```
 
-Failure.
+Result:
 
-Teaching.
+```
+Knowledge Updated
+```
 
-Discovery.
-
-Ancient records.
-
-Every Chronicle gradually becomes more knowledgeable.
-
----
-
-# Practice
-
-Understanding alone is insufficient.
-
-Repeated practice improves execution.
-
-Examples include:
-
-A player who repeatedly builds shelters becomes faster and more efficient.
-
-A player who repeatedly fishes becomes better at recognizing ideal fishing conditions.
-
-Practice refines knowledge into capability.
+No physical object is created.
 
 ---
 
-# Discovery
+However:
 
-Players continually discover new information.
+If the Chronicle writes:
 
-Examples include:
+```
+Stone Tool Manufacturing Guide
+```
 
-Unknown resources.
+A physical document is created.
 
-Animal behavior.
+Example:
 
-Monster territories.
+```
+ITEM-000142
 
-Medicinal plants.
+Name:
+Stone Tool Manufacturing Guide
 
-Efficient construction techniques.
+Category:
+Document
 
-Geographical shortcuts.
+Location:
+Library Shelf
+```
 
-Discovery becomes a meaningful reward.
+The knowledge exists in:
 
----
+```
+07-Knowledge.md
+```
 
-# Experimentation
+The written guide exists in:
 
-The world encourages experimentation.
-
-Players may discover:
-
-Improved tools.
-
-Better construction methods.
-
-More efficient preservation techniques.
-
-Alternative crafting processes.
-
-Unexpected solutions.
-
-Failure is part of learning.
+```
+02-Items.md
+```
 
 ---
 
-# Knowledge Domains
+# Knowledge Sources
 
-Knowledge naturally organizes into broad domains.
+Knowledge can be acquired through:
 
-Examples include:
+---
 
-Survival
+## Observation
 
-Construction
+The Chronicle learns by seeing.
 
-Crafting
+Example:
 
-Agriculture
+Observing wolves hunting:
 
-Medicine
+```
+Knowledge:
 
-Hunting
+Wolf hunting behavior observed
+```
 
-Fishing
+The Chronicle gains understanding.
 
-Navigation
+---
 
-Ecology
+## Practice
 
-Metallurgy
+Repeated actions improve understanding.
+
+Example:
+
+Repeatedly making rope:
+
+```
+First Attempt:
+
+Poor quality cordage
+
+↓
+
+Repeated Practice:
+
+Improved technique
+
+↓
+
+Mastered:
+
+Consistent cordage production
+```
+
+---
+
+## Experimentation
+
+Trial and error creates knowledge.
+
+Example:
+
+Combining materials:
+
+```
+Unknown mixture
+
+↓
+
+Experiment
+
+↓
+
+Result discovered
+```
+
+Failure is also knowledge.
+
+---
+
+## Teaching
+
+Knowledge may be transferred from another Chronicle or NPC.
+
+Example:
+
+A blacksmith teaches:
+
+```
+Metal Forging Principles
+```
+
+The student gains understanding.
+
+---
+
+## Documentation
+
+Written knowledge can preserve information.
+
+Examples:
+
+- books
+- stone tablets
+- blueprints
+- manuals
+- procedures
+
+Documentation allows knowledge transfer between individuals.
+
+---
+
+# Knowledge Categories
+
+Knowledge is organized by domain.
+
+---
+
+# Survival Knowledge
+
+Represents understanding required for basic survival.
+
+Examples:
+
+```
+Fire Making
+
+Shelter Construction
+
+Water Finding
+
+Basic Tracking
+
+Food Identification
+
+Basic First Aid
+```
+
+---
+
+# Material Knowledge
+
+Understanding of physical materials.
+
+Examples:
+
+```
+Stone Types
+
+Wood Properties
+
+Fiber Quality
+
+Clay Processing
+
+Metal Identification
+```
+
+---
+
+# Crafting Knowledge
+
+Understanding of manufacturing processes.
+
+Examples:
+
+```
+Stone Tool Production
+
+Cordage Making
+
+Leather Processing
+
+Carpentry
+
+Weaving
+```
+
+---
+
+# Engineering Knowledge
+
+Advanced understanding of construction and systems.
+
+Examples:
+
+```
+Structural Support
+
+Load Distribution
+
+Water Management
+
+Mechanical Systems
+
+Fortification Design
+```
+
+---
+
+# Agricultural Knowledge
+
+Understanding food production.
+
+Examples:
+
+```
+Plant Cultivation
+
+Seed Preservation
+
+Irrigation
 
 Animal Husbandry
 
-Future domains may emerge naturally.
+Soil Management
+```
 
 ---
 
-# Applied Knowledge
+# Medical Knowledge
 
-Knowledge becomes meaningful only through application.
+Understanding health and treatment.
 
-Knowing how to build a cabin is different from successfully building one.
+Examples:
 
-The world rewards understanding demonstrated through action.
+```
+Wound Cleaning
 
----
+Herbal Treatment
 
-# Documentation
+Disease Recognition
 
-Knowledge may be recorded.
-
-Examples include:
-
-Journals.
-
-Maps.
-
-Research notes.
-
-Construction plans.
-
-Personal observations.
-
-Documented knowledge survives beyond individual memory.
+Surgery Principles
+```
 
 ---
 
-# Teaching
+# Environmental Knowledge
 
-Knowledge may be shared between players.
+Understanding the world.
 
-Teaching accelerates civilization.
+Examples:
 
-Communities preserving knowledge progress more efficiently than isolated individuals.
+```
+Weather Patterns
 
----
+Animal Behavior
 
-# Forgotten Knowledge
+Seasonal Changes
 
-Knowledge may disappear.
+Geography
 
-If every Chronicle possessing certain knowledge dies without preserving it...
-
-Humanity may need to rediscover it.
-
-Knowledge is fragile.
-
-Civilization depends upon preserving it.
+Resource Locations
+```
 
 ---
 
-# Inherited Knowledge
+# Knowledge States
 
-Every transported human begins with ordinary Earth knowledge.
+Knowledge does not use numerical levels.
 
-Players do not inherit discoveries made by previous Chronicles automatically.
+Instead, it uses descriptive progression.
 
-They must rediscover surviving evidence.
+Example:
 
-Examples include:
+```
+Unknown
 
-Old journals.
+↓
 
-Buildings.
+Observed
 
-Tools.
+↓
 
-Roads.
+Familiar
 
-Ruins.
+↓
 
-History teaches those willing to learn.
+Practiced
 
----
+↓
 
-# Collective Progress
+Experienced
 
-Individual lives are temporary.
+↓
 
-Human knowledge is cumulative.
+Skilled
 
-Every Chronicle contributes to civilization's understanding.
+↓
 
-Even unsuccessful lives may teach future generations.
-
----
-
-# Mastery
-
-Mastery is never represented by numerical levels.
-
-Instead, mastery appears through:
-
-Efficiency.
-
-Accuracy.
-
-Consistency.
-
-Creativity.
-
-Adaptability.
-
-True mastery becomes visible through behavior.
+Mastered
+```
 
 ---
 
-# Civilization
+# Knowledge Examples
 
-Civilization advances because knowledge accumulates.
+## Example: Stone Axe
 
-Primitive shelters eventually become villages.
+Initial:
 
-Villages eventually become cities.
+```
+Knowledge
 
-Not because players leveled up—
+Stone Tools
 
-but because humanity learned.
+Unknown
+```
+
+After observing:
+
+```
+Stone Tools
+
+Observed
+```
+
+After attempting:
+
+```
+Stone Tools
+
+Practiced
+```
+
+After many successful creations:
+
+```
+Stone Tools
+
+Skilled
+```
+
+---
+
+# Technology Progression
+
+Technology emerges from accumulated knowledge.
+
+There are no artificial technology tiers.
+
+Example:
+
+A Chronicle discovers:
+
+```
+Stone Cutting
+
++
+
+Wood Shaping
+
++
+
+Binding Techniques
+
++
+
+Improved Understanding
+
+```
+
+Result:
+
+```
+Stone Axe Construction
+```
+
+becomes possible.
+
+---
+
+# Technology Emergence
+
+Advanced developments require foundations.
+
+Example:
+
+A forge cannot appear without:
+
+```
+Knowledge:
+
+Fire Control
+
+Metal Identification
+
+Heat Management
+
+Stone Construction
+
+```
+
+and infrastructure:
+
+```
+Forge
+```
+
+and materials:
+
+```
+Ore
+
+Fuel
+
+Tools
+```
+
+---
+
+# No Artificial Unlocks
+
+Invalid:
+
+```
+Level 10 reached
+
+↓
+
+Iron Weapons unlocked
+```
+
+Valid:
+
+```
+Knowledge accumulated
+
++
+
+Materials available
+
++
+
+Tools available
+
++
+
+Infrastructure available
+
+↓
+
+Iron Working becomes possible
+```
+
+---
+
+# Knowledge and Crafting
+
+Crafting requires knowledge.
+
+The simulation evaluates:
+
+- known techniques
+- available materials
+- available tools
+- workstation availability
+- environmental conditions
+
+Example:
+
+Attempt:
+
+> I forge a steel sword.
+
+Evaluation:
+
+Knowledge:
+
+```
+Unknown metallurgy
+```
+
+Materials:
+
+```
+No steel
+```
+
+Infrastructure:
+
+```
+No forge
+```
+
+Result:
+
+Cannot perform.
+
+---
+
+# Knowledge and Workstations
+
+Workstations improve learning and production.
+
+Examples:
+
+## Without Workbench
+
+The Chronicle learns through:
+
+- primitive methods
+- slower experimentation
+- inconsistent results
+
+---
+
+## With Workbench
+
+The Chronicle gains:
+
+- organized practice
+- improved precision
+- safer experimentation
+- faster production
+
+Example:
+
+Carpentry Workbench:
+
+Improves:
+
+```
+Woodworking Knowledge Development
+```
+
+---
+
+# Knowledge Transfer
+
+Knowledge can spread through:
+
+- teaching
+- books
+- manuals
+- apprenticeships
+- demonstrations
+
+Example:
+
+Master Carpenter
+
+teaches:
+
+```
+Wood Joinery
+```
+
+to another Chronicle.
+
+Both may now possess:
+
+```
+Woodworking Knowledge
+```
 
 ---
 
 # Knowledge Loss
 
-Poor preservation has consequences.
+Knowledge may be lost under certain conditions.
 
-Burned libraries.
+Examples:
 
-Destroyed journals.
+- death without documentation
+- isolation
+- memory degradation (future)
+- cultural collapse
 
-Collapsed settlements.
+However:
 
-Forgotten techniques.
+Physical documentation may preserve knowledge.
 
-History demonstrates that civilization can advance...
+Example:
 
-or regress.
+Master dies.
 
----
+Knowledge:
 
-# Player Identity
+Lost.
 
-Identity naturally emerges from accumulated knowledge.
+Book:
 
-Someone who understands farming becomes a farmer.
+Remains.
 
-Someone who understands medicine becomes a healer.
+Future Chronicle discovers:
 
-Someone who understands engineering becomes a builder.
+```
+Woodworking Manual
+```
 
-Identity is earned through understanding rather than chosen during character creation.
-
----
-
-# Design Principles
-
-Knowledge progression should satisfy the following principles.
-
-## Natural
-
-Knowledge develops through experience.
+Knowledge may be recovered.
 
 ---
 
-## Practical
+# Knowledge and History
 
-Understanding changes gameplay.
+Major discoveries should update:
 
----
+```
+08-History.md
+```
 
-## Persistent
+Examples:
 
-Knowledge recorded within the world survives.
+```
+First successful metal tool created
 
----
+First permanent settlement established
 
-## Fragile
+First bridge constructed
+```
 
-Knowledge can be forgotten.
-
----
-
-## Shareable
-
-Knowledge grows through cooperation.
+Knowledge becomes part of world history.
 
 ---
 
-## Historical
+# Knowledge Records
 
-Civilization is built upon accumulated understanding.
+Knowledge records contain:
+
+- Knowledge ID
+- Domain
+- Description
+- Current Understanding
+- Acquisition Source
+- Discovery Date
+- Related Documents
+- Related Infrastructure
+- Notes
 
 ---
 
-# What Progression Means
+Example:
 
-Progression is not becoming stronger.
+```
+KNOWLEDGE-000021
 
-Progression is becoming more capable.
+Name:
 
-The world itself remains equally dangerous.
+Basic Carpentry
 
-The player simply understands it better.
+Domain:
+
+Crafting
+
+State:
+
+Experienced
+
+Source:
+
+Repeated woodworking practice
+
+Related Infrastructure:
+
+Carpentry Workbench
+
+Related Documents:
+
+Carpentry Manual
+```
+
+---
+
+# Knowledge Persistence
+
+Knowledge remains with the Chronicle.
+
+It is not automatically shared.
+
+Example:
+
+A Chronicle knows:
+
+```
+Advanced Bow Construction
+```
+
+Another Chronicle does not know unless:
+
+- taught
+- documented
+- observed
+- independently discovered
+
+---
+
+# Future Expansion
+
+Future versions may introduce:
+
+- education systems
+- apprenticeships
+- civilizations
+- research institutions
+- scientific discovery
+- cultural knowledge
+- language development
+- forgotten technologies
+- ancient ruins containing lost knowledge
 
 ---
 
 # Final Principle
 
-The greatest achievement in Project Draugr is not defeating the strongest monster.
+Knowledge is the invisible infrastructure of civilization.
 
-It is ensuring that humanity knows more tomorrow than it knew yesterday.
+Buildings preserve physical progress.
 
-Knowledge outlives every Chronicle.
+Documents preserve recorded knowledge.
 
-Knowledge builds civilization.
+The Chronicle preserves understanding.
 
-Knowledge becomes history.
+The world remembers what was built.
 
-And history is what the world remembers.
+The Chronicle remembers what was learned.

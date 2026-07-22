@@ -1,8 +1,8 @@
-# 16 – Chronicle System
+# 17 – Chronicle System
 
 > **Project Draugr**
 >
-> *One life. One story. One legacy.*
+> *A Chronicle is not a character sheet. It is a life that leaves evidence behind.*
 
 ---
 
@@ -10,416 +10,554 @@
 
 This document defines the Chronicle System of Project Draugr.
 
-A Chronicle represents one complete human life from arrival until death.
+The Chronicle System represents the persistent identity, existence, and history of the player's controlled entity.
 
-Every transported human exists through exactly one Chronicle.
+The player does not control a statistic container.
 
-The Chronicle is the player's permanent existence within the world.
-
----
-
-# Design Philosophy
-
-A Chronicle is not a save file.
-
-It is not a character slot.
-
-It is not a profile.
-
-It is an entire lifetime.
-
-Every decision.
-
-Every success.
-
-Every mistake.
-
-Every discovery.
-
-Every relationship.
-
-Every structure.
-
-Every death.
-
-Becomes part of that Chronicle's history.
+The player experiences the life of a Chronicle within a persistent world.
 
 ---
 
-# Beginning
+# Core Philosophy
 
-A Chronicle begins when a transported human awakens within the world.
+The Chronicle System follows one immutable principle:
 
-Every Chronicle begins equally.
+> **The Chronicle exists before the player observes it, and continues after the player leaves.**
 
-The player possesses:
+A Chronicle is:
 
-- the clothing they wore on Earth
-- ordinary human knowledge
-- no equipment
-- no property
-- no predefined role
-
-The Chronicle begins with uncertainty.
+- a living entity
+- a physical presence in the world
+- a participant in history
+- a carrier of knowledge
+- a source of decisions and consequences
 
 ---
 
-# Identity
+# Chronicle Identity
 
-Identity emerges naturally.
+Every Chronicle has a permanent identity.
 
-Players never select:
+A Chronicle identity contains:
 
-- class
-- profession
-- background
-- specialization
-
-Instead, identity develops through repeated actions.
-
-A Chronicle reflects how that individual chose to live.
-
----
-
-# One Active Chronicle
-
-Each player may possess only one active Chronicle.
-
-There is no parallel progression.
-
-No alternate characters.
-
-No multiple save slots.
-
-The player's entire existence is focused upon one life.
+- Chronicle ID
+- Name
+- Origin
+- Creation Date
+- Current Age
+- Biological Sex
+- Physical Characteristics
+- Current Location
+- Survival Duration
+- Known History
 
 ---
 
-# Death
+# Chronicle ID
 
-Death permanently concludes the Chronicle.
+Every Chronicle receives a permanent identifier.
 
-Death cannot be reversed.
+Example:
 
-There are no:
+```
+CHR-000001
+```
 
-- reloads
-- checkpoints
-- resurrection systems
-- alternate timelines
+Chronicle IDs are:
 
-A Chronicle ends only once.
+- unique
+- permanent
+- never reused
 
----
-
-# Legacy
-
-Although the Chronicle ends...
-
-Its legacy remains.
-
-Examples include:
-
-Structures.
-
-Roads.
-
-Bridges.
-
-Journals.
-
-Settlements.
-
-Discoveries.
-
-Knowledge.
-
-History remembers the Chronicle.
+A Chronicle's identity remains recorded even after death.
 
 ---
 
-# Personal History
+# Chronicle Record
 
-Every Chronicle gradually accumulates history.
+The Chronicle record contains:
 
-Examples include:
+- Identity information
+- Life history
+- Major achievements
+- Discoveries
+- Relationships
+- Settlements created
+- Important events
 
-Locations visited.
+It does NOT contain:
 
-Species discovered.
+- current inventory
+- current body condition
+- current equipment
+- temporary resources
 
-Structures built.
-
-Resources gathered.
-
-People encountered.
-
-Civilizations founded.
-
-Personal journals.
-
-This history belongs uniquely to that life.
-
----
-
-# Chronicle Records
-
-Each Chronicle permanently records major events.
-
-Possible entries include:
-
-Birth of the Chronicle.
-
-First Shelter.
-
-First Fire.
-
-First Hunt.
-
-First Winter.
-
-Settlement Founded.
-
-Major Discoveries.
-
-Death.
-
-These milestones form the Chronicle's historical record.
+Those belong to their respective systems.
 
 ---
 
-# Personal Journal
+# System Separation
 
-Every Chronicle may maintain a personal journal.
+The Chronicle System connects multiple persistent systems.
 
-The journal records:
+```
+Chronicle
 
-Observations.
+↓
 
-Thoughts.
+Character State
+(Body)
 
-Maps.
+↓
 
-Research.
+Inventory
+(Possessions)
 
-Construction notes.
+↓
 
-Experiences.
+Equipment
+(Worn Items)
 
-If preserved, future Chronicles may discover these journals.
+↓
 
----
+Knowledge
+(Understanding)
 
-# Property
+↓
 
-Everything built during a Chronicle remains within the world whenever technically possible.
+History
+(Legacy)
+```
 
-Death transfers ownership back to history.
+Each system has its own authority.
 
-Future players inherit opportunity—not ownership.
+The Chronicle record references them.
 
----
-
-# Reputation
-
-The world itself does not assign numerical reputation.
-
-Instead...
-
-History remembers actions.
-
-Future players interpret that history themselves.
-
-One Chronicle may be remembered as:
-
-Builder.
-
-Explorer.
-
-Founder.
-
-Teacher.
-
-Destroyer.
-
-Or forgotten entirely.
-
-History is subjective.
+It does not replace them.
 
 ---
 
-# Knowledge
+# Chronicle Beginning
 
-Knowledge acquired during a Chronicle belongs to that Chronicle.
+A new Chronicle begins with:
 
-Unless preserved through:
+- biological state
+- basic human capability
+- limited knowledge
+- no artificial advantages
 
-Journals.
+The Chronicle does not begin with:
 
-Teaching.
+- unlocked technology
+- hidden knowledge
+- guaranteed resources
+- special abilities
 
-Documentation.
-
-Architecture.
-
-Civilization.
-
-Much of that knowledge dies with its owner.
-
----
-
-# Civilization
-
-A Chronicle may contribute to civilization.
-
-Or ignore it entirely.
-
-Neither path is considered correct.
-
-Every Chronicle defines its own purpose.
+The world determines circumstances.
 
 ---
 
-# Success
+# Origin
 
-Project Draugr intentionally avoids defining victory.
+Origin describes the Chronicle's background.
 
-A successful Chronicle may be:
+Examples:
 
-Living peacefully.
+```
+Unknown Survivor
 
-Building a village.
+Wilderness Native
 
-Exploring distant lands.
+Former Settler
 
-Advancing knowledge.
+Explorer
 
-Protecting others.
+Craftsman
 
-Simply surviving.
+Soldier
 
-Success belongs entirely to the player.
+Researcher
+```
 
----
+Origin influences starting knowledge and familiarity.
 
-# Failure
-
-Failure is equally personal.
-
-Death itself is not failure.
-
-A Chronicle that dies while leaving meaningful history may accomplish more than one surviving for decades without purpose.
+It does not provide unrealistic advantages.
 
 ---
 
-# Completion
+# Physical Identity
 
-Every Chronicle concludes with death.
+The Chronicle has a physical body.
 
-After death:
+Physical characteristics include:
 
-History remains.
+- height
+- body structure
+- appearance
+- biological sex
+- natural traits
 
-The world continues.
+Physical traits influence:
 
-A new Chronicle begins as another transported human entering the same persistent world.
+- carrying capability
+- endurance
+- environmental tolerance
+- appearance
 
-Life ends.
-
-History does not.
-
----
-
-# Historical Continuity
-
-Future Chronicles inherit the same world.
-
-They may discover:
-
-Old settlements.
-
-Ancient journals.
-
-Ruined workshops.
-
-Weathered roads.
-
-Forgotten graves.
-
-The past continually shapes the future.
+They do not determine destiny.
 
 ---
 
-# Design Principles
+# Age
 
-Every Chronicle should satisfy the following principles.
+Age affects biological capability.
 
-## Unique
+Age influences:
 
-No two Chronicles are identical.
+- recovery
+- physical performance
+- health risks
 
----
+Age does not directly determine knowledge.
 
-## Permanent
+A young Chronicle may become highly skilled.
 
-Death permanently concludes the Chronicle.
-
----
-
-## Historical
-
-Every Chronicle changes the world.
+An older Chronicle may lack experience.
 
 ---
 
-## Emergent
+# Chronicle Actions
 
-Stories arise naturally through player decisions.
+The Chronicle only performs actions explicitly declared by the player.
+
+The simulation must never:
+
+- decide intentions
+- add hidden actions
+- protect the Chronicle
+- assume motivations
+
+Example:
+
+Player:
+
+> I walk toward the river.
+
+Valid:
+
+The Chronicle moves toward the river.
+
+Invalid:
+
+The Chronicle also collects stones, drinks water, and searches the area.
 
 ---
 
-## Independent
+# Chronicle Decisions
 
-Players define their own goals.
+Every decision belongs to the player.
+
+The simulation provides:
+
+- environment
+- consequences
+- available information
+
+The player provides:
+
+- intent
+- actions
+- priorities
 
 ---
 
-## Memorable
+# Chronicle Memory
 
-Every Chronicle should leave something behind.
+The Chronicle remembers what the Chronicle has experienced.
+
+Memory includes:
+
+- observed locations
+- learned skills
+- discovered information
+- personal events
+
+Memory does not reveal:
+
+- unseen areas
+- hidden resources
+- unknown creatures
+- future events
 
 ---
 
-# What A Chronicle Is Not
+# Experience vs Knowledge
 
-A Chronicle is not:
+Experience creates opportunities for learning.
 
-- a save slot
-- a build
-- a class
-- a progression path
-- a disposable character
+However:
 
-A Chronicle is one complete human existence.
+Experience is not automatically complete understanding.
+
+Example:
+
+The Chronicle sees lightning.
+
+Result:
+
+```
+Experience:
+
+Storm observed
+```
+
+Not:
+
+```
+Knowledge:
+
+Meteorological science unlocked
+```
+
+Understanding develops through observation and study.
+
+---
+
+# Chronicle Inventory Relationship
+
+The Chronicle does not contain items directly.
+
+Inventory is managed by:
+
+```
+02-Inventory.md
+```
+
+Example:
+
+Chronicle:
+
+```
+Owns:
+ITEM-000021
+```
+
+Inventory:
+
+```
+ITEM-000021
+
+Stone Axe
+
+Location:
+Carried
+```
+
+---
+
+# Chronicle Equipment Relationship
+
+Equipment is a state of Items.
+
+The Chronicle does not store equipment separately.
+
+Example:
+
+```
+ITEM-000021
+
+Stone Axe
+
+State:
+
+Equipped
+
+Slot:
+
+Left Hand
+```
+
+---
+
+# Chronicle Death
+
+Death is permanent.
+
+When a Chronicle dies:
+
+The simulation records:
+
+- date
+- location
+- cause
+- final condition
+- final known actions
+- surviving possessions
+- created infrastructure
+
+---
+
+# Death Record Example
+
+```
+Chronicle Death Record
+
+Chronicle:
+
+CHR-000001
+
+Date:
+
+August 14, 2026
+
+Location:
+
+Northern Forest
+
+Cause:
+
+Critical Dehydration
+
+Final Condition:
+
+Severely Dehydrated
+
+Last Known Action:
+
+Searching for water
+
+Environmental Conditions:
+
+High temperature
+No nearby water source
+```
+
+---
+
+# Legacy System
+
+A Chronicle leaves evidence behind.
+
+Legacy includes:
+
+- buildings
+- tools
+- documents
+- discoveries
+- altered terrain
+- knowledge transfer
+
+The world remembers actions even after the Chronicle is gone.
+
+---
+
+# Future Chronicle Interaction
+
+Future Chronicles may discover:
+
+- abandoned settlements
+- old tools
+- written records
+- forgotten technologies
+- graves
+- ruins
+
+A previous Chronicle becomes part of the world's history.
+
+---
+
+# Chronicle Achievements
+
+Achievements are historical events, not rewards.
+
+Examples:
+
+```
+First Shelter Built
+
+First Tool Crafted
+
+First Permanent Settlement
+
+First Metal Tool Produced
+
+First Map Created
+```
+
+They are recorded because they changed the world.
+
+---
+
+# No RPG Level System
+
+Project Draugr does not use:
+
+- character levels
+- experience points
+- skill points
+- talent trees
+
+Progression emerges naturally.
+
+Example:
+
+A better carpenter becomes better because:
+
+- they practiced
+- they learned
+- they improved techniques
+
+Not because:
+
+```
+Carpentry Level +1
+```
+
+---
+
+# Chronicle Persistence
+
+A Chronicle's existence is always recorded.
+
+The world tracks:
+
+- who existed
+- what they did
+- what they created
+- what they discovered
+- how they ended
+
+Nothing important disappears.
+
+---
+
+# Future Expansion
+
+Future versions may introduce:
+
+- family systems
+- descendants
+- inheritance
+- reputation
+- culture creation
+- civilizations founded by Chronicles
+- Chronicle archives
+- generational gameplay
 
 ---
 
 # Final Principle
 
-Every Chronicle eventually ends.
+The Chronicle is not a player avatar.
 
-Some end quietly.
+The Chronicle is a life inside a persistent world.
 
-Some reshape the world.
+The player makes choices.
 
-Some are forgotten.
+The world reacts.
 
-Some become legend.
+History records the result.
 
-None live forever.
+The Chronicle may disappear.
 
-Yet every Chronicle leaves something behind.
-
-Every life leaves a mark.
-
-And the world remembers.
+The world remembers.

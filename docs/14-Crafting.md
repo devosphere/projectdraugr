@@ -2,392 +2,427 @@
 
 > **Project Draugr**
 >
-> *Knowledge transforms resources into civilization.*
+> *Crafting is the deliberate transformation of materials into functional objects.*
 
 ---
 
 # Purpose
 
-This document defines the crafting system of Project Draugr.
+This document defines the crafting system used throughout Project Draugr.
 
-Crafting is the process of transforming natural resources into useful objects through knowledge, tools, labor, and time.
+Crafting allows Chronicles to transform raw and processed materials into usable physical objects.
 
-Crafting represents humanity's ability to reshape the world using understanding rather than instinct.
+Unlike Construction, which permanently alters the world, Crafting produces portable objects that become World Entities.
+
+Every crafted object exists physically within the world.
 
 ---
 
 # Design Philosophy
 
-Crafting is not recipe collection.
+Crafting follows one principle:
 
-Crafting is applied knowledge.
+> **Nothing appears from nothing.**
 
-Players do not create an object because the interface allows it.
+Every crafted object requires:
 
-They create it because they understand the materials, the process, and the required tools.
+- materials
+- knowledge
+- appropriate tools
+- time
+- labor
+- suitable workstations (when required)
 
-Knowledge is the true crafting resource.
-
----
-
-# Crafting Progression
-
-Crafting develops naturally alongside human understanding.
-
-Primitive tools eventually lead to:
-
-- better tools
-- better shelters
-- improved agriculture
-- advanced construction
-- specialized equipment
-
-Crafting mirrors the growth of civilization.
+Crafting never bypasses physical reality.
 
 ---
 
-# Resources
+# Crafting Lifecycle
 
-Crafting consumes real resources obtained from the world.
+Every crafted object follows the same production pipeline.
 
-Examples include:
+```text
+Need
+        │
+        ▼
+Knowledge
+        │
+        ▼
+Material Preparation
+        │
+        ▼
+Crafting
+        │
+        ▼
+Finished Item
+        │
+        ▼
+World Entity Registration
+```
 
-Wood
-
-Stone
-
-Fiber
-
-Leather
-
-Bones
-
-Clay
-
-Metal
-
-Plant materials
-
-Water
-
-Every crafted object represents transformed natural materials.
-
----
-
-# Tools
-
-Many crafting processes require tools.
-
-Examples include:
-
-Stone Hammer
-
-Stone Axe
-
-Knife
-
-Awl
-
-Mortar
-
-Kiln
-
-Forge
-
-Workbench
-
-Better tools improve:
-
-- efficiency
-- precision
-- durability
-- quality
+After completion, the crafted object is registered as a permanent World Entity.
 
 ---
 
-# Workstations
+# Crafting Requirements
 
-Simple crafting may occur anywhere.
+Every recipe specifies one or more requirements.
 
-More advanced crafting requires specialized work areas.
+## Materials
 
-Examples include:
+Examples:
 
-Campfire
+- Stone
+- Timber
+- Leather
+- Rope
+- Cloth
+- Iron Ingot
 
-Drying Rack
-
-Workbench
-
-Stone Anvil
-
-Kiln
-
-Forge
-
-Workshop
-
-Workstations become important milestones in civilization.
+Materials are consumed during crafting.
 
 ---
 
-# Time
+## Tools
 
-Crafting requires time.
+Examples:
 
-Some objects require minutes.
+- Stone Knife
+- Hammer
+- Chisel
+- Axe
+- Needle
+- Pickaxe
 
-Others require days.
+Some tools are mandatory.
 
-Large projects may require multiple crafting stages.
-
-Instant production does not exist.
-
----
-
-# Labor
-
-Crafting consumes physical effort.
-
-Long or complex production becomes tiring.
-
-Players must balance productivity with survival.
+Others simply improve efficiency or quality.
 
 ---
 
-# Material Quality
+## Knowledge
 
-Crafting quality depends upon input quality.
+The Chronicle must possess sufficient knowledge.
 
-Poor materials produce poor results.
+Examples:
 
-Exceptional materials improve finished products.
+- Stone Knapping
+- Leatherworking
+- Sewing
+- Carpentry
+- Blacksmithing
 
-Quality should naturally emerge from the entire production chain.
+Without knowledge, crafting either:
 
----
-
-# Craftsmanship
-
-Two identical objects may differ in quality.
-
-Craftsmanship reflects:
-
-Knowledge.
-
-Experience.
-
-Tools.
-
-Materials.
-
-Working conditions.
-
-Craftsmanship develops naturally through repeated practice.
+- cannot begin, or
+- produces extremely poor results.
 
 ---
 
-# Experimentation
+## Workstations
 
-Players are encouraged to experiment.
+Some recipes require specialized workstations.
 
-Not every useful object should require a predefined recipe.
+Examples:
 
-Observation and creativity become valuable gameplay mechanics.
+General Workbench
 
-Failure contributes to learning.
+- handles
+- wooden bowls
+- furniture
 
----
+Stone Workbench
 
-# Discovery
+- stone blades
+- polished stone
+- stone bricks
 
-Some crafting methods may remain unknown until discovered.
+Weaving Workbench
 
-Knowledge may originate from:
+- cloth
+- rope
+- baskets
 
-Observation.
+Sewing Workbench
 
-Ancient ruins.
+- clothing
+- bags
+- leather equipment
 
-Experimentation.
+Forge (future)
 
-Teaching.
+- metal tools
+- weapons
+- armor
 
-Written journals.
-
-Human civilization grows through accumulated discoveries.
-
----
-
-# Repair
-
-Most crafted objects can be repaired.
-
-Repair generally requires:
-
-Materials.
-
-Tools.
-
-Time.
-
-Repair extends usefulness and reduces unnecessary waste.
-
----
-
-# Degradation
-
-Crafted objects deteriorate naturally.
-
-Examples include:
-
-Wood rotting.
-
-Leather drying.
-
-Metal rusting.
-
-Fiber weakening.
-
-Maintenance becomes part of long-term survival.
+Simple recipes may be crafted by hand.
 
 ---
 
 # Crafting Categories
 
-Examples include:
+## Tools
 
-Tools
+Examples:
 
-Weapons
+- Stone Axe
+- Hammer
+- Knife
+- Hoe
+- Shovel
 
-Containers
+---
 
-Clothing
+## Weapons
 
-Construction Components
+Examples:
+
+- Spear
+- Bow
+- Arrow
+- Club
+- Sling
+
+---
+
+## Clothing
+
+Examples:
+
+- Shirt
+- Hood
+- Boots
+- Gloves
+- Cloak
+
+---
+
+## Containers
+
+Examples:
+
+- Backpack
+- Basket
+- Sling Carrier
+- Sack
+- Barrel
+
+---
+
+## Furniture
+
+Examples:
+
+- Chair
+- Table
+- Shelf
+- Bed
+- Storage Rack
+
+---
+
+## Utility
+
+Examples:
+
+- Torch
+- Rope
+- Bucket
+- Fishing Net
+- Water Skin
+
+---
+
+## Documents
+
+Examples:
+
+- Maps
+- Blueprints
+- Training Manuals
+- Procedures
+- Engineering Drawings
+
+Documents are physical crafted objects.
+
+---
+
+# Crafting Quality
+
+Crafted quality depends on:
+
+- knowledge
+- material quality
+- tool quality
+- workstation quality
+- Chronicle condition
+- environmental conditions
+
+Possible quality levels:
+
+- Poor
+- Common
+- Good
+- Excellent
+- Masterwork
+
+Quality affects:
+
+- durability
+- efficiency
+- appearance
+- resale value (future)
+
+---
+
+# Crafting Time
+
+Crafting consumes simulation time.
+
+Factors include:
+
+- recipe complexity
+- available tools
+- workstation
+- Chronicle fatigue
+- injuries
+- skill level
+
+Time always progresses naturally.
+
+---
+
+# Failure
+
+Crafting is not guaranteed to succeed.
+
+Failure may result from:
+
+- insufficient knowledge
+- missing materials
+- damaged tools
+- poor workmanship
+- interruptions
+- environmental hazards
+
+Failure may:
+
+- waste materials
+- damage tools
+- produce inferior items
+- require restarting
+
+---
+
+# Repair
+
+Many crafted objects may be repaired.
+
+Repair requires:
+
+- appropriate materials
+- tools
+- knowledge
+
+Repair restores integrity but may not completely recover an item depending on damage.
+
+---
+
+# Refinement
+
+Some items may undergo refinement.
+
+Examples:
+
+Log
+
+↓
+
+Prepared Timber
+
+↓
+
+Polished Timber
+
+↓
 
 Furniture
 
-Cooking Equipment
+Or:
 
-Agricultural Equipment
+Stone
 
-Transportation Equipment
+↓
 
-Infrastructure Components
+Rough Blade
 
-Future updates may expand these categories.
+↓
 
----
+Sharpened Blade
 
-# Human Knowledge
+↓
 
-Every crafted object represents accumulated human knowledge.
+Stone Knife
 
-The first stone knife.
-
-The first fishing net.
-
-The first wooden bridge.
-
-The first iron tool.
-
-Civilization advances because knowledge compounds.
+Refinement increases quality before final crafting.
 
 ---
 
-# Sharing Knowledge
+# World Entity Creation
 
-Players may share knowledge with others.
+Every successfully crafted object immediately becomes a World Entity.
 
-Knowledge becomes one of civilization's greatest assets.
+The simulation automatically:
 
-Communities preserving knowledge develop faster than isolated individuals.
+1. Creates a new Entity ID.
+2. Registers the object in the World Entity Registry.
+3. Assigns its owner.
+4. Assigns its location.
+5. Places it into the appropriate inventory or container.
 
----
-
-# Historical Craftsmanship
-
-Crafted objects remain after their creators die whenever technically possible.
-
-Future Chronicles may discover:
-
-Ancient tools.
-
-Weathered furniture.
-
-Abandoned workshops.
-
-Broken weapons.
-
-Forgotten craftsmanship becomes part of history.
+Crafted objects never exist outside the world's persistent database.
 
 ---
 
-# Design Principles
+# Relationship with Other Systems
 
-Every crafting system should satisfy the following.
+Crafting depends upon:
 
-## Knowledge-Based
+- Materials
+- Knowledge Progression
+- Item System
+- World Entity System
+- Storage System
+- Physiology
 
-Knowledge enables creation.
+Crafting produces Items.
 
----
-
-## Physical
-
-Crafting consumes real materials.
-
----
-
-## Gradual
-
-Complexity increases naturally.
+Construction consumes both Items and Materials.
 
 ---
 
-## Persistent
+# Future Expansion
 
-Crafted objects remain within the world.
+Future versions may introduce:
 
----
-
-## Meaningful
-
-Every crafted object serves a purpose.
-
----
-
-## Historical
-
-Craftsmanship contributes to civilization's legacy.
-
----
-
-# What Crafting Is Not
-
-Crafting is not:
-
-- a progression shortcut
-- an instant reward system
-- recipe grinding
-- menu optimization
-
-Crafting represents humanity's ability to solve problems through understanding.
+- batch crafting
+- apprentices
+- production queues
+- automated workshops
+- machine-assisted manufacturing
+- quality specialization
+- regional crafting techniques
+- experimental recipes
+- recipe discovery
 
 ---
 
 # Final Principle
 
-Nature provides the materials.
+Crafting is the process through which knowledge becomes physical reality.
 
-Humanity provides the knowledge.
+Materials alone build nothing.
 
-Where these two meet...
+Knowledge without labor creates nothing.
 
-Civilization begins.
-
-Every crafted object is more than an item.
-
-It is proof that someone understood the world well enough to change it.
+Only when both come together does a new object permanently enter the world.
