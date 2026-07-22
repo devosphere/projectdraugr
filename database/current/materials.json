@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+
+  "registry": {
+    "total_material_types": 0,
+
+    "total_available_quantity": 0,
+
+    "resource_categories": []
+  },
+
+  "materials": []
+}

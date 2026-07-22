@@ -1,0 +1,91 @@
+{
+  "schema_version": "1.0",
+
+  "simulation": {
+    "simulation_id": null,
+
+    "status": "Not Initialized",
+
+    "mode": "World Simulation",
+
+    "version": "MVP"
+  },
+
+  "time": {
+    "world_tick": 0,
+
+    "current_day": 0,
+
+    "current_date": null,
+
+    "current_time": null,
+
+    "season": null,
+
+    "year": null
+  },
+
+  "active_chronicle": {
+    "chronicle_id": null,
+
+    "status": null,
+
+    "last_action": null
+  },
+
+  "world_processing": {
+    "current_phase": "Idle",
+
+    "last_processed_action": null,
+
+    "pending_events": [],
+
+    "active_events": []
+  },
+
+  "simulation_rules": {
+    "biological_simulation": true,
+
+    "weather_simulation": true,
+
+    "wildlife_simulation": true,
+
+    "resource_simulation": true,
+
+    "world_persistence": true,
+
+    "consequence_simulation": true
+  },
+
+  "database_sync": {
+    "last_sync": null,
+
+    "sync_status": "Initialized",
+
+    "updated_files": []
+  },
+
+  "snapshots": {
+    "last_snapshot_day": 0,
+
+    "snapshot_count": 0,
+
+    "latest_snapshot": null
+  },
+
+  "history_tracking": {
+    "last_recorded_event": null,
+
+    "total_actions_processed": 0,
+
+    "total_world_events": 0
+  },
+
+  "engine_state": {
+    "running": false,
+
+    "paused": false,
+
+    "error_state": null
+  }
+}

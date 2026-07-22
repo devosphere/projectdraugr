@@ -1,0 +1,105 @@
+{
+  "schema_version": "1.0",
+
+  "chronicle_id": null,
+
+  "status": "Not Initialized",
+
+  "body": {
+    "health": null,
+
+    "condition": [],
+
+    "hunger": null,
+
+    "thirst": null,
+
+    "energy": null,
+
+    "temperature": null,
+
+    "wetness": null,
+
+    "bladder": null,
+
+    "bowel": null,
+
+    "hygiene": null
+  },
+
+  "physical_state": {
+    "injuries": [],
+
+    "illnesses": [],
+
+    "pain": null,
+
+    "blood_loss": null,
+
+    "exposure": [],
+
+    "status_effects": []
+  },
+
+  "biological_state": {
+    "hydration_state": null,
+
+    "nutrition_state": null,
+
+    "fatigue_state": null,
+
+    "sleep_state": null,
+
+    "recovery_state": null
+  },
+
+  "environmental_effects": {
+    "temperature_exposure": null,
+
+    "wetness_exposure": null,
+
+    "weather_effects": [],
+
+    "environmental_hazards": []
+  },
+
+  "capabilities": {
+    "movement": null,
+
+    "physical_performance": null,
+
+    "crafting_efficiency": null,
+
+    "combat_capability": null,
+
+    "work_capacity": null
+  },
+
+  "needs": {
+    "food_requirement": null,
+
+    "water_requirement": null,
+
+    "rest_requirement": null,
+
+    "urination_requirement": null,
+
+    "defecation_requirement": null,
+
+    "hygiene_requirement": null
+  },
+
+  "current_effects": [],
+
+  "history": {
+    "injury_history": [],
+
+    "illness_history": [],
+
+    "recovery_history": [],
+
+    "major_physical_events": []
+  },
+
+  "last_updated": null
+}

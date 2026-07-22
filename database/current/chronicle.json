@@ -1,0 +1,131 @@
+{
+  "schema_version": "1.0",
+
+  "chronicle_id": null,
+
+  "identity": {
+    "name": null,
+
+    "gender": null,
+
+    "age": null,
+
+    "birth_date": null,
+
+    "origin": null,
+
+    "background": null
+  },
+
+  "existence": {
+    "status": "Not Initialized",
+
+    "alive": false,
+
+    "death_date": null,
+
+    "death_location": null,
+
+    "death_cause": null
+  },
+
+  "timeline": {
+    "awakening_date": null,
+
+    "survival_duration": {
+      "days": 0,
+
+      "hours": 0,
+
+      "minutes": 0
+    },
+
+    "current_day": 0
+  },
+
+  "location": {
+    "current_location_id": null,
+
+    "current_region": null,
+
+    "current_area": null,
+
+    "known_locations": []
+  },
+
+  "appearance": {
+    "height": null,
+
+    "weight": null,
+
+    "physical_description": null,
+
+    "visible_traits": [],
+
+    "permanent_marks": []
+  },
+
+  "skills": {
+    "known_skills": [],
+
+    "active_training": [],
+
+    "mastered_techniques": []
+  },
+
+  "achievements": [],
+
+  "discoveries": [],
+
+  "milestones": [],
+
+  "relationships": {
+    "known_entities": [],
+
+    "allies": [],
+
+    "enemies": [],
+
+    "communities": []
+  },
+
+  "possessions_summary": {
+    "item_count": 0,
+
+    "equipped_items": [],
+
+    "stored_items": []
+  },
+
+  "settlement": {
+    "has_established_camp": false,
+
+    "primary_camp_id": null,
+
+    "controlled_territory": []
+  },
+
+  "reputation": {
+    "known_by": [],
+
+    "reputation_records": []
+  },
+
+  "chronicle_records": {
+    "personal_notes": [],
+
+    "journals": [],
+
+    "written_documents": []
+  },
+
+  "history": {
+    "major_events": [],
+
+    "important_decisions": [],
+
+    "survival_records": []
+  },
+
+  "last_updated": null
+}

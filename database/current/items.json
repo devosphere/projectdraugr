@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+
+  "registry": {
+    "total_entities": 0,
+
+    "active_entities": 0,
+
+    "destroyed_entities": 0,
+
+    "retired_entity_ids": []
+  },
+
+  "items": []
+}

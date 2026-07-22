@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+
+  "registry": {
+    "total_recipes": 0,
+
+    "known_recipes": 0,
+
+    "active_projects": 0,
+
+    "completed_crafts": 0
+  },
+
+  "recipes": [],
+
+  "crafting_projects": [],
+
+  "production_history": []
+}

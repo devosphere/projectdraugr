@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+
+  "registry": {
+    "total_infrastructure": 0,
+
+    "operational_infrastructure": 0,
+
+    "destroyed_infrastructure": 0,
+
+    "retired_infrastructure_ids": []
+  },
+
+  "infrastructure": []
+}

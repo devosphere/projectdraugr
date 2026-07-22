@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+
+  "registry": {
+    "total_locations": 0,
+
+    "discovered_locations": 0,
+
+    "mapped_locations": 0
+  },
+
+  "world_map": {
+    "known_regions": [],
+
+    "known_areas": [],
+
+    "known_landmarks": []
+  },
+
+  "locations": [],
+
+  "routes": [],
+
+  "terrain_records": [],
+
+  "resource_locations": [],
+
+  "environmental_features": [],
+
+  "exploration_history": []
+}

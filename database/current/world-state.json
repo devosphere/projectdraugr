@@ -1,0 +1,73 @@
+{
+  "schema_version": "1.0",
+
+  "registry": {
+    "total_world_changes": 0,
+
+    "active_changes": 0,
+
+    "permanent_changes": 0
+  },
+
+  "world": {
+    "current_day": 0,
+
+    "current_time": null,
+
+    "current_season": null,
+
+    "current_weather": null
+  },
+
+  "environment": {
+    "terrain_changes": [],
+
+    "vegetation_changes": [],
+
+    "water_sources": [],
+
+    "climate_records": [],
+
+    "natural_events": []
+  },
+
+  "resources": {
+    "depleted_resources": [],
+
+    "regenerating_resources": [],
+
+    "harvested_areas": [],
+
+    "resource_changes": []
+  },
+
+  "wildlife": {
+    "known_species": [],
+
+    "animal_populations": [],
+
+    "hunting_impact": [],
+
+    "migration_records": []
+  },
+
+  "settlements": {
+    "known_settlements": [],
+
+    "abandoned_locations": [],
+
+    "civilization_changes": []
+  },
+
+  "world_entities": {
+    "destroyed_structures": [],
+
+    "ruins": [],
+
+    "historical_sites": []
+  },
+
+  "environmental_history": [],
+
+  "permanent_changes": []
+}

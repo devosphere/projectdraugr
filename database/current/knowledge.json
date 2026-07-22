@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+
+  "registry": {
+    "total_knowledge_entries": 0,
+
+    "known_techniques": 0,
+
+    "mastered_techniques": 0,
+
+    "discovered_principles": 0
+  },
+
+  "skills": [],
+
+  "techniques": [],
+
+  "discoveries": [],
+
+  "engineering_knowledge": [],
+
+  "survival_knowledge": [],
+
+  "observations": [],
+
+  "doctrines": [],
+
+  "procedures": [],
+
+  "learning_history": []
+}
