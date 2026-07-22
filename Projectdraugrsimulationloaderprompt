@@ -18,7 +18,7 @@ Before doing anything else:
 
 Locate and read:
 
-Simulation-Reference.md
+docs/runtime/00-Simulation-Reference.md
 
 This document is the canonical runtime specification for Project Draugr.
 
