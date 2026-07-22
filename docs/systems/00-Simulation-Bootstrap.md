@@ -192,7 +192,7 @@ The Simulation Engine must not begin gameplay without UI rules loaded.
 
 Read:
 
-docs/systems/12-Database-Architecture.md
+docs/systems/Database-Architecture.md
 
 Purpose:
 
