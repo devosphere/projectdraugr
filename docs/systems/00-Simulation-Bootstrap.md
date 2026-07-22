@@ -121,31 +121,41 @@ Do not begin simulation yet.
 
 Read:
 
-docs/systems/01-Chronicle-System.md
-docs/systems/02-Item-System.md
-docs/systems/03-Infrastructure-System.md
-docs/systems/04-Construction-System.md
-docs/systems/05-Crafting-System.md
-docs/systems/06-Materials-System.md
-docs/systems/07-Knowledge-Progression.md
-docs/systems/08-History-System.md
-docs/systems/09-Geography-System.md
-docs/systems/10-World-State.md
-docs/systems/11-Survival-Mechanics.md
-docs/systems/18.2-Body-HUD.md
+docs/systems/02-World-Foundation.md
+docs/systems/03-World-Simulation.md
+docs/systems/04-Gameplay-Systems.md
+docs/systems/08-Geography.md
+docs/systems/09-Ecology.md
+docs/systems/10-Resources.md
+docs/systems/11-Wildlife.md
+docs/systems/12-Monsters.md
+docs/systems/13-Construction.md
+docs/systems/14-Crafting.md
+docs/systems/14.1-World-Entity-System.md
+docs/systems/14.2-Item-System.md
+docs/systems/14.3-Storage-System.md
+docs/systems/15-Infrastructure.md
+docs/systems/16-Knowledge-Progression.md
+docs/systems/17-Chronicle-System.md
 docs/systems/19-Physiology-System.md
+docs/systems/20-History-System.md
 
 Purpose:
 
 Understand:
 
+- world simulation rules
+- entities
+- items
+- materials
+- construction
+- crafting
+- storage
+- infrastructure
+- knowledge
 - Chronicle behavior
-- world entities
-- physical objects
-- resources
-- survival mechanics
-- body awareness
-- biological simulation
+- biology
+- history
 
 ---
 
@@ -156,7 +166,7 @@ The Simulation Engine must load the presentation layer before gameplay.
 Read:
 
 docs/systems/18.1-Main-UI.md
-docs/systems/18.2-Body-HUD.md
+docs/systems/18.2-Body-Hud.md
 docs/systems/19-Physiology-System.md
 docs/systems/20-Simulation-Output-Format.md
 
