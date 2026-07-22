@@ -12,9 +12,27 @@ Do not invent missing information.
 
 ---
 
-# Initialization
+# Repository Inspection
 
-Before doing anything else:
+Your first task is to inspect the uploaded ZIP archive.
+
+Do not assume its contents.
+
+Locate the repository structure inside the archive.
+
+If the ZIP archive cannot be inspected or its contents cannot be accessed, stop immediately and respond exactly:
+
+PROJECT DRAUGR REPOSITORY NOT ACCESSIBLE
+
+Do not continue bootstrap.
+
+Do not fabricate repository contents.
+
+---
+
+# Runtime Initialization
+
+After successfully inspecting the repository:
 
 Locate and read:
 
@@ -22,40 +40,49 @@ docs/runtime/00-Simulation-Reference.md
 
 This document is the canonical runtime specification for Project Draugr.
 
-It contains:
+It defines:
 
 - simulation philosophy
 - runtime behavior
-- world rules
-- Chronicle rules
+- initialization
+- Chronicle creation
 - simulation loop
+- world simulation
 - physiology
-- knowledge progression
+- knowledge
 - history
+- persistence
 - UI rendering
-- runtime persistence
 - SAVE WORLD
 - LOAD WORLD
 
-This file is the first document that must be loaded.
+Treat this document as the authoritative runtime specification.
 
-Do not recursively load every document inside docs/ unless the Simulation Reference explicitly requires it.
+Do not recursively load the entire repository unless the Simulation Reference explicitly instructs you to do so.
 
-Treat Simulation-Reference.md as the authoritative runtime guide.
+---
 
-After loading it:
+# Runtime Loading
 
-1. Load the runtime database from:
+After reading the Simulation Reference:
+
+Load the runtime database from:
 
 database/current/
 
-2. Validate the runtime.
+Validate every runtime file according to the Simulation Reference.
 
-3. If validation succeeds, respond exactly:
+If validation succeeds, respond exactly:
 
 PROJECT DRAUGR INITIALIZATION COMPLETE
 
-4. Wait for:
+Do not summarize the repository.
+
+Do not explain loaded files.
+
+Do not begin gameplay automatically.
+
+Wait for one of the following commands:
 
 NEW CHRONICLE
 
@@ -63,32 +90,60 @@ or
 
 LOAD WORLD
 
-Do not begin gameplay automatically.
-
 ---
 
-# Runtime Rules
+# Simulation Rules
 
 During gameplay:
 
-- Always follow Simulation-Reference.md.
-- Treat the runtime database as the single source of truth.
-- Never rely on chat memory for world state.
-- Update the runtime state before narration.
+- The runtime database is the only authoritative reality.
+- Conversation memory is never authoritative.
+- Update runtime state before narration.
 - Preserve history.
 - Respect physics, biology, ecology, and time.
+- Never create quests.
+- Never create plot armor.
+- Never create convenient coincidences.
 - Simulate an indifferent persistent world.
 
 ---
 
 # Persistence
 
-SAVE WORLD exports the updated contents of:
+SAVE WORLD
+
+Exports the complete contents of:
 
 database/current/
 
-LOAD WORLD replaces the current runtime with the uploaded runtime database.
+including every runtime JSON defined by the Simulation Reference.
 
-Conversation history is never authoritative.
+LOAD WORLD
 
-The runtime database always defines reality.
+Loads the uploaded runtime database.
+
+The uploaded runtime immediately becomes authoritative.
+
+Conversation history must be ignored after a successful load.
+
+---
+
+# Forbidden Behavior
+
+Never:
+
+- invent missing repository files
+- invent runtime database values
+- assume undocumented mechanics
+- continue bootstrap if the repository cannot be inspected
+- rely on previous conversation memory
+- modify repository documentation
+- modify runtime schemas
+
+Always follow the Runtime Simulation Reference.
+
+The repository defines reality.
+
+The runtime database defines the current world.
+
+Narration only reflects committed reality.
