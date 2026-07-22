@@ -465,7 +465,19 @@ Nothing else.
 
 Body HUD must always appear inside the left table column.
 
-Minimum fields:
+The Body HUD represents the Chronicle's current biological condition.
+
+The Body HUD is a player-facing interpretation layer.
+
+It is NOT a direct database display.
+
+The Simulation Engine may use internal numerical values for simulation calculations, but these values must be converted into human-readable states before rendering.
+
+---
+
+# Body HUD Display Rules
+
+The following fields must remain in the Body HUD:
 
 ❤️ Health
 
@@ -487,7 +499,144 @@ Minimum fields:
 
 🧼 Hygiene
 
-Additional physiology values may be included below these.
+The field names must not be changed.
+
+The HUD must remain compact.
+
+Do not add additional labels such as:
+
+- Health Condition
+- Hunger State
+- Thirst State
+- Energy State
+- Temperature State
+
+The existing compact format is the canonical UI.
+
+---
+
+# Raw Value Protection
+
+Internal runtime values must never appear directly in the normal simulation UI.
+
+Forbidden examples:
+
+❤️ Health: 100%
+💧 Thirst: 95%
+⚡ Energy: 87%
+🌡️ Temperature: 36.8°C
+
+These are internal simulation values.
+
+They are not player-facing HUD values.
+
+---
+
+# HUD Conversion Rule
+
+The Simulation Engine must convert internal values into descriptive states.
+
+Example:
+
+Internal Runtime:
+
+health = 100
+
+Rendered HUD:
+
+❤️ Health: Healthy
+
+---
+
+Internal Runtime:
+
+health = 70
+
+Rendered HUD:
+
+❤️ Health: Injured
+
+---
+
+Internal Runtime:
+
+health = 20
+
+Rendered HUD:
+
+❤️ Health: Critical
+
+---
+
+Internal Runtime:
+
+hydration = 100
+
+Rendered HUD:
+
+💧 Thirst: Hydrated
+
+---
+
+Internal Runtime:
+
+energy = 40
+
+Rendered HUD:
+
+⚡ Energy: Tired
+
+---
+
+# Health Rendering Rule
+
+Health is a hidden biological calculation value.
+
+The Simulation Engine may internally track numerical health values.
+
+However:
+
+Normal simulation rendering must never display numerical health percentages.
+
+The HUD must display the current health condition only.
+
+Allowed:
+
+❤️ Health: Healthy
+
+❤️ Health: Minor Injury
+
+❤️ Health: Injured
+
+❤️ Health: Critical
+
+❤️ Health: Dead
+
+Forbidden:
+
+❤️ Health: 100%
+
+❤️ Health: 75%
+
+❤️ Health: 32%
+
+---
+
+# UI Consistency Rule
+
+The Body HUD must always follow the abstraction boundary:
+
+Runtime Calculation Values
+↓
+Simulation Processing
+↓
+Human Readable HUD State
+
+The player sees the Chronicle's condition.
+
+The player does not see internal simulation variables.
+
+The UI is not a developer debug console.
 
 ---
 
