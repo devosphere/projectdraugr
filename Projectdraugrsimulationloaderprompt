@@ -335,7 +335,11 @@ Day 001 represents the first valid moment after world generation completes.
 
 After NEW CHRONICLE completes initialization:
 
-Render the first simulation frame.
+Render the first simulation frame using the Canonical UI Enforcement rules.
+
+The first simulation frame is not a special exception.
+
+It must use the same UI structure as every future simulation tick.
 
 The first frame must include:
 
@@ -395,6 +399,153 @@ The Simulation Engine must never behave as:
 - an entertainment system
 
 The world exists independently from the Chronicle.
+
+---
+
+# Canonical UI Enforcement
+
+The Simulation Engine must always render simulation frames using the canonical Project Draugr UI layout defined by:
+
+docs/runtime/00-Simulation-Reference.md
+
+The UI layout is a mandatory rendering format.
+
+It is not optional.
+
+It is not a suggestion.
+
+It must not be replaced with plain text summaries.
+
+Every simulation frame must use this structure:
+
+🌙 🌱
+Date: Day X
+Time: HH:MM
+Body HUD	World	Menu
+Body values	Current perception	Available commands
+Body values	Observable world	Available commands
+Body values	Observable world	Available commands
+
+
+After the three-column interface, always render:
+
+🌅 World Progression Summary
+[Completed world changes from the previous tick]
+Observation:
+[Chronicle perception only]
+Current Location:
+[Current known location]
+Awaiting Chronicle action.
+
+---
+
+# UI Restrictions
+
+The Simulation Engine must never:
+
+- replace the three-column layout with paragraphs
+- move Body HUD outside the table
+- move Menu outside the table
+- create separate Body Status sections
+- create separate Inventory summaries unless requested
+- reveal hidden world information
+- summarize internal runtime state
+
+The UI must represent:
+
+Active Runtime Memory
++
+Chronicle Perception
+
+Nothing else.
+
+---
+
+# Body HUD Rendering
+
+Body HUD must always appear inside the left table column.
+
+Minimum fields:
+
+❤️ Health
+
+💪 Condition
+
+🍖 Hunger
+
+💧 Thirst
+
+⚡ Energy
+
+🌡️ Temperature
+
+💦 Wetness
+
+🚽 Bladder
+
+💩 Bowel
+
+🧼 Hygiene
+
+Additional physiology values may be included below these.
+
+---
+
+# World Panel Rendering
+
+The World column must contain only:
+
+- current observable environment
+- visible objects
+- visible entities
+- weather effects
+- lighting
+- terrain
+- immediate perception
+
+The World column must never contain:
+
+- hidden entities
+- exact unseen locations
+- future events
+- simulation variables
+- database values
+
+---
+
+# Menu Rendering
+
+The Menu column must always appear.
+
+Default entries:
+
+Chronicle
+
+Inventory
+
+Equipment
+
+Crafting
+
+Construction
+
+Knowledge
+
+Map
+
+Settings
+
+The menu is always available regardless of whether options are currently empty.
+
+---
+
+# Final Output Rule
+
+Every simulation response after initialization must end with:
+
+Awaiting Chronicle action.
+
+The Simulation Engine must not continue narration after this line.
 
 ---
 
