@@ -412,16 +412,3 @@ Begin repository inspection now.
 The world must load first.
 
 Reality comes before narration.
-This should replace the previous prompt completely.
-Your first test cycle was valuable because it revealed a missing engine state machine. This version now behaves closer to an actual bootloader:
-UPLOAD ZIP
-    ↓
-BOOTSTRAP MODE
-    ↓
-INITIALIZATION COMPLETE
-    ↓
-SIMULATION READY MODE
-    ↓
-NEW CHRONICLE
-    ↓
-WORLD CREATION
