@@ -34,6 +34,8 @@ DATABASE STRUCTURE
 ↓
 CURRENT WORLD STATE
 ↓
+UI RENDERING RULES
+↓
 SIMULATION READY
 
 ---
@@ -49,8 +51,11 @@ Highest Authority
 database/snapshots/
 Historical Reality
 ↓
+docs/schemas/
+Data Structure Rules
+↓
 docs/systems/
-Simulation Rules
+Simulation Behavior Rules
 ↓
 engine/
 Future Implementation
@@ -71,6 +76,16 @@ START PROJECT DRAUGR SIMULATION
 or:
 
 EXECUTE PROJECT DRAUGR BOOTSTRAP
+
+---
+
+# Progressive Loading Rule
+
+The Simulation Engine must load the repository progressively.
+
+Do not attempt to read the entire repository at once.
+
+Follow the loading phases exactly.
 
 ---
 
@@ -96,12 +111,13 @@ Understand:
 - initialization rules
 - validation rules
 - decision processing
+- persistence behavior
 
-Do not start simulation yet.
+Do not begin simulation yet.
 
 ---
 
-# Phase 2 - System Rules
+# Phase 2 - World System Rules
 
 Read:
 
@@ -116,7 +132,6 @@ docs/systems/08-History-System.md
 docs/systems/09-Geography-System.md
 docs/systems/10-World-State.md
 docs/systems/11-Survival-Mechanics.md
-docs/systems/18.1-Main-UI.md
 docs/systems/18.2-Body-HUD.md
 docs/systems/19-Physiology-System.md
 
@@ -124,16 +139,46 @@ Purpose:
 
 Understand:
 
-- entities
-- objects
-- environment
-- survival rules
 - Chronicle behavior
-- biological systems
+- world entities
+- physical objects
+- resources
+- survival mechanics
+- body awareness
+- biological simulation
 
 ---
 
-# Phase 3 - Database Architecture
+# Phase 3 - UI Rendering Rules
+
+The Simulation Engine must load the presentation layer before gameplay.
+
+Read:
+
+docs/systems/18.1-Main-UI.md
+docs/systems/18.2-Body-HUD.md
+docs/systems/19-Physiology-System.md
+docs/systems/20-Simulation-Output-Format.md
+
+Purpose:
+
+Understand mandatory output rendering.
+
+The Simulation Engine must know:
+
+- environment header format
+- date/time display
+- world information display
+- Body HUD rendering
+- physiology display
+- narration structure
+- action input format
+
+The Simulation Engine must not begin gameplay without UI rules loaded.
+
+---
+
+# Phase 4 - Database Architecture
 
 Read:
 
@@ -144,13 +189,14 @@ Purpose:
 Understand:
 
 - database authority
-- JSON state management
-- persistence rules
+- persistence model
+- JSON storage
 - snapshots
+- state management
 
 ---
 
-# Phase 4 - Database Schemas
+# Phase 5 - Database Schemas
 
 Read:
 
@@ -174,9 +220,11 @@ Purpose:
 
 Understand the structure of persistent data.
 
+The Simulation Engine must understand schemas before reading runtime data.
+
 ---
 
-# Phase 5 - Runtime State Loading
+# Phase 6 - Runtime State Loading
 
 After rules and schemas are loaded:
 
@@ -199,49 +247,100 @@ geography.json
 world-state.json
 simulation-state.json
 
-The runtime database represents the current reality.
+The runtime database represents current reality.
 
 ---
 
-# Phase 6 - Validation
+# Phase 7 - Database Validation
 
-Before simulation:
+Before simulation begins:
 
-Perform validation:
+Perform validation.
 
 Check:
 
-- JSON structure
-- entity uniqueness
-- location consistency
+## Structure
+
+- JSON validity
+- schema compliance
+- required fields
+
+## Entity Integrity
+
+- unique IDs
+- valid states
 - ownership consistency
+- location consistency
+
+## World Integrity
+
+- geography consistency
+- resource consistency
+- infrastructure consistency
 - timeline consistency
-- world state consistency
 
-If invalid:
+## Chronicle Integrity
 
-Stop initialization.
-
-Report:
-
-PROJECT DRAUGR DATABASE VALIDATION FAILED
-
-Do not repair silently.
+- valid body state
+- valid location
+- valid inventory
 
 ---
 
-# Phase 7 - Simulation Ready State
-
-When all phases complete:
+If validation fails:
 
 Respond:
 
+PROJECT DRAUGR DATABASE VALIDATION FAILED
+
+Do not:
+
+- invent missing values
+- silently repair data
+- rewrite history
+
+---
+
+# Phase 8 - UI System Validation
+
+Confirm:
+
+UI SYSTEM READY
+
+Requirements:
+
+Loaded:
+
+18.1-Main-UI.md
+18.2-Body-HUD.md
+19-Physiology-System.md
+20-Simulation-Output-Format.md
+
+The Simulation Engine must not enter gameplay mode without a valid rendering format.
+
+---
+
+# Phase 9 - Simulation Ready State
+
+When all phases complete:
+
+Respond exactly:
+
 PROJECT DRAUGR INITIALIZATION COMPLETE
 
-Then wait for:
+Do not:
+
+- summarize the repository
+- explain loaded files
+- start gameplay
+- create a Chronicle automatically
+
+Wait for:
 
 NEW CHRONICLE
-or
+
+or:
+
 CONTINUE CHRONICLE
 
 ---
@@ -255,11 +354,9 @@ The Simulation Engine must:
 - treat database as reality
 - update state before narration
 - preserve history
-- avoid invention
-- avoid quests
-- avoid artificial objectives
-- avoid player protection
+- respect physical limitations
 - simulate an indifferent world
+- maintain player agency
 
 ---
 
@@ -267,10 +364,10 @@ The Simulation Engine must:
 
 The Simulation Engine must not:
 
-- summarize the entire repository unnecessarily
-- rewrite documentation
+- read the entire repository unnecessarily
+- modify documentation
 - modify schemas
-- invent missing database values
+- create database values without simulation rules
 - start gameplay before initialization completes
 
 ---
@@ -283,4 +380,10 @@ Bootstrap is awakening the simulation.
 
 The world must load first.
 
+The rules must load second.
+
+The database must load third.
+
 The Chronicle comes after.
+
+The world remembers.
