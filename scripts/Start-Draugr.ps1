@@ -16,6 +16,11 @@ if (-not (Test-Path $maven)) {
 if (Test-Path $runtimeFile) {
     throw 'Project Draugr is already marked as running. Use scripts\Stop-Draugr.ps1 before launching another instance.'
 }
+foreach ($port in 8080, 5173) {
+    if (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue) {
+        throw "Port $port is already in use by another process. Close that existing backend/frontend first, then launch Project Draugr again."
+    }
+}
 
 Push-Location $root
 try {
