@@ -51,6 +51,7 @@ public class ChroniclePhysiologyService {
                 String cause = water > DEHYDRATION_DEATH_HOURS ? "Critical Dehydration" : food > STARVATION_DEATH_HOURS ? "Critical Starvation" : bloodLoss > 3500 ? "Critical Blood Loss" : "Systemic Illness";
                 UUID deathLocation = jdbc.query("SELECT current_location_id FROM world_object WHERE id=?", result -> result.next() ? result.getObject(1, UUID.class) : null, id);
                 relocatePossessions(id, deathLocation, now);
+                jdbc.update("INSERT INTO chronicle_death_snapshot (chronicle_id,died_at,death_location_id,cause,body_snapshot) VALUES (?,?,?,?,jsonb_build_object('health',?,'condition',?,'hunger',?,'thirst',?,'energy',?,'temperature',?,'wetness',?,'bladder',?,'bowel',?,'hygiene',?))",id,now,deathLocation,cause,health(injury,illness,bloodLoss),condition(rs.getString(12),pain,stress,sleepDebt),hunger(food),thirst(water),energy(energy),temperature(core),wetness(wetness),bladder(bladder),bowel(bowel),hygiene(hygiene));
                 jdbc.update("UPDATE chronicle SET life_state = 'DEAD', died_at = ?, death_cause = ? WHERE id = ?", now, cause, id);
                 jdbc.update("UPDATE chronicle_body SET health = 'Dying', condition_summary = ? WHERE chronicle_id = ?", cause, id);
                 jdbc.update("INSERT INTO chronicle_event (chronicle_id, occurred_at, event_type, payload) VALUES (?, ?, 'CHRONICLE_DIED', jsonb_build_object('cause', ?))", id, now, cause);
