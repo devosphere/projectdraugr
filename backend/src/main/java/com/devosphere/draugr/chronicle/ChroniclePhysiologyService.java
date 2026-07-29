@@ -82,6 +82,11 @@ public class ChroniclePhysiologyService {
         refreshBody(chronicleId);
     }
     @Transactional
+    public void eatCookedMeal(UUID chronicleId) {
+        jdbc.update("UPDATE chronicle_physiology SET hours_without_food=GREATEST(0,hours_without_food-16), energy_level=LEAST(100,energy_level+14),stress_level=GREATEST(0,stress_level-2) WHERE chronicle_id=?", chronicleId);
+        refreshBody(chronicleId);
+    }
+    @Transactional
     public void drink(UUID chronicleId) {
         jdbc.update("UPDATE chronicle_physiology SET hours_without_water=GREATEST(0,hours_without_water-10) WHERE chronicle_id=?", chronicleId);
         refreshBody(chronicleId);
