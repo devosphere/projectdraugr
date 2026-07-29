@@ -13,6 +13,7 @@ import java.sql.SQLException;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class WorldEventArchiveIntegrationTest {
     private static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
@@ -64,6 +65,16 @@ class WorldEventArchiveIntegrationTest {
             connection.createStatement().executeUpdate("INSERT INTO container_properties (object_id,max_mass_grams,max_volume_ml) VALUES ('" + firstItem + "',20000,20000),('" + secondItem + "',20000,20000)");
             connection.createStatement().executeUpdate("INSERT INTO item_containment (item_id,container_id) VALUES ('" + secondItem + "','" + firstItem + "')");
             assertThrows(SQLException.class, () -> connection.createStatement().executeUpdate("INSERT INTO item_containment (item_id,container_id) VALUES ('" + firstItem + "','" + secondItem + "')"));
+        }
+    }
+
+    @Test
+    void arrivalClothingDefinitionsHaveExplicitEquipmentSlots() throws SQLException {
+        try (Connection connection = java.sql.DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())) {
+            Integer definitions = connection.createStatement().executeQuery("SELECT COUNT(*) FROM item_definition WHERE item_key IN ('arrival_shirt','arrival_trousers','arrival_left_shoe','arrival_right_shoe')").next() ? connection.createStatement().executeQuery("SELECT COUNT(*) FROM item_definition WHERE item_key IN ('arrival_shirt','arrival_trousers','arrival_left_shoe','arrival_right_shoe')").getInt(1) : 0;
+            Integer slots = connection.createStatement().executeQuery("SELECT COUNT(*) FROM item_equipment_compatibility WHERE item_key IN ('arrival_shirt','arrival_trousers','arrival_left_shoe','arrival_right_shoe')").next() ? connection.createStatement().executeQuery("SELECT COUNT(*) FROM item_equipment_compatibility WHERE item_key IN ('arrival_shirt','arrival_trousers','arrival_left_shoe','arrival_right_shoe')").getInt(1) : 0;
+            assertEquals(4, definitions);
+            assertEquals(4, slots);
         }
     }
 }
