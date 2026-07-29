@@ -3,7 +3,7 @@ import forestArt from './assets/onboarding-forest-v1.png';
 
 type Panel = 'none' | 'archive' | 'settings' | 'crossing';
 
-export function OnboardingScreen() {
+export function OnboardingScreen({ onAwaken }: { onAwaken: () => void }) {
   const [panel, setPanel] = useState<Panel>('none');
   // Chronicle persistence will replace this with the authoritative session state.
   const hasLivingChronicle = false;
@@ -31,7 +31,7 @@ export function OnboardingScreen() {
           <p className="crossing-copy">Then the pain is gone.</p>
           <p className="crossing-copy">Cold air fills your lungs. Damp earth presses beneath your palms. Above you: an unfamiliar sky.</p>
           <p className="crossing-copy final">Your soul has found the body waiting for it.</p>
-          <button className="dialog-close" onClick={() => setPanel('none')}>Return</button>
+          <button className="dialog-close" onClick={onAwaken}>OK</button>
         </>}
         {panel === 'archive' && <>
           <p className="dialog-kicker">Chronicle Archive</p>
