@@ -1,11 +1,15 @@
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
+$runtimeFile = Join-Path $root '.draugr-runtime.json'
 
-foreach ($port in 5173, 8080) {
-    $listeners = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
-    foreach ($listener in $listeners) {
-        Stop-Process -Id $listener.OwningProcess -Force
+if (Test-Path $runtimeFile) {
+    $runtime = Get-Content -Raw -Path $runtimeFile | ConvertFrom-Json
+    foreach ($processId in @($runtime.backendProcessId, $runtime.frontendProcessId)) {
+        if ($processId -and (Get-Process -Id $processId -ErrorAction SilentlyContinue)) {
+            & taskkill.exe /PID $processId /T /F | Out-Null
+        }
     }
+    Remove-Item -LiteralPath $runtimeFile -Force
 }
 
 Push-Location $root
