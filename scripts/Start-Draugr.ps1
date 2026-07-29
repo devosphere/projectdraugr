@@ -13,6 +13,9 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
 if (-not (Test-Path $maven)) {
     throw 'The bundled Maven runtime was not found. Restore .tools before starting Draugr.'
 }
+if (-not (Test-Path (Join-Path $root 'frontend\node_modules'))) {
+    throw 'Frontend dependencies are missing. Open the frontend folder once and run npm install, then launch Project Draugr again.'
+}
 if (Test-Path $runtimeFile) {
     throw 'Project Draugr is already marked as running. Use scripts\Stop-Draugr.ps1 before launching another instance.'
 }
