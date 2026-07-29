@@ -14,9 +14,12 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 public class ChronicleActionService {
+    private static final Pattern DURATION = Pattern.compile("\\b(?:for\\s+)?(\\d{1,3})\\s*(minute|min|minutes|mins|hour|hours|hr|hrs)\\b", Pattern.CASE_INSENSITIVE);
     private final JdbcTemplate jdbc; private final SimulationTickService ticks; private final ChroniclePhysiologyService physiology; private final NarrationPolicy narration; private final PhysicalItemService items; private final CapabilityAdaptationService capability;
     public ChronicleActionService(JdbcTemplate jdbc, SimulationTickService ticks, ChroniclePhysiologyService physiology, NarrationPolicy narration, PhysicalItemService items, CapabilityAdaptationService capability) { this.jdbc = jdbc; this.ticks = ticks; this.physiology = physiology; this.narration = narration; this.items=items; this.capability=capability; }
 
@@ -25,10 +28,11 @@ public class ChronicleActionService {
         if (text == null || text.trim().isEmpty() || text.length() > 2500) throw new IllegalArgumentException("An action must contain 1 to 2500 characters.");
         ActiveChronicle chronicle = jdbc.query("SELECT c.id, w.current_location_id FROM chronicle c JOIN world_object w ON w.id=c.id WHERE c.life_state='LIVING' FOR UPDATE", rs -> rs.next() ? new ActiveChronicle(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class)) : null);
         if (chronicle == null) throw new IllegalStateException("No living Chronicle exists.");
-        Intent intent = classify(text); int minutes = intent == Intent.OBSERVE ? 10 : intent == Intent.REST ? 60 : intent == Intent.GATHER_FIBER ? 25 : 5;
+        Intent intent = classify(text); int minutes = durationFor(text, intent);
         Instant resolvedAt = ticks.advanceBy(Duration.ofMinutes(minutes)).simulatedAt();
         UUID actionId = UUID.randomUUID(); String outcome = "SUCCEEDED"; String perception;
         if (intent == Intent.OBSERVE) perception = observe(chronicle.location());
+        else if (intent == Intent.MOVE) perception = move(chronicle, text, actionId, resolvedAt);
         else if (intent == Intent.URINATE || intent == Intent.DEFECATE) {
             boolean bowel = intent == Intent.DEFECATE;
             physiology.applyRelief(chronicle.id(), bowel);
@@ -60,8 +64,24 @@ public class ChronicleActionService {
         return new NarrationPage(List.copyOf(entries), hasMore);
     }
     private String observe(UUID location) { Integer sites = jdbc.queryForObject("SELECT COUNT(*) FROM ecology_site WHERE chunk_id = ?", Integer.class, location); return sites != null && sites > 0 ? "You notice signs that this place has been shaped by more than rain and roots alone." : "Rain-darkened ground, roots, and wet leaves hold the nearest details of the forest."; }
-    private Intent classify(String action) { String value = action.toLowerCase(Locale.ROOT); if (value.contains("fire pit") || value.contains("firepit")) return Intent.BUILD_FIRE_PIT; if ((value.contains("gather")||value.contains("collect")) && value.contains("fiber")) return Intent.GATHER_FIBER; if (value.contains("observe") || value.contains("look") || value.contains("inspect")) return Intent.OBSERVE; if (value.contains("rest") || value.contains("wait")) return Intent.REST; if (value.contains("urinate") || value.contains("pee")) return Intent.URINATE; if (value.contains("defecate") || value.contains("poop")) return Intent.DEFECATE; return Intent.UNKNOWN; }
-    private record ActiveChronicle(UUID id, UUID location) { } private enum Intent { OBSERVE, REST, GATHER_FIBER, BUILD_FIRE_PIT, URINATE, DEFECATE, UNKNOWN }
+    private String move(ActiveChronicle chronicle, String action, UUID actionId, Instant occurredAt) {
+        Direction direction = Direction.from(action);
+        if (direction == null) return "You shift through the wet ground, but do not commit to a direction.";
+        UUID destination = jdbc.query("SELECT next.id FROM world_chunk current JOIN world_chunk next ON next.world_id=current.world_id AND next.grid_x=current.grid_x+? AND next.grid_y=current.grid_y+? WHERE current.id=?", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, direction.dx, direction.dy, chronicle.location());
+        if (destination == null) return "The ground gives way toward the edge of what you can cross. You turn back before leaving the land behind.";
+        jdbc.update("UPDATE world_object SET current_location_id=?, updated_at=? WHERE id=?", destination, occurredAt, chronicle.id());
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'MOVED',jsonb_build_object('fromLocationId',?::text,'toLocationId',?::text,'direction',?))", chronicle.id(), occurredAt, chronicle.location().toString(), destination.toString(), direction.name());
+        jdbc.update("INSERT INTO chronicle_event (chronicle_id,occurred_at,event_type,payload) VALUES (?,?,'CHRONICLE_MOVED',jsonb_build_object('fromLocationId',?::text,'toLocationId',?::text,'direction',?))", chronicle.id(), occurredAt, chronicle.location().toString(), destination.toString(), direction.name());
+        return "You travel " + direction.description + ", leaving the last stand of trees behind you.";
+    }
+    private int durationFor(String action, Intent intent) {
+        Matcher match = DURATION.matcher(action);
+        if (match.find()) { int amount = Integer.parseInt(match.group(1)); int minutes = match.group(2).toLowerCase(Locale.ROOT).startsWith("h") ? amount * 60 : amount; return Math.max(1, Math.min(minutes, 24 * 60)); }
+        return switch (intent) { case OBSERVE -> 10; case REST -> 60; case GATHER_FIBER -> 25; case MOVE -> 30; default -> 5; };
+    }
+    private Intent classify(String action) { String value = action.toLowerCase(Locale.ROOT); if (value.contains("fire pit") || value.contains("firepit")) return Intent.BUILD_FIRE_PIT; if ((value.contains("gather")||value.contains("collect")) && value.contains("fiber")) return Intent.GATHER_FIBER; if (Direction.from(value) != null && (value.contains("walk") || value.contains("travel") || value.contains("go ") || value.contains("move"))) return Intent.MOVE; if (value.contains("observe") || value.contains("look") || value.contains("inspect")) return Intent.OBSERVE; if (value.contains("rest") || value.contains("wait")) return Intent.REST; if (value.contains("urinate") || value.contains("pee")) return Intent.URINATE; if (value.contains("defecate") || value.contains("poop")) return Intent.DEFECATE; return Intent.UNKNOWN; }
+    private record ActiveChronicle(UUID id, UUID location) { } private enum Intent { OBSERVE, MOVE, REST, GATHER_FIBER, BUILD_FIRE_PIT, URINATE, DEFECATE, UNKNOWN }
+    private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;} }
     public record ActionResult(UUID actionId, String intent, String outcome, int durationMinutes, Instant resolvedAt, String perception, ChroniclePhysiologyService.BodyHudSnapshot body) { }
     public record NarrationEntry(UUID id, Instant occurredAt, String narration) { }
     public record NarrationPage(List<NarrationEntry> entries, boolean hasMore) { }

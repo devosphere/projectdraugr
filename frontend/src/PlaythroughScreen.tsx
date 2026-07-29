@@ -125,6 +125,9 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
       if (!response.ok || !result || !('perception' in result)) throw new Error(result && 'message' in result && result.message ? result.message : 'The simulation could not resolve that action.');
       setNarrations(entries => [...entries, { id: result.actionId, occurredAt: result.resolvedAt, text: result.perception }]);
       setBody(toBodyRows(result.body));
+      fetch(`${apiUrl}/api/chronicles/active/location`).then(response => response.ok ? response.json() : null).then((snapshot: LocationSnapshot | null) => {
+        if (snapshot) setLocation(backdropByBiome[snapshot.presentationKey] ?? backdropByBiome[snapshot.biome] ?? backdropByBiome.TEMPERATE_FOREST);
+      }).catch(() => undefined);
       setAction('');
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'The simulation could not resolve that action.');
