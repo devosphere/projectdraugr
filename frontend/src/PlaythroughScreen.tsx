@@ -12,6 +12,8 @@ const previewBody = [
 type BodySnapshot = { health: string; condition: string; hunger: string; thirst: string; energy: string; temperature: string; wetness: string; bladder: string; bowel: string; hygiene: string };
 type ActionResult = { actionId: string; intent: string; outcome: string; durationMinutes: number; perception: string; body: BodySnapshot };
 type LocationSnapshot = { biome: string; presentationKey: string };
+type ItemState = { carried: { id: string; displayName: string; itemKey: string }[]; equipped: { id: string; displayName: string; bodyPosition: string; layer: string }[] };
+type Panel = 'none' | 'chronicle' | 'equipment' | 'storage' | 'crafting' | 'construction' | 'knowledge' | 'map';
 
 const backdropByBiome: Record<string, { art: string; label: string }> = {
   TEMPERATE_FOREST: { art: forestArt, label: 'Uncharted forest' },
@@ -32,6 +34,8 @@ export function PlaythroughScreen({ apiUrl }: { apiUrl?: string }) {
   const [resolving, setResolving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [location, setLocation] = useState(backdropByBiome.TEMPERATE_FOREST);
+  const [panel, setPanel] = useState<Panel>('none');
+  const [items, setItems] = useState<ItemState | null>(null);
   const actionField = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -40,6 +44,16 @@ export function PlaythroughScreen({ apiUrl }: { apiUrl?: string }) {
       if (snapshot) setBody(toBodyRows(snapshot));
     }).catch(() => undefined);
   }, [apiUrl]);
+
+  useEffect(() => {
+    if (!apiUrl || (panel !== 'equipment' && panel !== 'storage')) return;
+    fetch(`${apiUrl}/api/items/state`).then(response => response.ok ? response.json() : null).then((snapshot: ItemState | null) => setItems(snapshot)).catch(() => setItems(null));
+  }, [apiUrl, panel]);
+
+  useEffect(() => {
+    const key = (event: KeyboardEvent) => { if (event.target instanceof HTMLTextAreaElement) return; const next: Record<string, Panel> = { c: 'chronicle', e: 'equipment', i: 'storage', k: 'knowledge', m: 'map' }; if (next[event.key.toLowerCase()]) setPanel(next[event.key.toLowerCase()]); };
+    window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key);
+  }, []);
 
   useEffect(() => {
     if (!apiUrl) return;
@@ -81,12 +95,22 @@ export function PlaythroughScreen({ apiUrl }: { apiUrl?: string }) {
     <header className="world-header">
       <div><p className="eyebrow">{location.label}</p><strong>Early morning</strong></div>
       <div className="world-signs" aria-label="Environmental conditions"><span title="Daylight">Dawn</span><span title="Weather">Light rain</span><span title="Season">Early spring</span></div>
-      <button className="quiet-menu" aria-label="Open menus">Menu</button>
+      <button className="quiet-menu" aria-label="Open menus" onClick={() => setPanel(panel === 'none' ? 'chronicle' : 'none')}>Menu</button>
     </header>
     <aside className="body-hud" aria-label="Body awareness">
       <p className="eyebrow">Body</p>
       {body.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
     </aside>
+    {panel !== 'none' && <aside className="expanded-menu" aria-label="Chronicle menu">
+      <header><p className="eyebrow">Chronicle systems</p><button onClick={() => setPanel('none')}>Close</button></header>
+      <nav>{([['chronicle','Chronicle'],['equipment','Equipment'],['storage','Storage'],['crafting','Crafting'],['construction','Construction'],['knowledge','Knowledge'],['map','Chronicle Map']] as [Panel,string][]).map(([id,label]) => <button key={id} className={panel===id?'active':''} onClick={() => setPanel(id)}>{label}</button>)}</nav>
+      <section className="menu-detail">
+        {panel==='equipment' && <><h2>Equipment</h2>{items?.equipped.length ? items.equipped.map(item => <p key={item.id}>{item.bodyPosition.replace('_',' ')} · {item.displayName}</p>) : <p>Nothing is attached to your body.</p>}</>}
+        {panel==='storage' && <><h2>Storage</h2>{items?.carried.filter(item => item.itemKey==='woven_basket').length ? items.carried.filter(item => item.itemKey==='woven_basket').map(item => <p key={item.id}>{item.displayName} is carried and may be opened when interacted with.</p>) : <p>You have no accessible storage object.</p>}</>}
+        {panel==='chronicle' && <><h2>Chronicle</h2><p>This life has only just begun.</p></>}
+        {(['crafting','construction','knowledge','map'] as Panel[]).includes(panel) && <><h2>{panel==='map'?'Chronicle Map':panel[0].toUpperCase()+panel.slice(1)}</h2><p>Nothing is available here yet.</p></>}
+      </section>
+    </aside>}
     <div className="playthrough-bottom">
       <section className="perception" aria-label="Current perception">
         <p className="eyebrow">Awakening</p>
