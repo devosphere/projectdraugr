@@ -12,6 +12,16 @@ if (Test-Path $runtimeFile) {
     Remove-Item -LiteralPath $runtimeFile -Force
 }
 
+# Maven and Vite can outlive the small launcher process that started them on
+# Windows. These two ports are reserved exclusively for the local Draugr app,
+# so clear any such orphaned child process before declaring the game stopped.
+foreach ($port in @(8080, 5173)) {
+    $listener = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($listener) {
+        & taskkill.exe /PID $listener.OwningProcess /T /F | Out-Null
+    }
+}
+
 Push-Location $root
 try {
     docker compose stop postgres
