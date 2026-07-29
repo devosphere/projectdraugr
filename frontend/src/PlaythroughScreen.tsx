@@ -13,7 +13,7 @@ type BodySnapshot = { health: string; condition: string; hunger: string; thirst:
 type ActionResult = { actionId: string; intent: string; outcome: string; durationMinutes: number; perception: string; body: BodySnapshot };
 type LocationSnapshot = { biome: string; presentationKey: string };
 type ItemState = { carried: { id: string; displayName: string; itemKey: string }[]; equipped: { id: string; displayName: string; bodyPosition: string; layer: string }[] };
-type Panel = 'none' | 'chronicle' | 'equipment' | 'storage' | 'crafting' | 'construction' | 'knowledge' | 'map';
+type Panel = 'none' | 'chronicle' | 'equipment' | 'load' | 'storage' | 'crafting' | 'construction' | 'knowledge' | 'map';
 
 const backdropByBiome: Record<string, { art: string; label: string }> = {
   TEMPERATE_FOREST: { art: forestArt, label: 'Uncharted forest' },
@@ -36,6 +36,7 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
   const [location, setLocation] = useState(backdropByBiome.TEMPERATE_FOREST);
   const [panel, setPanel] = useState<Panel>('none');
   const [items, setItems] = useState<ItemState | null>(null);
+  const prototypeMode = !apiUrl;
   const actionField = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -103,12 +104,16 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
     </aside>
     {panel !== 'none' && <aside className="expanded-menu" aria-label="Chronicle menu">
       <header><p className="eyebrow">Chronicle systems</p><button onClick={() => setPanel('none')}>Close</button></header>
-      <nav>{([['chronicle','Chronicle'],['equipment','Equipment'],['storage','Storage'],['knowledge','Knowledge'],['map','Chronicle Map']] as [Panel,string][]).map(([id,label]) => <button key={id} className={panel===id?'active':''} onClick={() => setPanel(id)}>{label}</button>)}<button className="return-main" onClick={onReturnToMainMenu}>Return to Main Menu</button></nav>
+      <nav>{((prototypeMode ? [['chronicle','Chronicle'],['equipment','Equipment'],['load','Load'],['storage','Storage'],['crafting','Crafting'],['construction','Construction'],['knowledge','Knowledge'],['map','Chronicle Map']] : [['chronicle','Chronicle'],['equipment','Equipment'],['load','Load'],['knowledge','Knowledge']]) as [Panel,string][]).map(([id,label]) => <button key={id} className={panel===id?'active':''} onClick={() => setPanel(id)}>{label}</button>)}<button className="return-main" onClick={onReturnToMainMenu}>Return to Main Menu</button></nav>
       <section className="menu-detail">
-        {panel==='equipment' && <><h2>Equipment</h2>{items?.equipped.length ? items.equipped.map(item => <p key={item.id}>{item.bodyPosition.replace('_',' ')} · {item.displayName}</p>) : <p>Nothing is attached to your body.</p>}</>}
-        {panel==='storage' && <><h2>Storage</h2>{items?.carried.filter(item => item.itemKey==='woven_basket').length ? items.carried.filter(item => item.itemKey==='woven_basket').map(item => <p key={item.id}>{item.displayName} is carried and may be opened when interacted with.</p>) : <p>You have no accessible storage object.</p>}</>}
-        {panel==='chronicle' && <><h2>Chronicle</h2><p>This life has only just begun.</p></>}
-        {(['crafting','construction','knowledge','map'] as Panel[]).includes(panel) && <><h2>{panel==='map'?'Chronicle Map':panel[0].toUpperCase()+panel.slice(1)}</h2><p>Nothing is available here yet.</p></>}
+        {panel==='equipment' && <><h2>Equipment</h2>{prototypeMode ? <><p>Head · empty</p><p>Torso · linen shirt</p><p>Waist · fiber cord</p><p>Back · woven basket</p><p>Hands · empty</p><p>Feet · bare</p></> : items?.equipped.length ? items.equipped.map(item => <p key={item.id}>{item.bodyPosition.replace('_',' ')} · {item.displayName}</p>) : <p>Nothing is attached to your body.</p>}</>}
+        {panel==='load' && <><h2>Load</h2>{prototypeMode ? <><p>6.3 kg / 25 kg sustained carry</p><p>4.8 L / 18 L direct bulk</p><p>Heaviest object · 1.2 kg / 40 kg lift</p><p>Woven basket · 0.9 kg empty + 4.2 kg contents</p><p>Plant fiber bundles · 8</p></> : <p>Authoritative carried load will appear here.</p>}</>}
+        {panel==='storage' && <><h2>Storage</h2>{prototypeMode ? <><p>Woven basket</p><p>5.4 kg / 12 kg internal mass</p><p>4.2 L / 18 L internal volume</p><p>Contents · plant fiber bundles, field stones, clay lump</p></> : items?.carried.filter(item => item.itemKey==='woven_basket').length ? items.carried.filter(item => item.itemKey==='woven_basket').map(item => <p key={item.id}>{item.displayName} is carried and may be opened when interacted with.</p>) : null}</>}
+        {panel==='chronicle' && <><h2>Chronicle</h2><p>Arrival · first day</p><p>Current place · uncharted forest</p><p>Every life leaves a mark.</p></>}
+        {panel==='crafting' && <><h2>Crafting</h2><p>Woven basket · known through practice</p><p>Primitive fire · established method</p><p className="perception-note">Reference only. Declare all attempts in the Action Composer.</p></>}
+        {panel==='construction' && <><h2>Construction</h2><p>Stone fire pit · understood</p><p className="perception-note">Reference only. Declare all attempts in the Action Composer.</p></>}
+        {panel==='knowledge' && <><h2>Knowledge</h2><p>Plant fiber · workable</p><p>Fire tending · observed</p><p>Forest water · unverified</p></>}
+        {panel==='map' && <><h2>Chronicle Map</h2><p>Hand-drawn forest sketch</p><p>Carried in woven basket</p><p className="perception-note">Only physical maps within reach are shown.</p></>}
       </section>
     </aside>}
     <div className="playthrough-bottom">
