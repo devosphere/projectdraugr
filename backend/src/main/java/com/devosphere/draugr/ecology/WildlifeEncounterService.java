@@ -2,6 +2,7 @@ package com.devosphere.draugr.ecology;
 
 import com.devosphere.draugr.chronicle.ChroniclePhysiologyService;
 import com.devosphere.draugr.item.PhysicalItemService;
+import com.devosphere.draugr.survival.FoodPreservationService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,8 +13,8 @@ import java.util.UUID;
 /** Resolves local wildlife contact deterministically; creatures exist as aggregates until an encounter kills one. */
 @Service
 public class WildlifeEncounterService {
-    private final JdbcTemplate jdbc; private final ChroniclePhysiologyService physiology; private final PhysicalItemService items;
-    public WildlifeEncounterService(JdbcTemplate jdbc, ChroniclePhysiologyService physiology, PhysicalItemService items) { this.jdbc=jdbc; this.physiology=physiology; this.items=items; }
+    private final JdbcTemplate jdbc; private final ChroniclePhysiologyService physiology; private final PhysicalItemService items; private final FoodPreservationService food;
+    public WildlifeEncounterService(JdbcTemplate jdbc, ChroniclePhysiologyService physiology, PhysicalItemService items, FoodPreservationService food) { this.jdbc=jdbc; this.physiology=physiology; this.items=items; this.food=food; }
 
     @Transactional
     public EncounterResult confront(UUID chronicle, UUID chunk, UUID action, Instant at) {
@@ -48,7 +49,7 @@ public class WildlifeEncounterService {
     public HarvestResult harvest(UUID chronicle, UUID chunk, UUID action, Instant at) {
         Carcass carcass=jdbc.query("SELECT wc.object_id,wc.species_key,wc.remaining_meat_units,wc.hide_available FROM wildlife_carcass wc JOIN world_object w ON w.id=wc.object_id WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' ORDER BY wc.died_at LIMIT 1 FOR UPDATE",rs->rs.next()?new Carcass(rs.getObject(1,UUID.class),rs.getString(2),rs.getInt(3),rs.getBoolean(4)):null,chunk);
         if(carcass==null)return new HarvestResult("FAILED","You search the ground carefully, then leave it as you found it.");
-        if(carcass.meat()>0) { items.createCarriedItem(chronicle,"raw_game_meat","Raw game meat",at,"HARVESTED_FROM_CARCASS"); jdbc.update("UPDATE wildlife_carcass SET remaining_meat_units=remaining_meat_units-1 WHERE object_id=?",carcass.id()); }
+        if(carcass.meat()>0) { UUID meat=items.createCarriedItem(chronicle,"raw_game_meat","Raw game meat",at,"HARVESTED_FROM_CARCASS"); food.registerRaw(meat,at); jdbc.update("UPDATE wildlife_carcass SET remaining_meat_units=remaining_meat_units-1 WHERE object_id=?",carcass.id()); }
         else if(carcass.hide()) { items.createCarriedItem(chronicle,"animal_hide","Animal hide",at,"HARVESTED_FROM_CARCASS"); jdbc.update("UPDATE wildlife_carcass SET hide_available=false WHERE object_id=?",carcass.id()); }
         else return new HarvestResult("FAILED","The remains offer nothing more that you can carry away.");
         Integer remaining=jdbc.queryForObject("SELECT remaining_meat_units FROM wildlife_carcass WHERE object_id=?",Integer.class,carcass.id()); Boolean hide=jdbc.queryForObject("SELECT hide_available FROM wildlife_carcass WHERE object_id=?",Boolean.class,carcass.id());

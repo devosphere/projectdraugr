@@ -1,6 +1,7 @@
 package com.devosphere.draugr.construction;
 
 import com.devosphere.draugr.item.PhysicalItemService;
+import com.devosphere.draugr.survival.FoodPreservationService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -10,8 +11,8 @@ import java.util.UUID;
 
 @Service
 public class FireService {
-    private final JdbcTemplate jdbc; private final PhysicalItemService items;
-    public FireService(JdbcTemplate jdbc, PhysicalItemService items) { this.jdbc=jdbc; this.items=items; }
+    private final JdbcTemplate jdbc; private final PhysicalItemService items; private final FoodPreservationService food;
+    public FireService(JdbcTemplate jdbc, PhysicalItemService items, FoodPreservationService food) { this.jdbc=jdbc; this.items=items; this.food=food; }
     @Transactional
     public boolean light(UUID chronicle, UUID location, Instant now) {
         UUID pit=jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='STONE_FIRE_PIT' AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' LIMIT 1",rs->rs.next()?rs.getObject(1,UUID.class):null,location);
@@ -30,7 +31,8 @@ public class FireService {
     public boolean cookGameMeat(UUID chronicle, UUID location, Instant now) {
         Integer active = jdbc.queryForObject("SELECT COUNT(*) FROM construction_project cp JOIN world_object w ON w.id=cp.object_id JOIN fire_state fs ON fs.construction_id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='STONE_FIRE_PIT' AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' AND fs.active=true", Integer.class, location);
         if(active==null || active==0 || !items.consumeOne(chronicle,"raw_game_meat",now)) return false;
-        items.createCarriedItem(chronicle,"cooked_game_meat","Cooked game meat",now,"COOKED_AT_FIRE");
+        UUID cooked=items.createCarriedItem(chronicle,"cooked_game_meat","Cooked game meat",now,"COOKED_AT_FIRE");
+        food.registerCooked(cooked,now);
         return true;
     }
     @Transactional

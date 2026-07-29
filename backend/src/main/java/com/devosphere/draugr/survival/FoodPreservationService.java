@@ -1,0 +1,32 @@
+package com.devosphere.draugr.survival;
+
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.UUID;
+
+/** Simulated-time food freshness. Spoilage changes state; it never removes the physical object. */
+@Service
+public class FoodPreservationService {
+    private final JdbcTemplate jdbc;
+    public FoodPreservationService(JdbcTemplate jdbc) { this.jdbc = jdbc; }
+    @Transactional public void registerRaw(UUID item, Instant at) { register(item,"RAW",at.plus(Duration.ofHours(18))); }
+    @Transactional public void registerCooked(UUID item, Instant at) { register(item,"COOKED",at.plus(Duration.ofHours(72))); }
+    @Transactional public void advanceTo(Instant now) {
+        jdbc.update("UPDATE food_preservation_state SET spoiled_at=? WHERE spoiled_at IS NULL AND safe_until<=?", now, now);
+        jdbc.update("UPDATE world_object w SET display_name='Spoiled ' || lower(w.display_name),updated_at=? FROM food_preservation_state f WHERE f.object_id=w.id AND f.spoiled_at=? AND w.lifecycle_state='ACTIVE' AND w.display_name NOT LIKE 'Spoiled %'", now, now);
+    }
+    @Transactional public Consumption consume(UUID chronicle, String itemKey, Instant at) {
+        FoodItem item=jdbc.query("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT r.id,f.spoiled_at IS NOT NULL FROM reachable r JOIN item_instance i ON i.object_id=r.id JOIN food_preservation_state f ON f.object_id=r.id WHERE i.item_key=? ORDER BY r.id FOR UPDATE LIMIT 1",rs->rs.next()?new FoodItem(rs.getObject(1,UUID.class),rs.getBoolean(2)):null,chronicle,itemKey);
+        if(item==null) return new Consumption(false,false);
+        jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED',destroyed_at=?,current_owner_id=NULL WHERE id=?",at,item.id());
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CONSUMED',jsonb_build_object('itemKey',?))",item.id(),at,itemKey);
+        return new Consumption(true,item.spoiled());
+    }
+    private void register(UUID item,String kind,Instant safeUntil) { jdbc.update("INSERT INTO food_preservation_state (object_id,preparation_kind,safe_until) VALUES (?,?,?)",item,kind,safeUntil); }
+    private record FoodItem(UUID id,boolean spoiled) { }
+    public record Consumption(boolean consumed,boolean spoiled) { }
+}

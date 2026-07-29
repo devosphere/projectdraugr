@@ -113,6 +113,12 @@ public class ChroniclePhysiologyService {
         refreshBody(chronicleId);
     }
     @Transactional
+    public void applyFoodborneIllness(UUID chronicleId, UUID actionId, Instant occurredAt) {
+        jdbc.update("UPDATE chronicle_physiology SET illness_severity=LEAST(100,illness_severity+12),stress_level=LEAST(100,stress_level+5) WHERE chronicle_id=?",chronicleId);
+        jdbc.update("INSERT INTO chronicle_condition_event (chronicle_id,occurred_at,condition_kind,severity,source_action_id,payload) VALUES (?,?,?,?,?,jsonb_build_object('source','spoiled_food'))",chronicleId,occurredAt,"FOODBORNE_ILLNESS",12,actionId);
+        refreshBody(chronicleId);
+    }
+    @Transactional
     public boolean bindWound(UUID chronicleId, PhysicalItemService items, UUID actionId, Instant occurredAt) {
         Integer wounded = jdbc.queryForObject("SELECT COUNT(*) FROM chronicle_physiology WHERE chronicle_id=? AND (injury_severity>0 OR blood_loss_ml>0)", Integer.class, chronicleId);
         if (wounded == null || wounded == 0 || !items.consumeOne(chronicleId, "plant_fiber", occurredAt)) return false;
