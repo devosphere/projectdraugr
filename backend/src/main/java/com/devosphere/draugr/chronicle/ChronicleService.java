@@ -36,7 +36,10 @@ public class ChronicleService {
     @Transactional
     public ChronicleSummary awaken() {
         ChronicleSummary current = active();
-        if (current != null) throw new IllegalStateException("A living Chronicle already exists.");
+        // The first crossing may be retried by the local UI while it is still
+        // learning whether a Chronicle already exists. Rejoining that same
+        // body is safe; creating a second living Chronicle is not.
+        if (current != null) return current;
         WorldSeed world = jdbc.query("SELECT world_id, seed FROM world_genesis FOR UPDATE", rs -> rs.next() ? new WorldSeed(rs.getObject(1, UUID.class), rs.getLong(2)) : null);
         if (world == null) throw new IllegalStateException("World Genesis must exist before a Chronicle can awaken.");
         Integer priorLives = jdbc.queryForObject("SELECT COUNT(*) FROM chronicle", Integer.class);
