@@ -374,6 +374,8 @@ Start PostgreSQL with `docker compose up -d`, then run the Spring Boot service f
 
 For the current local MVP launcher, start Docker Desktop and run `powershell -ExecutionPolicy Bypass -File .\scripts\Start-Draugr.ps1`. It starts PostgreSQL, backend, and frontend, then opens the local game. This is the operational precursor to the packaged desktop executable.
 
+For a normal double-click launch, use `Project-Draugr.cmd` in the repository root after Docker Desktop is running. It invokes the same checked launcher and keeps any startup error visible instead of silently closing.
+
 To stop the local stack without deleting its persistent world data, run `powershell -ExecutionPolicy Bypass -File .\scripts\Stop-Draugr.ps1`.
 
 After a launch, verify the exact backend, database migration, and read-only Persistent State Auditor with `powershell -ExecutionPolicy Bypass -File .\scripts\Verify-Draugr.ps1`. A successful verification is the local-play prerequisite before beginning a new Chronicle.
