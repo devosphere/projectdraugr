@@ -34,6 +34,15 @@ public class PhysicalItemService {
         assertCarryCapacity(chronicle);
         return count;
     }
+    @Transactional
+    public int gatherFieldStones(UUID chronicle, UUID location) {
+        String biome=jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?",String.class,location);
+        if ("OCEAN".equals(biome)) throw new IllegalStateException("No loose stone can be gathered from this immediate terrain.");
+        int count="MOUNTAIN".equals(biome) || "HIGHLAND".equals(biome) ? 3 : 2;
+        for(int i=0;i<count;i++){UUID id=UUID.randomUUID();jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM','Field stone',?)",id,chronicle);jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,'field_stone','SOUND')",id);jdbc.update("INSERT INTO object_transition (object_id,transition_type,payload) VALUES (?,'GATHERED',jsonb_build_object('biome',?))",id,biome);}
+        assertCarryCapacity(chronicle);
+        return count;
+    }
 
     @Transactional
     public ItemView craftBasket() {

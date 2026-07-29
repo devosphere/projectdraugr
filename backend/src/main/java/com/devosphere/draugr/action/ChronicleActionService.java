@@ -4,6 +4,7 @@ import com.devosphere.draugr.chronicle.ChroniclePhysiologyService;
 import com.devosphere.draugr.narration.NarrationPolicy;
 import com.devosphere.draugr.item.PhysicalItemService;
 import com.devosphere.draugr.capability.CapabilityAdaptationService;
+import com.devosphere.draugr.construction.ConstructionService;
 import com.devosphere.draugr.simulation.SimulationTickService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -20,8 +21,8 @@ import java.util.regex.Pattern;
 @Service
 public class ChronicleActionService {
     private static final Pattern DURATION = Pattern.compile("\\b(?:for\\s+)?(\\d{1,3})\\s*(minute|min|minutes|mins|hour|hours|hr|hrs)\\b", Pattern.CASE_INSENSITIVE);
-    private final JdbcTemplate jdbc; private final SimulationTickService ticks; private final ChroniclePhysiologyService physiology; private final NarrationPolicy narration; private final PhysicalItemService items; private final CapabilityAdaptationService capability;
-    public ChronicleActionService(JdbcTemplate jdbc, SimulationTickService ticks, ChroniclePhysiologyService physiology, NarrationPolicy narration, PhysicalItemService items, CapabilityAdaptationService capability) { this.jdbc = jdbc; this.ticks = ticks; this.physiology = physiology; this.narration = narration; this.items=items; this.capability=capability; }
+    private final JdbcTemplate jdbc; private final SimulationTickService ticks; private final ChroniclePhysiologyService physiology; private final NarrationPolicy narration; private final PhysicalItemService items; private final CapabilityAdaptationService capability; private final ConstructionService construction;
+    public ChronicleActionService(JdbcTemplate jdbc, SimulationTickService ticks, ChroniclePhysiologyService physiology, NarrationPolicy narration, PhysicalItemService items, CapabilityAdaptationService capability, ConstructionService construction) { this.jdbc = jdbc; this.ticks = ticks; this.physiology = physiology; this.narration = narration; this.items=items; this.capability=capability; this.construction=construction; }
 
     @Transactional
     public ActionResult resolve(String text) {
@@ -41,12 +42,14 @@ public class ChronicleActionService {
             perception = "You take a brief moment away from the immediate ground around you.";
         } else if (intent == Intent.REST) perception = "You remain still while the forest continues around you.";
         else if (intent == Intent.GATHER_FIBER) { int bundles=items.gatherPlantFiber(chronicle.id(),chronicle.location()); perception="You patiently separate usable plant fiber from the living growth around you."; jdbc.update("INSERT INTO chronicle_action_effect (action_id, effect_domain, effect_type, payload) VALUES (?, 'ITEM', 'PLANT_FIBER_GATHERED', jsonb_build_object('bundles', ?))", actionId, bundles); }
-        else if (intent == Intent.BUILD_FIRE_PIT) { outcome = "FAILED"; perception = "You set a few stones apart, then leave them where they lie. The ground remains unchanged."; }
+        else if (intent == Intent.GATHER_STONE) { int stones=items.gatherFieldStones(chronicle.id(),chronicle.location()); perception="You work loose a few stones from the ground and carry them with you."; jdbc.update("INSERT INTO chronicle_action_effect (action_id, effect_domain, effect_type, payload) VALUES (?, 'ITEM', 'FIELD_STONE_GATHERED', jsonb_build_object('stones', ?))", actionId, stones); }
+        else if (intent == Intent.CRAFT_BASKET) { try { items.craftBasket(); perception="Plant fiber tightens beneath your hands until a rough basket holds its shape."; } catch (IllegalStateException ignored) { outcome="FAILED"; perception="The loose fibers shift and fall away from one another. Nothing holds its shape."; } }
+        else if (intent == Intent.BUILD_FIRE_PIT) { if (construction.buildFirePit(chronicle.id(), chronicle.location(), actionId, resolvedAt)) perception = "You settle stone into a low, deliberate ring. The fire pit remains where you made it."; else { outcome = "FAILED"; perception = "You set a few stones apart, then leave them where they lie. The ground remains unchanged."; } }
         else { outcome = "FAILED"; perception = "The attempt passes without changing the immediate world around you."; }
         jdbc.update("INSERT INTO chronicle_action (id, chronicle_id, resolved_at, action_text, intent_type, outcome, duration_minutes, narration) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", actionId, chronicle.id(), resolvedAt, text.trim(), intent.name(), outcome, minutes, perception);
         jdbc.update("INSERT INTO chronicle_action_effect (action_id, effect_domain, effect_type, payload) VALUES (?, 'TIME', 'TIME_ADVANCED', jsonb_build_object('minutes', ?))", actionId, minutes);
         jdbc.update("INSERT INTO chronicle_event (chronicle_id, occurred_at, event_type, payload) VALUES (?, ?, 'CHRONICLE_ACTION_RESOLVED', jsonb_build_object('actionId', ?::text, 'intent', ?, 'outcome', ?))", chronicle.id(), resolvedAt, actionId.toString(), intent.name(), outcome);
-        if ("SUCCEEDED".equals(outcome)) capability.record(chronicle.id(), actionId, intent==Intent.GATHER_FIBER?"LOAD":intent==Intent.OBSERVE?"ATTENTION":intent==Intent.REST?"RECOVERY":"FINE_MOTOR", minutes, intent==Intent.GATHER_FIBER?.18:.05, intent==Intent.REST?.75:.45, resolvedAt);
+        if ("SUCCEEDED".equals(outcome)) capability.record(chronicle.id(), actionId, (intent==Intent.GATHER_FIBER||intent==Intent.GATHER_STONE)?"LOAD":intent==Intent.OBSERVE?"ATTENTION":intent==Intent.REST?"RECOVERY":"FINE_MOTOR", minutes, (intent==Intent.GATHER_FIBER||intent==Intent.GATHER_STONE)?.18:.05, intent==Intent.REST?.75:.45, resolvedAt);
         narration.validate(perception);
         return new ActionResult(actionId, intent.name(), outcome, minutes, resolvedAt, perception, physiology.activeBody());
     }
@@ -77,10 +80,10 @@ public class ChronicleActionService {
     private int durationFor(String action, Intent intent) {
         Matcher match = DURATION.matcher(action);
         if (match.find()) { int amount = Integer.parseInt(match.group(1)); int minutes = match.group(2).toLowerCase(Locale.ROOT).startsWith("h") ? amount * 60 : amount; return Math.max(1, Math.min(minutes, 24 * 60)); }
-        return switch (intent) { case OBSERVE -> 10; case REST -> 60; case GATHER_FIBER -> 25; case MOVE -> 30; default -> 5; };
+        return switch (intent) { case OBSERVE -> 10; case REST -> 60; case GATHER_FIBER, GATHER_STONE -> 25; case CRAFT_BASKET -> 45; case BUILD_FIRE_PIT -> 30; case MOVE -> 30; default -> 5; };
     }
-    private Intent classify(String action) { String value = action.toLowerCase(Locale.ROOT); if (value.contains("fire pit") || value.contains("firepit")) return Intent.BUILD_FIRE_PIT; if ((value.contains("gather")||value.contains("collect")) && value.contains("fiber")) return Intent.GATHER_FIBER; if (Direction.from(value) != null && (value.contains("walk") || value.contains("travel") || value.contains("go ") || value.contains("move"))) return Intent.MOVE; if (value.contains("observe") || value.contains("look") || value.contains("inspect")) return Intent.OBSERVE; if (value.contains("rest") || value.contains("wait")) return Intent.REST; if (value.contains("urinate") || value.contains("pee")) return Intent.URINATE; if (value.contains("defecate") || value.contains("poop")) return Intent.DEFECATE; return Intent.UNKNOWN; }
-    private record ActiveChronicle(UUID id, UUID location) { } private enum Intent { OBSERVE, MOVE, REST, GATHER_FIBER, BUILD_FIRE_PIT, URINATE, DEFECATE, UNKNOWN }
+    private Intent classify(String action) { String value = action.toLowerCase(Locale.ROOT); if (value.contains("fire pit") || value.contains("firepit")) return Intent.BUILD_FIRE_PIT; if ((value.contains("weave") || value.contains("craft") || value.contains("make")) && value.contains("basket")) return Intent.CRAFT_BASKET; if ((value.contains("gather")||value.contains("collect")) && value.contains("fiber")) return Intent.GATHER_FIBER; if ((value.contains("gather")||value.contains("collect")) && (value.contains("stone")||value.contains("rock"))) return Intent.GATHER_STONE; if (Direction.from(value) != null && (value.contains("walk") || value.contains("travel") || value.contains("go ") || value.contains("move"))) return Intent.MOVE; if (value.contains("observe") || value.contains("look") || value.contains("inspect")) return Intent.OBSERVE; if (value.contains("rest") || value.contains("wait")) return Intent.REST; if (value.contains("urinate") || value.contains("pee")) return Intent.URINATE; if (value.contains("defecate") || value.contains("poop")) return Intent.DEFECATE; return Intent.UNKNOWN; }
+    private record ActiveChronicle(UUID id, UUID location) { } private enum Intent { OBSERVE, MOVE, REST, GATHER_FIBER, GATHER_STONE, CRAFT_BASKET, BUILD_FIRE_PIT, URINATE, DEFECATE, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;} }
     public record ActionResult(UUID actionId, String intent, String outcome, int durationMinutes, Instant resolvedAt, String perception, ChroniclePhysiologyService.BodyHudSnapshot body) { }
     public record NarrationEntry(UUID id, Instant occurredAt, String narration) { }
