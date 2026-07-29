@@ -44,15 +44,16 @@ public class ChronicleService {
         UUID spawnChunk = selectSpawn(world, sequence);
         UUID chronicleId = UUID.randomUUID();
         Instant now = Instant.now();
+        Timestamp occurredAt = Timestamp.from(now);
         jdbc.update("INSERT INTO world_object (id, object_type, display_name, current_location_id) VALUES (?, 'CHRONICLE', ?, ?)", chronicleId, "Unrecorded arrival " + sequence, spawnChunk);
-        jdbc.update("INSERT INTO chronicle (id, world_id, sequence_number, life_state, arrived_at) VALUES (?, ?, ?, 'LIVING', ?)", chronicleId, world.id(), sequence, Timestamp.from(now));
+        jdbc.update("INSERT INTO chronicle (id, world_id, sequence_number, life_state, arrived_at) VALUES (?, ?, ?, 'LIVING', ?)", chronicleId, world.id(), sequence, occurredAt);
         jdbc.update("INSERT INTO chronicle_body (chronicle_id, health, condition_summary, hunger, thirst, energy, temperature, wetness, bladder, bowel, hygiene) VALUES (?, 'Healthy', 'Unsteady', 'Satisfied', 'Hydrated', 'Rested', 'Comfortable', 'Damp', 'Comfortable', 'Comfortable', 'Normal')", chronicleId);
-        jdbc.update("INSERT INTO chronicle_physiology (chronicle_id, last_metabolic_update) VALUES (?, ?)", chronicleId, now);
+        jdbc.update("INSERT INTO chronicle_physiology (chronicle_id, last_metabolic_update) VALUES (?, ?)", chronicleId, occurredAt);
         jdbc.update("INSERT INTO chronicle_carry_capacity (chronicle_id) VALUES (?)", chronicleId);
         jdbc.update("INSERT INTO chronicle_capability_adaptation (chronicle_id) VALUES (?)", chronicleId);
-        issueArrivalClothing(chronicleId, now);
-        jdbc.update("INSERT INTO chronicle_event (chronicle_id, occurred_at, event_type, payload) VALUES (?, ?, 'CHRONICLE_AWAKENED', jsonb_build_object('origin', 'Earth', 'spawnChunkId', ?::text))", chronicleId, now, spawnChunk.toString());
-        jdbc.update("INSERT INTO world_event (occurred_at, event_type, aggregate_id, payload) VALUES (?, 'CHRONICLE_AWAKENED', ?, jsonb_build_object('chronicleSequence', ?, 'origin', 'Earth'))", now, chronicleId, sequence);
+        issueArrivalClothing(chronicleId, occurredAt);
+        jdbc.update("INSERT INTO chronicle_event (chronicle_id, occurred_at, event_type, payload) VALUES (?, ?, 'CHRONICLE_AWAKENED', jsonb_build_object('origin', 'Earth', 'spawnChunkId', ?::text))", chronicleId, occurredAt, spawnChunk.toString());
+        jdbc.update("INSERT INTO world_event (occurred_at, event_type, aggregate_id, payload) VALUES (?, 'CHRONICLE_AWAKENED', ?, jsonb_build_object('chronicleSequence', ?, 'origin', 'Earth'))", occurredAt, chronicleId, sequence);
         return new ChronicleSummary(chronicleId, sequence, "LIVING", now, null, null, spawnChunk);
     }
 
@@ -63,14 +64,14 @@ public class ChronicleService {
         return candidates.get(index);
     }
 
-    private void issueArrivalClothing(UUID chronicleId, Instant occurredAt) {
+    private void issueArrivalClothing(UUID chronicleId, Timestamp occurredAt) {
         issueWornItem(chronicleId, "arrival_shirt", "Everyday shirt", "TORSO", "CLOTHING", occurredAt);
         issueWornItem(chronicleId, "arrival_trousers", "Everyday trousers", "WAIST", "CLOTHING", occurredAt);
         issueWornItem(chronicleId, "arrival_left_shoe", "Left everyday shoe", "FOOT_LEFT", "OUTER", occurredAt);
         issueWornItem(chronicleId, "arrival_right_shoe", "Right everyday shoe", "FOOT_RIGHT", "OUTER", occurredAt);
     }
 
-    private void issueWornItem(UUID chronicleId, String itemKey, String displayName, String bodyPosition, String layer, Instant occurredAt) {
+    private void issueWornItem(UUID chronicleId, String itemKey, String displayName, String bodyPosition, String layer, Timestamp occurredAt) {
         UUID itemId = UUID.randomUUID();
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM',?,?)", itemId, displayName, chronicleId);
         jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,?,'SOUND')", itemId, itemKey);
