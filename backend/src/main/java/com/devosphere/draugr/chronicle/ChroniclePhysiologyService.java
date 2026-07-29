@@ -1,5 +1,6 @@
 package com.devosphere.draugr.chronicle;
 
+import com.devosphere.draugr.item.PhysicalItemService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -101,8 +102,17 @@ public class ChroniclePhysiologyService {
         jdbc.update("INSERT INTO chronicle_condition_event (chronicle_id,occurred_at,condition_kind,severity,source_action_id,payload) VALUES (?,?,?,?,?,jsonb_build_object('source',?))",chronicleId,occurredAt,"INJURY",bounded,actionId,source);
         refreshBody(chronicleId);
     }
+    @Transactional
+    public boolean bindWound(UUID chronicleId, PhysicalItemService items, UUID actionId, Instant occurredAt) {
+        Integer wounded = jdbc.queryForObject("SELECT COUNT(*) FROM chronicle_physiology WHERE chronicle_id=? AND (injury_severity>0 OR blood_loss_ml>0)", Integer.class, chronicleId);
+        if (wounded == null || wounded == 0 || !items.consumeOne(chronicleId, "plant_fiber", occurredAt)) return false;
+        jdbc.update("UPDATE chronicle_physiology SET blood_loss_ml=GREATEST(0,blood_loss_ml-180),pain_level=GREATEST(0,pain_level-5),stress_level=GREATEST(0,stress_level-3) WHERE chronicle_id=?", chronicleId);
+        jdbc.update("INSERT INTO chronicle_condition_event (chronicle_id,occurred_at,condition_kind,severity,source_action_id,payload) VALUES (?,?,?,?,?,jsonb_build_object('method','plant_fiber_binding'))", chronicleId, occurredAt, "WOUND_BOUND", 1, actionId);
+        refreshBody(chronicleId);
+        return true;
+    }
     private void refreshBody(UUID chronicleId) {
-        jdbc.query("SELECT b.health,b.condition_summary,p.hours_without_food,p.hours_without_water,p.energy_level,p.core_temperature_c,p.wetness_level,p.bladder_level,p.bowel_level,p.hygiene_level FROM chronicle_body b JOIN chronicle_physiology p ON p.chronicle_id=b.chronicle_id WHERE b.chronicle_id=?",rs->{if(rs.next()){BodyHudSnapshot body=snapshot(rs.getString(1),rs.getString(2),rs.getBigDecimal(3).doubleValue(),rs.getBigDecimal(4).doubleValue(),rs.getInt(5),rs.getBigDecimal(6).doubleValue(),rs.getInt(7),rs.getInt(8),rs.getInt(9),rs.getInt(10));jdbc.update("UPDATE chronicle_body SET hunger=?,thirst=?,energy=?,temperature=?,wetness=?,bladder=?,bowel=?,hygiene=? WHERE chronicle_id=?",body.hunger(),body.thirst(),body.energy(),body.temperature(),body.wetness(),body.bladder(),body.bowel(),body.hygiene(),chronicleId);}return null;},chronicleId);
+        jdbc.query("SELECT b.condition_summary,p.hours_without_food,p.hours_without_water,p.energy_level,p.core_temperature_c,p.wetness_level,p.bladder_level,p.bowel_level,p.hygiene_level,p.sleep_debt_hours,p.pain_level,p.stress_level,p.injury_severity,p.illness_severity,p.blood_loss_ml FROM chronicle_body b JOIN chronicle_physiology p ON p.chronicle_id=b.chronicle_id WHERE b.chronicle_id=?",rs->{if(rs.next()){String health=health(rs.getInt(13),rs.getInt(14),rs.getInt(15));String condition=condition(rs.getString(1),rs.getInt(11),rs.getInt(12),rs.getBigDecimal(10).doubleValue());BodyHudSnapshot body=snapshot(health,condition,rs.getBigDecimal(2).doubleValue(),rs.getBigDecimal(3).doubleValue(),rs.getInt(4),rs.getBigDecimal(5).doubleValue(),rs.getInt(6),rs.getInt(7),rs.getInt(8),rs.getInt(9));jdbc.update("UPDATE chronicle_body SET health=?,condition_summary=?,hunger=?,thirst=?,energy=?,temperature=?,wetness=?,bladder=?,bowel=?,hygiene=? WHERE chronicle_id=?",health,condition,body.hunger(),body.thirst(),body.energy(),body.temperature(),body.wetness(),body.bladder(),body.bowel(),body.hygiene(),chronicleId);}return null;},chronicleId);
     }
     private void relocatePossessions(UUID chronicleId, UUID locationId, Instant occurredAt) {
         if (locationId == null) return;
