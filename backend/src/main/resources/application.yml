@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: draugr-server
+  datasource:
+    url: ${DRAUGR_DATABASE_URL:jdbc:postgresql://localhost:5432/draugr}
+    username: ${DRAUGR_DATABASE_USERNAME:draugr}
+    password: ${DRAUGR_DATABASE_PASSWORD:draugr}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    locations: classpath:db/migration
+
+server:
+  error:
+    include-message: always

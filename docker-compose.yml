@@ -1,0 +1,13 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: draugr
+      POSTGRES_USER: draugr
+      POSTGRES_PASSWORD: draugr
+    ports:
+      - "5432:5432"
+    volumes:
+      - draugr-postgres:/var/lib/postgresql/data
+volumes:
+  draugr-postgres:
