@@ -384,6 +384,8 @@ Before testing a risky playthrough, create a local database snapshot with `power
 
 To recover a stopped local world from a chosen backup, run `powershell -ExecutionPolicy Bypass -File .\scripts\Restore-Draugr.ps1 -BackupFile .\backups\draugr-YYYYMMDD-HHMMSS.sql`. Restore deliberately asks for the exact word `RESTORE` because it replaces the current local database. It is never performed automatically.
 
+To begin again from a fresh local world, first stop Draugr, then run `powershell -ExecutionPolicy Bypass -File .\scripts\Reset-Draugr.ps1`. It creates a backup before requiring the exact confirmation `RESET WORLD`, then clears only the local database. Launch Draugr again to apply current migrations.
+
 The local frontend is in `frontend/`. Run `npm install` and `npm run dev` there after the backend is running. It displays the server's current simulation state and can request a simulation tick; it never determines state locally.
 
 The immediate objective is to build a believable persistent world simulation.
