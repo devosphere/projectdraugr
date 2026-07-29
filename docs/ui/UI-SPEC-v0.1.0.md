@@ -31,6 +31,7 @@ This is the authoritative acceptance specification for the current player experi
 - The narration panel is the largest content region. It describes allowed perception and resolved consequences; it never diagnoses internal state, gives survival advice, creates objectives, or exposes unknown world facts.
 - The Action Composer accepts at most 2,500 characters, displays no more than four lines before scrolling, submits with Enter, and inserts a new line with Shift+Enter.
 - While the world is resolving an action, the interface uses a non-intrusive rotating hourglass/loading state. It must not insert placeholder narration that changes layout.
+- The expandable menu is a compact hamburger control. It lists only systems with current player-permitted state. Crafting and Construction are absent until the Chronicle has discovered a usable method or project.
 
 ## Settings
 
