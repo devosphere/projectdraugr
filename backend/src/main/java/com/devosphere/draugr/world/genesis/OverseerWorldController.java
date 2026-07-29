@@ -16,12 +16,15 @@ import org.springframework.web.bind.annotation.CrossOrigin;
 @CrossOrigin(origins = {"http://localhost:5173", "http://127.0.0.1:5173"})
 public class OverseerWorldController {
     private final WorldGenesisService worldGenesis;
-    public OverseerWorldController(WorldGenesisService worldGenesis) { this.worldGenesis = worldGenesis; }
+    private final WorldEcologyGenesisService ecologyGenesis;
+    public OverseerWorldController(WorldGenesisService worldGenesis, WorldEcologyGenesisService ecologyGenesis) { this.worldGenesis = worldGenesis; this.ecologyGenesis = ecologyGenesis; }
 
     @PostMapping("/genesis")
     public WorldGenesisService.GenesisSummary generate(@RequestBody(required = false) WorldGenesisService.GenesisRequest request) {
         return worldGenesis.generate(request == null ? WorldGenesisService.GenesisRequest.mvpDefault() : request);
     }
+    @PostMapping("/ecology")
+    public WorldEcologyGenesisService.EcologySummary seedEcology() { return ecologyGenesis.seed(); }
     @PostMapping("/preview")
     public WorldGenesisService.PreviewSummary preview(@RequestBody(required = false) WorldGenesisService.GenesisRequest request) {
         return worldGenesis.preview(request == null ? WorldGenesisService.GenesisRequest.mvpDefault() : request);

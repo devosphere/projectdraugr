@@ -144,6 +144,12 @@ public class WorldGenesisService {
         return List.copyOf(markers);
     }
 
+    /** Shared deterministic plan used by both the creator preview and canonical ecology seeding. */
+    public List<PreviewMarker> markerPlan(GenesisRequest request) {
+        validateDimensions(request);
+        return markersFor(request);
+    }
+
     private PreviewMarker marker(String category, String label, String[] accepted, GenesisRequest request, int salt) {
         int count = request.widthChunks() * request.heightChunks(), start = Math.floorMod((int) (request.seed() ^ (salt * 0x9E3779B9L)), count);
         for (int attempt = 0; attempt < count; attempt++) {
