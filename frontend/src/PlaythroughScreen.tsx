@@ -3,7 +3,7 @@ import forestArt from './assets/playthrough-forest-v1.png';
 
 const body = [
   ['Health', 'Healthy'], ['Condition', 'Unsteady'], ['Hunger', 'Satisfied'], ['Thirst', 'Hydrated'],
-  ['Energy', 'Rested'], ['Temperature', 'Comfortable'], ['Wetness', 'Damp'], ['Hygiene', 'Normal'],
+  ['Energy', 'Rested'], ['Temperature', 'Comfortable'], ['Wetness', 'Damp'], ['Bladder', 'Comfortable'], ['Bowel', 'Comfortable'], ['Hygiene', 'Normal'],
 ];
 
 export function PlaythroughScreen() {
@@ -33,8 +33,8 @@ export function PlaythroughScreen() {
     </section>
     <form className="action-composer" onSubmit={submit}>
       <label htmlFor="action">What do you do?</label>
-      <div><span aria-hidden="true">›</span><input id="action" value={action} onChange={event => setAction(event.target.value)} placeholder="Describe an action…" autoComplete="off" /><button aria-label="Submit action" type="submit">↵</button></div>
-      {notice && <p role="status">{notice}</p>}
+      <div><span aria-hidden="true">›</span><input id="action" value={action} maxLength={2500} onChange={event => setAction(event.target.value)} placeholder="Describe an action…" autoComplete="off" /><button aria-label="Submit action" type="submit">↵</button></div>
+      <p className="action-count">{action.length}/2500</p>{notice && <p role="status">{notice}</p>}
     </form>
   </main>;
 }

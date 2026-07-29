@@ -23,7 +23,7 @@ export function OnboardingScreen({ onAwaken }: { onAwaken: () => void }) {
     </section>
 
     {panel !== 'none' && <div className="onboarding-dialog-backdrop" role="presentation" onClick={() => setPanel('none')}>
-      <section className="onboarding-dialog" role="dialog" aria-modal="true" aria-label={panel} onClick={event => event.stopPropagation()}>
+      <section className={`onboarding-dialog ${panel === 'crossing' ? 'crossing-dialog' : ''}`} role="dialog" aria-modal="true" aria-label={panel} onClick={event => event.stopPropagation()}>
         {panel === 'crossing' && <>
           <p className="dialog-kicker">First awakening</p>
           <p className="crossing-copy">The familiar world fractures at its edges.</p>
