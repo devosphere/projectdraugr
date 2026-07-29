@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/audit")
-@CrossOrigin(origins = "${draugr.frontend-origin:http://localhost:5173}")
+@CrossOrigin(origins = {"${draugr.frontend-origin:http://localhost:5173}", "http://127.0.0.1:5173"})
 public class AuditController {
     private final PersistentStateAuditor auditor;
     public AuditController(PersistentStateAuditor auditor) { this.auditor = auditor; }
