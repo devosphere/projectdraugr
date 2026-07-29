@@ -49,7 +49,12 @@ function EquipmentHierarchy({ prototype, equipped }: { prototype: boolean; equip
     group('Fingers', [['Left thumb', 'Empty'], ['Left index', 'Empty'], ['Left middle', 'Empty'], ['Left ring', 'Empty'], ['Left little', 'Empty'], ['Right thumb', 'Empty'], ['Right index', 'Empty'], ['Right middle', 'Empty'], ['Right ring', 'Empty'], ['Right little', 'Empty']]),
     group('Waist', [['Waist', prototype ? 'Fiber cord' : attached('WAIST')]]),
     group('Lower Body', [['Under layer', 'Empty'], ['Outer layer', 'Empty'], ['Protective layer', 'Empty']]),
-    group('Legs & Knees', [['Leg protection', attached('LEG_LEFT')], ['Knee protection', 'Empty']]),
+    group('Legs & Knees', [
+      ['Left leg · protection', attached('LEG_LEFT')],
+      ['Left knee · protection', attached('KNEE_LEFT')],
+      ['Right leg · protection', attached('LEG_RIGHT')],
+      ['Right knee · protection', attached('KNEE_RIGHT')]
+    ]),
     group('Feet', [
       ['Left foot · inner layer', 'Empty'],
       ['Left foot · outer layer', prototype ? 'Bare foot' : attached('FOOT_LEFT')],
