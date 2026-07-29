@@ -3,6 +3,7 @@ package com.devosphere.draugr.action;
 import com.devosphere.draugr.chronicle.ChroniclePhysiologyService;
 import com.devosphere.draugr.narration.NarrationPolicy;
 import com.devosphere.draugr.item.PhysicalItemService;
+import com.devosphere.draugr.capability.CapabilityAdaptationService;
 import com.devosphere.draugr.simulation.SimulationTickService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -15,8 +16,8 @@ import java.util.UUID;
 
 @Service
 public class ChronicleActionService {
-    private final JdbcTemplate jdbc; private final SimulationTickService ticks; private final ChroniclePhysiologyService physiology; private final NarrationPolicy narration; private final PhysicalItemService items;
-    public ChronicleActionService(JdbcTemplate jdbc, SimulationTickService ticks, ChroniclePhysiologyService physiology, NarrationPolicy narration, PhysicalItemService items) { this.jdbc = jdbc; this.ticks = ticks; this.physiology = physiology; this.narration = narration; this.items=items; }
+    private final JdbcTemplate jdbc; private final SimulationTickService ticks; private final ChroniclePhysiologyService physiology; private final NarrationPolicy narration; private final PhysicalItemService items; private final CapabilityAdaptationService capability;
+    public ChronicleActionService(JdbcTemplate jdbc, SimulationTickService ticks, ChroniclePhysiologyService physiology, NarrationPolicy narration, PhysicalItemService items, CapabilityAdaptationService capability) { this.jdbc = jdbc; this.ticks = ticks; this.physiology = physiology; this.narration = narration; this.items=items; this.capability=capability; }
 
     @Transactional
     public ActionResult resolve(String text) {
@@ -39,6 +40,7 @@ public class ChronicleActionService {
         jdbc.update("INSERT INTO chronicle_action (id, chronicle_id, resolved_at, action_text, intent_type, outcome, duration_minutes) VALUES (?, ?, ?, ?, ?, ?, ?)", actionId, chronicle.id(), resolvedAt, text.trim(), intent.name(), outcome, minutes);
         jdbc.update("INSERT INTO chronicle_action_effect (action_id, effect_domain, effect_type, payload) VALUES (?, 'TIME', 'TIME_ADVANCED', jsonb_build_object('minutes', ?))", actionId, minutes);
         jdbc.update("INSERT INTO chronicle_event (chronicle_id, occurred_at, event_type, payload) VALUES (?, ?, 'CHRONICLE_ACTION_RESOLVED', jsonb_build_object('actionId', ?::text, 'intent', ?, 'outcome', ?))", chronicle.id(), resolvedAt, actionId.toString(), intent.name(), outcome);
+        if ("SUCCEEDED".equals(outcome)) capability.record(chronicle.id(), actionId, intent==Intent.GATHER_FIBER?"LOAD":intent==Intent.OBSERVE?"ATTENTION":intent==Intent.REST?"RECOVERY":"FINE_MOTOR", minutes, intent==Intent.GATHER_FIBER?.18:.05, intent==Intent.REST?.75:.45, resolvedAt);
         narration.validate(perception);
         return new ActionResult(actionId, intent.name(), outcome, minutes, perception, physiology.activeBody());
     }
