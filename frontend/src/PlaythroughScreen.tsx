@@ -10,12 +10,13 @@ const previewBody = [
 ];
 
 type BodySnapshot = { health: string; condition: string; hunger: string; thirst: string; energy: string; temperature: string; wetness: string; bladder: string; bowel: string; hygiene: string };
-type ActionResult = { actionId: string; intent: string; outcome: string; durationMinutes: number; perception: string; body: BodySnapshot };
+type ActionResult = { actionId: string; intent: string; outcome: string; durationMinutes: number; resolvedAt: string; perception: string; body: BodySnapshot };
 type LocationSnapshot = { biome: string; presentationKey: string };
 type ItemState = { carried: { id: string; displayName: string; itemKey: string }[]; equipped: { id: string; displayName: string; bodyPosition: string; layer: string }[] };
 type Panel = 'none' | 'chronicle' | 'equipment' | 'load' | 'storage' | 'crafting' | 'construction' | 'knowledge' | 'map' | 'literature';
 type ReaderDocument = 'field-journal' | 'folded-letter';
-type NarrationEntry = { id: string; text: string };
+type NarrationEntry = { id: string; text: string; occurredAt?: string };
+type NarrationPage = { entries: { id: string; occurredAt: string; narration: string }[]; hasMore: boolean };
 
 const olderNarrationPages = [[
   { id: 'arrival-2', text: 'The familiar world recedes. Sound thins, distance loses meaning, and weakness moves through you before the rain-cold air of another place takes hold.' },
@@ -52,10 +53,13 @@ function EquipmentHierarchy({ prototype, equipped }: { prototype: boolean; equip
 }
 
 export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: string; onReturnToMainMenu: () => void }) {
+  const prototypeMode = !apiUrl;
   const [action, setAction] = useState('');
   const [body, setBody] = useState(previewBody);
   const [narrations, setNarrations] = useState<NarrationEntry[]>([{ id: 'arrival-3', text: 'Cold air fills your lungs. Rainwater darkens the leaves around you. A narrow stream moves somewhere to your right, beneath the hush of unfamiliar trees.' }]);
   const [olderNarrationPage, setOlderNarrationPage] = useState(0);
+  const [hasOlderNarrations, setHasOlderNarrations] = useState(prototypeMode);
+  const [loadingOlderNarrations, setLoadingOlderNarrations] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [location, setLocation] = useState(backdropByBiome.TEMPERATE_FOREST);
@@ -65,7 +69,6 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
   const [mapOverlay, setMapOverlay] = useState(false);
   const [readerDocument, setReaderDocument] = useState<ReaderDocument | null>(null);
   const [items, setItems] = useState<ItemState | null>(null);
-  const prototypeMode = !apiUrl;
   const actionField = useRef<HTMLTextAreaElement>(null);
   const narrationTimeline = useRef<HTMLDivElement>(null);
 
@@ -73,6 +76,15 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
     if (!apiUrl) return;
     fetch(`${apiUrl}/api/chronicles/active/body`).then(response => response.ok ? response.json() : null).then((snapshot: BodySnapshot | null) => {
       if (snapshot) setBody(toBodyRows(snapshot));
+    }).catch(() => undefined);
+  }, [apiUrl]);
+
+  useEffect(() => {
+    if (!apiUrl) return;
+    fetch(`${apiUrl}/api/actions/history?limit=20`).then(response => response.ok ? response.json() : null).then((page: NarrationPage | null) => {
+      if (!page) return;
+      setNarrations(page.entries.reverse().map(entry => ({ id: entry.id, occurredAt: entry.occurredAt, text: entry.narration })));
+      setHasOlderNarrations(page.hasMore);
     }).catch(() => undefined);
   }, [apiUrl]);
 
@@ -111,7 +123,7 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
       const response = await fetch(`${apiUrl}/api/actions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
       const result = await response.json().catch(() => null) as ActionResult | { message?: string } | null;
       if (!response.ok || !result || !('perception' in result)) throw new Error(result && 'message' in result && result.message ? result.message : 'The simulation could not resolve that action.');
-      setNarrations(entries => [...entries, { id: result.actionId, text: result.perception }]);
+      setNarrations(entries => [...entries, { id: result.actionId, occurredAt: result.resolvedAt, text: result.perception }]);
       setBody(toBodyRows(result.body));
       setAction('');
     } catch (error) {
@@ -121,13 +133,31 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
     }
   }
 
-  function loadOlderNarrations() {
-    if (!prototypeMode || olderNarrationPage >= olderNarrationPages.length) return;
+  async function loadOlderNarrations() {
+    if (loadingOlderNarrations || !hasOlderNarrations) return;
     const timeline = narrationTimeline.current;
     const previousHeight = timeline?.scrollHeight ?? 0;
-    setNarrations(entries => [...olderNarrationPages[olderNarrationPage], ...entries]);
-    setOlderNarrationPage(page => page + 1);
-    requestAnimationFrame(() => { if (timeline) timeline.scrollTop = timeline.scrollHeight - previousHeight; });
+    if (prototypeMode) {
+      if (olderNarrationPage >= olderNarrationPages.length) { setHasOlderNarrations(false); return; }
+      setNarrations(entries => [...olderNarrationPages[olderNarrationPage], ...entries]);
+      const next = olderNarrationPage + 1;
+      setOlderNarrationPage(next);
+      setHasOlderNarrations(next < olderNarrationPages.length);
+      requestAnimationFrame(() => { if (timeline) timeline.scrollTop = timeline.scrollHeight - previousHeight; });
+      return;
+    }
+    const oldest = narrations[0];
+    if (!apiUrl || !oldest?.occurredAt) return;
+    setLoadingOlderNarrations(true);
+    try {
+      const params = new URLSearchParams({ before: oldest.occurredAt, beforeId: oldest.id, limit: '20' });
+      const response = await fetch(`${apiUrl}/api/actions/history?${params}`);
+      const page = response.ok ? await response.json() as NarrationPage : null;
+      if (!page) return;
+      setNarrations(entries => [...page.entries.reverse().map(entry => ({ id: entry.id, occurredAt: entry.occurredAt, text: entry.narration })), ...entries]);
+      setHasOlderNarrations(page.hasMore);
+      requestAnimationFrame(() => { if (timeline) timeline.scrollTop = timeline.scrollHeight - previousHeight; });
+    } finally { setLoadingOlderNarrations(false); }
   }
 
   function exportChronicle() {
@@ -172,7 +202,7 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
       <section className="perception" aria-label="Narrative history">
         <p className="eyebrow">Awakening</p>
         <div className="narration-timeline" ref={narrationTimeline} onScroll={event => { if (event.currentTarget.scrollTop < 12) loadOlderNarrations(); }}>
-          {prototypeMode && olderNarrationPage < olderNarrationPages.length && <p className="narration-loading">Earlier memories surface as you look back…</p>}
+          {hasOlderNarrations && <p className="narration-loading">{loadingOlderNarrations ? 'Earlier memories surface…' : 'Scroll upward for earlier moments.'}</p>}
           {narrations.map(entry => <p key={entry.id}>{entry.text}</p>)}
         </div>
       </section>
