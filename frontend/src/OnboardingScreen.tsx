@@ -14,13 +14,12 @@ export function OnboardingScreen() {
     <section className="onboarding-menu" aria-label="Project Draugr main menu">
       <p className="onboarding-kicker">A persistent survival chronicle</p>
       <h1>Project<br /><em>Draugr</em></h1>
-      <p className="onboarding-tagline">The world remembers.</p>
+      <p className="onboarding-tagline"><strong>Every life leaves a mark.</strong><br /><em>The world remembers. The Overseer never forgets.</em></p>
       <nav className="onboarding-actions" aria-label="Main actions">
         <button className="menu-button primary" onClick={() => setPanel('crossing')}><span aria-hidden="true">○</span>{primaryLabel}</button>
         <button className="menu-button" onClick={() => setPanel('archive')}><span aria-hidden="true">○</span>Chronicle Archive</button>
         <button className="menu-button" onClick={() => setPanel('settings')}><span aria-hidden="true">○</span>Settings</button>
       </nav>
-      <p className="onboarding-footer">One living Chronicle at a time.</p>
     </section>
 
     {panel !== 'none' && <div className="onboarding-dialog-backdrop" role="presentation" onClick={() => setPanel('none')}>
