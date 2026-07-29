@@ -11,7 +11,7 @@ $env:DRAUGR_PGADMIN_PASSWORD = Read-Host 'Choose a local pgAdmin password'
 docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d pgadmin
 ```
 
-Open `http://localhost:5050` and sign in with `admin@draugr.local` and the password entered above.
+Open `http://localhost:5050` and sign in with `admin@draugr.app` and the password entered above.
 
 Add one server connection:
 
