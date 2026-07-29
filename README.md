@@ -376,6 +376,8 @@ For the current local MVP launcher, start Docker Desktop and run `powershell -Ex
 
 To stop the local stack without deleting its persistent world data, run `powershell -ExecutionPolicy Bypass -File .\scripts\Stop-Draugr.ps1`.
 
+Before testing a risky playthrough, create a local database snapshot with `powershell -ExecutionPolicy Bypass -File .\scripts\Backup-Draugr.ps1`. Backups are stored under ignored `backups/` and are never committed.
+
 The local frontend is in `frontend/`. Run `npm install` and `npm run dev` there after the backend is running. It displays the server's current simulation state and can request a simulation tick; it never determines state locally.
 
 The immediate objective is to build a believable persistent world simulation.
