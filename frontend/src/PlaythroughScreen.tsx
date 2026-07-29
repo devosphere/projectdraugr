@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import forestArt from './assets/playthrough-forest-v1.png';
 
 const body = [
@@ -8,11 +8,16 @@ const body = [
 
 export function PlaythroughScreen() {
   const [action, setAction] = useState('');
-  const [notice, setNotice] = useState<string | null>(null);
+  const actionField = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const field = actionField.current;
+    if (!field) return;
+    field.style.height = 'auto';
+    field.style.height = `${Math.min(field.scrollHeight, 102)}px`;
+  }, [action]);
   function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!action.trim()) return;
-    setNotice('Your intention has been heard. The simulation will resolve it in the next playable slice.');
     setAction('');
   }
   return <main className="playthrough" style={{ backgroundImage: `url(${forestArt})` }}>
@@ -26,15 +31,17 @@ export function PlaythroughScreen() {
       <p className="eyebrow">Body</p>
       {body.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
     </aside>
-    <section className="perception" aria-label="Current perception">
-      <p className="eyebrow">Awakening</p>
-      <p>Cold air fills your lungs. Rainwater darkens the leaves around you. A narrow stream moves somewhere to your right, beneath the hush of unfamiliar trees.</p>
-      <p className="perception-note">You have no map. You have no supplies. You are here.</p>
-    </section>
-    <form className="action-composer" onSubmit={submit}>
-      <label htmlFor="action">What do you do?</label>
-      <div><span aria-hidden="true">›</span><input id="action" value={action} maxLength={2500} onChange={event => setAction(event.target.value)} placeholder="Describe an action…" autoComplete="off" /><button aria-label="Submit action" type="submit">↵</button></div>
-      <p className="action-count">{action.length}/2500</p>{notice && <p role="status">{notice}</p>}
-    </form>
+    <div className="playthrough-bottom">
+      <section className="perception" aria-label="Current perception">
+        <p className="eyebrow">Awakening</p>
+        <p>Cold air fills your lungs. Rainwater darkens the leaves around you. A narrow stream moves somewhere to your right, beneath the hush of unfamiliar trees.</p>
+        <p className="perception-note">You have no map. You have no supplies. You are here.</p>
+      </section>
+      <form className="action-composer" onSubmit={submit}>
+        <label htmlFor="action">What do you do?</label>
+        <div><span aria-hidden="true">›</span><textarea ref={actionField} id="action" value={action} maxLength={2500} rows={1} onChange={event => setAction(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} placeholder="Describe an action…" autoComplete="off" /><button aria-label="Submit action" type="submit">↵</button></div>
+        <p className="action-count">{action.length}/2500 · Shift + Enter for a new line</p>
+      </form>
+    </div>
   </main>;
 }
