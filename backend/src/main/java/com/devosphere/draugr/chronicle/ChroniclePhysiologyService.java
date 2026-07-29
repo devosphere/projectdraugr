@@ -40,6 +40,8 @@ public class ChroniclePhysiologyService {
             int hygiene = clamp((int) Math.round(rs.getInt(10) - hours * .25));
             if (food > STARVATION_DEATH_HOURS || water > DEHYDRATION_DEATH_HOURS) {
                 String cause = water > DEHYDRATION_DEATH_HOURS ? "Critical Dehydration" : "Critical Starvation";
+                UUID deathLocation = jdbc.query("SELECT current_location_id FROM world_object WHERE id=?", result -> result.next() ? result.getObject(1, UUID.class) : null, id);
+                relocatePossessions(id, deathLocation, now);
                 jdbc.update("UPDATE chronicle SET life_state = 'DEAD', died_at = ?, death_cause = ? WHERE id = ?", now, cause, id);
                 jdbc.update("UPDATE chronicle_body SET health = 'Dying', condition_summary = ? WHERE chronicle_id = ?", cause, id);
                 jdbc.update("INSERT INTO chronicle_event (chronicle_id, occurred_at, event_type, payload) VALUES (?, ?, 'CHRONICLE_DIED', jsonb_build_object('cause', ?))", id, now, cause);
@@ -58,6 +60,26 @@ public class ChroniclePhysiologyService {
         String column = bowel ? "bowel_level" : "bladder_level";
         jdbc.update("UPDATE chronicle_physiology SET " + column + " = 0 WHERE chronicle_id = ?", chronicleId);
         jdbc.update("UPDATE chronicle_body SET " + (bowel ? "bowel" : "bladder") + " = 'Empty' WHERE chronicle_id = ?", chronicleId);
+    }
+
+    @Transactional
+    public void eat(UUID chronicleId) {
+        jdbc.update("UPDATE chronicle_physiology SET hours_without_food=GREATEST(0,hours_without_food-8), energy_level=LEAST(100,energy_level+6) WHERE chronicle_id=?", chronicleId);
+        refreshBody(chronicleId);
+    }
+    @Transactional
+    public void drink(UUID chronicleId) {
+        jdbc.update("UPDATE chronicle_physiology SET hours_without_water=GREATEST(0,hours_without_water-10) WHERE chronicle_id=?", chronicleId);
+        refreshBody(chronicleId);
+    }
+    private void refreshBody(UUID chronicleId) {
+        jdbc.query("SELECT b.health,b.condition_summary,p.hours_without_food,p.hours_without_water,p.energy_level,p.core_temperature_c,p.wetness_level,p.bladder_level,p.bowel_level,p.hygiene_level FROM chronicle_body b JOIN chronicle_physiology p ON p.chronicle_id=b.chronicle_id WHERE b.chronicle_id=?",rs->{if(rs.next()){BodyHudSnapshot body=snapshot(rs.getString(1),rs.getString(2),rs.getBigDecimal(3).doubleValue(),rs.getBigDecimal(4).doubleValue(),rs.getInt(5),rs.getBigDecimal(6).doubleValue(),rs.getInt(7),rs.getInt(8),rs.getInt(9),rs.getInt(10));jdbc.update("UPDATE chronicle_body SET hunger=?,thirst=?,energy=?,temperature=?,wetness=?,bladder=?,bowel=?,hygiene=? WHERE chronicle_id=?",body.hunger(),body.thirst(),body.energy(),body.temperature(),body.wetness(),body.bladder(),body.bowel(),body.hygiene(),chronicleId);}return null;},chronicleId);
+    }
+    private void relocatePossessions(UUID chronicleId, UUID locationId, Instant occurredAt) {
+        if (locationId == null) return;
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) SELECT id,?,'CHRONICLE_DIED_DROPPED',jsonb_build_object('locationId',?::text) FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE'", occurredAt, locationId.toString(), chronicleId);
+        jdbc.update("DELETE FROM equipment_attachment WHERE chronicle_id=?", chronicleId);
+        jdbc.update("UPDATE world_object SET current_owner_id=NULL,current_location_id=?,updated_at=? WHERE current_owner_id=? AND lifecycle_state='ACTIVE'", locationId, occurredAt, chronicleId);
     }
 
     public static BodyHudSnapshot snapshot(String health, String condition, double foodHours, double waterHours, int energy, double temperature, int wetness, int bladder, int bowel, int hygiene) {
