@@ -42,6 +42,7 @@ public class ChronicleService {
         jdbc.update("INSERT INTO chronicle (id, world_id, sequence_number, life_state, arrived_at) VALUES (?, ?, ?, 'LIVING', ?)", chronicleId, world.id(), sequence, now);
         jdbc.update("INSERT INTO chronicle_body (chronicle_id, health, condition_summary, hunger, thirst, energy, temperature, wetness, bladder, bowel, hygiene) VALUES (?, 'Healthy', 'Unsteady', 'Satisfied', 'Hydrated', 'Rested', 'Comfortable', 'Damp', 'Comfortable', 'Comfortable', 'Normal')", chronicleId);
         jdbc.update("INSERT INTO chronicle_physiology (chronicle_id, last_metabolic_update) VALUES (?, ?)", chronicleId, now);
+        jdbc.update("INSERT INTO chronicle_carry_capacity (chronicle_id) VALUES (?)", chronicleId);
         jdbc.update("INSERT INTO chronicle_event (chronicle_id, occurred_at, event_type, payload) VALUES (?, ?, 'CHRONICLE_AWAKENED', jsonb_build_object('origin', 'Earth', 'spawnChunkId', ?::text))", chronicleId, now, spawnChunk.toString());
         jdbc.update("INSERT INTO world_event (occurred_at, event_type, aggregate_id, payload) VALUES (?, 'CHRONICLE_AWAKENED', ?, jsonb_build_object('chronicleSequence', ?, 'origin', 'Earth'))", now, chronicleId, sequence);
         return new ChronicleSummary(chronicleId, sequence, "LIVING", now, null, null, spawnChunk);
