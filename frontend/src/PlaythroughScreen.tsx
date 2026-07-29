@@ -50,7 +50,12 @@ function EquipmentHierarchy({ prototype, equipped }: { prototype: boolean; equip
     group('Waist', [['Waist', prototype ? 'Fiber cord' : attached('WAIST')]]),
     group('Lower Body', [['Under layer', 'Empty'], ['Outer layer', 'Empty'], ['Protective layer', 'Empty']]),
     group('Legs & Knees', [['Leg protection', attached('LEG_LEFT')], ['Knee protection', 'Empty']]),
-    group('Feet', [['Inner layer', 'Empty'], ['Outer layer', prototype ? 'Bare feet' : attached('FOOT_LEFT')]])
+    group('Feet', [
+      ['Left foot · inner layer', 'Empty'],
+      ['Left foot · outer layer', prototype ? 'Bare foot' : attached('FOOT_LEFT')],
+      ['Right foot · inner layer', 'Empty'],
+      ['Right foot · outer layer', prototype ? 'Bare foot' : attached('FOOT_RIGHT')]
+    ])
   ]}</div>;
 }
 
