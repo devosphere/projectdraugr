@@ -1,0 +1,15 @@
+services:
+  pgadmin:
+    image: dpage/pgadmin4:9.16
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${DRAUGR_PGADMIN_EMAIL:-admin@draugr.local}
+      PGADMIN_DEFAULT_PASSWORD: ${DRAUGR_PGADMIN_PASSWORD:?Set DRAUGR_PGADMIN_PASSWORD before starting pgAdmin}
+    ports:
+      - "127.0.0.1:5050:80"
+    volumes:
+      - draugr-pgadmin:/var/lib/pgadmin
+    depends_on:
+      - postgres
+
+volumes:
+  draugr-pgadmin:
