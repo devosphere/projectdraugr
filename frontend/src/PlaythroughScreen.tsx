@@ -37,6 +37,14 @@ function toBodyRows(snapshot: BodySnapshot) {
   return [['Health', snapshot.health], ['Condition', snapshot.condition], ['Hunger', snapshot.hunger], ['Thirst', snapshot.thirst], ['Energy', snapshot.energy], ['Temperature', snapshot.temperature], ['Wetness', snapshot.wetness], ['Bladder', snapshot.bladder], ['Bowel', snapshot.bowel], ['Hygiene', snapshot.hygiene]];
 }
 
+function seasonAt(instant: string) {
+  const month = new Date(instant).getUTCMonth();
+  if (month <= 1 || month === 11) return 'Winter';
+  if (month <= 4) return 'Spring';
+  if (month <= 7) return 'Summer';
+  return 'Autumn';
+}
+
 function EquipmentHierarchy({ prototype, equipped }: { prototype: boolean; equipped?: ItemState['equipped'] }) {
   const attached = (position: string, fallback = 'Empty') => prototype ? fallback : equipped?.filter(item => item.bodyPosition === position).map(item => item.displayName).join(', ') || 'Empty';
   const group = (title: string, entries: [string, string][]) => <section className="equipment-group" key={title}><h3>{title}</h3>{entries.map(([slot,value]) => <div className="equipment-slot" key={slot}><span>{slot}</span><strong>{value}</strong></div>)}</section>;
@@ -98,7 +106,7 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
     fetch(`${apiUrl}/api/chronicles/active/environment`).then(response => response.ok ? response.json() : null).then((snapshot: EnvironmentSnapshot | null) => {
       if (!snapshot) return;
       const hour = new Date(snapshot.simulatedAt).getUTCHours();
-      setEnvironment({ time: hour < 6 ? 'Before dawn' : hour < 12 ? 'Morning' : hour < 18 ? 'Afternoon' : 'Night', weather: snapshot.weatherKind.toLowerCase().replace(/^./, letter => letter.toUpperCase()), season: snapshot.ambientTemperatureC === null ? 'Unknown season' : `${Math.round(snapshot.ambientTemperatureC)}°C · ${snapshot.windSpeedKph ?? 0} kph wind` });
+      setEnvironment({ time: hour < 6 ? 'Before dawn' : hour < 12 ? 'Morning' : hour < 18 ? 'Afternoon' : 'Night', weather: snapshot.weatherKind.toLowerCase().replace(/^./, letter => letter.toUpperCase()), season: `${seasonAt(snapshot.simulatedAt)} · ${Math.round(snapshot.ambientTemperatureC ?? 18)}°C · ${snapshot.windSpeedKph ?? 0} kph wind` });
     }).catch(() => undefined);
   }, [apiUrl]);
 
@@ -158,7 +166,7 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
       }).catch(() => undefined);
       fetch(`${apiUrl}/api/chronicles/active/discoveries`).then(response => response.ok ? response.json() : null).then((context: DiscoveryContext | null) => setDiscoveries(context)).catch(() => undefined);
       fetch(`${apiUrl}/api/items/state`).then(response => response.ok ? response.json() : null).then((snapshot: ItemState | null) => setItems(snapshot)).catch(() => setItems(null));
-      fetch(`${apiUrl}/api/chronicles/active/environment`).then(response => response.ok ? response.json() : null).then((snapshot: EnvironmentSnapshot | null) => { if (snapshot) { const hour=new Date(snapshot.simulatedAt).getUTCHours(); setEnvironment({ time: hour < 6 ? 'Before dawn' : hour < 12 ? 'Morning' : hour < 18 ? 'Afternoon' : 'Night', weather: snapshot.weatherKind.toLowerCase().replace(/^./, letter => letter.toUpperCase()), season: snapshot.ambientTemperatureC === null ? 'Unknown season' : `${Math.round(snapshot.ambientTemperatureC)}°C · ${snapshot.windSpeedKph ?? 0} kph wind` }); } }).catch(() => undefined);
+      fetch(`${apiUrl}/api/chronicles/active/environment`).then(response => response.ok ? response.json() : null).then((snapshot: EnvironmentSnapshot | null) => { if (snapshot) { const hour=new Date(snapshot.simulatedAt).getUTCHours(); setEnvironment({ time: hour < 6 ? 'Before dawn' : hour < 12 ? 'Morning' : hour < 18 ? 'Afternoon' : 'Night', weather: snapshot.weatherKind.toLowerCase().replace(/^./, letter => letter.toUpperCase()), season: `${seasonAt(snapshot.simulatedAt)} · ${Math.round(snapshot.ambientTemperatureC ?? 18)}°C · ${snapshot.windSpeedKph ?? 0} kph wind` }); } }).catch(() => undefined);
       setAction('');
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'The simulation could not resolve that action.');

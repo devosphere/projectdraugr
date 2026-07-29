@@ -25,7 +25,7 @@ public class ChronicleService {
     }
     @Transactional(readOnly = true)
     public ChronicleEnvironment activeEnvironment() {
-        return jdbc.query("SELECT sc.simulated_at,ww.weather_kind,ww.ambient_temperature_c,ww.wind_speed_kph FROM chronicle c JOIN simulation_clock sc ON sc.id=1 LEFT JOIN world_weather ww ON ww.world_id=c.world_id WHERE c.life_state='LIVING'",rs->rs.next()?new ChronicleEnvironment(rs.getTimestamp(1).toInstant(),rs.getString(2)==null?"CLEAR":rs.getString(2),rs.getBigDecimal(3)==null?null:rs.getBigDecimal(3).doubleValue(),rs.getObject(4,Integer.class)):null);
+        return jdbc.query("SELECT sc.simulated_at,COALESCE(ww.weather_kind,'CLEAR'),COALESCE(ww.ambient_temperature_c,18.0),COALESCE(ww.wind_speed_kph,6) FROM chronicle c JOIN simulation_clock sc ON sc.id=1 LEFT JOIN world_weather ww ON ww.world_id=c.world_id WHERE c.life_state='LIVING'",rs->rs.next()?new ChronicleEnvironment(rs.getTimestamp(1).toInstant(),rs.getString(2),rs.getBigDecimal(3).doubleValue(),rs.getInt(4)):null);
     }
 
     @Transactional(readOnly = true)
