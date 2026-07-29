@@ -1,6 +1,7 @@
 package com.devosphere.draugr.action;
 
 import com.devosphere.draugr.chronicle.ChroniclePhysiologyService;
+import com.devosphere.draugr.narration.NarrationPolicy;
 import com.devosphere.draugr.simulation.SimulationTickService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -13,8 +14,8 @@ import java.util.UUID;
 
 @Service
 public class ChronicleActionService {
-    private final JdbcTemplate jdbc; private final SimulationTickService ticks; private final ChroniclePhysiologyService physiology;
-    public ChronicleActionService(JdbcTemplate jdbc, SimulationTickService ticks, ChroniclePhysiologyService physiology) { this.jdbc = jdbc; this.ticks = ticks; this.physiology = physiology; }
+    private final JdbcTemplate jdbc; private final SimulationTickService ticks; private final ChroniclePhysiologyService physiology; private final NarrationPolicy narration;
+    public ChronicleActionService(JdbcTemplate jdbc, SimulationTickService ticks, ChroniclePhysiologyService physiology, NarrationPolicy narration) { this.jdbc = jdbc; this.ticks = ticks; this.physiology = physiology; this.narration = narration; }
 
     @Transactional
     public ActionResult resolve(String text) {
@@ -36,10 +37,11 @@ public class ChronicleActionService {
         jdbc.update("INSERT INTO chronicle_action (id, chronicle_id, resolved_at, action_text, intent_type, outcome, duration_minutes) VALUES (?, ?, ?, ?, ?, ?, ?)", actionId, chronicle.id(), resolvedAt, text.trim(), intent.name(), outcome, minutes);
         jdbc.update("INSERT INTO chronicle_action_effect (action_id, effect_domain, effect_type, payload) VALUES (?, 'TIME', 'TIME_ADVANCED', jsonb_build_object('minutes', ?))", actionId, minutes);
         jdbc.update("INSERT INTO chronicle_event (chronicle_id, occurred_at, event_type, payload) VALUES (?, ?, 'CHRONICLE_ACTION_RESOLVED', jsonb_build_object('actionId', ?::text, 'intent', ?, 'outcome', ?))", chronicle.id(), resolvedAt, actionId.toString(), intent.name(), outcome);
-        return new ActionResult(actionId, intent.name(), outcome, minutes, perception);
+        narration.validate(perception);
+        return new ActionResult(actionId, intent.name(), outcome, minutes, perception, physiology.activeBody());
     }
     private String observe(UUID location) { Integer sites = jdbc.queryForObject("SELECT COUNT(*) FROM ecology_site WHERE chunk_id = ?", Integer.class, location); return sites != null && sites > 0 ? "You notice signs that this place has been shaped by more than rain and roots alone." : "Rain-darkened ground, roots, and wet leaves hold the nearest details of the forest."; }
     private Intent classify(String action) { String value = action.toLowerCase(Locale.ROOT); if (value.contains("observe") || value.contains("look") || value.contains("inspect")) return Intent.OBSERVE; if (value.contains("rest") || value.contains("wait")) return Intent.REST; if (value.contains("urinate") || value.contains("pee")) return Intent.URINATE; if (value.contains("defecate") || value.contains("poop")) return Intent.DEFECATE; return Intent.UNKNOWN; }
     private record ActiveChronicle(UUID id, UUID location) { } private enum Intent { OBSERVE, REST, URINATE, DEFECATE, UNKNOWN }
-    public record ActionResult(UUID actionId, String intent, String outcome, int durationMinutes, String perception) { }
+    public record ActionResult(UUID actionId, String intent, String outcome, int durationMinutes, String perception, ChroniclePhysiologyService.BodyHudSnapshot body) { }
 }

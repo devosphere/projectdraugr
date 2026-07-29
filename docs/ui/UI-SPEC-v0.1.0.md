@@ -45,6 +45,12 @@ This is the authoritative acceptance specification for the current player experi
 - Stream and quarry backdrops; these are planned compatible additions.
 - Multiplayer UI.
 
+## Queued next slice
+
+- Generate original manhua-inspired stream and quarry backdrops.
+- Extend the authoritative location response with biome/location presentation data.
+- Select the playthrough backdrop from that authoritative location data, so a Chronicle sees the appropriate environment after travel rather than a fixed forest scene.
+
 ## Change log
 
 ### v0.1.0 — 2026-07-29
