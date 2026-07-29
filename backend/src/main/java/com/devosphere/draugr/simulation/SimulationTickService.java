@@ -27,8 +27,8 @@ public class SimulationTickService {
         SimulationClock simulationClock = clocks.findById((short) 1).orElseThrow();
         Instant now = clock.instant();
         SimulationAgent.SimulationAssessment assessment = simulation.assess(simulationClock.getTick() + 1, now);
-        physiology.advanceTo(now);
-        wildlife.advanceTo(now); weather.advanceTo(now); fires.advanceTo(now);
+        weather.advanceTo(now); fires.advanceTo(now); physiology.advanceTo(now);
+        wildlife.advanceTo(now);
         simulationClock.advanceTo(now);
         events.save(new WorldEvent(now, assessment.eventType(), null, null, Map.of()));
         return new SimulationTick(simulationClock.getTick(), simulationClock.getSimulatedAt());
@@ -39,8 +39,8 @@ public class SimulationTickService {
         simulationClock.advanceBy(duration);
         Instant now = simulationClock.getSimulatedAt();
         SimulationAgent.SimulationAssessment assessment = simulation.assess(simulationClock.getTick(), now);
-        physiology.advanceTo(now);
-        wildlife.advanceTo(now); weather.advanceTo(now); fires.advanceTo(now);
+        weather.advanceTo(now); fires.advanceTo(now); physiology.advanceTo(now);
+        wildlife.advanceTo(now);
         events.save(new WorldEvent(now, assessment.eventType(), null, null, Map.of("durationMinutes", duration.toMinutes())));
         return new SimulationTick(simulationClock.getTick(), now);
     }
