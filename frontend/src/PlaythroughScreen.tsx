@@ -13,7 +13,8 @@ type BodySnapshot = { health: string; condition: string; hunger: string; thirst:
 type ActionResult = { actionId: string; intent: string; outcome: string; durationMinutes: number; perception: string; body: BodySnapshot };
 type LocationSnapshot = { biome: string; presentationKey: string };
 type ItemState = { carried: { id: string; displayName: string; itemKey: string }[]; equipped: { id: string; displayName: string; bodyPosition: string; layer: string }[] };
-type Panel = 'none' | 'chronicle' | 'equipment' | 'load' | 'storage' | 'crafting' | 'construction' | 'knowledge' | 'map';
+type Panel = 'none' | 'chronicle' | 'equipment' | 'load' | 'storage' | 'crafting' | 'construction' | 'knowledge' | 'map' | 'literature';
+type ReaderDocument = 'field-journal' | 'folded-letter';
 
 const backdropByBiome: Record<string, { art: string; label: string }> = {
   TEMPERATE_FOREST: { art: forestArt, label: 'Uncharted forest' },
@@ -54,6 +55,7 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
   const [panel, setPanel] = useState<Panel>('none');
   const [menuOpen, setMenuOpen] = useState(false);
   const [mapOverlay, setMapOverlay] = useState(false);
+  const [readerDocument, setReaderDocument] = useState<ReaderDocument | null>(null);
   const [items, setItems] = useState<ItemState | null>(null);
   const prototypeMode = !apiUrl;
   const actionField = useRef<HTMLTextAreaElement>(null);
@@ -122,7 +124,7 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
       {body.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
     </aside>
     {menuOpen && <aside className="expanded-menu" aria-label="Chronicle menu">
-      {panel === 'none' ? <nav>{((prototypeMode ? [['chronicle','Chronicle'],['equipment','Equipment'],['load','Load'],['storage','Storage'],['crafting','Crafting'],['construction','Construction'],['knowledge','Knowledge'],['map','Chronicle Map']] : [['chronicle','Chronicle'],['equipment','Equipment'],['load','Load'],['knowledge','Knowledge']]) as [Panel,string][]).map(([id,label]) => <button key={id} onClick={() => setPanel(id)}>{label}</button>)}<button className="return-main" onClick={onReturnToMainMenu}>Return to Main Menu</button></nav> : <>
+      {panel === 'none' ? <nav>{((prototypeMode ? [['chronicle','Chronicle'],['equipment','Equipment'],['load','Load'],['storage','Storage'],['crafting','Crafting'],['construction','Construction'],['knowledge','Knowledge'],['map','Chronicle Map'],['literature','Literature']] : [['chronicle','Chronicle'],['equipment','Equipment'],['load','Load'],['knowledge','Knowledge']]) as [Panel,string][]).map(([id,label]) => <button key={id} onClick={() => setPanel(id)}>{label}</button>)}<button className="return-main" onClick={onReturnToMainMenu}>Return to Main Menu</button></nav> : <>
       <header><button aria-label="Back to menu" onClick={() => setPanel('none')}>←</button></header>
       <section className="menu-detail">
         {panel==='equipment' && <><h2>Equipment</h2><EquipmentHierarchy prototype={prototypeMode} equipped={items?.equipped} /></>}
@@ -133,9 +135,11 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
         {panel==='construction' && <><h2>Construction</h2><div className="record"><strong>Stone fire pit</strong><span>Understood</span><span>Current ground · forest clearing</span></div><p className="perception-note">Reference only. Declare all attempts in the Action Composer.</p></>}
         {panel==='knowledge' && <><h2>Knowledge</h2><div className="record"><strong>Plant fiber</strong><span>Workable material</span></div><div className="record"><strong>Fire tending</strong><span>Observed</span></div><div className="record"><strong>Forest water</strong><span>Unverified</span></div></>}
         {panel==='map' && <><h2>Chronicle Map</h2><button className="map-list-entry" onClick={() => setMapOverlay(true)}>Hand-drawn forest sketch <span>carried in woven basket</span></button><p className="perception-note">Only physical maps within reach are shown.</p></>}
+        {panel==='literature' && <><h2>Literature</h2><button className="map-list-entry" onClick={() => setReaderDocument('field-journal')}><strong>Weather-worn field journal</strong><span>Carried in woven basket · Revision 3</span></button><button className="map-list-entry" onClick={() => setReaderDocument('folded-letter')}><strong>Folded letter</strong><span>Carried in woven basket · Revision 1</span></button><p className="perception-note">Only readable objects within reach are shown. Maps remain in Chronicle Map.</p></>}
       </section>
       </>}</aside>}
     {mapOverlay && <div className="map-overlay" role="dialog" aria-modal="true" aria-label="Hand-drawn forest sketch"><button aria-label="Close map" onClick={() => setMapOverlay(false)}>×</button><section><p className="eyebrow">Hand-drawn forest sketch</p><h2>Uncharted Forest</h2><div className="map-sketch"><span>Stream</span><span>Fallen cedar</span><span>Clay bank</span><i /></div><p>Weather-worn charcoal and bark marks. The far edges remain blank.</p></section></div>}
+    {readerDocument && <div className="reader-overlay" role="dialog" aria-modal="true" aria-label="Read literature"><button aria-label="Close reader" onClick={() => setReaderDocument(null)}>×</button><article>{readerDocument === 'field-journal' ? <><p className="eyebrow">Weather-worn field journal</p><p className="reader-revision">Revision 3 · copied by hand</p><h2>Near the cedar</h2><div className="reader-page"><p>The stream turns shallow beside the fallen cedar. Clay clings beneath the roots after rain.</p><p>Something broad moved in the fern beds before dawn. It left the stems bent low, then the forest settled again.</p><p className="reader-mark">The next pages are blank.</p></div></> : <><p className="eyebrow">Folded letter</p><p className="reader-revision">Revision 1 · ink faded by damp</p><h2>Untitled</h2><div className="reader-page"><p>If this reaches you, keep it dry. The trail does not stay where it was drawn.</p><p className="reader-mark">No signature remains.</p></div></>}<p className="reader-note">Inspection only. Any writing, copying, or revision must be declared through the Action Composer.</p></article></div>}
     <div className="playthrough-bottom">
       <section className="perception" aria-label="Current perception">
         <p className="eyebrow">Awakening</p>
