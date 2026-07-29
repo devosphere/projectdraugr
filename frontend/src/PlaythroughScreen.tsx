@@ -1,14 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
 import forestArt from './assets/playthrough-forest-v1.png';
 
-const body = [
+const previewBody = [
   ['Health', 'Healthy'], ['Condition', 'Unsteady'], ['Hunger', 'Satisfied'], ['Thirst', 'Hydrated'],
   ['Energy', 'Rested'], ['Temperature', 'Comfortable'], ['Wetness', 'Damp'], ['Bladder', 'Comfortable'], ['Bowel', 'Comfortable'], ['Hygiene', 'Normal'],
 ];
 
-export function PlaythroughScreen() {
+type BodySnapshot = { health: string; condition: string; hunger: string; thirst: string; energy: string; temperature: string; wetness: string; bladder: string; bowel: string; hygiene: string };
+
+export function PlaythroughScreen({ apiUrl }: { apiUrl?: string }) {
   const [action, setAction] = useState('');
+  const [body, setBody] = useState(previewBody);
   const actionField = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (!apiUrl) return;
+    fetch(`${apiUrl}/api/chronicles/active/body`).then(response => response.ok ? response.json() : null).then((snapshot: BodySnapshot | null) => {
+      if (!snapshot) return;
+      setBody([['Health', snapshot.health], ['Condition', snapshot.condition], ['Hunger', snapshot.hunger], ['Thirst', snapshot.thirst], ['Energy', snapshot.energy], ['Temperature', snapshot.temperature], ['Wetness', snapshot.wetness], ['Bladder', snapshot.bladder], ['Bowel', snapshot.bowel], ['Hygiene', snapshot.hygiene]]);
+    }).catch(() => undefined);
+  }, [apiUrl]);
   useEffect(() => {
     const field = actionField.current;
     if (!field) return;

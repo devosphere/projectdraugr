@@ -15,8 +15,10 @@ import java.util.List;
 @CrossOrigin(origins = "${draugr.frontend-origin:http://localhost:5173}")
 public class ChronicleController {
     private final ChronicleService chronicles;
-    public ChronicleController(ChronicleService chronicles) { this.chronicles = chronicles; }
+    private final ChroniclePhysiologyService physiology;
+    public ChronicleController(ChronicleService chronicles, ChroniclePhysiologyService physiology) { this.chronicles = chronicles; this.physiology = physiology; }
     @GetMapping("/active") public ChronicleService.ChronicleSummary active() { return chronicles.active(); }
+    @GetMapping("/active/body") public ChroniclePhysiologyService.BodyHudSnapshot activeBody() { return physiology.activeBody(); }
     @GetMapping("/archive") public List<ChronicleService.ChronicleSummary> archive() { return chronicles.archive(); }
     @PostMapping @ResponseStatus(HttpStatus.CREATED) public ChronicleService.ChronicleSummary awaken() { return chronicles.awaken(); }
 }
