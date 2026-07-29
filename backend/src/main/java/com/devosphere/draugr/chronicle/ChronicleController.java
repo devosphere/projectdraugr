@@ -18,6 +18,7 @@ public class ChronicleController {
     private final ChroniclePhysiologyService physiology;
     public ChronicleController(ChronicleService chronicles, ChroniclePhysiologyService physiology) { this.chronicles = chronicles; this.physiology = physiology; }
     @GetMapping("/active") public ChronicleService.ChronicleSummary active() { return chronicles.active(); }
+    @GetMapping("/active/location") public ChronicleService.ChronicleLocation activeLocation() { return chronicles.activeLocation(); }
     @GetMapping("/active/body") public ChroniclePhysiologyService.BodyHudSnapshot activeBody() { return physiology.activeBody(); }
     @GetMapping("/archive") public List<ChronicleService.ChronicleSummary> archive() { return chronicles.archive(); }
     @PostMapping @ResponseStatus(HttpStatus.CREATED) public ChronicleService.ChronicleSummary awaken() { return chronicles.awaken(); }

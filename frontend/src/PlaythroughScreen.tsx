@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import forestArt from './assets/playthrough-forest-v1.png';
+import streamArt from './assets/playthrough-stream-v1.png';
+import quarryArt from './assets/playthrough-quarry-v1.png';
 
 const previewBody = [
   ['Health', 'Healthy'], ['Condition', 'Unsteady'], ['Hunger', 'Satisfied'], ['Thirst', 'Hydrated'],
@@ -8,6 +10,14 @@ const previewBody = [
 
 type BodySnapshot = { health: string; condition: string; hunger: string; thirst: string; energy: string; temperature: string; wetness: string; bladder: string; bowel: string; hygiene: string };
 type ActionResult = { actionId: string; intent: string; outcome: string; durationMinutes: number; perception: string; body: BodySnapshot };
+type LocationSnapshot = { biome: string };
+
+const backdropByBiome: Record<string, { art: string; label: string }> = {
+  TEMPERATE_FOREST: { art: forestArt, label: 'Uncharted forest' },
+  WETLAND: { art: streamArt, label: 'Forest stream' },
+  MOUNTAIN: { art: quarryArt, label: 'Stone basin' },
+  HIGHLAND: { art: quarryArt, label: 'Highland quarry' },
+};
 
 function toBodyRows(snapshot: BodySnapshot) {
   return [['Health', snapshot.health], ['Condition', snapshot.condition], ['Hunger', snapshot.hunger], ['Thirst', snapshot.thirst], ['Energy', snapshot.energy], ['Temperature', snapshot.temperature], ['Wetness', snapshot.wetness], ['Bladder', snapshot.bladder], ['Bowel', snapshot.bowel], ['Hygiene', snapshot.hygiene]];
@@ -19,12 +29,20 @@ export function PlaythroughScreen({ apiUrl }: { apiUrl?: string }) {
   const [perception, setPerception] = useState('Cold air fills your lungs. Rainwater darkens the leaves around you. A narrow stream moves somewhere to your right, beneath the hush of unfamiliar trees.');
   const [resolving, setResolving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [location, setLocation] = useState(backdropByBiome.TEMPERATE_FOREST);
   const actionField = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (!apiUrl) return;
     fetch(`${apiUrl}/api/chronicles/active/body`).then(response => response.ok ? response.json() : null).then((snapshot: BodySnapshot | null) => {
       if (snapshot) setBody(toBodyRows(snapshot));
+    }).catch(() => undefined);
+  }, [apiUrl]);
+
+  useEffect(() => {
+    if (!apiUrl) return;
+    fetch(`${apiUrl}/api/chronicles/active/location`).then(response => response.ok ? response.json() : null).then((snapshot: LocationSnapshot | null) => {
+      if (snapshot) setLocation(backdropByBiome[snapshot.biome] ?? backdropByBiome.TEMPERATE_FOREST);
     }).catch(() => undefined);
   }, [apiUrl]);
 
@@ -56,10 +74,10 @@ export function PlaythroughScreen({ apiUrl }: { apiUrl?: string }) {
     }
   }
 
-  return <main className="playthrough" style={{ backgroundImage: `url(${forestArt})` }}>
+  return <main className="playthrough" style={{ backgroundImage: `url(${location.art})` }}>
     <div className="playthrough-vignette" />
     <header className="world-header">
-      <div><p className="eyebrow">Uncharted forest</p><strong>Early morning</strong></div>
+      <div><p className="eyebrow">{location.label}</p><strong>Early morning</strong></div>
       <div className="world-signs" aria-label="Environmental conditions"><span title="Daylight">Dawn</span><span title="Weather">Light rain</span><span title="Season">Early spring</span></div>
       <button className="quiet-menu" aria-label="Open menus">Menu</button>
     </header>

@@ -18,6 +18,11 @@ public class ChronicleService {
     public ChronicleSummary active() { return findSummary("WHERE c.life_state = 'LIVING'"); }
 
     @Transactional(readOnly = true)
+    public ChronicleLocation activeLocation() {
+        return jdbc.query("SELECT c.id, w.current_location_id, wc.biome FROM chronicle c JOIN world_object w ON w.id = c.id JOIN world_chunk wc ON wc.id = w.current_location_id WHERE c.life_state = 'LIVING'", rs -> rs.next() ? new ChronicleLocation(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getString(3)) : null);
+    }
+
+    @Transactional(readOnly = true)
     public List<ChronicleSummary> archive() {
         return jdbc.query("SELECT c.id, c.sequence_number, c.life_state, c.arrived_at, c.died_at, c.death_cause, w.current_location_id FROM chronicle c JOIN world_object w ON w.id = c.id WHERE c.life_state = 'DEAD' ORDER BY c.died_at DESC", (rs, row) -> summary(rs.getObject(1, UUID.class), rs.getInt(2), rs.getString(3), rs.getTimestamp(4).toInstant(), rs.getTimestamp(5) == null ? null : rs.getTimestamp(5).toInstant(), rs.getString(6), rs.getObject(7, UUID.class)));
     }
@@ -56,4 +61,5 @@ public class ChronicleService {
     private ChronicleSummary summary(UUID id, int sequence, String state, Instant arrived, Instant died, String cause, UUID location) { return new ChronicleSummary(id, sequence, state, arrived, died, cause, location); }
     private record WorldSeed(UUID id, long seed) { }
     public record ChronicleSummary(UUID id, int sequenceNumber, String lifeState, Instant arrivedAt, Instant diedAt, String deathCause, UUID locationId) { }
+    public record ChronicleLocation(UUID chronicleId, UUID locationId, String biome) { }
 }
