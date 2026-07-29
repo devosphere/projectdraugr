@@ -3,7 +3,7 @@ import forestArt from './assets/onboarding-forest-v1.png';
 
 type Panel = 'none' | 'archive' | 'settings' | 'crossing' | 'exit';
 
-export function OnboardingScreen({ hasLivingChronicle, onAwaken }: { hasLivingChronicle: boolean; onAwaken: () => void }) {
+export function OnboardingScreen({ hasLivingChronicle, onAwaken, entryError }: { hasLivingChronicle: boolean; onAwaken: () => void; entryError?: string | null }) {
   const [panel, setPanel] = useState<Panel>('none');
   const primaryLabel = hasLivingChronicle ? 'Soul Link' : 'Awaken';
   const canExitApplication = window.location.protocol === 'file:' || ['localhost', '127.0.0.1'].includes(window.location.hostname);
@@ -32,6 +32,7 @@ export function OnboardingScreen({ hasLivingChronicle, onAwaken }: { hasLivingCh
           <p className="crossing-copy">Cold air fills your lungs. Damp earth presses beneath your palms. Above you: an unfamiliar sky.</p>
           <p className="crossing-copy final">Your soul has found the body waiting for it.</p>
           <button className="dialog-close" onClick={onAwaken}>OK</button>
+          {entryError && <p role="status">{entryError}</p>}
         </>}
         {panel === 'archive' && <>
           <p className="dialog-kicker">Chronicle Archive</p>
