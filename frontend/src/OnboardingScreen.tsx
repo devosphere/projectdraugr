@@ -3,10 +3,8 @@ import forestArt from './assets/onboarding-forest-v1.png';
 
 type Panel = 'none' | 'archive' | 'settings' | 'crossing';
 
-export function OnboardingScreen({ onAwaken }: { onAwaken: () => void }) {
+export function OnboardingScreen({ hasLivingChronicle, onAwaken }: { hasLivingChronicle: boolean; onAwaken: () => void }) {
   const [panel, setPanel] = useState<Panel>('none');
-  // Chronicle persistence will replace this with the authoritative session state.
-  const hasLivingChronicle = false;
   const primaryLabel = hasLivingChronicle ? 'Soul Link' : 'Awaken';
 
   return <main className="onboarding" style={{ backgroundImage: `url(${forestArt})` }}>

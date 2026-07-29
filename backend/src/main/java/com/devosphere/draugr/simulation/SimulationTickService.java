@@ -12,14 +12,16 @@ import java.util.Map;
 public class SimulationTickService {
     private final SimulationClockRepository clocks;
     private final WorldEventRepository events;
+    private final SimulationAgent simulation;
     private final Clock clock = Clock.systemUTC();
-    public SimulationTickService(SimulationClockRepository clocks, WorldEventRepository events) { this.clocks = clocks; this.events = events; }
+    public SimulationTickService(SimulationClockRepository clocks, WorldEventRepository events, SimulationAgent simulation) { this.clocks = clocks; this.events = events; this.simulation = simulation; }
     @Transactional
     public SimulationTick advance() {
         SimulationClock simulationClock = clocks.findById((short) 1).orElseThrow();
         Instant now = clock.instant();
+        SimulationAgent.SimulationAssessment assessment = simulation.assess(simulationClock.getTick() + 1, now);
         simulationClock.advanceTo(now);
-        events.save(new WorldEvent(now, "SIMULATION_TICK_COMPLETED", null, null, Map.of()));
+        events.save(new WorldEvent(now, assessment.eventType(), null, null, Map.of()));
         return new SimulationTick(simulationClock.getTick(), simulationClock.getSimulatedAt());
     }
     @Transactional(readOnly = true)
