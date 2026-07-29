@@ -24,7 +24,7 @@ public class ChroniclePhysiologyService {
 
     @Transactional
     public void advanceTo(Instant now) {
-        jdbc.query("SELECT c.id, p.last_metabolic_update, p.hours_without_food, p.hours_without_water, p.energy_level, p.core_temperature_c, p.wetness_level, p.bladder_level, p.bowel_level, p.hygiene_level, b.health, b.condition_summary FROM chronicle c JOIN chronicle_physiology p ON p.chronicle_id = c.id JOIN chronicle_body b ON b.chronicle_id = c.id WHERE c.life_state = 'LIVING' FOR UPDATE", rs -> {
+        jdbc.query("SELECT c.id, p.last_metabolic_update, p.hours_without_food, p.hours_without_water, p.energy_level, p.core_temperature_c, p.wetness_level, p.bladder_level, p.bowel_level, p.hygiene_level, b.health, b.condition_summary, p.sleep_debt_hours, p.pain_level, p.stress_level, p.injury_severity, p.illness_severity, p.blood_loss_ml FROM chronicle c JOIN chronicle_physiology p ON p.chronicle_id = c.id JOIN chronicle_body b ON b.chronicle_id = c.id WHERE c.life_state = 'LIVING' FOR UPDATE", rs -> {
             if (!rs.next()) return null;
             UUID id = rs.getObject(1, UUID.class);
             Instant last = rs.getTimestamp(2).toInstant();
@@ -38,8 +38,10 @@ public class ChroniclePhysiologyService {
             int bladder = clamp((int) Math.round(rs.getInt(8) + hours * 8));
             int bowel = clamp((int) Math.round(rs.getInt(9) + hours * 1.5));
             int hygiene = clamp((int) Math.round(rs.getInt(10) - hours * .25));
-            if (food > STARVATION_DEATH_HOURS || water > DEHYDRATION_DEATH_HOURS) {
-                String cause = water > DEHYDRATION_DEATH_HOURS ? "Critical Dehydration" : "Critical Starvation";
+            double sleepDebt = Math.min(72, rs.getBigDecimal(13).doubleValue() + hours);
+            int pain = rs.getInt(14); int stress = rs.getInt(15); int injury = rs.getInt(16); int illness = rs.getInt(17); int bloodLoss = rs.getInt(18);
+            if (food > STARVATION_DEATH_HOURS || water > DEHYDRATION_DEATH_HOURS || bloodLoss > 3500 || illness >= 100) {
+                String cause = water > DEHYDRATION_DEATH_HOURS ? "Critical Dehydration" : food > STARVATION_DEATH_HOURS ? "Critical Starvation" : bloodLoss > 3500 ? "Critical Blood Loss" : "Systemic Illness";
                 UUID deathLocation = jdbc.query("SELECT current_location_id FROM world_object WHERE id=?", result -> result.next() ? result.getObject(1, UUID.class) : null, id);
                 relocatePossessions(id, deathLocation, now);
                 jdbc.update("UPDATE chronicle SET life_state = 'DEAD', died_at = ?, death_cause = ? WHERE id = ?", now, cause, id);
@@ -47,8 +49,8 @@ public class ChroniclePhysiologyService {
                 jdbc.update("INSERT INTO chronicle_event (chronicle_id, occurred_at, event_type, payload) VALUES (?, ?, 'CHRONICLE_DIED', jsonb_build_object('cause', ?))", id, now, cause);
                 jdbc.update("INSERT INTO world_event (occurred_at, event_type, aggregate_id, payload) VALUES (?, 'CHRONICLE_DIED', ?, jsonb_build_object('cause', ?))", now, id, cause);
             } else {
-                jdbc.update("UPDATE chronicle_physiology SET last_metabolic_update = ?, hours_without_food = ?, hours_without_water = ?, energy_level = ?, wetness_level = ?, bladder_level = ?, bowel_level = ?, hygiene_level = ? WHERE chronicle_id = ?", now, BigDecimal.valueOf(food), BigDecimal.valueOf(water), energy, wetness, bladder, bowel, hygiene, id);
-                BodyHudSnapshot body = snapshot(rs.getString(11), rs.getString(12), food, water, energy, rs.getBigDecimal(6).doubleValue(), wetness, bladder, bowel, hygiene);
+                jdbc.update("UPDATE chronicle_physiology SET last_metabolic_update = ?, hours_without_food = ?, hours_without_water = ?, energy_level = ?, wetness_level = ?, bladder_level = ?, bowel_level = ?, hygiene_level = ?, sleep_debt_hours=?, pain_level=?, stress_level=?, injury_severity=?, illness_severity=?, blood_loss_ml=? WHERE chronicle_id = ?", now, BigDecimal.valueOf(food), BigDecimal.valueOf(water), energy, wetness, bladder, bowel, hygiene, BigDecimal.valueOf(sleepDebt), pain, stress, injury, illness, bloodLoss, id);
+                BodyHudSnapshot body = snapshot(health(injury, illness, bloodLoss), condition(rs.getString(12), pain, stress, sleepDebt), food, water, energy, rs.getBigDecimal(6).doubleValue(), wetness, bladder, bowel, hygiene);
                 jdbc.update("UPDATE chronicle_body SET hunger = ?, thirst = ?, energy = ?, temperature = ?, wetness = ?, bladder = ?, bowel = ?, hygiene = ? WHERE chronicle_id = ?", body.hunger(), body.thirst(), body.energy(), body.temperature(), body.wetness(), body.bladder(), body.bowel(), body.hygiene(), id);
             }
             return null;
@@ -70,6 +72,12 @@ public class ChroniclePhysiologyService {
     @Transactional
     public void drink(UUID chronicleId) {
         jdbc.update("UPDATE chronicle_physiology SET hours_without_water=GREATEST(0,hours_without_water-10) WHERE chronicle_id=?", chronicleId);
+        refreshBody(chronicleId);
+    }
+    @Transactional
+    public void rest(UUID chronicleId, int minutes) {
+        double hours = minutes / 60.0;
+        jdbc.update("UPDATE chronicle_physiology SET sleep_debt_hours=GREATEST(0,sleep_debt_hours-?),energy_level=LEAST(100,energy_level+?),pain_level=GREATEST(0,pain_level-?),stress_level=GREATEST(0,stress_level-?) WHERE chronicle_id=?", hours * .85, Math.max(1, (int)Math.round(hours * 9)), Math.max(0, (int)Math.round(hours)), Math.max(0, (int)Math.round(hours * 2)), chronicleId);
         refreshBody(chronicleId);
     }
     private void refreshBody(UUID chronicleId) {
@@ -94,5 +102,7 @@ public class ChroniclePhysiologyService {
     private static String bowel(int value) { return value >= 90 ? "Critical" : value >= 70 ? "Urgent" : value >= 45 ? "Need Relief" : value <= 5 ? "Empty" : "Normal"; }
     private static String hygiene(int value) { return value >= 80 ? "Clean" : value >= 55 ? "Normal" : value >= 30 ? "Dirty" : value >= 10 ? "Filthy" : "Hazardous"; }
     private static int clamp(int value) { return Math.max(0, Math.min(100, value)); }
+    private static String health(int injury,int illness,int bloodLoss) { return bloodLoss > 2800 || illness > 80 || injury > 80 ? "Critical" : injury > 35 || illness > 35 ? "Injured" : "Healthy"; }
+    private static String condition(String existing,int pain,int stress,double sleepDebt) { if (pain > 70) return "In pain"; if (stress > 75) return "Distressed"; if (sleepDebt > 28) return "Sleep deprived"; return existing; }
     public record BodyHudSnapshot(String health, String condition, String hunger, String thirst, String energy, String temperature, String wetness, String bladder, String bowel, String hygiene) { }
 }
