@@ -27,7 +27,7 @@ function toBodyRows(snapshot: BodySnapshot) {
   return [['Health', snapshot.health], ['Condition', snapshot.condition], ['Hunger', snapshot.hunger], ['Thirst', snapshot.thirst], ['Energy', snapshot.energy], ['Temperature', snapshot.temperature], ['Wetness', snapshot.wetness], ['Bladder', snapshot.bladder], ['Bowel', snapshot.bowel], ['Hygiene', snapshot.hygiene]];
 }
 
-export function PlaythroughScreen({ apiUrl }: { apiUrl?: string }) {
+export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: string; onReturnToMainMenu: () => void }) {
   const [action, setAction] = useState('');
   const [body, setBody] = useState(previewBody);
   const [perception, setPerception] = useState('Cold air fills your lungs. Rainwater darkens the leaves around you. A narrow stream moves somewhere to your right, beneath the hush of unfamiliar trees.');
@@ -103,7 +103,7 @@ export function PlaythroughScreen({ apiUrl }: { apiUrl?: string }) {
     </aside>
     {panel !== 'none' && <aside className="expanded-menu" aria-label="Chronicle menu">
       <header><p className="eyebrow">Chronicle systems</p><button onClick={() => setPanel('none')}>Close</button></header>
-      <nav>{([['chronicle','Chronicle'],['equipment','Equipment'],['storage','Storage'],['crafting','Crafting'],['construction','Construction'],['knowledge','Knowledge'],['map','Chronicle Map']] as [Panel,string][]).map(([id,label]) => <button key={id} className={panel===id?'active':''} onClick={() => setPanel(id)}>{label}</button>)}</nav>
+      <nav>{([['chronicle','Chronicle'],['equipment','Equipment'],['storage','Storage'],['crafting','Crafting'],['construction','Construction'],['knowledge','Knowledge'],['map','Chronicle Map']] as [Panel,string][]).map(([id,label]) => <button key={id} className={panel===id?'active':''} onClick={() => setPanel(id)}>{label}</button>)}<button className="return-main" onClick={onReturnToMainMenu}>Return to Main Menu</button></nav>
       <section className="menu-detail">
         {panel==='equipment' && <><h2>Equipment</h2>{items?.equipped.length ? items.equipped.map(item => <p key={item.id}>{item.bodyPosition.replace('_',' ')} · {item.displayName}</p>) : <p>Nothing is attached to your body.</p>}</>}
         {panel==='storage' && <><h2>Storage</h2>{items?.carried.filter(item => item.itemKey==='woven_basket').length ? items.carried.filter(item => item.itemKey==='woven_basket').map(item => <p key={item.id}>{item.displayName} is carried and may be opened when interacted with.</p>) : <p>You have no accessible storage object.</p>}</>}

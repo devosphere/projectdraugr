@@ -20,5 +20,5 @@ export function App() {
     setPlaying(true);
   }
   if (new URLSearchParams(window.location.search).get('mode') === 'overseer') return <OverseerMap />;
-  return playing ? <PlaythroughScreen apiUrl={apiUrl} /> : <OnboardingScreen hasLivingChronicle={hasLivingChronicle} onAwaken={() => void enterWorld()} />;
+  return playing ? <PlaythroughScreen apiUrl={apiUrl} onReturnToMainMenu={() => setPlaying(false)} /> : <OnboardingScreen hasLivingChronicle={hasLivingChronicle} onAwaken={() => void enterWorld()} />;
 }

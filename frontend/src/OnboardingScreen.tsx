@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import forestArt from './assets/onboarding-forest-v1.png';
 
-type Panel = 'none' | 'archive' | 'settings' | 'crossing';
+type Panel = 'none' | 'archive' | 'settings' | 'crossing' | 'exit';
 
 export function OnboardingScreen({ hasLivingChronicle, onAwaken }: { hasLivingChronicle: boolean; onAwaken: () => void }) {
   const [panel, setPanel] = useState<Panel>('none');
   const primaryLabel = hasLivingChronicle ? 'Soul Link' : 'Awaken';
+  const canExitApplication = window.location.protocol === 'file:' || ['localhost', '127.0.0.1'].includes(window.location.hostname);
 
   return <main className="onboarding" style={{ backgroundImage: `url(${forestArt})` }}>
     <div className="onboarding-shade" />
@@ -17,6 +18,7 @@ export function OnboardingScreen({ hasLivingChronicle, onAwaken }: { hasLivingCh
         <button className="menu-button primary" onClick={() => setPanel('crossing')}><span aria-hidden="true">○</span>{primaryLabel}</button>
         <button className="menu-button" onClick={() => setPanel('archive')}><span aria-hidden="true">○</span>Chronicle Archive</button>
         <button className="menu-button" onClick={() => setPanel('settings')}><span aria-hidden="true">○</span>Settings</button>
+        {canExitApplication && <button className="menu-button" onClick={() => setPanel('exit')}><span aria-hidden="true">○</span>Exit</button>}
       </nav>
     </section>
 
@@ -44,6 +46,10 @@ export function OnboardingScreen({ hasLivingChronicle, onAwaken }: { hasLivingCh
           <label>Resolution<select defaultValue="1920x1080"><option>1280 × 720</option><option>1366 × 768</option><option>1600 × 900</option><option>1920 × 1080</option><option>2560 × 1440</option><option>3840 × 2160</option></select></label>
           <label>Interface scale<select defaultValue="Default"><option>Small</option><option>Default</option><option>Large</option></select></label>
           <button className="dialog-close" onClick={() => setPanel('none')}>Done</button>
+        </>}
+        {panel === 'exit' && <>
+          <p className="dialog-kicker">Exit Project Draugr</p><h2>Leave the world behind?</h2><p>Your persistent world remains unchanged.</p>
+          <button className="dialog-close" onClick={() => window.close()}>Exit</button><button className="dialog-close" onClick={() => setPanel('none')}>Return</button>
         </>}
       </section>
     </div>}
