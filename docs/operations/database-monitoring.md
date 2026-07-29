@@ -1,5 +1,11 @@
 # Database Monitoring
 
+**Runbook version:** 0.1.0
+**Status:** Local development only
+**Last verified:** 2026-07-29
+
+This runbook is version-controlled with the application. Update it in the same change as any compose, credential, port, database-name, or monitoring workflow change. Never commit passwords, exported database data, or local pgAdmin state.
+
 Project Draugr can run pgAdmin as an optional local-only dashboard. It does not modify Docker Desktop settings or expose PostgreSQL to the internet.
 
 ## Start pgAdmin

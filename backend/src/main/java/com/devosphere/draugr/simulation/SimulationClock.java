@@ -2,6 +2,7 @@ package com.devosphere.draugr.simulation;
 
 import jakarta.persistence.*;
 import java.time.Instant;
+import java.time.Duration;
 
 @Entity
 @Table(name = "simulation_clock")
@@ -13,4 +14,5 @@ public class SimulationClock {
     public long getTick() { return tick; }
     public Instant getSimulatedAt() { return simulatedAt; }
     public void advanceTo(Instant next) { if (next.isBefore(simulatedAt)) throw new IllegalArgumentException("Simulation time cannot move backward"); simulatedAt = next; tick++; }
+    public void advanceBy(Duration duration) { if (duration.isNegative() || duration.isZero()) throw new IllegalArgumentException("Simulation time must advance"); advanceTo(simulatedAt.plus(duration)); }
 }

@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.Map;
 
 @Service
@@ -26,6 +27,16 @@ public class SimulationTickService {
         simulationClock.advanceTo(now);
         events.save(new WorldEvent(now, assessment.eventType(), null, null, Map.of()));
         return new SimulationTick(simulationClock.getTick(), simulationClock.getSimulatedAt());
+    }
+    @Transactional
+    public SimulationTick advanceBy(Duration duration) {
+        SimulationClock simulationClock = clocks.findById((short) 1).orElseThrow();
+        simulationClock.advanceBy(duration);
+        Instant now = simulationClock.getSimulatedAt();
+        SimulationAgent.SimulationAssessment assessment = simulation.assess(simulationClock.getTick(), now);
+        physiology.advanceTo(now);
+        events.save(new WorldEvent(now, assessment.eventType(), null, null, Map.of("durationMinutes", duration.toMinutes())));
+        return new SimulationTick(simulationClock.getTick(), now);
     }
     @Transactional(readOnly = true)
     public SimulationTick current() {

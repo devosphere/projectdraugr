@@ -6,6 +6,9 @@
 
 ---
 
+**Current implementation specification:** [UI Specification v0.1.0](../ui/UI-SPEC-v0.1.0.md)
+**Status:** Foundational philosophy; versioned implementation requirements live in `docs/ui/`.
+
 # Purpose
 
 This document defines the User Interface (UI) and User Experience (UX) philosophy of Project Draugr.
