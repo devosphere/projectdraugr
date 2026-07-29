@@ -37,10 +37,7 @@ public class ConstructionService {
         UUID projectId = UUID.randomUUID();
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CONSTRUCTION','Stone fire pit',?)", projectId, locationId);
         jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,created_from_action_id,completed_at) VALUES (?,'STONE_FIRE_PIT','COMPLETED',100,?,?)", projectId, actionId, occurredAt);
-        for (UUID stone : stones.subList(0, 4)) {
-            jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED', destroyed_at=?, current_owner_id=NULL WHERE id=?", occurredAt, stone);
-            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CONSUMED_FOR_CONSTRUCTION',jsonb_build_object('projectId',?::text))", stone, occurredAt, projectId.toString());
-        }
+        for (UUID stone : stones.subList(0, 4)) items.retire(stone, occurredAt, "CONSUMED_FOR_CONSTRUCTION", "field_stone");
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CONSTRUCTED',jsonb_build_object('projectKind','STONE_FIRE_PIT'))", projectId, occurredAt);
         return true;
     }

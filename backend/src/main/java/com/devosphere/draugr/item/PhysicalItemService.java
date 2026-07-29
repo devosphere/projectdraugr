@@ -61,7 +61,7 @@ public class PhysicalItemService {
     @Transactional
     public boolean consumeOne(UUID chronicle, String itemKey, Instant occurredAt) {
         UUID item=jdbc.query("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT r.id FROM reachable r JOIN item_instance i ON i.object_id=r.id WHERE i.item_key=? ORDER BY r.id FOR UPDATE LIMIT 1",rs->rs.next()?rs.getObject(1,UUID.class):null,chronicle,itemKey);
-        if(item==null)return false; jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED',destroyed_at=?,current_owner_id=NULL WHERE id=?",occurredAt,item); jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CONSUMED',jsonb_build_object('itemKey',?))",item,occurredAt,itemKey); return true;
+        if(item==null)return false; retire(item,occurredAt,"CONSUMED",itemKey); return true;
     }
     @Transactional
     public UUID createCarriedItem(UUID chronicle, String itemKey, String displayName, Instant occurredAt, String transitionType) {
@@ -87,7 +87,7 @@ public class PhysicalItemService {
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM','Woven basket',?)",basket,chronicle);
         jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,'woven_basket','SOUND')",basket);
         jdbc.update("INSERT INTO container_properties (object_id,max_mass_grams,max_volume_ml) VALUES (?,12000,18000)",basket);
-        for(UUID material:fiber.subList(0,8)) { jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED',destroyed_at=?,current_owner_id=NULL WHERE id=?",now,material); jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CONSUMED_FOR_CRAFTING',jsonb_build_object('outputId',?::text))",material,now,basket.toString()); }
+        for(UUID material:fiber.subList(0,8)) { retire(material,now,"CONSUMED_FOR_CRAFTING","plant_fiber"); }
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CRAFTED',jsonb_build_object('recipe','woven_basket'))",basket,now);
         assertCarryCapacity(chronicle);
         return new ItemView(basket,"Woven basket","woven_basket",chronicle,null);
@@ -113,6 +113,14 @@ public class PhysicalItemService {
         jdbc.update("UPDATE world_object SET current_owner_id=?,current_location_id=NULL WHERE id=?",chronicle,item);
         assertCarryCapacity(chronicle);
         jdbc.update("INSERT INTO object_transition (object_id,transition_type,to_attachment,payload) VALUES (?,'EQUIPPED',?, '{}'::jsonb)",item,position+":"+layer);
+    }
+    /** Retires a physical item without deleting its identity or immutable transition history. */
+    @Transactional
+    public void retire(UUID item, Instant occurredAt, String transitionType, String itemKey) {
+        jdbc.update("DELETE FROM equipment_attachment WHERE item_id=?", item);
+        jdbc.update("DELETE FROM item_containment WHERE item_id=?", item);
+        jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED',destroyed_at=?,current_owner_id=NULL,current_location_id=NULL WHERE id=?", occurredAt, item);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,?,jsonb_build_object('itemKey',?))", item, occurredAt, transitionType, itemKey);
     }
     private UUID activeChronicle(){ UUID id=jdbc.query("SELECT id FROM chronicle WHERE life_state='LIVING'",rs->rs.next()?rs.getObject(1,UUID.class):null); if(id==null) throw new IllegalStateException("No living Chronicle exists."); return id; }
     private void assertAccessible(UUID item,UUID chronicle){ Integer present=jdbc.queryForObject("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT COUNT(*) FROM reachable WHERE id=?",Integer.class,chronicle,item); if(present==null||present==0) throw new IllegalArgumentException("The item is not physically reachable by the Chronicle."); }
