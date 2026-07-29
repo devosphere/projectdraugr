@@ -376,6 +376,8 @@ For the current local MVP launcher, start Docker Desktop and run `powershell -Ex
 
 To stop the local stack without deleting its persistent world data, run `powershell -ExecutionPolicy Bypass -File .\scripts\Stop-Draugr.ps1`.
 
+After a launch, verify the exact backend, database migration, and read-only Persistent State Auditor with `powershell -ExecutionPolicy Bypass -File .\scripts\Verify-Draugr.ps1`. A successful verification is the local-play prerequisite before beginning a new Chronicle.
+
 Before testing a risky playthrough, create a local database snapshot with `powershell -ExecutionPolicy Bypass -File .\scripts\Backup-Draugr.ps1`. Backups are stored under ignored `backups/` and are never committed.
 
 To recover a stopped local world from a chosen backup, run `powershell -ExecutionPolicy Bypass -File .\scripts\Restore-Draugr.ps1 -BackupFile .\backups\draugr-YYYYMMDD-HHMMSS.sql`. Restore deliberately asks for the exact word `RESTORE` because it replaces the current local database. It is never performed automatically.
