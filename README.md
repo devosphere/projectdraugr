@@ -378,6 +378,8 @@ To stop the local stack without deleting its persistent world data, run `powersh
 
 Before testing a risky playthrough, create a local database snapshot with `powershell -ExecutionPolicy Bypass -File .\scripts\Backup-Draugr.ps1`. Backups are stored under ignored `backups/` and are never committed.
 
+To recover a stopped local world from a chosen backup, run `powershell -ExecutionPolicy Bypass -File .\scripts\Restore-Draugr.ps1 -BackupFile .\backups\draugr-YYYYMMDD-HHMMSS.sql`. Restore deliberately asks for the exact word `RESTORE` because it replaces the current local database. It is never performed automatically.
+
 The local frontend is in `frontend/`. Run `npm install` and `npm run dev` there after the backend is running. It displays the server's current simulation state and can request a simulation tick; it never determines state locally.
 
 The immediate objective is to build a believable persistent world simulation.
