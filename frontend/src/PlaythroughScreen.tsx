@@ -15,6 +15,12 @@ type LocationSnapshot = { biome: string; presentationKey: string };
 type ItemState = { carried: { id: string; displayName: string; itemKey: string }[]; equipped: { id: string; displayName: string; bodyPosition: string; layer: string }[] };
 type Panel = 'none' | 'chronicle' | 'equipment' | 'load' | 'storage' | 'crafting' | 'construction' | 'knowledge' | 'map' | 'literature';
 type ReaderDocument = 'field-journal' | 'folded-letter';
+type NarrationEntry = { id: string; text: string };
+
+const olderNarrationPages = [[
+  { id: 'arrival-2', text: 'The familiar world recedes. Sound thins, distance loses meaning, and weakness moves through you before the rain-cold air of another place takes hold.' },
+  { id: 'arrival-1', text: 'Pain loosens its grip. Beneath an unfamiliar sky, the forest remains where it was.' },
+]];
 
 const backdropByBiome: Record<string, { art: string; label: string }> = {
   TEMPERATE_FOREST: { art: forestArt, label: 'Uncharted forest' },
@@ -48,7 +54,8 @@ function EquipmentHierarchy({ prototype, equipped }: { prototype: boolean; equip
 export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: string; onReturnToMainMenu: () => void }) {
   const [action, setAction] = useState('');
   const [body, setBody] = useState(previewBody);
-  const [perception, setPerception] = useState('Cold air fills your lungs. Rainwater darkens the leaves around you. A narrow stream moves somewhere to your right, beneath the hush of unfamiliar trees.');
+  const [narrations, setNarrations] = useState<NarrationEntry[]>([{ id: 'arrival-3', text: 'Cold air fills your lungs. Rainwater darkens the leaves around you. A narrow stream moves somewhere to your right, beneath the hush of unfamiliar trees.' }]);
+  const [olderNarrationPage, setOlderNarrationPage] = useState(0);
   const [resolving, setResolving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [location, setLocation] = useState(backdropByBiome.TEMPERATE_FOREST);
@@ -60,6 +67,7 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
   const [items, setItems] = useState<ItemState | null>(null);
   const prototypeMode = !apiUrl;
   const actionField = useRef<HTMLTextAreaElement>(null);
+  const narrationTimeline = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!apiUrl) return;
@@ -103,7 +111,7 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
       const response = await fetch(`${apiUrl}/api/actions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
       const result = await response.json().catch(() => null) as ActionResult | { message?: string } | null;
       if (!response.ok || !result || !('perception' in result)) throw new Error(result && 'message' in result && result.message ? result.message : 'The simulation could not resolve that action.');
-      setPerception(result.perception);
+      setNarrations(entries => [...entries, { id: result.actionId, text: result.perception }]);
       setBody(toBodyRows(result.body));
       setAction('');
     } catch (error) {
@@ -111,6 +119,25 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
     } finally {
       setResolving(false);
     }
+  }
+
+  function loadOlderNarrations() {
+    if (!prototypeMode || olderNarrationPage >= olderNarrationPages.length) return;
+    const timeline = narrationTimeline.current;
+    const previousHeight = timeline?.scrollHeight ?? 0;
+    setNarrations(entries => [...olderNarrationPages[olderNarrationPage], ...entries]);
+    setOlderNarrationPage(page => page + 1);
+    requestAnimationFrame(() => { if (timeline) timeline.scrollTop = timeline.scrollHeight - previousHeight; });
+  }
+
+  function exportChronicle() {
+    if (prototypeMode && olderNarrationPage < olderNarrationPages.length) {
+      setNarrations(entries => [...olderNarrationPages.slice(olderNarrationPage).flat(), ...entries]);
+      setOlderNarrationPage(olderNarrationPages.length);
+      requestAnimationFrame(() => window.print());
+      return;
+    }
+    window.print();
   }
 
   return <main className="playthrough" style={{ backgroundImage: `url(${location.art})` }}>
@@ -125,7 +152,7 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
       {body.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
     </aside>
     {menuOpen && <aside className="expanded-menu" aria-label="Chronicle menu">
-      {panel === 'none' ? <nav>{((prototypeMode ? [['chronicle','Chronicle'],['equipment','Equipment'],['load','Load'],['storage','Storage'],['crafting','Crafting'],['construction','Construction'],['knowledge','Knowledge'],['map','Chronicle Map'],['literature','Literature']] : [['chronicle','Chronicle'],['equipment','Equipment'],['load','Load'],['knowledge','Knowledge']]) as [Panel,string][]).map(([id,label]) => <button key={id} onClick={() => setPanel(id)}>{label}</button>)}<button className="return-main" onClick={onReturnToMainMenu}>Return to Main Menu</button></nav> : <>
+      {panel === 'none' ? <nav>{((prototypeMode ? [['chronicle','Chronicle'],['equipment','Equipment'],['load','Load'],['storage','Storage'],['crafting','Crafting'],['construction','Construction'],['knowledge','Knowledge'],['map','Chronicle Map'],['literature','Literature']] : [['chronicle','Chronicle'],['equipment','Equipment'],['load','Load'],['knowledge','Knowledge']]) as [Panel,string][]).map(([id,label]) => <button key={id} onClick={() => setPanel(id)}>{label}</button>)}<button className="export-chronicle" onClick={exportChronicle}>Export Chronicle</button><button className="return-main" onClick={onReturnToMainMenu}>Return to Main Menu</button></nav> : <>
       <header><button aria-label="Back to menu" onClick={() => setPanel('none')}>←</button></header>
       <section className="menu-detail">
         {panel==='equipment' && <><h2>Equipment</h2><EquipmentHierarchy prototype={prototypeMode} equipped={items?.equipped} /></>}
@@ -142,10 +169,12 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
     {mapOverlay && <div className="map-overlay" role="dialog" aria-modal="true" aria-label="Hand-drawn forest sketch"><button aria-label="Close map" onClick={() => setMapOverlay(false)}>×</button><section><p className="eyebrow">Hand-drawn forest sketch</p><h2>Uncharted Forest</h2><div className="map-sketch"><span>Stream</span><span>Fallen cedar</span><span>Clay bank</span><i /></div><p>Weather-worn charcoal and bark marks. The far edges remain blank.</p></section></div>}
     {readerDocument && <div className="reader-overlay" role="dialog" aria-modal="true" aria-label="Read literature"><button aria-label="Close reader" onClick={() => setReaderDocument(null)}>×</button><article>{readerDocument === 'field-journal' ? <><p className="eyebrow">Weather-worn field journal</p><p className="reader-revision">Revision 3 · copied by hand</p><h2>Near the cedar</h2><div className="reader-page"><p>The stream turns shallow beside the fallen cedar. Clay clings beneath the roots after rain.</p><p>Something broad moved in the fern beds before dawn. It left the stems bent low, then the forest settled again.</p><p className="reader-mark">The next pages are blank.</p></div></> : <><p className="eyebrow">Folded letter</p><p className="reader-revision">Revision 1 · ink faded by damp</p><h2>Untitled</h2><div className="reader-page"><p>If this reaches you, keep it dry. The trail does not stay where it was drawn.</p><p className="reader-mark">No signature remains.</p></div></>}<p className="reader-note">Inspection only. Any writing, copying, or revision must be declared through the Action Composer.</p></article></div>}
     <div className="playthrough-bottom">
-      <section className="perception" aria-label="Current perception">
+      <section className="perception" aria-label="Narrative history">
         <p className="eyebrow">Awakening</p>
-        <p>{perception}</p>
-        <p className="perception-note">You have no map. You have no supplies. You are here.</p>
+        <div className="narration-timeline" ref={narrationTimeline} onScroll={event => { if (event.currentTarget.scrollTop < 12) loadOlderNarrations(); }}>
+          {prototypeMode && olderNarrationPage < olderNarrationPages.length && <p className="narration-loading">Earlier memories surface as you look back…</p>}
+          {narrations.map(entry => <p key={entry.id}>{entry.text}</p>)}
+        </div>
       </section>
       <form className="action-composer" onSubmit={submit}>
         <label htmlFor="action">What do you do?</label>
