@@ -19,7 +19,7 @@ public class ChroniclePhysiologyService {
 
     @Transactional(readOnly = true)
     public BodyHudSnapshot activeBody() {
-        return jdbc.query("SELECT b.health, b.condition_summary, p.hours_without_food, p.hours_without_water, p.energy_level, p.core_temperature_c, p.wetness_level, p.bladder_level, p.bowel_level, p.hygiene_level FROM chronicle c JOIN chronicle_body b ON b.chronicle_id = c.id JOIN chronicle_physiology p ON p.chronicle_id = c.id WHERE c.life_state = 'LIVING'", rs -> rs.next() ? snapshot(rs.getString(1), rs.getString(2), rs.getBigDecimal(3).doubleValue(), rs.getBigDecimal(4).doubleValue(), rs.getInt(5), rs.getBigDecimal(6).doubleValue(), rs.getInt(7), rs.getInt(8), rs.getInt(9), rs.getInt(10)) : null);
+        return jdbc.query("SELECT b.condition_summary, p.hours_without_food, p.hours_without_water, p.energy_level, p.core_temperature_c, p.wetness_level, p.bladder_level, p.bowel_level, p.hygiene_level, p.sleep_debt_hours, p.pain_level, p.stress_level, p.injury_severity, p.illness_severity, p.blood_loss_ml FROM chronicle c JOIN chronicle_body b ON b.chronicle_id = c.id JOIN chronicle_physiology p ON p.chronicle_id = c.id WHERE c.life_state = 'LIVING'", rs -> rs.next() ? snapshot(health(rs.getInt(13), rs.getInt(14), rs.getInt(15)), condition(rs.getString(1), rs.getInt(11), rs.getInt(12), rs.getBigDecimal(10).doubleValue()), rs.getBigDecimal(2).doubleValue(), rs.getBigDecimal(3).doubleValue(), rs.getInt(4), rs.getBigDecimal(5).doubleValue(), rs.getInt(6), rs.getInt(7), rs.getInt(8), rs.getInt(9)) : null);
     }
 
     @Transactional
@@ -40,12 +40,13 @@ public class ChroniclePhysiologyService {
             int hygiene = clamp((int) Math.round(rs.getInt(10) - hours * .25));
             double sleepDebt = Math.min(72, rs.getBigDecimal(13).doubleValue() + hours);
             int pain = rs.getInt(14); int stress = rs.getInt(15); int injury = rs.getInt(16); int illness = rs.getInt(17); int bloodLoss = rs.getInt(18);
-            Environment environment = jdbc.query("SELECT ww.weather_kind,ww.intensity,ww.ambient_temperature_c,ww.wind_speed_kph,EXISTS(SELECT 1 FROM construction_project cp JOIN fire_state fs ON fs.construction_id=cp.object_id JOIN world_object pit ON pit.id=cp.object_id JOIN world_object body ON body.current_location_id=pit.current_location_id WHERE body.id=c.id AND fs.active=true) FROM chronicle c JOIN world_weather ww ON ww.world_id=c.world_id WHERE c.id=?", result -> result.next() ? new Environment(result.getString(1),result.getInt(2),result.getBigDecimal(3).doubleValue(),result.getInt(4),result.getBoolean(5)) : new Environment("CLEAR",0,18,0,false), id);
+            Environment environment = jdbc.query("SELECT ww.weather_kind,ww.intensity,ww.ambient_temperature_c,ww.wind_speed_kph,EXISTS(SELECT 1 FROM construction_project cp JOIN fire_state fs ON fs.construction_id=cp.object_id JOIN world_object pit ON pit.id=cp.object_id JOIN world_object body ON body.current_location_id=pit.current_location_id WHERE body.id=c.id AND fs.active=true),EXISTS(SELECT 1 FROM construction_project cp JOIN world_object shelter ON shelter.id=cp.object_id JOIN world_object body ON body.current_location_id=shelter.current_location_id WHERE body.id=c.id AND cp.project_kind='LEAN_TO' AND cp.state='COMPLETED') FROM chronicle c JOIN world_weather ww ON ww.world_id=c.world_id WHERE c.id=?", result -> result.next() ? new Environment(result.getString(1),result.getInt(2),result.getBigDecimal(3).doubleValue(),result.getInt(4),result.getBoolean(5),result.getBoolean(6)) : new Environment("CLEAR",0,18,0,false,false), id);
             double core = rs.getBigDecimal(6).doubleValue();
-            double exposure = (environment.ambient() - core) * Math.min(.22, hours * .04) - environment.wind() * hours * .004;
+            double effectiveWind = environment.shelter() ? environment.wind() * .25 : environment.wind();
+            double exposure = (environment.ambient() - core) * Math.min(.22, hours * .04) - effectiveWind * hours * .004;
             if (environment.fire()) exposure += (37.0 - core) * Math.min(.35, hours * .12);
             core = Math.max(20, Math.min(45, core + exposure));
-            if ("RAIN".equals(environment.kind()) || "STORM".equals(environment.kind())) wetness = clamp((int)Math.round(wetness + hours * (environment.intensity() / 7.0)));
+            if ("RAIN".equals(environment.kind()) || "STORM".equals(environment.kind())) wetness = clamp((int)Math.round(wetness + hours * (environment.intensity() / (environment.shelter() ? 28.0 : 7.0))));
             if (environment.fire()) wetness = clamp((int)Math.round(wetness - hours * 14));
             if (food > STARVATION_DEATH_HOURS || water > DEHYDRATION_DEATH_HOURS || bloodLoss > 3500 || illness >= 100) {
                 String cause = water > DEHYDRATION_DEATH_HOURS ? "Critical Dehydration" : food > STARVATION_DEATH_HOURS ? "Critical Starvation" : bloodLoss > 3500 ? "Critical Blood Loss" : "Systemic Illness";
@@ -124,6 +125,6 @@ public class ChroniclePhysiologyService {
     private static int clamp(int value) { return Math.max(0, Math.min(100, value)); }
     private static String health(int injury,int illness,int bloodLoss) { return bloodLoss > 2800 || illness > 80 || injury > 80 ? "Critical" : injury > 35 || illness > 35 ? "Injured" : "Healthy"; }
     private static String condition(String existing,int pain,int stress,double sleepDebt) { if (pain > 70) return "In pain"; if (stress > 75) return "Distressed"; if (sleepDebt > 28) return "Sleep deprived"; return existing; }
-    private record Environment(String kind,int intensity,double ambient,int wind,boolean fire) { }
+    private record Environment(String kind,int intensity,double ambient,int wind,boolean fire,boolean shelter) { }
     public record BodyHudSnapshot(String health, String condition, String hunger, String thirst, String energy, String temperature, String wetness, String bladder, String bowel, String hygiene) { }
 }
