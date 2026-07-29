@@ -27,6 +27,23 @@ function toBodyRows(snapshot: BodySnapshot) {
   return [['Health', snapshot.health], ['Condition', snapshot.condition], ['Hunger', snapshot.hunger], ['Thirst', snapshot.thirst], ['Energy', snapshot.energy], ['Temperature', snapshot.temperature], ['Wetness', snapshot.wetness], ['Bladder', snapshot.bladder], ['Bowel', snapshot.bowel], ['Hygiene', snapshot.hygiene]];
 }
 
+function EquipmentHierarchy({ prototype, equipped }: { prototype: boolean; equipped?: ItemState['equipped'] }) {
+  const attached = (position: string, fallback = 'Empty') => prototype ? fallback : equipped?.filter(item => item.bodyPosition === position).map(item => item.displayName).join(', ') || 'Empty';
+  const group = (title: string, entries: [string, string][]) => <section className="equipment-group" key={title}><h3>{title}</h3>{entries.map(([slot,value]) => <div className="equipment-slot" key={slot}><span>{slot}</span><strong>{value}</strong></div>)}</section>;
+  return <div className="equipment-hierarchy">{[
+    group('Head', [['Upper head', attached('HEAD')], ['Mid head', 'Empty'], ['Lower head', attached('FACE')]]),
+    group('Neck & Shoulders', [['Neck', attached('NECK')], ['Left shoulder', attached('SHOULDER_LEFT')], ['Right shoulder', attached('SHOULDER_RIGHT')]]),
+    group('Upper Body', [['Inner layer', prototype ? 'Linen shirt' : attached('TORSO')], ['Body layer', 'Empty'], ['Outer layer', 'Empty'], ['Protective layer', 'Empty'], ['Back equipment', prototype ? 'Woven basket' : attached('BACK')]]),
+    group('Arms', [['Left arm · protection', attached('ARM_LEFT')], ['Right arm · protection', attached('ARM_RIGHT')]]),
+    group('Hands', [['Left hand', attached('HAND_LEFT')], ['Right hand', attached('HAND_RIGHT')]]),
+    group('Fingers', [['Left thumb', 'Empty'], ['Left index', 'Empty'], ['Left middle', 'Empty'], ['Left ring', 'Empty'], ['Left little', 'Empty'], ['Right thumb', 'Empty'], ['Right index', 'Empty'], ['Right middle', 'Empty'], ['Right ring', 'Empty'], ['Right little', 'Empty']]),
+    group('Waist', [['Waist', prototype ? 'Fiber cord' : attached('WAIST')]]),
+    group('Lower Body', [['Under layer', 'Empty'], ['Outer layer', 'Empty'], ['Protective layer', 'Empty']]),
+    group('Legs & Knees', [['Leg protection', attached('LEG_LEFT')], ['Knee protection', 'Empty']]),
+    group('Feet', [['Inner layer', 'Empty'], ['Outer layer', prototype ? 'Bare feet' : attached('FOOT_LEFT')]])
+  ]}</div>;
+}
+
 export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: string; onReturnToMainMenu: () => void }) {
   const [action, setAction] = useState('');
   const [body, setBody] = useState(previewBody);
@@ -108,13 +125,13 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
       {panel === 'none' ? <nav>{((prototypeMode ? [['chronicle','Chronicle'],['equipment','Equipment'],['load','Load'],['storage','Storage'],['crafting','Crafting'],['construction','Construction'],['knowledge','Knowledge'],['map','Chronicle Map']] : [['chronicle','Chronicle'],['equipment','Equipment'],['load','Load'],['knowledge','Knowledge']]) as [Panel,string][]).map(([id,label]) => <button key={id} onClick={() => setPanel(id)}>{label}</button>)}<button className="return-main" onClick={onReturnToMainMenu}>Return to Main Menu</button></nav> : <>
       <header><button aria-label="Back to menu" onClick={() => setPanel('none')}>←</button></header>
       <section className="menu-detail">
-        {panel==='equipment' && <><h2>Equipment</h2>{prototypeMode ? <><p>Head · empty</p><p>Torso · linen shirt</p><p>Waist · fiber cord</p><p>Back · woven basket</p><p>Hands · empty</p><p>Feet · bare</p></> : items?.equipped.length ? items.equipped.map(item => <p key={item.id}>{item.bodyPosition.replace('_',' ')} · {item.displayName}</p>) : <p>Nothing is attached to your body.</p>}</>}
-        {panel==='load' && <><h2>Load</h2>{prototypeMode ? <><p>6.3 kg / 25 kg sustained carry</p><p>4.8 L / 18 L direct bulk</p><p>Heaviest object · 1.2 kg / 40 kg lift</p><p>Woven basket · 0.9 kg empty + 4.2 kg contents</p><p>Plant fiber bundles · 8</p></> : <p>Authoritative carried load will appear here.</p>}</>}
-        {panel==='storage' && <><h2>Storage</h2>{prototypeMode ? <><p>Woven basket</p><p>5.4 kg / 12 kg internal mass</p><p>4.2 L / 18 L internal volume</p><p>Contents · plant fiber bundles, field stones, clay lump</p></> : items?.carried.filter(item => item.itemKey==='woven_basket').length ? items.carried.filter(item => item.itemKey==='woven_basket').map(item => <p key={item.id}>{item.displayName} is carried and may be opened when interacted with.</p>) : null}</>}
+        {panel==='equipment' && <><h2>Equipment</h2><EquipmentHierarchy prototype={prototypeMode} equipped={items?.equipped} /></>}
+        {panel==='load' && <><h2>Load</h2>{prototypeMode ? <><div className="record"><strong>Carried load</strong><span>6.3 kg / 25 kg sustained carry</span><span>4.8 L / 18 L direct bulk</span><span>Heaviest object · 1.2 kg / 40 kg lift</span></div><div className="record"><strong>Woven basket</strong><span>0.9 kg empty + 4.2 kg contents</span><span>Contains · plant fiber bundles, field stones</span></div></> : <p>Authoritative carried load will appear here.</p>}</>}
+        {panel==='storage' && <><h2>Storage</h2>{prototypeMode ? <div className="record"><strong>Woven basket</strong><span>5.4 kg / 12 kg internal mass</span><span>4.2 L / 18 L internal volume</span><span>Contents · plant fiber bundles, field stones, clay lump</span></div> : items?.carried.filter(item => item.itemKey==='woven_basket').length ? items.carried.filter(item => item.itemKey==='woven_basket').map(item => <div className="record" key={item.id}><strong>{item.displayName}</strong><span>Carried and physically accessible</span></div>) : null}</>}
         {panel==='chronicle' && <><h2>Chronicle</h2><p>Arrival · first day</p><p>Current place · uncharted forest</p><p>Every life leaves a mark.</p></>}
-        {panel==='crafting' && <><h2>Crafting</h2><p>Woven basket · known through practice</p><p>Primitive fire · established method</p><p className="perception-note">Reference only. Declare all attempts in the Action Composer.</p></>}
-        {panel==='construction' && <><h2>Construction</h2><p>Stone fire pit · understood</p><p className="perception-note">Reference only. Declare all attempts in the Action Composer.</p></>}
-        {panel==='knowledge' && <><h2>Knowledge</h2><p>Plant fiber · workable</p><p>Fire tending · observed</p><p>Forest water · unverified</p></>}
+        {panel==='crafting' && <><h2>Crafting</h2><div className="record"><strong>Woven basket</strong><span>Known through practice</span><span>Current materials · plant fiber bundles</span></div><div className="record"><strong>Primitive fire</strong><span>Established method</span></div><p className="perception-note">Reference only. Declare all attempts in the Action Composer.</p></>}
+        {panel==='construction' && <><h2>Construction</h2><div className="record"><strong>Stone fire pit</strong><span>Understood</span><span>Current ground · forest clearing</span></div><p className="perception-note">Reference only. Declare all attempts in the Action Composer.</p></>}
+        {panel==='knowledge' && <><h2>Knowledge</h2><div className="record"><strong>Plant fiber</strong><span>Workable material</span></div><div className="record"><strong>Fire tending</strong><span>Observed</span></div><div className="record"><strong>Forest water</strong><span>Unverified</span></div></>}
         {panel==='map' && <><h2>Chronicle Map</h2><button className="map-list-entry" onClick={() => setMapOverlay(true)}>Hand-drawn forest sketch <span>carried in woven basket</span></button><p className="perception-note">Only physical maps within reach are shown.</p></>}
       </section>
       </>}</aside>}
