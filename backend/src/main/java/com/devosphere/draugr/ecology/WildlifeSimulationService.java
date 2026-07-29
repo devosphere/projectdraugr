@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.Duration;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
@@ -19,7 +20,20 @@ public class WildlifeSimulationService {
     public void advanceTo(Instant now) {
         seedExistingSites(now);
         int hour = now.atZone(ZoneOffset.UTC).getHour();
-        jdbc.update("UPDATE wildlife_population SET behavior_state = CASE activity_cycle WHEN 'NOCTURNAL' THEN CASE WHEN ? >= 19 OR ? < 5 THEN 'FORAGING' ELSE 'RESTING' END WHEN 'CREPUSCULAR' THEN CASE WHEN ? BETWEEN 5 AND 8 OR ? BETWEEN 17 AND 20 THEN 'FORAGING' ELSE 'RESTING' END ELSE CASE WHEN ? BETWEEN 7 AND 18 THEN 'FORAGING' ELSE 'RESTING' END END, last_simulated_at = ?", hour, hour, hour, hour, hour, now);
+        jdbc.query("SELECT wp.id,wp.population_count,wp.carrying_capacity,wp.ecological_role,wp.activity_cycle,wp.last_simulated_at,ww.weather_kind FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id JOIN world_weather ww ON ww.world_id=es.world_id FOR UPDATE", rs -> {
+            while (rs.next()) {
+                UUID id = rs.getObject(1, UUID.class); int population = rs.getInt(2); int capacity = rs.getInt(3); String role = rs.getString(4); String cycle = rs.getString(5); Instant last = rs.getTimestamp(6).toInstant(); String weather = rs.getString(7);
+                long intervalHours = reproductionIntervalHours(role);
+                long intervals = Math.max(0, Duration.between(last, now).toHours() / intervalHours);
+                if (intervals > 0 && population < capacity) {
+                    int next = Math.min(capacity, population + (int)Math.min(intervals, capacity - population));
+                    jdbc.update("UPDATE wildlife_population SET population_count=?,last_simulated_at=? WHERE id=?", next, last.plus(Duration.ofHours(intervals * intervalHours)), id);
+                }
+                String behavior = behaviorFor(role, hour, weather, cycle);
+                jdbc.update("UPDATE wildlife_population SET behavior_state=? WHERE id=?", behavior, id);
+            }
+            return null;
+        });
     }
 
     @Transactional
@@ -48,6 +62,12 @@ public class WildlifeSimulationService {
         if (kind.contains("otter")) return new Profile("river_otter", "CARNIVORE", "DIURNAL", 5, 12);
         if (kind.contains("fowl")) return new Profile("marsh_fowl", "OMNIVORE", "DIURNAL", 35, 85);
         return new Profile("forest_fox", "OMNIVORE", "CREPUSCULAR", 4, 10);
+    }
+    private long reproductionIntervalHours(String role) { return "CARNIVORE".equals(role) ? 24L * 28 : "OMNIVORE".equals(role) ? 24L * 18 : 24L * 10; }
+    private String behaviorFor(String role, int hour, String weather, String cycle) {
+        if ("STORM".equals(weather)) return "SHELTERING";
+        boolean active = switch (cycle) { case "NOCTURNAL" -> hour >= 19 || hour < 5; case "CREPUSCULAR" -> (hour >= 5 && hour <= 8) || (hour >= 17 && hour <= 20); default -> hour >= 7 && hour <= 18; };
+        return active ? ("CARNIVORE".equals(role) ? "HUNTING" : "FORAGING") : "RESTING";
     }
     private record Site(UUID id, String kind) { }
     private record Profile(String species, String role, String cycle, int initial, int capacity) { }
