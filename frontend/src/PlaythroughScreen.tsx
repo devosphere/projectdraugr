@@ -35,6 +35,8 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
   const [actionError, setActionError] = useState<string | null>(null);
   const [location, setLocation] = useState(backdropByBiome.TEMPERATE_FOREST);
   const [panel, setPanel] = useState<Panel>('none');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [mapOverlay, setMapOverlay] = useState(false);
   const [items, setItems] = useState<ItemState | null>(null);
   const prototypeMode = !apiUrl;
   const actionField = useRef<HTMLTextAreaElement>(null);
@@ -96,15 +98,15 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
     <header className="world-header">
       <div><p className="eyebrow">{location.label}</p><strong>Early morning</strong></div>
       <div className="world-signs" aria-label="Environmental conditions"><span title="Daylight">Dawn</span><span title="Weather">Light rain</span><span title="Season">Early spring</span></div>
-      <button className="quiet-menu" aria-label="Open menus" onClick={() => setPanel(panel === 'none' ? 'chronicle' : 'none')}>☰</button>
+      <button className="quiet-menu" aria-label="Open menus" onClick={() => { setMenuOpen(!menuOpen); setPanel('none'); }}>☰</button>
     </header>
     <aside className="body-hud" aria-label="Body awareness">
       <p className="eyebrow">Body</p>
       {body.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
     </aside>
-    {panel !== 'none' && <aside className="expanded-menu" aria-label="Chronicle menu">
-      <header><p className="eyebrow">Chronicle systems</p><button onClick={() => setPanel('none')}>Close</button></header>
-      <nav>{((prototypeMode ? [['chronicle','Chronicle'],['equipment','Equipment'],['load','Load'],['storage','Storage'],['crafting','Crafting'],['construction','Construction'],['knowledge','Knowledge'],['map','Chronicle Map']] : [['chronicle','Chronicle'],['equipment','Equipment'],['load','Load'],['knowledge','Knowledge']]) as [Panel,string][]).map(([id,label]) => <button key={id} className={panel===id?'active':''} onClick={() => setPanel(id)}>{label}</button>)}<button className="return-main" onClick={onReturnToMainMenu}>Return to Main Menu</button></nav>
+    {menuOpen && <aside className="expanded-menu" aria-label="Chronicle menu">
+      {panel === 'none' ? <nav>{((prototypeMode ? [['chronicle','Chronicle'],['equipment','Equipment'],['load','Load'],['storage','Storage'],['crafting','Crafting'],['construction','Construction'],['knowledge','Knowledge'],['map','Chronicle Map']] : [['chronicle','Chronicle'],['equipment','Equipment'],['load','Load'],['knowledge','Knowledge']]) as [Panel,string][]).map(([id,label]) => <button key={id} onClick={() => setPanel(id)}>{label}</button>)}<button className="return-main" onClick={onReturnToMainMenu}>Return to Main Menu</button></nav> : <>
+      <header><button aria-label="Back to menu" onClick={() => setPanel('none')}>←</button></header>
       <section className="menu-detail">
         {panel==='equipment' && <><h2>Equipment</h2>{prototypeMode ? <><p>Head · empty</p><p>Torso · linen shirt</p><p>Waist · fiber cord</p><p>Back · woven basket</p><p>Hands · empty</p><p>Feet · bare</p></> : items?.equipped.length ? items.equipped.map(item => <p key={item.id}>{item.bodyPosition.replace('_',' ')} · {item.displayName}</p>) : <p>Nothing is attached to your body.</p>}</>}
         {panel==='load' && <><h2>Load</h2>{prototypeMode ? <><p>6.3 kg / 25 kg sustained carry</p><p>4.8 L / 18 L direct bulk</p><p>Heaviest object · 1.2 kg / 40 kg lift</p><p>Woven basket · 0.9 kg empty + 4.2 kg contents</p><p>Plant fiber bundles · 8</p></> : <p>Authoritative carried load will appear here.</p>}</>}
@@ -113,9 +115,10 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
         {panel==='crafting' && <><h2>Crafting</h2><p>Woven basket · known through practice</p><p>Primitive fire · established method</p><p className="perception-note">Reference only. Declare all attempts in the Action Composer.</p></>}
         {panel==='construction' && <><h2>Construction</h2><p>Stone fire pit · understood</p><p className="perception-note">Reference only. Declare all attempts in the Action Composer.</p></>}
         {panel==='knowledge' && <><h2>Knowledge</h2><p>Plant fiber · workable</p><p>Fire tending · observed</p><p>Forest water · unverified</p></>}
-        {panel==='map' && <><h2>Chronicle Map</h2><p>Hand-drawn forest sketch</p><p>Carried in woven basket</p><p className="perception-note">Only physical maps within reach are shown.</p></>}
+        {panel==='map' && <><h2>Chronicle Map</h2><button className="map-list-entry" onClick={() => setMapOverlay(true)}>Hand-drawn forest sketch <span>carried in woven basket</span></button><p className="perception-note">Only physical maps within reach are shown.</p></>}
       </section>
-    </aside>}
+      </>}</aside>}
+    {mapOverlay && <div className="map-overlay" role="dialog" aria-modal="true" aria-label="Hand-drawn forest sketch"><button aria-label="Close map" onClick={() => setMapOverlay(false)}>×</button><section><p className="eyebrow">Hand-drawn forest sketch</p><h2>Uncharted Forest</h2><div className="map-sketch"><span>Stream</span><span>Fallen cedar</span><span>Clay bank</span><i /></div><p>Weather-worn charcoal and bark marks. The far edges remain blank.</p></section></div>}
     <div className="playthrough-bottom">
       <section className="perception" aria-label="Current perception">
         <p className="eyebrow">Awakening</p>
