@@ -1,5 +1,6 @@
 package com.devosphere.draugr.item;
 
+import com.devosphere.draugr.ecology.ResourceEcologyService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -10,8 +11,8 @@ import java.util.UUID;
 
 @Service
 public class PhysicalItemService {
-    private final JdbcTemplate jdbc;
-    public PhysicalItemService(JdbcTemplate jdbc) { this.jdbc = jdbc; }
+    private final JdbcTemplate jdbc; private final ResourceEcologyService resources;
+    public PhysicalItemService(JdbcTemplate jdbc, ResourceEcologyService resources) { this.jdbc = jdbc; this.resources = resources; }
 
     @Transactional(readOnly = true)
     public List<ItemView> carried() {
@@ -26,35 +27,35 @@ public class PhysicalItemService {
         return new ItemState(chronicle,carried,equipped,loadState(chronicle),containers(chronicle));
     }
     @Transactional
-    public int gatherPlantFiber(UUID chronicle, UUID location) {
+    public int gatherPlantFiber(UUID chronicle, UUID location, Instant occurredAt) {
         String biome=jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?",String.class,location);
         if ("OCEAN".equals(biome) || "MOUNTAIN".equals(biome)) throw new IllegalStateException("No suitable plant fiber can be gathered from this immediate terrain.");
-        int count="WETLAND".equals(biome)?3:2;
+        int count=resources.take(location,"plant_fiber","WETLAND".equals(biome)?3:2,occurredAt);
         for(int i=0;i<count;i++){UUID id=UUID.randomUUID();jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM','Plant fiber bundle',?)",id,chronicle);jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,'plant_fiber','SOUND')",id);jdbc.update("INSERT INTO object_transition (object_id,transition_type,payload) VALUES (?,'GATHERED',jsonb_build_object('biome',?))",id,biome);}
         assertCarryCapacity(chronicle);
         return count;
     }
     @Transactional
-    public int gatherFieldStones(UUID chronicle, UUID location) {
+    public int gatherFieldStones(UUID chronicle, UUID location, Instant occurredAt) {
         String biome=jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?",String.class,location);
         if ("OCEAN".equals(biome)) throw new IllegalStateException("No loose stone can be gathered from this immediate terrain.");
-        int count="MOUNTAIN".equals(biome) || "HIGHLAND".equals(biome) ? 3 : 2;
+        int count=resources.take(location,"field_stone","MOUNTAIN".equals(biome) || "HIGHLAND".equals(biome) ? 3 : 2,occurredAt);
         for(int i=0;i<count;i++){UUID id=UUID.randomUUID();jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM','Field stone',?)",id,chronicle);jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,'field_stone','SOUND')",id);jdbc.update("INSERT INTO object_transition (object_id,transition_type,payload) VALUES (?,'GATHERED',jsonb_build_object('biome',?))",id,biome);}
         assertCarryCapacity(chronicle);
         return count;
     }
     @Transactional
-    public int gatherWildBerries(UUID chronicle, UUID location) {
+    public int gatherWildBerries(UUID chronicle, UUID location, Instant occurredAt) {
         String biome=jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?",String.class,location);
         if ("MOUNTAIN".equals(biome) || "OCEAN".equals(biome)) throw new IllegalStateException("No edible growth is available in this immediate terrain.");
-        int count="WETLAND".equals(biome)?3:2;
+        int count=resources.take(location,"wild_berries","WETLAND".equals(biome)?3:2,occurredAt);
         for(int i=0;i<count;i++){UUID id=UUID.randomUUID();jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM','Wild berries',?)",id,chronicle);jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,'wild_berries','SOUND')",id);jdbc.update("INSERT INTO object_transition (object_id,transition_type,payload) VALUES (?,'GATHERED',jsonb_build_object('biome',?))",id,biome);} assertCarryCapacity(chronicle); return count;
     }
     @Transactional
-    public int gatherDryBranches(UUID chronicle, UUID location) {
+    public int gatherDryBranches(UUID chronicle, UUID location, Instant occurredAt) {
         String biome=jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?",String.class,location);
         if ("OCEAN".equals(biome)) throw new IllegalStateException("No branches can be gathered here.");
-        int count="MOUNTAIN".equals(biome)?1:2;
+        int count=resources.take(location,"dry_branch","MOUNTAIN".equals(biome)?1:2,occurredAt);
         for(int i=0;i<count;i++){UUID id=UUID.randomUUID();jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM','Dry branch',?)",id,chronicle);jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,'dry_branch','SOUND')",id);jdbc.update("INSERT INTO object_transition (object_id,transition_type,payload) VALUES (?,'GATHERED','{}'::jsonb)",id);} assertCarryCapacity(chronicle); return count;
     }
     @Transactional
