@@ -83,6 +83,11 @@ public class ChroniclePhysiologyService {
         refreshBody(chronicleId);
     }
     @Transactional
+    public void wash(UUID chronicleId) {
+        jdbc.update("UPDATE chronicle_physiology SET hygiene_level=LEAST(100,hygiene_level+28),wetness_level=LEAST(100,wetness_level+18),stress_level=GREATEST(0,stress_level-4) WHERE chronicle_id=?", chronicleId);
+        refreshBody(chronicleId);
+    }
+    @Transactional
     public void rest(UUID chronicleId, int minutes) {
         double hours = minutes / 60.0;
         jdbc.update("UPDATE chronicle_physiology SET sleep_debt_hours=GREATEST(0,sleep_debt_hours-?),energy_level=LEAST(100,energy_level+?),pain_level=GREATEST(0,pain_level-?),stress_level=GREATEST(0,stress_level-?) WHERE chronicle_id=?", hours * .85, Math.max(1, (int)Math.round(hours * 9)), Math.max(0, (int)Math.round(hours)), Math.max(0, (int)Math.round(hours * 2)), chronicleId);
