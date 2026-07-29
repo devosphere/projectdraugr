@@ -71,8 +71,12 @@ class WorldEventArchiveIntegrationTest {
     @Test
     void arrivalClothingDefinitionsHaveExplicitEquipmentSlots() throws SQLException {
         try (Connection connection = java.sql.DriverManager.getConnection(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())) {
-            Integer definitions = connection.createStatement().executeQuery("SELECT COUNT(*) FROM item_definition WHERE item_key IN ('arrival_shirt','arrival_trousers','arrival_left_shoe','arrival_right_shoe')").next() ? connection.createStatement().executeQuery("SELECT COUNT(*) FROM item_definition WHERE item_key IN ('arrival_shirt','arrival_trousers','arrival_left_shoe','arrival_right_shoe')").getInt(1) : 0;
-            Integer slots = connection.createStatement().executeQuery("SELECT COUNT(*) FROM item_equipment_compatibility WHERE item_key IN ('arrival_shirt','arrival_trousers','arrival_left_shoe','arrival_right_shoe')").next() ? connection.createStatement().executeQuery("SELECT COUNT(*) FROM item_equipment_compatibility WHERE item_key IN ('arrival_shirt','arrival_trousers','arrival_left_shoe','arrival_right_shoe')").getInt(1) : 0;
+            var definitionResult = connection.createStatement().executeQuery("SELECT COUNT(*) FROM item_definition WHERE item_key IN ('arrival_shirt','arrival_trousers','arrival_left_shoe','arrival_right_shoe')");
+            definitionResult.next();
+            Integer definitions = definitionResult.getInt(1);
+            var slotResult = connection.createStatement().executeQuery("SELECT COUNT(*) FROM item_equipment_compatibility WHERE item_key IN ('arrival_shirt','arrival_trousers','arrival_left_shoe','arrival_right_shoe')");
+            slotResult.next();
+            Integer slots = slotResult.getInt(1);
             assertEquals(4, definitions);
             assertEquals(4, slots);
         }
