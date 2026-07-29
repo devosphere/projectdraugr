@@ -19,7 +19,7 @@ public class ChronicleService {
 
     @Transactional(readOnly = true)
     public ChronicleLocation activeLocation() {
-        return jdbc.query("SELECT c.id, w.current_location_id, wc.biome FROM chronicle c JOIN world_object w ON w.id = c.id JOIN world_chunk wc ON wc.id = w.current_location_id WHERE c.life_state = 'LIVING'", rs -> rs.next() ? new ChronicleLocation(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getString(3)) : null);
+        return jdbc.query("SELECT c.id, w.current_location_id, wc.biome, CASE WHEN EXISTS (SELECT 1 FROM ecology_site es WHERE es.chunk_id = wc.id AND es.site_category = 'RESOURCE' AND lower(es.site_kind) LIKE '%clay%') THEN 'CLAY_DEPOSIT' ELSE wc.biome END FROM chronicle c JOIN world_object w ON w.id = c.id JOIN world_chunk wc ON wc.id = w.current_location_id WHERE c.life_state = 'LIVING'", rs -> rs.next() ? new ChronicleLocation(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getString(3), rs.getString(4)) : null);
     }
 
     @Transactional(readOnly = true)
@@ -61,5 +61,5 @@ public class ChronicleService {
     private ChronicleSummary summary(UUID id, int sequence, String state, Instant arrived, Instant died, String cause, UUID location) { return new ChronicleSummary(id, sequence, state, arrived, died, cause, location); }
     private record WorldSeed(UUID id, long seed) { }
     public record ChronicleSummary(UUID id, int sequenceNumber, String lifeState, Instant arrivedAt, Instant diedAt, String deathCause, UUID locationId) { }
-    public record ChronicleLocation(UUID chronicleId, UUID locationId, String biome) { }
+    public record ChronicleLocation(UUID chronicleId, UUID locationId, String biome, String presentationKey) { }
 }

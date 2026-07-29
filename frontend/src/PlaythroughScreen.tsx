@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import forestArt from './assets/playthrough-forest-v1.png';
 import streamArt from './assets/playthrough-stream-v1.png';
 import quarryArt from './assets/playthrough-quarry-v1.png';
+import clayDepositArt from './assets/playthrough-clay-deposit-v1.png';
 
 const previewBody = [
   ['Health', 'Healthy'], ['Condition', 'Unsteady'], ['Hunger', 'Satisfied'], ['Thirst', 'Hydrated'],
@@ -10,13 +11,14 @@ const previewBody = [
 
 type BodySnapshot = { health: string; condition: string; hunger: string; thirst: string; energy: string; temperature: string; wetness: string; bladder: string; bowel: string; hygiene: string };
 type ActionResult = { actionId: string; intent: string; outcome: string; durationMinutes: number; perception: string; body: BodySnapshot };
-type LocationSnapshot = { biome: string };
+type LocationSnapshot = { biome: string; presentationKey: string };
 
 const backdropByBiome: Record<string, { art: string; label: string }> = {
   TEMPERATE_FOREST: { art: forestArt, label: 'Uncharted forest' },
   WETLAND: { art: streamArt, label: 'Forest stream' },
   MOUNTAIN: { art: quarryArt, label: 'Stone basin' },
   HIGHLAND: { art: quarryArt, label: 'Highland quarry' },
+  CLAY_DEPOSIT: { art: clayDepositArt, label: 'Clay deposit' },
 };
 
 function toBodyRows(snapshot: BodySnapshot) {
@@ -42,7 +44,7 @@ export function PlaythroughScreen({ apiUrl }: { apiUrl?: string }) {
   useEffect(() => {
     if (!apiUrl) return;
     fetch(`${apiUrl}/api/chronicles/active/location`).then(response => response.ok ? response.json() : null).then((snapshot: LocationSnapshot | null) => {
-      if (snapshot) setLocation(backdropByBiome[snapshot.biome] ?? backdropByBiome.TEMPERATE_FOREST);
+      if (snapshot) setLocation(backdropByBiome[snapshot.presentationKey] ?? backdropByBiome[snapshot.biome] ?? backdropByBiome.TEMPERATE_FOREST);
     }).catch(() => undefined);
   }, [apiUrl]);
 
