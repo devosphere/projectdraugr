@@ -18,6 +18,21 @@ public class PhysicalItemService {
         UUID chronicle = activeChronicle();
         return jdbc.query("SELECT w.id, w.display_name, i.item_key, w.current_owner_id, ic.container_id FROM world_object w JOIN item_instance i ON i.object_id=w.id LEFT JOIN item_containment ic ON ic.item_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' ORDER BY w.display_name", (rs,row) -> new ItemView(rs.getObject(1,UUID.class),rs.getString(2),rs.getString(3),rs.getObject(4,UUID.class),rs.getObject(5,UUID.class)), chronicle);
     }
+    @Transactional(readOnly = true)
+    public ItemState state() {
+        UUID chronicle=activeChronicle();
+        List<ItemView> carried=carried();
+        List<EquippedView> equipped=jdbc.query("SELECT w.id,w.display_name,i.item_key,e.body_position,e.layer FROM equipment_attachment e JOIN world_object w ON w.id=e.item_id JOIN item_instance i ON i.object_id=w.id WHERE e.chronicle_id=? ORDER BY e.body_position,e.layer",(rs,row)->new EquippedView(rs.getObject(1,UUID.class),rs.getString(2),rs.getString(3),rs.getString(4),rs.getString(5)),chronicle);
+        return new ItemState(chronicle,carried,equipped);
+    }
+    @Transactional
+    public int gatherPlantFiber(UUID chronicle, UUID location) {
+        String biome=jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?",String.class,location);
+        if ("OCEAN".equals(biome) || "MOUNTAIN".equals(biome)) throw new IllegalStateException("No suitable plant fiber can be gathered from this immediate terrain.");
+        int count="WETLAND".equals(biome)?3:2;
+        for(int i=0;i<count;i++){UUID id=UUID.randomUUID();jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM','Plant fiber bundle',?)",id,chronicle);jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,'plant_fiber','SOUND')",id);jdbc.update("INSERT INTO object_transition (object_id,transition_type,payload) VALUES (?,'GATHERED',jsonb_build_object('biome',?))",id,biome);}
+        return count;
+    }
 
     @Transactional
     public ItemView craftBasket() {
@@ -54,4 +69,6 @@ public class PhysicalItemService {
     private UUID activeChronicle(){ UUID id=jdbc.query("SELECT id FROM chronicle WHERE life_state='LIVING'",rs->rs.next()?rs.getObject(1,UUID.class):null); if(id==null) throw new IllegalStateException("No living Chronicle exists."); return id; }
     private void assertAccessible(UUID item,UUID chronicle){ Integer present=jdbc.queryForObject("SELECT COUNT(*) FROM world_object WHERE id=? AND current_owner_id=? AND lifecycle_state='ACTIVE'",Integer.class,item,chronicle); if(present==null||present==0) throw new IllegalArgumentException("The item is not directly accessible to the Chronicle."); }
     public record ItemView(UUID id,String displayName,String itemKey,UUID ownerId,UUID containerId){}
+    public record EquippedView(UUID id,String displayName,String itemKey,String bodyPosition,String layer){}
+    public record ItemState(UUID chronicleId,List<ItemView> carried,List<EquippedView> equipped){}
 }

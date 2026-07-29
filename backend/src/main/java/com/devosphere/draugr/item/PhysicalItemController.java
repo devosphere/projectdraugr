@@ -5,6 +5,7 @@ import java.util.*;
 public class PhysicalItemController {
  private final PhysicalItemService items; public PhysicalItemController(PhysicalItemService items){this.items=items;}
  @GetMapping("/carried") public List<PhysicalItemService.ItemView> carried(){return items.carried();}
+ @GetMapping("/state") public PhysicalItemService.ItemState state(){return items.state();}
  @PostMapping("/craft/woven-basket") public PhysicalItemService.ItemView basket(){return items.craftBasket();}
  @PostMapping("/{itemId}/container/{containerId}") public void place(@PathVariable UUID itemId,@PathVariable UUID containerId){items.placeInContainer(itemId,containerId);}
  @PostMapping("/{itemId}/equip") public void equip(@PathVariable UUID itemId,@RequestBody EquipRequest request){items.equip(itemId,request.bodyPosition(),request.layer());}
