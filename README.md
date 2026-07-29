@@ -372,6 +372,8 @@ Project Draugr is transitioning from the **Blueprint Phase** into an implementat
 
 Start PostgreSQL with `docker compose up -d`, then run the Spring Boot service from `backend/` with Maven: `mvn spring-boot:run`. If using this workspace's local Maven installation, run `..\.tools\apache-maven-3.9.11\bin\mvn.cmd spring-boot:run` instead. The service applies its Flyway migrations at startup. `POST /api/simulation/ticks` advances authoritative simulation time and appends an immutable tick event.
 
+For the current local MVP launcher, start Docker Desktop and run `powershell -ExecutionPolicy Bypass -File .\scripts\Start-Draugr.ps1`. It starts PostgreSQL, backend, and frontend, then opens the local game. This is the operational precursor to the packaged desktop executable.
+
 The local frontend is in `frontend/`. Run `npm install` and `npm run dev` there after the backend is running. It displays the server's current simulation state and can request a simulation tick; it never determines state locally.
 
 The immediate objective is to build a believable persistent world simulation.
