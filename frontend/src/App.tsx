@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { OverseerMap } from './OverseerMap';
 
 type SimulationState = { tick: number; simulatedAt: string };
-const apiUrl = import.meta.env.VITE_DRAUGR_API_URL ?? 'http://localhost:8080';
+// A published Atlas must never probe a visitor's local machine. The local
+// backend is used automatically only by the development server.
+const apiUrl = import.meta.env.VITE_DRAUGR_API_URL ?? (import.meta.env.DEV ? 'http://localhost:8080' : undefined);
 
 export function App() {
   if (new URLSearchParams(window.location.search).get('mode') === 'overseer') return <OverseerMap />;
@@ -11,6 +13,10 @@ export function App() {
   const [advancing, setAdvancing] = useState(false);
 
   const load = useCallback(async () => {
+    if (!apiUrl) {
+      setError('The local simulation is available only in the desktop application. Open the Overseer Atlas to view the public world preview.');
+      return;
+    }
     try {
       const response = await fetch(`${apiUrl}/api/simulation`);
       if (!response.ok) throw new Error('The simulation is unavailable.');

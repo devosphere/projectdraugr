@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import atlasArt from './assets/overseer-atlas-v1.png';
 
-const apiUrl = import.meta.env.VITE_DRAUGR_API_URL ?? 'http://localhost:8080';
+// Keep the public GitHub Pages Atlas fully static: it must not request access
+// to a visitor's local backend. Local development still uses the Spring API.
+const apiUrl = import.meta.env.VITE_DRAUGR_API_URL ?? (import.meta.env.DEV ? 'http://localhost:8080' : undefined);
 const seed = 681013497;
 type Marker = { category: 'RESOURCE' | 'WILDLIFE' | 'MONSTER' | 'RUIN'; label: string; x: number; y: number };
 type Preview = { markers: Marker[] };
@@ -17,6 +19,11 @@ export function OverseerMap() {
   const [markers, setMarkers] = useState<Marker[]>([]);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
+    if (!apiUrl) {
+      setMarkers(fallbackMarkers);
+      setReady(true);
+      return;
+    }
     fetch(`${apiUrl}/api/overseer/world/preview`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seed, widthChunks: 28, heightChunks: 20 }) })
       .then(response => response.ok ? response.json() : Promise.reject(new Error('Preview unavailable.')))
       .then((preview: Preview) => { setMarkers(preview.markers); setReady(true); }).catch(() => { setMarkers(fallbackMarkers); setReady(true); });
