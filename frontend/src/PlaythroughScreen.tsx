@@ -54,6 +54,7 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
   const [location, setLocation] = useState(backdropByBiome.TEMPERATE_FOREST);
   const [panel, setPanel] = useState<Panel>('none');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [bodyOpen, setBodyOpen] = useState(false);
   const [mapOverlay, setMapOverlay] = useState(false);
   const [readerDocument, setReaderDocument] = useState<ReaderDocument | null>(null);
   const [items, setItems] = useState<ItemState | null>(null);
@@ -117,9 +118,9 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
     <header className="world-header">
       <div><p className="eyebrow">{location.label}</p><strong>Early morning</strong></div>
       <div className="world-signs" aria-label="Environmental conditions"><span title="Daylight">Dawn</span><span title="Weather">Light rain</span><span title="Season">Early spring</span></div>
-      <button className="quiet-menu" aria-label="Open menus" onClick={() => { setMenuOpen(!menuOpen); setPanel('none'); }}>☰</button>
+      <div className="header-controls"><button className="quiet-body" aria-label="Open body awareness" aria-expanded={bodyOpen} onClick={() => { setBodyOpen(!bodyOpen); setMenuOpen(false); setPanel('none'); }}>🧍</button><button className="quiet-menu" aria-label="Open menus" aria-expanded={menuOpen} onClick={() => { setMenuOpen(!menuOpen); setBodyOpen(false); setPanel('none'); }}>☰</button></div>
     </header>
-    <aside className="body-hud" aria-label="Body awareness">
+    <aside className={`body-hud${bodyOpen ? ' is-open' : ''}`} aria-label="Body awareness">
       <p className="eyebrow">Body</p>
       {body.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
     </aside>
