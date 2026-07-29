@@ -17,6 +17,7 @@ type Panel = 'none' | 'chronicle' | 'equipment' | 'load' | 'storage' | 'crafting
 type ReaderDocument = 'field-journal' | 'folded-letter';
 type NarrationEntry = { id: string; text: string; occurredAt?: string };
 type NarrationPage = { entries: { id: string; occurredAt: string; narration: string }[]; hasMore: boolean };
+type DiscoveryContext = { discoveries: string[]; constructions: { id: string; displayName: string; projectKind: string; state: string; progressPercent: number }[] };
 
 const olderNarrationPages = [[
   { id: 'arrival-2', text: 'The familiar world recedes. Sound thins, distance loses meaning, and weakness moves through you before the rain-cold air of another place takes hold.' },
@@ -69,6 +70,7 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
   const [mapOverlay, setMapOverlay] = useState(false);
   const [readerDocument, setReaderDocument] = useState<ReaderDocument | null>(null);
   const [items, setItems] = useState<ItemState | null>(null);
+  const [discoveries, setDiscoveries] = useState<DiscoveryContext | null>(null);
   const actionField = useRef<HTMLTextAreaElement>(null);
   const narrationTimeline = useRef<HTMLDivElement>(null);
 
@@ -77,6 +79,11 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
     fetch(`${apiUrl}/api/chronicles/active/body`).then(response => response.ok ? response.json() : null).then((snapshot: BodySnapshot | null) => {
       if (snapshot) setBody(toBodyRows(snapshot));
     }).catch(() => undefined);
+  }, [apiUrl]);
+
+  useEffect(() => {
+    if (!apiUrl) return;
+    fetch(`${apiUrl}/api/chronicles/active/discoveries`).then(response => response.ok ? response.json() : null).then((context: DiscoveryContext | null) => setDiscoveries(context)).catch(() => undefined);
   }, [apiUrl]);
 
   useEffect(() => {
@@ -128,6 +135,7 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
       fetch(`${apiUrl}/api/chronicles/active/location`).then(response => response.ok ? response.json() : null).then((snapshot: LocationSnapshot | null) => {
         if (snapshot) setLocation(backdropByBiome[snapshot.presentationKey] ?? backdropByBiome[snapshot.biome] ?? backdropByBiome.TEMPERATE_FOREST);
       }).catch(() => undefined);
+      fetch(`${apiUrl}/api/chronicles/active/discoveries`).then(response => response.ok ? response.json() : null).then((context: DiscoveryContext | null) => setDiscoveries(context)).catch(() => undefined);
       setAction('');
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'The simulation could not resolve that action.');
@@ -173,6 +181,8 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
     window.print();
   }
 
+  const menuItems = (prototypeMode ? [['chronicle','Chronicle'],['equipment','Equipment'],['load','Load'],['storage','Storage'],['crafting','Crafting'],['construction','Construction'],['knowledge','Knowledge'],['map','Chronicle Map'],['literature','Literature']] : [['chronicle','Chronicle'],['equipment','Equipment'],['load','Load'],...(items?.containers.length ? [['storage','Storage']] : []),...(discoveries?.discoveries.includes('WOVEN_BASKET') ? [['crafting','Crafting']] : []),...(discoveries?.constructions.length ? [['construction','Construction']] : []),...(discoveries?.discoveries.length ? [['knowledge','Knowledge']] : [])]) as [Panel,string][];
+
   return <main className="playthrough" style={{ backgroundImage: `url(${location.art})` }}>
     <div className="playthrough-vignette" />
     <header className="world-header">
@@ -185,16 +195,16 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
       {body.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
     </aside>
     {menuOpen && <aside className="expanded-menu" aria-label="Chronicle menu">
-      {panel === 'none' ? <nav>{((prototypeMode ? [['chronicle','Chronicle'],['equipment','Equipment'],['load','Load'],['storage','Storage'],['crafting','Crafting'],['construction','Construction'],['knowledge','Knowledge'],['map','Chronicle Map'],['literature','Literature']] : [['chronicle','Chronicle'],['equipment','Equipment'],['load','Load'],['knowledge','Knowledge']]) as [Panel,string][]).map(([id,label]) => <button key={id} onClick={() => setPanel(id)}>{label}</button>)}<button className="export-chronicle" onClick={exportChronicle}>Export Chronicle</button><button className="return-main" onClick={onReturnToMainMenu}>Return to Main Menu</button></nav> : <>
+      {panel === 'none' ? <nav>{menuItems.map(([id,label]) => <button key={id} onClick={() => setPanel(id)}>{label}</button>)}<button className="export-chronicle" onClick={exportChronicle}>Export Chronicle</button><button className="return-main" onClick={onReturnToMainMenu}>Return to Main Menu</button></nav> : <>
       <header><button aria-label="Back to menu" onClick={() => setPanel('none')}>←</button></header>
       <section className="menu-detail">
         {panel==='equipment' && <><h2>Equipment</h2><EquipmentHierarchy prototype={prototypeMode} equipped={items?.equipped} /></>}
         {panel==='load' && <><h2>Load</h2>{prototypeMode ? <><div className="record"><strong>Carried load</strong><span>6.3 kg / 25 kg sustained carry</span><span>4.8 L / 18 L direct bulk</span><span>Heaviest object · 1.2 kg / 40 kg lift</span></div><div className="record"><strong>Woven basket</strong><span>0.9 kg empty + 4.2 kg contents</span><span>Contains · plant fiber bundles, field stones</span></div></> : items?.load && <><div className="record"><strong>Carried load</strong><span>{(items.load.massGrams / 1000).toFixed(1)} kg / {(items.load.sustainedMassCapacityGrams / 1000).toFixed(1)} kg sustained carry</span><span>{(items.load.bulkMl / 1000).toFixed(1)} L / {(items.load.directBulkCapacityMl / 1000).toFixed(1)} L direct bulk</span><span>Heaviest object · {(items.load.heaviestObjectGrams / 1000).toFixed(1)} kg / {(items.load.maximumSingleLiftGrams / 1000).toFixed(1)} kg lift</span></div>{items.carried.map(item => <div className="record" key={item.id}><strong>{item.displayName}</strong><span>{item.containerId ? 'Stored inside a carried container' : 'Carried directly'}</span></div>)}</>}</>}
         {panel==='storage' && <><h2>Storage</h2>{prototypeMode ? <div className="record"><strong>Woven basket</strong><span>5.4 kg / 12 kg internal mass</span><span>4.2 L / 18 L internal volume</span><span>Contents · plant fiber bundles, field stones, clay lump</span></div> : items?.containers.map(container => <div className="record" key={container.id}><strong>{container.displayName}</strong><span>{(container.usedMassGrams / 1000).toFixed(1)} kg / {(container.maxMassGrams / 1000).toFixed(1)} kg internal mass</span><span>{(container.usedVolumeMl / 1000).toFixed(1)} L / {(container.maxVolumeMl / 1000).toFixed(1)} L internal volume</span></div>)}</>}
         {panel==='chronicle' && <><h2>Chronicle</h2><p>Arrival · first day</p><p>Current place · uncharted forest</p><p>Every life leaves a mark.</p></>}
-        {panel==='crafting' && <><h2>Crafting</h2><div className="record"><strong>Woven basket</strong><span>Known through practice</span><span>Current materials · plant fiber bundles</span></div><div className="record"><strong>Primitive fire</strong><span>Established method</span></div><p className="perception-note">Reference only. Declare all attempts in the Action Composer.</p></>}
-        {panel==='construction' && <><h2>Construction</h2><div className="record"><strong>Stone fire pit</strong><span>Understood</span><span>Current ground · forest clearing</span></div><p className="perception-note">Reference only. Declare all attempts in the Action Composer.</p></>}
-        {panel==='knowledge' && <><h2>Knowledge</h2><div className="record"><strong>Plant fiber</strong><span>Workable material</span></div><div className="record"><strong>Fire tending</strong><span>Observed</span></div><div className="record"><strong>Forest water</strong><span>Unverified</span></div></>}
+        {panel==='crafting' && <><h2>Crafting</h2>{prototypeMode ? <><div className="record"><strong>Woven basket</strong><span>Known through practice</span><span>Current materials · plant fiber bundles</span></div><div className="record"><strong>Primitive fire</strong><span>Established method</span></div></> : discoveries?.discoveries.filter(item => item==='WOVEN_BASKET').map(item => <div className="record" key={item}><strong>Woven basket</strong><span>Known through practice</span></div>)}<p className="perception-note">Reference only. Declare all attempts in the Action Composer.</p></>}
+        {panel==='construction' && <><h2>Construction</h2>{prototypeMode ? <div className="record"><strong>Stone fire pit</strong><span>Understood</span><span>Current ground · forest clearing</span></div> : discoveries?.constructions.map(project => <div className="record" key={project.id}><strong>{project.displayName}</strong><span>{project.state.toLowerCase()} · {project.progressPercent}% complete</span></div>)}<p className="perception-note">Reference only. Declare all attempts in the Action Composer.</p></>}
+        {panel==='knowledge' && <><h2>Knowledge</h2>{prototypeMode ? <><div className="record"><strong>Plant fiber</strong><span>Workable material</span></div><div className="record"><strong>Fire tending</strong><span>Observed</span></div><div className="record"><strong>Forest water</strong><span>Unverified</span></div></> : discoveries?.discoveries.map(item => <div className="record" key={item}><strong>{item === 'WOVEN_BASKET' ? 'Woven basket' : item === 'STONE_FIRE_PIT' ? 'Stone fire pit' : item}</strong><span>Established through practice</span></div>)}</>}
         {panel==='map' && <><h2>Chronicle Map</h2><button className="map-list-entry" onClick={() => setMapOverlay(true)}>Hand-drawn forest sketch <span>carried in woven basket</span></button><p className="perception-note">Only physical maps within reach are shown.</p></>}
         {panel==='literature' && <><h2>Literature</h2><button className="map-list-entry" onClick={() => setReaderDocument('field-journal')}><strong>Weather-worn field journal</strong><span>Carried in woven basket · Revision 3</span></button><button className="map-list-entry" onClick={() => setReaderDocument('folded-letter')}><strong>Folded letter</strong><span>Carried in woven basket · Revision 1</span></button><p className="perception-note">Only readable objects within reach are shown. Maps remain in Chronicle Map.</p></>}
       </section>
