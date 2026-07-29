@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.time.ZoneOffset;
+import java.sql.Timestamp;
 
 @Service
 public class ChronicleService {
@@ -44,7 +45,7 @@ public class ChronicleService {
         UUID chronicleId = UUID.randomUUID();
         Instant now = Instant.now();
         jdbc.update("INSERT INTO world_object (id, object_type, display_name, current_location_id) VALUES (?, 'CHRONICLE', ?, ?)", chronicleId, "Unrecorded arrival " + sequence, spawnChunk);
-        jdbc.update("INSERT INTO chronicle (id, world_id, sequence_number, life_state, arrived_at) VALUES (?, ?, ?, 'LIVING', ?)", chronicleId, world.id(), sequence, now);
+        jdbc.update("INSERT INTO chronicle (id, world_id, sequence_number, life_state, arrived_at) VALUES (?, ?, ?, 'LIVING', ?)", chronicleId, world.id(), sequence, Timestamp.from(now));
         jdbc.update("INSERT INTO chronicle_body (chronicle_id, health, condition_summary, hunger, thirst, energy, temperature, wetness, bladder, bowel, hygiene) VALUES (?, 'Healthy', 'Unsteady', 'Satisfied', 'Hydrated', 'Rested', 'Comfortable', 'Damp', 'Comfortable', 'Comfortable', 'Normal')", chronicleId);
         jdbc.update("INSERT INTO chronicle_physiology (chronicle_id, last_metabolic_update) VALUES (?, ?)", chronicleId, now);
         jdbc.update("INSERT INTO chronicle_carry_capacity (chronicle_id) VALUES (?)", chronicleId);
