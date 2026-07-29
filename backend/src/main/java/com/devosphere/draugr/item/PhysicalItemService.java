@@ -63,11 +63,16 @@ public class PhysicalItemService {
         UUID item=jdbc.query("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT r.id FROM reachable r JOIN item_instance i ON i.object_id=r.id WHERE i.item_key=? ORDER BY r.id FOR UPDATE LIMIT 1",rs->rs.next()?rs.getObject(1,UUID.class):null,chronicle,itemKey);
         if(item==null)return false; jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED',destroyed_at=?,current_owner_id=NULL WHERE id=?",occurredAt,item); jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CONSUMED',jsonb_build_object('itemKey',?))",item,occurredAt,itemKey); return true;
     }
+    @Transactional(readOnly = true)
+    public boolean hasAtLeast(UUID chronicle, String itemKey, int required) {
+        Integer count = jdbc.queryForObject("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT COUNT(*) FROM reachable r JOIN item_instance i ON i.object_id=r.id WHERE i.item_key=?", Integer.class, chronicle, itemKey);
+        return count != null && count >= required;
+    }
 
     @Transactional
     public ItemView craftBasket() {
         UUID chronicle=activeChronicle();
-        List<UUID> fiber=jdbc.query("SELECT w.id FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND i.item_key='plant_fiber' AND w.lifecycle_state='ACTIVE' ORDER BY w.created_at FOR UPDATE", (rs,row)->rs.getObject(1,UUID.class), chronicle);
+        List<UUID> fiber=jdbc.query("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT r.id FROM reachable r JOIN item_instance i ON i.object_id=r.id WHERE i.item_key='plant_fiber' ORDER BY r.id FOR UPDATE", (rs,row)->rs.getObject(1,UUID.class), chronicle);
         if(fiber.size()<8) throw new IllegalStateException("Crafting a woven basket requires eight physical plant-fiber bundles carried by the Chronicle.");
         Instant now=Instant.now(); UUID basket=UUID.randomUUID();
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM','Woven basket',?)",basket,chronicle);
