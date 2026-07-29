@@ -119,7 +119,11 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
     if (!apiUrl) return;
     fetch(`${apiUrl}/api/actions/history?limit=20`).then(response => response.ok ? response.json() : null).then((page: NarrationPage | null) => {
       if (!page) return;
-      setNarrations(page.entries.reverse().map(entry => ({ id: entry.id, occurredAt: entry.occurredAt, text: entry.narration })));
+      // A newly awakened Chronicle has no action history yet. Keep the
+      // arrival perception visible instead of replacing it with an empty list.
+      if (page.entries.length > 0) {
+        setNarrations(page.entries.reverse().map(entry => ({ id: entry.id, occurredAt: entry.occurredAt, text: entry.narration })));
+      }
       setHasOlderNarrations(page.hasMore);
     }).catch(() => undefined);
   }, [apiUrl]);
