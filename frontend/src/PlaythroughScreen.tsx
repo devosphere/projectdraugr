@@ -12,6 +12,7 @@ const previewBody = [
 type BodySnapshot = { health: string; condition: string; hunger: string; thirst: string; energy: string; temperature: string; wetness: string; bladder: string; bowel: string; hygiene: string };
 type ActionResult = { actionId: string; intent: string; outcome: string; durationMinutes: number; resolvedAt: string; perception: string; body: BodySnapshot };
 type LocationSnapshot = { biome: string; presentationKey: string };
+type EnvironmentSnapshot = { simulatedAt: string; weatherKind: string; ambientTemperatureC: number | null; windSpeedKph: number | null };
 type ItemState = { carried: { id: string; displayName: string; itemKey: string; containerId: string | null }[]; equipped: { id: string; displayName: string; bodyPosition: string; layer: string }[]; load: { massGrams: number; bulkMl: number; heaviestObjectGrams: number; sustainedMassCapacityGrams: number; directBulkCapacityMl: number; maximumSingleLiftGrams: number }; containers: { id: string; displayName: string; maxMassGrams: number; maxVolumeMl: number; usedMassGrams: number; usedVolumeMl: number }[] };
 type Panel = 'none' | 'chronicle' | 'equipment' | 'load' | 'storage' | 'crafting' | 'construction' | 'knowledge' | 'map' | 'literature';
 type ReaderDocument = 'field-journal' | 'folded-letter';
@@ -64,6 +65,7 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
   const [resolving, setResolving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [location, setLocation] = useState(backdropByBiome.TEMPERATE_FOREST);
+  const [environment, setEnvironment] = useState({ time: 'Early morning', weather: 'Light rain', season: 'Early spring' });
   const [panel, setPanel] = useState<Panel>('none');
   const [menuOpen, setMenuOpen] = useState(false);
   const [bodyOpen, setBodyOpen] = useState(false);
@@ -78,6 +80,15 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
     if (!apiUrl) return;
     fetch(`${apiUrl}/api/chronicles/active/body`).then(response => response.ok ? response.json() : null).then((snapshot: BodySnapshot | null) => {
       if (snapshot) setBody(toBodyRows(snapshot));
+    }).catch(() => undefined);
+  }, [apiUrl]);
+
+  useEffect(() => {
+    if (!apiUrl) return;
+    fetch(`${apiUrl}/api/chronicles/active/environment`).then(response => response.ok ? response.json() : null).then((snapshot: EnvironmentSnapshot | null) => {
+      if (!snapshot) return;
+      const hour = new Date(snapshot.simulatedAt).getUTCHours();
+      setEnvironment({ time: hour < 6 ? 'Before dawn' : hour < 12 ? 'Morning' : hour < 18 ? 'Afternoon' : 'Night', weather: snapshot.weatherKind.toLowerCase().replace(/^./, letter => letter.toUpperCase()), season: snapshot.ambientTemperatureC === null ? 'Unknown season' : `${Math.round(snapshot.ambientTemperatureC)}°C · ${snapshot.windSpeedKph ?? 0} kph wind` });
     }).catch(() => undefined);
   }, [apiUrl]);
 
@@ -136,6 +147,7 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
         if (snapshot) setLocation(backdropByBiome[snapshot.presentationKey] ?? backdropByBiome[snapshot.biome] ?? backdropByBiome.TEMPERATE_FOREST);
       }).catch(() => undefined);
       fetch(`${apiUrl}/api/chronicles/active/discoveries`).then(response => response.ok ? response.json() : null).then((context: DiscoveryContext | null) => setDiscoveries(context)).catch(() => undefined);
+      fetch(`${apiUrl}/api/chronicles/active/environment`).then(response => response.ok ? response.json() : null).then((snapshot: EnvironmentSnapshot | null) => { if (snapshot) { const hour=new Date(snapshot.simulatedAt).getUTCHours(); setEnvironment({ time: hour < 6 ? 'Before dawn' : hour < 12 ? 'Morning' : hour < 18 ? 'Afternoon' : 'Night', weather: snapshot.weatherKind.toLowerCase().replace(/^./, letter => letter.toUpperCase()), season: snapshot.ambientTemperatureC === null ? 'Unknown season' : `${Math.round(snapshot.ambientTemperatureC)}°C · ${snapshot.windSpeedKph ?? 0} kph wind` }); } }).catch(() => undefined);
       setAction('');
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'The simulation could not resolve that action.');
@@ -186,8 +198,8 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
   return <main className="playthrough" style={{ backgroundImage: `url(${location.art})` }}>
     <div className="playthrough-vignette" />
     <header className="world-header">
-      <div><p className="eyebrow">{location.label}</p><strong>Early morning</strong></div>
-      <div className="world-signs" aria-label="Environmental conditions"><span title="Daylight">Dawn</span><span title="Weather">Light rain</span><span title="Season">Early spring</span></div>
+      <div><p className="eyebrow">{location.label}</p><strong>{environment.time}</strong></div>
+      <div className="world-signs" aria-label="Environmental conditions"><span title="Daylight">{environment.time}</span><span title="Weather">{environment.weather}</span><span title="Environment">{environment.season}</span></div>
       <div className="header-controls"><button className="quiet-body" aria-label="Open body awareness" aria-expanded={bodyOpen} onClick={() => { setBodyOpen(!bodyOpen); setMenuOpen(false); setPanel('none'); }}>🧍</button><button className="quiet-menu" aria-label="Open menus" aria-expanded={menuOpen} onClick={() => { setMenuOpen(!menuOpen); setBodyOpen(false); setPanel('none'); }}>☰</button></div>
     </header>
     <aside className={`body-hud${bodyOpen ? ' is-open' : ''}`} aria-label="Body awareness">

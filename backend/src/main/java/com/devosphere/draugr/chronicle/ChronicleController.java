@@ -20,6 +20,7 @@ public class ChronicleController {
     public ChronicleController(ChronicleService chronicles, ChroniclePhysiologyService physiology, ChronicleDiscoveryService discoveries) { this.chronicles = chronicles; this.physiology = physiology; this.discoveries = discoveries; }
     @GetMapping("/active") public ChronicleService.ChronicleSummary active() { return chronicles.active(); }
     @GetMapping("/active/location") public ChronicleService.ChronicleLocation activeLocation() { return chronicles.activeLocation(); }
+    @GetMapping("/active/environment") public ChronicleService.ChronicleEnvironment activeEnvironment() { return chronicles.activeEnvironment(); }
     @GetMapping("/active/body") public ChroniclePhysiologyService.BodyHudSnapshot activeBody() { return physiology.activeBody(); }
     @GetMapping("/active/discoveries") public ChronicleDiscoveryService.DiscoveryContext discoveries() { return discoveries.activeContext(); }
     @GetMapping("/archive") public List<ChronicleService.ChronicleSummary> archive() { return chronicles.archive(); }

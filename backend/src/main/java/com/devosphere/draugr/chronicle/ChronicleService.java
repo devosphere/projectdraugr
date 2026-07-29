@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.time.ZoneOffset;
 
 @Service
 public class ChronicleService {
@@ -20,6 +21,10 @@ public class ChronicleService {
     @Transactional(readOnly = true)
     public ChronicleLocation activeLocation() {
         return jdbc.query("SELECT c.id, w.current_location_id, wc.biome, CASE WHEN EXISTS (SELECT 1 FROM ecology_site es WHERE es.chunk_id = wc.id AND es.site_category = 'RESOURCE' AND lower(es.site_kind) LIKE '%clay%') THEN 'CLAY_DEPOSIT' ELSE wc.biome END FROM chronicle c JOIN world_object w ON w.id = c.id JOIN world_chunk wc ON wc.id = w.current_location_id WHERE c.life_state = 'LIVING'", rs -> rs.next() ? new ChronicleLocation(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getString(3), rs.getString(4)) : null);
+    }
+    @Transactional(readOnly = true)
+    public ChronicleEnvironment activeEnvironment() {
+        return jdbc.query("SELECT sc.simulated_at,ww.weather_kind,ww.ambient_temperature_c,ww.wind_speed_kph FROM chronicle c JOIN simulation_clock sc ON sc.id=1 LEFT JOIN world_weather ww ON ww.world_id=c.world_id WHERE c.life_state='LIVING'",rs->rs.next()?new ChronicleEnvironment(rs.getTimestamp(1).toInstant(),rs.getString(2)==null?"CLEAR":rs.getString(2),rs.getBigDecimal(3)==null?null:rs.getBigDecimal(3).doubleValue(),rs.getObject(4,Integer.class)):null);
     }
 
     @Transactional(readOnly = true)
@@ -64,4 +69,5 @@ public class ChronicleService {
     private record WorldSeed(UUID id, long seed) { }
     public record ChronicleSummary(UUID id, int sequenceNumber, String lifeState, Instant arrivedAt, Instant diedAt, String deathCause, UUID locationId) { }
     public record ChronicleLocation(UUID chronicleId, UUID locationId, String biome, String presentationKey) { }
+    public record ChronicleEnvironment(Instant simulatedAt,String weatherKind,Double ambientTemperatureC,Integer windSpeedKph) { }
 }
