@@ -8,18 +8,33 @@ export function App() {
   const [hasLivingChronicle, setHasLivingChronicle] = useState(false);
   const [entryError, setEntryError] = useState<string | null>(null);
   const apiUrl = import.meta.env.VITE_DRAUGR_API_URL ?? (import.meta.env.DEV ? 'http://localhost:8080' : undefined);
+
+  async function findLivingChronicle() {
+    if (!apiUrl) return null;
+    const response = await fetch(`${apiUrl}/api/chronicles/active`);
+    return response.ok ? response.json() : null;
+  }
+
   useEffect(() => {
     if (!apiUrl) return;
-    fetch(`${apiUrl}/api/chronicles/active`).then(response => response.ok ? response.json() : null).then(active => setHasLivingChronicle(Boolean(active))).catch(() => setHasLivingChronicle(false));
+    findLivingChronicle().then(active => setHasLivingChronicle(Boolean(active))).catch(() => setHasLivingChronicle(false));
   }, [apiUrl]);
+
   async function enterWorld() {
     setEntryError(null);
-    try { if (!hasLivingChronicle && apiUrl) {
+    try {
+      const active = await findLivingChronicle();
+      if (active) {
+        setHasLivingChronicle(true);
+        setPlaying(true);
+        return;
+      }
+      if (apiUrl) {
       const response = await fetch(`${apiUrl}/api/chronicles`, { method: 'POST' });
       if (!response.ok) throw new Error('Unable to awaken a Chronicle.');
       setHasLivingChronicle(true);
-    }
-    setPlaying(true);
+      }
+      setPlaying(true);
     } catch { setEntryError('The world could not be reached. Start Project Draugr, then try again.'); }
   }
   if (new URLSearchParams(window.location.search).get('mode') === 'overseer') return <OverseerMap />;
