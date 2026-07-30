@@ -159,8 +159,11 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
     if (!apiUrl) { setActionError('The local simulation service is unavailable.'); return; }
     setResolving(true);
     setActionError(null);
+    // A per-submission key so a duplicated delivery of this exact request resolves
+    // once on the backend rather than advancing the world twice.
+    const idempotencyKey = crypto.randomUUID();
     try {
-      const response = await fetch(`${apiUrl}/api/actions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+      const response = await fetch(`${apiUrl}/api/actions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, idempotencyKey }) });
       const result = await response.json().catch(() => null) as ActionResult | { message?: string } | null;
       if (!response.ok || !result || !('perception' in result)) throw new Error(result && 'message' in result && result.message ? result.message : 'The simulation could not resolve that action.');
       setNarrations(entries => [...entries, { id: result.actionId, occurredAt: result.resolvedAt, text: result.perception }]);

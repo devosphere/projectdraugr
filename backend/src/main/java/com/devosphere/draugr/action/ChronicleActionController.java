@@ -9,7 +9,7 @@ import java.util.UUID;
 @RestController @RequestMapping("/api/actions") @CrossOrigin(origins = {"${draugr.frontend-origin:http://localhost:5173}", "http://127.0.0.1:5173"})
 public class ChronicleActionController {
     private final ChronicleActionService actions; public ChronicleActionController(ChronicleActionService actions) { this.actions = actions; }
-    @PostMapping @ResponseStatus(HttpStatus.CREATED) public ChronicleActionService.ActionResult resolve(@RequestBody ActionRequest request) { return actions.resolve(request.text()); }
+    @PostMapping @ResponseStatus(HttpStatus.CREATED) public ChronicleActionService.ActionResult resolve(@RequestBody ActionRequest request) { return actions.resolve(request.text(), request.idempotencyKey()); }
     @GetMapping("/history") public ChronicleActionService.NarrationPage history(@RequestParam(required = false) Instant before, @RequestParam(required = false) UUID beforeId, @RequestParam(defaultValue = "20") int limit) { return actions.narrationHistory(before, beforeId, limit); }
-    public record ActionRequest(String text) { }
+    public record ActionRequest(String text, UUID idempotencyKey) { }
 }

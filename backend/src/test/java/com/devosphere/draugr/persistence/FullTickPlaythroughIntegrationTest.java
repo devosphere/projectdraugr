@@ -153,6 +153,15 @@ class FullTickPlaythroughIntegrationTest {
                 Integer.class);
         assertEquals(1, body, "the living Chronicle must retain exactly one body and physiology record");
 
+        // Idempotency: a repeated submission with the same key returns the original
+        // action and must not advance the world a second time.
+        UUID key = UUID.randomUUID();
+        ChronicleActionService.ActionResult firstSubmit = actions.resolve("I take stock of the ground once more.", key);
+        long tickAfterFirst = ticks.current().tick();
+        ChronicleActionService.ActionResult duplicate = actions.resolve("I take stock of the ground once more.", key);
+        assertEquals(firstSubmit.actionId(), duplicate.actionId(), "a duplicate idempotency key must return the original action");
+        assertEquals(tickAfterFirst, ticks.current().tick(), "a duplicate submission must not advance the simulation clock again");
+
         PersistentStateAuditor.AuditReport report = auditor.inspect();
         assertTrue(report.consistent(), () -> "auditor must report a consistent world after the action battery: " + report.violations());
     }
