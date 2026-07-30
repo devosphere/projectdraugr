@@ -179,6 +179,7 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
       setActionError(error instanceof Error ? error.message : 'The simulation could not resolve that action.');
     } finally {
       setResolving(false);
+      actionField.current?.focus();
     }
   }
 
