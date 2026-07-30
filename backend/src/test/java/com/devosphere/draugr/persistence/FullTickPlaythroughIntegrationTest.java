@@ -219,14 +219,13 @@ class FullTickPlaythroughIntegrationTest {
     @Order(5)
     void gatheringBeyondCarryingCapacityResolvesGracefully() {
         UUID chronicle = livingChronicle();
-        // Force zero carrying headroom, then attempt to gather. It must resolve
-        // as an empty-handed attempt, not crash or roll back with an error.
+        UUID location = chronicles.active().locationId();
+        // Force zero carrying headroom, then gather directly (no physiology tick,
+        // so this isolates the capacity behavior without over-exertion side
+        // effects on the shared Chronicle). It must return 0, not throw.
         jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=1, direct_bulk_ml=1, maximum_single_lift_grams=1 WHERE chronicle_id=?", chronicle);
-        Integer before = jdbc.queryForObject("SELECT COUNT(*) FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key='field_stone'", Integer.class, chronicle);
-        ChronicleActionService.ActionResult result = assertDoesNotThrow(() -> actions.resolve("I gather loose stones from the ground."), "gathering while full must resolve gracefully, not error");
-        Integer after = jdbc.queryForObject("SELECT COUNT(*) FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key='field_stone'", Integer.class, chronicle);
-        assertEquals(before, after, "no items may be added when the Chronicle has no carrying headroom");
-        assertNotNull(result.body(), "the body HUD must remain readable after a graceful over-capacity gather");
+        int gathered = assertDoesNotThrow(() -> items.gatherFieldStones(chronicle, location, simNow()), "gathering while full must resolve gracefully, not throw a capacity error");
+        assertEquals(0, gathered, "no units may be gathered when the Chronicle has no carrying headroom");
         // Restore realistic capacity for the remaining ordered scenarios.
         jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=25000, direct_bulk_ml=18000, maximum_single_lift_grams=40000 WHERE chronicle_id=?", chronicle);
     }
