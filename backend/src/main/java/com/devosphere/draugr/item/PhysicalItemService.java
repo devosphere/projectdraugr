@@ -120,6 +120,19 @@ public class PhysicalItemService {
         assertCarryCapacity(chronicle);
         return desired;
     }
+    /** Split a flat stone slab from rock — a heavy, permanent writing surface. Stony highland terrain only. */
+    @Transactional
+    public int gatherStoneSlab(UUID chronicle, UUID location, Instant occurredAt) {
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
+        if (!"MOUNTAIN".equals(biome) && !"HIGHLAND".equals(biome)) return 0; // No workable rock face here.
+        if (capacityHeadroomUnits(chronicle, "stone_slab") <= 0) return 0;
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM','Stone slab',?)", id, chronicle);
+        jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,'stone_slab','SOUND')", id);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'GATHERED',jsonb_build_object('biome',?))", id, Timestamp.from(occurredAt), biome);
+        assertCarryCapacity(chronicle);
+        return 1;
+    }
     /** Take a piece of charcoal from a spent fire — a writing implement. Requires a fire that was lit here and has since burned out. */
     @Transactional
     public boolean makeCharcoal(UUID chronicle, UUID location, Instant occurredAt) {

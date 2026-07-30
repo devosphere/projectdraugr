@@ -112,6 +112,20 @@ public class ChroniclePhysiologyService {
         jdbc.update("UPDATE chronicle_physiology SET sleep_debt_hours=GREATEST(0,sleep_debt_hours-?),energy_level=LEAST(100,energy_level+?),pain_level=GREATEST(0,pain_level-?),stress_level=GREATEST(0,stress_level-?),wetness_level=GREATEST(0,wetness_level-?) WHERE chronicle_id=?", hours * .85 * recovery, Math.max(1, (int)Math.round(hours * 9 * recovery)), Math.max(0, (int)Math.round(hours * recovery)), Math.max(0, (int)Math.round(hours * 2 * recovery)), drying, chronicleId);
         refreshBody(chronicleId);
     }
+    /** Deep sleep — a fuller recovery than a brief rest. Shelter makes it restful; sleeping exposed is possible but shallow. Returns whether the chronicle was sheltered. */
+    @Transactional
+    public boolean sleep(UUID chronicleId, int minutes) {
+        double hours = minutes / 60.0;
+        Boolean sheltered = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object shelter ON shelter.id=cp.object_id JOIN world_object body ON body.current_location_id=shelter.current_location_id WHERE body.id=? AND cp.project_kind='LEAN_TO' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND shelter.lifecycle_state='ACTIVE')", Boolean.class, chronicleId);
+        boolean safe = Boolean.TRUE.equals(sheltered);
+        // Sheltered sleep is deep and restorative; exposed sleep on bare ground is
+        // broken and shallow, clearing far less debt and leaving stress behind.
+        double recovery = safe ? 1.5 : 0.7;
+        int drying = safe ? Math.max(1, (int)Math.round(hours * 9)) : 0;
+        jdbc.update("UPDATE chronicle_physiology SET sleep_debt_hours=GREATEST(0,sleep_debt_hours-?),energy_level=LEAST(100,energy_level+?),pain_level=GREATEST(0,pain_level-?),stress_level=GREATEST(0,stress_level-?),wetness_level=GREATEST(0,wetness_level-?) WHERE chronicle_id=?", hours * 1.1 * recovery, Math.max(1, (int)Math.round(hours * 12 * recovery)), Math.max(0, (int)Math.round(hours * 1.5 * recovery)), Math.max(0, (int)Math.round(hours * 3 * recovery)), drying, chronicleId);
+        refreshBody(chronicleId);
+        return safe;
+    }
     @Transactional
     public void applyInjury(UUID chronicleId, int severity, UUID actionId, Instant occurredAt, String source) {
         int bounded=clamp(severity);
