@@ -36,6 +36,14 @@ public class ChronicleActionService {
         new String[]{"tinder","nest","kindling","dry grass","fibre","fiber","bark shavings"},
         new String[]{"ember","coal","spark","smoke","glow"},
         new String[]{"downward","steady","press","spin","rotate","back and forth","until","then","slowly","patient"});
+    // Signal groups for a hunting attempt: naming a weapon or strike, a target on
+    // the animal, an approach, and a follow-through reads as a deliberate kill.
+    // "kill the boar" matches none and rests on raw body state and what is in hand.
+    private static final List<String[]> HUNT_SIGNALS = List.of(
+        new String[]{"spear","thrust","stab","throw","strike","blow","jab","drive the","swing"},
+        new String[]{"throat","neck","heart","eye","head","skull","chest","flank","side","leg","hamstring","belly"},
+        new String[]{"ambush","flank","circle","corner","distract","downwind","sneak","creep","approach slowly","wait for","from behind"},
+        new String[]{"pin","finish","again","repeated","hold it down","press the attack","keep"});
     private final JdbcTemplate jdbc; private final SimulationTickService ticks; private final ChroniclePhysiologyService physiology; private final NarrationPolicy narration; private final PhysicalItemService items; private final CapabilityAdaptationService capability; private final ConstructionService construction; private final ChronicleDiscoveryService discoveries; private final WildlifeEncounterService wildlife; private final FireService fire; private final LiteratureService literature; private final FoodPreservationService food;
     public ChronicleActionService(JdbcTemplate jdbc, SimulationTickService ticks, ChroniclePhysiologyService physiology, NarrationPolicy narration, PhysicalItemService items, CapabilityAdaptationService capability, ConstructionService construction, ChronicleDiscoveryService discoveries, WildlifeEncounterService wildlife, FireService fire, LiteratureService literature, FoodPreservationService food) { this.jdbc = jdbc; this.ticks = ticks; this.physiology = physiology; this.narration = narration; this.items=items; this.capability=capability; this.construction=construction; this.discoveries=discoveries; this.wildlife=wildlife; this.fire=fire; this.literature=literature; this.food=food; }
 
@@ -83,7 +91,7 @@ public class ChronicleActionService {
         else if (intent == Intent.WASH) { String biome=jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?",String.class,chronicle.location()); if("WETLAND".equals(biome)){physiology.wash(chronicle.id());perception="Cold water runs over your hands and skin, carrying away some of the dirt.";}else{outcome="FAILED";perception="You pause, but find no water here to wash with.";} }
         else if (intent == Intent.TREAT_WOUND) { if (physiology.bindWound(chronicle.id(), items, actionId, resolvedAt)) perception="You press and bind the wounded place until the immediate bleeding eases."; else { outcome="FAILED"; perception="You work at yourself for a moment, then stop without changing the wound."; } }
         else if (intent == Intent.EDIT_DOCUMENT) { try { reviseDocument(chronicle.id(), actionId, resolvedAt, text); perception="Your marks remain on the physical page."; } catch (IllegalArgumentException | IllegalStateException ignored) { outcome="FAILED"; perception="You handle the page for a while, then set it aside unchanged."; } }
-        else if (intent == Intent.CONFRONT_WILDLIFE) { WildlifeEncounterService.EncounterResult result=wildlife.confront(chronicle.id(),chronicle.location(),actionId,resolvedAt); outcome=result.outcome(); perception=result.narration(); }
+        else if (intent == Intent.CONFRONT_WILDLIFE) { double spec=SuccessModel.specificity(text,HUNT_SIGNALS); double fam=capability.familiarity(chronicle.id(),"AIM"); int tactic=(int)Math.round(spec*30 + Math.min(0.20,fam*3.0)*100); WildlifeEncounterService.EncounterResult result=wildlife.confront(chronicle.id(),chronicle.location(),actionId,resolvedAt,tactic); outcome=result.outcome(); perception=result.narration(); }
         else if (intent == Intent.HARVEST_CARCASS) { WildlifeEncounterService.HarvestResult result=wildlife.harvest(chronicle.id(),chronicle.location(),actionId,resolvedAt); outcome=result.outcome(); perception=result.narration(); }
         else if (intent == Intent.LIGHT_FIRE) {
             // Layer 2 (how well the attempt was described) and Layer 3 (how practiced
@@ -127,7 +135,7 @@ public class ChronicleActionService {
         jdbc.update("INSERT INTO chronicle_event (chronicle_id, occurred_at, event_type, payload) VALUES (?, ?, 'CHRONICLE_ACTION_RESOLVED', jsonb_build_object('actionId', ?::text, 'intent', ?, 'outcome', ?))", chronicle.id(), resolvedTs, actionId.toString(), intent.name(), outcome);
         if ("SUCCEEDED".equals(outcome) && intent == Intent.CRAFT_BASKET) discoveries.record(chronicle.id(), "WOVEN_BASKET", actionId, resolvedAt);
         if ("SUCCEEDED".equals(outcome) && intent == Intent.BUILD_FIRE_PIT) discoveries.record(chronicle.id(), "STONE_FIRE_PIT", actionId, resolvedAt);
-        if ("SUCCEEDED".equals(outcome)) capability.record(chronicle.id(), actionId, (intent==Intent.GATHER_FIBER||intent==Intent.GATHER_STONE)?"LOAD":intent==Intent.OBSERVE?"ATTENTION":(intent==Intent.REST||intent==Intent.SLEEP)?"RECOVERY":"FINE_MOTOR", minutes, (intent==Intent.GATHER_FIBER||intent==Intent.GATHER_STONE)?.18:.05, (intent==Intent.REST||intent==Intent.SLEEP)?.75:.45, resolvedAt);
+        if ("SUCCEEDED".equals(outcome)) capability.record(chronicle.id(), actionId, (intent==Intent.GATHER_FIBER||intent==Intent.GATHER_STONE)?"LOAD":intent==Intent.OBSERVE?"ATTENTION":(intent==Intent.REST||intent==Intent.SLEEP)?"RECOVERY":intent==Intent.CONFRONT_WILDLIFE?"AIM":intent==Intent.MOVE?"LOCOMOTION":"FINE_MOTOR", minutes, (intent==Intent.GATHER_FIBER||intent==Intent.GATHER_STONE)?.18:.05, (intent==Intent.REST||intent==Intent.SLEEP)?.75:.45, resolvedAt);
         narration.validate(perception);
         return new ActionResult(actionId, intent.name(), outcome, minutes, resolvedAt, perception, physiology.activeBody());
     }

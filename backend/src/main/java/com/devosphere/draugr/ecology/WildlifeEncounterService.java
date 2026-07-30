@@ -19,10 +19,21 @@ public class WildlifeEncounterService {
 
     @Transactional
     public EncounterResult confront(UUID chronicle, UUID chunk, UUID action, Instant at) {
+        return confront(chronicle, chunk, action, at, 0);
+    }
+
+    /**
+     * @param tacticBonus added to the chronicle's effective capability — the caller's
+     * measure of how well the attempt was described (naming a target, a weapon, an
+     * approach) and how practiced the chronicle is at the hunt. A bare "kill the boar"
+     * carries a bonus of zero and rests on raw body state and whatever is in hand.
+     */
+    @Transactional
+    public EncounterResult confront(UUID chronicle, UUID chunk, UUID action, Instant at, int tacticBonus) {
         Encounter candidate=jdbc.query("SELECT wp.id,wp.species_key,wp.ecological_role,wp.behavior_state,wp.population_count FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id WHERE es.chunk_id=? AND wp.population_count>0 ORDER BY CASE wp.ecological_role WHEN 'CARNIVORE' THEN 0 WHEN 'OMNIVORE' THEN 1 ELSE 2 END LIMIT 1 FOR UPDATE",rs->rs.next()?new Encounter(rs.getObject(1,UUID.class),rs.getString(2),rs.getString(3),rs.getString(4),rs.getInt(5)):null,chunk);
         if(candidate==null)return new EncounterResult("FAILED","The ground answers only with rain and the small movements of the forest.");
         Combatant body=jdbc.query("SELECT p.energy_level,p.injury_severity,p.pain_level,COALESCE((SELECT COUNT(*) FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id WHERE e.chronicle_id=? AND e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key IN ('stone_axe','primitive_spear')),0),COALESCE((SELECT COUNT(*) FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key='field_stone'),0) FROM chronicle_physiology p WHERE p.chronicle_id=?",rs->rs.next()?new Combatant(rs.getInt(1),rs.getInt(2),rs.getInt(3),rs.getInt(4),rs.getInt(5)):new Combatant(0,100,100,0,0),chronicle,chronicle,chronicle);
-        int capability = body.energy()/3 - body.injury()/2 - body.pain()/3 + body.handWeapon()*35 + Math.min(10,body.stones()*2);
+        int capability = body.energy()/3 - body.injury()/2 - body.pain()/3 + body.handWeapon()*35 + Math.min(10,body.stones()*2) + tacticBonus;
         int resistance = "CARNIVORE".equals(candidate.role()) ? 85 : "OMNIVORE".equals(candidate.role()) ? 65 : 42;
         if("HUNTING".equals(candidate.behavior())) resistance += 10;
         if("SHELTERING".equals(candidate.behavior())) resistance -= 12;
