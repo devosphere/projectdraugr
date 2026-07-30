@@ -29,6 +29,25 @@ public class LiteratureService {
         jdbc.update("UPDATE literature_document SET current_revision_id=? WHERE object_id=?",revision,documentId);
         return revision;
     }
+    /**
+     * Turns a reachable physical surface (a bark sheet, a hide) into a written
+     * document with its first revision. The object keeps its identity and simply
+     * gains writing on it, which is exactly how a real record is made.
+     */
+    @Transactional
+    public UUID createFromSurface(UUID surfaceObjectId, UUID chronicleId, UUID actionId, Instant occurredAt, String kind, String title, String content) {
+        assertReachable(surfaceObjectId, chronicleId);
+        Integer already = jdbc.queryForObject("SELECT COUNT(*) FROM literature_document WHERE object_id=?", Integer.class, surfaceObjectId);
+        if (already != null && already > 0) throw new IllegalStateException("That surface already carries a written record.");
+        jdbc.update("INSERT INTO literature_document (object_id,document_kind,title,current_revision_id) VALUES (?,?,?,NULL)", surfaceObjectId, kind, title);
+        jdbc.update("UPDATE world_object SET display_name=? WHERE id=?", title, surfaceObjectId);
+        return revise(surfaceObjectId, chronicleId, actionId, occurredAt, Edit.INITIAL, content, null);
+    }
+    /** The most recently made reachable document of a kind, so a player can refer to "my journal" / "my map" without an id. */
+    @Transactional(readOnly = true)
+    public UUID reachableDocumentOfKind(UUID chronicleId, String kind) {
+        return jdbc.query("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT d.object_id FROM reachable x JOIN literature_document d ON d.object_id=x.id JOIN world_object w ON w.id=d.object_id WHERE d.document_kind=? ORDER BY w.created_at DESC LIMIT 1", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, chronicleId, kind);
+    }
     @Transactional(readOnly = true)
     public List<DocumentView> reachable(UUID chronicleId) {
         return jdbc.query("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT d.object_id,d.document_kind,d.title,d.current_revision_id,COALESCE(r.revision_number,0) FROM reachable x JOIN literature_document d ON d.object_id=x.id LEFT JOIN literature_revision r ON r.id=d.current_revision_id ORDER BY d.title",(rs,row)->new DocumentView(rs.getObject(1,UUID.class),rs.getString(2),rs.getString(3),rs.getObject(4,UUID.class),rs.getInt(5)),chronicleId);

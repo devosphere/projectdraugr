@@ -81,6 +81,35 @@ public class PhysicalItemService {
         assertCarryCapacity(chronicle);
         return id;
     }
+    /** The id of one reachable item of a kind (carried or in a carried container), or null. */
+    @Transactional(readOnly = true)
+    public UUID findReachable(UUID chronicle, String itemKey) {
+        return jdbc.query("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT r.id FROM reachable r JOIN item_instance i ON i.object_id=r.id WHERE i.item_key=? ORDER BY r.id LIMIT 1", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, chronicle, itemKey);
+    }
+    /** Strip a workable sheet of bark from a tree — a writing surface. Wooded terrain only. */
+    @Transactional
+    public int stripBark(UUID chronicle, UUID location, Instant occurredAt) {
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
+        if (!"TEMPERATE_FOREST".equals(biome)) return 0; // No trees with workable bark here.
+        if (capacityHeadroomUnits(chronicle, "bark_sheet") <= 0) return 0;
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM','Bark sheet',?)", id, chronicle);
+        jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,'bark_sheet','SOUND')", id);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'GATHERED',jsonb_build_object('material','bark_sheet'))", id, Timestamp.from(occurredAt));
+        return 1;
+    }
+    /** Take a piece of charcoal from a spent fire — a writing implement. Requires a built fire pit here. */
+    @Transactional
+    public boolean makeCharcoal(UUID chronicle, UUID location, Instant occurredAt) {
+        Integer pits = jdbc.queryForObject("SELECT COUNT(*) FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='STONE_FIRE_PIT' AND cp.state='COMPLETED'", Integer.class, location);
+        if (pits == null || pits == 0) return false;
+        if (capacityHeadroomUnits(chronicle, "charcoal") <= 0) return false;
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM','Charcoal',?)", id, chronicle);
+        jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,'charcoal','SOUND')", id);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'MADE_CHARCOAL','{}'::jsonb)", id, Timestamp.from(occurredAt));
+        return true;
+    }
     @Transactional(readOnly = true)
     public boolean hasAtLeast(UUID chronicle, String itemKey, int required) {
         Integer count = jdbc.queryForObject("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT COUNT(*) FROM reachable r JOIN item_instance i ON i.object_id=r.id WHERE i.item_key=?", Integer.class, chronicle, itemKey);
