@@ -1,6 +1,7 @@
 package com.devosphere.draugr.persistence;
 
 import com.devosphere.draugr.action.ChronicleActionService;
+import com.devosphere.draugr.audit.PersistentStateAuditor;
 import com.devosphere.draugr.chronicle.ChroniclePhysiologyService;
 import com.devosphere.draugr.chronicle.ChronicleService;
 import com.devosphere.draugr.item.PhysicalItemService;
@@ -23,6 +24,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -82,6 +84,7 @@ class FullTickPlaythroughIntegrationTest {
     @Autowired PhysicalItemService items;
     @Autowired LiteratureService literature;
     @Autowired SimulationTickService ticks;
+    @Autowired PersistentStateAuditor auditor;
     @Autowired JdbcTemplate jdbc;
 
     private UUID livingChronicle() { return chronicles.active().id(); }
@@ -132,6 +135,9 @@ class FullTickPlaythroughIntegrationTest {
                 "SELECT COUNT(*) FROM chronicle c JOIN chronicle_body b ON b.chronicle_id=c.id JOIN chronicle_physiology p ON p.chronicle_id=c.id WHERE c.life_state='LIVING'",
                 Integer.class);
         assertEquals(1, body, "the living Chronicle must retain exactly one body and physiology record");
+
+        PersistentStateAuditor.AuditReport report = auditor.inspect();
+        assertTrue(report.consistent(), () -> "auditor must report a consistent world after the action battery: " + report.violations());
     }
 
     @Test
@@ -194,6 +200,47 @@ class FullTickPlaythroughIntegrationTest {
 
     @Test
     @Order(5)
+    void wildlifeKillHarvestAndCookResolveWithoutSqlErrors() {
+        UUID chronicle = livingChronicle();
+        UUID chunk = chronicles.active().locationId();
+        UUID worldId = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, chunk);
+        Timestamp ts = Timestamp.from(simNow());
+
+        // Seed a wildlife population at the Chronicle's current chunk so combat has a target.
+        UUID siteObj = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE','Deer range',?)", siteObj, chunk);
+        jdbc.update("INSERT INTO ecology_site (id,world_id,chunk_id,site_category,site_kind,baseline_abundance) VALUES (?,?,?,'WILDLIFE','Deer range',700)", siteObj, worldId, chunk);
+        UUID population = UUID.randomUUID();
+        jdbc.update("INSERT INTO wildlife_population (id,site_id,species_key,ecological_role,activity_cycle,population_count,carrying_capacity,behavior_state,last_simulated_at) VALUES (?,?,'red_deer','HERBIVORE','DIURNAL',8,10,'FORAGING',?)", population, siteObj, ts);
+
+        // Combat outcome is deterministic per action id but effectively random across
+        // attempts; each must resolve cleanly whether it flees, injures, or kills.
+        // This exercises the kill path (carcass INSERT + WILDLIFE_KILLED transition)
+        // whenever a strike lands.
+        for (int i = 0; i < 20; i++) {
+            final int n = i;
+            assertDoesNotThrow(() -> actions.resolve("I attack the animal, strike " + n), "a wildlife encounter must resolve without a persistence error");
+        }
+
+        // Guarantee harvest + cook coverage regardless of combat RNG by seeding a
+        // carcass and an active fire at the Chronicle's location.
+        UUID carcass = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CARCASS','Deer carcass',?)", carcass, chunk);
+        jdbc.update("INSERT INTO wildlife_carcass (object_id,source_population_id,species_key,remaining_meat_units,hide_available,killed_by_action_id,died_at) VALUES (?,?,'red_deer',3,true,?,?)", carcass, population, UUID.randomUUID(), ts);
+        UUID pit = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CONSTRUCTION','Stone fire pit',?)", pit, chunk);
+        jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at) VALUES (?,'STONE_FIRE_PIT','COMPLETED',100,?)", pit, ts);
+        jdbc.update("INSERT INTO fire_state (construction_id,active,fuel_minutes,last_updated_at) VALUES (?,true,120,?)", pit, ts);
+
+        ChronicleActionService.ActionResult harvest = assertDoesNotThrow(() -> actions.resolve("I harvest the carcass for meat."), "harvesting a carcass must not raise a persistence error");
+        assertEquals("SUCCEEDED", harvest.outcome(), "harvesting a seeded carcass must succeed");
+        assertDoesNotThrow(() -> actions.resolve("I cook the meat over the fire."), "cooking meat must not raise a persistence error");
+
+        assertTrue(auditor.inspect().consistent(), () -> "auditor must stay consistent after the hunting loop: " + auditor.inspect().violations());
+    }
+
+    @Test
+    @Order(6)
     void lethalStateResolvesDeathWithPossessionRelocationWithoutSqlErrors() {
         UUID chronicle = livingChronicle();
         // Force a lethal condition and let the metabolic pass resolve death. This
@@ -210,5 +257,8 @@ class FullTickPlaythroughIntegrationTest {
         // death location, not deleted, and no longer owned by the dead Chronicle.
         Integer stillOwned = jdbc.queryForObject("SELECT COUNT(*) FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE'", Integer.class, chronicle);
         assertEquals(0, stillOwned, "a dead Chronicle must own no active objects; possessions relocate to the death location");
+
+        PersistentStateAuditor.AuditReport report = auditor.inspect();
+        assertTrue(report.consistent(), () -> "auditor must report a consistent world after death and possession relocation: " + report.violations());
     }
 }
