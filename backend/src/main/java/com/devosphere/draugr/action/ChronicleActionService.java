@@ -138,6 +138,7 @@ public class ChronicleActionService {
         else if (intent == Intent.STRIP_BARK) { int n = items.stripBark(chronicle.id(), chronicle.location(), resolvedAt); outcome = n > 0 ? "SUCCEEDED" : "FAILED"; perception = n > 0 ? "You work a broad strip of bark free from a tree and keep it." : "You look for a tree with workable bark, but find none within reach."; }
         else if (intent == Intent.MAKE_CHARCOAL) { boolean made = items.makeCharcoal(chronicle.id(), chronicle.location(), resolvedAt); outcome = made ? "SUCCEEDED" : "FAILED"; perception = made ? "You lift a piece of cooled charcoal from the spent fire." : "You search for usable charcoal, but the ground offers none."; }
         else if (intent == Intent.WRITE) { String[] r = writeOrDraw(chronicle, text, actionId, resolvedAt); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.SKETCH_MAP) { String[] r = sketchMap(chronicle, text, actionId, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.EQUIP) { String[] r = equipByName(chronicle, text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.UNEQUIP) { String[] r = unequipByName(chronicle, text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.DROP) { String[] r = dropByName(chronicle, text, resolvedAt); outcome = r[0]; perception = r[1]; }
@@ -378,7 +379,7 @@ public class ChronicleActionService {
     private int durationFor(String action, Intent intent) {
         Matcher match = DURATION.matcher(action);
         if (match.find()) { int amount = Integer.parseInt(match.group(1)); int minutes = match.group(2).toLowerCase(Locale.ROOT).startsWith("h") ? amount * 60 : amount; return Math.max(1, Math.min(minutes, 24 * 60)); }
-        return switch (intent) { case OBSERVE -> 10; case REST -> 60; case SLEEP -> 480; case GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES -> 25; case GATHER_CLAY -> 20; case GATHER_STONE_SLAB -> 30; case EAT, DRINK, FEED_FIRE -> 5; case LIGHT_FIRE -> 20; case COOK_MEAT, TREAT_WOUND, CONFRONT_WILDLIFE, HARVEST_CARCASS -> 10; case EDIT_DOCUMENT, WRITE -> 15; case STRIP_BARK -> 15; case MAKE_CHARCOAL -> 10; case CRAFT_BASKET -> 45; case CRAFT_SPEAR -> 35; case CRAFT_FIRE_KIT -> 25; case CRAFT_TINDER -> 10; case CRAFT_DESK -> 60; case CRAFT_CHAIR -> 40; case CRAFT_SHELF -> 50; case BUILD_FIRE_PIT, START_LEAN_TO -> 30; case WORK_LEAN_TO -> 45; case ABANDON_LEAN_TO, RESUME_LEAN_TO -> 5; case MOVE -> 30; case MARK -> 15; case EQUIP, UNEQUIP, DROP -> 5; case DESIGNATE -> 10; case REFINE -> 30; default -> 5; };
+        return switch (intent) { case OBSERVE -> 10; case REST -> 60; case SLEEP -> 480; case GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES -> 25; case GATHER_CLAY -> 20; case GATHER_STONE_SLAB -> 30; case EAT, DRINK, FEED_FIRE -> 5; case LIGHT_FIRE -> 20; case COOK_MEAT, TREAT_WOUND, CONFRONT_WILDLIFE, HARVEST_CARCASS -> 10; case EDIT_DOCUMENT, WRITE -> 15; case SKETCH_MAP -> 30; case STRIP_BARK -> 15; case MAKE_CHARCOAL -> 10; case CRAFT_BASKET -> 45; case CRAFT_SPEAR -> 35; case CRAFT_FIRE_KIT -> 25; case CRAFT_TINDER -> 10; case CRAFT_DESK -> 60; case CRAFT_CHAIR -> 40; case CRAFT_SHELF -> 50; case BUILD_FIRE_PIT, START_LEAN_TO -> 30; case WORK_LEAN_TO -> 45; case ABANDON_LEAN_TO, RESUME_LEAN_TO -> 5; case MOVE -> 30; case MARK -> 15; case EQUIP, UNEQUIP, DROP -> 5; case DESIGNATE -> 10; case REFINE -> 30; default -> 5; };
     }
     private Intent classify(String action) {
         String value=action.toLowerCase(Locale.ROOT);
@@ -405,6 +406,7 @@ public class ChronicleActionService {
         if(value.contains("drop")||value.contains("leave behind")||value.contains("set down")||value.contains("put down")||value.contains("discard")) return Intent.DROP;
         if(value.contains("unequip")||value.contains("take off")||value.contains("remove my")||value.contains("remove the")||value.contains("doff")) return Intent.UNEQUIP;
         if((value.contains("equip")||value.contains("wear")||value.contains("put on")||value.contains("wield")||value.contains("hold my")||value.contains("hold the")||value.contains("carry on my back")||value.contains("sling"))) return Intent.EQUIP;
+        if(!action.contains(":")&&(value.contains("map")||value.contains("chart")||value.contains("cartograph"))&&(value.contains("sketch")||value.contains("draw")||value.contains("make")||value.contains("chart")||value.contains("create")||value.contains("update")||value.contains("plot")||value.contains("survey")||value.contains("map out"))) return Intent.SKETCH_MAP;
         if(action.contains(":")&&(value.contains("write")||value.contains("draw")||value.contains("sketch")||value.contains("record")||value.contains("inscribe")||value.contains("mark ")||value.contains("note"))) return Intent.WRITE;
         return classifyLegacy(action);
     }
@@ -439,6 +441,63 @@ public class ChronicleActionService {
         return new String[]{"SUCCEEDED", kind.equals("MAP") ? "You scratch a rough map onto the surface, marking what you know of the land." : "You press charcoal to the surface and set down your first written words."};
     }
     private boolean referencesExisting(String value) { return value.matches("(?s).*\\b(my|the)\\b.*\\b(journal|record|map|note|book|writing|log|diary|chronicle)\\b.*"); }
+    /**
+     * Draw a map from the chronicle's own geographic knowledge, rather than from a
+     * layout the player supplied. Fidelity follows real cartography: a well-travelled
+     * hand who has memorized and marked places, and revised the map before, produces
+     * something close to true; a newcomer working from vague memory produces a rough,
+     * error-prone sketch. A player who instead types their own map layout after a
+     * colon takes the WRITE path and it is recorded verbatim — their own survey work.
+     */
+    private String[] sketchMap(ActiveChronicle chronicle, String text, UUID actionId, Instant at) {
+        if (!items.hasAtLeast(chronicle.id(), "charcoal", 1)) return new String[]{"FAILED", "Without anything to draw with, the map stays only in your mind."};
+        String value = text.toLowerCase(Locale.ROOT);
+        UUID existing = literature.reachableDocumentOfKind(chronicle.id(), "MAP");
+        boolean update = existing != null && (value.contains("update") || value.contains("revise") || value.contains("improve") || referencesExisting(value));
+        int priorRevisions = 0;
+        if (update) { Integer rc = jdbc.queryForObject("SELECT COALESCE(r.revision_number,0) FROM literature_document d LEFT JOIN literature_revision r ON r.id=d.current_revision_id WHERE d.object_id=?", Integer.class, existing); priorRevisions = rc == null ? 0 : rc; }
+        String content = generateMapSketch(chronicle, actionId, Math.min(0.4, priorRevisions * 0.08));
+        if (update) { literature.revise(existing, chronicle.id(), actionId, at, LiteratureService.Edit.REPLACE, content, null); return new String[]{"SUCCEEDED", "You work over your map again, correcting a line here, placing a name there. Each pass makes it a little truer."}; }
+        UUID surface = items.findReachable(chronicle.id(), "bark_sheet");
+        if (surface == null) surface = items.findReachable(chronicle.id(), "animal_hide");
+        if (surface == null) surface = items.findReachable(chronicle.id(), "stone_slab");
+        if (surface == null) return new String[]{"FAILED", "You have nothing suitable to draw a map on, and the charcoal marks only your fingers."};
+        literature.createFromSurface(surface, chronicle.id(), actionId, at, "MAP", "Hand-drawn map", content);
+        return new String[]{"SUCCEEDED", "You set down a map of the country you have walked, drawn as clearly as memory allows."};
+    }
+    private String generateMapSketch(ActiveChronicle chronicle, UUID actionId, double revisionBonus) {
+        java.util.List<java.util.Map<String,Object>> places = jdbc.queryForList("SELECT nl.name, nl.memorized, c.grid_x, c.grid_y, (SELECT COUNT(*) FROM location_marker m WHERE m.chunk_id=nl.chunk_id) AS markers, COALESCE((SELECT visit_count FROM chronicle_chunk_visit v WHERE v.chronicle_id=nl.chronicle_id AND v.chunk_id=nl.chunk_id),0) AS visits FROM chronicle_named_location nl JOIN world_chunk c ON c.id=nl.chunk_id WHERE nl.chronicle_id=?", chronicle.id());
+        if (places.isEmpty()) return "A few uncertain strokes cross the surface, but you have named and fixed too few places to draw a map worth the name.";
+        double drawing = capability.familiarity(chronicle.id(), "FINE_MOTOR");
+        long solid = places.stream().filter(p -> Boolean.TRUE.equals(p.get("memorized")) || ((Number)p.get("markers")).intValue() > 0).count();
+        double dataQuality = (double) solid / places.size();
+        double breadth = Math.min(1.0, places.size() / 8.0);
+        double accuracy = Math.max(0.15, Math.min(0.95, 0.20 + dataQuality * 0.40 + breadth * 0.15 + drawing * 3.0 + revisionBonus));
+        java.util.Map<String,Object> anchor = places.stream().max(java.util.Comparator.comparingInt(p -> ((Number)p.get("visits")).intValue())).orElse(places.get(0));
+        int ax = (int) anchor.get("grid_x"), ay = (int) anchor.get("grid_y"); String anchorName = (String) anchor.get("name");
+        StringBuilder b = new StringBuilder("Map sketch, centred on ").append(anchorName).append(".\n");
+        java.util.Random rnd = new java.util.Random(actionId.getMostSignificantBits() ^ actionId.getLeastSignificantBits());
+        for (java.util.Map<String,Object> p : places) {
+            String name = (String) p.get("name");
+            if (name.equals(anchorName)) { b.append("- ").append(name).append(" (centre)\n"); continue; }
+            int dx = (int) p.get("grid_x") - ax, dy = (int) p.get("grid_y") - ay;
+            int dist = Math.max(Math.abs(dx), Math.abs(dy));
+            String dir = compass(dx, dy);
+            if (rnd.nextDouble() > accuracy) { // the chronicle's memory of this place is imperfect
+                double e = rnd.nextDouble();
+                if (e < 0.30) continue; // forgotten off the map entirely
+                else if (e < 0.65) b.append("- ").append(name).append(": roughly ").append(rotateCompass(dir, rnd.nextBoolean())).append(", perhaps ").append(Math.max(1, dist + rnd.nextInt(3) - 1)).append(" off (unsure)\n");
+                else b.append("- ").append(name).append(": somewhere ").append(dir).append(" (position uncertain)\n");
+            } else {
+                b.append("- ").append(name).append(": ").append(dir).append(", about ").append(dist).append(" off\n");
+            }
+        }
+        b.append(accuracy >= 0.75 ? "The proportions feel true; this is a map you could set your course by." : accuracy >= 0.45 ? "Some of it is guesswork, but the shape of the land is here." : "Much of this is uncertain — a rough impression more than a faithful record.");
+        return b.toString();
+    }
+    /** Eight-point compass from a grid offset; grid y increases southward. */
+    private String compass(int dx, int dy) { String ns = dy < 0 ? "north" : dy > 0 ? "south" : ""; String ew = dx > 0 ? "east" : dx < 0 ? "west" : ""; String c = ns + ew; return c.isEmpty() ? "at the centre" : c; }
+    private String rotateCompass(String dir, boolean clockwise) { String[] ring = {"north","northeast","east","southeast","south","southwest","west","northwest"}; for (int i=0;i<ring.length;i++) if (ring[i].equals(dir)) return ring[(i + (clockwise?1:ring.length-1)) % ring.length]; return dir; }
     private String[] equipByName(ActiveChronicle chronicle, String text, Instant at) {
         java.util.List<java.util.Map<String,Object>> candidates = jdbc.queryForList("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT w.id,w.display_name,c.body_position,c.layer FROM reachable r JOIN world_object w ON w.id=r.id JOIN item_instance i ON i.object_id=w.id JOIN item_equipment_compatibility c ON c.item_key=i.item_key LEFT JOIN equipment_attachment e ON e.item_id=w.id WHERE e.item_id IS NULL ORDER BY w.display_name", chronicle.id());
         if (candidates.isEmpty()) return new String[]{"FAILED","You have nothing unequipped that can be worn or wielded."};
@@ -484,7 +543,7 @@ public class ChronicleActionService {
     private String baseName(String displayName) { return displayName.replaceAll("(?i)\\s+Revision\\s+[IVXLC0-9]+$", "").trim(); }
     private String toRoman(int n) { if(n<=0) return String.valueOf(n); int[] v={100,90,50,40,10,9,5,4,1}; String[] s={"C","XC","L","XL","X","IX","V","IV","I"}; StringBuilder b=new StringBuilder(); for(int i=0;i<v.length;i++) while(n>=v[i]){b.append(s[i]);n-=v[i];} return b.toString(); }
     private void reviseDocument(UUID chronicleId, UUID actionId, Instant resolvedAt, String text) { Matcher match=DOCUMENT_EDIT.matcher(text); if(!match.matches()) throw new IllegalArgumentException("Unrecognized document edit."); UUID documentId=UUID.fromString(match.group(2)); LiteratureService.Edit edit="append".equalsIgnoreCase(match.group(1))?LiteratureService.Edit.APPEND:LiteratureService.Edit.REPLACE; if(!literature.documentReachable(documentId,chronicleId)) throw new IllegalArgumentException("The document is not physically reachable."); literature.revise(documentId,chronicleId,actionId,resolvedAt,edit,match.group(3),null); }
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, EAT, DRINK, WASH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, BUILD_FIRE_PIT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, EQUIP, UNEQUIP, DROP, DESIGNATE, REFINE, URINATE, DEFECATE, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, SKETCH_MAP, EAT, DRINK, WASH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, BUILD_FIRE_PIT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, EQUIP, UNEQUIP, DROP, DESIGNATE, REFINE, URINATE, DEFECATE, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;} }
     public record ActionResult(UUID actionId, String intent, String outcome, int durationMinutes, Instant resolvedAt, String perception, ChroniclePhysiologyService.BodyHudSnapshot body) { }
     public record NarrationEntry(UUID id, Instant occurredAt, String narration) { }
