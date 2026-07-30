@@ -127,6 +127,9 @@ public class PhysicalItemService {
         jdbc.update("INSERT INTO container_properties (object_id,max_mass_grams,max_volume_ml) VALUES (?,12000,18000)",basket);
         for(UUID material:fiber.subList(0,8)) { retire(material,now,"CONSUMED_FOR_CRAFTING","plant_fiber"); }
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CRAFTED',jsonb_build_object('recipe','woven_basket'))",basket,Timestamp.from(now));
+        // Equip to BACK immediately — a basket is worn, not clutched. Falls back to carried if BACK is occupied.
+        boolean backFree = jdbc.queryForObject("SELECT COUNT(*)=0 FROM equipment_attachment WHERE chronicle_id=? AND body_position='BACK'", Boolean.class, chronicle);
+        if (Boolean.TRUE.equals(backFree)) { jdbc.update("INSERT INTO equipment_attachment (item_id,chronicle_id,body_position,layer) VALUES (?,?,'BACK','CARRIED')",basket,chronicle); jdbc.update("UPDATE world_object SET current_owner_id=? WHERE id=?",chronicle,basket); }
         assertCarryCapacity(chronicle);
         return new ItemView(basket,"Woven basket","woven_basket",chronicle,null);
     }
