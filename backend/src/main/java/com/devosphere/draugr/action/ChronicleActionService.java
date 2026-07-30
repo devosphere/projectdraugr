@@ -95,6 +95,9 @@ public class ChronicleActionService {
         else if (intent == Intent.STRIP_BARK) { int n = items.stripBark(chronicle.id(), chronicle.location(), resolvedAt); outcome = n > 0 ? "SUCCEEDED" : "FAILED"; perception = n > 0 ? "You work a broad strip of bark free from a tree and keep it." : "You look for a tree with workable bark, but find none within reach."; }
         else if (intent == Intent.MAKE_CHARCOAL) { boolean made = items.makeCharcoal(chronicle.id(), chronicle.location(), resolvedAt); outcome = made ? "SUCCEEDED" : "FAILED"; perception = made ? "You lift a piece of cooled charcoal from the spent fire." : "You search for usable charcoal, but the ground offers none."; }
         else if (intent == Intent.WRITE) { String[] r = writeOrDraw(chronicle, text, actionId, resolvedAt); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.EQUIP) { String[] r = equipByName(chronicle, text, resolvedAt); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.UNEQUIP) { String[] r = unequipByName(chronicle, text, resolvedAt); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.DROP) { String[] r = dropByName(chronicle, text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else { outcome = "FAILED"; perception = "The attempt passes without changing the immediate world around you."; }
         jdbc.update("INSERT INTO chronicle_action (id, chronicle_id, resolved_at, action_text, intent_type, outcome, duration_minutes, narration, idempotency_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", actionId, chronicle.id(), resolvedTs, text.trim(), intent.name(), outcome, minutes, perception, idempotencyKey);
         jdbc.update("INSERT INTO chronicle_action_effect (action_id, effect_domain, effect_type, payload) VALUES (?, 'TIME', 'TIME_ADVANCED', jsonb_build_object('minutes', ?))", actionId, minutes);
@@ -134,7 +137,7 @@ public class ChronicleActionService {
     private int durationFor(String action, Intent intent) {
         Matcher match = DURATION.matcher(action);
         if (match.find()) { int amount = Integer.parseInt(match.group(1)); int minutes = match.group(2).toLowerCase(Locale.ROOT).startsWith("h") ? amount * 60 : amount; return Math.max(1, Math.min(minutes, 24 * 60)); }
-        return switch (intent) { case OBSERVE -> 10; case REST -> 60; case GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES -> 25; case EAT, DRINK, LIGHT_FIRE, FEED_FIRE -> 5; case COOK_MEAT, TREAT_WOUND, CONFRONT_WILDLIFE, HARVEST_CARCASS -> 10; case EDIT_DOCUMENT, WRITE -> 15; case STRIP_BARK -> 15; case MAKE_CHARCOAL -> 10; case CRAFT_BASKET -> 45; case CRAFT_SPEAR -> 35; case BUILD_FIRE_PIT, START_LEAN_TO -> 30; case WORK_LEAN_TO -> 45; case ABANDON_LEAN_TO, RESUME_LEAN_TO -> 5; case MOVE -> 30; default -> 5; };
+        return switch (intent) { case OBSERVE -> 10; case REST -> 60; case GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES -> 25; case EAT, DRINK, LIGHT_FIRE, FEED_FIRE -> 5; case COOK_MEAT, TREAT_WOUND, CONFRONT_WILDLIFE, HARVEST_CARCASS -> 10; case EDIT_DOCUMENT, WRITE -> 15; case STRIP_BARK -> 15; case MAKE_CHARCOAL -> 10; case CRAFT_BASKET -> 45; case CRAFT_SPEAR -> 35; case BUILD_FIRE_PIT, START_LEAN_TO -> 30; case WORK_LEAN_TO -> 45; case ABANDON_LEAN_TO, RESUME_LEAN_TO -> 5; case MOVE -> 30; case EQUIP, UNEQUIP, DROP -> 5; default -> 5; };
     }
     private Intent classify(String action) {
         String value=action.toLowerCase(Locale.ROOT);
@@ -147,6 +150,9 @@ public class ChronicleActionService {
         if(value.contains("wash")||value.contains("bathe")||value.contains("clean myself")) return Intent.WASH;
         if(value.contains("charcoal")&&(value.contains("make")||value.contains("take")||value.contains("gather")||value.contains("get")||value.contains("collect"))) return Intent.MAKE_CHARCOAL;
         if(value.contains("bark")&&(value.contains("strip")||value.contains("peel")||value.contains("gather")||value.contains("cut")||value.contains("collect")||value.contains("pull"))) return Intent.STRIP_BARK;
+        if(value.contains("drop")||value.contains("leave behind")||value.contains("set down")||value.contains("put down")||value.contains("discard")) return Intent.DROP;
+        if(value.contains("unequip")||value.contains("take off")||value.contains("remove my")||value.contains("remove the")||value.contains("doff")) return Intent.UNEQUIP;
+        if((value.contains("equip")||value.contains("wear")||value.contains("put on")||value.contains("wield")||value.contains("hold my")||value.contains("hold the")||value.contains("carry on my back")||value.contains("sling"))) return Intent.EQUIP;
         if(action.contains(":")&&(value.contains("write")||value.contains("draw")||value.contains("sketch")||value.contains("record")||value.contains("inscribe")||value.contains("mark ")||value.contains("note"))) return Intent.WRITE;
         return classifyLegacy(action);
     }
@@ -176,8 +182,35 @@ public class ChronicleActionService {
         return new String[]{"SUCCEEDED", kind.equals("MAP") ? "You scratch a rough map onto the surface, marking what you know of the land." : "You press charcoal to the surface and set down your first written words."};
     }
     private boolean referencesExisting(String value) { return value.matches("(?s).*\\b(my|the)\\b.*\\b(journal|record|map|note|book|writing|log|diary|chronicle)\\b.*"); }
+    private String[] equipByName(ActiveChronicle chronicle, String text, Instant at) {
+        java.util.List<java.util.Map<String,Object>> candidates = jdbc.queryForList("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT w.id,w.display_name,c.body_position,c.layer FROM reachable r JOIN world_object w ON w.id=r.id JOIN item_instance i ON i.object_id=w.id JOIN item_equipment_compatibility c ON c.item_key=i.item_key LEFT JOIN equipment_attachment e ON e.item_id=w.id WHERE e.item_id IS NULL ORDER BY w.display_name", chronicle.id());
+        if (candidates.isEmpty()) return new String[]{"FAILED","You have nothing unequipped that can be worn or wielded."};
+        String lower = text.toLowerCase(Locale.ROOT);
+        var match = candidates.stream().filter(c->lower.contains(((String)c.get("display_name")).toLowerCase(Locale.ROOT))).findFirst().orElse(candidates.get(0));
+        UUID item = (UUID) match.get("id"); String pos = (String) match.get("body_position"); String layer = (String) match.get("layer");
+        try { items.equip(item, pos, layer); return new String[]{"SUCCEEDED","You settle the "+match.get("display_name")+" into place."}; }
+        catch (Exception e) { return new String[]{"FAILED","The "+match.get("display_name")+" cannot be fitted there — something else is already in the way."}; }
+    }
+    private String[] unequipByName(ActiveChronicle chronicle, String text, Instant at) {
+        java.util.List<java.util.Map<String,Object>> equipped = jdbc.queryForList("SELECT w.id,w.display_name FROM equipment_attachment e JOIN world_object w ON w.id=e.item_id WHERE e.chronicle_id=? AND w.lifecycle_state='ACTIVE'", chronicle.id());
+        if (equipped.isEmpty()) return new String[]{"FAILED","You have nothing equipped to remove."};
+        String lower = text.toLowerCase(Locale.ROOT);
+        var match = equipped.stream().filter(r->lower.contains(((String)r.get("display_name")).toLowerCase(Locale.ROOT))).findFirst().orElse(null);
+        if (match == null) return new String[]{"FAILED","You are not wearing or holding anything by that name."};
+        boolean done = items.unequip((UUID)match.get("id"), at);
+        return done ? new String[]{"SUCCEEDED","You remove the "+match.get("display_name")+" and hold it."} : new String[]{"FAILED","The "+match.get("display_name")+" cannot be removed right now."};
+    }
+    private String[] dropByName(ActiveChronicle chronicle, String text, Instant at) {
+        java.util.List<java.util.Map<String,Object>> carried = jdbc.queryForList("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT w.id,w.display_name FROM reachable r JOIN world_object w ON w.id=r.id JOIN item_instance i ON i.object_id=w.id ORDER BY w.display_name", chronicle.id());
+        if (carried.isEmpty()) return new String[]{"FAILED","You are not carrying anything to leave behind."};
+        String lower = text.toLowerCase(Locale.ROOT);
+        var match = carried.stream().filter(r->lower.contains(((String)r.get("display_name")).toLowerCase(Locale.ROOT))).findFirst().orElse(null);
+        if (match == null) return new String[]{"FAILED","You are not carrying anything by that name."};
+        items.drop((UUID)match.get("id"), chronicle.location(), at);
+        return new String[]{"SUCCEEDED","You set the "+match.get("display_name")+" down and leave it where it lies."};
+    }
     private void reviseDocument(UUID chronicleId, UUID actionId, Instant resolvedAt, String text) { Matcher match=DOCUMENT_EDIT.matcher(text); if(!match.matches()) throw new IllegalArgumentException("Unrecognized document edit."); UUID documentId=UUID.fromString(match.group(2)); LiteratureService.Edit edit="append".equalsIgnoreCase(match.group(1))?LiteratureService.Edit.APPEND:LiteratureService.Edit.REPLACE; if(!literature.documentReachable(documentId,chronicleId)) throw new IllegalArgumentException("The document is not physically reachable."); literature.revise(documentId,chronicleId,actionId,resolvedAt,edit,match.group(3),null); }
-    private record ActiveChronicle(UUID id, UUID location) { } private enum Intent { OBSERVE, MOVE, REST, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, EAT, DRINK, WASH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, BUILD_FIRE_PIT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, URINATE, DEFECATE, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private enum Intent { OBSERVE, MOVE, REST, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, EAT, DRINK, WASH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, BUILD_FIRE_PIT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, EQUIP, UNEQUIP, DROP, URINATE, DEFECATE, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;} }
     public record ActionResult(UUID actionId, String intent, String outcome, int durationMinutes, Instant resolvedAt, String perception, ChroniclePhysiologyService.BodyHudSnapshot body) { }
     public record NarrationEntry(UUID id, Instant occurredAt, String narration) { }

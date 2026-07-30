@@ -156,6 +156,26 @@ public class PhysicalItemService {
         assertCarryCapacity(chronicle);
         jdbc.update("INSERT INTO object_transition (object_id,transition_type,to_attachment,payload) VALUES (?,'EQUIPPED',?, '{}'::jsonb)",item,position+":"+layer);
     }
+    @Transactional
+    public boolean unequip(UUID item, Instant occurredAt) {
+        UUID chronicle = activeChronicle(); assertAccessible(item, chronicle);
+        Integer equipped = jdbc.queryForObject("SELECT COUNT(*) FROM equipment_attachment WHERE item_id=?", Integer.class, item);
+        if (equipped == null || equipped == 0) return false;
+        jdbc.update("DELETE FROM equipment_attachment WHERE item_id=?", item);
+        jdbc.update("UPDATE world_object SET current_owner_id=? WHERE id=?", chronicle, item);
+        assertCarryCapacity(chronicle);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'UNEQUIPPED','{}'::jsonb)", item, Timestamp.from(occurredAt));
+        return true;
+    }
+    @Transactional
+    public boolean drop(UUID item, UUID location, Instant occurredAt) {
+        UUID chronicle = activeChronicle(); assertAccessible(item, chronicle);
+        jdbc.update("DELETE FROM equipment_attachment WHERE item_id=?", item);
+        jdbc.update("DELETE FROM item_containment WHERE item_id=?", item);
+        jdbc.update("UPDATE world_object SET current_owner_id=NULL,current_location_id=? WHERE id=?", location, item);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'DROPPED',jsonb_build_object('locationId',?::text))", item, Timestamp.from(occurredAt), location.toString());
+        return true;
+    }
     /** Retires a physical item without deleting its identity or immutable transition history. */
     @Transactional
     public void retire(UUID item, Instant occurredAt, String transitionType, String itemKey) {
