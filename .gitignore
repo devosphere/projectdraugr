@@ -4,3 +4,4 @@ world-exports/
 backups/
 .draugr-runtime.json
 .claude/settings.local.json
+.app-profile/
