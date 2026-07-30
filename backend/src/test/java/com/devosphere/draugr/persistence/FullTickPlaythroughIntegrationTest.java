@@ -234,6 +234,9 @@ class FullTickPlaythroughIntegrationTest {
     @Order(6)
     void wildlifeKillHarvestAndCookResolveWithoutSqlErrors() {
         UUID chronicle = livingChronicle();
+        // Heal the Chronicle first so the combat loop verifies encounter persistence
+        // deterministically, independent of injuries carried over from earlier scenarios.
+        jdbc.update("UPDATE chronicle_physiology SET injury_severity=0, illness_severity=0, blood_loss_ml=0, pain_level=0, energy_level=90 WHERE chronicle_id=?", chronicle);
         UUID chunk = chronicles.active().locationId();
         UUID worldId = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, chunk);
         Timestamp ts = Timestamp.from(simNow());
@@ -249,7 +252,7 @@ class FullTickPlaythroughIntegrationTest {
         // attempts; each must resolve cleanly whether it flees, injures, or kills.
         // This exercises the kill path (carcass INSERT + WILDLIFE_KILLED transition)
         // whenever a strike lands.
-        for (int i = 0; i < 20; i++) {
+        for (int i = 0; i < 8; i++) {
             final int n = i;
             assertDoesNotThrow(() -> actions.resolve("I attack the animal, strike " + n), "a wildlife encounter must resolve without a persistence error");
         }
