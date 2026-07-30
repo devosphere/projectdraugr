@@ -31,7 +31,9 @@ public class PhysicalItemService {
     public int gatherPlantFiber(UUID chronicle, UUID location, Instant occurredAt) {
         String biome=jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?",String.class,location);
         if ("OCEAN".equals(biome) || "MOUNTAIN".equals(biome)) return 0; // No suitable fiber here; resolves as a graceful empty-handed attempt.
-        int count=resources.take(location,"plant_fiber","WETLAND".equals(biome)?3:2,occurredAt);
+        int desired=Math.min("WETLAND".equals(biome)?3:2, capacityHeadroomUnits(chronicle,"plant_fiber"));
+        if(desired<=0) return 0; // The Chronicle cannot carry any more; a graceful empty-handed attempt.
+        int count=resources.take(location,"plant_fiber",desired,occurredAt);
         for(int i=0;i<count;i++){UUID id=UUID.randomUUID();jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM','Plant fiber bundle',?)",id,chronicle);jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,'plant_fiber','SOUND')",id);jdbc.update("INSERT INTO object_transition (object_id,transition_type,payload) VALUES (?,'GATHERED',jsonb_build_object('biome',?))",id,biome);}
         assertCarryCapacity(chronicle);
         return count;
@@ -40,7 +42,9 @@ public class PhysicalItemService {
     public int gatherFieldStones(UUID chronicle, UUID location, Instant occurredAt) {
         String biome=jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?",String.class,location);
         if ("OCEAN".equals(biome)) return 0; // No loose stone here; resolves as a graceful empty-handed attempt.
-        int count=resources.take(location,"field_stone","MOUNTAIN".equals(biome) || "HIGHLAND".equals(biome) ? 3 : 2,occurredAt);
+        int desired=Math.min("MOUNTAIN".equals(biome) || "HIGHLAND".equals(biome) ? 3 : 2, capacityHeadroomUnits(chronicle,"field_stone"));
+        if(desired<=0) return 0; // The Chronicle cannot carry any more; a graceful empty-handed attempt.
+        int count=resources.take(location,"field_stone",desired,occurredAt);
         for(int i=0;i<count;i++){UUID id=UUID.randomUUID();jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM','Field stone',?)",id,chronicle);jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,'field_stone','SOUND')",id);jdbc.update("INSERT INTO object_transition (object_id,transition_type,payload) VALUES (?,'GATHERED',jsonb_build_object('biome',?))",id,biome);}
         assertCarryCapacity(chronicle);
         return count;
@@ -49,14 +53,18 @@ public class PhysicalItemService {
     public int gatherWildBerries(UUID chronicle, UUID location, Instant occurredAt) {
         String biome=jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?",String.class,location);
         if ("MOUNTAIN".equals(biome) || "OCEAN".equals(biome)) return 0; // No edible growth here; resolves as a graceful empty-handed attempt.
-        int count=resources.take(location,"wild_berries","WETLAND".equals(biome)?3:2,occurredAt);
+        int desired=Math.min("WETLAND".equals(biome)?3:2, capacityHeadroomUnits(chronicle,"wild_berries"));
+        if(desired<=0) return 0; // The Chronicle cannot carry any more; a graceful empty-handed attempt.
+        int count=resources.take(location,"wild_berries",desired,occurredAt);
         for(int i=0;i<count;i++){UUID id=UUID.randomUUID();jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM','Wild berries',?)",id,chronicle);jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,'wild_berries','SOUND')",id);jdbc.update("INSERT INTO object_transition (object_id,transition_type,payload) VALUES (?,'GATHERED',jsonb_build_object('biome',?))",id,biome);} assertCarryCapacity(chronicle); return count;
     }
     @Transactional
     public int gatherDryBranches(UUID chronicle, UUID location, Instant occurredAt) {
         String biome=jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?",String.class,location);
         if ("OCEAN".equals(biome)) return 0; // No branches here; resolves as a graceful empty-handed attempt.
-        int count=resources.take(location,"dry_branch","MOUNTAIN".equals(biome)?1:2,occurredAt);
+        int desired=Math.min("MOUNTAIN".equals(biome)?1:2, capacityHeadroomUnits(chronicle,"dry_branch"));
+        if(desired<=0) return 0; // The Chronicle cannot carry any more; a graceful empty-handed attempt.
+        int count=resources.take(location,"dry_branch",desired,occurredAt);
         for(int i=0;i<count;i++){UUID id=UUID.randomUUID();jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM','Dry branch',?)",id,chronicle);jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,'dry_branch','SOUND')",id);jdbc.update("INSERT INTO object_transition (object_id,transition_type,payload) VALUES (?,'GATHERED','{}'::jsonb)",id);} assertCarryCapacity(chronicle); return count;
     }
     @Transactional
@@ -127,6 +135,20 @@ public class PhysicalItemService {
     }
     private UUID activeChronicle(){ UUID id=jdbc.query("SELECT id FROM chronicle WHERE life_state='LIVING'",rs->rs.next()?rs.getObject(1,UUID.class):null); if(id==null) throw new IllegalStateException("No living Chronicle exists."); return id; }
     private void assertAccessible(UUID item,UUID chronicle){ Integer present=jdbc.queryForObject("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT COUNT(*) FROM reachable WHERE id=?",Integer.class,chronicle,item); if(present==null||present==0) throw new IllegalArgumentException("The item is not physically reachable by the Chronicle."); }
+    /**
+     * How many additional units of an item the Chronicle can still physically carry,
+     * from remaining mass and bulk headroom (0 if a single unit exceeds the lift limit).
+     * Lets gathering take only what fits instead of failing the whole attempt.
+     */
+    private int capacityHeadroomUnits(UUID chronicle, String itemKey) {
+        LoadState s = loadState(chronicle);
+        int[] dims = jdbc.query("SELECT unit_mass_grams,unit_volume_ml FROM item_definition WHERE item_key=?", rs -> rs.next() ? new int[]{rs.getInt(1), rs.getInt(2)} : new int[]{0, 0}, itemKey);
+        int unitMass = dims[0], unitVol = dims[1];
+        if (unitMass > 0 && unitMass > s.maximumSingleLiftGrams()) return 0;
+        int byMass = unitMass > 0 ? Math.max(0, (s.sustainedMassCapacityGrams() - s.massGrams()) / unitMass) : Integer.MAX_VALUE;
+        int byVolume = unitVol > 0 ? Math.max(0, (s.directBulkCapacityMl() - s.bulkMl()) / unitVol) : Integer.MAX_VALUE;
+        return Math.max(0, Math.min(byMass, byVolume));
+    }
     private void assertCarryCapacity(UUID chronicle) {
         LoadState state=loadState(chronicle); Capacity cap=new Capacity(state.sustainedMassCapacityGrams(),state.directBulkCapacityMl(),state.maximumSingleLiftGrams()); Load load=new Load(state.massGrams(),state.bulkMl(),state.heaviestObjectGrams());
         if(load.mass()>cap.mass()||load.volume()>cap.volume()||load.largest()>cap.singleLift()) throw new IllegalStateException("The Chronicle cannot physically carry that load.");
