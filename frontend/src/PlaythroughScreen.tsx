@@ -16,6 +16,8 @@ type EnvironmentSnapshot = { simulatedAt: string; weatherKind: string; ambientTe
 type ItemState = { carried: { id: string; displayName: string; itemKey: string; containerId: string | null }[]; equipped: { id: string; displayName: string; bodyPosition: string; layer: string }[]; load: { massGrams: number; bulkMl: number; heaviestObjectGrams: number; sustainedMassCapacityGrams: number; directBulkCapacityMl: number; maximumSingleLiftGrams: number }; containers: { id: string; displayName: string; maxMassGrams: number; maxVolumeMl: number; usedMassGrams: number; usedVolumeMl: number }[] };
 type Panel = 'none' | 'chronicle' | 'equipment' | 'load' | 'storage' | 'crafting' | 'construction' | 'knowledge' | 'map' | 'literature';
 type ReaderDocument = 'field-journal' | 'folded-letter';
+type LiteratureDoc = { id: string; kind: string; title: string; revisionId: string | null; revisionNumber: number };
+type LiteratureRevision = { id: string; kind: string; title: string; revisionId: string; revisionNumber: number; content: string; createdAt: string };
 type NarrationEntry = { id: string; text: string; occurredAt?: string };
 type NarrationPage = { entries: { id: string; occurredAt: string; narration: string }[]; hasMore: boolean };
 type DiscoveryContext = { discoveries: string[]; constructions: { id: string; displayName: string; projectKind: string; state: string; progressPercent: number }[] };
@@ -89,6 +91,8 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
   const [bodyOpen, setBodyOpen] = useState(false);
   const [mapOverlay, setMapOverlay] = useState(false);
   const [readerDocument, setReaderDocument] = useState<ReaderDocument | null>(null);
+  const [documents, setDocuments] = useState<LiteratureDoc[]>([]);
+  const [openDoc, setOpenDoc] = useState<LiteratureRevision | null>(null);
   const [items, setItems] = useState<ItemState | null>(null);
   const [discoveries, setDiscoveries] = useState<DiscoveryContext | null>(null);
   const actionField = useRef<HTMLTextAreaElement>(null);
@@ -134,6 +138,20 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
   }, [apiUrl]);
 
   useEffect(() => {
+    if (!apiUrl) return;
+    fetch(`${apiUrl}/api/literature`).then(response => response.ok ? response.json() : null).then((docs: LiteratureDoc[] | null) => setDocuments(docs ?? [])).catch(() => undefined);
+  }, [apiUrl]);
+
+  async function openDocument(id: string) {
+    if (!apiUrl) return;
+    try {
+      const response = await fetch(`${apiUrl}/api/literature/${id}`);
+      const revision = response.ok ? await response.json() as LiteratureRevision : null;
+      if (revision) setOpenDoc(revision);
+    } catch { /* a document briefly out of reach simply does not open */ }
+  }
+
+  useEffect(() => {
     const key = (event: KeyboardEvent) => { if (event.target instanceof HTMLTextAreaElement) return; const next: Record<string, Panel> = { c: 'chronicle', e: 'equipment', i: 'storage', k: 'knowledge', m: 'map' }; if (next[event.key.toLowerCase()]) setPanel(next[event.key.toLowerCase()]); };
     window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key);
   }, []);
@@ -173,6 +191,7 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
       }).catch(() => undefined);
       fetch(`${apiUrl}/api/chronicles/active/discoveries`).then(response => response.ok ? response.json() : null).then((context: DiscoveryContext | null) => setDiscoveries(context)).catch(() => undefined);
       fetch(`${apiUrl}/api/items/state`).then(response => response.ok ? response.json() : null).then((snapshot: ItemState | null) => setItems(snapshot)).catch(() => setItems(null));
+      fetch(`${apiUrl}/api/literature`).then(response => response.ok ? response.json() : null).then((docs: LiteratureDoc[] | null) => setDocuments(docs ?? [])).catch(() => undefined);
       fetch(`${apiUrl}/api/chronicles/active/environment`).then(response => response.ok ? response.json() : null).then((snapshot: EnvironmentSnapshot | null) => { if (snapshot) { const hour=new Date(snapshot.simulatedAt).getUTCHours(); setEnvironment({ time: hour < 6 ? 'Before dawn' : hour < 12 ? 'Morning' : hour < 18 ? 'Afternoon' : 'Night', weather: snapshot.weatherKind.toLowerCase().replace(/^./, letter => letter.toUpperCase()), season: `${seasonAt(snapshot.simulatedAt)} · ${Math.round(snapshot.ambientTemperatureC ?? 18)}°C · ${snapshot.windSpeedKph ?? 0} kph wind` }); } }).catch(() => undefined);
       setAction('');
     } catch (error) {
@@ -244,12 +263,13 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
         {panel==='crafting' && <><h2>Crafting</h2>{prototypeMode ? <><div className="record"><strong>Woven basket</strong><span>Known through practice</span><span>Current materials · plant fiber bundles</span></div><div className="record"><strong>Primitive fire</strong><span>Established method</span></div></> : discoveries?.discoveries.filter(item => item==='WOVEN_BASKET').map(item => <div className="record" key={item}><strong>Woven basket</strong><span>Known through practice</span></div>)}<p className="perception-note">Reference only. Declare all attempts in the Action Composer.</p></>}
         {panel==='construction' && <><h2>Construction</h2>{prototypeMode ? <div className="record"><strong>Stone fire pit</strong><span>Understood</span><span>Current ground · forest clearing</span></div> : discoveries?.constructions.map(project => <div className="record" key={project.id}><strong>{project.displayName}</strong><span>{project.state.toLowerCase()} · {project.progressPercent}% complete</span></div>)}<p className="perception-note">Reference only. Declare all attempts in the Action Composer.</p></>}
         {panel==='knowledge' && <><h2>Knowledge</h2>{prototypeMode ? <><div className="record"><strong>Plant fiber</strong><span>Workable material</span></div><div className="record"><strong>Fire tending</strong><span>Observed</span></div><div className="record"><strong>Forest water</strong><span>Unverified</span></div></> : discoveries?.discoveries.map(item => <div className="record" key={item}><strong>{item === 'WOVEN_BASKET' ? 'Woven basket' : item === 'STONE_FIRE_PIT' ? 'Stone fire pit' : item}</strong><span>Established through practice</span></div>)}</>}
-        {panel==='map' && <><h2>Chronicle Map</h2><button className="map-list-entry" onClick={() => setMapOverlay(true)}>Hand-drawn forest sketch <span>carried in woven basket</span></button><p className="perception-note">Only physical maps within reach are shown.</p></>}
-        {panel==='literature' && <><h2>Literature</h2><button className="map-list-entry" onClick={() => setReaderDocument('field-journal')}><strong>Weather-worn field journal</strong><span>Carried in woven basket · Revision 3</span></button><button className="map-list-entry" onClick={() => setReaderDocument('folded-letter')}><strong>Folded letter</strong><span>Carried in woven basket · Revision 1</span></button><p className="perception-note">Only readable objects within reach are shown. Maps remain in Chronicle Map.</p></>}
+        {panel==='map' && <><h2>Chronicle Map</h2>{prototypeMode ? <button className="map-list-entry" onClick={() => setMapOverlay(true)}>Hand-drawn forest sketch <span>carried in woven basket</span></button> : <>{documents.filter(doc => doc.kind === 'MAP').map(doc => <button className="map-list-entry" key={doc.id} onClick={() => openDocument(doc.id)}><strong>{doc.title}</strong><span>Revision {doc.revisionNumber}</span></button>)}{documents.filter(doc => doc.kind === 'MAP').length === 0 && <p className="perception-note">No maps are within reach.</p>}</>}<p className="perception-note">Only physical maps within reach are shown.</p></>}
+        {panel==='literature' && <><h2>Literature</h2>{prototypeMode ? <><button className="map-list-entry" onClick={() => setReaderDocument('field-journal')}><strong>Weather-worn field journal</strong><span>Carried in woven basket · Revision 3</span></button><button className="map-list-entry" onClick={() => setReaderDocument('folded-letter')}><strong>Folded letter</strong><span>Carried in woven basket · Revision 1</span></button></> : <>{documents.filter(doc => doc.kind !== 'MAP').map(doc => <button className="map-list-entry" key={doc.id} onClick={() => openDocument(doc.id)}><strong>{doc.title}</strong><span>Revision {doc.revisionNumber}</span></button>)}{documents.filter(doc => doc.kind !== 'MAP').length === 0 && <p className="perception-note">No readable records are within reach.</p>}</>}<p className="perception-note">Only readable objects within reach are shown. Maps remain in Chronicle Map.</p></>}
       </section>
       </>}</aside>}
     {mapOverlay && <div className="map-overlay" role="dialog" aria-modal="true" aria-label="Hand-drawn forest sketch"><button aria-label="Close map" onClick={() => setMapOverlay(false)}>×</button><section><p className="eyebrow">Hand-drawn forest sketch</p><h2>Uncharted Forest</h2><div className="map-sketch"><span>Stream</span><span>Fallen cedar</span><span>Clay bank</span><i /></div><p>Weather-worn charcoal and bark marks. The far edges remain blank.</p></section></div>}
     {readerDocument && <div className="reader-overlay" role="dialog" aria-modal="true" aria-label="Read literature"><button aria-label="Close reader" onClick={() => setReaderDocument(null)}>×</button><article>{readerDocument === 'field-journal' ? <><p className="eyebrow">Weather-worn field journal</p><p className="reader-revision">Revision 3 · copied by hand</p><h2>Near the cedar</h2><div className="reader-page"><p>The stream turns shallow beside the fallen cedar. Clay clings beneath the roots after rain.</p><p>Something broad moved in the fern beds before dawn. It left the stems bent low, then the forest settled again.</p><p className="reader-mark">The next pages are blank.</p></div></> : <><p className="eyebrow">Folded letter</p><p className="reader-revision">Revision 1 · ink faded by damp</p><h2>Untitled</h2><div className="reader-page"><p>If this reaches you, keep it dry. The trail does not stay where it was drawn.</p><p className="reader-mark">No signature remains.</p></div></>}<p className="reader-note">Inspection only. Any writing, copying, or revision must be declared through the Action Composer.</p></article></div>}
+    {openDoc && <div className="reader-overlay" role="dialog" aria-modal="true" aria-label={openDoc.kind === 'MAP' ? 'Read map' : 'Read record'}><button aria-label="Close" onClick={() => setOpenDoc(null)}>×</button><article><p className="eyebrow">{openDoc.kind === 'MAP' ? 'Hand-drawn map' : 'Written record'}</p><p className="reader-revision">Revision {openDoc.revisionNumber}</p><h2>{openDoc.title}</h2>{openDoc.kind === 'MAP' ? <pre className="doc-body">{openDoc.content}</pre> : <div className="reader-page reader-prose">{openDoc.content}</div>}<p className="reader-note">Inspection only. Any writing, copying, or revision must be declared through the Action Composer.</p></article></div>}
     <div className="playthrough-bottom">
       <section className="perception" aria-label="Narrative history">
         <p className="eyebrow">Awakening</p>
