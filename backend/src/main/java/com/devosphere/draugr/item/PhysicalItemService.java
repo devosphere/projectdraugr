@@ -190,6 +190,27 @@ public class PhysicalItemService {
         return true;
     }
 
+    /**
+     * Build a piece of furniture and set it down at the chronicle's location — a
+     * world object fixed to a place, not carried. Woodworking needs a blade and
+     * dry branches lashed with fiber; a stone shelf is built up from slabs. A
+     * container piece (a shelf) gains storage. Returns false on missing material.
+     */
+    @Transactional
+    public boolean craftFurniture(UUID chronicle, UUID location, String itemKey, String displayName, int branches, int slabs, boolean container, int capMass, int capVol, Instant at) {
+        if (branches > 0 && (!hasCuttingTool(chronicle) || !hasAtLeast(chronicle,"dry_branch",branches) || !hasAtLeast(chronicle,"plant_fiber",1))) return false;
+        if (slabs > 0 && !hasAtLeast(chronicle,"stone_slab",slabs)) return false;
+        if (branches == 0 && slabs == 0) return false;
+        for (int i=0;i<branches;i++) if(!consumeOne(chronicle,"dry_branch",at)) return false;
+        for (int i=0;i<slabs;i++) if(!consumeOne(chronicle,"stone_slab",at)) return false;
+        if (branches > 0) consumeOne(chronicle,"plant_fiber",at);
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ITEM',?,?)", id, displayName, location);
+        jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,?,'SOUND')", id, itemKey);
+        if (container) jdbc.update("INSERT INTO container_properties (object_id,max_mass_grams,max_volume_ml) VALUES (?,?,?)", id, capMass, capVol);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CRAFTED',jsonb_build_object('recipe',?,'placedAt',?::text))", id, Timestamp.from(at), itemKey, location.toString());
+        return true;
+    }
     /** Tease a plant-fiber bundle into a fine, dry nest that can catch an ember. */
     @Transactional
     public boolean craftTinder(Instant at) {
