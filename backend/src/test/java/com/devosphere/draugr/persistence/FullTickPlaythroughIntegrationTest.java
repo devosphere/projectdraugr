@@ -91,6 +91,23 @@ class FullTickPlaythroughIntegrationTest {
     private Instant simNow() { return ticks.current().simulatedAt(); }
 
     @Test
+    @Order(0)
+    void canonicalWorldIsBootstrappedFromThePinnedSeed() {
+        // The startup bootstrap must have established the approved world deterministically,
+        // so a reset + relaunch always reproduces the identical genesis world.
+        WorldGenesisService.GenesisSummary current = worldGenesis.current();
+        assertNotNull(current, "the canonical world must be bootstrapped on startup");
+        assertEquals(681_013_497L, current.seed(), "the pinned MVP world seed must be used");
+        Integer chunks = jdbc.queryForObject("SELECT COUNT(*) FROM world_chunk", Integer.class);
+        assertEquals(560, chunks, "the approved 28x20 world must have 560 chunks");
+        Integer sites = jdbc.queryForObject("SELECT COUNT(*) FROM ecology_site", Integer.class);
+        assertEquals(worldGenesis.markerPlan(new WorldGenesisService.GenesisRequest(current.seed(), current.widthChunks(), current.heightChunks())).size(), sites,
+                "ecology must be seeded deterministically from the world's marker plan");
+        Integer noChronicleYet = jdbc.queryForObject("SELECT COUNT(*) FROM chronicle", Integer.class);
+        assertEquals(0, noChronicleYet, "a freshly bootstrapped world must contain no Chronicle");
+    }
+
+    @Test
     @Order(1)
     void worldGenesisAwakeningAndActionBatteryResolveWithoutSqlErrors() {
         if (worldGenesis.current() == null) {
