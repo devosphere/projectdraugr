@@ -27,6 +27,10 @@ import java.util.regex.Pattern;
 public class ChronicleActionService {
     private static final Pattern DURATION = Pattern.compile("\\b(?:for\\s+)?(\\d{1,3})\\s*(minute|min|minutes|mins|hour|hours|hr|hrs)\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern DOCUMENT_EDIT = Pattern.compile("(?is)^\\s*(append|replace|write)\\s+(?:to\\s+)?(?:document|journal|map)\\s+([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\s*:\\s*(.+)$");
+    // Captures the name a chronicle gives a place: "...as the Sleeping Area",
+    // "name this Wolf Kingdom", "call this place the Drinking Area".
+    private static final Pattern DESIGNATE_NAME = Pattern.compile("(?is)\\b(?:as|called|named|be)\\s+(?:the\\s+|a\\s+|my\\s+)?(.+)$");
+    private static final Pattern DESIGNATE_FALLBACK = Pattern.compile("(?is)\\b(?:designate|name|call|establish|found|christen|mark)\\s+(?:this|here|this\\s+place|this\\s+area|this\\s+spot)?\\s*(?:the\\s+|a\\s+|my\\s+)?(.+)$");
     private static final Pattern WRITE_CONTENT = Pattern.compile("(?is):\\s*(.+)$");
     // Signal groups for the fire-lighting specificity score. Each group is a set
     // of synonyms; naming the tool, the tinder, the ember, and the motion reads
@@ -128,6 +132,7 @@ public class ChronicleActionService {
         else if (intent == Intent.EQUIP) { String[] r = equipByName(chronicle, text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.UNEQUIP) { String[] r = unequipByName(chronicle, text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.DROP) { String[] r = dropByName(chronicle, text, resolvedAt); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.DESIGNATE) { String[] r = designate(chronicle, text, actionId, resolvedAt); outcome = r[0]; perception = r[1]; }
         else { outcome = "FAILED"; perception = "The attempt passes without changing the immediate world around you."; }
         jdbc.update("INSERT INTO chronicle_action (id, chronicle_id, resolved_at, action_text, intent_type, outcome, duration_minutes, narration, idempotency_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", actionId, chronicle.id(), resolvedTs, text.trim(), intent.name(), outcome, minutes, perception, idempotencyKey);
         jdbc.update("INSERT INTO chronicle_action_effect (action_id, effect_domain, effect_type, payload) VALUES (?, 'TIME', 'TIME_ADVANCED', jsonb_build_object('minutes', ?))", actionId, minutes);
@@ -152,7 +157,30 @@ public class ChronicleActionService {
         if (hasMore) entries = entries.subList(0, limit);
         return new NarrationPage(List.copyOf(entries), hasMore);
     }
-    private String observe(UUID location) { Integer sites = jdbc.queryForObject("SELECT COUNT(*) FROM ecology_site WHERE chunk_id = ?", Integer.class, location); return sites != null && sites > 0 ? "You notice signs that this place has been shaped by more than rain and roots alone." : "Rain-darkened ground, roots, and wet leaves hold the nearest details of the forest."; }
+    private String observe(UUID location) {
+        Integer sites = jdbc.queryForObject("SELECT COUNT(*) FROM ecology_site WHERE chunk_id = ?", Integer.class, location);
+        String base = sites != null && sites > 0 ? "You notice signs that this place has been shaped by more than rain and roots alone." : "Rain-darkened ground, roots, and wet leaves hold the nearest details of the forest.";
+        String named = jdbc.query("SELECT name FROM chronicle_named_location WHERE chunk_id=? LIMIT 1", rs -> rs.next() ? rs.getString(1) : null, location);
+        return named == null ? base : "This is " + named + ", a place you named and made your own. " + base;
+    }
+    /** Give the current chunk a name and a role, or rename it. The chronicle's sense of place is built from these designations. */
+    private String[] designate(ActiveChronicle chronicle, String text, UUID actionId, Instant at) {
+        String name = extractDesignatedName(text);
+        if (name == null || name.isBlank()) return new String[]{"FAILED", "You mean to give this place a name, but no clear name forms."};
+        String value = text.toLowerCase(Locale.ROOT);
+        String purpose = value.contains("sleep") ? "SLEEPING" : (value.contains("urinat")||value.contains("latrine")||value.contains("defecat")||value.contains("toilet")) ? "SANITATION" : (value.contains("drink")||value.contains("water")) ? "WATER" : (value.contains("store")||value.contains("storage")) ? "STORAGE" : (value.contains("craft")||value.contains("work")||value.contains("forge")||value.contains("manufactur")) ? "WORKSHOP" : (value.contains("archive")||value.contains("library")||value.contains("knowledge")) ? "KNOWLEDGE" : null;
+        jdbc.update("INSERT INTO chronicle_named_location (chronicle_id,chunk_id,name,purpose_tag,designated_at,source_action_id) VALUES (?,?,?,?,?,?) ON CONFLICT (chronicle_id,chunk_id) DO UPDATE SET name=EXCLUDED.name, purpose_tag=EXCLUDED.purpose_tag, designated_at=EXCLUDED.designated_at, source_action_id=EXCLUDED.source_action_id", chronicle.id(), chronicle.location(), name, purpose, java.sql.Timestamp.from(at), actionId);
+        return new String[]{"SUCCEEDED", "You fix a name to this place: " + name + ". It is yours now, marked in your mind as surely as on any map."};
+    }
+    private String extractDesignatedName(String text) {
+        String raw = null;
+        Matcher a = DESIGNATE_NAME.matcher(text);
+        if (a.find()) raw = a.group(1);
+        else { Matcher b = DESIGNATE_FALLBACK.matcher(text); if (b.find()) raw = b.group(1); }
+        if (raw == null) return null;
+        raw = raw.trim().replaceAll("[\\.\\!\\?\"']+$", "").trim();
+        return raw.length() > 60 ? raw.substring(0, 60).trim() : raw;
+    }
     private String move(ActiveChronicle chronicle, String action, UUID actionId, Instant occurredAt) {
         Direction direction = Direction.from(action);
         if (direction == null) return "You shift through the wet ground, but do not commit to a direction.";
@@ -167,7 +195,7 @@ public class ChronicleActionService {
     private int durationFor(String action, Intent intent) {
         Matcher match = DURATION.matcher(action);
         if (match.find()) { int amount = Integer.parseInt(match.group(1)); int minutes = match.group(2).toLowerCase(Locale.ROOT).startsWith("h") ? amount * 60 : amount; return Math.max(1, Math.min(minutes, 24 * 60)); }
-        return switch (intent) { case OBSERVE -> 10; case REST -> 60; case SLEEP -> 480; case GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES -> 25; case GATHER_CLAY -> 20; case GATHER_STONE_SLAB -> 30; case EAT, DRINK, FEED_FIRE -> 5; case LIGHT_FIRE -> 20; case COOK_MEAT, TREAT_WOUND, CONFRONT_WILDLIFE, HARVEST_CARCASS -> 10; case EDIT_DOCUMENT, WRITE -> 15; case STRIP_BARK -> 15; case MAKE_CHARCOAL -> 10; case CRAFT_BASKET -> 45; case CRAFT_SPEAR -> 35; case CRAFT_FIRE_KIT -> 25; case CRAFT_TINDER -> 10; case BUILD_FIRE_PIT, START_LEAN_TO -> 30; case WORK_LEAN_TO -> 45; case ABANDON_LEAN_TO, RESUME_LEAN_TO -> 5; case MOVE -> 30; case EQUIP, UNEQUIP, DROP -> 5; default -> 5; };
+        return switch (intent) { case OBSERVE -> 10; case REST -> 60; case SLEEP -> 480; case GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES -> 25; case GATHER_CLAY -> 20; case GATHER_STONE_SLAB -> 30; case EAT, DRINK, FEED_FIRE -> 5; case LIGHT_FIRE -> 20; case COOK_MEAT, TREAT_WOUND, CONFRONT_WILDLIFE, HARVEST_CARCASS -> 10; case EDIT_DOCUMENT, WRITE -> 15; case STRIP_BARK -> 15; case MAKE_CHARCOAL -> 10; case CRAFT_BASKET -> 45; case CRAFT_SPEAR -> 35; case CRAFT_FIRE_KIT -> 25; case CRAFT_TINDER -> 10; case BUILD_FIRE_PIT, START_LEAN_TO -> 30; case WORK_LEAN_TO -> 45; case ABANDON_LEAN_TO, RESUME_LEAN_TO -> 5; case MOVE -> 30; case EQUIP, UNEQUIP, DROP -> 5; case DESIGNATE -> 10; default -> 5; };
     }
     private Intent classify(String action) {
         String value=action.toLowerCase(Locale.ROOT);
@@ -184,6 +212,7 @@ public class ChronicleActionService {
         if(value.contains("wash")||value.contains("bathe")||value.contains("clean myself")) return Intent.WASH;
         if(value.contains("charcoal")&&(value.contains("make")||value.contains("take")||value.contains("gather")||value.contains("get")||value.contains("collect"))) return Intent.MAKE_CHARCOAL;
         if(value.contains("bark")&&(value.contains("strip")||value.contains("peel")||value.contains("gather")||value.contains("cut")||value.contains("collect")||value.contains("pull"))) return Intent.STRIP_BARK;
+        if(value.contains("designate")||value.contains("christen")||((value.contains("name")||value.contains("call")||value.contains("establish")||value.contains("found")||value.contains("mark"))&&(value.contains("this place")||value.contains("this area")||value.contains("this spot")||value.contains("this location")||value.contains("here as")||value.contains("this as")||value.contains("this the")))) return Intent.DESIGNATE;
         if(value.contains("drop")||value.contains("leave behind")||value.contains("set down")||value.contains("put down")||value.contains("discard")) return Intent.DROP;
         if(value.contains("unequip")||value.contains("take off")||value.contains("remove my")||value.contains("remove the")||value.contains("doff")) return Intent.UNEQUIP;
         if((value.contains("equip")||value.contains("wear")||value.contains("put on")||value.contains("wield")||value.contains("hold my")||value.contains("hold the")||value.contains("carry on my back")||value.contains("sling"))) return Intent.EQUIP;
@@ -249,7 +278,7 @@ public class ChronicleActionService {
         return new String[]{"SUCCEEDED","You set the "+match.get("display_name")+" down and leave it where it lies."};
     }
     private void reviseDocument(UUID chronicleId, UUID actionId, Instant resolvedAt, String text) { Matcher match=DOCUMENT_EDIT.matcher(text); if(!match.matches()) throw new IllegalArgumentException("Unrecognized document edit."); UUID documentId=UUID.fromString(match.group(2)); LiteratureService.Edit edit="append".equalsIgnoreCase(match.group(1))?LiteratureService.Edit.APPEND:LiteratureService.Edit.REPLACE; if(!literature.documentReachable(documentId,chronicleId)) throw new IllegalArgumentException("The document is not physically reachable."); literature.revise(documentId,chronicleId,actionId,resolvedAt,edit,match.group(3),null); }
-    private record ActiveChronicle(UUID id, UUID location) { } private enum Intent { OBSERVE, MOVE, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, EAT, DRINK, WASH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_FIRE_KIT, CRAFT_TINDER, BUILD_FIRE_PIT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, EQUIP, UNEQUIP, DROP, URINATE, DEFECATE, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private enum Intent { OBSERVE, MOVE, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, EAT, DRINK, WASH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_FIRE_KIT, CRAFT_TINDER, BUILD_FIRE_PIT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, EQUIP, UNEQUIP, DROP, DESIGNATE, URINATE, DEFECATE, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;} }
     public record ActionResult(UUID actionId, String intent, String outcome, int durationMinutes, Instant resolvedAt, String perception, ChroniclePhysiologyService.BodyHudSnapshot body) { }
     public record NarrationEntry(UUID id, Instant occurredAt, String narration) { }
