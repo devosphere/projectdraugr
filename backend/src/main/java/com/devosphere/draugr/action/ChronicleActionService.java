@@ -65,7 +65,11 @@ public class ChronicleActionService {
         }
         ActiveChronicle chronicle = jdbc.query("SELECT c.id, w.current_location_id FROM chronicle c JOIN world_object w ON w.id=c.id WHERE c.life_state='LIVING' FOR UPDATE", rs -> rs.next() ? new ActiveChronicle(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class)) : null);
         if (chronicle == null) throw new IllegalStateException("No living Chronicle exists.");
-        Intent intent = classify(text); int minutes = durationFor(text, intent);
+        Intent intent = classify(text);
+        // Travel time is resolved before the tick advances, because it scales with
+        // the distance to a place the chronicle can actually find its way to.
+        TravelPlan travel = intent == Intent.TRAVEL ? planTravel(chronicle, text) : null;
+        int minutes = intent == Intent.TRAVEL ? (travel == null ? 20 : Math.max(15, travel.distance() * 18)) : durationFor(text, intent);
         Instant resolvedAt = ticks.advanceBy(Duration.ofMinutes(minutes)).simulatedAt();
         java.sql.Timestamp resolvedTs = java.sql.Timestamp.from(resolvedAt);
         UUID actionId = UUID.randomUUID(); String outcome = "SUCCEEDED"; String perception;
@@ -73,8 +77,10 @@ public class ChronicleActionService {
         // action row is written only after intent resolution. Gather effects are
         // therefore captured here and inserted after the parent row exists.
         String gatherEffectType = null; String gatherPayloadKey = null; int gatherCount = 0;
-        if (intent == Intent.OBSERVE) perception = observe(chronicle.location());
+        if (intent == Intent.OBSERVE) perception = survey(chronicle, resolvedAt);
         else if (intent == Intent.MOVE) perception = move(chronicle, text, actionId, resolvedAt);
+        else if (intent == Intent.TRAVEL) { String[] r = travelTo(chronicle, travel, resolvedAt); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.MARK) { String[] r = markLandmark(chronicle, text, actionId, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.URINATE || intent == Intent.DEFECATE) {
             boolean bowel = intent == Intent.DEFECATE;
             physiology.applyRelief(chronicle.id(), bowel);
@@ -161,11 +167,96 @@ public class ChronicleActionService {
         if (hasMore) entries = entries.subList(0, limit);
         return new NarrationPage(List.copyOf(entries), hasMore);
     }
-    private String observe(UUID location) {
-        Integer sites = jdbc.queryForObject("SELECT COUNT(*) FROM ecology_site WHERE chunk_id = ?", Integer.class, location);
-        String base = sites != null && sites > 0 ? "You notice signs that this place has been shaped by more than rain and roots alone." : "Rain-darkened ground, roots, and wet leaves hold the nearest details of the forest.";
-        String named = jdbc.query("SELECT name FROM chronicle_named_location WHERE chunk_id=? LIMIT 1", rs -> rs.next() ? rs.getString(1) : null, location);
-        return named == null ? base : "This is " + named + ", a place you named and made your own. " + base;
+    /**
+     * A full read of the surroundings: the place's given name, its terrain, the
+     * hour and weather, what stands here, what the neighbouring ground hints at,
+     * and how well the chronicle knows this spot. This is the player's primary way
+     * to orient and decide where to explore — the narrator describes, never advises.
+     */
+    private String survey(ActiveChronicle chronicle, Instant at) {
+        UUID loc = chronicle.location();
+        java.util.Map<String,Object> here = jdbc.queryForMap("SELECT world_id, grid_x, grid_y, biome, elevation FROM world_chunk WHERE id=?", loc);
+        UUID world = (UUID) here.get("world_id"); int gx=(int)here.get("grid_x"); int gy=(int)here.get("grid_y"); String biome=(String)here.get("biome");
+        StringBuilder s = new StringBuilder();
+        String named = jdbc.query("SELECT name FROM chronicle_named_location WHERE chunk_id=? AND chronicle_id=? LIMIT 1", rs -> rs.next() ? rs.getString(1) : null, loc, chronicle.id());
+        if (named != null) s.append("This is ").append(named).append(", a place you named and made your own. ");
+        s.append(biomeDescription(biome)).append(" ");
+        s.append(timeOfDay(at)).append(" ");
+        String weather = jdbc.query("SELECT weather_kind,intensity FROM world_weather WHERE world_id=?", rs -> rs.next() ? weatherPhrase(rs.getString(1), rs.getInt(2)) : null, world);
+        if (weather != null) s.append(weather).append(" ");
+        // What stands on this ground.
+        Integer sites = jdbc.queryForObject("SELECT COUNT(*) FROM ecology_site WHERE chunk_id=?", Integer.class, loc);
+        Integer builds = jdbc.queryForObject("SELECT COUNT(*) FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE'", Integer.class, loc);
+        Integer markers = jdbc.queryForObject("SELECT COUNT(*) FROM location_marker WHERE chunk_id=?", Integer.class, loc);
+        Integer carcasses = jdbc.queryForObject("SELECT COUNT(*) FROM world_object WHERE current_location_id=? AND object_type='CARCASS' AND lifecycle_state='ACTIVE'", Integer.class, loc);
+        if (builds != null && builds > 0) s.append("Structures you raised stand here. ");
+        if (markers != null && markers > 0) s.append("A marker you left catches your eye, quietly confirming this is a place you have been. ");
+        if (sites != null && sites > 0) s.append("The ground shows signs of living things that pass through or feed here. ");
+        if (carcasses != null && carcasses > 0) s.append("A fallen animal lies nearby, not yet returned to the earth. ");
+        // What lies around — read from the neighbouring chunks, so the chronicle can choose a direction.
+        String around = neighbourHints(world, gx, gy);
+        if (!around.isEmpty()) s.append(around);
+        // How well this ground is known.
+        Integer visits = jdbc.queryForObject("SELECT visit_count FROM chronicle_chunk_visit WHERE chronicle_id=? AND chunk_id=?", Integer.class, chronicle.id(), loc);
+        if (visits != null && visits >= 5) s.append("You know this ground well; your feet have worn a familiarity into it. ");
+        return s.toString().trim();
+    }
+    private String biomeDescription(String biome) {
+        return switch (biome == null ? "" : biome) {
+            case "TEMPERATE_FOREST" -> "Tall trees close overhead, their trunks dark with damp and the floor deep in leaf litter.";
+            case "WETLAND" -> "The ground is soft and waterlogged, reeds standing in slow, dark water.";
+            case "RIVER_BANK" -> "A river runs past a bank of smoothed stone and packed earth.";
+            case "CLAY_DEPOSIT" -> "The earth here is heavy and grey-brown, slick clay breaking the surface.";
+            case "MOUNTAIN" -> "Bare rock rises in broken shelves, the air thin and cold against exposed stone.";
+            case "HIGHLAND" -> "High, open ground rolls away in coarse grass and outcrops of weathered rock.";
+            case "GRASSLAND" -> "Open grass runs to every horizon, bending in long waves under the wind.";
+            case "OCEAN" -> "Water stretches beyond reach, grey and restless to the edge of sight.";
+            default -> "The land around you is plain and unremarkable, holding little at first glance.";
+        };
+    }
+    private String timeOfDay(Instant at) {
+        int h = at.atZone(java.time.ZoneOffset.UTC).getHour();
+        if (h < 5) return "It is deep night, the dark near total.";
+        if (h < 8) return "Early light is only beginning to reach the ground.";
+        if (h < 12) return "The morning is up, the light clear and growing.";
+        if (h < 15) return "The day stands at its height, the light full overhead.";
+        if (h < 19) return "The light is lengthening toward evening.";
+        if (h < 22) return "Dusk is settling, colour draining from the land.";
+        return "Night has closed in, and little can be made out at a distance.";
+    }
+    private String weatherPhrase(String kind, int intensity) {
+        String strength = intensity >= 66 ? "heavy " : intensity >= 33 ? "" : "light ";
+        return switch (kind == null ? "" : kind) {
+            case "CLEAR" -> "The sky is clear.";
+            case "OVERCAST" -> "A flat grey overcast holds the sky.";
+            case "RAIN" -> "A " + strength + "rain falls, ticking against leaf and stone.";
+            case "STORM" -> "A storm drives " + strength + "rain sidelong on a hard wind.";
+            case "SNOW" -> "A " + strength + "snow drifts down, muffling the ground.";
+            default -> "";
+        };
+    }
+    /** Directional hints drawn from adjacent chunks, so a survey reveals what lies nearby without naming an action to take. */
+    private String neighbourHints(UUID world, int gx, int gy) {
+        int[][] dirs = { {0,-1}, {0,1}, {1,0}, {-1,0} };
+        String[] names = { "to the north", "to the south", "to the east", "to the west" };
+        StringBuilder b = new StringBuilder();
+        for (int i=0;i<dirs.length;i++) {
+            String nb = jdbc.query("SELECT biome FROM world_chunk WHERE world_id=? AND grid_x=? AND grid_y=?", rs -> rs.next() ? rs.getString(1) : null, world, gx+dirs[i][0], gy+dirs[i][1]);
+            String hint = neighbourPhrase(nb);
+            if (hint != null) b.append(hint).append(" ").append(names[i]).append(". ");
+        }
+        return b.toString();
+    }
+    private String neighbourPhrase(String biome) {
+        return switch (biome == null ? "" : biome) {
+            case "RIVER_BANK", "WETLAND" -> "You catch the sound of water";
+            case "MOUNTAIN", "HIGHLAND" -> "The ground rises toward higher, broken rock";
+            case "TEMPERATE_FOREST" -> "The trees grow denser";
+            case "GRASSLAND" -> "The land opens into grass";
+            case "OCEAN" -> "You sense open water and a colder air";
+            case "CLAY_DEPOSIT" -> "The earth looks heavier and greyer";
+            default -> null;
+        };
     }
     /** Give the current chunk a name and a role, or rename it. The chronicle's sense of place is built from these designations. */
     private String[] designate(ActiveChronicle chronicle, String text, UUID actionId, Instant at) {
@@ -173,8 +264,14 @@ public class ChronicleActionService {
         if (name == null || name.isBlank()) return new String[]{"FAILED", "You mean to give this place a name, but no clear name forms."};
         String value = text.toLowerCase(Locale.ROOT);
         String purpose = value.contains("sleep") ? "SLEEPING" : (value.contains("urinat")||value.contains("latrine")||value.contains("defecat")||value.contains("toilet")) ? "SANITATION" : (value.contains("drink")||value.contains("water")) ? "WATER" : (value.contains("store")||value.contains("storage")) ? "STORAGE" : (value.contains("craft")||value.contains("work")||value.contains("forge")||value.contains("manufactur")) ? "WORKSHOP" : (value.contains("archive")||value.contains("library")||value.contains("knowledge")) ? "KNOWLEDGE" : null;
-        jdbc.update("INSERT INTO chronicle_named_location (chronicle_id,chunk_id,name,purpose_tag,designated_at,source_action_id) VALUES (?,?,?,?,?,?) ON CONFLICT (chronicle_id,chunk_id) DO UPDATE SET name=EXCLUDED.name, purpose_tag=EXCLUDED.purpose_tag, designated_at=EXCLUDED.designated_at, source_action_id=EXCLUDED.source_action_id", chronicle.id(), chronicle.location(), name, purpose, java.sql.Timestamp.from(at), actionId);
-        return new String[]{"SUCCEEDED", "You fix a name to this place: " + name + ". It is yours now, marked in your mind as surely as on any map."};
+        boolean memorize = value.contains("memoriz") || value.contains("memoris") || value.contains("remember") || value.contains("commit to memory") || value.contains("fix in") || value.contains("by heart");
+        java.sql.Timestamp ts = java.sql.Timestamp.from(at);
+        jdbc.update("INSERT INTO chronicle_named_location (chronicle_id,chunk_id,name,purpose_tag,designated_at,source_action_id,memorized,last_visited_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT (chronicle_id,chunk_id) DO UPDATE SET name=EXCLUDED.name, purpose_tag=EXCLUDED.purpose_tag, designated_at=EXCLUDED.designated_at, source_action_id=EXCLUDED.source_action_id, memorized=chronicle_named_location.memorized OR EXCLUDED.memorized, last_visited_at=EXCLUDED.last_visited_at", chronicle.id(), chronicle.location(), name, purpose, ts, actionId, memorize, ts);
+        boolean markerHere = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM location_marker WHERE chunk_id=?)", Boolean.class, chronicle.location()));
+        String tail = memorize
+            ? (markerHere ? " You fix it firmly in memory, and with your marker already standing here, you will find your way back to it without fail." : " You fix it firmly in memory — though without a marker or a map, memory alone may dim if you stay away too long.")
+            : " But you leave no marker and do not commit the way to memory; unless you return often, this name may fade from you.";
+        return new String[]{"SUCCEEDED", "You fix a name to this place: " + name + "." + tail};
     }
     private String extractDesignatedName(String text) {
         String raw = null;
@@ -194,12 +291,94 @@ public class ChronicleActionService {
         jdbc.update("UPDATE world_object SET current_location_id=?, updated_at=? WHERE id=?", destination, occurredTs, chronicle.id());
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'MOVED',jsonb_build_object('fromLocationId',?::text,'toLocationId',?::text,'direction',?))", chronicle.id(), occurredTs, chronicle.location().toString(), destination.toString(), direction.name());
         jdbc.update("INSERT INTO chronicle_event (chronicle_id,occurred_at,event_type,payload) VALUES (?,?,'CHRONICLE_MOVED',jsonb_build_object('fromLocationId',?::text,'toLocationId',?::text,'direction',?))", chronicle.id(), occurredTs, chronicle.location().toString(), destination.toString(), direction.name());
-        return "You travel " + direction.description + ", leaving the last stand of trees behind you.";
+        recordVisit(chronicle.id(), destination, occurredAt);
+        return "You travel " + direction.description + ", the ground shifting under you as you go.";
     }
+    /** Register the chronicle's presence in a chunk — the raw material of route memory and the decay clock on named places. */
+    private void recordVisit(UUID chronicle, UUID chunk, Instant at) {
+        java.sql.Timestamp ts = java.sql.Timestamp.from(at);
+        jdbc.update("INSERT INTO chronicle_chunk_visit (chronicle_id,chunk_id,visit_count,last_visited_at) VALUES (?,?,1,?) ON CONFLICT (chronicle_id,chunk_id) DO UPDATE SET visit_count=chronicle_chunk_visit.visit_count+1, last_visited_at=EXCLUDED.last_visited_at", chronicle, chunk, ts);
+        jdbc.update("UPDATE chronicle_named_location SET last_visited_at=? WHERE chronicle_id=? AND chunk_id=?", ts, chronicle, chunk);
+    }
+    /**
+     * Decide whether the chronicle can find its way to a place named in the action,
+     * and how far it is. A place is locatable only if it is on a carried map, marked
+     * and memorized, walked often enough to be routine, or memorized and visited
+     * recently. A name without any of these has faded, and returns null.
+     */
+    private TravelPlan planTravel(ActiveChronicle chronicle, String text) {
+        String lower = text.toLowerCase(Locale.ROOT);
+        java.util.List<java.util.Map<String,Object>> named = jdbc.queryForList("SELECT nl.chunk_id, nl.name, nl.memorized, nl.last_visited_at, c.grid_x, c.grid_y FROM chronicle_named_location nl JOIN world_chunk c ON c.id=nl.chunk_id WHERE nl.chronicle_id=? ORDER BY length(nl.name) DESC", chronicle.id());
+        java.util.Map<String,Object> cur = jdbc.queryForMap("SELECT grid_x, grid_y FROM world_chunk WHERE id=?", chronicle.location());
+        int cx=(int)cur.get("grid_x"), cy=(int)cur.get("grid_y");
+        for (java.util.Map<String,Object> n : named) {
+            String name = (String) n.get("name");
+            if (!lower.contains(name.toLowerCase(Locale.ROOT))) continue;
+            UUID chunk = (UUID) n.get("chunk_id");
+            boolean memorized = Boolean.TRUE.equals(n.get("memorized"));
+            java.sql.Timestamp last = (java.sql.Timestamp) n.get("last_visited_at");
+            boolean recent = last != null && last.toInstant().isAfter(java.time.Instant.now().minus(java.time.Duration.ofDays(4)));
+            boolean markerHere = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM location_marker WHERE chunk_id=?)", Boolean.class, chunk));
+            boolean onMap = Boolean.TRUE.equals(jdbc.queryForObject("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT EXISTS(SELECT 1 FROM reachable x JOIN literature_document d ON d.object_id=x.id JOIN literature_revision rv ON rv.id=d.current_revision_id WHERE d.document_kind='MAP' AND rv.content ILIKE ?)", Boolean.class, chronicle.id(), "%"+name+"%"));
+            Integer visits = jdbc.queryForObject("SELECT visit_count FROM chronicle_chunk_visit WHERE chronicle_id=? AND chunk_id=?", Integer.class, chronicle.id(), chunk);
+            boolean routine = visits != null && visits >= 5;
+            boolean locatable = onMap || (markerHere && memorized) || routine || (memorized && recent);
+            if (!locatable) continue;
+            int gx=(int)n.get("grid_x"), gy=(int)n.get("grid_y");
+            int distance = Math.max(Math.abs(gx-cx), Math.abs(gy-cy));
+            String reason = onMap ? "map" : routine ? "routine" : markerHere ? "marker" : "memory";
+            return new TravelPlan(chunk, distance, reason);
+        }
+        return null;
+    }
+    private String[] travelTo(ActiveChronicle chronicle, TravelPlan plan, Instant at) {
+        if (plan == null) return new String[]{"FAILED", "You try to fix the place in your mind and make for it, but you cannot call the way to mind clearly enough to set out. Some places, once, are not places you can find again."};
+        if (plan.destination().equals(chronicle.location())) return new String[]{"SUCCEEDED", "You are already at the place you meant to reach."};
+        java.sql.Timestamp ts = java.sql.Timestamp.from(at);
+        jdbc.update("UPDATE world_object SET current_location_id=?, updated_at=? WHERE id=?", plan.destination(), ts, chronicle.id());
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'MOVED',jsonb_build_object('fromLocationId',?::text,'toLocationId',?::text,'wayfinding',?))", chronicle.id(), ts, chronicle.location().toString(), plan.destination().toString(), plan.reason());
+        jdbc.update("INSERT INTO chronicle_event (chronicle_id,occurred_at,event_type,payload) VALUES (?,?,'CHRONICLE_MOVED',jsonb_build_object('fromLocationId',?::text,'toLocationId',?::text,'wayfinding',?))", chronicle.id(), ts, chronicle.location().toString(), plan.destination().toString(), plan.reason());
+        recordVisit(chronicle.id(), plan.destination(), at);
+        String how = switch (plan.reason()) { case "map" -> "following the trails you sketched on your map"; case "routine" -> "along a way your feet have walked many times"; case "marker" -> "guided by the marker you once left"; default -> "holding the place firmly in memory"; };
+        return new String[]{"SUCCEEDED", "You set out, " + how + ", and come at last to the place you meant to reach."};
+    }
+    /**
+     * Leave a physical marker at the current place — a blaze carved on a tree, a
+     * cairn of stones, a driven stake. A marker makes a spot recognizable and can
+     * later anchor a name; on its own it carries no name.
+     */
+    private String[] markLandmark(ActiveChronicle chronicle, String text, UUID actionId, Instant at) {
+        String v = text.toLowerCase(Locale.ROOT);
+        String kind; String need;
+        if (v.contains("cairn") || v.contains("pile") || v.contains("stack") || (v.contains("stone") && !v.contains("carve"))) { kind = "CAIRN"; need = "field_stone"; }
+        else if (v.contains("stake") || v.contains("post") || v.contains("stick") || v.contains("stave")) { kind = "STAKE"; need = "dry_branch"; }
+        else { kind = "BLAZE"; need = "tool"; }
+        if (kind.equals("CAIRN")) { if (!items.hasAtLeast(chronicle.id(),"field_stone",3)) return new String[]{"FAILED","You cast about for stones to pile, but you do not have enough to raise anything that would stand and be seen."}; for (int i=0;i<3;i++) items.consumeOne(chronicle.id(),"field_stone",at); }
+        else if (kind.equals("STAKE")) { if (!items.hasAtLeast(chronicle.id(),"dry_branch",1)) return new String[]{"FAILED","You have nothing to drive into the ground as a marker."}; items.consumeOne(chronicle.id(),"dry_branch",at); }
+        else { if (!items.hasCuttingTool(chronicle.id())) return new String[]{"FAILED","You set a hand to the bark, but with no blade you can cut no lasting mark."}; }
+        String shape = extractShape(v);
+        UUID id = UUID.randomUUID();
+        String label = kind.equals("CAIRN") ? "Stone cairn" : kind.equals("STAKE") ? "Driven stake" : "Carved blaze";
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'MARKER',?,?)", id, label, chronicle.location());
+        jdbc.update("INSERT INTO location_marker (object_id,chunk_id,marker_kind,description,created_by_chronicle_id,created_at) VALUES (?,?,?,?,?,?)", id, chronicle.location(), kind, shape, chronicle.id(), java.sql.Timestamp.from(at));
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'MARKED',jsonb_build_object('kind',?))", id, java.sql.Timestamp.from(at), kind);
+        String made = kind.equals("CAIRN") ? "You stack stones into a cairn that will stand and be seen" : kind.equals("STAKE") ? "You drive a stake firmly into the ground" : "You cut a clear blaze into the bark of a tree";
+        // If the same act also names the place, register it — a marked, named, and
+        // (if asked) memorized spot is the surest kind to find one's way back to.
+        String name = namesInMarking(v) ? extractDesignatedName(text) : null;
+        if (name != null && !name.isBlank()) {
+            boolean memorize = v.contains("memoriz")||v.contains("memoris")||v.contains("remember")||v.contains("commit to memory")||v.contains("by heart");
+            jdbc.update("INSERT INTO chronicle_named_location (chronicle_id,chunk_id,name,purpose_tag,designated_at,source_action_id,memorized,last_visited_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT (chronicle_id,chunk_id) DO UPDATE SET name=EXCLUDED.name, designated_at=EXCLUDED.designated_at, source_action_id=EXCLUDED.source_action_id, memorized=chronicle_named_location.memorized OR EXCLUDED.memorized, last_visited_at=EXCLUDED.last_visited_at", chronicle.id(), chronicle.location(), name, null, java.sql.Timestamp.from(at), actionId, memorize, java.sql.Timestamp.from(at));
+            return new String[]{"SUCCEEDED", made + (shape==null?"":", in the shape of a "+shape) + ", and name this place " + name + ". Marked and named" + (memorize?" and fixed in memory":"") + ", it is a place you will find again."};
+        }
+        return new String[]{"SUCCEEDED", made + (shape==null?"":", in the shape of a "+shape) + " — a mark on this place that will outlast your passing. It bears no name until you give it one."};
+    }
+    private boolean namesInMarking(String v) { return v.contains(" as ")||v.contains("name it")||v.contains("name this")||v.contains("call it")||v.contains("call this")||v.contains("named"); }
+    private String extractShape(String v) { for (String s : new String[]{"triangle","circle","cross","square","arrow","spiral","line","star","diamond","chevron"}) if (v.contains(s)) return s; return null; }
     private int durationFor(String action, Intent intent) {
         Matcher match = DURATION.matcher(action);
         if (match.find()) { int amount = Integer.parseInt(match.group(1)); int minutes = match.group(2).toLowerCase(Locale.ROOT).startsWith("h") ? amount * 60 : amount; return Math.max(1, Math.min(minutes, 24 * 60)); }
-        return switch (intent) { case OBSERVE -> 10; case REST -> 60; case SLEEP -> 480; case GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES -> 25; case GATHER_CLAY -> 20; case GATHER_STONE_SLAB -> 30; case EAT, DRINK, FEED_FIRE -> 5; case LIGHT_FIRE -> 20; case COOK_MEAT, TREAT_WOUND, CONFRONT_WILDLIFE, HARVEST_CARCASS -> 10; case EDIT_DOCUMENT, WRITE -> 15; case STRIP_BARK -> 15; case MAKE_CHARCOAL -> 10; case CRAFT_BASKET -> 45; case CRAFT_SPEAR -> 35; case CRAFT_FIRE_KIT -> 25; case CRAFT_TINDER -> 10; case CRAFT_DESK -> 60; case CRAFT_CHAIR -> 40; case CRAFT_SHELF -> 50; case BUILD_FIRE_PIT, START_LEAN_TO -> 30; case WORK_LEAN_TO -> 45; case ABANDON_LEAN_TO, RESUME_LEAN_TO -> 5; case MOVE -> 30; case EQUIP, UNEQUIP, DROP -> 5; case DESIGNATE -> 10; case REFINE -> 30; default -> 5; };
+        return switch (intent) { case OBSERVE -> 10; case REST -> 60; case SLEEP -> 480; case GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES -> 25; case GATHER_CLAY -> 20; case GATHER_STONE_SLAB -> 30; case EAT, DRINK, FEED_FIRE -> 5; case LIGHT_FIRE -> 20; case COOK_MEAT, TREAT_WOUND, CONFRONT_WILDLIFE, HARVEST_CARCASS -> 10; case EDIT_DOCUMENT, WRITE -> 15; case STRIP_BARK -> 15; case MAKE_CHARCOAL -> 10; case CRAFT_BASKET -> 45; case CRAFT_SPEAR -> 35; case CRAFT_FIRE_KIT -> 25; case CRAFT_TINDER -> 10; case CRAFT_DESK -> 60; case CRAFT_CHAIR -> 40; case CRAFT_SHELF -> 50; case BUILD_FIRE_PIT, START_LEAN_TO -> 30; case WORK_LEAN_TO -> 45; case ABANDON_LEAN_TO, RESUME_LEAN_TO -> 5; case MOVE -> 30; case MARK -> 15; case EQUIP, UNEQUIP, DROP -> 5; case DESIGNATE -> 10; case REFINE -> 30; default -> 5; };
     }
     private Intent classify(String action) {
         String value=action.toLowerCase(Locale.ROOT);
@@ -219,6 +398,8 @@ public class ChronicleActionService {
         if(value.contains("wash")||value.contains("bathe")||value.contains("clean myself")) return Intent.WASH;
         if(value.contains("charcoal")&&(value.contains("make")||value.contains("take")||value.contains("gather")||value.contains("get")||value.contains("collect"))) return Intent.MAKE_CHARCOAL;
         if(value.contains("bark")&&(value.contains("strip")||value.contains("peel")||value.contains("gather")||value.contains("cut")||value.contains("collect")||value.contains("pull"))) return Intent.STRIP_BARK;
+        if((value.contains("go to")||value.contains("head to")||value.contains("head for")||value.contains("make for")||value.contains("travel to")||value.contains("walk to")||value.contains("return to")||value.contains("go back to")||value.contains("head back to")||value.contains("journey to")||value.contains("set out for"))&&Direction.from(value)==null) return Intent.TRAVEL;
+        if(value.contains("carve")||value.contains("blaze")||value.contains("cairn")||value.contains("landmark")||value.contains("drive a stake")||value.contains("leave a marker")||value.contains("leave a mark")||((value.contains("mark")||value.contains("pile")||value.contains("stack"))&&(value.contains("tree")||value.contains("stone")||value.contains("stake")||value.contains("post")))) return Intent.MARK;
         if(value.contains("refine")||value.contains("improve")||value.contains("upgrade")||value.contains("revise")||value.contains("enhance")||(value.contains("add")&&value.contains("holder"))) return Intent.REFINE;
         if(value.contains("designate")||value.contains("christen")||((value.contains("name")||value.contains("call")||value.contains("establish")||value.contains("found")||value.contains("mark"))&&(value.contains("this place")||value.contains("this area")||value.contains("this spot")||value.contains("this location")||value.contains("here as")||value.contains("this as")||value.contains("this the")))) return Intent.DESIGNATE;
         if(value.contains("drop")||value.contains("leave behind")||value.contains("set down")||value.contains("put down")||value.contains("discard")) return Intent.DROP;
@@ -233,7 +414,7 @@ public class ChronicleActionService {
         if(value.contains("resume")||value.contains("return to")) return Intent.RESUME_LEAN_TO;
         return (value.contains("work") || value.contains("continue") || value.contains("build") || value.contains("weave") || value.contains("bind")) ? Intent.WORK_LEAN_TO : Intent.START_LEAN_TO;
     }
-    private Intent classifyLegacy(String action) { String value = action.toLowerCase(Locale.ROOT); if ((value.contains("cook") || value.contains("roast")) && (value.contains("meat") || value.contains("game"))) return Intent.COOK_MEAT; if ((value.contains("harvest") || value.contains("butcher") || value.contains("skin")) && (value.contains("carcass") || value.contains("remains") || value.contains("animal"))) return Intent.HARVEST_CARCASS; if ((value.contains("bind") || value.contains("bandage") || value.contains("dress")) && (value.contains("wound") || value.contains("injury") || value.contains("bleeding"))) return Intent.TREAT_WOUND; if ((value.contains("feed") || value.contains("stoke") || value.contains("add wood")) && value.contains("fire")) return Intent.FEED_FIRE; if ((value.contains("light")||value.contains("ignite")) && value.contains("fire")) return Intent.LIGHT_FIRE; if (value.contains("fire pit") || value.contains("firepit")) return Intent.BUILD_FIRE_PIT; if ((value.contains("fight")||value.contains("attack")||value.contains("strike")) && (value.contains("animal")||value.contains("wildlife")||value.contains("creature"))) return Intent.CONFRONT_WILDLIFE; if ((value.contains("weave") || value.contains("craft") || value.contains("make")) && value.contains("basket")) return Intent.CRAFT_BASKET; if ((value.contains("gather")||value.contains("collect")) && value.contains("fiber")) return Intent.GATHER_FIBER; if ((value.contains("gather")||value.contains("collect")) && (value.contains("branch")||value.contains("stick"))) return Intent.GATHER_BRANCHES; if ((value.contains("gather")||value.contains("collect")) && (value.contains("berry")||value.contains("berries"))) return Intent.GATHER_BERRIES; if ((value.contains("gather")||value.contains("collect")) && (value.contains("stone")||value.contains("rock"))) return Intent.GATHER_STONE; if (value.contains("eat")||value.contains("consume")) return Intent.EAT; if (value.contains("drink")) return Intent.DRINK; if (Direction.from(value) != null && (value.contains("walk") || value.contains("travel") || value.contains("go ") || value.contains("move"))) return Intent.MOVE; if (value.contains("observe") || value.contains("look") || value.contains("inspect")) return Intent.OBSERVE; if (value.contains("sleep") || value.contains("nap") || value.contains("lie down to sleep") || value.contains("bed down") || value.contains("go to sleep")) return Intent.SLEEP; if (value.contains("rest") || value.contains("wait")) return Intent.REST; if (value.contains("urinate") || value.contains("pee")) return Intent.URINATE; if (value.contains("defecate") || value.contains("poop")) return Intent.DEFECATE; return Intent.UNKNOWN; }
+    private Intent classifyLegacy(String action) { String value = action.toLowerCase(Locale.ROOT); if ((value.contains("cook") || value.contains("roast")) && (value.contains("meat") || value.contains("game"))) return Intent.COOK_MEAT; if ((value.contains("harvest") || value.contains("butcher") || value.contains("skin")) && (value.contains("carcass") || value.contains("remains") || value.contains("animal"))) return Intent.HARVEST_CARCASS; if ((value.contains("bind") || value.contains("bandage") || value.contains("dress")) && (value.contains("wound") || value.contains("injury") || value.contains("bleeding"))) return Intent.TREAT_WOUND; if ((value.contains("feed") || value.contains("stoke") || value.contains("add wood")) && value.contains("fire")) return Intent.FEED_FIRE; if ((value.contains("light")||value.contains("ignite")) && value.contains("fire")) return Intent.LIGHT_FIRE; if (value.contains("fire pit") || value.contains("firepit")) return Intent.BUILD_FIRE_PIT; if ((value.contains("fight")||value.contains("attack")||value.contains("strike")) && (value.contains("animal")||value.contains("wildlife")||value.contains("creature"))) return Intent.CONFRONT_WILDLIFE; if ((value.contains("weave") || value.contains("craft") || value.contains("make")) && value.contains("basket")) return Intent.CRAFT_BASKET; if ((value.contains("gather")||value.contains("collect")) && value.contains("fiber")) return Intent.GATHER_FIBER; if ((value.contains("gather")||value.contains("collect")) && (value.contains("branch")||value.contains("stick"))) return Intent.GATHER_BRANCHES; if ((value.contains("gather")||value.contains("collect")) && (value.contains("berry")||value.contains("berries"))) return Intent.GATHER_BERRIES; if ((value.contains("gather")||value.contains("collect")) && (value.contains("stone")||value.contains("rock"))) return Intent.GATHER_STONE; if (value.contains("eat")||value.contains("consume")) return Intent.EAT; if (value.contains("drink")) return Intent.DRINK; if (Direction.from(value) != null && (value.contains("walk") || value.contains("travel") || value.contains("go ") || value.contains("move"))) return Intent.MOVE; if (value.contains("observe") || value.contains("look") || value.contains("inspect") || value.contains("survey") || value.contains("scout") || value.contains("scan") || value.contains("explore") || value.contains("examine") || value.contains("study the") || value.contains("take in")) return Intent.OBSERVE; if (value.contains("sleep") || value.contains("nap") || value.contains("lie down to sleep") || value.contains("bed down") || value.contains("go to sleep")) return Intent.SLEEP; if (value.contains("rest") || value.contains("wait")) return Intent.REST; if (value.contains("urinate") || value.contains("pee")) return Intent.URINATE; if (value.contains("defecate") || value.contains("poop")) return Intent.DEFECATE; return Intent.UNKNOWN; }
     private String[] writeOrDraw(ActiveChronicle chronicle, String text, UUID actionId, Instant at) {
         Matcher m = WRITE_CONTENT.matcher(text);
         if (!m.find() || m.group(1).trim().isEmpty()) return new String[]{"FAILED", "You hold the charcoal a moment, then set nothing down."};
@@ -303,7 +484,7 @@ public class ChronicleActionService {
     private String baseName(String displayName) { return displayName.replaceAll("(?i)\\s+Revision\\s+[IVXLC0-9]+$", "").trim(); }
     private String toRoman(int n) { if(n<=0) return String.valueOf(n); int[] v={100,90,50,40,10,9,5,4,1}; String[] s={"C","XC","L","XL","X","IX","V","IV","I"}; StringBuilder b=new StringBuilder(); for(int i=0;i<v.length;i++) while(n>=v[i]){b.append(s[i]);n-=v[i];} return b.toString(); }
     private void reviseDocument(UUID chronicleId, UUID actionId, Instant resolvedAt, String text) { Matcher match=DOCUMENT_EDIT.matcher(text); if(!match.matches()) throw new IllegalArgumentException("Unrecognized document edit."); UUID documentId=UUID.fromString(match.group(2)); LiteratureService.Edit edit="append".equalsIgnoreCase(match.group(1))?LiteratureService.Edit.APPEND:LiteratureService.Edit.REPLACE; if(!literature.documentReachable(documentId,chronicleId)) throw new IllegalArgumentException("The document is not physically reachable."); literature.revise(documentId,chronicleId,actionId,resolvedAt,edit,match.group(3),null); }
-    private record ActiveChronicle(UUID id, UUID location) { } private enum Intent { OBSERVE, MOVE, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, EAT, DRINK, WASH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, BUILD_FIRE_PIT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, EQUIP, UNEQUIP, DROP, DESIGNATE, REFINE, URINATE, DEFECATE, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, EAT, DRINK, WASH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, BUILD_FIRE_PIT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, EQUIP, UNEQUIP, DROP, DESIGNATE, REFINE, URINATE, DEFECATE, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;} }
     public record ActionResult(UUID actionId, String intent, String outcome, int durationMinutes, Instant resolvedAt, String perception, ChroniclePhysiologyService.BodyHudSnapshot body) { }
     public record NarrationEntry(UUID id, Instant occurredAt, String narration) { }
