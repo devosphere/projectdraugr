@@ -14,12 +14,23 @@ import java.util.UUID;
 public class FireService {
     private final JdbcTemplate jdbc; private final PhysicalItemService items; private final FoodPreservationService food;
     public FireService(JdbcTemplate jdbc, PhysicalItemService items, FoodPreservationService food) { this.jdbc=jdbc; this.items=items; this.food=food; }
+    /** Outcome of a fire-lighting attempt, distinct enough for the narrator to witness what physically happened. */
+    public enum LightResult { LIT, NO_PIT, NO_KIT, NO_TINDER, NO_FUEL }
+
     @Transactional
-    public boolean light(UUID chronicle, UUID location, Instant now) {
+    public LightResult light(UUID chronicle, UUID location, Instant now) {
         UUID pit=jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='STONE_FIRE_PIT' AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' LIMIT 1",rs->rs.next()?rs.getObject(1,UUID.class):null,location);
-        if(pit==null || !items.consumeOne(chronicle,"dry_branch",now)) return false;
+        if(pit==null) return LightResult.NO_PIT;
+        // Friction fire needs a hearth board and spindle to raise an ember...
+        if(!items.hasAtLeast(chronicle,"hearth_board",1) || !items.hasAtLeast(chronicle,"fire_spindle",1)) return LightResult.NO_KIT;
+        // ...a tinder nest fine enough to catch it (consumed)...
+        if(!items.hasAtLeast(chronicle,"tinder_nest",1)) return LightResult.NO_TINDER;
+        // ...and dry fuel to build the caught flame into a fire (consumed).
+        if(!items.hasAtLeast(chronicle,"dry_branch",1)) return LightResult.NO_FUEL;
+        if(!items.consumeOne(chronicle,"tinder_nest",now)) return LightResult.NO_TINDER;
+        if(!items.consumeOne(chronicle,"dry_branch",now)) return LightResult.NO_FUEL;
         jdbc.update("INSERT INTO fire_state (construction_id,active,fuel_minutes,last_updated_at) VALUES (?,true,45,?) ON CONFLICT (construction_id) DO UPDATE SET active=true,fuel_minutes=fire_state.fuel_minutes+45,last_updated_at=EXCLUDED.last_updated_at",pit,Timestamp.from(now));
-        return true;
+        return LightResult.LIT;
     }
     @Transactional
     public boolean feed(UUID chronicle, UUID location, Instant now) {

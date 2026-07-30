@@ -120,11 +120,14 @@ public class PhysicalItemService {
         assertCarryCapacity(chronicle);
         return desired;
     }
-    /** Take a piece of charcoal from a spent fire — a writing implement. Requires a built fire pit here. */
+    /** Take a piece of charcoal from a spent fire — a writing implement. Requires a fire that was lit here and has since burned out. */
     @Transactional
     public boolean makeCharcoal(UUID chronicle, UUID location, Instant occurredAt) {
-        Integer pits = jdbc.queryForObject("SELECT COUNT(*) FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='STONE_FIRE_PIT' AND cp.state='COMPLETED'", Integer.class, location);
-        if (pits == null || pits == 0) return false;
+        // Charcoal comes from wood that has actually burned. A fire pit that was
+        // built but never lit is just a ring of cold stone. Require a fire_state
+        // row (the pit was lit at least once) that is no longer burning.
+        Integer spent = jdbc.queryForObject("SELECT COUNT(*) FROM construction_project cp JOIN world_object w ON w.id=cp.object_id JOIN fire_state fs ON fs.construction_id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='STONE_FIRE_PIT' AND cp.state='COMPLETED' AND fs.active=false", Integer.class, location);
+        if (spent == null || spent == 0) return false;
         if (capacityHeadroomUnits(chronicle, "charcoal") <= 0) return false;
         UUID id = UUID.randomUUID();
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM','Charcoal',?)", id, chronicle);
@@ -157,6 +160,33 @@ public class PhysicalItemService {
     }
     @Transactional public ItemView craftPrimitiveSpear(Instant at) { UUID chronicle=activeChronicle(); if(!hasAtLeast(chronicle,"dry_branch",1)||!hasAtLeast(chronicle,"field_stone",1)||!hasAtLeast(chronicle,"plant_fiber",1))throw new IllegalStateException("Insufficient physical material."); if(!consumeOne(chronicle,"dry_branch",at)||!consumeOne(chronicle,"field_stone",at)||!consumeOne(chronicle,"plant_fiber",at))throw new IllegalStateException("Material changed."); UUID spear=createCarriedItem(chronicle,"primitive_spear","Primitive spear",at,"CRAFTED"); equip(spear,"HAND_RIGHT","ATTACHED"); return new ItemView(spear,"Primitive spear","primitive_spear",chronicle,null); }
     @Transactional public ItemView craftPrimitiveTool(String itemKey, String displayName, boolean needsBranch, Instant at) { UUID chronicle=activeChronicle(); if(!hasAtLeast(chronicle,"field_stone",1)||!hasAtLeast(chronicle,"plant_fiber",1)||(needsBranch&&!hasAtLeast(chronicle,"dry_branch",1)))throw new IllegalStateException("Insufficient physical material."); if(!consumeOne(chronicle,"field_stone",at)||!consumeOne(chronicle,"plant_fiber",at)||(needsBranch&&!consumeOne(chronicle,"dry_branch",at)))throw new IllegalStateException("Material changed."); UUID tool=createCarriedItem(chronicle,itemKey,displayName,at,"CRAFTED"); equip(tool,"HAND_RIGHT","ATTACHED"); return new ItemView(tool,displayName,itemKey,chronicle,null); }
+
+    /** True if the Chronicle can reach any blade capable of carving wood. */
+    @Transactional(readOnly = true)
+    public boolean hasCuttingTool(UUID chronicle) { return hasAtLeast(chronicle,"stone_knife",1) || hasAtLeast(chronicle,"stone_hatchet",1); }
+
+    /** Carve a hearth board and spindle from a dry branch — the reusable friction-fire kit. Needs a blade. */
+    @Transactional
+    public boolean craftFireKit(Instant at) {
+        UUID chronicle=activeChronicle();
+        if(!hasCuttingTool(chronicle) || !hasAtLeast(chronicle,"dry_branch",1)) return false;
+        if(capacityHeadroomUnits(chronicle,"hearth_board")<=0 || capacityHeadroomUnits(chronicle,"fire_spindle")<=0) return false;
+        if(!consumeOne(chronicle,"dry_branch",at)) return false;
+        createCarriedItem(chronicle,"hearth_board","Hearth board",at,"CRAFTED");
+        createCarriedItem(chronicle,"fire_spindle","Fire spindle",at,"CRAFTED");
+        return true;
+    }
+
+    /** Tease a plant-fiber bundle into a fine, dry nest that can catch an ember. */
+    @Transactional
+    public boolean craftTinder(Instant at) {
+        UUID chronicle=activeChronicle();
+        if(!hasAtLeast(chronicle,"plant_fiber",1)) return false;
+        if(capacityHeadroomUnits(chronicle,"tinder_nest")<=0) return false;
+        if(!consumeOne(chronicle,"plant_fiber",at)) return false;
+        createCarriedItem(chronicle,"tinder_nest","Tinder nest",at,"CRAFTED");
+        return true;
+    }
 
     @Transactional
     public void placeInContainer(UUID item, UUID container) {
