@@ -43,14 +43,19 @@ public class ChroniclePhysiologyService {
             int hygiene = clamp((int) Math.round(rs.getInt(10) - hours * .25));
             double sleepDebt = Math.min(72, rs.getBigDecimal(13).doubleValue() + hours);
             int pain = rs.getInt(14); int stress = rs.getInt(15); int injury = rs.getInt(16); int illness = rs.getInt(17); int bloodLoss = rs.getInt(18);
-            Environment environment = jdbc.query("SELECT ww.weather_kind,ww.intensity,ww.ambient_temperature_c,ww.wind_speed_kph,EXISTS(SELECT 1 FROM construction_project cp JOIN fire_state fs ON fs.construction_id=cp.object_id JOIN world_object pit ON pit.id=cp.object_id JOIN world_object body ON body.current_location_id=pit.current_location_id WHERE body.id=c.id AND fs.active=true),EXISTS(SELECT 1 FROM construction_project cp JOIN world_object shelter ON shelter.id=cp.object_id JOIN world_object body ON body.current_location_id=shelter.current_location_id WHERE body.id=c.id AND cp.project_kind='LEAN_TO' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND shelter.lifecycle_state='ACTIVE') FROM chronicle c JOIN world_weather ww ON ww.world_id=c.world_id WHERE c.id=?", result -> result.next() ? new Environment(result.getString(1),result.getInt(2),result.getBigDecimal(3).doubleValue(),result.getInt(4),result.getBoolean(5),result.getBoolean(6)) : new Environment("CLEAR",0,18,0,false,false), id);
+            Environment environment = jdbc.query("SELECT ww.weather_kind,ww.intensity,ww.ambient_temperature_c,ww.wind_speed_kph,COALESCE((SELECT fs.fuel_minutes FROM construction_project cp JOIN fire_state fs ON fs.construction_id=cp.object_id JOIN world_object pit ON pit.id=cp.object_id JOIN world_object body ON body.current_location_id=pit.current_location_id WHERE body.id=c.id AND fs.active=true ORDER BY fs.fuel_minutes DESC LIMIT 1),0),EXISTS(SELECT 1 FROM construction_project cp JOIN world_object shelter ON shelter.id=cp.object_id JOIN world_object body ON body.current_location_id=shelter.current_location_id WHERE body.id=c.id AND cp.project_kind='LEAN_TO' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND shelter.lifecycle_state='ACTIVE') FROM chronicle c JOIN world_weather ww ON ww.world_id=c.world_id WHERE c.id=?", result -> result.next() ? new Environment(result.getString(1),result.getInt(2),result.getBigDecimal(3).doubleValue(),result.getInt(4),result.getInt(5),result.getBoolean(6)) : new Environment("CLEAR",0,18,0,0,false), id);
             double core = rs.getBigDecimal(6).doubleValue();
             double effectiveWind = environment.shelter() ? environment.wind() * .25 : environment.wind();
             double exposure = (environment.ambient() - core) * Math.min(.22, hours * .04) - effectiveWind * hours * .004;
-            if (environment.fire()) exposure += (37.0 - core) * Math.min(.35, hours * .12);
+            // Fire warming scales with fuel level: dying embers (1-30 min) = low, steady (31-90) = moderate, well-fed (91+) = good.
+            // A primitive open fire pit is less effective than an enclosed hearth — capped accordingly.
+            if (environment.fuelMinutes() > 0) {
+                double fireRate = environment.fuelMinutes() <= 30 ? 0.6 : environment.fuelMinutes() <= 90 ? 1.4 : 2.0;
+                exposure += (37.0 - core) * Math.min(0.5, hours * fireRate);
+            }
             core = Math.max(20, Math.min(45, core + exposure));
             if ("RAIN".equals(environment.kind()) || "STORM".equals(environment.kind())) wetness = clamp((int)Math.round(wetness + hours * (environment.intensity() / (environment.shelter() ? 28.0 : 7.0))));
-            if (environment.fire()) wetness = clamp((int)Math.round(wetness - hours * 14));
+            if (environment.fuelMinutes() > 0) wetness = clamp((int)Math.round(wetness - hours * 14));
             int illnessPressure = (hygiene <= 10 ? (int) Math.ceil(hours * .4) : 0) + (wetness >= 70 && core < 36.0 ? (int) Math.ceil(hours * .6) : 0) + (injury >= 60 ? (int) Math.ceil(hours * .15) : 0);
             illness = clamp(illness + illnessPressure);
             if (food > STARVATION_DEATH_HOURS || water > DEHYDRATION_DEATH_HOURS || bloodLoss > 3500 || illness >= 100 || core < 28.0 || core > 42.0) {
@@ -154,6 +159,6 @@ public class ChroniclePhysiologyService {
     private static int clamp(int value) { return Math.max(0, Math.min(100, value)); }
     private static String health(int injury,int illness,int bloodLoss) { return bloodLoss > 2800 || illness > 80 || injury > 80 ? "Critical" : injury > 35 || illness > 35 ? "Injured" : "Healthy"; }
     private static String condition(String existing,int pain,int stress,double sleepDebt) { if (pain > 70) return "In pain"; if (stress > 75) return "Distressed"; if (sleepDebt > 28) return "Sleep deprived"; return existing; }
-    private record Environment(String kind,int intensity,double ambient,int wind,boolean fire,boolean shelter) { }
+    private record Environment(String kind,int intensity,double ambient,int wind,int fuelMinutes,boolean shelter) { }
     public record BodyHudSnapshot(String health, String condition, String hunger, String thirst, String energy, String temperature, String wetness, String bladder, String bowel, String hygiene) { }
 }
