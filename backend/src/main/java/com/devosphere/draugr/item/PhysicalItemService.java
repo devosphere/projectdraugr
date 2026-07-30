@@ -98,6 +98,28 @@ public class PhysicalItemService {
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'GATHERED',jsonb_build_object('material','bark_sheet'))", id, Timestamp.from(occurredAt));
         return 1;
     }
+    /** Dig clay from wet earth. Yield scales with biome: CLAY_DEPOSIT > RIVER_BANK > WETLAND. Dry biomes yield nothing. */
+    @Transactional
+    public int gatherClay(UUID chronicle, UUID location, Instant occurredAt) {
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
+        int yield = switch (biome != null ? biome : "") {
+            case "CLAY_DEPOSIT" -> 3;
+            case "RIVER_BANK"   -> 2;
+            case "WETLAND"      -> 1;
+            default -> 0;
+        };
+        if (yield == 0) return 0;
+        int desired = Math.min(yield, capacityHeadroomUnits(chronicle, "clay_lump"));
+        if (desired <= 0) return 0;
+        for (int i = 0; i < desired; i++) {
+            UUID id = UUID.randomUUID();
+            jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM','Clay lump',?)", id, chronicle);
+            jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,'clay_lump','SOUND')", id);
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'GATHERED',jsonb_build_object('biome',?))", id, Timestamp.from(occurredAt), biome);
+        }
+        assertCarryCapacity(chronicle);
+        return desired;
+    }
     /** Take a piece of charcoal from a spent fire — a writing implement. Requires a built fire pit here. */
     @Transactional
     public boolean makeCharcoal(UUID chronicle, UUID location, Instant occurredAt) {
