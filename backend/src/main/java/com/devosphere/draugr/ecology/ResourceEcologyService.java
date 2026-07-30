@@ -4,6 +4,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -17,13 +18,14 @@ public class ResourceEcologyService {
     @Transactional
     public int take(UUID chunkId, String resourceKey, int requestedUnits, Instant simulatedAt) {
         Profile profile = profile(chunkId, resourceKey);
-        jdbc.update("INSERT INTO world_chunk_resource (chunk_id,resource_key,available_units,capacity_units,last_regenerated_at) VALUES (?,?,?,?,?) ON CONFLICT (chunk_id,resource_key) DO NOTHING", chunkId, resourceKey, profile.capacity(), profile.capacity(), simulatedAt);
+        Timestamp simulatedTs = Timestamp.from(simulatedAt);
+        jdbc.update("INSERT INTO world_chunk_resource (chunk_id,resource_key,available_units,capacity_units,last_regenerated_at) VALUES (?,?,?,?,?) ON CONFLICT (chunk_id,resource_key) DO NOTHING", chunkId, resourceKey, profile.capacity(), profile.capacity(), simulatedTs);
         Stock stock = jdbc.query("SELECT available_units,capacity_units,last_regenerated_at FROM world_chunk_resource WHERE chunk_id=? AND resource_key=? FOR UPDATE", rs -> rs.next() ? new Stock(rs.getInt(1), rs.getInt(2), rs.getTimestamp(3).toInstant()) : null, chunkId, resourceKey);
         if (stock == null) return 0;
         long regenerationSteps = Math.max(0, Duration.between(stock.lastRegeneratedAt(), simulatedAt).toHours() / profile.hoursPerUnit());
         int regenerated = Math.min(stock.capacity(), stock.available() + (int) Math.min(Integer.MAX_VALUE, regenerationSteps));
         int taken = Math.min(Math.max(0, requestedUnits), regenerated);
-        jdbc.update("UPDATE world_chunk_resource SET available_units=?,last_regenerated_at=? WHERE chunk_id=? AND resource_key=?", regenerated - taken, simulatedAt, chunkId, resourceKey);
+        jdbc.update("UPDATE world_chunk_resource SET available_units=?,last_regenerated_at=? WHERE chunk_id=? AND resource_key=?", regenerated - taken, simulatedTs, chunkId, resourceKey);
         return taken;
     }
 

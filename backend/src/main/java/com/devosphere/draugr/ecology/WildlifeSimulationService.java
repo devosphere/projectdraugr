@@ -4,6 +4,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.Duration;
 import java.time.ZoneOffset;
@@ -27,7 +28,7 @@ public class WildlifeSimulationService {
                 long intervals = Math.max(0, Duration.between(last, now).toHours() / intervalHours);
                 if (intervals > 0 && population < capacity) {
                     int next = Math.min(capacity, population + (int)Math.min(intervals, capacity - population));
-                    jdbc.update("UPDATE wildlife_population SET population_count=?,last_simulated_at=? WHERE id=?", next, last.plus(Duration.ofHours(intervals * intervalHours)), id);
+                    jdbc.update("UPDATE wildlife_population SET population_count=?,last_simulated_at=? WHERE id=?", next, Timestamp.from(last.plus(Duration.ofHours(intervals * intervalHours))), id);
                 }
                 String behavior = behaviorFor(role, hour, weather, cycle);
                 jdbc.update("UPDATE wildlife_population SET behavior_state=? WHERE id=?", behavior, id);
@@ -41,7 +42,7 @@ public class WildlifeSimulationService {
         List<Site> sites = jdbc.query("SELECT id, site_kind FROM ecology_site WHERE site_category = 'WILDLIFE' AND NOT EXISTS (SELECT 1 FROM wildlife_population wp WHERE wp.site_id = ecology_site.id)", (rs, row) -> new Site(rs.getObject(1, UUID.class), rs.getString(2)));
         for (Site site : sites) {
             Profile profile = profileFor(site.kind().toLowerCase());
-            jdbc.update("INSERT INTO wildlife_population (id, site_id, species_key, ecological_role, activity_cycle, population_count, carrying_capacity, behavior_state, last_simulated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'RESTING', ?)", UUID.randomUUID(), site.id(), profile.species(), profile.role(), profile.cycle(), profile.initial(), profile.capacity(), now);
+            jdbc.update("INSERT INTO wildlife_population (id, site_id, species_key, ecological_role, activity_cycle, population_count, carrying_capacity, behavior_state, last_simulated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'RESTING', ?)", UUID.randomUUID(), site.id(), profile.species(), profile.role(), profile.cycle(), profile.initial(), profile.capacity(), Timestamp.from(now));
         }
     }
 

@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.sql.Timestamp;
 import java.util.List;
 import java.util.UUID;
 
@@ -15,7 +16,7 @@ public class ChronicleDiscoveryService {
 
     @Transactional
     public void record(UUID chronicleId, String discoveryKey, UUID actionId, Instant occurredAt) {
-        jdbc.update("INSERT INTO chronicle_discovery (chronicle_id,discovery_key,acquired_at,source_action_id) VALUES (?,?,?,?) ON CONFLICT (chronicle_id,discovery_key) DO NOTHING", chronicleId, discoveryKey, occurredAt, actionId);
+        jdbc.update("INSERT INTO chronicle_discovery (chronicle_id,discovery_key,acquired_at,source_action_id) VALUES (?,?,?,?) ON CONFLICT (chronicle_id,discovery_key) DO NOTHING", chronicleId, discoveryKey, Timestamp.from(occurredAt), actionId);
     }
 
     @Transactional(readOnly = true)
