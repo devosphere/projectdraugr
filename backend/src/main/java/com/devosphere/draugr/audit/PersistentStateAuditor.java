@@ -22,6 +22,8 @@ public class PersistentStateAuditor {
         if (unlocatedObjects != null && unlocatedObjects > 0) violations.add(unlocatedObjects + " active object(s) lack a location or owner.");
         Integer destroyedLocated = jdbc.queryForObject("SELECT COUNT(*) FROM world_object WHERE lifecycle_state='DESTROYED' AND (current_location_id IS NOT NULL OR current_owner_id IS NOT NULL)", Integer.class);
         if (destroyedLocated != null && destroyedLocated > 0) violations.add(destroyedLocated + " destroyed object(s) still have an active location or owner.");
+        Integer destroyedNoCause = jdbc.queryForObject("SELECT COUNT(*) FROM world_object WHERE lifecycle_state='DESTROYED' AND destroyed_cause IS NULL", Integer.class);
+        if (destroyedNoCause != null && destroyedNoCause > 0) violations.add(destroyedNoCause + " destroyed object(s) do not record how they were destroyed.");
         Integer invalidContainment = jdbc.queryForObject("SELECT COUNT(*) FROM item_containment ic JOIN world_object item ON item.id=ic.item_id JOIN world_object container ON container.id=ic.container_id WHERE item.lifecycle_state<>'ACTIVE' OR container.lifecycle_state<>'ACTIVE'", Integer.class);
         if (invalidContainment != null && invalidContainment > 0) violations.add(invalidContainment + " containment relation(s) reference an inactive object.");
         Integer inactiveEquipment = jdbc.queryForObject("SELECT COUNT(*) FROM equipment_attachment ea JOIN world_object item ON item.id=ea.item_id JOIN chronicle c ON c.id=ea.chronicle_id WHERE item.lifecycle_state<>'ACTIVE' OR c.life_state='DEAD'", Integer.class);

@@ -26,7 +26,7 @@ public class ConstructionService {
         List<UUID> collapsed = jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE cp.project_kind='LEAN_TO' AND cp.state='COMPLETED' AND cp.integrity_percent=0 AND w.lifecycle_state='ACTIVE' FOR UPDATE", (rs, row) -> rs.getObject(1, UUID.class));
         for (UUID objectId : collapsed) {
             jdbc.update("UPDATE construction_project SET state='DESTROYED' WHERE object_id=?", objectId);
-            jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED',destroyed_at=?,current_location_id=NULL,updated_at=? WHERE id=?", occurredAt, occurredAt, objectId);
+            jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED',destroyed_at=?,destroyed_location_id=current_location_id,destroyed_cause='CONSTRUCTION_COLLAPSED',current_location_id=NULL,updated_at=? WHERE id=?", occurredAt, occurredAt, objectId);
             jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CONSTRUCTION_COLLAPSED',jsonb_build_object('cause','storm_decay'))", objectId, occurredAt);
         }
     }
