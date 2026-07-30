@@ -83,6 +83,27 @@ function Ensure-DockerEngine([bool]$autoStart, $state) {
     }
     throw 'The Docker engine did not become ready in time. Open Docker Desktop manually, then relaunch.'
 }
+function Watch-GameWindow($root) {
+    # In app-window mode, closing the game window (via the Exit button's
+    # window.close() or the window frame) should stop the whole local stack, the
+    # way a desktop game would. We detect the isolated app-profile browser
+    # process and run the clean shutdown once it is gone. Best-effort: any
+    # failure here simply leaves the self-healing launcher to clean up next time.
+    $profileDir = Join-Path $root '.app-profile'
+    $filter = "Name='msedge.exe' OR Name='chrome.exe'"
+    try {
+        $appeared = $false
+        for ($i = 0; $i -lt 30; $i++) {
+            if (@(Get-CimInstance Win32_Process -Filter $filter -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($profileDir) }).Count -gt 0) { $appeared = $true; break }
+            Start-Sleep -Seconds 1
+        }
+        if (-not $appeared) { return }
+        while (@(Get-CimInstance Win32_Process -Filter $filter -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($profileDir) }).Count -gt 0) {
+            Start-Sleep -Seconds 2
+        }
+        & (Join-Path $PSScriptRoot 'Stop-Draugr.ps1')
+    } catch { }
+}
 function Open-GameWindow($url, $root) {
     $browser = @(
         (Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'),
@@ -108,12 +129,18 @@ try {
     if (-not (Test-Path (Join-Path $root 'frontend\node_modules'))) {
         throw 'Frontend dependencies are missing. Open the frontend folder once and run npm install, then launch Project Draugr again.'
     }
-    if (Test-Path $runtimeFile) {
-        throw 'Project Draugr is already marked as running. Use scripts\Stop-Draugr.ps1 before launching another instance.'
+    # Self-heal: a previous session that was closed without a clean shutdown can
+    # leave the runtime marker or the ports occupied. Rather than forcing the
+    # player to stop it manually, stop the prior instance automatically.
+    $priorInstance = (Test-Path $runtimeFile) -or (Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue) -or (Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction SilentlyContinue)
+    if ($priorInstance) {
+        Set-SplashStatus $splashState 'Closing a previous session...'
+        try { & (Join-Path $PSScriptRoot 'Stop-Draugr.ps1') } catch { }
+        Start-Sleep -Seconds 3
     }
     foreach ($port in 8080, 5173) {
         if (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue) {
-            throw "Port $port is already in use by another process. Close that existing backend/frontend first, then launch Project Draugr again."
+            throw "Port $port is still in use after attempting to close the previous session. Close that process, then relaunch."
         }
     }
 
@@ -143,6 +170,8 @@ try {
         elseif (-not $NoBrowser) { Start-Process 'http://127.0.0.1:5173' }
         Start-Sleep -Seconds 2
         Write-Host 'Project Draugr is starting. PostgreSQL, backend, and frontend were launched.'
+        Close-Splash $splashState; $splashState = $null
+        if ($AppWindow) { Watch-GameWindow $root }
     } catch {
         foreach ($startedProcess in @($backend, $frontend)) {
             if ($startedProcess -and (Get-Process -Id $startedProcess.Id -ErrorAction SilentlyContinue)) {
