@@ -28,7 +28,11 @@ public class SimulationTickService {
     @Transactional
     public SimulationTick advance() {
         SimulationClock simulationClock = clocks.findById((short) 1).orElseThrow();
+        // Actions advance simulated time forward by their duration, so simulated
+        // time can already be ahead of the wall clock. A real-time heartbeat tick
+        // must never rewind the world; clamp to the current simulated instant.
         Instant now = clock.instant();
+        if (now.isBefore(simulationClock.getSimulatedAt())) now = simulationClock.getSimulatedAt();
         SimulationAgent.SimulationAssessment assessment = simulation.assess(simulationClock.getTick() + 1, now);
         weather.advanceTo(now); fires.advanceTo(now); food.advanceTo(now); construction.advanceTo(now); physiology.advanceTo(now);
         wildlife.advanceTo(now);
