@@ -317,7 +317,7 @@ M1 and M2 are the hardening proper and should land together — M2 without M1 ha
 
 **Principal risk:** backfilling categories across every existing matchable row (M2) is broad and mechanical. A missed row silently stops matching. The Auditor invariant requiring a category on every matchable row is the guard, and it must land in the same migration as the columns, not after.
 
-**Explicitly out of scope:** AI-assisted classification. The classifier must stay deterministic and free. Routing exists to *avoid* API calls; a router that costs a call defeats itself.
+**Explicitly out of scope:** AI-assisted classification. The classifier must stay deterministic and free. Routing exists to *avoid* API calls; a router that costs a call defeats itself. This was revisited in full once M1/M2 landed and the answer held — see [routing-and-coverage-strategy.md](routing-and-coverage-strategy.md) for the decision record, so it need not be argued a third time.
 
 ---
 
@@ -325,6 +325,7 @@ M1 and M2 are the hardening proper and should land together — M2 without M1 ha
 
 | Document | Relevance |
 |----------|-----------|
+| [routing-and-coverage-strategy.md](routing-and-coverage-strategy.md) | Where AI belongs (authoring time, not resolution time) and how to read the coverage backlog |
 | [narration-engine.md](narration-engine.md) | NarrationRouter — the same routing principle for prose |
 | [domain-creation-pattern.md](domain-creation-pattern.md) | How the Architect adds a domain |
 | [core-agent-boundaries.md](core-agent-boundaries.md) | What each of the three agents may do |

@@ -325,7 +325,9 @@ public class PhysicalItemService {
         // a wrong match does not throw: it quietly does the wrong thing to a
         // chronicle's inventory. The narration says nothing about why nothing matched;
         // the world simply does not yet know how to do it.
-        String key = matcher.match(actionText);
+        // matchAndRecord, not match: this is the play path, so a miss here is a real
+        // gap a player walked into and belongs in the backlog (V56).
+        String key = matcher.matchAndRecord(actionText);
         if (key == null) return new String[]{"FAILED", "You turn the material over without settling on what to do with it."};
         java.util.Map<String,Object> match = jdbc.queryForMap(
             "SELECT process_key, display_name, output_item_key, output_min, output_max, tool_class, " +

@@ -58,9 +58,29 @@ public class ProcessMatcher {
 
     private final JdbcTemplate jdbc;
     private final ActivityClassifier classifier;
+    private final RoutingMissRecorder misses;
 
-    public ProcessMatcher(JdbcTemplate jdbc, ActivityClassifier classifier) {
-        this.jdbc = jdbc; this.classifier = classifier;
+    public ProcessMatcher(JdbcTemplate jdbc, ActivityClassifier classifier, RoutingMissRecorder misses) {
+        this.jdbc = jdbc; this.classifier = classifier; this.misses = misses;
+    }
+
+    /**
+     * The outcome of applying the rule: what matched, or how far the nearest candidate
+     * got before a gate stopped it.
+     *
+     * <p>The near-miss is not decoration. When nothing resolves, the only question
+     * worth asking is whether the WORDS are missing or the MECHANIC is missing, and
+     * those have completely different fixes — a category term versus a whole process
+     * definition. {@code furthestGate} answers it: NONE means no process in that
+     * category exists at all, CATEGORY means one exists but does not know this
+     * phrasing, KEYWORD means the right process was reached and rejected the material.
+     *
+     * @param processKey the winning process, or null when nothing matched
+     * @param furthestGate NONE, CATEGORY or KEYWORD — the last gate a candidate passed
+     * @param nearProcessKey the candidate that got furthest, or null when none did
+     */
+    public record Result(String processKey, String furthestGate, String nearProcessKey) {
+        boolean matched() { return processKey != null; }
     }
 
     /**
@@ -71,32 +91,66 @@ public class ProcessMatcher {
      * always resolves to the same process no matter what order the rows arrive in.
      *
      * @param category the classified category, or null to drop the category condition
-     * @return the winning process key, or null when nothing agrees on all three counts
      */
-    public static String match(String text, String category, List<Candidate> candidates) {
+    public static Result resolve(String text, String category, List<Candidate> candidates) {
         String v = ActivityClassifier.normalise(text);
         String best = null; int bestLen = -1;
+        String nearKey = null; String gate = "NONE";
         for (Candidate c : candidates) {
             if (category != null && !category.equals(c.categoryKey())) continue;
             int len = -1;
             for (String kw : c.keywords())
                 if (ActivityClassifier.containsTerm(v, kw) && kw.length() > len) len = kw.length();
-            if (len < 0) continue;
+            if (len < 0) {
+                // Shares the category but answers to none of these words.
+                if ("NONE".equals(gate)) { gate = "CATEGORY"; nearKey = c.processKey(); }
+                continue;
+            }
             boolean subject = false;
             for (String s : c.subjects()) if (ActivityClassifier.containsTerm(v, s)) { subject = true; break; }
-            if (!subject) continue;
+            if (!subject) {
+                // Right work, right verb, wrong material — the closest kind of miss.
+                if (!"KEYWORD".equals(gate)) { gate = "KEYWORD"; nearKey = c.processKey(); }
+                continue;
+            }
             if (len > bestLen || (len == bestLen && c.processKey().compareTo(best) < 0)) {
                 best = c.processKey(); bestLen = len;
             }
         }
-        return best;
+        return new Result(best, gate, nearKey);
     }
 
-    /** Apply the rule against the world's own processes. Null when none matches. */
+    /** The winning process key alone, for callers that do not care why it missed. */
+    public static String match(String text, String category, List<Candidate> candidates) {
+        return resolve(text, category, candidates).processKey();
+    }
+
+    /**
+     * Apply the rule against the world's own processes, without side effects. Null when
+     * none matches.
+     *
+     * <p>Used by {@code ArchitectRouter}, which is read-only by contract: assessing
+     * whether a gap exists is not the same as a player running into one.
+     */
     @Transactional(readOnly = true)
     public String match(String actionText) {
-        return match(actionText, classifier.classify(actionText), candidates());
+        return resolve(actionText, classifier.classify(actionText), candidates()).processKey();
     }
+
+    /**
+     * Apply the rule on the play path, recording a miss when nothing resolves.
+     *
+     * <p>This is the only place misses are counted, and it is the right one: it means
+     * a player actually tried to do material work and the world could not. An action
+     * merely being assessed for routing is not evidence of anything.
+     */
+    public String matchAndRecord(String actionText) {
+        String category = classifier.classify(actionText);
+        Result r = resolve(actionText, category, candidates());
+        if (!r.matched()) misses.record(actionText, category, r);
+        return r.processKey();
+    }
+
 
     /**
      * Only reviewed processes are candidates (V53). A definition the Auditor has

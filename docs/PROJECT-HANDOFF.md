@@ -98,10 +98,13 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 | `backend/src/main/java/com/devosphere/draugr/capability/CapabilityAdaptationService.java` | Layer 3 familiarity() — reads chronicle_capability_adaptation. |
 | `backend/src/main/java/com/devosphere/draugr/audit/PersistentStateAuditor.java` | Read-only invariant checks. Never add mutation methods here. |
 | `backend/src/main/java/com/devosphere/draugr/domain/ArchitectRouter.java` | Cost gate for the Architect — routes COVERED / POLISH / INVENT. |
-| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V54. Next is V55. |
+| `backend/src/main/java/com/devosphere/draugr/routing/ProcessMatcher.java` | The **only** implementation of the action→process resolution rule. Both `runProcess()` and `ArchitectRouter` go through it. |
+| `backend/src/main/java/com/devosphere/draugr/routing/RoutingMissRecorder.java` | Records unresolved actions into the V56 backlog. Separate bean on purpose — see its Javadoc. |
+| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V56. Next is V57. |
 | `backend/src/main/java/com/devosphere/draugr/domain/DomainRegistryService.java` | Reads domain_registry — the Architect's ledger of invented domains. |
 | `docs/architecture/domain-creation-pattern.md` | The exact recipe for adding a new domain. |
 | `docs/architecture/action-routing-hardening.md` | Sprint 003 spec — collisions, milestones M1–M5. |
+| `docs/architecture/routing-and-coverage-strategy.md` | **Decision record: no AI at resolution time.** Read before proposing one. Also: how to read the coverage backlog. |
 | `frontend/src/PlaythroughScreen.tsx` | Main game UI. |
 
 ## Architecture Patterns
@@ -116,7 +119,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 
 ---
 
-## What Is Built (Migrations V1–V54, all applied)
+## What Is Built (Migrations V1–V56, all applied)
 
 - V1–V30: World geography, ecology, chronicle lifecycle, physiology, action ledger, wildlife, items, equipment, carry capacity, capability adaptation, construction, literature, fire, weather, food preservation, tools, clothing, idempotency
 - V31: Writing materials (bark_sheet, charcoal, clay_lump; STRIP_BARK, MAKE_CHARCOAL, GATHER_CLAY, WRITE)
@@ -166,6 +169,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 - V53: The Auditor's review gate — `process_review`, `process_mass_balance` view, `conservation_exempt`. A process is not canon until `review_state='VERIFIED'`; `runProcess()` reads VERIFIED only. Caught 9 of the 20 V52 processes creating matter.
 - V54: Activity categories + subject gate (schema half of M1+M2). See below.
 - V55: Routing category corrections — four processes V54 made unreachable or mis-resolved, plus a migration-time check that a process's own keywords classify to its own category.
+- V56: Routing miss backlog — `routing_miss` (frequency-ranked, recorded on the play path only) + `routing_miss_backlog` and `routing_unknown_term` views. Answers the question that directs coverage work: is a gap missing *words* or a missing *mechanic*?
 
 **Why routing hardening exists:** matching was lexical and global. "Split the fish" matched `split_planks`; "weatherproof the shell" matched the weather domain. A wrong match doesn't throw — it silently suppresses the Architect call the moment needed, which is worse than an honest gap.
 
@@ -177,26 +181,32 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 
 **V55 corrects V54's data.** Wiring the Java and probing with ordinary phrasing exposed the opposite failure from the one V54 fixed: `dress_foundation`, `reinforce_timber` and `fire_vessel` had become unreachable by any plausible sentence, and `weave_large_basket` resolved to `weave_textile`. In every case a process's declared category disagreed with the category its own verbs classify to — an axis V54 introduced but never checked. V55 fixes the four and adds the check.
 
-**M1 + M2 are COMPLETE.** `ActivityClassifier` (classification) and `ProcessMatcher` (the full rule) live in `com.devosphere.draugr.routing`; both `PhysicalItemService.runProcess()` and `ArchitectRouter` route through `ProcessMatcher`, so the rule has exactly one implementation. The Auditor carries three new standing invariants. 87 DB-free unit tests green; 55 migrations apply clean from scratch.
+**M1 + M2 are COMPLETE.** `ActivityClassifier` (classification) and `ProcessMatcher` (the full rule) live in `com.devosphere.draugr.routing`; both `PhysicalItemService.runProcess()` and `ArchitectRouter` route through `ProcessMatcher`, so the rule has exactly one implementation. The Auditor carries three new standing invariants. 88 DB-free unit tests green; 56 migrations apply clean from scratch.
 
-**Verified:** 8/8 recorded collisions blocked, 21/21 processes reachable by ordinary phrasing — `ProcessRoutingTest`.
+**Verified:** 8/8 recorded collisions blocked, 21/21 processes reachable by ordinary phrasing, and every miss correctly diagnosed as vocabulary / keyword / subject / mechanic — `ProcessRoutingTest`.
+
+#### SETTLED: no AI at resolution time — read this before proposing one
+
+**`docs/architecture/routing-and-coverage-strategy.md` is the decision record. Read it rather than re-deriving it.**
+
+The question "should an AI layer help the ActivityClassifier work out what the player meant?" has been asked and answered: **no.** Four reasons, in short — (1) ~39 of ~46 probed actions missed because *the mechanic does not exist*, so a classifier would pay a call to confirm emptiness; (2) an LLM handed 20 candidates finds the nearest one, which manufactures exactly the false COVERED that V54/V55 exist to prevent; (3) `runProcess` writes permanent history, and V53's gate works precisely because what it gates is data sitting still — an inline classifier's output is a decision already executed, with nothing left to gate; (4) it grants a fourth agent authority that `core-agent-boundaries.md` never gave it.
+
+**AI goes at authoring time instead** — one call per novel verb ever, one call per process ever, both permanent and compounding. The strategy doc carries the full argument, the backlog queries, the invariants that must not be broken, and the specific evidence that would justify reopening the question.
 
 #### Resume point
 
-1. **Bulk foundation generation through the V53 gate** (see the open question below) — reprioritized above M3. This is the actual API-cost lever; M1/M2 bought correctness, not coverage.
-2. Then M3 (staged assembly), M3b (graded quality), M4 (vocabulary), M5 (coverage as standing measure).
+1. **DONE — Step 1: measure.** V56 shipped. The backlog is live and directs the rest.
+2. **NEXT — Step 2: bulk foundation generation through the V53 gate.** The actual API-cost lever; M1/M2 bought correctness, not coverage. Target 200–300 processes, generated offline as `DRAFT`, validated by V53 mass balance + V55 category agreement + V51 reachability + derived subject terms, sampled by hand for plausibility, and only then promoted to `VERIFIED`. Scope named by the simulations: staged assembly, joinery, building layers, timber preservation, salt/food preservation, fish processing, bow production, leather armour.
+3. **Then Step 3: re-measure** via `routing_miss_backlog` and let the `MECHANIC` share decide what the next cycle does.
+4. Then M3 (staged assembly), M3b (graded quality), M4 (vocabulary), M5 (coverage as standing measure).
 
-Carried forward from M4: log NULL classifications into a ranked backlog so the Architect can propose category terms for genuinely novel verbs — one call per novel verb ever, amortizing to near zero.
-
-#### Open strategic question: coverage, not correctness, is the cost driver
+#### Why coverage, not correctness, is the cost driver
 
 Four procedure simulations (15 m² cabin, fish preservation, bow production, leather armor) returned 0/12, 1/10, 3/12, 3/12 COVERED — and several of those were *false* COVERED. True coverage is roughly 5–10%. With only 20 processes, nearly every meaningful action still routes to the Architect.
 
-**M1/M2 improves correctness, not cost.** Routing hardening makes the gaps honest; it does not make them fewer.
+**M1/M2 improves correctness, not cost.** Routing hardening makes the gaps honest; it does not make them fewer. V56 makes them countable. Step 2 makes them fewer.
 
-The proposed unlock: V53's review gate already makes machine-authored processes safe to accept — it caught 9 of 20 hand-authored recipes creating matter, deterministically and with no AI involved. So generate several hundred processes offline in one batch, run them through the gate, and land only `VERIFIED` rows as a migration. Bounded one-time offline cost instead of an unbounded per-action one.
-
-Caveat: mass balance catches physics errors but not *plausibility* errors — a recipe can conserve mass and still be bad primitive technology. Needs tightly grounded generation prompts plus sampled human review (design rule #5).
+The unlock: V53's review gate already makes machine-authored processes safe to accept — it caught 9 of 20 hand-authored recipes creating matter, deterministically and with no AI involved. Bounded one-time offline cost instead of an unbounded per-action one. Caveat: mass balance catches physics errors but not *plausibility* errors — a recipe can conserve mass and still be bad primitive technology. Needs tightly grounded generation prompts plus sampled human review (design rule #5).
 
 **THEN: Task #21 — AI narration (the Simulation Agent's voice).** The seam is built: `NarrationRouter` decides whether to call, `NarrationEngine` supplies the `backendNarration` the refinement prompt builds on. See `docs/architecture/narration-engine.md` for the prompt template and cost model.
 

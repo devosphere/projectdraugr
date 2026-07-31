@@ -105,6 +105,34 @@ class ProcessRoutingTest {
         assertEquals("timber_from_log", RoutingFixture.resolve("baulk the timber"));
     }
 
+    /**
+     * A miss has to say which kind of miss it was, because vocabulary gaps and mechanic
+     * gaps have completely different fixes and wildly different costs. This is what
+     * V56's backlog turns into VOCABULARY / MECHANIC / KEYWORD / SUBJECT.
+     */
+    @Test
+    @DisplayName("a miss reports how far the nearest candidate got")
+    void missesAreDiagnosed() {
+        // No process is HUNT at all, so nothing even shares the category. The world is
+        // missing a mechanic — there is no way to process a fish — and no amount of
+        // vocabulary would change that.
+        ProcessMatcher.Result mechanic = RoutingFixture.diagnose("split the fish into thin strips");
+        assertEquals("NONE", mechanic.furthestGate());
+        assertNull(mechanic.nearProcessKey());
+
+        // A construction process exists and the category is right, but it answers to
+        // none of these words. That is a keyword gap, and cheap to close.
+        ProcessMatcher.Result keyword = RoutingFixture.diagnose("weatherproof the shell with cladding");
+        assertEquals("CATEGORY", keyword.furthestGate());
+        assertEquals("reinforce_timber", keyword.nearProcessKey());
+
+        // The right process was reached by the right verb and turned the material down.
+        // Either a subject term is missing or the player meant something else entirely.
+        ProcessMatcher.Result subject = RoutingFixture.diagnose("split the bone into strips");
+        assertEquals("KEYWORD", subject.furthestGate());
+        assertEquals("split_planks", subject.nearProcessKey());
+    }
+
     /** Nothing at all should come back for text that names no work and no material. */
     @Test
     @DisplayName("empty and irrelevant text resolves to nothing")

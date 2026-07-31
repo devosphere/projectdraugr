@@ -150,7 +150,11 @@ final class RoutingFixture {
 
     /** Classify then match, the way the runtime does. */
     static String resolve(String text) {
-        String category = ActivityClassifier.classify(text, VOCABULARY, PRECEDENCE);
-        return ProcessMatcher.match(text, category, PROCESSES);
+        return diagnose(text).processKey();
+    }
+
+    /** The same, keeping the near-miss detail the backlog records. */
+    static ProcessMatcher.Result diagnose(String text) {
+        return ProcessMatcher.resolve(text, ActivityClassifier.classify(text, VOCABULARY, PRECEDENCE), PROCESSES);
     }
 }
