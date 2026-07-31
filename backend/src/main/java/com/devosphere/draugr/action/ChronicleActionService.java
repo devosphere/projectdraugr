@@ -261,7 +261,7 @@ public class ChronicleActionService {
         String around = neighbourHints(world, gx, gy);
         if (!around.isEmpty()) s.append(around);
         // How well this ground is known.
-        Integer visits = jdbc.queryForObject("SELECT visit_count FROM chronicle_chunk_visit WHERE chronicle_id=? AND chunk_id=?", Integer.class, chronicle.id(), loc);
+        Integer visits = jdbc.queryForObject("SELECT COALESCE((SELECT visit_count FROM chronicle_chunk_visit WHERE chronicle_id=? AND chunk_id=?),0)", Integer.class, chronicle.id(), loc);
         if (visits != null && visits >= 5) s.append("You know this ground well; your feet have worn a familiarity into it. ");
         return s.toString().trim();
     }
@@ -384,7 +384,7 @@ public class ChronicleActionService {
             boolean recent = last != null && last.toInstant().isAfter(java.time.Instant.now().minus(java.time.Duration.ofDays(4)));
             boolean markerHere = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM location_marker WHERE chunk_id=?)", Boolean.class, chunk));
             boolean onMap = Boolean.TRUE.equals(jdbc.queryForObject("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT EXISTS(SELECT 1 FROM reachable x JOIN literature_document d ON d.object_id=x.id JOIN literature_revision rv ON rv.id=d.current_revision_id WHERE d.document_kind='MAP' AND rv.content ILIKE ?)", Boolean.class, chronicle.id(), "%"+name+"%"));
-            Integer visits = jdbc.queryForObject("SELECT visit_count FROM chronicle_chunk_visit WHERE chronicle_id=? AND chunk_id=?", Integer.class, chronicle.id(), chunk);
+            Integer visits = jdbc.queryForObject("SELECT COALESCE((SELECT visit_count FROM chronicle_chunk_visit WHERE chronicle_id=? AND chunk_id=?),0)", Integer.class, chronicle.id(), chunk);
             boolean routine = visits != null && visits >= 5;
             boolean locatable = onMap || (markerHere && memorized) || routine || (memorized && recent);
             if (!locatable) continue;
@@ -458,7 +458,11 @@ public class ChronicleActionService {
         if((value.contains("craft")||value.contains("make")||value.contains("build")||value.contains("construct")||value.contains("assemble"))&&(value.contains("chair")||value.contains("stool")||value.contains("seat"))) return Intent.CRAFT_CHAIR;
         if(value.contains("lean-to") || value.contains("lean to")) return classifyLeanTo(value);
         if((value.contains("check")||value.contains("inspect")||value.contains("look at")||value.contains("empty")||value.contains("collect from")||value.contains("return to"))&&(value.contains("trap")||value.contains("snare")||value.contains("deadfall"))) return Intent.CHECK_TRAP;
-        if((value.contains("build")||value.contains("set")||value.contains("make")||value.contains("place")||value.contains("construct")||value.contains("lay"))&&(value.contains("deadfall")||value.contains("pit trap")||value.contains("fish trap")||value.contains("cage trap")||value.contains("box trap")||(value.contains("trap")&&!value.contains("check")))) return Intent.SET_TRAP;
+        // Placing a trap and working a snare by hand both mention "snare", so the
+        // deciding signal is whether the chronicle is LEAVING something behind. A
+        // setting/building verb means a persistent placed trap (V46); a bare
+        // "snare a rabbit" is the immediate hand-worked attempt (V42).
+        if((value.contains("build")||value.contains("set")||value.contains("make")||value.contains("place")||value.contains("construct")||value.contains("lay"))&&(value.contains("deadfall")||value.contains("pit trap")||value.contains("fish trap")||value.contains("cage trap")||value.contains("box trap")||value.contains("snare")||(value.contains("trap")&&!value.contains("check")))) return Intent.SET_TRAP;
         if(value.contains("lure")||value.contains("bait the")||((value.contains("leave")||value.contains("put")||value.contains("place")||value.contains("set"))&&(value.contains("bait")||value.contains("draw them")||value.contains("draw it")))) return Intent.LURE;
         if(value.contains("tame")||value.contains("befriend")||value.contains("domesticate")||value.contains("gain its trust")||value.contains("earn its trust")||((value.contains("approach")||value.contains("offer")||value.contains("feed")||value.contains("hold out"))&&(value.contains("calm")||value.contains("slow")||value.contains("gentl")||value.contains("quiet")||value.contains("trust")||value.contains("goat")||value.contains("rabbit")||value.contains("fowl")||value.contains("turtle")||value.contains("hedgehog")||value.contains("pigeon")||value.contains("deer")||value.contains("reindeer")||value.contains("duck")))) return Intent.TAME;
         if(value.contains("track")||value.contains("follow the trail")||value.contains("read the ground")||value.contains("look for sign")||value.contains("look for tracks")||((value.contains("print")||value.contains("spoor")||value.contains("scat")||value.contains("droppings")||value.contains("trail"))&&(value.contains("find")||value.contains("read")||value.contains("follow")||value.contains("search")||value.contains("look")))) return Intent.TRACK;
