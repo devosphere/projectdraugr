@@ -32,6 +32,29 @@ public class PersistentStateAuditor {
         if (brokenShelters != null && brokenShelters > 0) violations.add(brokenShelters + " completed construction(s) have zero integrity while still active.");
         Integer orphanFood = jdbc.queryForObject("SELECT COUNT(*) FROM food_preservation_state fps LEFT JOIN item_instance ii ON ii.object_id=fps.object_id WHERE ii.object_id IS NULL", Integer.class);
         if (orphanFood != null && orphanFood > 0) violations.add(orphanFood + " food-preservation record(s) lack a physical item.");
+        // Literature: a document is a title bound to a chain of revisions. A document
+        // with no current revision holds no words; a current revision belonging to
+        // another document, or one that is not the latest, means the chain has been
+        // corrupted — the record would render stale or foreign text.
+        Integer emptyDocuments = jdbc.queryForObject("SELECT COUNT(*) FROM literature_document WHERE current_revision_id IS NULL", Integer.class);
+        if (emptyDocuments != null && emptyDocuments > 0) violations.add(emptyDocuments + " literature document(s) have no current revision.");
+        Integer foreignRevision = jdbc.queryForObject("SELECT COUNT(*) FROM literature_document ld JOIN literature_revision lr ON lr.id=ld.current_revision_id WHERE lr.document_id <> ld.object_id", Integer.class);
+        if (foreignRevision != null && foreignRevision > 0) violations.add(foreignRevision + " literature document(s) point to a revision from another document.");
+        Integer staleRevision = jdbc.queryForObject("SELECT COUNT(*) FROM literature_document ld JOIN literature_revision cur ON cur.id=ld.current_revision_id WHERE cur.revision_number < (SELECT MAX(r.revision_number) FROM literature_revision r WHERE r.document_id=ld.object_id)", Integer.class);
+        if (staleRevision != null && staleRevision > 0) violations.add(staleRevision + " literature document(s) do not point to their latest revision.");
+        // Fire: a live fire needs fuel, a hearth to sit in, and that hearth intact.
+        Integer starvedFire = jdbc.queryForObject("SELECT COUNT(*) FROM fire_state WHERE active=true AND fuel_minutes=0", Integer.class);
+        if (starvedFire != null && starvedFire > 0) violations.add(starvedFire + " fire(s) burn with no fuel remaining.");
+        Integer displacedFire = jdbc.queryForObject("SELECT COUNT(*) FROM fire_state fs JOIN construction_project cp ON cp.object_id=fs.construction_id JOIN world_object w ON w.id=fs.construction_id WHERE fs.active=true AND (cp.project_kind <> 'STONE_FIRE_PIT' OR w.lifecycle_state='DESTROYED')", Integer.class);
+        if (displacedFire != null && displacedFire > 0) violations.add(displacedFire + " fire(s) burn on something other than an intact fire pit.");
+        // A carcass emptied of both meat and hide should have been retired, not left
+        // standing as an active object the world still offers up.
+        Integer spentCarcass = jdbc.queryForObject("SELECT COUNT(*) FROM wildlife_carcass wc JOIN world_object w ON w.id=wc.object_id WHERE w.lifecycle_state='ACTIVE' AND wc.remaining_meat_units=0 AND wc.hide_available=false", Integer.class);
+        if (spentCarcass != null && spentCarcass > 0) violations.add(spentCarcass + " exhausted carcass(es) remain active in the world.");
+        // Navigation memory: a recorded visit means the chronicle has stood there at
+        // least once, so a non-positive count is a corrupted route memory.
+        Integer emptyVisits = jdbc.queryForObject("SELECT COUNT(*) FROM chronicle_chunk_visit WHERE visit_count <= 0", Integer.class);
+        if (emptyVisits != null && emptyVisits > 0) violations.add(emptyVisits + " navigation visit record(s) hold a non-positive count.");
         Integer chunks = jdbc.queryForObject("SELECT COUNT(*) FROM world_chunk", Integer.class);
         if (chunks == null || chunks == 0) violations.add("Canonical geography is missing.");
         return new AuditReport(violations.isEmpty(), List.copyOf(violations));
