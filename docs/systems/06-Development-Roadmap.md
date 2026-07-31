@@ -68,11 +68,19 @@ Define the complete vision before implementation.
 
 ### Status
 
-Current Phase
+Complete — all design documents, schemas, and vision documents authored. Active development has entered Phase 1.
 
 ---
 
 # Phase 1 — Minimum Viable World (MVP)
+
+## Status
+
+**In Progress** — as of 2026-07-31
+
+Backend: Java 21 / Spring Boot / PostgreSQL. Migrations V1–V37 applied. All core systems built (physiology, fire, wildlife, items, construction, literature, navigation, cartography, sleep, capability adaptation, three-layer success model). Frontend: React/Vite/TypeScript playable UI.
+
+Remaining before Phase 1 complete: foundation tasks F1–F7 (perception frame, consequence completeness, Auditor catalog, domain registry), then AI narration (Task #21).
 
 ## Objective
 
