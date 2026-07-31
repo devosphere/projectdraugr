@@ -300,6 +300,108 @@ public class PhysicalItemService {
         return count != null && count >= required;
     }
 
+    /**
+     * Search the ground and exposed rock for a mineral (V50). What can be found is
+     * decided by the geology of the biome, and whether it IS found by the mineral's
+     * own rarity — searching stone for a flint nodule is patient work that often
+     * comes to nothing. A named mineral is searched for specifically; an unnamed
+     * search turns up whatever this ground most readily offers.
+     *
+     * @return [outcome, narration]
+     */
+    @Transactional
+    public String[] gatherMineral(UUID chronicle, UUID location, String actionText, Instant occurredAt) {
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
+        String v = actionText.toLowerCase(java.util.Locale.ROOT);
+
+        java.util.List<java.util.Map<String,Object>> here = jdbc.queryForList(
+            "SELECT mineral_key, display_name, rarity, tool_required, yield_min, yield_max FROM mineral_definition " +
+            "WHERE biome_affinity ILIKE ? ORDER BY rarity DESC", "%" + biome + "%");
+        if (here.isEmpty())
+            return new String[]{"FAILED", "You turn over what stone there is. This ground has nothing in it but dirt."};
+
+        java.util.Map<String,Object> target = here.stream()
+            .filter(m -> v.contains(((String)m.get("mineral_key")).replace('_',' ')) || v.contains(((String)m.get("display_name")).toLowerCase()))
+            .findFirst().orElse(null);
+        boolean named = target != null;
+        if (target == null) target = here.get(0);
+
+        String key = (String) target.get("mineral_key");
+        String name = (String) target.get("display_name");
+        String tool = (String) target.get("tool_required");
+        if (tool != null && !hasCuttingTool(chronicle) && !hasAtLeast(chronicle,"stone_hammer",1) && !hasAtLeast(chronicle,"primitive_pickaxe",1))
+            return new String[]{"FAILED", "The " + name.toLowerCase() + " is locked in the rock, and you have nothing to break it free with."};
+
+        // Searching for one specific mineral is harder than taking what is plainly there.
+        double chance = ((Number) target.get("rarity")).doubleValue() * (named ? 0.75 : 1.0);
+        if (Math.random() > chance)
+            return new String[]{"FAILED", named
+                ? "You work along the rock looking for " + name.toLowerCase() + ", turning over what looks promising. None of it is."
+                : "You search the stone for a long while and come away with nothing worth carrying."};
+
+        int lo = ((Number)target.get("yield_min")).intValue(), hi = ((Number)target.get("yield_max")).intValue();
+        int want = lo + (hi > lo ? (int)(Math.random()*(hi-lo+1)) : 0);
+        int room = capacityHeadroomUnits(chronicle, key);
+        int take = Math.min(want, room);
+        if (take <= 0) return new String[]{"FAILED", "You find what you were after and cannot carry another thing."};
+        for (int i = 0; i < take; i++) {
+            UUID id = UUID.randomUUID();
+            jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM',?,?)", id, name, chronicle);
+            jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,?,'SOUND')", id, key);
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'GATHERED',jsonb_build_object('mineral',?,'biome',?))", id, Timestamp.from(occurredAt), key, biome);
+        }
+        assertCarryCapacity(chronicle);
+        return new String[]{"SUCCEEDED", "You work it loose and turn it over in your hand: " + name.toLowerCase() + (take > 1 ? ", and more of it nearby." : ".")};
+    }
+
+    /**
+     * Sew or weave a garment. Hide and fur come off animals the chronicle killed;
+     * a woven tunic comes off the plants they gathered. Cutting work needs a blade.
+     * The garment is created worn-ready but not equipped — putting it on is the
+     * player's own decision, through EQUIP.
+     *
+     * @return [outcome, narration]
+     */
+    @Transactional
+    public String[] craftGarment(UUID chronicle, String actionText, Instant occurredAt) {
+        String v = actionText.toLowerCase(java.util.Locale.ROOT);
+        record Pattern(String itemKey, String name, String hideKind, int hides, int fiber, boolean needsBlade) { }
+        Pattern p =
+            v.contains("cloak") || v.contains("fur")       ? new Pattern("fur_cloak",    "Fur cloak",     "pelt", 2, 1, true)
+          : v.contains("legging") || v.contains("trouser") ? new Pattern("hide_leggings","Hide leggings", "hide", 1, 1, true)
+          : v.contains("boot") || v.contains("shoe")       ? new Pattern("hide_boots",   "Hide boots",    "hide", 1, 1, true)
+          : v.contains("tunic") || v.contains("woven")     ? new Pattern("fiber_tunic",  "Woven tunic",   null,   0, 6, false)
+          :                                                  new Pattern("hide_coat",    "Hide coat",     "hide", 2, 1, true);
+
+        if (p.needsBlade() && !hasCuttingTool(chronicle))
+            return new String[]{"FAILED", "You lay the material out and reach for something to cut it with. You have no blade."};
+
+        // Pelts are warmer than plain hide, so a cloak asks for them specifically;
+        // anything else takes whatever skin is to hand.
+        java.util.List<String> hideKeys = "pelt".equals(p.hideKind())
+            ? java.util.List.of("wolf_pelt","bear_pelt","fox_pelt","lynx_pelt","rabbit_pelt","dire_wolf_pelt")
+            : java.util.List.of("animal_hide","deer_hide","boar_hide","troll_hide","wolf_pelt","bear_pelt","fox_pelt","lynx_pelt","rabbit_pelt");
+
+        int haveHides = 0;
+        for (String k : hideKeys) { Integer n = jdbc.queryForObject(
+            "WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object n ON n.id=ic.item_id WHERE n.lifecycle_state='ACTIVE') SELECT COUNT(*) FROM reachable r JOIN item_instance i ON i.object_id=r.id WHERE i.item_key=?",
+            Integer.class, chronicle, k); haveHides += n == null ? 0 : n; }
+
+        if (haveHides < p.hides())
+            return new String[]{"FAILED", p.hides() == 0 ? "You have nothing to work with." :
+                "You spread out what skins you have and turn them over. There is not enough here to make " + p.name().toLowerCase() + " that would cover anything."};
+        if (!hasAtLeast(chronicle, "plant_fiber", p.fiber()) && !hasAtLeast(chronicle, "animal_sinew", p.fiber()) && !hasAtLeast(chronicle, "fiber_cordage", p.fiber()))
+            return new String[]{"FAILED", "The pieces sit together well enough, but you have nothing to stitch them with."};
+
+        int taken = 0;
+        for (String k : hideKeys) { while (taken < p.hides() && consumeOne(chronicle, k, occurredAt)) taken++; if (taken >= p.hides()) break; }
+        for (int i = 0; i < p.fiber(); i++)
+            if (!consumeOne(chronicle,"animal_sinew",occurredAt) && !consumeOne(chronicle,"fiber_cordage",occurredAt)) consumeOne(chronicle,"plant_fiber",occurredAt);
+
+        createCarriedItem(chronicle, p.itemKey(), p.name(), occurredAt, "CRAFTED");
+        return new String[]{"SUCCEEDED", "You work the material to shape and stitch it closed. The " + p.name().toLowerCase() + " is finished, and it is warm in the hand."};
+    }
+
     /** The outcome of an insect harvest: what happened, how it read, and any hazard the body took. */
     public record InsectHarvest(String outcome, String narration, int hazardSeverity, String hazardKind) { }
 

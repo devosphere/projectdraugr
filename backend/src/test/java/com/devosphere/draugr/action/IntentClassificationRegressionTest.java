@@ -56,4 +56,55 @@ class IntentClassificationRegressionTest {
     @Test void interceptedInputsStillClassify() throws Exception {
         assertEquals("OBSERVE", classify("look around carefully"));
     }
+
+    // --- Garment work must not be swallowed by the furniture or tool craft branches,
+    // --- which both match "craft"/"make" and appear earlier in the chain.
+    @Test void garmentCraftingIsReachable() throws Exception {
+        assertEquals("CRAFT_GARMENT", classify("sew a hide coat"));
+        assertEquals("CRAFT_GARMENT", classify("make a fur cloak"));
+        assertEquals("CRAFT_GARMENT", classify("stitch hide leggings"));
+        assertEquals("CRAFT_GARMENT", classify("weave a tunic"));
+        assertEquals("CRAFT_GARMENT", classify("craft hide boots"));
+    }
+
+    /** The older craft intents must keep working — garment matching is additive. */
+    @Test void existingCraftIntentsAreUnaffected() throws Exception {
+        assertEquals("CRAFT_SPEAR", classify("craft a spear"));
+        assertEquals("CRAFT_KNIFE", classify("make a knife"));
+        assertEquals("CRAFT_BASKET", classify("weave a basket"));
+        assertEquals("CRAFT_DESK", classify("build a desk"));
+    }
+
+    @Test void lightingAFireStillClassifies() throws Exception {
+        assertEquals("LIGHT_FIRE", classify("light a fire with the bow drill"));
+        assertEquals("LIGHT_FIRE", classify("ignite a fire by striking flint against pyrite"));
+    }
+
+    // --- V49 added flint, pyrite and crystal as fire kit with no way to obtain them.
+    // --- V50 makes them findable; these guard that the search is actually reachable
+    // --- and is not mistaken for an attempt to strike a light.
+    @Test void mineralsCanBeSearchedFor() throws Exception {
+        assertEquals("GATHER_MINERAL", classify("search the rocks for pyrite"));
+        assertEquals("GATHER_MINERAL", classify("look for flint in the chalk"));
+        assertEquals("GATHER_MINERAL", classify("prospect for quartz crystal"));
+        assertEquals("GATHER_MINERAL", classify("gather tool stone"));
+        assertEquals("GATHER_MINERAL", classify("dig for ore in the hillside"));
+    }
+
+    /** "forest" contains "ore" — a word-boundary bug that stole plant gathering. */
+    @Test void oreDoesNotMatchInsideForest() throws Exception {
+        assertEquals("GATHER_PLANT", classify("gather mushrooms from the forest floor"));
+        assertEquals("GATHER_PLANT", classify("collect herbs in the forest"));
+    }
+
+    // --- Found in E2E: naming a real technique without the word "fire" fell through
+    // --- to UNKNOWN, so most of the V49 method vocabulary was unreachable in play.
+    @Test void namingATechniqueIsAskingForFire() throws Exception {
+        assertEquals("LIGHT_FIRE", classify("strike flint against pyrite"));
+        assertEquals("LIGHT_FIRE", classify("spin the bow drill"));
+        assertEquals("LIGHT_FIRE", classify("work the hand drill between my palms"));
+        assertEquals("LIGHT_FIRE", classify("use the fire plough"));
+        assertEquals("LIGHT_FIRE", classify("focus the sun onto the tinder with a lens"));
+        assertEquals("LIGHT_FIRE", classify("carry an ember from the old hearth"));
+    }
 }

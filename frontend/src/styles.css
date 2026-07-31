@@ -80,3 +80,7 @@ button:disabled { opacity: .6; cursor: wait; }.error { padding: 1rem; color: #ff
 .archive-list { max-height: min(18rem, 34vh); }
 .archive-footer { display: flex; flex-wrap: wrap; gap: .6rem; }
 .archive-footer .dialog-close { margin-top: 1rem; }
+
+/* Header controls were 65x22 — under the 24px minimum a finger or an imprecise
+   pointer can reliably hit. Sized up without changing how they read. */
+.quiet-menu, .quiet-body { min-width: 2.2rem; min-height: 2.2rem; display: inline-flex; align-items: center; justify-content: center; }
