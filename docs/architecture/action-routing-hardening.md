@@ -134,6 +134,19 @@ The single most important finding: **staged assembly is not construction-only.**
 
 The bow, its string, and arrows also do not exist as items (fire_bow and bow_drill are fire-making kit, not weapons), which is an ordinary vocabulary gap for M4.
 
+## Fourth fixture: primitive leather armor
+
+A twelve-step leather-armor workflow was routed the same way. **Result: 3 COVERED (two false), 1 POLISH, 8 INVENT.**
+
+This fixture is **largely confirmatory** and is recorded as such rather than inflated into new milestones. Collisions #6 (`shape` → `shape_components`) and #7 (`cordage` → `twist_cordage`) recur unchanged, now on leather rather than wood — "shape and refine each leather component" is routed to the process that shapes wooden components from a plank. That the same two collisions appear across construction, food, weaponry, and now armour is itself the finding: the defect is structural, not tied to any one domain.
+
+It contributes **two genuine refinements**, not new milestones:
+
+- **Quality is graded, not binary.** M3b as written proposes a condition attribute (sound / worn / defective). The armor's "leather grade based on thickness, flexibility, structural integrity" shows quality is a *tier* that carries forward — a fine hide yields fine armour, a poor one yields poor armour. M3b's condition attribute should be an ordered grade, and the grade should flow from input to output. Folded into M3b below.
+- **Cut-planning: one stock, many components, with waste.** "Lay out and plan all required armor components... minimizing material waste" is a step the process model cannot express: `material_process` turns a fixed input set into *one* output type. A hide is laid out and cut into *several differently-shaped components* with a yield that depends on how well it is planned. This is a real new capability — multi-output layout with a waste factor — noted for M4.
+
+The pre-tanning **fleshing / de-hairing** step (scrape flesh, fat, and hair before tanning) is also absent: `tan_hide` consumes a raw hide directly. An ordinary vocabulary gap for M4, as is `leather_armor` itself.
+
 ## The architecture
 
 ### Two-phase resolution
@@ -236,11 +249,11 @@ Every matchable term carries its categories. A resolver that queries without a c
 
 **Scope:** The quality dimension every real workflow has and the foundation has none of, surfaced by the bow's inspect-and-rework phases.
 
-- [ ] Material and component **condition** as a first-class attribute (sound / worn / defective), set at creation and readable at use
-- [ ] `INSPECT` intent — reports the condition of carried materials or an in-progress assembly, separating usable from defective; witness-stance, no advice
+- [ ] Material and component **quality as an ordered grade** (e.g. defective < poor < sound < fine), not a binary flag — the leather-armor fixture showed quality is a tier that carries forward, a fine hide yielding fine armour
+- [ ] Grade set at creation and **flowing from input to output**: a product's grade derives from its inputs' grades and the specificity of the assembly attempts (ties into the existing three-layer success model)
+- [ ] `INSPECT` intent — reports the grade/condition of carried materials or an in-progress assembly, separating usable from defective; witness-stance, no advice
 - [ ] Defective inputs gate the stages that would consume them, rather than silently producing a poor result
 - [ ] **Rework**: a failed inspection on an assembly returns it to the appropriate prior stage rather than destroying it
-- [ ] Finished-item quality derives from the condition of its inputs and the specificity of the assembly attempts (ties into the existing three-layer success model)
 - [ ] Auditor invariant: no assembly may reach a terminal stage while carrying a component flagged defective
 
 **Done when:** a bow built from defective components inspects as defective and can be reworked rather than only discarded, and quality flows from inputs to output deterministically.
@@ -270,6 +283,11 @@ Weapons and tools (from the bow fixture):
 - [ ] `bow` (weapon), `bowstring`, `arrow_shaft`, `arrow` as items, with a source and a review-passed recipe each
 - [ ] Binding compound recipe reconciled: the bow workflow uses resin + charcoal + **ash**; the foundation's `render_pitch` uses resin + charcoal. Decide whether ash is a real third input or the simpler recipe stands.
 
+Leather and armour (from the armor fixture):
+- [ ] Fleshing / de-hairing step producing a cleaned hide as `tan_hide`'s input (currently `tan_hide` consumes a raw hide directly)
+- [ ] `leather_armor` (and lighter/heavier grades) as items assembled through M3 stages
+- [ ] **Cut-planning / multi-output layout**: a process form where one large stock (a hide) is laid out into *several differently-shaped components* with a yield that depends on how well it is planned — `material_process` currently produces a single output type only. This is a schema extension, not just data, and should be scoped before the armour recipes depend on it.
+
 - [ ] Every addition passes the V53 review gate before going live
 - [ ] Reachability invariant stays at zero unreachable
 
@@ -285,7 +303,7 @@ Weapons and tools (from the bow fixture):
 - [ ] Record every INVENT assessment as a gap row with the triggering text
 - [ ] Rank gaps by frequency — the most-requested absent capability first
 - [ ] Simulation harness: route a named procedure through the foundation and report per-step routes
-- [ ] Fixtures: the 15 m² cabin (construction), primitive fish preservation (food), and primitive bow production (staged craft) as the first three
+- [ ] Fixtures: the 15 m² cabin (construction), primitive fish preservation (food), primitive bow production (staged craft), and primitive leather armour (graded assembly) as the first four
 - [ ] Regression: no fixture's coverage may decrease, and none may regain a false COVERED
 - [ ] The harness must report false COVERED separately from true COVERED — the bow showed a route can read COVERED while pointing at the wrong process, so route counts alone are not enough
 
