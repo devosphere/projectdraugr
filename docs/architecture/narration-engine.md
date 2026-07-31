@@ -29,6 +29,60 @@ More importantly: the NarrationEngine produces correct prose unconditionally. If
 
 ---
 
+## ActionInputClassifier — Pre-Pass Filter
+
+**Class:** `com.devosphere.draugr.narration.ActionInputClassifier`
+
+**Runs:** Before `classifyIntent()` in `ChronicleActionService.resolve()`. First thing. Every time.
+
+**Method:** `classify(String actionText) → InputClass`
+
+### Classification Categories
+
+| Class | Trigger examples | Response tone |
+|-------|-----------------|---------------|
+| `OBSCENE` | sexual acts, profanity directed at world entities ("fuck that", "masturbate", "sex with") | flat indifference — the world does not register the intent |
+| `NONSENSICAL` | gibberish, keyboard mash, empty strings, single characters | flat — the body does not know how to act on this |
+| `PHYSICALLY_IMPOSSIBLE` | "fly", "breathe underwater", "turn invisible", "summon" | witness describes the attempt; it produces nothing |
+| `VALID` | anything else | passes through to normal dispatch |
+
+### Detection Strategy
+
+- **OBSCENE:** keyword list covering sexual acts, sexual anatomy terms directed at non-human targets, violent profanity as a verb. Checked case-insensitively. Add to list as patterns are encountered in production.
+- **NONSENSICAL:** text length < 3 chars, or > 80% non-alphabetic, or zero recognizable English words (spot-check first 5 tokens against a minimal word list).
+- **PHYSICALLY_IMPOSSIBLE:** small keyword set for physics violations regardless of how described — fly (without aerial mount), teleport, disappear, cast spell, summon entity.
+
+### Response Library (`InputResponseLibrary`)
+
+Pool of 3–5 responses per class, randomly selected to avoid repetition:
+
+**OBSCENE:**
+- "The forest continues. Nothing acknowledges what you attempted."
+- "The world is indifferent to that. Time does not pass."
+- "That is not something the world around you responds to."
+- "Nothing happens. The wind moves through the trees regardless."
+
+**NONSENSICAL:**
+- "The body has no reference for that. Nothing moves."
+- "The hands find no shape for that intent. A moment passes, nothing more."
+- "That resolves into nothing. The ground is still beneath you."
+
+**PHYSICALLY_IMPOSSIBLE:**
+- "The attempt produces exactly what the physics of this place allow: nothing."
+- "The body reaches toward that and finds no path. It stands where it stood."
+- "What the mind imagines and what the body can do are different things here."
+
+### What Does NOT Happen on Intercept
+
+- No `chronicle_action` row is written. No tick advances. No physiology changes.
+- No AI call is made. Zero token cost.
+- No hint is given about what the player should do instead.
+- The narrator expresses zero surprise, humor, or moral judgment.
+
+The world is not a person. It does not react to personality. It reacts only to physical events.
+
+---
+
 ## NarrationEngine
 
 **Class:** `com.devosphere.draugr.narration.NarrationEngine`
