@@ -118,6 +118,103 @@ public class WildlifeEncounterService {
         if((remaining==null||remaining==0) && Boolean.FALSE.equals(hide)) { Timestamp ts=Timestamp.from(at); jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED',destroyed_at=?,destroyed_location_id=current_location_id,destroyed_cause='CARCASS_EXHAUSTED',current_location_id=NULL WHERE id=?",ts,carcass.id()); jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CARCASS_EXHAUSTED','{}'::jsonb)",carcass.id(),ts); }
         return new HarvestResult("SUCCEEDED","You work carefully over the remains and take what you can carry.");
     }
+    /**
+     * The world's turn. A chronicle busy with a task in ground where something is
+     * actively hunting may be reached before they ever choose to look up. This runs
+     * after ordinary actions (travel, gathering) — it is the reason not looking
+     * around is dangerous, and it never announces itself beforehand.
+     *
+     * @return a witness line if something happened, or null if the ground stayed quiet.
+     */
+    @Transactional
+    public String passiveEncounter(UUID chronicle, UUID chunk, UUID action, Instant at, String attention) {
+        Threat threat = jdbc.query(
+            "SELECT wp.id,wp.species_key,wp.behavior_state,ws.base_resistance,ws.ambush_hunter,ws.size_tier " +
+            "FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id " +
+            "LEFT JOIN wildlife_species ws ON ws.species_key=wp.species_key " +
+            "WHERE es.chunk_id=? AND wp.population_count>0 AND wp.ecological_role IN ('CARNIVORE','OMNIVORE') " +
+            "AND wp.behavior_state IN ('HUNTING','PACK_HUNT','STALKING','TERRITORIAL','ALERT') " +
+            "ORDER BY CASE wp.behavior_state WHEN 'PACK_HUNT' THEN 0 WHEN 'HUNTING' THEN 1 WHEN 'STALKING' THEN 2 ELSE 3 END LIMIT 1",
+            rs -> rs.next() ? new Threat(rs.getObject(1,UUID.class), rs.getString(2), rs.getString(3), (Integer)rs.getObject(4), rs.getBoolean(5), rs.getString(6)) : null, chunk);
+        if (threat == null) return null;
+
+        // How likely it is to reach the chronicle. A pack that is coordinating is the
+        // worst case; a merely alert animal is the least. A chronicle who is paying
+        // attention sees it coming and it does not close; one heads-down does not.
+        int chance = switch (threat.behavior()) { case "PACK_HUNT" -> 35; case "HUNTING" -> 25; case "STALKING" -> 20; case "TERRITORIAL" -> 15; default -> 8; };
+        if (threat.ambushHunter()) chance += 10;
+        if ("HIGH".equals(attention)) chance -= 12;
+        else if ("MODERATE".equals(attention)) chance -= 5;
+        if (Math.floorMod(action.hashCode() >>> 8, 100) >= Math.max(0, chance)) return null;
+
+        int resistance = threat.baseResistance() != null ? threat.baseResistance() : 50;
+        int severity = Math.max(4, resistance / 4 + (threat.ambushHunter() ? 8 : 0));
+        physiology.applyInjury(chronicle, severity, action, at, "PASSIVE_WILDLIFE_ATTACK");
+        record(chronicle, threat.populationId(), chunk, "PASSIVE_ATTACK", at, action);
+        jdbc.update("UPDATE wildlife_population SET behavior_state='ALERT' WHERE id=?", threat.populationId());
+        return threat.ambushHunter()
+            ? "It is on you before there is anything to see — weight and teeth out of the cover, and the ground coming up to meet you."
+            : "The " + display(threat.species()) + " does not wait to be found. It closes while your hands are busy, and the work you were doing is over.";
+    }
+
+    /**
+     * Read the ground for what has passed over it. Tracking finds sign, not animals:
+     * prints, scat, feathers, den marks. What the chronicle can read from them scales
+     * with how carefully they looked and how practiced they are.
+     */
+    @Transactional
+    public EncounterResult track(UUID chronicle, UUID chunk, UUID action, Instant at, String attention, double familiarity) {
+        java.util.List<java.util.Map<String,Object>> sign = jdbc.queryForList(
+            "SELECT wp.id AS population_id, wp.species_key, wp.behavior_state, g.sign_kind, g.readable_hours " +
+            "FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id " +
+            "JOIN wildlife_sign g ON g.species_key=wp.species_key " +
+            "WHERE es.chunk_id=? AND wp.population_count>0 ORDER BY g.readable_hours DESC", chunk);
+        if (sign.isEmpty()) return new EncounterResult("FAILED","You go over the ground carefully, but it holds nothing that anything has left behind.");
+        java.util.Map<String,Object> found = sign.get(Math.floorMod(action.hashCode(), sign.size()));
+        String species = (String) found.get("species_key");
+        String kind = (String) found.get("sign_kind");
+        UUID population = (UUID) found.get("population_id");
+        record(chronicle, population, chunk, "TRACKED", at, action);
+
+        String what = switch (kind) {
+            case "PRINTS" -> "a line of prints pressed into the softer ground";
+            case "SCAT" -> "droppings, not old";
+            case "FEATHERS" -> "feathers caught in the low growth";
+            case "DISTURBED_GROUND" -> "ground turned over and rooted through";
+            case "CARCASS_SCRAPS" -> "scraps and bone fragments pulled away from something larger";
+            case "DEN_MARKS" -> "a worn track running to a gap under the roots";
+            case "TERRITORIAL_SCRATCH" -> "deep scoring in the bark, higher than your shoulder";
+            default -> "sign";
+        };
+        StringBuilder s = new StringBuilder("You find ").append(what).append(". ");
+        // A careful, practiced reading gets the animal and what it was doing. A
+        // glance gets only that something was here.
+        boolean reads = "HIGH".equals(attention) || familiarity > 0.15;
+        if (reads) {
+            s.append("A ").append(display(species)).append(", by the look of it");
+            String behavior = (String) found.get("behavior_state");
+            String doing = switch (behavior == null ? "" : behavior) {
+                case "HUNTING", "PACK_HUNT", "STALKING" -> ", and moving with purpose";
+                case "FEEDING", "FORAGING" -> ", and in no hurry";
+                case "FLEEING" -> ", and going fast";
+                case "TERRITORIAL" -> ", and not far off";
+                default -> "";
+            };
+            s.append(doing).append(".");
+        } else {
+            s.append("Something was here. What it was, and how long ago, you cannot say.");
+        }
+        return new EncounterResult("SUCCEEDED", s.toString());
+    }
+
+    /** Append a contact to the immutable wildlife-event ledger. */
+    private void record(UUID chronicle, UUID population, UUID chunk, String kind, Instant at, UUID action) {
+        jdbc.update("INSERT INTO chronicle_wildlife_event (chronicle_id,population_id,chunk_id,event_kind,occurred_at,source_action_id) VALUES (?,?,?,?,?,?)",
+            chronicle, population, chunk, kind, Timestamp.from(at), action);
+    }
+
+    private record Threat(UUID populationId, String species, String behavior, Integer baseResistance, boolean ambushHunter, String sizeTier) { }
+
     /** Take a species' catalogued yields from a carcass. Returns how many items came away. */
     private int takeSpeciesDrops(UUID chronicle, String species, Instant at) {
         java.util.List<java.util.Map<String,Object>> drops = jdbc.queryForList("SELECT item_key,yield_min,yield_max,rarity FROM wildlife_drop WHERE species_key=? ORDER BY rarity DESC", species);

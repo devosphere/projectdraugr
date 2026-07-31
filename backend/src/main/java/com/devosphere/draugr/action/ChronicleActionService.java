@@ -129,6 +129,7 @@ public class ChronicleActionService {
         else if (intent == Intent.GATHER_STONE_SLAB) { int slabs=items.gatherStoneSlab(chronicle.id(),chronicle.location(),resolvedAt); outcome=slabs>0?"SUCCEEDED":"FAILED"; perception=slabs>0?"You work a broad, flat slab of stone free from the rock and take up its considerable weight.":"You search the rock for a slab flat enough to work, but nothing here breaks away clean."; gatherEffectType="STONE_SLAB_GATHERED"; gatherPayloadKey="slabs"; gatherCount=slabs; }
         else if (intent == Intent.GATHER_PLANT) { String[] r=items.gatherPlant(chronicle.id(),chronicle.location(),text,resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.FELL_TREE) { String[] r=items.fellTree(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
+        else if (intent == Intent.TRACK) { WildlifeEncounterService.EncounterResult r=wildlife.track(chronicle.id(),chronicle.location(),actionId,resolvedAt,attentionLevel(text,intent),capability.familiarity(chronicle.id(),"ATTENTION")); outcome=r.outcome(); perception=r.narration(); }
         else if (intent == Intent.FISH) { WildlifeEncounterService.EncounterResult r=wildlife.fish(chronicle.id(),chronicle.location(),actionId,resolvedAt,text); outcome=r.outcome(); perception=r.narration(); }
         else if (intent == Intent.SNARE) { WildlifeEncounterService.EncounterResult r=wildlife.snare(chronicle.id(),chronicle.location(),actionId,resolvedAt); outcome=r.outcome(); perception=r.narration(); }
         else if (intent == Intent.RAID_HIVE) { PhysicalItemService.InsectHarvest r=items.raidHive(chronicle.id(),chronicle.location(),text,resolvedAt); outcome=r.outcome(); perception=r.narration(); applyInsectHazard(chronicle.id(),r,actionId,resolvedAt); }
@@ -191,6 +192,15 @@ public class ChronicleActionService {
         // Venting at scenery: a minute and a little energy, and nothing else moves.
         else if (intent == Intent.AGGRESSION_INANIMATE) { physiology.applyMinorExertion(chronicle.id(), 2); perception = inputClassifier.narrate(ActionInputClassifier.InputClass.AGGRESSION_TOWARD_INANIMATE, text); }
         else { outcome = "FAILED"; perception = "The attempt passes without changing the immediate world around you."; }
+        // The world's turn (V44). While the chronicle was occupied, anything hunting
+        // this ground had the chance to reach them. It is checked only for acts that
+        // take real time and leave the body exposed — not for a moment's equipping,
+        // and never after an encounter the chronicle already fought through.
+        String attention = attentionLevel(text, intent);
+        if (exposesToWildlife(intent) && minutes >= 10) {
+            String ambush = wildlife.passiveEncounter(chronicle.id(), chronicle.location(), actionId, resolvedAt, attention);
+            if (ambush != null) perception = perception + " " + ambush;
+        }
         jdbc.update("INSERT INTO chronicle_action (id, chronicle_id, resolved_at, action_text, intent_type, outcome, duration_minutes, narration, idempotency_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", actionId, chronicle.id(), resolvedTs, text.trim(), intent.name(), outcome, minutes, perception, idempotencyKey);
         jdbc.update("INSERT INTO chronicle_action_effect (action_id, effect_domain, effect_type, payload) VALUES (?, 'TIME', 'TIME_ADVANCED', jsonb_build_object('minutes', ?))", actionId, minutes);
         if (gatherEffectType != null) jdbc.update("INSERT INTO chronicle_action_effect (action_id, effect_domain, effect_type, payload) VALUES (?, 'ITEM', ?, jsonb_build_object(?, ?))", actionId, gatherEffectType, gatherPayloadKey, gatherCount);
@@ -202,7 +212,6 @@ public class ChronicleActionService {
         if ("SUCCEEDED".equals(outcome) && buildsCapability) capability.record(chronicle.id(), actionId, (intent==Intent.GATHER_FIBER||intent==Intent.GATHER_STONE)?"LOAD":intent==Intent.OBSERVE?"ATTENTION":(intent==Intent.REST||intent==Intent.SLEEP)?"RECOVERY":intent==Intent.CONFRONT_WILDLIFE?"AIM":intent==Intent.MOVE?"LOCOMOTION":"FINE_MOTOR", minutes, (intent==Intent.GATHER_FIBER||intent==Intent.GATHER_STONE)?.18:.05, (intent==Intent.REST||intent==Intent.SLEEP)?.75:.45, resolvedAt);
         narration.validate(perception);
         ChroniclePhysiologyService.BodyHudSnapshot afterBody = physiology.activeBody();
-        String attention = attentionLevel(text, intent);
         return new ActionResult(actionId, intent.name(), outcome, minutes, resolvedAt, perception, afterBody, buildFrame(chronicle, intent, outcome, perception, resolvedAt, beforeBody, afterBody, beforeWeather, attention));
     }
     @Transactional(readOnly = true)
@@ -429,7 +438,7 @@ public class ChronicleActionService {
     private int durationFor(String action, Intent intent) {
         Matcher match = DURATION.matcher(action);
         if (match.find()) { int amount = Integer.parseInt(match.group(1)); int minutes = match.group(2).toLowerCase(Locale.ROOT).startsWith("h") ? amount * 60 : amount; return Math.max(1, Math.min(minutes, 24 * 60)); }
-        return switch (intent) { case OBSERVE -> 10; case REST -> 60; case SLEEP -> 480; case GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES -> 25; case GATHER_CLAY -> 20; case GATHER_STONE_SLAB -> 30; case GATHER_PLANT -> 20; case FELL_TREE -> 60; case RAID_HIVE -> 15; case COLLECT_INSECTS -> 20; case FISH -> 45; case SNARE -> 25; case EAT, DRINK, FEED_FIRE -> 5; case LIGHT_FIRE -> 20; case COOK_MEAT, TREAT_WOUND, CONFRONT_WILDLIFE, HARVEST_CARCASS -> 10; case EDIT_DOCUMENT, WRITE -> 15; case SKETCH_MAP -> 30; case STRIP_BARK -> 15; case MAKE_CHARCOAL -> 10; case CRAFT_BASKET -> 45; case CRAFT_SPEAR -> 35; case CRAFT_FIRE_KIT -> 25; case CRAFT_TINDER -> 10; case CRAFT_DESK -> 60; case CRAFT_CHAIR -> 40; case CRAFT_SHELF -> 50; case BUILD_FIRE_PIT, START_LEAN_TO -> 30; case WORK_LEAN_TO -> 45; case ABANDON_LEAN_TO, RESUME_LEAN_TO -> 5; case MOVE -> 30; case MARK -> 15; case EQUIP, UNEQUIP, DROP -> 5; case DESIGNATE -> 10; case REFINE -> 30; case PERSONAL_ACT -> 20; case AGGRESSION_WILDLIFE -> 5; case AGGRESSION_INANIMATE -> 1; default -> 5; };
+        return switch (intent) { case OBSERVE -> 10; case REST -> 60; case SLEEP -> 480; case GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES -> 25; case GATHER_CLAY -> 20; case GATHER_STONE_SLAB -> 30; case GATHER_PLANT -> 20; case FELL_TREE -> 60; case RAID_HIVE -> 15; case COLLECT_INSECTS -> 20; case FISH -> 45; case SNARE -> 25; case TRACK -> 25; case EAT, DRINK, FEED_FIRE -> 5; case LIGHT_FIRE -> 20; case COOK_MEAT, TREAT_WOUND, CONFRONT_WILDLIFE, HARVEST_CARCASS -> 10; case EDIT_DOCUMENT, WRITE -> 15; case SKETCH_MAP -> 30; case STRIP_BARK -> 15; case MAKE_CHARCOAL -> 10; case CRAFT_BASKET -> 45; case CRAFT_SPEAR -> 35; case CRAFT_FIRE_KIT -> 25; case CRAFT_TINDER -> 10; case CRAFT_DESK -> 60; case CRAFT_CHAIR -> 40; case CRAFT_SHELF -> 50; case BUILD_FIRE_PIT, START_LEAN_TO -> 30; case WORK_LEAN_TO -> 45; case ABANDON_LEAN_TO, RESUME_LEAN_TO -> 5; case MOVE -> 30; case MARK -> 15; case EQUIP, UNEQUIP, DROP -> 5; case DESIGNATE -> 10; case REFINE -> 30; case PERSONAL_ACT -> 20; case AGGRESSION_WILDLIFE -> 5; case AGGRESSION_INANIMATE -> 1; default -> 5; };
     }
     private Intent classify(String action) {
         String value=action.toLowerCase(Locale.ROOT);
@@ -444,6 +453,7 @@ public class ChronicleActionService {
         if((value.contains("craft")||value.contains("make")||value.contains("build")||value.contains("construct")||value.contains("assemble"))&&(value.contains("desk")||value.contains("table")||value.contains("workbench")||value.contains("bench"))) return Intent.CRAFT_DESK;
         if((value.contains("craft")||value.contains("make")||value.contains("build")||value.contains("construct")||value.contains("assemble"))&&(value.contains("chair")||value.contains("stool")||value.contains("seat"))) return Intent.CRAFT_CHAIR;
         if(value.contains("lean-to") || value.contains("lean to")) return classifyLeanTo(value);
+        if(value.contains("track")||value.contains("follow the trail")||value.contains("read the ground")||value.contains("look for sign")||value.contains("look for tracks")||((value.contains("print")||value.contains("spoor")||value.contains("scat")||value.contains("droppings")||value.contains("trail"))&&(value.contains("find")||value.contains("read")||value.contains("follow")||value.contains("search")||value.contains("look")))) return Intent.TRACK;
         if(value.contains("fish")||value.contains("angle")||((value.contains("catch")||value.contains("spear"))&&(value.contains("trout")||value.contains("perch")||value.contains("pike")||value.contains("carp")||value.contains("eel")||value.contains("catfish")||value.contains("crayfish")))) return Intent.FISH;
         if(value.contains("snare")||value.contains("set a trap")||value.contains("set trap")||((value.contains("trap")||value.contains("noose"))&&(value.contains("rabbit")||value.contains("hare")||value.contains("bird")||value.contains("fowl")||value.contains("small")||value.contains("run")))) return Intent.SNARE;
         if((value.contains("raid")||value.contains("harvest")||value.contains("smoke")||value.contains("rob")||value.contains("take")||value.contains("collect")||value.contains("gather"))&&(value.contains("hive")||value.contains("nest")||value.contains("honey")||value.contains("beeswax")||value.contains("bees")||value.contains("hornet"))) return Intent.RAID_HIVE;
@@ -599,7 +609,7 @@ public class ChronicleActionService {
     private String baseName(String displayName) { return displayName.replaceAll("(?i)\\s+Revision\\s+[IVXLC0-9]+$", "").trim(); }
     private String toRoman(int n) { if(n<=0) return String.valueOf(n); int[] v={100,90,50,40,10,9,5,4,1}; String[] s={"C","XC","L","XL","X","IX","V","IV","I"}; StringBuilder b=new StringBuilder(); for(int i=0;i<v.length;i++) while(n>=v[i]){b.append(s[i]);n-=v[i];} return b.toString(); }
     private void reviseDocument(UUID chronicleId, UUID actionId, Instant resolvedAt, String text) { Matcher match=DOCUMENT_EDIT.matcher(text); if(!match.matches()) throw new IllegalArgumentException("Unrecognized document edit."); UUID documentId=UUID.fromString(match.group(2)); LiteratureService.Edit edit="append".equalsIgnoreCase(match.group(1))?LiteratureService.Edit.APPEND:LiteratureService.Edit.REPLACE; if(!literature.documentReachable(documentId,chronicleId)) throw new IllegalArgumentException("The document is not physically reachable."); literature.revise(documentId,chronicleId,actionId,resolvedAt,edit,match.group(3),null); }
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, RAID_HIVE, COLLECT_INSECTS, FISH, SNARE, SKETCH_MAP, EAT, DRINK, WASH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, BUILD_FIRE_PIT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, EQUIP, UNEQUIP, DROP, DESIGNATE, REFINE, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, RAID_HIVE, COLLECT_INSECTS, FISH, SNARE, TRACK, SKETCH_MAP, EAT, DRINK, WASH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, BUILD_FIRE_PIT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, EQUIP, UNEQUIP, DROP, DESIGNATE, REFINE, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;} }
     /**
      * The structured perception frame — the seam every future Simulation Agent reads
@@ -668,6 +678,20 @@ public class ChronicleActionService {
         return d;
     }
     private void addChange(List<StateChange> d, String aspect, String from, String to) { if (from != null && !from.equals(to)) d.add(new StateChange(aspect, from, to)); }
+    /**
+     * Whether an act leaves the chronicle open to being reached by something hunting
+     * this ground. Sustained outdoor work with the hands and eyes occupied does;
+     * a moment spent equipping, dropping, or naming a place does not, and an act
+     * that was already a wildlife encounter is not doubled.
+     */
+    private boolean exposesToWildlife(Intent intent) {
+        return switch (intent) {
+            case EQUIP, UNEQUIP, DROP, DESIGNATE, MARK, REFINE, EDIT_DOCUMENT,
+                 CONFRONT_WILDLIFE, HARVEST_CARCASS, PERSONAL_ACT, AGGRESSION_WILDLIFE,
+                 AGGRESSION_INANIMATE, UNKNOWN -> false;
+            default -> true;
+        };
+    }
     /** Route an insect colony's hazard to the body: stings and bites wound, venom sickens. */
     private void applyInsectHazard(UUID chronicle, PhysicalItemService.InsectHarvest r, UUID actionId, Instant at) {
         if (r.hazardSeverity() <= 0 || r.hazardKind() == null) return;
