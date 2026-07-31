@@ -145,7 +145,16 @@ class FullTickPlaythroughIntegrationTest {
             assertDoesNotThrow(() -> actions.resolve(intent), "action must resolve without a persistence error: " + intent);
         }
 
-        assertNotNull(actions.resolve("I wait a moment.").body(), "body HUD snapshot must remain readable");
+        ChronicleActionService.ActionResult waited = actions.resolve("I wait a moment.");
+        assertNotNull(waited.body(), "body HUD snapshot must remain readable");
+        // F1 — every resolved action must carry a structured perception frame (the AI seam).
+        ChronicleActionService.PerceptionFrame frame = waited.frame();
+        assertNotNull(frame, "a resolved action must return a perception frame");
+        assertNotNull(frame.location(), "the frame must locate the chronicle");
+        assertNotNull(frame.location().biome(), "the frame's location must carry a biome");
+        assertNotNull(frame.timeOfDay(), "the frame must report the time of day");
+        assertNotNull(frame.physiology(), "the frame must carry the body snapshot");
+        assertEquals(waited.perception(), frame.narration(), "the frame's narration must match the action's perception prose");
         assertTrue(ticks.current().tick() > 0, "simulation clock must have advanced through the playthrough");
 
         Integer body = jdbc.queryForObject(

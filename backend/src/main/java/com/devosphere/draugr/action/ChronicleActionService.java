@@ -60,8 +60,10 @@ public class ChronicleActionService {
         if (idempotencyKey != null) {
             // A duplicate submission returns the original outcome without resolving
             // again, so the world never advances twice for one intended action.
-            ActionResult prior = jdbc.query("SELECT id, intent_type, outcome, duration_minutes, resolved_at, narration FROM chronicle_action WHERE idempotency_key = ?", rs -> rs.next() ? new ActionResult(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3), rs.getInt(4), rs.getTimestamp(5).toInstant(), rs.getString(6), null) : null, idempotencyKey);
-            if (prior != null) return new ActionResult(prior.actionId(), prior.intent(), prior.outcome(), prior.durationMinutes(), prior.resolvedAt(), prior.perception(), physiology.activeBody());
+            ActionResult prior = jdbc.query("SELECT id, intent_type, outcome, duration_minutes, resolved_at, narration FROM chronicle_action WHERE idempotency_key = ?", rs -> rs.next() ? new ActionResult(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3), rs.getInt(4), rs.getTimestamp(5).toInstant(), rs.getString(6), null, null) : null, idempotencyKey);
+            // A replayed action does not advance the world, so no fresh frame is built;
+            // the durable perception prose and current body state are returned as-is.
+            if (prior != null) return new ActionResult(prior.actionId(), prior.intent(), prior.outcome(), prior.durationMinutes(), prior.resolvedAt(), prior.perception(), physiology.activeBody(), null);
         }
         ActiveChronicle chronicle = jdbc.query("SELECT c.id, w.current_location_id FROM chronicle c JOIN world_object w ON w.id=c.id WHERE c.life_state='LIVING' FOR UPDATE", rs -> rs.next() ? new ActiveChronicle(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class)) : null);
         if (chronicle == null) throw new IllegalStateException("No living Chronicle exists.");
@@ -153,7 +155,7 @@ public class ChronicleActionService {
         if ("SUCCEEDED".equals(outcome) && intent == Intent.BUILD_FIRE_PIT) discoveries.record(chronicle.id(), "STONE_FIRE_PIT", actionId, resolvedAt);
         if ("SUCCEEDED".equals(outcome)) capability.record(chronicle.id(), actionId, (intent==Intent.GATHER_FIBER||intent==Intent.GATHER_STONE)?"LOAD":intent==Intent.OBSERVE?"ATTENTION":(intent==Intent.REST||intent==Intent.SLEEP)?"RECOVERY":intent==Intent.CONFRONT_WILDLIFE?"AIM":intent==Intent.MOVE?"LOCOMOTION":"FINE_MOTOR", minutes, (intent==Intent.GATHER_FIBER||intent==Intent.GATHER_STONE)?.18:.05, (intent==Intent.REST||intent==Intent.SLEEP)?.75:.45, resolvedAt);
         narration.validate(perception);
-        return new ActionResult(actionId, intent.name(), outcome, minutes, resolvedAt, perception, physiology.activeBody());
+        return new ActionResult(actionId, intent.name(), outcome, minutes, resolvedAt, perception, physiology.activeBody(), buildFrame(chronicle, intent, outcome, perception, resolvedAt));
     }
     @Transactional(readOnly = true)
     public NarrationPage narrationHistory(Instant before, UUID beforeId, int requestedLimit) {
@@ -545,7 +547,43 @@ public class ChronicleActionService {
     private void reviseDocument(UUID chronicleId, UUID actionId, Instant resolvedAt, String text) { Matcher match=DOCUMENT_EDIT.matcher(text); if(!match.matches()) throw new IllegalArgumentException("Unrecognized document edit."); UUID documentId=UUID.fromString(match.group(2)); LiteratureService.Edit edit="append".equalsIgnoreCase(match.group(1))?LiteratureService.Edit.APPEND:LiteratureService.Edit.REPLACE; if(!literature.documentReachable(documentId,chronicleId)) throw new IllegalArgumentException("The document is not physically reachable."); literature.revise(documentId,chronicleId,actionId,resolvedAt,edit,match.group(3),null); }
     private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, SKETCH_MAP, EAT, DRINK, WASH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, BUILD_FIRE_PIT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, EQUIP, UNEQUIP, DROP, DESIGNATE, REFINE, URINATE, DEFECATE, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;} }
-    public record ActionResult(UUID actionId, String intent, String outcome, int durationMinutes, Instant resolvedAt, String perception, ChroniclePhysiologyService.BodyHudSnapshot body) { }
+    /**
+     * The structured perception frame — the seam every future Simulation Agent reads
+     * from. Where {@code perception} is the finished player-facing prose, this frame
+     * is the machine-legible truth behind it: the raw intent and outcome, where the
+     * chronicle stood, the hour and weather in unembellished terms, what physically
+     * shared that ground, and which items the act touched. An AI narrator receives
+     * this and only this, and must witness it without advising. Physiology is carried
+     * as the same Body HUD snapshot the player sees; the tick-delta layer (F2) will
+     * later record what changed since the previous frame.
+     */
+    private PerceptionFrame buildFrame(ActiveChronicle chronicle, Intent intent, String outcome, String perception, Instant at) {
+        UUID loc = chronicle.location();
+        java.util.Map<String,Object> here = jdbc.queryForMap("SELECT world_id, grid_x, grid_y, biome FROM world_chunk WHERE id=?", loc);
+        UUID world = (UUID) here.get("world_id");
+        String named = jdbc.query("SELECT name FROM chronicle_named_location WHERE chunk_id=? AND chronicle_id=? LIMIT 1", rs -> rs.next() ? rs.getString(1) : null, loc, chronicle.id());
+        LocationView location = new LocationView(loc, named, (String) here.get("biome"), (int) here.get("grid_x"), (int) here.get("grid_y"));
+        WeatherView weather = jdbc.query("SELECT weather_kind, intensity FROM world_weather WHERE world_id=?", rs -> rs.next() ? new WeatherView(rs.getString(1), rs.getInt(2)) : null, world);
+        List<String> nearby = jdbc.query(
+            "SELECT object_type, COUNT(*) FROM world_object WHERE current_location_id=? AND lifecycle_state='ACTIVE' AND id<>? GROUP BY object_type ORDER BY object_type",
+            (rs, row) -> rs.getString(1).toLowerCase(Locale.ROOT) + ":" + rs.getInt(2), loc, chronicle.id());
+        return new PerceptionFrame(intent.name(), outcome, location, timeOfDayLabel(at), weather, List.copyOf(nearby), physiology.activeBody(), perception);
+    }
+    /** A terse, machine-facing hour label for the frame, distinct from the prose the survey narrates. */
+    private String timeOfDayLabel(Instant at) {
+        int h = at.atZone(java.time.ZoneOffset.UTC).getHour();
+        if (h < 5) return "NIGHT";
+        if (h < 8) return "DAWN";
+        if (h < 12) return "MORNING";
+        if (h < 15) return "MIDDAY";
+        if (h < 19) return "AFTERNOON";
+        if (h < 22) return "DUSK";
+        return "NIGHT";
+    }
+    public record ActionResult(UUID actionId, String intent, String outcome, int durationMinutes, Instant resolvedAt, String perception, ChroniclePhysiologyService.BodyHudSnapshot body, PerceptionFrame frame) { }
+    public record PerceptionFrame(String intent, String outcome, LocationView location, String timeOfDay, WeatherView weather, List<String> nearbyObjects, ChroniclePhysiologyService.BodyHudSnapshot physiology, String narration) { }
+    public record LocationView(UUID chunkId, String name, String biome, int gridX, int gridY) { }
+    public record WeatherView(String kind, int intensity) { }
     public record NarrationEntry(UUID id, Instant occurredAt, String narration) { }
     public record NarrationPage(List<NarrationEntry> entries, boolean hasMore) { }
 }
