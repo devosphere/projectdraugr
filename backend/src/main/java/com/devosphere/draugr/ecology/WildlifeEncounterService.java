@@ -51,11 +51,21 @@ public class WildlifeEncounterService {
             jdbc.update("UPDATE wildlife_population SET behavior_state='FLEEING' WHERE id=?",candidate.populationId());
             return new EncounterResult("PARTIAL","The animal breaks away through the cover before either of you can close the distance again.");
         }
-        int severity="CARNIVORE".equals(candidate.role())?22:"OMNIVORE".equals(candidate.role())?12:4;
+        // A worse mismatch means a worse wound. A defenceless rush at a hunting
+        // predator can be mortal; a near-won struggle only draws blood. The deficit
+        // between the chronicle's effort and the animal's resistance sets the gravity,
+        // so a bare-handed charge at a bear is punished the way it would be in life.
+        int deficit = Math.max(0, resistance - (capability + roll));
+        int severity=("CARNIVORE".equals(candidate.role())?22:"OMNIVORE".equals(candidate.role())?12:4) + deficit;
         if("RESTING".equals(candidate.behavior()) || "SHELTERING".equals(candidate.behavior())) severity=Math.max(2,severity-5);
         physiology.applyInjury(chronicle,severity,action,at,"WILDLIFE_CONTACT");
         jdbc.update("UPDATE wildlife_population SET behavior_state='FLEEING' WHERE id=?",candidate.populationId());
-        return new EncounterResult("PARTIAL","The " + display(candidate.species()) + " moves with sudden force. The encounter leaves its mark before the forest takes it back.");
+        String mark = severity >= 70
+            ? "The " + display(candidate.species()) + " closes with its whole weight, and for a moment there is only force and tearing before it wheels away into the trees."
+            : severity >= 35
+            ? "The " + display(candidate.species()) + " drives into you hard, raking deep before it breaks off through the cover."
+            : "The " + display(candidate.species()) + " moves with sudden force. The encounter leaves its mark before the forest takes it back.";
+        return new EncounterResult("PARTIAL", mark);
     }
 
     @Transactional

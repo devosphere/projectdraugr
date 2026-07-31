@@ -58,8 +58,13 @@ public class ChroniclePhysiologyService {
             if (environment.fuelMinutes() > 0) wetness = clamp((int)Math.round(wetness - hours * 14));
             int illnessPressure = (hygiene <= 10 ? (int) Math.ceil(hours * .4) : 0) + (wetness >= 70 && core < 36.0 ? (int) Math.ceil(hours * .6) : 0) + (injury >= 60 ? (int) Math.ceil(hours * .15) : 0);
             illness = clamp(illness + illnessPressure);
-            if (food > STARVATION_DEATH_HOURS || water > DEHYDRATION_DEATH_HOURS || bloodLoss > 3500 || illness >= 100 || core < 28.0 || core > 42.0) {
-                String cause = water > DEHYDRATION_DEATH_HOURS ? "Critical Dehydration" : food > STARVATION_DEATH_HOURS ? "Critical Starvation" : bloodLoss > 3500 ? "Critical Blood Loss" : core < 28.0 ? "Severe Hypothermia" : core > 42.0 ? "Severe Hyperthermia" : "Systemic Illness";
+            // Every physiological death vector terminates here. Trauma (injury_severity
+            // at its ceiling) is the path a grievous mauling or an accumulation of
+            // untreated wounds takes: without it, a chronicle savaged to the limit
+            // would live on indefinitely, since a single wound rarely bleeds past the
+            // exsanguination threshold on its own.
+            if (food > STARVATION_DEATH_HOURS || water > DEHYDRATION_DEATH_HOURS || bloodLoss > 3500 || injury >= 100 || illness >= 100 || core < 28.0 || core > 42.0) {
+                String cause = water > DEHYDRATION_DEATH_HOURS ? "Critical Dehydration" : food > STARVATION_DEATH_HOURS ? "Critical Starvation" : bloodLoss > 3500 ? "Critical Blood Loss" : injury >= 100 ? "Fatal Trauma" : core < 28.0 ? "Severe Hypothermia" : core > 42.0 ? "Severe Hyperthermia" : "Systemic Illness";
                 UUID deathLocation = jdbc.query("SELECT current_location_id FROM world_object WHERE id=?", result -> result.next() ? result.getObject(1, UUID.class) : null, id);
                 relocatePossessions(id, deathLocation, now);
                 jdbc.update("INSERT INTO chronicle_death_snapshot (chronicle_id,died_at,death_location_id,cause,body_snapshot) VALUES (?,?,?,?,jsonb_build_object('health',?,'condition',?,'hunger',?,'thirst',?,'energy',?,'temperature',?,'wetness',?,'bladder',?,'bowel',?,'hygiene',?))",id,ts,deathLocation,cause,health(injury,illness,bloodLoss),condition(rs.getString(12),pain,stress,sleepDebt),hunger(food),thirst(water),energy(energy),temperature(core),wetness(wetness),bladder(bladder),bowel(bowel),hygiene(hygiene));
