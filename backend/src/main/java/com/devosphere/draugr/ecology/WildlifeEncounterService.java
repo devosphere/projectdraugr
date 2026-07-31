@@ -7,6 +7,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.sql.Timestamp;
 import java.util.UUID;
@@ -286,6 +287,121 @@ public class WildlifeEncounterService {
     }
 
     private record Tamable(UUID populationId, String species, int tamability, String behavior) { }
+
+    /**
+     * Leave bait on the ground to draw animals toward it. What comes depends on what
+     * was left: meat brings predators and scavengers, fruit and greens bring browsers.
+     * The bait is really consumed and the lure really expires, so this is a decision
+     * with a cost rather than a free summons.
+     */
+    @Transactional
+    public EncounterResult lure(UUID chronicle, UUID chunk, Instant at, String actionText) {
+        String v = actionText.toLowerCase(java.util.Locale.ROOT);
+        // Find a bait the chronicle actually carries; prefer one they named.
+        java.util.List<java.util.Map<String,Object>> baits = jdbc.queryForList(
+            "SELECT b.item_key,b.draws_role,b.potency,b.hours_active,d.display_name FROM bait_profile b " +
+            "JOIN item_definition d ON d.item_key=b.item_key ORDER BY b.potency DESC");
+        java.util.Map<String,Object> chosen = null;
+        for (java.util.Map<String,Object> b : baits) {
+            String key = (String) b.get("item_key");
+            if (!items.hasAtLeast(chronicle, key, 1)) continue;
+            if (v.contains(key.replace('_',' '))) { chosen = b; break; }
+            if (chosen == null) chosen = b;
+        }
+        if (chosen == null) return new EncounterResult("FAILED","You look through what you carry for something worth leaving out, and find nothing that would draw anything in.");
+
+        String itemKey = (String) chosen.get("item_key");
+        items.consumeOne(chronicle, itemKey, at);
+        int hours = ((Number) chosen.get("hours_active")).intValue();
+        jdbc.update("INSERT INTO placed_lure (chunk_id,chronicle_id,bait_item_key,draws_role,placed_at,expires_at) VALUES (?,?,?,?,?,?)",
+            chunk, chronicle, itemKey, chosen.get("draws_role"), Timestamp.from(at), Timestamp.from(at.plus(Duration.ofHours(hours))));
+        // Bait shifts what the drawn class of animal is doing in this ground.
+        jdbc.update("UPDATE wildlife_population wp SET behavior_state='FORAGING' FROM ecology_site es " +
+            "WHERE es.id=wp.site_id AND es.chunk_id=? AND wp.ecological_role=? AND wp.behavior_state IN ('RESTING','SHELTERING')",
+            chunk, chosen.get("draws_role"));
+        return new EncounterResult("SUCCEEDED","You set the " + ((String)chosen.get("display_name")).toLowerCase() + " down in the open and withdraw from it. The ground smells of it now, and will for a while.");
+    }
+
+    /**
+     * Build a trap and leave it standing. Unlike a snare worked by hand, a placed
+     * trap is a physical object in the world that catches in its own time — the
+     * chronicle sets it, goes away, and learns later what walked into it.
+     */
+    @Transactional
+    public EncounterResult setTrap(UUID chronicle, UUID chunk, Instant at, String actionText) {
+        String v = actionText.toLowerCase(java.util.Locale.ROOT);
+        String kind = v.contains("deadfall") || v.contains("falling") ? "DEADFALL"
+                    : v.contains("pit") ? "PIT"
+                    : v.contains("fish") || v.contains("weir") ? "FISH_TRAP"
+                    : v.contains("cage") || v.contains("box") ? "CAGE" : "SNARE";
+        // Every trap costs real material to build.
+        boolean built = switch (kind) {
+            case "DEADFALL" -> items.hasAtLeast(chronicle,"field_stone",1) && items.hasAtLeast(chronicle,"dry_branch",1)
+                && items.consumeOne(chronicle,"field_stone",at) && items.consumeOne(chronicle,"dry_branch",at);
+            case "FISH_TRAP", "CAGE" -> items.hasAtLeast(chronicle,"hazel_rod",2)
+                && items.consumeOne(chronicle,"hazel_rod",at) && items.consumeOne(chronicle,"hazel_rod",at);
+            case "PIT" -> items.hasAtLeast(chronicle,"dry_branch",2)
+                && items.consumeOne(chronicle,"dry_branch",at) && items.consumeOne(chronicle,"dry_branch",at);
+            default -> items.hasAtLeast(chronicle,"plant_fiber",2)
+                && items.consumeOne(chronicle,"plant_fiber",at) && items.consumeOne(chronicle,"plant_fiber",at);
+        };
+        if (!built) return new EncounterResult("FAILED","You work at it for a while, but you do not have what a trap of that kind needs.");
+
+        // Bait it too, if the chronicle carries something and says so.
+        String bait = null;
+        if (v.contains("bait") || v.contains("bait it") || v.contains("with meat") || v.contains("with berries")) {
+            for (java.util.Map<String,Object> b : jdbc.queryForList("SELECT item_key FROM bait_profile ORDER BY potency DESC")) {
+                String key = (String) b.get("item_key");
+                if (items.hasAtLeast(chronicle,key,1) && items.consumeOne(chronicle,key,at)) { bait = key; break; }
+            }
+        }
+        UUID trap = UUID.randomUUID();
+        String label = switch (kind) { case "DEADFALL" -> "Deadfall trap"; case "PIT" -> "Covered pit"; case "FISH_TRAP" -> "Woven fish trap"; case "CAGE" -> "Woven cage trap"; default -> "Set snare"; };
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'TRAP',?,?)", trap, label, chunk);
+        jdbc.update("INSERT INTO placed_trap (object_id,chunk_id,trap_kind,set_by,set_at,baited_with) VALUES (?,?,?,?,?,?)",
+            trap, chunk, kind, chronicle, Timestamp.from(at), bait);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'TRAP_SET',jsonb_build_object('kind',?))", trap, Timestamp.from(at), kind);
+        return new EncounterResult("SUCCEEDED","You build the " + label.toLowerCase() + " and set it across the run" + (bait != null ? ", baited" : "") + ". It stands there after you have gone. What comes to it is not yours to decide.");
+    }
+
+    /**
+     * Check a trap the chronicle has left standing. A trap that has been out long
+     * enough, in ground where something suitable moves, may have caught.
+     */
+    @Transactional
+    public EncounterResult checkTrap(UUID chronicle, UUID chunk, UUID action, Instant at) {
+        java.util.Map<String,Object> trap = jdbc.query(
+            "SELECT object_id,trap_kind,set_at,baited_with FROM placed_trap WHERE chunk_id=? AND NOT sprung ORDER BY set_at LIMIT 1 FOR UPDATE",
+            rs -> rs.next() ? java.util.Map.of("id",rs.getObject(1,UUID.class),"kind",rs.getString(2),"set_at",rs.getTimestamp(3).toInstant()) : null, chunk);
+        if (trap == null) return new EncounterResult("FAILED","There is nothing of yours standing here to check.");
+        Instant setAt = (Instant) trap.get("set_at");
+        UUID trapId = (UUID) trap.get("id");
+        long hoursOut = Duration.between(setAt, at).toHours();
+        if (hoursOut < 2) return new EncounterResult("PARTIAL","The trap stands as you left it. Not enough time has passed for anything to have found it.");
+
+        String kind = (String) trap.get("kind");
+        boolean aquatic = "FISH_TRAP".equals(kind);
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, chunk);
+        java.util.List<String> prey = jdbc.queryForList(
+            aquatic ? "SELECT species_key FROM wildlife_species WHERE movement_class='AQUATIC' AND biome_affinity ILIKE ? ORDER BY species_key"
+                    : "SELECT species_key FROM wildlife_species WHERE size_tier IN ('TINY','SMALL','MEDIUM') AND movement_class IN ('TERRESTRIAL','AERIAL') AND biome_affinity ILIKE ? ORDER BY species_key",
+            String.class, "%"+biome+"%");
+        if (prey.isEmpty()) return new EncounterResult("PARTIAL","The trap is untouched. Nothing that uses this ground has come near it.");
+        // The longer it has stood, the likelier it has caught — up to a point.
+        int chance = (int) Math.min(70, 15 + hoursOut * 6);
+        if (Math.floorMod(action.hashCode(), 100) >= chance) {
+            jdbc.update("UPDATE placed_trap SET checked_at=? WHERE object_id=?", Timestamp.from(at), trapId);
+            return new EncounterResult("PARTIAL","The trap is exactly as you set it. Nothing has come to it yet.");
+        }
+        String caught = prey.get(Math.floorMod(action.hashCode() >>> 4, prey.size()));
+        takeSpeciesDrops(chronicle, caught, at);
+        if (aquatic) { UUID fish = items.createCarriedItem(chronicle,"raw_fish","Raw fish",at,"TAKEN_FROM_TRAP"); food.registerRaw(fish,at); }
+        else { UUID meat = items.createCarriedItem(chronicle,"raw_game_meat","Raw game meat",at,"TAKEN_FROM_TRAP"); food.registerRaw(meat,at); }
+        jdbc.update("UPDATE placed_trap SET sprung=true,checked_at=?,caught_species=? WHERE object_id=?", Timestamp.from(at), caught, trapId);
+        jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED',destroyed_at=?,destroyed_location_id=current_location_id,destroyed_cause='TRAP_SPRUNG',current_location_id=NULL WHERE id=?", Timestamp.from(at), trapId);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'TRAP_SPRUNG',jsonb_build_object('species',?))", trapId, Timestamp.from(at), caught);
+        return new EncounterResult("SUCCEEDED","The trap has done its work. A " + display(caught) + " lies in it, long still by the time you reach it.");
+    }
 
     /** Append a contact to the immutable wildlife-event ledger. */
     private void record(UUID chronicle, UUID population, UUID chunk, String kind, Instant at, UUID action) {
