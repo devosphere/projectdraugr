@@ -207,6 +207,86 @@ public class WildlifeEncounterService {
         return new EncounterResult("SUCCEEDED", s.toString());
     }
 
+    /**
+     * Approach an animal calmly and try to build trust. Trust is earned across many
+     * returns, not won in one: each calm approach moves it a little, food moves it
+     * more, and approaching with a weapon in hand moves it back. Species tamability
+     * (V41) sets the ceiling — a turtle yields readily, a lynx almost never.
+     *
+     * <p>The bond belongs to this chronicle. It is not inherited: when they die the
+     * animal is wild again to whoever finds it next.
+     */
+    @Transactional
+    public EncounterResult tame(UUID chronicle, UUID chunk, UUID action, Instant at, String actionText) {
+        Tamable t = jdbc.query(
+            "SELECT wp.id,wp.species_key,ws.tamability,wp.behavior_state FROM wildlife_population wp " +
+            "JOIN ecology_site es ON es.id=wp.site_id JOIN wildlife_species ws ON ws.species_key=wp.species_key " +
+            "WHERE es.chunk_id=? AND wp.population_count>0 AND ws.tamability>0 " +
+            "ORDER BY ws.tamability DESC LIMIT 1 FOR UPDATE OF wp",
+            rs -> rs.next() ? new Tamable(rs.getObject(1,UUID.class), rs.getString(2), rs.getInt(3), rs.getString(4)) : null, chunk);
+        if (t == null) return new EncounterResult("FAILED","You stand still a long while, but there is nothing here that would let you near it.");
+
+        String v = actionText.toLowerCase(java.util.Locale.ROOT);
+        boolean armed = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id " +
+            "WHERE e.chronicle_id=? AND e.body_position IN ('HAND_LEFT','HAND_RIGHT') " +
+            "AND i.item_key IN ('primitive_spear','stone_axe','stone_hatchet','stone_knife','stone_hammer','primitive_pickaxe'))",
+            Boolean.class, chronicle));
+        // Offering food is the strongest single thing a chronicle can do, and it costs
+        // real food from their own stores.
+        boolean offersFood = (v.contains("offer")||v.contains("feed")||v.contains("hold out")||v.contains("food")||v.contains("bait"))
+            && (items.consumeOne(chronicle,"wild_berries",at) || items.consumeOne(chronicle,"blackberry",at) || items.consumeOne(chronicle,"raw_game_meat",at) || items.consumeOne(chronicle,"dandelion",at));
+
+        java.util.Map<String,Object> existing = jdbc.query(
+            "SELECT id,trust_level,interaction_count,bond_stage FROM wildlife_bond WHERE chronicle_id=? AND population_id=? FOR UPDATE",
+            rs -> rs.next() ? java.util.Map.of("id",rs.getObject(1,UUID.class),"trust",rs.getInt(2),"count",rs.getInt(3),"stage",rs.getString(4)) : null,
+            chronicle, t.populationId());
+        int trust = existing == null ? 0 : (Integer) existing.get("trust");
+        int count = existing == null ? 0 : (Integer) existing.get("count");
+
+        // Trust moves by species willingness, tempered by how the chronicle carried
+        // themselves. A weapon in hand reads as threat whatever the intent.
+        int delta;
+        String note;
+        if (armed) { delta = -12; note = "It will not let you close with that in your hand. Whatever ground you had is gone."; }
+        else {
+            delta = Math.max(2, t.tamability() / 10) + (offersFood ? 8 : 0);
+            if ("FLEEING".equals(t.behavior()) || "ALERT".equals(t.behavior())) delta = Math.max(1, delta / 2);
+            note = offersFood ? "It takes what you offer, and does not move away afterwards."
+                 : "It lets you come nearer than last time, and holds there, watching.";
+        }
+        int newTrust = Math.max(0, Math.min(100, trust + delta));
+        String stage = newTrust >= 95 ? "TAMED" : newTrust >= 75 ? "BONDED" : newTrust >= 50 ? "TOLERANT" : newTrust >= 25 ? "CAUTIOUS" : newTrust > 0 ? "WARY" : "WILD";
+
+        UUID bondId;
+        if (existing == null) {
+            bondId = UUID.randomUUID();
+            jdbc.update("INSERT INTO wildlife_bond (id,chronicle_id,population_id,bond_stage,trust_level,interaction_count,last_interaction_at) VALUES (?,?,?,?,?,?,?)",
+                bondId, chronicle, t.populationId(), stage, newTrust, 1, Timestamp.from(at));
+        } else {
+            bondId = (UUID) existing.get("id");
+            jdbc.update("UPDATE wildlife_bond SET bond_stage=?,trust_level=?,interaction_count=?,last_interaction_at=? WHERE id=?",
+                stage, newTrust, count + 1, Timestamp.from(at), bondId);
+        }
+        record(chronicle, t.populationId(), chunk, "APPROACHED", at, action);
+
+        // Reaching TAMED makes the animal a physical thing in the world, owned like
+        // any other object, and starts whatever it produces on its clock.
+        if ("TAMED".equals(stage) && (existing == null || !"TAMED".equals(existing.get("stage")))) {
+            UUID beast = UUID.randomUUID();
+            jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'CREATURE',?,?)", beast, display(t.species()), chronicle);
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'TAMED',jsonb_build_object('species',?))", beast, Timestamp.from(at), t.species());
+            jdbc.update("UPDATE wildlife_bond SET tamed_object_id=? WHERE id=?", beast, bondId);
+            jdbc.update("UPDATE wildlife_population SET population_count=GREATEST(0,population_count-1) WHERE id=?", t.populationId());
+            for (java.util.Map<String,Object> y : jdbc.queryForList("SELECT item_key,interval_hours FROM tamed_yield WHERE species_key=?", t.species()))
+                jdbc.update("INSERT INTO tamed_production (bond_id,item_key,interval_hours,last_yielded_at) VALUES (?,?,?,?)", bondId, y.get("item_key"), y.get("interval_hours"), Timestamp.from(at));
+            return new EncounterResult("SUCCEEDED","It comes to you without being called, and stays when you turn away. Whatever it was before, it is yours now.");
+        }
+        return new EncounterResult(armed ? "PARTIAL" : "SUCCEEDED", note);
+    }
+
+    private record Tamable(UUID populationId, String species, int tamability, String behavior) { }
+
     /** Append a contact to the immutable wildlife-event ledger. */
     private void record(UUID chronicle, UUID population, UUID chunk, String kind, Instant at, UUID action) {
         jdbc.update("INSERT INTO chronicle_wildlife_event (chronicle_id,population_id,chunk_id,event_kind,occurred_at,source_action_id) VALUES (?,?,?,?,?,?)",
