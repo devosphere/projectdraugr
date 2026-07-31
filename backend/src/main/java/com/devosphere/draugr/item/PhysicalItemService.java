@@ -301,6 +301,89 @@ public class PhysicalItemService {
     }
 
     /**
+     * Run a material process from the declarative table (V52): splitting planks,
+     * dressing stone, twisting cordage, tanning hide, rendering pitch, firing a pot.
+     *
+     * <p>The whole chain is data. Nothing here knows what a plank is — it reads which
+     * process the action names, checks that the inputs, tool class, fire and water it
+     * declares are actually present, then consumes and produces. Adding a material
+     * chain is a migration, not a code change, which is the point: every gap in that
+     * table is a moment the simulation cannot resolve on its own and has to spend an
+     * AI call instead.
+     *
+     * @return [outcome, narration]
+     */
+    @Transactional
+    public String[] runProcess(UUID chronicle, UUID location, String actionText, Instant at) {
+        String v = actionText.toLowerCase(java.util.Locale.ROOT);
+        // Longest keyword wins, so "fire the pot" beats a bare "pot" elsewhere.
+        java.util.List<java.util.Map<String,Object>> all = jdbc.queryForList(
+            "SELECT process_key, display_name, output_item_key, output_min, output_max, tool_class, " +
+            "requires_fire, requires_water, keywords, narration FROM material_process");
+        java.util.Map<String,Object> match = null; int bestLen = 0;
+        for (java.util.Map<String,Object> p : all)
+            for (String kw : ((String) p.get("keywords")).split(","))
+                if (!kw.isBlank() && v.contains(kw.trim()) && kw.trim().length() > bestLen) { match = p; bestLen = kw.trim().length(); }
+        if (match == null) return new String[]{"FAILED", "You turn the material over without settling on what to do with it."};
+
+        String key = (String) match.get("process_key");
+        String toolClass = (String) match.get("tool_class");
+        if (toolClass != null) {
+            boolean ok = switch (toolClass) {
+                case "CUTTING"  -> hasCuttingTool(chronicle);
+                case "STRIKING" -> hasAtLeast(chronicle,"stone_hammer",1) || hasAtLeast(chronicle,"primitive_pickaxe",1) || hasAtLeast(chronicle,"field_stone",1);
+                case "AXE"      -> hasAtLeast(chronicle,"stone_axe",1) || hasAtLeast(chronicle,"stone_hatchet",1);
+                default -> true; };
+            if (!ok) return new String[]{"FAILED", "The work needs a tool you are not carrying."};
+        }
+        if (Boolean.TRUE.equals(match.get("requires_fire"))) {
+            Boolean fire = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM fire_state fs JOIN world_object w ON w.id=fs.construction_id WHERE w.current_location_id=? AND fs.active=true)", Boolean.class, location);
+            if (!Boolean.TRUE.equals(fire)) return new String[]{"FAILED", "It needs heat, and there is no fire burning here."};
+        }
+        if (Boolean.TRUE.equals(match.get("requires_water"))) {
+            String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
+            if (!"WETLAND".equals(biome)) return new String[]{"FAILED", "It needs water, and there is none here to work with."};
+        }
+
+        // Fixed inputs, then each either/or group.
+        java.util.List<java.util.Map<String,Object>> fixed = jdbc.queryForList(
+            "SELECT item_key, quantity FROM material_process_input WHERE process_key=?", key);
+        for (java.util.Map<String,Object> in : fixed)
+            if (!hasAtLeast(chronicle, (String) in.get("item_key"), ((Number) in.get("quantity")).intValue()))
+                return new String[]{"FAILED", "You have not got enough to hand for that."};
+
+        java.util.List<String> groups = jdbc.queryForList(
+            "SELECT DISTINCT group_name FROM material_process_input_group WHERE process_key=?", String.class, key);
+        java.util.Map<String,String> chosen = new java.util.LinkedHashMap<>();
+        for (String g : groups) {
+            String pick = null;
+            for (java.util.Map<String,Object> o : jdbc.queryForList(
+                    "SELECT item_key, quantity FROM material_process_input_group WHERE process_key=? AND group_name=?", key, g))
+                if (hasAtLeast(chronicle, (String) o.get("item_key"), ((Number) o.get("quantity")).intValue())) { pick = (String) o.get("item_key"); break; }
+            if (pick == null) return new String[]{"FAILED", "You have nothing suitable to work from."};
+            chosen.put(g, pick);
+        }
+
+        String outKey = (String) match.get("output_item_key");
+        if (capacityHeadroomUnits(chronicle, outKey) <= 0)
+            return new String[]{"FAILED", "You could do the work, but you could not carry what it would make."};
+
+        for (java.util.Map<String,Object> in : fixed)
+            for (int i = 0; i < ((Number) in.get("quantity")).intValue(); i++) consumeOne(chronicle, (String) in.get("item_key"), at);
+        for (java.util.Map.Entry<String,String> e : chosen.entrySet()) {
+            Integer q = jdbc.queryForObject("SELECT quantity FROM material_process_input_group WHERE process_key=? AND group_name=? AND item_key=?", Integer.class, key, e.getKey(), e.getValue());
+            for (int i = 0; i < (q == null ? 1 : q); i++) consumeOne(chronicle, e.getValue(), at);
+        }
+
+        int lo = ((Number) match.get("output_min")).intValue(), hi = ((Number) match.get("output_max")).intValue();
+        int made = Math.min(lo + (hi > lo ? (int)(Math.random()*(hi-lo+1)) : 0), Math.max(1, capacityHeadroomUnits(chronicle, outKey)));
+        String outName = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, outKey);
+        for (int i = 0; i < made; i++) createCarriedItem(chronicle, outKey, outName, at, "PROCESSED");
+        assertCarryCapacity(chronicle);
+        return new String[]{"SUCCEEDED", (String) match.get("narration")};
+    }
+
+    /**
      * Search the ground and exposed rock for a mineral (V50). What can be found is
      * decided by the geology of the biome, and whether it IS found by the mineral's
      * own rarity — searching stone for a flint nodule is patient work that often
