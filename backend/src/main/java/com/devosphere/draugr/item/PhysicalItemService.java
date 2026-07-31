@@ -559,6 +559,41 @@ public class PhysicalItemService {
     }
 
     /**
+     * Make one piece of ignition kit beyond the basic board and spindle (V49).
+     * Each of the nine fire-making methods needs its own gear, and a method whose
+     * kit cannot be made is a method that does not exist — the flaw the item
+     * reachability invariant now guards against.
+     *
+     * @return [outcome, narration]
+     */
+    @Transactional
+    public String[] craftFireTool(UUID chronicle, String actionText, Instant at) {
+        String v = actionText.toLowerCase(java.util.Locale.ROOT);
+        record Kit(String key, String name, String needKey, int needQty, boolean blade, String made) { }
+        Kit k =
+            v.contains("bow")                                   ? new Kit("fire_bow","Fire bow","dry_branch",1,true,"You bend a springy branch and string it with cord until it draws true. The bow will drive a spindle far faster than palms ever could.")
+          : v.contains("socket")||v.contains("bearing")||v.contains("handhold") ? new Kit("fire_socket","Bearing block","field_stone",1,true,"You hollow a socket into the stone, smooth enough that the spindle can spin under your whole weight without binding.")
+          : v.contains("plough")||v.contains("plow")            ? new Kit("plough_board","Fire plough board","dry_branch",2,true,"You cut a long straight groove down the face of the board — a track for the point to run and pile its own dust ahead of it.")
+          : v.contains("saw")                                   ? new Kit("fire_saw_set","Fire saw set","dry_branch",2,true,"You split the wood and notch it, so one piece can be sawn hard across the other.")
+          : v.contains("char")                                  ? new Kit("char_tinder","Charred tinder","plant_fiber",2,false,"You char the fiber slowly and smother it before it burns away. What is left will take a spark that raw fiber would shrug off.")
+          : v.contains("ember")||v.contains("bundle")           ? new Kit("ember_bundle","Ember bundle","plant_fiber",3,false,"You pack the fiber into a tight bundle with a hollow at its heart — somewhere an ember can travel and stay alive.")
+          :                                                       null;
+        if (k == null) return new String[]{"FAILED","You turn the wood over in your hands without settling on what to make of it."};
+        if (k.blade() && !hasCuttingTool(chronicle))
+            return new String[]{"FAILED","The shaping needs a blade, and you have none."};
+        if (!hasAtLeast(chronicle, k.needKey(), k.needQty()))
+            return new String[]{"FAILED","You have not got the material to hand for that."};
+        // An ember bundle is only worth carrying if there is a live fire to take from.
+        if ("ember_bundle".equals(k.key())) {
+            Boolean live = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM fire_state fs JOIN world_object w ON w.id=fs.construction_id JOIN world_object body ON body.current_location_id=w.current_location_id WHERE body.id=? AND fs.active=true)", Boolean.class, chronicle);
+            if (!Boolean.TRUE.equals(live)) return new String[]{"FAILED","You build the bundle and hold it ready, but there is no live fire here to take an ember from. It stays cold in your hands."};
+        }
+        for (int i = 0; i < k.needQty(); i++) consumeOne(chronicle, k.needKey(), at);
+        createCarriedItem(chronicle, k.key(), k.name(), at, "CRAFTED");
+        return new String[]{"SUCCEEDED", k.made()};
+    }
+
+    /**
      * Build a piece of furniture and set it down at the chronicle's location — a
      * world object fixed to a place, not carried. Woodworking needs a blade and
      * dry branches lashed with fiber; a stone shelf is built up from slabs. A

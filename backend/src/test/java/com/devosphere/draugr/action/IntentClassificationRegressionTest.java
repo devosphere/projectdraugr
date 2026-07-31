@@ -80,6 +80,22 @@ class IntentClassificationRegressionTest {
         assertEquals("LIGHT_FIRE", classify("ignite a fire by striking flint against pyrite"));
     }
 
+    // --- The reachability invariant caught that five of the nine V49 fire methods
+    // --- had kit nobody could make. These guard the crafting path that fixed it.
+    @Test void ignitionKitCanBeMade() throws Exception {
+        assertEquals("CRAFT_FIRE_TOOL", classify("carve a fire bow"));
+        assertEquals("CRAFT_FIRE_TOOL", classify("make a bearing block"));
+        assertEquals("CRAFT_FIRE_TOOL", classify("cut a fire plough board"));
+        assertEquals("CRAFT_FIRE_TOOL", classify("prepare an ember bundle"));
+        assertEquals("CRAFT_FIRE_TOOL", classify("make charred tinder"));
+    }
+
+    /** Making the kit must not be mistaken for trying to light something with it. */
+    @Test void makingKitIsNotLightingAFire() throws Exception {
+        assertEquals("LIGHT_FIRE", classify("spin the bow drill"));
+        assertEquals("CRAFT_FIRE_TOOL", classify("carve a fire bow"));
+    }
+
     // --- V49 added flint, pyrite and crystal as fire kit with no way to obtain them.
     // --- V50 makes them findable; these guard that the search is actually reachable
     // --- and is not mistaken for an attempt to strike a light.

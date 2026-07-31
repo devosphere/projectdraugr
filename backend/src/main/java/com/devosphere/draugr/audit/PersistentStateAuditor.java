@@ -51,6 +51,21 @@ public class PersistentStateAuditor {
         // standing as an active object the world still offers up.
         Integer spentCarcass = jdbc.queryForObject("SELECT COUNT(*) FROM wildlife_carcass wc JOIN world_object w ON w.id=wc.object_id WHERE w.lifecycle_state='ACTIVE' AND wc.remaining_meat_units=0 AND wc.hide_available=false", Integer.class);
         if (spentCarcass != null && spentCarcass > 0) violations.add(spentCarcass + " exhausted carcass(es) remain active in the world.");
+        // Reachability: an item nobody can obtain is scenery wearing the costume of a
+        // mechanic. This has already happened twice — the V48 hide garments were
+        // insulating but unsewable, and V49 added flint and pyrite as fire kit with
+        // nowhere to find them. Both were caught by hand, which is not a system.
+        // item_source (V51) declares how each item enters the world; anything with no
+        // source and no recorded reason is a definition someone forgot to finish.
+        Integer unreachableItems = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM item_definition d " +
+            "WHERE NOT EXISTS (SELECT 1 FROM item_source s WHERE s.item_key=d.item_key) " +
+            "AND NOT EXISTS (SELECT 1 FROM item_unreachable_known k WHERE k.item_key=d.item_key)", Integer.class);
+        if (unreachableItems != null && unreachableItems > 0) violations.add(unreachableItems + " item definition(s) have no way to be obtained.");
+        // The converse: a source pointing at an item that no longer exists.
+        Integer orphanSources = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM item_source s LEFT JOIN item_definition d ON d.item_key=s.item_key WHERE d.item_key IS NULL", Integer.class);
+        if (orphanSources != null && orphanSources > 0) violations.add(orphanSources + " item source(s) reference an item that does not exist.");
         // Navigation memory: a recorded visit means the chronicle has stood there at
         // least once, so a non-positive count is a corrupted route memory.
         Integer emptyVisits = jdbc.queryForObject("SELECT COUNT(*) FROM chronicle_chunk_visit WHERE visit_count <= 0", Integer.class);
