@@ -72,6 +72,12 @@ public class ChronicleActionService {
         // the distance to a place the chronicle can actually find its way to.
         TravelPlan travel = intent == Intent.TRAVEL ? planTravel(chronicle, text) : null;
         int minutes = intent == Intent.TRAVEL ? (travel == null ? 20 : Math.max(15, travel.distance() * 18)) : durationFor(text, intent);
+        // F2 — capture the body and the sky as they stood before the tick runs, so
+        // the frame can report what the passage of time changed, not just the state
+        // it left behind. A chronicle who lies down hungry and wakes starving must
+        // have that passage surfaced rather than silently swallowed.
+        ChroniclePhysiologyService.BodyHudSnapshot beforeBody = physiology.activeBody();
+        String beforeWeather = jdbc.query("SELECT ww.weather_kind FROM world_weather ww JOIN world_chunk c ON c.world_id=ww.world_id WHERE c.id=?", rs -> rs.next() ? rs.getString(1) : null, chronicle.location());
         Instant resolvedAt = ticks.advanceBy(Duration.ofMinutes(minutes)).simulatedAt();
         java.sql.Timestamp resolvedTs = java.sql.Timestamp.from(resolvedAt);
         UUID actionId = UUID.randomUUID(); String outcome = "SUCCEEDED"; String perception;
@@ -155,7 +161,8 @@ public class ChronicleActionService {
         if ("SUCCEEDED".equals(outcome) && intent == Intent.BUILD_FIRE_PIT) discoveries.record(chronicle.id(), "STONE_FIRE_PIT", actionId, resolvedAt);
         if ("SUCCEEDED".equals(outcome)) capability.record(chronicle.id(), actionId, (intent==Intent.GATHER_FIBER||intent==Intent.GATHER_STONE)?"LOAD":intent==Intent.OBSERVE?"ATTENTION":(intent==Intent.REST||intent==Intent.SLEEP)?"RECOVERY":intent==Intent.CONFRONT_WILDLIFE?"AIM":intent==Intent.MOVE?"LOCOMOTION":"FINE_MOTOR", minutes, (intent==Intent.GATHER_FIBER||intent==Intent.GATHER_STONE)?.18:.05, (intent==Intent.REST||intent==Intent.SLEEP)?.75:.45, resolvedAt);
         narration.validate(perception);
-        return new ActionResult(actionId, intent.name(), outcome, minutes, resolvedAt, perception, physiology.activeBody(), buildFrame(chronicle, intent, outcome, perception, resolvedAt));
+        ChroniclePhysiologyService.BodyHudSnapshot afterBody = physiology.activeBody();
+        return new ActionResult(actionId, intent.name(), outcome, minutes, resolvedAt, perception, afterBody, buildFrame(chronicle, intent, outcome, perception, resolvedAt, beforeBody, afterBody, beforeWeather));
     }
     @Transactional(readOnly = true)
     public NarrationPage narrationHistory(Instant before, UUID beforeId, int requestedLimit) {
@@ -554,10 +561,11 @@ public class ChronicleActionService {
      * chronicle stood, the hour and weather in unembellished terms, what physically
      * shared that ground, and which items the act touched. An AI narrator receives
      * this and only this, and must witness it without advising. Physiology is carried
-     * as the same Body HUD snapshot the player sees; the tick-delta layer (F2) will
-     * later record what changed since the previous frame.
+     * as the same Body HUD snapshot the player sees, alongside {@code sinceLastFrame} —
+     * the qualitative transitions the tick and this action wrought since the previous
+     * frame, so the passage of time is surfaced rather than silently swallowed.
      */
-    private PerceptionFrame buildFrame(ActiveChronicle chronicle, Intent intent, String outcome, String perception, Instant at) {
+    private PerceptionFrame buildFrame(ActiveChronicle chronicle, Intent intent, String outcome, String perception, Instant at, ChroniclePhysiologyService.BodyHudSnapshot before, ChroniclePhysiologyService.BodyHudSnapshot after, String beforeWeather) {
         UUID loc = chronicle.location();
         java.util.Map<String,Object> here = jdbc.queryForMap("SELECT world_id, grid_x, grid_y, biome FROM world_chunk WHERE id=?", loc);
         UUID world = (UUID) here.get("world_id");
@@ -567,8 +575,33 @@ public class ChronicleActionService {
         List<String> nearby = jdbc.query(
             "SELECT object_type, COUNT(*) FROM world_object WHERE current_location_id=? AND lifecycle_state='ACTIVE' AND id<>? GROUP BY object_type ORDER BY object_type",
             (rs, row) -> rs.getString(1).toLowerCase(Locale.ROOT) + ":" + rs.getInt(2), loc, chronicle.id());
-        return new PerceptionFrame(intent.name(), outcome, location, timeOfDayLabel(at), weather, List.copyOf(nearby), physiology.activeBody(), perception);
+        List<StateChange> sinceLast = physiologyDelta(before, after);
+        if (beforeWeather != null && weather != null && !beforeWeather.equals(weather.kind())) sinceLast.add(new StateChange("weather", beforeWeather, weather.kind()));
+        return new PerceptionFrame(intent.name(), outcome, location, timeOfDayLabel(at), weather, List.copyOf(nearby), after, List.copyOf(sinceLast), perception);
     }
+    /**
+     * What the tick and this action together changed in the body since the previous
+     * frame, aspect by aspect. Only genuine transitions are reported — hunger sliding
+     * from Hungry to Starving, energy climbing from Fatigued to Rested. The frame
+     * carries these for a Simulation Agent to weave into sensory narration; the
+     * qualitative Body HUD, not the prose, remains the authoritative physiology display.
+     */
+    private List<StateChange> physiologyDelta(ChroniclePhysiologyService.BodyHudSnapshot a, ChroniclePhysiologyService.BodyHudSnapshot b) {
+        List<StateChange> d = new java.util.ArrayList<>();
+        if (a == null || b == null) return d;
+        addChange(d, "health", a.health(), b.health());
+        addChange(d, "condition", a.condition(), b.condition());
+        addChange(d, "hunger", a.hunger(), b.hunger());
+        addChange(d, "thirst", a.thirst(), b.thirst());
+        addChange(d, "energy", a.energy(), b.energy());
+        addChange(d, "temperature", a.temperature(), b.temperature());
+        addChange(d, "wetness", a.wetness(), b.wetness());
+        addChange(d, "bladder", a.bladder(), b.bladder());
+        addChange(d, "bowel", a.bowel(), b.bowel());
+        addChange(d, "hygiene", a.hygiene(), b.hygiene());
+        return d;
+    }
+    private void addChange(List<StateChange> d, String aspect, String from, String to) { if (from != null && !from.equals(to)) d.add(new StateChange(aspect, from, to)); }
     /** A terse, machine-facing hour label for the frame, distinct from the prose the survey narrates. */
     private String timeOfDayLabel(Instant at) {
         int h = at.atZone(java.time.ZoneOffset.UTC).getHour();
@@ -581,9 +614,11 @@ public class ChronicleActionService {
         return "NIGHT";
     }
     public record ActionResult(UUID actionId, String intent, String outcome, int durationMinutes, Instant resolvedAt, String perception, ChroniclePhysiologyService.BodyHudSnapshot body, PerceptionFrame frame) { }
-    public record PerceptionFrame(String intent, String outcome, LocationView location, String timeOfDay, WeatherView weather, List<String> nearbyObjects, ChroniclePhysiologyService.BodyHudSnapshot physiology, String narration) { }
+    public record PerceptionFrame(String intent, String outcome, LocationView location, String timeOfDay, WeatherView weather, List<String> nearbyObjects, ChroniclePhysiologyService.BodyHudSnapshot physiology, List<StateChange> sinceLastFrame, String narration) { }
     public record LocationView(UUID chunkId, String name, String biome, int gridX, int gridY) { }
     public record WeatherView(String kind, int intensity) { }
+    /** A single qualitative transition between the previous frame and this one — e.g. hunger "Hungry" → "Starving". */
+    public record StateChange(String aspect, String from, String to) { }
     public record NarrationEntry(UUID id, Instant occurredAt, String narration) { }
     public record NarrationPage(List<NarrationEntry> entries, boolean hasMore) { }
 }

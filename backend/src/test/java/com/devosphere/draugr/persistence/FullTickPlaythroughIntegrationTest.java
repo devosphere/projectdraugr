@@ -154,6 +154,8 @@ class FullTickPlaythroughIntegrationTest {
         assertNotNull(frame.location().biome(), "the frame's location must carry a biome");
         assertNotNull(frame.timeOfDay(), "the frame must report the time of day");
         assertNotNull(frame.physiology(), "the frame must carry the body snapshot");
+        // F2 — the frame must carry the transitions since the last frame (possibly empty, never null).
+        assertNotNull(frame.sinceLastFrame(), "the frame must carry a since-last-frame delta list");
         assertEquals(waited.perception(), frame.narration(), "the frame's narration must match the action's perception prose");
         assertTrue(ticks.current().tick() > 0, "simulation clock must have advanced through the playthrough");
 
