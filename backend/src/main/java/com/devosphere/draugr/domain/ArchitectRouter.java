@@ -67,8 +67,15 @@ public class ArchitectRouter {
      */
     @Transactional(readOnly = true)
     public Assessment assess(String actionText) {
-        String v = actionText == null ? "" : actionText.toLowerCase(Locale.ROOT);
-        if (v.isBlank()) return new Assessment(Route.COVERED, "Empty action; nothing to build.", List.of(), List.of());
+        String raw = actionText == null ? "" : actionText.toLowerCase(Locale.ROOT);
+        if (raw.isBlank()) return new Assessment(Route.COVERED, "Empty action; nothing to build.", List.of(), List.of());
+        // Matching is on whole words, not substrings. Padding both the text and each
+        // candidate with spaces makes " ash " fail to match "flashing" and " weather "
+        // fail to match "weatherproof" — collisions that were silently routing real
+        // gaps to COVERED, which is the dangerous direction: a false COVERED
+        // suppresses the very Architect call the situation needed. Non-letters become
+        // spaces so punctuation does not weld words together.
+        String v = " " + raw.replaceAll("[^a-z0-9]+", " ").trim() + " ";
 
         // 1. Does something in the foundation already resolve this outright?
         List<String> covering = jdbc.queryForList(
@@ -77,7 +84,7 @@ public class ArchitectRouter {
             "  UNION ALL SELECT display_name, lower(display_name) FROM material_process" +
             "  UNION ALL SELECT display_name, lower(display_name) FROM construction_kind" +
             "  UNION ALL SELECT display_name, lower(display_name) FROM fire_method" +
-            ") c WHERE ? LIKE '%' || m || '%' LIMIT 5", String.class, v);
+            ") c WHERE ? LIKE '% ' || m || ' %' LIMIT 5", String.class, v);
         if (!covering.isEmpty())
             return new Assessment(Route.COVERED,
                 "Already in the foundation: " + String.join(", ", covering) + ".", List.of(), List.of());
@@ -85,17 +92,17 @@ public class ArchitectRouter {
         // Keyword coverage too — a process is named by its verbs, not only its title.
         Integer kw = jdbc.queryForObject(
             "SELECT COUNT(*) FROM material_process mp, unnest(string_to_array(mp.keywords, ',')) k " +
-            "WHERE ? LIKE '%' || btrim(k) || '%'", Integer.class, v);
+            "WHERE ? LIKE '% ' || btrim(k) || ' %'", Integer.class, v);
         if (kw != null && kw > 0)
             return new Assessment(Route.COVERED, "A material process already covers this action.", List.of(), List.of());
 
         // 2. What does the world already have that bears on the request?
         List<String> materials = jdbc.queryForList(
-            "SELECT item_key FROM item_definition WHERE ? LIKE '%' || replace(item_key,'_',' ') || '%' " +
-            "   OR ? LIKE '%' || lower(display_name) || '%' LIMIT 12", String.class, v, v);
+            "SELECT item_key FROM item_definition WHERE ? LIKE '% ' || replace(item_key,'_',' ') || ' %' " +
+            "   OR ? LIKE '% ' || lower(display_name) || ' %' LIMIT 12", String.class, v, v);
         List<String> domains = jdbc.queryForList(
-            "SELECT domain_key FROM domain_registry WHERE ? LIKE '%' || replace(domain_key,'_',' ') || '%' " +
-            "   OR ? LIKE '%' || lower(display_name) || '%' LIMIT 8", String.class, v, v);
+            "SELECT domain_key FROM domain_registry WHERE ? LIKE '% ' || replace(domain_key,'_',' ') || ' %' " +
+            "   OR ? LIKE '% ' || lower(display_name) || ' %' LIMIT 8", String.class, v, v);
 
         // 3. Materials present means the player can genuinely reach for this, so the
         // Architect is refining a gap between known things rather than inventing.
