@@ -89,28 +89,34 @@ Backend: Java 21 / Spring Boot / PostgreSQL. Migrations V1–V38 applied. All co
 - PersistentStateAuditor: 17 invariant checks (F5). AuditSentinel: launch gate + heartbeat (F6).
 - domain_registry (V38) + DomainRegistryService + GET /api/domains (F7). Monotonic schema decision (F8 / DR-0013).
 
+### Ecosystem Expansion (V39–V46) — ✅ COMPLETE
+
+Per DR-0015, the deterministic ecosystem had to reach maximum coverage before AI narration was wired. All eight migrations are applied and validated from scratch against Postgres 16:
+
+| Migration | Scope | Status |
+|-----------|-------|--------|
+| V39 | Flora system — 33 species; flora_definition + flora_drop + chunk_flora; GATHER_PLANT, FELL_TREE | ✅ |
+| V40 | Insect ecosystem — 11 colonies, products, hazards; RAID_HIVE, COLLECT_INSECTS | ✅ |
+| V41 | wildlife_species registry (Mammalia/Reptilia/Amphibia) + 6 FSM cascade rules | ✅ |
+| V42 | Aves + Pisces + wildlife_drop per-species butchery + aquatic_catch; FISH, SNARE | ✅ |
+| V43 | Monster system — monster_profile, 9 species as MONSTRUM, 6 special mechanics | ✅ |
+| V44 | chronicle_wildlife_event + wildlife_sign; passive encounters, TRACK | ✅ |
+| V45 | wildlife_bond + tamed_yield/production; TAME | ✅ |
+| V46 | bait_profile + placed_lure + placed_trap; LURE, SET_TRAP, CHECK_TRAP | ✅ |
+
+**Totals:** 35 domains · 66 wildlife species · 33 flora · 11 insect colonies · 9 monsters · 122 items · 97 wildlife drops · 48 flora drops · 124 signs · 12 baits · 61 DB-free unit tests green.
+
+**ActionInputClassifier** — ✅ pre-pass filter (DR-0019). Personal acts and aggression carry real physiological and ecological consequence; gibberish and the physically impossible are intercepted before the tick at zero cost.
+
+**NarrationEngine** — ✅ deterministic witness prose for 30 intent × outcome scenes plus a safe generic fallback, varied by biome, time of day, weather, species, and wound severity. Correct even with the API unreachable.
+
+**NarrationRouter** — ✅ pure Java, no migration; routes AI_REFINE vs DETERMINISTIC per DR-0017. 27 intents never call; significance (death, monsters, taming thresholds, serious wounds, writing, deliberate observation) earns the call. Cost shape is enforced by test.
+
 ### Remaining before Phase 1 complete
 
-**Ecosystem Expansion (V39–V46) — in progress**
+**Task #21 — AI narration** — Claude API refinement layer, one to two sentences of atmospheric flavour on top of NarrationEngine prose, per DR-0016. Now fully unblocked: the router decides when to call and the engine supplies the `backendNarration` the prompt builds on.
 
-Per DR-0015, the deterministic ecosystem must reach maximum coverage before AI narration is wired. Eight migrations planned:
-
-| Migration | Scope |
-|-----------|-------|
-| V39 | Flora system — trees, shrubs, herbs, fungi, aquatic plants; flora_definition + flora_drop + chunk_flora |
-| V40 | Insect ecosystem — colonies, products, hazards, decomposers |
-| V41 | Expanded land wildlife — full species registry across Mammalia, Reptilia, Amphibia; FSM expansion |
-| V42 | Aerial + aquatic wildlife — birds, bats, fish, FISH intent, SNARE intent |
-| V43 | Monster system — ground and aerial monsters backed, monster_profile table |
-| V44 | Passive encounters + flee consequences + TRACK intent |
-| V45 | Taming + bonding — wildlife_bond table, TAME intent |
-| V46 | Lure + bait + trap — LURE and SET_TRAP intents |
-
-**NarrationEngine** — deterministic prose templates per intent × outcome × species × biome × severity.
-
-**NarrationRouter** — pure Java, no migration; routes AI_REFINE vs DETERMINISTIC per DR-0017.
-
-**Task #21 — AI narration** — Claude API refinement layer, one to two sentences of atmospheric flavor on top of NarrationEngine prose, per DR-0016.
+**Ecology tick pass** — one periodic tick advancing insect colonies, traps, and tamed production. Seven deferred behaviours share this single dependency and are grouped in the sprint backlog rather than scattered (mosquito illness, bee pollination, locust flora destruction, autonomous trap catches, livestock production, poison ingestion, scavenger-bird ambient mechanics).
 
 ## Objective
 
