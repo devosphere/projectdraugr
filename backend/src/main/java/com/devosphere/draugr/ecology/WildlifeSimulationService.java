@@ -35,6 +35,54 @@ public class WildlifeSimulationService {
             }
             return null;
         });
+        applyCascades(now);
+    }
+
+    /**
+     * The inter-species cascade pass. Base behaviour above is decided per population
+     * in isolation; these rules then let populations react to each other and to the
+     * world, which is what makes the ecology read as intelligent without any model
+     * being asked to think. Each rule is a deterministic set-based update, applied
+     * after every population has its base state. See docs/systems/11.2-Behavioral-FSM.md.
+     */
+    @Transactional
+    void applyCascades(Instant now) {
+        // Pack cascade — a pack-hunting species that is hunting coordinates instead.
+        jdbc.update("UPDATE wildlife_population wp SET behavior_state='PACK_HUNT' FROM wildlife_species ws WHERE ws.species_key=wp.species_key AND ws.pack_hunter AND wp.behavior_state='HUNTING' AND wp.population_count>1");
+
+        // Prey awareness — herbivores in a chunk where a predator is actively hunting
+        // stop feeding and watch. Prey do not need to see the predator to sense it.
+        jdbc.update("UPDATE wildlife_population prey SET behavior_state='ALERT' " +
+            "FROM ecology_site prey_site WHERE prey_site.id=prey.site_id AND prey.ecological_role='HERBIVORE' " +
+            "AND prey.behavior_state IN ('FORAGING','RESTING','DRINKING','FEEDING') " +
+            "AND EXISTS (SELECT 1 FROM wildlife_population pred JOIN ecology_site pred_site ON pred_site.id=pred.site_id " +
+            "  WHERE pred_site.chunk_id=prey_site.chunk_id AND pred.id<>prey.id AND pred.population_count>0 " +
+            "  AND pred.ecological_role='CARNIVORE' AND pred.behavior_state IN ('HUNTING','PACK_HUNT','STALKING'))");
+
+        // Scavenger cascade — scavengers converge on a chunk holding a fresh carcass.
+        jdbc.update("UPDATE wildlife_population sc SET behavior_state='FEEDING' " +
+            "FROM ecology_site site WHERE site.id=sc.site_id AND sc.ecological_role='SCAVENGER' AND sc.population_count>0 " +
+            "AND EXISTS (SELECT 1 FROM wildlife_carcass wc JOIN world_object w ON w.id=wc.object_id " +
+            "  WHERE w.current_location_id=site.chunk_id AND w.lifecycle_state='ACTIVE' AND wc.remaining_meat_units>0)");
+
+        // Fire fear — a lit fire drives animals off the ground around it. Predators
+        // hold at a wary distance rather than pressing a hunt through smoke and light.
+        jdbc.update("UPDATE wildlife_population wp SET behavior_state='ALERT' " +
+            "FROM ecology_site site WHERE site.id=wp.site_id AND wp.behavior_state IN ('HUNTING','PACK_HUNT','STALKING','FORAGING') " +
+            "AND EXISTS (SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "  JOIN fire_state fs ON fs.construction_id=cp.object_id " +
+            "  WHERE w.current_location_id=site.chunk_id AND fs.active=true)");
+
+        // Territorial defence — a territorial species at or near capacity holds ground
+        // rather than ranging, which is what makes intruding on it dangerous.
+        jdbc.update("UPDATE wildlife_population wp SET behavior_state='TERRITORIAL' FROM wildlife_species ws " +
+            "WHERE ws.species_key=wp.species_key AND ws.territorial AND wp.behavior_state='FORAGING' " +
+            "AND wp.population_count >= (wp.carrying_capacity * 3) / 4");
+
+        // Flee window — a population that fled stays fled for two hours, so a chronicle
+        // who drove something off finds the ground genuinely quieter for a while.
+        jdbc.update("UPDATE wildlife_population SET behavior_state='RESTING' WHERE behavior_state='FLEEING' AND last_simulated_at < ?",
+            Timestamp.from(now.minus(Duration.ofHours(2))));
     }
 
     @Transactional

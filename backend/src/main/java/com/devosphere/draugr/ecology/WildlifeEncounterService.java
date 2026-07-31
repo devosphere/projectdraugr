@@ -30,12 +30,24 @@ public class WildlifeEncounterService {
      */
     @Transactional
     public EncounterResult confront(UUID chronicle, UUID chunk, UUID action, Instant at, int tacticBonus) {
-        Encounter candidate=jdbc.query("SELECT wp.id,wp.species_key,wp.ecological_role,wp.behavior_state,wp.population_count FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id WHERE es.chunk_id=? AND wp.population_count>0 ORDER BY CASE wp.ecological_role WHEN 'CARNIVORE' THEN 0 WHEN 'OMNIVORE' THEN 1 ELSE 2 END LIMIT 1 FOR UPDATE",rs->rs.next()?new Encounter(rs.getObject(1,UUID.class),rs.getString(2),rs.getString(3),rs.getString(4),rs.getInt(5)):null,chunk);
+        // The species registry (V41) supplies movement class, intrinsic resistance,
+        // and the ambush flag; it is LEFT JOINed so a population whose species is not
+        // yet catalogued still resolves on its role alone.
+        Encounter candidate=jdbc.query("SELECT wp.id,wp.species_key,wp.ecological_role,wp.behavior_state,wp.population_count,ws.movement_class,ws.base_resistance,ws.ambush_hunter FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id LEFT JOIN wildlife_species ws ON ws.species_key=wp.species_key WHERE es.chunk_id=? AND wp.population_count>0 ORDER BY CASE wp.ecological_role WHEN 'CARNIVORE' THEN 0 WHEN 'OMNIVORE' THEN 1 ELSE 2 END LIMIT 1 FOR UPDATE",rs->rs.next()?new Encounter(rs.getObject(1,UUID.class),rs.getString(2),rs.getString(3),rs.getString(4),rs.getInt(5),rs.getString(6),(Integer)rs.getObject(7),rs.getBoolean(8)):null,chunk);
         if(candidate==null)return new EncounterResult("FAILED","The ground answers only with rain and the small movements of the forest.");
         Combatant body=jdbc.query("SELECT p.energy_level,p.injury_severity,p.pain_level,COALESCE((SELECT COUNT(*) FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id WHERE e.chronicle_id=? AND e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key IN ('stone_axe','primitive_spear')),0),COALESCE((SELECT COUNT(*) FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key='field_stone'),0) FROM chronicle_physiology p WHERE p.chronicle_id=?",rs->rs.next()?new Combatant(rs.getInt(1),rs.getInt(2),rs.getInt(3),rs.getInt(4),rs.getInt(5)):new Combatant(0,100,100,0,0),chronicle,chronicle,chronicle);
+        // A creature on the wing cannot be reached by a hand weapon. Throwing stones
+        // is the only contact a chronicle has with it. The narrator witnesses the
+        // futility without naming what would be needed.
+        if("AERIAL".equals(candidate.movementClass()) && body.stones()==0)
+            return new EncounterResult("FAILED","It stays above you, well out of reach. Whatever you do with your hands, the air between you does not close.");
         int capability = body.energy()/3 - body.injury()/2 - body.pain()/3 + body.handWeapon()*35 + Math.min(10,body.stones()*2) + tacticBonus;
-        int resistance = "CARNIVORE".equals(candidate.role()) ? 85 : "OMNIVORE".equals(candidate.role()) ? 65 : 42;
-        if("HUNTING".equals(candidate.behavior())) resistance += 10;
+        // Registry resistance is authoritative when catalogued; the old role-based
+        // bands remain the fallback. Registry values are species-scaled, so they are
+        // lifted onto the same footing as the bands they replace.
+        int resistance = candidate.baseResistance()!=null ? 30 + candidate.baseResistance()/2
+            : "CARNIVORE".equals(candidate.role()) ? 85 : "OMNIVORE".equals(candidate.role()) ? 65 : 42;
+        if("HUNTING".equals(candidate.behavior())||"PACK_HUNT".equals(candidate.behavior())) resistance += 10;
         if("SHELTERING".equals(candidate.behavior())) resistance -= 12;
         int roll = Math.floorMod(action.hashCode(), 100);
         if (capability + roll >= resistance + 40) {
@@ -58,6 +70,9 @@ public class WildlifeEncounterService {
         int deficit = Math.max(0, resistance - (capability + roll));
         int severity=("CARNIVORE".equals(candidate.role())?22:"OMNIVORE".equals(candidate.role())?12:4) + deficit;
         if("RESTING".equals(candidate.behavior()) || "SHELTERING".equals(candidate.behavior())) severity=Math.max(2,severity-5);
+        // An ambush hunter strikes from cover with no warning; the first blow lands
+        // on a body that had no chance to set itself against it.
+        if(candidate.ambushHunter()) severity += 8;
         physiology.applyInjury(chronicle,severity,action,at,"WILDLIFE_CONTACT");
         jdbc.update("UPDATE wildlife_population SET behavior_state='FLEEING' WHERE id=?",candidate.populationId());
         String mark = severity >= 70
@@ -81,7 +96,7 @@ public class WildlifeEncounterService {
     }
     private int meatFor(String species) { return species.contains("bear") || species.contains("elk") ? 4 : species.contains("deer") || species.contains("boar") ? 3 : 1; }
     private String display(String species) { return species.replace('_',' '); }
-    private record Encounter(UUID populationId,String species,String role,String behavior,int population){}
+    private record Encounter(UUID populationId,String species,String role,String behavior,int population,String movementClass,Integer baseResistance,boolean ambushHunter){}
     private record Combatant(int energy,int injury,int pain,int handWeapon,int stones){}
     private record Carcass(UUID id,String species,int meat,boolean hide){}
     public record EncounterResult(String outcome,String narration){}
