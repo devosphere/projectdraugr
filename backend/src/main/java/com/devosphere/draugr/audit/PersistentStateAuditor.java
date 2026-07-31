@@ -51,6 +51,20 @@ public class PersistentStateAuditor {
         // standing as an active object the world still offers up.
         Integer spentCarcass = jdbc.queryForObject("SELECT COUNT(*) FROM wildlife_carcass wc JOIN world_object w ON w.id=wc.object_id WHERE w.lifecycle_state='ACTIVE' AND wc.remaining_meat_units=0 AND wc.hide_available=false", Integer.class);
         if (spentCarcass != null && spentCarcass > 0) violations.add(spentCarcass + " exhausted carcass(es) remain active in the world.");
+        // Process integrity: a declarative recipe can be wrong in ways that never
+        // throw — creating matter, consuming its own output, resting on an input
+        // nobody can get. These are caught before a process is allowed to run, so the
+        // only thing reported here is drift: a process that went live while carrying
+        // an unresolved blocking finding against it.
+        Integer liveButFlagged = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM material_process mp WHERE mp.review_state='VERIFIED' AND EXISTS (" +
+            "  SELECT 1 FROM process_review r WHERE r.process_key=mp.process_key AND r.severity='BLOCKING' AND r.resolved_at IS NULL)", Integer.class);
+        if (liveButFlagged != null && liveButFlagged > 0) violations.add(liveButFlagged + " verified process(es) still carry an unresolved blocking finding.");
+        Integer massCreating = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM process_mass_balance b JOIN material_process mp ON mp.process_key=b.process_key " +
+            "WHERE mp.review_state='VERIFIED' AND NOT mp.conservation_exempt " +
+            "AND b.min_input_grams > 0 AND b.max_output_grams > b.min_input_grams * 1.05", Integer.class);
+        if (massCreating != null && massCreating > 0) violations.add(massCreating + " live process(es) would create matter from nothing.");
         // Reachability: an item nobody can obtain is scenery wearing the costume of a
         // mechanic. This has already happened twice — the V48 hide garments were
         // insulating but unsewable, and V49 added flint and pyrite as fire kit with

@@ -317,9 +317,14 @@ public class PhysicalItemService {
     public String[] runProcess(UUID chronicle, UUID location, String actionText, Instant at) {
         String v = actionText.toLowerCase(java.util.Locale.ROOT);
         // Longest keyword wins, so "fire the pot" beats a bare "pot" elsewhere.
+        // Only reviewed processes may run (V53). A definition the Auditor has flagged
+        // is held out of play entirely rather than allowed to write a suspect result
+        // into a chronicle's permanent record, where it would become history before
+        // anyone noticed. The narration says nothing about review states — the world
+        // simply does not yet know how to do it.
         java.util.List<java.util.Map<String,Object>> all = jdbc.queryForList(
             "SELECT process_key, display_name, output_item_key, output_min, output_max, tool_class, " +
-            "requires_fire, requires_water, keywords, narration FROM material_process");
+            "requires_fire, requires_water, keywords, narration FROM material_process WHERE review_state='VERIFIED'");
         java.util.Map<String,Object> match = null; int bestLen = 0;
         for (java.util.Map<String,Object> p : all)
             for (String kw : ((String) p.get("keywords")).split(","))
