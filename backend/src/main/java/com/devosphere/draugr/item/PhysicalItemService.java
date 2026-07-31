@@ -148,6 +148,152 @@ public class PhysicalItemService {
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'MADE_CHARCOAL','{}'::jsonb)", id, Timestamp.from(occurredAt));
         return true;
     }
+    /**
+     * Gather a plant from the flora_drop table — mushroom, herb, berry, root, or
+     * any non-tree flora. The action text is used to infer the target species; if
+     * unrecognised, the first matching flora in the chunk's biome is used.
+     * Season gates and tool requirements are enforced. Returns [outcome, narration].
+     */
+    @Transactional
+    public String[] gatherPlant(UUID chronicle, UUID location, String actionText, Instant occurredAt) {
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
+        String lower = actionText.toLowerCase(java.util.Locale.ROOT);
+        String season = seasonOf(occurredAt);
+
+        // Find a flora in this biome that the action text names (or any available)
+        java.util.List<java.util.Map<String,Object>> candidates = jdbc.queryForList(
+            "SELECT fd.flora_key, fd.organism_type, fd.tool_required, fd.is_poisonous " +
+            "FROM flora_definition fd " +
+            "JOIN chunk_flora cf ON cf.flora_key=fd.flora_key " +
+            "WHERE cf.chunk_id=? AND cf.quantity > 0 AND fd.organism_type <> 'TREE' " +
+            "ORDER BY fd.flora_key", location);
+
+        if (candidates.isEmpty()) {
+            // No chunk_flora rows — fall back to biome affinity check
+            candidates = jdbc.queryForList(
+                "SELECT flora_key, organism_type, tool_required, is_poisonous " +
+                "FROM flora_definition " +
+                "WHERE organism_type <> 'TREE' AND biome_affinity ILIKE ? " +
+                "ORDER BY flora_key", "%" + biome + "%");
+        }
+        if (candidates.isEmpty()) return new String[]{"FAILED", "You search through the growth, but find nothing here worth taking."};
+
+        // Prefer species the action text names
+        java.util.Map<String,Object> target = candidates.stream()
+            .filter(c -> lower.contains(((String)c.get("flora_key")).replace("_"," ")))
+            .findFirst()
+            .orElse(candidates.get(0));
+
+        String floraKey = (String) target.get("flora_key");
+        String toolRequired = (String) target.get("tool_required");
+
+        // Tool gate — only KNIFE_CLASS tools apply here (no flora needs axe bare-hand)
+        if (toolRequired != null && toolRequired.contains("KNIFE") && !hasCuttingTool(chronicle)) {
+            return new String[]{"FAILED", "You reach for the plant, but it needs cutting and you carry no blade."};
+        }
+
+        // Get drops for this flora, filtered by season
+        java.util.List<java.util.Map<String,Object>> drops = jdbc.queryForList(
+            "SELECT item_key, yield_min, yield_max, season FROM flora_drop " +
+            "WHERE flora_key=? AND (season IS NULL OR season=? OR ? IS NULL) " +
+            "ORDER BY item_key", floraKey, season, season);
+
+        if (drops.isEmpty()) {
+            return new String[]{"FAILED", "You find the plant but nothing here is ready to take — wrong season or nothing ripe."};
+        }
+
+        // Pick first available drop (simplest — can expand to multi-drop later)
+        java.util.Map<String,Object> drop = drops.get(0);
+        String itemKey = (String) drop.get("item_key");
+        int yieldMin = ((Number) drop.get("yield_min")).intValue();
+        int yieldMax = ((Number) drop.get("yield_max")).intValue();
+        int yield = yieldMin + (yieldMax > yieldMin ? (int)(Math.random() * (yieldMax - yieldMin + 1)) : 0);
+        int available = capacityHeadroomUnits(chronicle, itemKey);
+        int count = Math.min(yield, Math.max(1, available));
+        if (available <= 0) return new String[]{"FAILED", "You cannot carry any more of what you find here."};
+
+        // Look up display name from item_definition
+        String displayName = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, itemKey);
+
+        for (int i = 0; i < count; i++) {
+            UUID id = UUID.randomUUID();
+            jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM',?,?)", id, displayName, chronicle);
+            jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,?,'SOUND')", id, itemKey);
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'GATHERED',jsonb_build_object('floraKey',?,'biome',?))", id, Timestamp.from(occurredAt), floraKey, biome);
+        }
+        // Deplete chunk_flora if present
+        jdbc.update("UPDATE chunk_flora SET quantity=GREATEST(0,quantity-?), last_harvested_at=? WHERE chunk_id=? AND flora_key=?", count, Timestamp.from(occurredAt), location, floraKey);
+        assertCarryCapacity(chronicle);
+        String plantName = floraKey.replace("_", " ");
+        return new String[]{"SUCCEEDED", "You gather " + (count == 1 ? "a" : count + "") + " " + displayName.toLowerCase() + " from the " + plantName + " growing here."};
+    }
+
+    /**
+     * Fell a tree in the current chunk — requires an axe-class tool equipped or
+     * carried. Yields logs and any secondary drops from flora_drop. Returns [outcome, narration].
+     */
+    @Transactional
+    public String[] fellTree(UUID chronicle, UUID location, Instant occurredAt) {
+        // Axe-class tool check: stone_axe, stone_hatchet, or any future axe item
+        boolean hasAxe = Boolean.TRUE.equals(jdbc.queryForObject(
+            "WITH RECURSIVE reachable(id) AS (" +
+            "  SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE'" +
+            "  UNION ALL SELECT ic.item_id FROM item_containment ic" +
+            "  JOIN reachable r ON r.id=ic.container_id" +
+            "  JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE')" +
+            "SELECT EXISTS(SELECT 1 FROM reachable r JOIN item_instance i ON i.object_id=r.id " +
+            "WHERE i.item_key IN ('stone_axe','stone_hatchet','iron_axe','hand_axe'))",
+            Boolean.class, chronicle));
+        if (!hasAxe) return new String[]{"FAILED", "You set your hands against the trunk. Without an axe, you cannot fell a tree."};
+
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
+        // Check that there is a tree here via chunk_flora
+        java.util.Map<String,Object> tree = jdbc.query(
+            "SELECT cf.flora_key, fd.organism_type FROM chunk_flora cf " +
+            "JOIN flora_definition fd ON fd.flora_key=cf.flora_key " +
+            "WHERE cf.chunk_id=? AND fd.organism_type='TREE' AND cf.quantity>0 LIMIT 1",
+            rs -> rs.next() ? java.util.Map.of("flora_key", rs.getString(1), "organism_type", rs.getString(2)) : null,
+            location);
+
+        if (tree == null) {
+            // Fall back: biome has trees by nature even without chunk_flora rows
+            String treeKey = switch (biome != null ? biome : "") {
+                case "FOREST", "TEMPERATE_FOREST" -> "oak";
+                case "MOUNTAIN" -> "spruce";
+                case "HIGHLAND" -> "pine";
+                case "WETLAND", "RIVERBANK" -> "willow";
+                default -> null;
+            };
+            if (treeKey == null) return new String[]{"FAILED", "There are no trees here to fell."};
+            tree = java.util.Map.of("flora_key", treeKey, "organism_type", "TREE");
+        }
+
+        String floraKey = (String) tree.get("flora_key");
+        // Get log drop for this tree
+        java.util.List<java.util.Map<String,Object>> drops = jdbc.queryForList(
+            "SELECT item_key, yield_min, yield_max FROM flora_drop WHERE flora_key=? AND tool_condition='AXE_CLASS'", floraKey);
+        if (drops.isEmpty()) return new String[]{"FAILED", "The tree stands but offers nothing your axe can shape."};
+
+        String logKey = (String) drops.get(0).get("item_key");
+        int logYield = ((Number)drops.get(0).get("yield_min")).intValue();
+        String logName = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, logKey);
+
+        int available = capacityHeadroomUnits(chronicle, logKey);
+        int count = Math.min(logYield, Math.max(1, available));
+        if (available <= 0) return new String[]{"FAILED", "You cannot carry the logs — your hands and back are full."};
+
+        for (int i = 0; i < count; i++) {
+            UUID id = UUID.randomUUID();
+            jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM',?,?)", id, logName, chronicle);
+            jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,?,'SOUND')", id, logKey);
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'FELLED',jsonb_build_object('floraKey',?,'biome',?))", id, Timestamp.from(occurredAt), floraKey, biome);
+        }
+        jdbc.update("UPDATE chunk_flora SET quantity=GREATEST(0,quantity-1), last_harvested_at=? WHERE chunk_id=? AND flora_key=?", Timestamp.from(occurredAt), location, floraKey);
+        assertCarryCapacity(chronicle);
+        String treeName = floraKey.replace("_", " ");
+        return new String[]{"SUCCEEDED", "The " + treeName + " comes down with a crack that carries across the ground. You take up " + count + " " + logName.toLowerCase() + (count > 1 ? "s" : "") + " from what lies."};
+    }
+
     @Transactional(readOnly = true)
     public boolean hasAtLeast(UUID chronicle, String itemKey, int required) {
         Integer count = jdbc.queryForObject("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT COUNT(*) FROM reachable r JOIN item_instance i ON i.object_id=r.id WHERE i.item_key=?", Integer.class, chronicle, itemKey);
@@ -177,6 +323,16 @@ public class PhysicalItemService {
     /** True if the Chronicle can reach any blade capable of carving wood. */
     @Transactional(readOnly = true)
     public boolean hasCuttingTool(UUID chronicle) { return hasAtLeast(chronicle,"stone_knife",1) || hasAtLeast(chronicle,"stone_hatchet",1); }
+    /** Northern-hemisphere season derived from the simulated instant's month, until a dedicated world-clock season exists. */
+    private static String seasonOf(Instant at) {
+        int month = at.atZone(java.time.ZoneOffset.UTC).getMonthValue();
+        return switch (month) {
+            case 3, 4, 5 -> "SPRING";
+            case 6, 7, 8 -> "SUMMER";
+            case 9, 10, 11 -> "AUTUMN";
+            default -> "WINTER";
+        };
+    }
 
     /** Carve a hearth board and spindle from a dry branch — the reusable friction-fire kit. Needs a blade. */
     @Transactional
