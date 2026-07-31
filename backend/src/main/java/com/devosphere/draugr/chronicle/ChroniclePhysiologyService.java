@@ -163,6 +163,14 @@ public class ChroniclePhysiologyService {
         jdbc.update("INSERT INTO chronicle_condition_event (chronicle_id,occurred_at,condition_kind,severity,source_action_id,payload) VALUES (?,?,?,?,?,jsonb_build_object('source','spoiled_food'))",chronicleId,Timestamp.from(occurredAt),"FOODBORNE_ILLNESS",12,actionId);
         refreshBody(chronicleId);
     }
+    /** A general illness from any cause — venom, tainted water, a poisonous plant. Raises illness_severity and a little stress. */
+    @Transactional
+    public void applyIllness(UUID chronicleId, int severity, UUID actionId, Instant occurredAt, String source) {
+        int bounded = clamp(severity);
+        jdbc.update("UPDATE chronicle_physiology SET illness_severity=LEAST(100,illness_severity+?),stress_level=LEAST(100,stress_level+?) WHERE chronicle_id=?", bounded, Math.max(1, bounded / 3), chronicleId);
+        jdbc.update("INSERT INTO chronicle_condition_event (chronicle_id,occurred_at,condition_kind,severity,source_action_id,payload) VALUES (?,?,?,?,?,jsonb_build_object('source',?))", chronicleId, Timestamp.from(occurredAt), "ILLNESS", bounded, actionId, source);
+        refreshBody(chronicleId);
+    }
     @Transactional
     public boolean bindWound(UUID chronicleId, PhysicalItemService items, UUID actionId, Instant occurredAt) {
         Integer wounded = jdbc.queryForObject("SELECT COUNT(*) FROM chronicle_physiology WHERE chronicle_id=? AND (injury_severity>0 OR blood_loss_ml>0)", Integer.class, chronicleId);

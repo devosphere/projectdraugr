@@ -300,6 +300,116 @@ public class PhysicalItemService {
         return count != null && count >= required;
     }
 
+    /** The outcome of an insect harvest: what happened, how it read, and any hazard the body took. */
+    public record InsectHarvest(String outcome, String narration, int hazardSeverity, String hazardKind) { }
+
+    /**
+     * Raid a hive or nest for its products — honey and wax from bees, venom from
+     * hornets. Bee stings are suppressed when the raider works smoke (an active
+     * fire in the chunk and smoke described in the action); hornets sting
+     * regardless. The colony kind is inferred from the biome when no colony
+     * instance is placed here, mirroring flora gathering.
+     */
+    @Transactional
+    public InsectHarvest raidHive(UUID chronicle, UUID location, String actionText, Instant occurredAt) {
+        return harvestColony(chronicle, location, actionText, occurredAt, "RAID_HIVE");
+    }
+
+    /**
+     * Collect insects by hand — silk cocoons, ant chitin, edible grasshoppers and
+     * crickets, earthworm bait, spider silk. Some colonies bite or bear venom; the
+     * hazard is applied by the caller from the returned severity and kind.
+     */
+    @Transactional
+    public InsectHarvest collectInsects(UUID chronicle, UUID location, String actionText, Instant occurredAt) {
+        return harvestColony(chronicle, location, actionText, occurredAt, "COLLECT_INSECTS");
+    }
+
+    private InsectHarvest harvestColony(UUID chronicle, UUID location, String actionText, Instant occurredAt, String intent) {
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
+        String lower = actionText.toLowerCase(java.util.Locale.ROOT);
+        String season = seasonOf(occurredAt);
+
+        // Candidate colony kinds for this intent, present in this biome and season.
+        java.util.List<java.util.Map<String,Object>> kinds = jdbc.queryForList(
+            "SELECT ck.colony_kind, ck.hazard_kind, ck.hazard_min, ck.hazard_max, ck.smoke_suppresses " +
+            "FROM insect_colony_kind ck " +
+            "WHERE ck.harvest_intent=? AND ck.biome_affinity ILIKE ? " +
+            "AND (ck.season_active='ALL' OR ck.season_active ILIKE ?) " +
+            "ORDER BY ck.colony_kind", intent, "%" + biome + "%", "%" + season + "%");
+        if (kinds.isEmpty()) {
+            return new InsectHarvest("FAILED", intent.equals("RAID_HIVE")
+                ? "You search for a hive or nest to raid, but find none here to work."
+                : "You turn over the ground and growth for insects, but find nothing worth taking here.", 0, null);
+        }
+
+        // Prefer a colony the action text names; otherwise the first available.
+        java.util.Map<String,Object> kind = kinds.stream()
+            .filter(k -> lower.contains(((String)k.get("colony_kind")).replace("_"," ").replace(" colony","").replace(" swarm","").replace(" patch","").replace(" den","").replace(" nest","").replace(" hive","")))
+            .findFirst().orElse(kinds.get(0));
+        String colonyKind = (String) kind.get("colony_kind");
+        String hazardKind = (String) kind.get("hazard_kind");
+        int hazardMin = ((Number) kind.get("hazard_min")).intValue();
+        int hazardMax = ((Number) kind.get("hazard_max")).intValue();
+        boolean smokeSuppresses = Boolean.TRUE.equals(kind.get("smoke_suppresses"));
+
+        // Smoke is real only when there is an active fire in the chunk and the
+        // action actually describes using its smoke.
+        boolean describesSmoke = lower.contains("smoke") || lower.contains("smok") || lower.contains("smoulder") || lower.contains("smolder");
+        boolean activeFire = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id JOIN fire_state fs ON fs.construction_id=cp.object_id WHERE w.current_location_id=? AND fs.active=true)",
+            Boolean.class, location));
+        boolean smokeWorking = describesSmoke && activeFire;
+
+        int hazardSeverity = 0;
+        if (hazardKind != null && hazardMax > 0) {
+            boolean suppressed = smokeSuppresses && smokeWorking;
+            if (!suppressed) hazardSeverity = hazardMin + (hazardMax > hazardMin ? (int)(Math.random() * (hazardMax - hazardMin + 1)) : 0);
+        }
+
+        // Yield each product by its rarity roll, respecting carry capacity.
+        java.util.List<java.util.Map<String,Object>> products = jdbc.queryForList(
+            "SELECT item_key, yield_min, yield_max, rarity FROM insect_colony_product WHERE colony_kind=? ORDER BY rarity DESC", colonyKind);
+        int totalTaken = 0; String firstItemName = null;
+        for (java.util.Map<String,Object> p : products) {
+            double rarity = ((Number) p.get("rarity")).doubleValue();
+            if (Math.random() > rarity) continue;
+            String itemKey = (String) p.get("item_key");
+            int ymin = ((Number) p.get("yield_min")).intValue();
+            int ymax = ((Number) p.get("yield_max")).intValue();
+            int want = ymin + (ymax > ymin ? (int)(Math.random() * (ymax - ymin + 1)) : 0);
+            int room = capacityHeadroomUnits(chronicle, itemKey);
+            int take = Math.min(want, room);
+            if (take <= 0) continue;
+            String displayName = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, itemKey);
+            if (firstItemName == null) firstItemName = displayName;
+            for (int i = 0; i < take; i++) {
+                UUID id = UUID.randomUUID();
+                jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM',?,?)", id, displayName, chronicle);
+                jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,?,'SOUND')", id, itemKey);
+                jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'GATHERED',jsonb_build_object('colonyKind',?,'biome',?))", id, Timestamp.from(occurredAt), colonyKind, biome);
+            }
+            totalTaken += take;
+        }
+        // Record disturbance on any placed instance of this colony in the chunk.
+        jdbc.update("UPDATE insect_colony SET last_disturbed_at=?, health=GREATEST(0,health-15) WHERE chunk_id=? AND colony_kind=?", Timestamp.from(occurredAt), location, colonyKind);
+        if (totalTaken > 0) assertCarryCapacity(chronicle);
+
+        String name = colonyKind.replace("_", " ");
+        String narration;
+        if (totalTaken == 0) {
+            narration = intent.equals("RAID_HIVE")
+                ? "You break into the " + name + ", but it yields nothing you can carry away this time."
+                : "You work at the " + name + " for a while, but come away empty-handed.";
+        } else if (hazardSeverity > 0) {
+            narration = "You take " + firstItemName.toLowerCase() + " from the " + name + ", and the colony makes you pay for it before you withdraw.";
+        } else {
+            narration = "You take " + firstItemName.toLowerCase() + " from the " + name + ", working steadily until you have what you came for.";
+        }
+        String outcome = totalTaken > 0 ? "SUCCEEDED" : "FAILED";
+        return new InsectHarvest(outcome, narration, hazardSeverity, hazardKind);
+    }
+
     @Transactional
     public ItemView craftBasket() {
         UUID chronicle=activeChronicle();
