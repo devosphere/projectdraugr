@@ -73,9 +73,30 @@ public class WildlifeEncounterService {
         // An ambush hunter strikes from cover with no warning; the first blow lands
         // on a body that had no chance to set itself against it.
         if(candidate.ambushHunter()) severity += 8;
+        // A monster's special mechanic shapes what losing to it means. These are
+        // biological traits, not scripted set pieces: a wyvern breathes fire, a roc
+        // carries what it catches, a harpy takes what it can lift, a wraith's wounds
+        // go bad. The narrator witnesses the result and explains nothing.
+        String mechanic = jdbc.query("SELECT special_mechanic FROM monster_profile WHERE species_key=?", rs->rs.next()?rs.getString(1):null, candidate.species());
+        String monsterMark = null;
+        if (mechanic != null) switch (mechanic) {
+            case "FIRE_BREATH" -> { severity += 25; monsterMark = "Heat arrives before anything else does. The air itself turns against you, and what it leaves behind goes on burning after the shape above has wheeled away."; }
+            case "GRAB_AND_CARRY" -> { severity += 20; monsterMark = "You are lifted. The ground drops away, tilts, and then returns all at once, and the returning is the part that breaks something."; }
+            case "SWARM_WOUNDS" -> { severity += 10; monsterMark = "There is no single blow to brace against — only many, from every direction at once, until the air is nothing but wings and small teeth."; }
+            case "DISEASE_WOUND" -> { physiology.applyIllness(chronicle, 15, action, at, "BOG_WRAITH_WOUND"); monsterMark = "The wound it opens is cold, and something in it does not stop at the skin."; }
+            case "VENOM_WOUND" -> { physiology.applyIllness(chronicle, 12, action, at, "GIANT_HORNET_VENOM"); monsterMark = "The sting goes deep, and a slow heat spreads out from it that has nothing to do with the wound itself."; }
+            case "ITEM_THEFT" -> { UUID stolen = jdbc.query("SELECT w.id FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' ORDER BY random() LIMIT 1", rs->rs.next()?rs.getObject(1,UUID.class):null, chronicle);
+                if (stolen != null) { String name = jdbc.queryForObject("SELECT display_name FROM world_object WHERE id=?", String.class, stolen);
+                    jdbc.update("UPDATE world_object SET current_owner_id=NULL,current_location_id=? WHERE id=?", chunk, stolen);
+                    jdbc.update("DELETE FROM equipment_attachment WHERE item_id=?", stolen);
+                    jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'STOLEN',jsonb_build_object('by',?))", stolen, Timestamp.from(at), candidate.species());
+                    monsterMark = "It comes in fast and close, and goes out again heavier. The " + name.toLowerCase() + " is no longer yours."; } }
+            default -> { }
+        }
         physiology.applyInjury(chronicle,severity,action,at,"WILDLIFE_CONTACT");
         jdbc.update("UPDATE wildlife_population SET behavior_state='FLEEING' WHERE id=?",candidate.populationId());
-        String mark = severity >= 70
+        String mark = monsterMark != null ? monsterMark
+            : severity >= 70
             ? "The " + display(candidate.species()) + " closes with its whole weight, and for a moment there is only force and tearing before it wheels away into the trees."
             : severity >= 35
             ? "The " + display(candidate.species()) + " drives into you hard, raking deep before it breaks off through the cover."
