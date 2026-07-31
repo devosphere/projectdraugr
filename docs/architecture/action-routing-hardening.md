@@ -22,14 +22,15 @@ Matching is **lexical and global** where it needs to be **semantic and scoped**.
 
 ### Recorded occurrences
 
-| # | Action text | Wrongly matched | Module that should never have been consulted |
-|---|-------------|-----------------|---------------------------------------------|
-| 1 | "gather mushrooms from the **forest** floor" | `ore` | Mineral prospecting |
-| 2 | "install doors and windows with **flashing**" | `ash` | Ash gathering |
-| 3 | "**weatherproof** the shell with cladding" | `weather` | Weather simulation |
-| 4 | "build the floor frame with **beams**" | `beam` | Timber reinforcement |
+| # | Action text | Wrongly matched | Module that should never have been consulted | Survives word-boundary fix? |
+|---|-------------|-----------------|---------------------------------------------|:---:|
+| 1 | "gather mushrooms from the **forest** floor" | `ore` | Mineral prospecting | no |
+| 2 | "install doors and windows with **flashing**" | `ash` | Ash gathering | no |
+| 3 | "**weatherproof** the shell with cladding" | `weather` | Weather simulation | no |
+| 4 | "build the floor frame with **beams**" | `beam` | Timber reinforcement | no |
+| 5 | "**split** the fish into thin strips" | `split_planks` | Plank splitting (needs an axe and a log) | **YES** |
 
-Occurrences 1 and 4 were caught by tests. Occurrences 2 and 3 were caught only by simulating a construction procedure by hand.
+Occurrences 1 and 4 were caught by tests. Occurrences 2 and 3 were caught only by simulating a construction procedure by hand. **Occurrence 5 was caught by the fish-preservation simulation *after* the word-boundary fix (d0e238c) had shipped** — it is a live false positive that whole-word matching does not remove, because "split" is a legitimate whole word in both wood processing and fish processing. It is the direct proof that boundary tightening treats symptoms and category scoping treats the cause: routed live, "split the fish into thin strips" is told it is already handled and sent to a process that demands an axe and a log, so the fish is never filletable and the gap is never recorded.
 
 ### Why word boundaries are not the fix
 
@@ -83,6 +84,30 @@ Felling, plank splitting, component shaping, structural timber, dressed stone gr
 This is why the cabin is the right test case: it fails at the architecture, not at the vocabulary.
 
 ---
+
+## Second fixture: primitive fish preservation
+
+A ten-step primitive fish-preservation procedure was routed the same way.
+
+**Result: 1 COVERED (false), 1 POLISH, 8 INVENT.**
+
+| Step | Route | Note |
+|------|-------|------|
+| Clean and gut the fish | INVENT | no butchery-of-fish process |
+| **Split into thin strips** | **COVERED (false)** | matched `split_planks` — collision #5 above |
+| Salt every surface | INVENT | **no salt exists in the world at all** |
+| Build a smoke rack over a fire | POLISH | matched the `fire` domain; it is really construction |
+| Smoke until firm and dry | INVENT | no smoking process |
+| Build a drying rack in sun and air | INVENT | no drying rack, no solar drying |
+| Dry until leathery | INVENT | no active drying process |
+| Cool and store | INVENT | `FoodPreservationService` is a spoilage clock, not a preservation act |
+
+Two findings beyond the routing collision:
+
+- **Salt does not exist as a material.** A preservation method that predates recorded history has no representation. This is the same reachability lesson as the fire kit: a procedure the whole world once depended on is simply absent.
+- **Preservation is modelled as decay, not as action.** `FoodPreservationService` tracks how fast food spoils. Nothing lets a chronicle *slow* that through smoking, salting, or drying. The verbs exist in every survival manual and in none of the foundation.
+
+The fish procedure is the food-domain counterpart to the cabin: the cabin fails at staged construction, the fish fails at active preservation, and both surface the same routing defect on the way down.
 
 ## The architecture
 
@@ -181,19 +206,28 @@ Every matchable term carries its categories. A resolver that queries without a c
 
 ---
 
-### M4 — The building vocabulary
+### M4 — The building and preservation vocabulary
 
-**Scope:** Close the material and technique gaps the cabin exposed.
+**Scope:** Close the material and technique gaps the cabin and fish simulations exposed.
 
+Building:
 - [ ] Framing members: joist, stud, plate, rafter, beam, purlin — as processed timber
 - [ ] Joinery: wooden peg, mortise-and-tenon, structural lashing, notching
 - [ ] Foundation: pier stone, sill beam, ground preparation, drainage cut
 - [ ] Building layers: cladding board, shingle, thatch, insulation batt, vapour layer
 - [ ] Preservation: char-treated timber, pitch-coated timber
+
+Food preservation (from the fish fixture):
+- [ ] Salt as a gatherable/producible material (evaporation, coastal, or mineral source)
+- [ ] Butchery-of-fish process producing fillets/strips distinct from wood splitting
+- [ ] Active preservation acts — salting, smoking, drying — that *reduce* a food's spoilage rate rather than only tracking it
+- [ ] Smoke rack and drying rack as construction kinds (depends on M3)
+- [ ] `smoked_fish`, `dried_fish`, `salted_fish` as outputs with slower spoilage than `raw_fish`
+
 - [ ] Every addition passes the V53 review gate before going live
 - [ ] Reachability invariant stays at zero unreachable
 
-**Done when:** the twelve cabin steps route to COVERED or POLISH, and none to INVENT on vocabulary grounds.
+**Done when:** the twelve cabin steps and the ten fish steps each route to COVERED or POLISH, none to INVENT on vocabulary grounds, and no false COVERED remains.
 
 ---
 
@@ -204,8 +238,9 @@ Every matchable term carries its categories. A resolver that queries without a c
 - [ ] Extend `/api/domains/coverage` with per-category coverage
 - [ ] Record every INVENT assessment as a gap row with the triggering text
 - [ ] Rank gaps by frequency — the most-requested absent capability first
-- [ ] Simulation harness: route a named procedure through the foundation and report per-step routes (the cabin as the first fixture)
-- [ ] Regression fixture: cabin coverage must not decrease
+- [ ] Simulation harness: route a named procedure through the foundation and report per-step routes
+- [ ] Fixtures: the 15 m² cabin (construction) and primitive fish preservation (food) as the first two
+- [ ] Regression: neither fixture's coverage may decrease, and neither may regain a false COVERED
 
 **Done when:** a coverage regression fails the build rather than surfacing in play.
 
