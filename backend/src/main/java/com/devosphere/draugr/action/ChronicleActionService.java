@@ -2,6 +2,7 @@ package com.devosphere.draugr.action;
 
 import com.devosphere.draugr.chronicle.ChroniclePhysiologyService;
 import com.devosphere.draugr.narration.NarrationPolicy;
+import com.devosphere.draugr.narration.ActionInputClassifier;
 import com.devosphere.draugr.item.PhysicalItemService;
 import com.devosphere.draugr.capability.CapabilityAdaptationService;
 import com.devosphere.draugr.construction.ConstructionService;
@@ -55,8 +56,8 @@ public class ChronicleActionService {
         "look around","look about","glance around","take in","survey","scan","scout","observe","examine",
         "inspect","study the","study my","search the","search for","scour","peer","gaze","watch the",
         "keep watch","keep an eye","listen","carefully","cautiously","warily","alert","note the","eye the");
-    private final JdbcTemplate jdbc; private final SimulationTickService ticks; private final ChroniclePhysiologyService physiology; private final NarrationPolicy narration; private final PhysicalItemService items; private final CapabilityAdaptationService capability; private final ConstructionService construction; private final ChronicleDiscoveryService discoveries; private final WildlifeEncounterService wildlife; private final FireService fire; private final LiteratureService literature; private final FoodPreservationService food;
-    public ChronicleActionService(JdbcTemplate jdbc, SimulationTickService ticks, ChroniclePhysiologyService physiology, NarrationPolicy narration, PhysicalItemService items, CapabilityAdaptationService capability, ConstructionService construction, ChronicleDiscoveryService discoveries, WildlifeEncounterService wildlife, FireService fire, LiteratureService literature, FoodPreservationService food) { this.jdbc = jdbc; this.ticks = ticks; this.physiology = physiology; this.narration = narration; this.items=items; this.capability=capability; this.construction=construction; this.discoveries=discoveries; this.wildlife=wildlife; this.fire=fire; this.literature=literature; this.food=food; }
+    private final JdbcTemplate jdbc; private final SimulationTickService ticks; private final ChroniclePhysiologyService physiology; private final NarrationPolicy narration; private final PhysicalItemService items; private final CapabilityAdaptationService capability; private final ConstructionService construction; private final ChronicleDiscoveryService discoveries; private final WildlifeEncounterService wildlife; private final FireService fire; private final LiteratureService literature; private final FoodPreservationService food; private final ActionInputClassifier inputClassifier;
+    public ChronicleActionService(JdbcTemplate jdbc, SimulationTickService ticks, ChroniclePhysiologyService physiology, NarrationPolicy narration, PhysicalItemService items, CapabilityAdaptationService capability, ConstructionService construction, ChronicleDiscoveryService discoveries, WildlifeEncounterService wildlife, FireService fire, LiteratureService literature, FoodPreservationService food, ActionInputClassifier inputClassifier) { this.jdbc = jdbc; this.ticks = ticks; this.physiology = physiology; this.narration = narration; this.items=items; this.capability=capability; this.construction=construction; this.discoveries=discoveries; this.wildlife=wildlife; this.fire=fire; this.literature=literature; this.food=food; this.inputClassifier=inputClassifier; }
 
     @Transactional
     public ActionResult resolve(String text) { return resolve(text, null); }
@@ -74,7 +75,23 @@ public class ChronicleActionService {
         }
         ActiveChronicle chronicle = jdbc.query("SELECT c.id, w.current_location_id FROM chronicle c JOIN world_object w ON w.id=c.id WHERE c.life_state='LIVING' FOR UPDATE", rs -> rs.next() ? new ActiveChronicle(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class)) : null);
         if (chronicle == null) throw new IllegalStateException("No living Chronicle exists.");
-        Intent intent = classify(text);
+        // The pre-pass filter runs before intent classification (DR-0019). Gibberish
+        // and the physically impossible are intercepted here: no tick, no
+        // chronicle_action row, no AI call — zero cost. Personal physical acts and
+        // aggression are mapped to intents that DO advance the world, so they pass
+        // through the normal path and carry real physiological or ecological
+        // consequence. The world applies physics, not judgment.
+        ActionInputClassifier.InputClass inputClass = inputClassifier.classify(text);
+        if (inputClass == ActionInputClassifier.InputClass.NONSENSICAL || inputClass == ActionInputClassifier.InputClass.PHYSICALLY_IMPOSSIBLE) {
+            Instant nowSim = ticks.current().simulatedAt();
+            return new ActionResult(UUID.randomUUID(), inputClass.name(), "NO_EFFECT", 0, nowSim, inputClassifier.narrate(inputClass, text), physiology.activeBody(), null);
+        }
+        Intent intent = switch (inputClass) {
+            case PERSONAL_PHYSICAL_ACT -> Intent.PERSONAL_ACT;
+            case AGGRESSION_TOWARD_WILDLIFE -> Intent.AGGRESSION_WILDLIFE;
+            case AGGRESSION_TOWARD_INANIMATE -> Intent.AGGRESSION_INANIMATE;
+            default -> classify(text);
+        };
         // Travel time is resolved before the tick advances, because it scales with
         // the distance to a place the chronicle can actually find its way to.
         TravelPlan travel = intent == Intent.TRAVEL ? planTravel(chronicle, text) : null;
@@ -161,6 +178,14 @@ public class ChronicleActionService {
         else if (intent == Intent.DROP) { String[] r = dropByName(chronicle, text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.DESIGNATE) { String[] r = designate(chronicle, text, actionId, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.REFINE) { String[] r = refineByName(chronicle, text, resolvedAt); outcome = r[0]; perception = r[1]; }
+        // A personal physical act: time passes and the body pays for it. The narrator
+        // witnesses without comment; the physiology tick will, in time, do the rest.
+        else if (intent == Intent.PERSONAL_ACT) { physiology.applyPersonalActExertion(chronicle.id()); perception = inputClassifier.narrate(ActionInputClassifier.InputClass.PERSONAL_PHYSICAL_ACT, text); }
+        // A sexual or violent contact attempt with a live animal, routed into the
+        // encounter system with no preparation at all — the animal answers in kind.
+        else if (intent == Intent.AGGRESSION_WILDLIFE) { WildlifeEncounterService.EncounterResult result = wildlife.confront(chronicle.id(), chronicle.location(), actionId, resolvedAt, -20); outcome = result.outcome(); perception = result.narration(); }
+        // Venting at scenery: a minute and a little energy, and nothing else moves.
+        else if (intent == Intent.AGGRESSION_INANIMATE) { physiology.applyMinorExertion(chronicle.id(), 2); perception = inputClassifier.narrate(ActionInputClassifier.InputClass.AGGRESSION_TOWARD_INANIMATE, text); }
         else { outcome = "FAILED"; perception = "The attempt passes without changing the immediate world around you."; }
         jdbc.update("INSERT INTO chronicle_action (id, chronicle_id, resolved_at, action_text, intent_type, outcome, duration_minutes, narration, idempotency_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", actionId, chronicle.id(), resolvedTs, text.trim(), intent.name(), outcome, minutes, perception, idempotencyKey);
         jdbc.update("INSERT INTO chronicle_action_effect (action_id, effect_domain, effect_type, payload) VALUES (?, 'TIME', 'TIME_ADVANCED', jsonb_build_object('minutes', ?))", actionId, minutes);
@@ -168,7 +193,9 @@ public class ChronicleActionService {
         jdbc.update("INSERT INTO chronicle_event (chronicle_id, occurred_at, event_type, payload) VALUES (?, ?, 'CHRONICLE_ACTION_RESOLVED', jsonb_build_object('actionId', ?::text, 'intent', ?, 'outcome', ?))", chronicle.id(), resolvedTs, actionId.toString(), intent.name(), outcome);
         if ("SUCCEEDED".equals(outcome) && intent == Intent.CRAFT_BASKET) discoveries.record(chronicle.id(), "WOVEN_BASKET", actionId, resolvedAt);
         if ("SUCCEEDED".equals(outcome) && intent == Intent.BUILD_FIRE_PIT) discoveries.record(chronicle.id(), "STONE_FIRE_PIT", actionId, resolvedAt);
-        if ("SUCCEEDED".equals(outcome)) capability.record(chronicle.id(), actionId, (intent==Intent.GATHER_FIBER||intent==Intent.GATHER_STONE)?"LOAD":intent==Intent.OBSERVE?"ATTENTION":(intent==Intent.REST||intent==Intent.SLEEP)?"RECOVERY":intent==Intent.CONFRONT_WILDLIFE?"AIM":intent==Intent.MOVE?"LOCOMOTION":"FINE_MOTOR", minutes, (intent==Intent.GATHER_FIBER||intent==Intent.GATHER_STONE)?.18:.05, (intent==Intent.REST||intent==Intent.SLEEP)?.75:.45, resolvedAt);
+        // Personal acts and venting build no capability — there is no skill in them.
+        boolean buildsCapability = intent != Intent.PERSONAL_ACT && intent != Intent.AGGRESSION_INANIMATE && intent != Intent.AGGRESSION_WILDLIFE;
+        if ("SUCCEEDED".equals(outcome) && buildsCapability) capability.record(chronicle.id(), actionId, (intent==Intent.GATHER_FIBER||intent==Intent.GATHER_STONE)?"LOAD":intent==Intent.OBSERVE?"ATTENTION":(intent==Intent.REST||intent==Intent.SLEEP)?"RECOVERY":intent==Intent.CONFRONT_WILDLIFE?"AIM":intent==Intent.MOVE?"LOCOMOTION":"FINE_MOTOR", minutes, (intent==Intent.GATHER_FIBER||intent==Intent.GATHER_STONE)?.18:.05, (intent==Intent.REST||intent==Intent.SLEEP)?.75:.45, resolvedAt);
         narration.validate(perception);
         ChroniclePhysiologyService.BodyHudSnapshot afterBody = physiology.activeBody();
         String attention = attentionLevel(text, intent);
@@ -398,7 +425,7 @@ public class ChronicleActionService {
     private int durationFor(String action, Intent intent) {
         Matcher match = DURATION.matcher(action);
         if (match.find()) { int amount = Integer.parseInt(match.group(1)); int minutes = match.group(2).toLowerCase(Locale.ROOT).startsWith("h") ? amount * 60 : amount; return Math.max(1, Math.min(minutes, 24 * 60)); }
-        return switch (intent) { case OBSERVE -> 10; case REST -> 60; case SLEEP -> 480; case GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES -> 25; case GATHER_CLAY -> 20; case GATHER_STONE_SLAB -> 30; case GATHER_PLANT -> 20; case FELL_TREE -> 60; case EAT, DRINK, FEED_FIRE -> 5; case LIGHT_FIRE -> 20; case COOK_MEAT, TREAT_WOUND, CONFRONT_WILDLIFE, HARVEST_CARCASS -> 10; case EDIT_DOCUMENT, WRITE -> 15; case SKETCH_MAP -> 30; case STRIP_BARK -> 15; case MAKE_CHARCOAL -> 10; case CRAFT_BASKET -> 45; case CRAFT_SPEAR -> 35; case CRAFT_FIRE_KIT -> 25; case CRAFT_TINDER -> 10; case CRAFT_DESK -> 60; case CRAFT_CHAIR -> 40; case CRAFT_SHELF -> 50; case BUILD_FIRE_PIT, START_LEAN_TO -> 30; case WORK_LEAN_TO -> 45; case ABANDON_LEAN_TO, RESUME_LEAN_TO -> 5; case MOVE -> 30; case MARK -> 15; case EQUIP, UNEQUIP, DROP -> 5; case DESIGNATE -> 10; case REFINE -> 30; default -> 5; };
+        return switch (intent) { case OBSERVE -> 10; case REST -> 60; case SLEEP -> 480; case GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES -> 25; case GATHER_CLAY -> 20; case GATHER_STONE_SLAB -> 30; case GATHER_PLANT -> 20; case FELL_TREE -> 60; case EAT, DRINK, FEED_FIRE -> 5; case LIGHT_FIRE -> 20; case COOK_MEAT, TREAT_WOUND, CONFRONT_WILDLIFE, HARVEST_CARCASS -> 10; case EDIT_DOCUMENT, WRITE -> 15; case SKETCH_MAP -> 30; case STRIP_BARK -> 15; case MAKE_CHARCOAL -> 10; case CRAFT_BASKET -> 45; case CRAFT_SPEAR -> 35; case CRAFT_FIRE_KIT -> 25; case CRAFT_TINDER -> 10; case CRAFT_DESK -> 60; case CRAFT_CHAIR -> 40; case CRAFT_SHELF -> 50; case BUILD_FIRE_PIT, START_LEAN_TO -> 30; case WORK_LEAN_TO -> 45; case ABANDON_LEAN_TO, RESUME_LEAN_TO -> 5; case MOVE -> 30; case MARK -> 15; case EQUIP, UNEQUIP, DROP -> 5; case DESIGNATE -> 10; case REFINE -> 30; case PERSONAL_ACT -> 20; case AGGRESSION_WILDLIFE -> 5; case AGGRESSION_INANIMATE -> 1; default -> 5; };
     }
     private Intent classify(String action) {
         String value=action.toLowerCase(Locale.ROOT);
@@ -564,7 +591,7 @@ public class ChronicleActionService {
     private String baseName(String displayName) { return displayName.replaceAll("(?i)\\s+Revision\\s+[IVXLC0-9]+$", "").trim(); }
     private String toRoman(int n) { if(n<=0) return String.valueOf(n); int[] v={100,90,50,40,10,9,5,4,1}; String[] s={"C","XC","L","XL","X","IX","V","IV","I"}; StringBuilder b=new StringBuilder(); for(int i=0;i<v.length;i++) while(n>=v[i]){b.append(s[i]);n-=v[i];} return b.toString(); }
     private void reviseDocument(UUID chronicleId, UUID actionId, Instant resolvedAt, String text) { Matcher match=DOCUMENT_EDIT.matcher(text); if(!match.matches()) throw new IllegalArgumentException("Unrecognized document edit."); UUID documentId=UUID.fromString(match.group(2)); LiteratureService.Edit edit="append".equalsIgnoreCase(match.group(1))?LiteratureService.Edit.APPEND:LiteratureService.Edit.REPLACE; if(!literature.documentReachable(documentId,chronicleId)) throw new IllegalArgumentException("The document is not physically reachable."); literature.revise(documentId,chronicleId,actionId,resolvedAt,edit,match.group(3),null); }
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, SKETCH_MAP, EAT, DRINK, WASH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, BUILD_FIRE_PIT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, EQUIP, UNEQUIP, DROP, DESIGNATE, REFINE, URINATE, DEFECATE, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, SKETCH_MAP, EAT, DRINK, WASH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, BUILD_FIRE_PIT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, EQUIP, UNEQUIP, DROP, DESIGNATE, REFINE, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;} }
     /**
      * The structured perception frame — the seam every future Simulation Agent reads

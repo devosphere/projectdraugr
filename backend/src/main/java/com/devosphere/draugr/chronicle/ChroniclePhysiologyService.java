@@ -88,6 +88,25 @@ public class ChroniclePhysiologyService {
         jdbc.update("UPDATE chronicle_body SET " + (bowel ? "bowel" : "bladder") + " = 'Empty' WHERE chronicle_id = ?", chronicleId);
     }
 
+    /**
+     * The physiological cost of a personal physical act — moderate exertion with
+     * no nourishment. Energy falls, the body burns through food and water faster,
+     * hygiene degrades, the bladder fills. The tick makes no exception for why the
+     * body is spent: repeated without eating, drinking, or resting, this depletes
+     * toward exhaustion and dehydration like any other drain. The world applies
+     * physics, not judgment. See DR-0019.
+     */
+    @Transactional
+    public void applyPersonalActExertion(UUID chronicleId) {
+        jdbc.update("UPDATE chronicle_physiology SET energy_level=GREATEST(0,energy_level-15), hours_without_food=hours_without_food+2, hours_without_water=hours_without_water+2, hygiene_level=GREATEST(0,hygiene_level-12), bladder_level=LEAST(100,bladder_level+5) WHERE chronicle_id=?", chronicleId);
+        refreshBody(chronicleId);
+    }
+    /** A trivial exertion — venting frustration at scenery costs a little energy and nothing else. */
+    @Transactional
+    public void applyMinorExertion(UUID chronicleId, int energyCost) {
+        jdbc.update("UPDATE chronicle_physiology SET energy_level=GREATEST(0,energy_level-?) WHERE chronicle_id=?", Math.max(0, energyCost), chronicleId);
+        refreshBody(chronicleId);
+    }
     @Transactional
     public void eat(UUID chronicleId) {
         jdbc.update("UPDATE chronicle_physiology SET hours_without_food=GREATEST(0,hours_without_food-8), energy_level=LEAST(100,energy_level+6) WHERE chronicle_id=?", chronicleId);
