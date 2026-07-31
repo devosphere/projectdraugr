@@ -39,47 +39,87 @@ More importantly: the NarrationEngine produces correct prose unconditionally. If
 
 ### Classification Categories
 
-| Class | Trigger examples | Response tone |
-|-------|-----------------|---------------|
-| `OBSCENE` | sexual acts, profanity directed at world entities ("fuck that", "masturbate", "sex with") | flat indifference — the world does not register the intent |
-| `NONSENSICAL` | gibberish, keyboard mash, empty strings, single characters | flat — the body does not know how to act on this |
-| `PHYSICALLY_IMPOSSIBLE` | "fly", "breathe underwater", "turn invisible", "summon" | witness describes the attempt; it produces nothing |
-| `VALID` | anything else | passes through to normal dispatch |
+| Class | Triggers | Time passes | Physiology | World state | AI call |
+|-------|----------|-------------|-----------|-------------|---------|
+| `PERSONAL_PHYSICAL_ACT` | masturbate, sexual self-acts | YES — 20 min | YES — energy, hunger, thirst, hygiene drain | NO | NO |
+| `AGGRESSION_TOWARD_WILDLIFE` | sexual acts toward creature, violent contact attempt | YES — 5 min | YES — injury from resistance | YES — population ALERT | NO |
+| `AGGRESSION_TOWARD_INANIMATE` | "fuck that tree", profanity as verb at object | YES — 1 min | energy -2 | NO | NO |
+| `NONSENSICAL` | gibberish, < 3 chars, keyboard mash, zero recognizable words | NO | NO | NO | NO |
+| `PHYSICALLY_IMPOSSIBLE` | fly, teleport, cast spell, summon, turn invisible | NO | NO | NO | NO |
+| `VALID` | everything else | normal | normal | normal | per router |
+
+### Physiological Consequences
+
+#### PERSONAL_PHYSICAL_ACT (masturbation, sexual self-acts)
+
+The body is performing physical activity. Physics applies.
+
+| Physiology field | Change per act |
+|-----------------|---------------|
+| energy | -15 (moderate exertion) |
+| hunger | -8 (caloric burn) |
+| thirst | -10 (fluid loss) |
+| hygiene | -12 |
+| bladder | +5 |
+| duration | 20 minutes of world time |
+
+Repeated use: Energy depletes toward Exhausted → Collapse. Thirst accelerates toward Critical Dehydration. The physiology tick applies the same death vectors as any other cause. A chronicle who does this instead of eating, drinking, or sleeping will die. No special case needed — the simulation handles it.
+
+`chronicle_action` IS written with intent `PERSONAL_ACT`.
+
+#### AGGRESSION_TOWARD_WILDLIFE
+
+The animal responds to physical threat.
+
+- Triggers passive encounter logic equivalent to `CONFRONT_WILDLIFE` with tactic_bonus = -20.
+- The animal resists. Injury severity follows normal wound formula.
+- Population shifts to ALERT or FLEEING.
+- Duration: 5 minutes.
+- `chronicle_action` IS written.
+
+#### AGGRESSION_TOWARD_INANIMATE
+
+- Energy -2. 1 minute passes. `chronicle_action` IS written. No world_object changes.
 
 ### Detection Strategy
 
-- **OBSCENE:** keyword list covering sexual acts, sexual anatomy terms directed at non-human targets, violent profanity as a verb. Checked case-insensitively. Add to list as patterns are encountered in production.
-- **NONSENSICAL:** text length < 3 chars, or > 80% non-alphabetic, or zero recognizable English words (spot-check first 5 tokens against a minimal word list).
-- **PHYSICALLY_IMPOSSIBLE:** small keyword set for physics violations regardless of how described — fly (without aerial mount), teleport, disappear, cast spell, summon entity.
+- **PERSONAL_PHYSICAL_ACT:** keywords: masturbate, masturbation, jerk off, touch myself, pleasure myself. Case-insensitive.
+- **AGGRESSION_TOWARD_WILDLIFE:** sexual keywords + animal noun proximity; also violent contact toward named creature without weapon equipped.
+- **AGGRESSION_TOWARD_INANIMATE:** profanity as leading verb + inanimate noun target.
+- **NONSENSICAL:** length < 3 chars, or > 80% non-alphabetic, or zero recognizable words in first 5 tokens.
+- **PHYSICALLY_IMPOSSIBLE:** fly, teleport, disappear, cast spell, summon, turn invisible, become [non-human creature].
 
-### Response Library (`InputResponseLibrary`)
+### Narration Templates (witness-stance, flat, no judgment)
 
-Pool of 3–5 responses per class, randomly selected to avoid repetition:
+**PERSONAL_PHYSICAL_ACT:**
+- "The act is done. Twenty minutes have passed. The forest does not acknowledge it."
+- "The body does what it does. Time passes. The hunger is slightly deeper. The world waits."
+- "It is finished. The energy cost is real. The world is unchanged."
 
-**OBSCENE:**
-- "The forest continues. Nothing acknowledges what you attempted."
-- "The world is indifferent to that. Time does not pass."
-- "That is not something the world around you responds to."
-- "Nothing happens. The wind moves through the trees regardless."
+**AGGRESSION_TOWARD_WILDLIFE:**
+- "The [species] does not cooperate with that. It responds the only way it knows."
+- "The animal reads the approach as threat. What follows is the animal's answer, not yours."
+
+**AGGRESSION_TOWARD_INANIMATE:**
+- "The [object] receives that. It does not respond. A moment has passed."
+- "The sentiment goes into the air. Nothing moves that was not already moving."
 
 **NONSENSICAL:**
-- "The body has no reference for that. Nothing moves."
-- "The hands find no shape for that intent. A moment passes, nothing more."
+- "The body has no shape for that intent. Nothing moves."
 - "That resolves into nothing. The ground is still beneath you."
 
 **PHYSICALLY_IMPOSSIBLE:**
 - "The attempt produces exactly what the physics of this place allow: nothing."
 - "The body reaches toward that and finds no path. It stands where it stood."
-- "What the mind imagines and what the body can do are different things here."
 
-### What Does NOT Happen on Intercept
+### What the Narrator Never Does
 
-- No `chronicle_action` row is written. No tick advances. No physiology changes.
-- No AI call is made. Zero token cost.
-- No hint is given about what the player should do instead.
-- The narrator expresses zero surprise, humor, or moral judgment.
+- Never expresses surprise, humor, disgust, or moral judgment.
+- Never hints at what the player should do instead.
+- Never names the act as wrong, inappropriate, or unusual.
+- Never breaks from witness-stance.
 
-The world is not a person. It does not react to personality. It reacts only to physical events.
+The world applies physics. That is all.
 
 ---
 
