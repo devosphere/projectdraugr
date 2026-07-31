@@ -3,6 +3,7 @@ package com.devosphere.draugr.chronicle;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -24,5 +25,6 @@ public class ChronicleController {
     @GetMapping("/active/body") public ChroniclePhysiologyService.BodyHudSnapshot activeBody() { return physiology.activeBody(); }
     @GetMapping("/active/discoveries") public ChronicleDiscoveryService.DiscoveryContext discoveries() { return discoveries.activeContext(); }
     @GetMapping("/archive") public List<ChronicleService.ChronicleSummary> archive() { return chronicles.archive(); }
+    @GetMapping("/{id}/journey") public ChronicleService.ChronicleJourney journey(@PathVariable java.util.UUID id) { return chronicles.journey(id); }
     @PostMapping @ResponseStatus(HttpStatus.CREATED) public ChronicleService.ChronicleSummary awaken() { return chronicles.awaken(); }
 }

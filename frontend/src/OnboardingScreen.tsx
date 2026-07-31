@@ -1,10 +1,45 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import forestArt from './assets/onboarding-forest-v1.png';
 
 type Panel = 'none' | 'archive' | 'settings' | 'crossing' | 'exit';
 
-export function OnboardingScreen({ hasLivingChronicle, onAwaken, entryError }: { hasLivingChronicle: boolean; onAwaken: () => void; entryError?: string | null }) {
+type ChronicleSummary = { id: string; sequenceNumber: number; lifeState: string; arrivedAt: string; diedAt: string | null; deathCause: string | null };
+type JourneyEntry = { at: string; intent: string; outcome: string; narration: string };
+type ChronicleJourney = { summary: ChronicleSummary; entries: JourneyEntry[]; finalBody: string | null; discoveries: number; placesNamed: number };
+
+/** How long a life lasted, in the world's own reckoning. */
+function lifespan(from: string, to: string | null) {
+  const end = to ? new Date(to).getTime() : Date.now();
+  const mins = Math.max(0, Math.round((end - new Date(from).getTime()) / 60000));
+  const d = Math.floor(mins / 1440), h = Math.floor((mins % 1440) / 60);
+  return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${mins % 60}m` : `${mins}m`;
+}
+
+export function OnboardingScreen({ hasLivingChronicle, onAwaken, entryError, apiUrl }: { hasLivingChronicle: boolean; onAwaken: () => void; entryError?: string | null; apiUrl?: string }) {
   const [panel, setPanel] = useState<Panel>('none');
+  const [roster, setRoster] = useState<ChronicleSummary[] | null>(null);
+  const [journey, setJourney] = useState<ChronicleJourney | null>(null);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+
+  // The roster is loaded when the archive opens, not on mount — the main menu
+  // should not depend on the world being reachable in order to render.
+  useEffect(() => {
+    if (panel !== 'archive' || !apiUrl || roster) return;
+    setArchiveError(null);
+    fetch(`${apiUrl}/api/chronicles/archive`)
+      .then(r => (r.ok ? r.text() : Promise.reject(new Error('unreachable'))))
+      .then(raw => setRoster(raw ? JSON.parse(raw) : []))
+      .catch(() => setArchiveError('The archive could not be read. The world may not be running.'));
+  }, [panel, apiUrl, roster]);
+
+  function openJourney(id: string) {
+    if (!apiUrl) return;
+    setJourney(null); setArchiveError(null);
+    fetch(`${apiUrl}/api/chronicles/${id}/journey`)
+      .then(r => (r.ok ? r.text() : Promise.reject(new Error('unreachable'))))
+      .then(raw => { if (raw) setJourney(JSON.parse(raw)); })
+      .catch(() => setArchiveError('That life could not be read back.'));
+  }
   const primaryLabel = hasLivingChronicle ? 'Soul Link' : 'Awaken';
   const canExitApplication = window.location.protocol === 'file:' || ['localhost', '127.0.0.1'].includes(window.location.hostname);
 
@@ -36,9 +71,57 @@ export function OnboardingScreen({ hasLivingChronicle, onAwaken, entryError }: {
         </>}
         {panel === 'archive' && <>
           <p className="dialog-kicker">Chronicle Archive</p>
-          <h2>No lives have concluded.</h2>
-          <p>When a Chronicle dies, their complete life record will remain here: arrival, discoveries, hardships, and the final moment.</p>
-          <button className="dialog-close" onClick={() => setPanel('none')}>Return</button>
+          {archiveError && <p role="status">{archiveError}</p>}
+
+          {/* A single life, read back in full. */}
+          {journey ? <div className="archive-journey">
+            <h2>Chronicle {journey.summary.sequenceNumber}</h2>
+            <p className="archive-meta">
+              {journey.summary.lifeState === 'DEAD'
+                ? <>Lived {lifespan(journey.summary.arrivedAt, journey.summary.diedAt)} · {journey.summary.deathCause}</>
+                : <>Living · {lifespan(journey.summary.arrivedAt, null)} so far</>}
+              {' · '}{journey.entries.length} action{journey.entries.length === 1 ? '' : 's'}
+              {journey.discoveries > 0 && <> · {journey.discoveries} discover{journey.discoveries === 1 ? 'y' : 'ies'}</>}
+              {journey.placesNamed > 0 && <> · {journey.placesNamed} place{journey.placesNamed === 1 ? '' : 's'} named</>}
+            </p>
+            {journey.entries.length === 0
+              ? <p>This chronicle resolved no actions before the end. The world holds nothing of them but their arrival.</p>
+              : <ol className="archive-entries">
+                  {journey.entries.map((e, i) => <li key={i}>
+                    <span className="archive-entry-time">{new Date(e.at).toISOString().slice(0, 16).replace('T', ' ')}</span>
+                    <span className="archive-entry-text">{e.narration}</span>
+                  </li>)}
+                </ol>}
+          </div>
+
+          /* The roster of every life the world has held. */
+          : <div className="archive-roster">
+            {roster === null && !archiveError && <p>Reading the archive…</p>}
+            {roster !== null && roster.length === 0 && <>
+              <h2>No lives recorded yet.</h2>
+              <p>When a Chronicle awakens, their record begins here: arrival, discoveries, hardships, and the final moment.</p>
+            </>}
+            {roster !== null && roster.length > 0 && <>
+              <h2>{roster.length} {roster.length === 1 ? 'life' : 'lives'} recorded</h2>
+              <ul className="archive-list">
+                {roster.map(c => <li key={c.id}>
+                  <button className="archive-item" onClick={() => openJourney(c.id)}>
+                    <span className="archive-item-name">Chronicle {c.sequenceNumber}</span>
+                    <span className="archive-item-fate">
+                      {c.lifeState === 'DEAD'
+                        ? <>{c.deathCause} · lived {lifespan(c.arrivedAt, c.diedAt)}</>
+                        : <>Still living · {lifespan(c.arrivedAt, null)}</>}
+                    </span>
+                  </button>
+                </li>)}
+              </ul>
+            </>}
+          </div>}
+
+          <div className="archive-footer">
+            {journey && <button className="dialog-close" onClick={() => setJourney(null)}>Back to archive</button>}
+            <button className="dialog-close" onClick={() => { setPanel('none'); setJourney(null); }}>Return</button>
+          </div>
         </>}
         {panel === 'settings' && <>
           <p className="dialog-kicker">Settings</p>

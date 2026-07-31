@@ -12,7 +12,15 @@ export function App() {
   async function findLivingChronicle() {
     if (!apiUrl) return null;
     const response = await fetch(`${apiUrl}/api/chronicles/active`);
-    return response.ok ? response.json() : null;
+    if (!response.ok) return null;
+    // When no chronicle is living the endpoint answers 200 with an empty body, so
+    // response.json() would throw and be caught as "the world could not be reached"
+    // — telling a player whose chronicle has just died that the server is down, and
+    // blocking them from ever awakening a new one. Permanent death is the core of
+    // this game, so that path is the common one, not the edge case.
+    const raw = await response.text();
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch { return null; }
   }
 
   useEffect(() => {
@@ -38,5 +46,5 @@ export function App() {
     } catch { setEntryError('The world could not be reached. Start Project Draugr, then try again.'); }
   }
   if (new URLSearchParams(window.location.search).get('mode') === 'overseer') return <OverseerMap />;
-  return playing ? <PlaythroughScreen apiUrl={apiUrl} onReturnToMainMenu={() => setPlaying(false)} /> : <OnboardingScreen hasLivingChronicle={hasLivingChronicle} onAwaken={() => void enterWorld()} entryError={entryError} />;
+  return playing ? <PlaythroughScreen apiUrl={apiUrl} onReturnToMainMenu={() => setPlaying(false)} /> : <OnboardingScreen hasLivingChronicle={hasLivingChronicle} onAwaken={() => void enterWorld()} entryError={entryError} apiUrl={apiUrl} />;
 }

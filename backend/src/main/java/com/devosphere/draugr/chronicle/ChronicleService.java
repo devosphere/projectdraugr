@@ -30,7 +30,47 @@ public class ChronicleService {
 
     @Transactional(readOnly = true)
     public List<ChronicleSummary> archive() {
-        return jdbc.query("SELECT c.id, c.sequence_number, c.life_state, c.arrived_at, c.died_at, c.death_cause, w.current_location_id FROM chronicle c JOIN world_object w ON w.id = c.id WHERE c.life_state = 'DEAD' ORDER BY c.died_at DESC", (rs, row) -> summary(rs.getObject(1, UUID.class), rs.getInt(2), rs.getString(3), rs.getTimestamp(4).toInstant(), rs.getTimestamp(5) == null ? null : rs.getTimestamp(5).toInstant(), rs.getString(6), rs.getObject(7, UUID.class)));
+        // Every chronicle the world has held, newest first — the living one included,
+        // their story simply unfinished. The archive is a record of the world's whole
+        // history of inhabitants, not a list of the fallen.
+        return jdbc.query("SELECT c.id, c.sequence_number, c.life_state, c.arrived_at, c.died_at, c.death_cause, w.current_location_id FROM chronicle c JOIN world_object w ON w.id = c.id ORDER BY c.sequence_number DESC", (rs, row) -> summary(rs.getObject(1, UUID.class), rs.getInt(2), rs.getString(3), rs.getTimestamp(4).toInstant(), rs.getTimestamp(5) == null ? null : rs.getTimestamp(5).toInstant(), rs.getString(6), rs.getObject(7, UUID.class)));
+    }
+
+    /**
+     * Everything one chronicle's life left behind: who they were, every action they
+     * resolved in order, and the state of the body at the end.
+     *
+     * <p>The ledgers are append-only and objects are never deleted, so a life stays
+     * fully readable long after it ends — which is what makes the archive a record
+     * rather than a scoreboard. A living chronicle can be read too; their story is
+     * simply still being written, and the death snapshot is absent.
+     */
+    @Transactional(readOnly = true)
+    public ChronicleJourney journey(UUID chronicleId) {
+        ChronicleSummary summary = jdbc.query(
+            "SELECT c.id, c.sequence_number, c.life_state, c.arrived_at, c.died_at, c.death_cause, w.current_location_id " +
+            "FROM chronicle c JOIN world_object w ON w.id=c.id WHERE c.id=?",
+            rs -> rs.next() ? summary(rs.getObject(1, UUID.class), rs.getInt(2), rs.getString(3), rs.getTimestamp(4).toInstant(),
+                rs.getTimestamp(5) == null ? null : rs.getTimestamp(5).toInstant(), rs.getString(6), rs.getObject(7, UUID.class)) : null,
+            chronicleId);
+        if (summary == null) throw new IllegalArgumentException("No such Chronicle.");
+
+        List<JourneyEntry> entries = jdbc.query(
+            "SELECT resolved_at, intent_type, outcome, narration FROM chronicle_action " +
+            "WHERE chronicle_id=? AND narration IS NOT NULL ORDER BY resolved_at, id",
+            (rs, row) -> new JourneyEntry(rs.getTimestamp(1).toInstant(), rs.getString(2), rs.getString(3), rs.getString(4)),
+            chronicleId);
+
+        String finalBody = jdbc.query("SELECT body_snapshot::text FROM chronicle_death_snapshot WHERE chronicle_id=?",
+            rs -> rs.next() ? rs.getString(1) : null, chronicleId);
+
+        Integer discoveries = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM chronicle_discovery WHERE chronicle_id=?", Integer.class, chronicleId);
+        Integer placesNamed = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM chronicle_named_location WHERE chronicle_id=?", Integer.class, chronicleId);
+
+        return new ChronicleJourney(summary, entries, finalBody, discoveries == null ? 0 : discoveries,
+            placesNamed == null ? 0 : placesNamed);
     }
 
     @Transactional
@@ -89,6 +129,10 @@ public class ChronicleService {
     private ChronicleSummary summary(UUID id, int sequence, String state, Instant arrived, Instant died, String cause, UUID location) { return new ChronicleSummary(id, sequence, state, arrived, died, cause, location); }
     private record WorldSeed(UUID id, long seed) { }
     public record ChronicleSummary(UUID id, int sequenceNumber, String lifeState, Instant arrivedAt, Instant diedAt, String deathCause, UUID locationId) { }
+    /** One resolved action, as the archive replays it. */
+    public record JourneyEntry(Instant at, String intent, String outcome, String narration) { }
+    /** A whole life, readable after its end. {@code finalBody} is null while the chronicle still lives. */
+    public record ChronicleJourney(ChronicleSummary summary, List<JourneyEntry> entries, String finalBody, int discoveries, int placesNamed) { }
     public record ChronicleLocation(UUID chronicleId, UUID locationId, String biome, String presentationKey) { }
     public record ChronicleEnvironment(Instant simulatedAt,String weatherKind,Double ambientTemperatureC,Integer windSpeedKph) { }
 }

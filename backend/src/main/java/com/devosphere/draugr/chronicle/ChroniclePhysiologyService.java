@@ -46,14 +46,44 @@ public class ChroniclePhysiologyService {
             Environment environment = jdbc.query("SELECT ww.weather_kind,ww.intensity,ww.ambient_temperature_c,ww.wind_speed_kph,COALESCE((SELECT fs.fuel_minutes FROM construction_project cp JOIN fire_state fs ON fs.construction_id=cp.object_id JOIN world_object pit ON pit.id=cp.object_id JOIN world_object body ON body.current_location_id=pit.current_location_id WHERE body.id=c.id AND fs.active=true ORDER BY fs.fuel_minutes DESC LIMIT 1),0),EXISTS(SELECT 1 FROM construction_project cp JOIN world_object shelter ON shelter.id=cp.object_id JOIN world_object body ON body.current_location_id=shelter.current_location_id WHERE body.id=c.id AND cp.project_kind='LEAN_TO' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND shelter.lifecycle_state='ACTIVE') FROM chronicle c JOIN world_weather ww ON ww.world_id=c.world_id WHERE c.id=?", result -> result.next() ? new Environment(result.getString(1),result.getInt(2),result.getBigDecimal(3).doubleValue(),result.getInt(4),result.getInt(5),result.getBoolean(6)) : new Environment("CLEAR",0,18,0,0,false), id);
             double core = rs.getBigDecimal(6).doubleValue();
             double effectiveWind = environment.shelter() ? environment.wind() * .25 : environment.wind();
-            double exposure = (environment.ambient() - core) * Math.min(.22, hours * .04) - effectiveWind * hours * .004;
+            // What the chronicle is wearing finally counts. Summed insulation across worn
+            // garments is capped at 80%, so no stack of rags makes a body invulnerable —
+            // clothing buys time against the cold, it does not repeal it.
+            Integer worn = jdbc.queryForObject(
+                "SELECT COALESCE(SUM(d.insulation_value),0) FROM equipment_attachment e " +
+                "JOIN item_instance i ON i.object_id=e.item_id " +
+                "JOIN item_definition d ON d.item_key=i.item_key " +
+                "JOIN world_object w ON w.id=e.item_id AND w.lifecycle_state='ACTIVE' " +
+                "WHERE e.chronicle_id=?", Integer.class, id);
+            double retained = 1.0 - Math.min(0.80, (worn == null ? 0 : worn) / 100.0);
+            // Wet clothing insulates far worse than dry — the classic way people die of
+            // cold in weather that is not, in itself, lethal.
+            if (wetness >= 60) retained = Math.min(1.0, retained * 1.6);
+            double exposure = ((environment.ambient() - core) * Math.min(.22, hours * .04) - effectiveWind * hours * .004) * retained;
+            // A living body makes its own heat, and that is what actually holds core
+            // temperature at 37C in air far colder than 37C. Without this term the model
+            // had nothing opposing environmental drain, so core decayed toward ambient
+            // and any ambient below 28C was eventually fatal regardless of preparation.
+            // Fuel matters: a starving or exhausted body thermoregulates poorly, which
+            // is why cold takes the hungry first — and why food, fire, and clothing all
+            // have to fail together before a chronicle freezes.
+            double metabolicVigour = (food > STARVATION_DEATH_HOURS * .6 || energy < 15) ? .35 : 1.0;
+            exposure += (37.0 - core) * Math.min(.40, hours * .07) * metabolicVigour;
             // Fire warming scales with fuel level: dying embers (1-30 min) = low, steady (31-90) = moderate, well-fed (91+) = good.
             // A primitive open fire pit is less effective than an enclosed hearth — capped accordingly.
             if (environment.fuelMinutes() > 0) {
                 double fireRate = environment.fuelMinutes() <= 30 ? 0.6 : environment.fuelMinutes() <= 90 ? 1.4 : 2.0;
                 exposure += (37.0 - core) * Math.min(0.5, hours * fireRate);
             }
-            core = Math.max(20, Math.min(45, core + exposure));
+            core = core + exposure;
+            // A body cannot be chilled below the air around it. Wind and wet carry heat
+            // away faster, but they cannot take a body past equilibrium with its
+            // surroundings — without this floor the uncapped wind term drove core
+            // temperature below ambient without limit, and every chronicle froze to
+            // death on a mild day. Cold air still kills; a 20C day no longer does.
+            if (environment.fuelMinutes() == 0 && environment.ambient() < 37.0)
+                core = Math.max(Math.min(environment.ambient(), 36.6), core);
+            core = Math.max(20, Math.min(45, core));
             if ("RAIN".equals(environment.kind()) || "STORM".equals(environment.kind())) wetness = clamp((int)Math.round(wetness + hours * (environment.intensity() / (environment.shelter() ? 28.0 : 7.0))));
             if (environment.fuelMinutes() > 0) wetness = clamp((int)Math.round(wetness - hours * 14));
             int illnessPressure = (hygiene <= 10 ? (int) Math.ceil(hours * .4) : 0) + (wetness >= 70 && core < 36.0 ? (int) Math.ceil(hours * .6) : 0) + (injury >= 60 ? (int) Math.ceil(hours * .15) : 0);
