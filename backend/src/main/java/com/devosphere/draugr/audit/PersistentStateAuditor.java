@@ -65,6 +65,37 @@ public class PersistentStateAuditor {
             "WHERE mp.review_state='VERIFIED' AND NOT mp.conservation_exempt " +
             "AND b.min_input_grams > 0 AND b.max_output_grams > b.min_input_grams * 1.05", Integer.class);
         if (massCreating != null && massCreating > 0) violations.add(massCreating + " live process(es) would create matter from nothing.");
+        // Routing reachability (V54/V55). A process is matched only when the action text
+        // agrees with it on category, keyword and subject, so a process can go silently
+        // unreachable in two ways — and unreachable is not a loud failure. Nothing
+        // throws; the action simply routes to the Architect, and the world pays for an
+        // AI call to invent something it already had.
+        //
+        // V54 and V55 enforce both of these at migration time, but a migration only
+        // guards the rows present when it runs. These are the standing checks.
+        Integer subjectlessProcesses = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM material_process mp " +
+            "WHERE NOT EXISTS (SELECT 1 FROM process_subject s WHERE s.process_key=mp.process_key)", Integer.class);
+        if (subjectlessProcesses != null && subjectlessProcesses > 0)
+            violations.add(subjectlessProcesses + " process(es) have no subject terms and can never match.");
+        // The second way: a process whose own keywords classify to a different category
+        // than the one it declares. The category gate then rejects every sentence that
+        // would have named it.
+        Integer miscategorised = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM material_process mp WHERE NOT EXISTS (" +
+            "  SELECT 1 FROM unnest(string_to_array(mp.keywords, ',')) k " +
+            "  JOIN category_term ct ON ct.category_key = mp.category_key " +
+            "  WHERE ' ' || btrim(k) || ' ' LIKE '% ' || ct.term || ' %' " +
+            "     OR ' ' || ct.term  || ' ' LIKE '% ' || btrim(k) || ' %')", Integer.class);
+        if (miscategorised != null && miscategorised > 0)
+            violations.add(miscategorised + " process(es) have no keyword that classifies to their own category.");
+        // A term shared by many categories decides nothing and only adds noise to every
+        // score it touches. Some sharing is legitimate — 'dress' is PROCESS on a hide
+        // and CONSTRUCT on a stone — so this reports genuine over-breadth, not sharing.
+        Integer overBroadTerms = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM (SELECT term FROM category_term GROUP BY term HAVING COUNT(*) > 3) t", Integer.class);
+        if (overBroadTerms != null && overBroadTerms > 0)
+            violations.add(overBroadTerms + " routing term(s) belong to more than three categories and cannot discriminate.");
         // Reachability: an item nobody can obtain is scenery wearing the costume of a
         // mechanic. This has already happened twice — the V48 hide garments were
         // insulating but unsewable, and V49 added flint and pyrite as fire kit with

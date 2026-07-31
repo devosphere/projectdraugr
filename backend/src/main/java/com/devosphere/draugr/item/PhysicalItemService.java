@@ -1,6 +1,7 @@
 package com.devosphere.draugr.item;
 
 import com.devosphere.draugr.ecology.ResourceEcologyService;
+import com.devosphere.draugr.routing.ProcessMatcher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,7 +14,10 @@ import java.util.UUID;
 @Service
 public class PhysicalItemService {
     private final JdbcTemplate jdbc; private final ResourceEcologyService resources;
-    public PhysicalItemService(JdbcTemplate jdbc, ResourceEcologyService resources) { this.jdbc = jdbc; this.resources = resources; }
+    private final ProcessMatcher matcher;
+    public PhysicalItemService(JdbcTemplate jdbc, ResourceEcologyService resources, ProcessMatcher matcher) {
+        this.jdbc = jdbc; this.resources = resources; this.matcher = matcher;
+    }
 
     @Transactional(readOnly = true)
     public List<ItemView> carried() {
@@ -315,23 +319,18 @@ public class PhysicalItemService {
      */
     @Transactional
     public String[] runProcess(UUID chronicle, UUID location, String actionText, Instant at) {
-        String v = actionText.toLowerCase(java.util.Locale.ROOT);
-        // Longest keyword wins, so "fire the pot" beats a bare "pot" elsewhere.
-        // Only reviewed processes may run (V53). A definition the Auditor has flagged
-        // is held out of play entirely rather than allowed to write a suspect result
-        // into a chronicle's permanent record, where it would become history before
-        // anyone noticed. The narration says nothing about review states — the world
-        // simply does not yet know how to do it.
-        java.util.List<java.util.Map<String,Object>> all = jdbc.queryForList(
+        // A process may run only when the text agrees with it on the kind of work, the
+        // verb, and the material — see ProcessMatcher, which holds the rule and the
+        // reasoning. Keyword alone was how "split the fish" reached split_planks, and
+        // a wrong match does not throw: it quietly does the wrong thing to a
+        // chronicle's inventory. The narration says nothing about why nothing matched;
+        // the world simply does not yet know how to do it.
+        String key = matcher.match(actionText);
+        if (key == null) return new String[]{"FAILED", "You turn the material over without settling on what to do with it."};
+        java.util.Map<String,Object> match = jdbc.queryForMap(
             "SELECT process_key, display_name, output_item_key, output_min, output_max, tool_class, " +
-            "requires_fire, requires_water, keywords, narration FROM material_process WHERE review_state='VERIFIED'");
-        java.util.Map<String,Object> match = null; int bestLen = 0;
-        for (java.util.Map<String,Object> p : all)
-            for (String kw : ((String) p.get("keywords")).split(","))
-                if (!kw.isBlank() && v.contains(kw.trim()) && kw.trim().length() > bestLen) { match = p; bestLen = kw.trim().length(); }
-        if (match == null) return new String[]{"FAILED", "You turn the material over without settling on what to do with it."};
+            "requires_fire, requires_water, narration FROM material_process WHERE process_key=?", key);
 
-        String key = (String) match.get("process_key");
         String toolClass = (String) match.get("tool_class");
         if (toolClass != null) {
             boolean ok = switch (toolClass) {

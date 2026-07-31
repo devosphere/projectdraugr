@@ -1,5 +1,6 @@
 package com.devosphere.draugr.domain;
 
+import com.devosphere.draugr.routing.ProcessMatcher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,7 +58,10 @@ public class ArchitectRouter {
     public record Assessment(Route route, String reason, List<String> knownDomains, List<String> availableMaterials) { }
 
     private final JdbcTemplate jdbc;
-    public ArchitectRouter(JdbcTemplate jdbc) { this.jdbc = jdbc; }
+    private final ProcessMatcher matcher;
+    public ArchitectRouter(JdbcTemplate jdbc, ProcessMatcher matcher) {
+        this.jdbc = jdbc; this.matcher = matcher;
+    }
 
     /**
      * Assess an action the deterministic dispatch could not resolve.
@@ -81,7 +85,8 @@ public class ArchitectRouter {
         List<String> covering = jdbc.queryForList(
             "SELECT display_name FROM (" +
             "  SELECT display_name, lower(display_name) AS m FROM technique_definition" +
-            "  UNION ALL SELECT display_name, lower(display_name) FROM material_process" +
+            // A process held out of play by the review gate covers nothing.
+            "  UNION ALL SELECT display_name, lower(display_name) FROM material_process WHERE review_state='VERIFIED'" +
             "  UNION ALL SELECT display_name, lower(display_name) FROM construction_kind" +
             "  UNION ALL SELECT display_name, lower(display_name) FROM fire_method" +
             ") c WHERE ? LIKE '% ' || m || ' %' LIMIT 5", String.class, v);
@@ -90,10 +95,12 @@ public class ArchitectRouter {
                 "Already in the foundation: " + String.join(", ", covering) + ".", List.of(), List.of());
 
         // Keyword coverage too — a process is named by its verbs, not only its title.
-        Integer kw = jdbc.queryForObject(
-            "SELECT COUNT(*) FROM material_process mp, unnest(string_to_array(mp.keywords, ',')) k " +
-            "WHERE ? LIKE '% ' || btrim(k) || ' %'", Integer.class, v);
-        if (kw != null && kw > 0)
+        // Scoped exactly as PhysicalItemService.runProcess scopes it, and for the same
+        // reason: a process only covers an action it would actually run for. Claiming
+        // COVERED on a keyword the runtime would reject on category or subject is the
+        // worst outcome available here — the gap goes unreported AND unresolved.
+        String process = matcher.match(actionText);
+        if (process != null)
             return new Assessment(Route.COVERED, "A material process already covers this action.", List.of(), List.of());
 
         // 2. What does the world already have that bears on the request?

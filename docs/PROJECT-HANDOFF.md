@@ -165,6 +165,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 - V52: Declarative material processing — `material_process` (+ inputs, input groups). 20 processes. Material chains became data, not Java.
 - V53: The Auditor's review gate — `process_review`, `process_mass_balance` view, `conservation_exempt`. A process is not canon until `review_state='VERIFIED'`; `runProcess()` reads VERIFIED only. Caught 9 of the 20 V52 processes creating matter.
 - V54: Activity categories + subject gate (schema half of M1+M2). See below.
+- V55: Routing category corrections — four processes V54 made unreachable or mis-resolved, plus a migration-time check that a process's own keywords classify to its own category.
 
 **Why routing hardening exists:** matching was lexical and global. "Split the fish" matched `split_planks`; "weatherproof the shell" matched the weather domain. A wrong match doesn't throw — it silently suppresses the Architect call the moment needed, which is worse than an honest gap.
 
@@ -174,16 +175,18 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 
 **Resolution rule (documented in full at the foot of V54 — Java must not drift from it):** classify by summed term weight, `precedence` breaks ties; a process matches only if category **and** keyword **and** subject all agree; **if no category term matches, classification is NULL and the category condition is dropped**, not treated as "matches nothing".
 
-**Verified:** 54 migrations apply clean from scratch; fixture is 24/24 — all 9 collisions blocked, all 15 legitimate actions still resolve.
+**V55 corrects V54's data.** Wiring the Java and probing with ordinary phrasing exposed the opposite failure from the one V54 fixed: `dress_foundation`, `reinforce_timber` and `fire_vessel` had become unreachable by any plausible sentence, and `weave_large_basket` resolved to `weave_textile`. In every case a process's declared category disagreed with the category its own verbs classify to — an axis V54 introduced but never checked. V55 fixes the four and adds the check.
+
+**M1 + M2 are COMPLETE.** `ActivityClassifier` (classification) and `ProcessMatcher` (the full rule) live in `com.devosphere.draugr.routing`; both `PhysicalItemService.runProcess()` and `ArchitectRouter` route through `ProcessMatcher`, so the rule has exactly one implementation. The Auditor carries three new standing invariants. 87 DB-free unit tests green; 55 migrations apply clean from scratch.
+
+**Verified:** 8/8 recorded collisions blocked, 21/21 processes reachable by ordinary phrasing — `ProcessRoutingTest`.
 
 #### Resume point
 
-1. `ActivityClassifier.java` — deterministic, cached, implementing the V54 rule exactly.
-2. Filter `ArchitectRouter` coverage checks and `PhysicalItemService.runProcess()` by category+subject.
-3. Auditor invariants: a term in >3 categories is over-broad; every `material_process` needs ≥1 `process_subject` row (V54 enforces this at migration time via a DO block, but nothing yet guards later inserts).
-4. Port the 24-case fixture into a JUnit regression test.
-5. **Bulk foundation generation through the V53 gate** (see the open question below) — reprioritized above M3.
-6. Then M3 (staged assembly), M3b (graded quality), M4 (vocabulary), M5 (coverage as standing measure).
+1. **Bulk foundation generation through the V53 gate** (see the open question below) — reprioritized above M3. This is the actual API-cost lever; M1/M2 bought correctness, not coverage.
+2. Then M3 (staged assembly), M3b (graded quality), M4 (vocabulary), M5 (coverage as standing measure).
+
+Carried forward from M4: log NULL classifications into a ranked backlog so the Architect can propose category terms for genuinely novel verbs — one call per novel verb ever, amortizing to near zero.
 
 #### Open strategic question: coverage, not correctness, is the cost driver
 
