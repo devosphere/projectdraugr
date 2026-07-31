@@ -448,3 +448,62 @@ Some may hunt them.
 Some may never acknowledge their existence.
 
 To the monsters, transported humans are simply another unfamiliar creature entering an already living world.
+
+---
+
+# Implementation Reference
+
+## Monster Registry
+
+Full species entries with resistance values, movement class, and special mechanics are recorded in:
+
+[11.1 – Species Registry → Monsters section](11.1-Species-Registry.md)
+
+## Monster Schema
+
+Introduced in V43:
+
+```
+monster_profile (
+  species_key VARCHAR(80) PRIMARY KEY,
+  movement_class VARCHAR(20),
+  resistance SMALLINT,
+  aggression VARCHAR(20),
+  sight_radius SMALLINT,
+  special_mechanic VARCHAR(80)
+)
+```
+
+Monster sites use `ecology_site.site_category = 'MONSTER'` — this category existed in schema since V3 but was unbacked until V43.
+
+## Implemented Species
+
+| Species | Type | Biome | Status |
+|---------|------|-------|--------|
+| cave_troll | Ground | CAVE, MOUNTAIN | V43 planned |
+| dire_wolf | Ground | FOREST, HIGHLAND | V43 planned |
+| bog_wraith | Ground | WETLAND | V43 planned |
+| wyvern | Aerial | MOUNTAIN | V43 planned |
+| giant_bat_swarm | Aerial | CAVE | V43 planned |
+| harpy | Aerial | CLIFF, HIGHLAND | V43 planned |
+| roc | Aerial | HIGHLAND | V43 planned |
+| giant_hornet_queen | Flying insect | FOREST, HIGHLAND | V43 planned |
+| locust_swarm | Flying insect | GRASSLAND | V43 planned |
+
+## Aerial Combat Gate
+
+Aerial monsters cannot be confronted with melee while airborne.
+
+CONFRONT against an AERIAL monster without a ranged weapon (spear throw, bow — future) describes the futile attempt without outcome. The narrator witnesses the failure. No hint is provided about what is needed.
+
+## Special Mechanics Summary
+
+| Species | Mechanic |
+|---------|---------|
+| wyvern | fire_breath passive burn on approach without fireproof cover |
+| roc | grab + carry → drop = fall damage (severity 25–60) |
+| harpy | intelligent item theft — targets fire, food, maps specifically |
+| giant_bat_swarm | swarm = multiple simultaneous wound events per tick |
+| bog_wraith | disease wound type — every hit adds illness_severity +15 |
+| dire_wolf | always HUNTING; pack cascade always active |
+| locust_swarm | destroys all chunk flora drops within 1 tick; non-aggressive to chronicles |

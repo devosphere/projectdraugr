@@ -491,3 +491,48 @@ Long before humanity arrived, they lived.
 Long after a Chronicle ends, they will continue living.
 
 Players are merely temporary visitors within their home.
+
+---
+
+# Implementation Reference
+
+## Sub-Documents
+
+| Document | Scope |
+|----------|-------|
+| [11.1 – Species Registry](11.1-Species-Registry.md) | Full species registry — all kingdoms, all attributes, all drops |
+| [11.2 – Behavioral FSM](11.2-Behavioral-FSM.md) | State machine rules, cascade rules, tracking signs, passive encounter logic |
+
+## Implemented Intents
+
+| Intent | Description |
+|--------|-------------|
+| CONFRONT_WILDLIFE | Combat with wildlife or monsters; three-layer success model |
+| HARVEST_CARCASS | Butcher a carcass for meat and hide |
+| OBSERVE | General survey — wildlife visible at HIGH attention |
+| FISH | Catch aquatic species (V42) |
+| SNARE | Trap ground or aerial species (V42) |
+| TRACK | Read wildlife signs from terrain (V44) |
+| TAME / APPROACH_CALM | Build trust with tamable species (V45) |
+| LURE | Place bait to draw wildlife (V46) |
+| SET_TRAP | Passive catch via placed trap (V46) |
+| RAID_HIVE | Harvest insect colony products (V40) |
+| COLLECT_INSECTS | Gather individual insects bare-hand (V40) |
+
+## Movement Class Gate
+
+AERIAL species cannot be confronted with melee while airborne.
+
+The CONFRONT dispatch checks `movement_class` against equipped items. No ranged weapon equipped + AERIAL target = narrator describes the futile attempt. No outcome. No hint about what is needed.
+
+## Kingdom Coverage
+
+| Kingdom | V-target | Status |
+|---------|----------|--------|
+| Mammalia (existing: wolf, bear, boar, deer, elk, hare, goat, beaver, otter, fox) | V41 expansion | Planned |
+| Reptilia | V41 | Planned |
+| Amphibia | V41 | Planned |
+| Pisces | V42 | Planned |
+| Aves (wildlife) | V42 | Planned |
+| Insecta | V40 | Planned |
+| Monsters (ground + aerial) | V43 | Planned |

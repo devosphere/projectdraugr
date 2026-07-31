@@ -429,3 +429,39 @@ Life competes.
 Life adapts.
 
 Whether humanity survives within that living world is another question entirely.
+
+---
+
+# Implementation Status
+
+*As of V38 (applied) and V39–V46 (planned, Sprint 002)*
+
+## What Exists
+
+- `ecology_site` — physical site entity linked to a world chunk. Categories: RESOURCE, WILDLIFE, MONSTER, RUIN. V39 adds FLORA; V40 adds INSECT.
+- `wildlife_population` — one population per site, with species_key, ecological_role, behavior_state, population_count, carrying_capacity.
+- `wildlife_carcass` — produced on successful hunt; tracks remaining meat and hide.
+- 11 wildlife species seeded (gray_wolf, brown_bear, wild_boar, red_deer, elk, hare, mountain_goat, beaver, river_otter, marsh_fowl, forest_fox).
+- Behavior tick: `WildlifeSimulationService.advanceTo()` runs reproduction and behavior_state updates.
+
+## Sub-Documents
+
+| Document | Scope |
+|----------|-------|
+| [09.1 – Flora Catalogue](09.1-Flora-Catalogue.md) | All plant species — trees, shrubs, herbs, fungi, aquatic flora |
+| [09.2 – Insect Catalogue](09.2-Insect-Catalogue.md) | All insect and invertebrate colonies — products, hazards, ecosystem roles |
+| [11.1 – Species Registry](11.1-Species-Registry.md) | Full animal species registry — Mammalia, Reptilia, Amphibia, Pisces, Aves, Monsters |
+| [11.2 – Behavioral FSM](11.2-Behavioral-FSM.md) | Finite state machine rules — state transitions, cascade rules, seasonal modifiers |
+
+## Planned Migrations
+
+| Migration | Scope | Status |
+|-----------|-------|--------|
+| V39 | Flora system (flora_definition, flora_drop, chunk_flora, all plant species) | Planned |
+| V40 | Insect ecosystem (insect_colony, all colony species) | Planned |
+| V41 | Expanded land wildlife — full kingdom registry, FSM expansion | Planned |
+| V42 | Aerial + aquatic wildlife — birds, fish, FISH intent, SNARE intent | Planned |
+| V43 | Monster system — monster_profile, all ground and aerial monsters | Planned |
+| V44 | Passive encounters + flee consequences + TRACK intent | Planned |
+| V45 | Taming + bonding — wildlife_bond, TAME intent | Planned |
+| V46 | Lure + bait + traps — LURE and SET_TRAP intents | Planned |

@@ -78,9 +78,39 @@ Complete — all design documents, schemas, and vision documents authored. Activ
 
 **In Progress** — as of 2026-07-31
 
-Backend: Java 21 / Spring Boot / PostgreSQL. Migrations V1–V37 applied. All core systems built (physiology, fire, wildlife, items, construction, literature, navigation, cartography, sleep, capability adaptation, three-layer success model). Frontend: React/Vite/TypeScript playable UI.
+Backend: Java 21 / Spring Boot / PostgreSQL. Migrations V1–V38 applied. All core systems built (physiology, fire, wildlife, items, construction, literature, navigation, cartography, sleep, capability adaptation, three-layer success model, perception frame, domain registry). Foundation tasks F1–F8 all complete. Frontend: React/Vite/TypeScript playable UI.
 
-Remaining before Phase 1 complete: foundation tasks F1–F7 (perception frame, consequence completeness, Auditor catalog, domain registry), then AI narration (Task #21).
+### Completed in Phase 1 so far
+
+- V1–V38 migrations applied and clean.
+- Three-layer success model (physical gate → text specificity → capability familiarity) wired for LIGHT_FIRE and CONFRONT_WILDLIFE.
+- PerceptionFrame returned with every action (F1). Tick-progression deltas in frame (F2). ATTENTION-scaled world detail (F3).
+- All seven death vectors wired (F4): starvation, dehydration, blood loss, fatal trauma, illness, hypothermia, hyperthermia.
+- PersistentStateAuditor: 17 invariant checks (F5). AuditSentinel: launch gate + heartbeat (F6).
+- domain_registry (V38) + DomainRegistryService + GET /api/domains (F7). Monotonic schema decision (F8 / DR-0013).
+
+### Remaining before Phase 1 complete
+
+**Ecosystem Expansion (V39–V46) — in progress**
+
+Per DR-0015, the deterministic ecosystem must reach maximum coverage before AI narration is wired. Eight migrations planned:
+
+| Migration | Scope |
+|-----------|-------|
+| V39 | Flora system — trees, shrubs, herbs, fungi, aquatic plants; flora_definition + flora_drop + chunk_flora |
+| V40 | Insect ecosystem — colonies, products, hazards, decomposers |
+| V41 | Expanded land wildlife — full species registry across Mammalia, Reptilia, Amphibia; FSM expansion |
+| V42 | Aerial + aquatic wildlife — birds, bats, fish, FISH intent, SNARE intent |
+| V43 | Monster system — ground and aerial monsters backed, monster_profile table |
+| V44 | Passive encounters + flee consequences + TRACK intent |
+| V45 | Taming + bonding — wildlife_bond table, TAME intent |
+| V46 | Lure + bait + trap — LURE and SET_TRAP intents |
+
+**NarrationEngine** — deterministic prose templates per intent × outcome × species × biome × severity.
+
+**NarrationRouter** — pure Java, no migration; routes AI_REFINE vs DETERMINISTIC per DR-0017.
+
+**Task #21 — AI narration** — Claude API refinement layer, one to two sentences of atmospheric flavor on top of NarrationEngine prose, per DR-0016.
 
 ## Objective
 
