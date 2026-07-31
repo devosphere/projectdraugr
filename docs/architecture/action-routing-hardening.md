@@ -29,8 +29,13 @@ Matching is **lexical and global** where it needs to be **semantic and scoped**.
 | 3 | "**weatherproof** the shell with cladding" | `weather` | Weather simulation | no |
 | 4 | "build the floor frame with **beams**" | `beam` | Timber reinforcement | no |
 | 5 | "**split** the fish into thin strips" | `split_planks` | Plank splitting (needs an axe and a log) | **YES** |
+| 6 | "**shape** the bow blank from a branch" | `shape_components` | Component shaping (needs a timber plank) | **YES** |
+| 7 | "assemble the bow with **cordage** and sinew" | `twist_cordage` | Cordage twisting (would make more cordage, not assemble) | **YES** |
+| 8 | "process resin into binding compound with **ash**" | `gather_ash` | Ash gathering (not pitch rendering) | **YES** |
 
-Occurrences 1 and 4 were caught by tests. Occurrences 2 and 3 were caught only by simulating a construction procedure by hand. **Occurrence 5 was caught by the fish-preservation simulation *after* the word-boundary fix (d0e238c) had shipped** — it is a live false positive that whole-word matching does not remove, because "split" is a legitimate whole word in both wood processing and fish processing. It is the direct proof that boundary tightening treats symptoms and category scoping treats the cause: routed live, "split the fish into thin strips" is told it is already handled and sent to a process that demands an axe and a log, so the fish is never filletable and the gap is never recorded.
+Occurrences 1 and 4 were caught by tests. Occurrences 2 and 3 were caught only by simulating a construction procedure by hand. **Occurrence 5 was caught by the fish-preservation simulation, and 6–8 by the bow-production simulation, all *after* the word-boundary fix (d0e238c) had shipped.** They are live false positives that whole-word matching does not remove, because the colliding words — split, shape, cordage, ash — are legitimate whole words in two modules at once.
+
+Occurrences 6–8 are the sharpest evidence, because they show the failure is not merely wrong-module but **wrong-recipe**. "assemble the bow with cordage and sinew" does not route to *some* construction step; it routes to the process that *makes cordage*, because the material named in the sentence collided with a process keyword. Routed live, an assembly instruction would produce raw cordage. A COVERED verdict that looks correct at the route level can still be pointing at the wrong process underneath, which is why the fix must scope by activity category before matching, not after.
 
 ### Why word boundaries are not the fix
 
@@ -108,6 +113,26 @@ Two findings beyond the routing collision:
 - **Preservation is modelled as decay, not as action.** `FoodPreservationService` tracks how fast food spoils. Nothing lets a chronicle *slow* that through smoking, salting, or drying. The verbs exist in every survival manual and in none of the foundation.
 
 The fish procedure is the food-domain counterpart to the cabin: the cabin fails at staged construction, the fish fails at active preservation, and both surface the same routing defect on the way down.
+
+## Third fixture: primitive bow production
+
+A twelve-phase primitive bow workflow was routed the same way.
+
+**Result: 5 COVERED (three of them false), 1 POLISH, 6 INVENT.**
+
+The three false COVEREDs are collisions #6–#8 above. What the bow adds beyond the routing defect is **three mechanics no milestone yet covers**, all in the second half of any real production workflow:
+
+| Phase | Route | Missing mechanic |
+|-------|-------|------------------|
+| Inspect materials / components / finished item | INVENT | **Quality inspection** — no notion that a material or component has condition that gates its use |
+| Refine components to consistent dimensions | INVENT | Component refinement short of the finished-item REFINE intent |
+| Assemble blank + cordage + pitch + sinew into a bow | false COVERED | **Staged assembly of a portable item** — same gap as the cabin, but the output is carried, not sited |
+| Cure while compounds harden | INVENT | **Curing time** — a stage that completes on elapsed time, not on inputs |
+| Return failed item to a prior stage for rework | INVENT | **Rework loop** — a backward stage transition on failed inspection |
+
+The single most important finding: **staged assembly is not construction-only.** The bow is a multi-component staged assembly whose product is a portable item. The M3 stage model, scoped in this document to *sited* construction, must also serve *portable* crafts, or every non-trivial tool — bow, trap, sled, loom — hits the same wall the cabin does.
+
+The bow, its string, and arrows also do not exist as items (fire_bow and bow_drill are fire-making kit, not weapons), which is an ordinary vocabulary gap for M4.
 
 ## The architecture
 
@@ -189,20 +214,36 @@ Every matchable term carries its categories. A resolver that queries without a c
 
 ---
 
-### M3 — Staged construction
+### M3 — Staged assembly (sited **and** portable)
 
-**Scope:** Give sited, multi-stage structures somewhere to exist. This is the gap that blocks the cabin outright.
+**Scope:** Give multi-stage things — structures *and* multi-component crafts — somewhere to exist. This is the gap that blocks the cabin and the bow outright. Revised from "sited construction only" after the bow fixture showed a portable craft hits the identical wall.
 
-- [ ] `construction_stage` table — project kind, stage order, name, prerequisite stage
-- [ ] `construction_stage_requirement` — stage, item, quantity, tool class
-- [ ] `construction_progress` — per-project stage completion, replacing bare `progress_percent`
+- [ ] `assembly_stage` table — subject kind, stage order, name, prerequisite stage (serves both construction kinds and craft recipes)
+- [ ] `assembly_stage_requirement` — stage, item, quantity, tool class
+- [ ] `assembly_progress` — per-instance stage completion, replacing bare `progress_percent`
 - [ ] Stage dependency enforcement: a stage cannot begin before its prerequisite completes
-- [ ] `ADVANCE_CONSTRUCTION` intent resolving the next available stage
+- [ ] **Cure stages**: a stage may complete on elapsed world time rather than on inputs (the bow's compounds hardening), reusing the physiology/food tick clock
+- [ ] `ADVANCE_ASSEMBLY` intent resolving the next available stage, for both a sited project and a carried in-progress craft
 - [ ] Narration per stage, witness-stance
 - [ ] Auditor invariants: no orphan stages, no cyclic prerequisites, no stage whose requirements are unobtainable
-- [ ] Migrate `LEAN_TO` and `STONE_FIRE_PIT` onto stages without behaviour change
+- [ ] Migrate `LEAN_TO` and `STONE_FIRE_PIT` onto stages without behaviour change; add the bow as the first portable staged craft
 
-**Done when:** an existing lean-to still builds identically, and a multi-stage structure can be defined entirely in data.
+**Done when:** an existing lean-to still builds identically, a multi-stage sited structure can be defined entirely in data, and a portable multi-component craft (the bow) can be built through its stages including a cure.
+
+---
+
+### M3b — Production quality: inspection and rework
+
+**Scope:** The quality dimension every real workflow has and the foundation has none of, surfaced by the bow's inspect-and-rework phases.
+
+- [ ] Material and component **condition** as a first-class attribute (sound / worn / defective), set at creation and readable at use
+- [ ] `INSPECT` intent — reports the condition of carried materials or an in-progress assembly, separating usable from defective; witness-stance, no advice
+- [ ] Defective inputs gate the stages that would consume them, rather than silently producing a poor result
+- [ ] **Rework**: a failed inspection on an assembly returns it to the appropriate prior stage rather than destroying it
+- [ ] Finished-item quality derives from the condition of its inputs and the specificity of the assembly attempts (ties into the existing three-layer success model)
+- [ ] Auditor invariant: no assembly may reach a terminal stage while carrying a component flagged defective
+
+**Done when:** a bow built from defective components inspects as defective and can be reworked rather than only discarded, and quality flows from inputs to output deterministically.
 
 ---
 
@@ -224,10 +265,15 @@ Food preservation (from the fish fixture):
 - [ ] Smoke rack and drying rack as construction kinds (depends on M3)
 - [ ] `smoked_fish`, `dried_fish`, `salted_fish` as outputs with slower spoilage than `raw_fish`
 
+Weapons and tools (from the bow fixture):
+- [ ] `bow_stave` / bow blank shaped from a hardwood branch (distinct from `wooden_component` off a plank)
+- [ ] `bow` (weapon), `bowstring`, `arrow_shaft`, `arrow` as items, with a source and a review-passed recipe each
+- [ ] Binding compound recipe reconciled: the bow workflow uses resin + charcoal + **ash**; the foundation's `render_pitch` uses resin + charcoal. Decide whether ash is a real third input or the simpler recipe stands.
+
 - [ ] Every addition passes the V53 review gate before going live
 - [ ] Reachability invariant stays at zero unreachable
 
-**Done when:** the twelve cabin steps and the ten fish steps each route to COVERED or POLISH, none to INVENT on vocabulary grounds, and no false COVERED remains.
+**Done when:** the twelve cabin steps, the ten fish steps, and the twelve bow phases each route to COVERED or POLISH, none to INVENT on vocabulary grounds, and no false COVERED remains.
 
 ---
 
@@ -239,8 +285,9 @@ Food preservation (from the fish fixture):
 - [ ] Record every INVENT assessment as a gap row with the triggering text
 - [ ] Rank gaps by frequency — the most-requested absent capability first
 - [ ] Simulation harness: route a named procedure through the foundation and report per-step routes
-- [ ] Fixtures: the 15 m² cabin (construction) and primitive fish preservation (food) as the first two
-- [ ] Regression: neither fixture's coverage may decrease, and neither may regain a false COVERED
+- [ ] Fixtures: the 15 m² cabin (construction), primitive fish preservation (food), and primitive bow production (staged craft) as the first three
+- [ ] Regression: no fixture's coverage may decrease, and none may regain a false COVERED
+- [ ] The harness must report false COVERED separately from true COVERED — the bow showed a route can read COVERED while pointing at the wrong process, so route counts alone are not enough
 
 **Done when:** a coverage regression fails the build rather than surfacing in play.
 
@@ -248,7 +295,7 @@ Food preservation (from the fish fixture):
 
 ## Sequencing and risk
 
-M1 and M2 are the hardening proper and should land together — M2 without M1 has no category to filter by, and M1 without M2 changes nothing. M3 is independent and can proceed in parallel; it is the larger piece of work. M4 depends on M3, since building materials need stages to be consumed by. M5 is small and should follow M2 so the measure reflects scoped routing.
+M1 and M2 are the hardening proper and should land together — M2 without M1 has no category to filter by, and M1 without M2 changes nothing. M3 (staged assembly, sited and portable) is independent and can proceed in parallel; it is the larger piece of work. M3b (inspection and rework) depends on M3, since it acts on stages and components. M4 depends on M3, since building and craft materials need stages to be consumed by. M5 is small and should follow M2 so the measure reflects scoped routing.
 
 **Principal risk:** backfilling categories across every existing matchable row (M2) is broad and mechanical. A missed row silently stops matching. The Auditor invariant requiring a category on every matchable row is the guard, and it must land in the same migration as the columns, not after.
 
