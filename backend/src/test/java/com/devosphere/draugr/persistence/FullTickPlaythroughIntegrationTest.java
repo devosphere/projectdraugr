@@ -157,6 +157,12 @@ class FullTickPlaythroughIntegrationTest {
         // F2 — the frame must carry the transitions since the last frame (possibly empty, never null).
         assertNotNull(frame.sinceLastFrame(), "the frame must carry a since-last-frame delta list");
         assertEquals(waited.perception(), frame.narration(), "the frame's narration must match the action's perception prose");
+        // F3 — ATTENTION scales what the frame reveals. A heads-down wait is LOW and
+        // surfaces no ambient objects; a deliberate look is HIGH.
+        assertEquals("LOW", frame.attention(), "a heads-down wait must read as LOW attention");
+        assertTrue(frame.nearbyObjects().isEmpty(), "LOW attention must not surface ambient objects");
+        ChronicleActionService.ActionResult scanned = actions.resolve("I stop and look around carefully, scanning the treeline and the ground for anything nearby.");
+        assertEquals("HIGH", scanned.frame().attention(), "deliberate looking must read as HIGH attention");
         assertTrue(ticks.current().tick() > 0, "simulation clock must have advanced through the playthrough");
 
         Integer body = jdbc.queryForObject(

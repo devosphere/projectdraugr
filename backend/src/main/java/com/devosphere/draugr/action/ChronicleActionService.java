@@ -48,6 +48,13 @@ public class ChronicleActionService {
         new String[]{"throat","neck","heart","eye","head","skull","chest","flank","side","leg","hamstring","belly"},
         new String[]{"ambush","flank","circle","corner","distract","downwind","sneak","creep","approach slowly","wait for","from behind"},
         new String[]{"pin","finish","again","repeated","hold it down","press the attack","keep"});
+    // Cues that the action text is spending effort on perceiving the surroundings,
+    // rather than on a single heads-down task. Their presence lifts the frame's
+    // ATTENTION, so the world it reveals matches what the chronicle actually looked at.
+    private static final List<String> ATTENTION_CUES = List.of(
+        "look around","look about","glance around","take in","survey","scan","scout","observe","examine",
+        "inspect","study the","study my","search the","search for","scour","peer","gaze","watch the",
+        "keep watch","keep an eye","listen","carefully","cautiously","warily","alert","note the","eye the");
     private final JdbcTemplate jdbc; private final SimulationTickService ticks; private final ChroniclePhysiologyService physiology; private final NarrationPolicy narration; private final PhysicalItemService items; private final CapabilityAdaptationService capability; private final ConstructionService construction; private final ChronicleDiscoveryService discoveries; private final WildlifeEncounterService wildlife; private final FireService fire; private final LiteratureService literature; private final FoodPreservationService food;
     public ChronicleActionService(JdbcTemplate jdbc, SimulationTickService ticks, ChroniclePhysiologyService physiology, NarrationPolicy narration, PhysicalItemService items, CapabilityAdaptationService capability, ConstructionService construction, ChronicleDiscoveryService discoveries, WildlifeEncounterService wildlife, FireService fire, LiteratureService literature, FoodPreservationService food) { this.jdbc = jdbc; this.ticks = ticks; this.physiology = physiology; this.narration = narration; this.items=items; this.capability=capability; this.construction=construction; this.discoveries=discoveries; this.wildlife=wildlife; this.fire=fire; this.literature=literature; this.food=food; }
 
@@ -162,7 +169,8 @@ public class ChronicleActionService {
         if ("SUCCEEDED".equals(outcome)) capability.record(chronicle.id(), actionId, (intent==Intent.GATHER_FIBER||intent==Intent.GATHER_STONE)?"LOAD":intent==Intent.OBSERVE?"ATTENTION":(intent==Intent.REST||intent==Intent.SLEEP)?"RECOVERY":intent==Intent.CONFRONT_WILDLIFE?"AIM":intent==Intent.MOVE?"LOCOMOTION":"FINE_MOTOR", minutes, (intent==Intent.GATHER_FIBER||intent==Intent.GATHER_STONE)?.18:.05, (intent==Intent.REST||intent==Intent.SLEEP)?.75:.45, resolvedAt);
         narration.validate(perception);
         ChroniclePhysiologyService.BodyHudSnapshot afterBody = physiology.activeBody();
-        return new ActionResult(actionId, intent.name(), outcome, minutes, resolvedAt, perception, afterBody, buildFrame(chronicle, intent, outcome, perception, resolvedAt, beforeBody, afterBody, beforeWeather));
+        String attention = attentionLevel(text, intent);
+        return new ActionResult(actionId, intent.name(), outcome, minutes, resolvedAt, perception, afterBody, buildFrame(chronicle, intent, outcome, perception, resolvedAt, beforeBody, afterBody, beforeWeather, attention));
     }
     @Transactional(readOnly = true)
     public NarrationPage narrationHistory(Instant before, UUID beforeId, int requestedLimit) {
@@ -565,19 +573,38 @@ public class ChronicleActionService {
      * the qualitative transitions the tick and this action wrought since the previous
      * frame, so the passage of time is surfaced rather than silently swallowed.
      */
-    private PerceptionFrame buildFrame(ActiveChronicle chronicle, Intent intent, String outcome, String perception, Instant at, ChroniclePhysiologyService.BodyHudSnapshot before, ChroniclePhysiologyService.BodyHudSnapshot after, String beforeWeather) {
+    private PerceptionFrame buildFrame(ActiveChronicle chronicle, Intent intent, String outcome, String perception, Instant at, ChroniclePhysiologyService.BodyHudSnapshot before, ChroniclePhysiologyService.BodyHudSnapshot after, String beforeWeather, String attention) {
         UUID loc = chronicle.location();
         java.util.Map<String,Object> here = jdbc.queryForMap("SELECT world_id, grid_x, grid_y, biome FROM world_chunk WHERE id=?", loc);
         UUID world = (UUID) here.get("world_id");
         String named = jdbc.query("SELECT name FROM chronicle_named_location WHERE chunk_id=? AND chronicle_id=? LIMIT 1", rs -> rs.next() ? rs.getString(1) : null, loc, chronicle.id());
         LocationView location = new LocationView(loc, named, (String) here.get("biome"), (int) here.get("grid_x"), (int) here.get("grid_y"));
         WeatherView weather = jdbc.query("SELECT weather_kind, intensity FROM world_weather WHERE world_id=?", rs -> rs.next() ? new WeatherView(rs.getString(1), rs.getInt(2)) : null, world);
-        List<String> nearby = jdbc.query(
+        // ATTENTION scales what the frame reveals. A chronicle heads-down on a task
+        // (LOW) witnesses only what the act touches, not the carcass in the treeline
+        // they never looked at — the ignorance the design intends. Moving takes the
+        // surroundings in passing (MODERATE); deliberate looking reveals all (HIGH).
+        List<String> nearby = "LOW".equals(attention) ? List.of() : jdbc.query(
             "SELECT object_type, COUNT(*) FROM world_object WHERE current_location_id=? AND lifecycle_state='ACTIVE' AND id<>? GROUP BY object_type ORDER BY object_type",
             (rs, row) -> rs.getString(1).toLowerCase(Locale.ROOT) + ":" + rs.getInt(2), loc, chronicle.id());
         List<StateChange> sinceLast = physiologyDelta(before, after);
         if (beforeWeather != null && weather != null && !beforeWeather.equals(weather.kind())) sinceLast.add(new StateChange("weather", beforeWeather, weather.kind()));
-        return new PerceptionFrame(intent.name(), outcome, location, timeOfDayLabel(at), weather, List.copyOf(nearby), after, List.copyOf(sinceLast), perception);
+        return new PerceptionFrame(intent.name(), outcome, location, timeOfDayLabel(at), weather, attention, List.copyOf(nearby), after, List.copyOf(sinceLast), perception);
+    }
+    /**
+     * How much of the world the chronicle was actually attending to, read from the
+     * action text. Deliberate perception — looking, scanning, searching, doing a task
+     * "carefully" or "warily" — is HIGH. Moving through the country takes it in
+     * passing (MODERATE). A single heads-down task with no such cue is LOW: the
+     * narrator witnesses the act and little else. This is the seam that lets a player
+     * who does not look remain, dangerously, uninformed.
+     */
+    private String attentionLevel(String text, Intent intent) {
+        if (intent == Intent.OBSERVE) return "HIGH";
+        String v = text.toLowerCase(Locale.ROOT);
+        for (String cue : ATTENTION_CUES) if (v.contains(cue)) return "HIGH";
+        if (intent == Intent.MOVE || intent == Intent.TRAVEL) return "MODERATE";
+        return "LOW";
     }
     /**
      * What the tick and this action together changed in the body since the previous
@@ -614,7 +641,7 @@ public class ChronicleActionService {
         return "NIGHT";
     }
     public record ActionResult(UUID actionId, String intent, String outcome, int durationMinutes, Instant resolvedAt, String perception, ChroniclePhysiologyService.BodyHudSnapshot body, PerceptionFrame frame) { }
-    public record PerceptionFrame(String intent, String outcome, LocationView location, String timeOfDay, WeatherView weather, List<String> nearbyObjects, ChroniclePhysiologyService.BodyHudSnapshot physiology, List<StateChange> sinceLastFrame, String narration) { }
+    public record PerceptionFrame(String intent, String outcome, LocationView location, String timeOfDay, WeatherView weather, String attention, List<String> nearbyObjects, ChroniclePhysiologyService.BodyHudSnapshot physiology, List<StateChange> sinceLastFrame, String narration) { }
     public record LocationView(UUID chunkId, String name, String biome, int gridX, int gridY) { }
     public record WeatherView(String kind, int intensity) { }
     /** A single qualitative transition between the previous frame and this one — e.g. hunger "Hungry" → "Starving". */
