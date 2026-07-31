@@ -88,12 +88,86 @@ public class WildlifeEncounterService {
         Carcass carcass=jdbc.query("SELECT wc.object_id,wc.species_key,wc.remaining_meat_units,wc.hide_available FROM wildlife_carcass wc JOIN world_object w ON w.id=wc.object_id WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' ORDER BY wc.died_at LIMIT 1 FOR UPDATE",rs->rs.next()?new Carcass(rs.getObject(1,UUID.class),rs.getString(2),rs.getInt(3),rs.getBoolean(4)):null,chunk);
         if(carcass==null)return new HarvestResult("FAILED","You search the ground carefully, then leave it as you found it.");
         if(carcass.meat()>0) { UUID meat=items.createCarriedItem(chronicle,"raw_game_meat","Raw game meat",at,"HARVESTED_FROM_CARCASS"); food.registerRaw(meat,at); jdbc.update("UPDATE wildlife_carcass SET remaining_meat_units=remaining_meat_units-1 WHERE object_id=?",carcass.id()); }
-        else if(carcass.hide()) { items.createCarriedItem(chronicle,"animal_hide","Animal hide",at,"HARVESTED_FROM_CARCASS"); jdbc.update("UPDATE wildlife_carcass SET hide_available=false WHERE object_id=?",carcass.id()); }
+        // The meat is off; what remains is the species' own yield — a wolf's pelt and
+        // fangs, a deer's antler and sinew — drawn from wildlife_drop (V42). The legacy
+        // generic hide stands in for species not yet catalogued.
+        else if(carcass.hide()) { int taken=takeSpeciesDrops(chronicle,carcass.species(),at); if(taken==0) items.createCarriedItem(chronicle,"animal_hide","Animal hide",at,"HARVESTED_FROM_CARCASS"); jdbc.update("UPDATE wildlife_carcass SET hide_available=false WHERE object_id=?",carcass.id()); }
         else return new HarvestResult("FAILED","The remains offer nothing more that you can carry away.");
         Integer remaining=jdbc.queryForObject("SELECT remaining_meat_units FROM wildlife_carcass WHERE object_id=?",Integer.class,carcass.id()); Boolean hide=jdbc.queryForObject("SELECT hide_available FROM wildlife_carcass WHERE object_id=?",Boolean.class,carcass.id());
         if((remaining==null||remaining==0) && Boolean.FALSE.equals(hide)) { Timestamp ts=Timestamp.from(at); jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED',destroyed_at=?,destroyed_location_id=current_location_id,destroyed_cause='CARCASS_EXHAUSTED',current_location_id=NULL WHERE id=?",ts,carcass.id()); jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CARCASS_EXHAUSTED','{}'::jsonb)",carcass.id(),ts); }
         return new HarvestResult("SUCCEEDED","You work carefully over the remains and take what you can carry.");
     }
+    /** Take a species' catalogued yields from a carcass. Returns how many items came away. */
+    private int takeSpeciesDrops(UUID chronicle, String species, Instant at) {
+        java.util.List<java.util.Map<String,Object>> drops = jdbc.queryForList("SELECT item_key,yield_min,yield_max,rarity FROM wildlife_drop WHERE species_key=? ORDER BY rarity DESC", species);
+        int taken = 0;
+        for (java.util.Map<String,Object> d : drops) {
+            if (Math.random() > ((Number)d.get("rarity")).doubleValue()) continue;
+            String itemKey = (String) d.get("item_key");
+            int lo = ((Number)d.get("yield_min")).intValue(), hi = ((Number)d.get("yield_max")).intValue();
+            int want = lo + (hi > lo ? (int)(Math.random()*(hi-lo+1)) : 0);
+            String name = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, itemKey);
+            for (int i = 0; i < want; i++) { items.createCarriedItem(chronicle, itemKey, name, at, "HARVESTED_FROM_CARCASS"); taken++; }
+        }
+        return taken;
+    }
+
+    /**
+     * Take a fish from the water. Method decides the odds: bare hands rarely work,
+     * a spear is a real tool for it, a woven trap works patiently and well. The
+     * fish species present are those the registry places in this biome.
+     */
+    @Transactional
+    public EncounterResult fish(UUID chronicle, UUID chunk, UUID action, Instant at, String actionText) {
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, chunk);
+        String v = actionText.toLowerCase(java.util.Locale.ROOT);
+        String method; int chance;
+        if (v.contains("trap") || v.contains("basket") || v.contains("weir")) { method="TRAP"; chance=75; }
+        else if (v.contains("spear") && items.hasAtLeast(chronicle,"primitive_spear",1)) { method="SPEAR"; chance=55; }
+        else if (v.contains("line") || v.contains("hook")) { method="LINE"; chance=45; }
+        else { method="BARE_HAND"; chance=20; }
+        java.util.List<String> species = jdbc.queryForList("SELECT species_key FROM wildlife_species WHERE movement_class='AQUATIC' AND biome_affinity ILIKE ? ORDER BY species_key", String.class, "%"+biome+"%");
+        if (species.isEmpty()) return new EncounterResult("FAILED","You watch the ground a while. There is no water here that holds anything worth taking.");
+        if (Math.floorMod(action.hashCode(),100) >= chance)
+            return new EncounterResult("FAILED", method.equals("BARE_HAND")
+                ? "You stand in the cold water with your hands open, and whatever moves past is gone before you close them."
+                : "You work the water patiently, and it gives up nothing this time.");
+        String caught = species.get(Math.floorMod(action.hashCode(), species.size()));
+        int got = 0;
+        for (java.util.Map<String,Object> d : jdbc.queryForList("SELECT item_key,yield_min,yield_max,rarity FROM wildlife_drop WHERE species_key=?", caught)) {
+            if (Math.random() > ((Number)d.get("rarity")).doubleValue()) continue;
+            String itemKey=(String)d.get("item_key");
+            int lo=((Number)d.get("yield_min")).intValue(), hi=((Number)d.get("yield_max")).intValue();
+            int want = lo + (hi>lo ? (int)(Math.random()*(hi-lo+1)) : 0);
+            String name = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, itemKey);
+            for (int i=0;i<want;i++) { UUID id=items.createCarriedItem(chronicle,itemKey,name,at,"CAUGHT_FROM_WATER"); if("raw_fish".equals(itemKey)){ food.registerRaw(id,at); jdbc.update("INSERT INTO aquatic_catch (object_id,species_key,method_used,caught_at) VALUES (?,?,?,?)",id,caught,method,Timestamp.from(at)); } got++; }
+        }
+        if (got==0) return new EncounterResult("FAILED","Something takes and slips free again, and the water closes over it.");
+        return new EncounterResult("SUCCEEDED","The "+display(caught)+" comes up out of the water, cold and heavy and still fighting.");
+    }
+
+    /**
+     * Set a snare for small ground game and low-flying birds. The catch is not
+     * immediate — the snare is placed, and what walks into it does so in its own
+     * time. Requires cordage to build.
+     */
+    @Transactional
+    public EncounterResult snare(UUID chronicle, UUID chunk, UUID action, Instant at) {
+        if (!items.hasAtLeast(chronicle,"plant_fiber",2) && !items.hasAtLeast(chronicle,"hazel_rod",1))
+            return new EncounterResult("FAILED","You crouch over the run and find you have nothing to build a snare from.");
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, chunk);
+        java.util.List<String> prey = jdbc.queryForList("SELECT species_key FROM wildlife_species WHERE size_tier IN ('TINY','SMALL') AND movement_class IN ('TERRESTRIAL','AERIAL') AND biome_affinity ILIKE ? ORDER BY species_key", String.class, "%"+biome+"%");
+        if (prey.isEmpty()) return new EncounterResult("FAILED","You set a snare across the run, but nothing here uses this ground.");
+        if (items.hasAtLeast(chronicle,"plant_fiber",2)) { items.consumeOne(chronicle,"plant_fiber",at); items.consumeOne(chronicle,"plant_fiber",at); }
+        else items.consumeOne(chronicle,"hazel_rod",at);
+        if (Math.floorMod(action.hashCode(),100) >= 45)
+            return new EncounterResult("PARTIAL","You set the snare across a run and leave it standing. Whether anything comes to it is not yours to decide.");
+        String caught = prey.get(Math.floorMod(action.hashCode(), prey.size()));
+        int got = takeSpeciesDrops(chronicle, caught, at);
+        UUID meat = items.createCarriedItem(chronicle,"raw_game_meat","Raw game meat",at,"TAKEN_FROM_SNARE"); food.registerRaw(meat,at);
+        return new EncounterResult("SUCCEEDED","The snare has held. A "+display(caught)+" hangs in the cord, long still by the time you reach it."+(got>0?"":""));
+    }
+
     private int meatFor(String species) { return species.contains("bear") || species.contains("elk") ? 4 : species.contains("deer") || species.contains("boar") ? 3 : 1; }
     private String display(String species) { return species.replace('_',' '); }
     private record Encounter(UUID populationId,String species,String role,String behavior,int population,String movementClass,Integer baseResistance,boolean ambushHunter){}
