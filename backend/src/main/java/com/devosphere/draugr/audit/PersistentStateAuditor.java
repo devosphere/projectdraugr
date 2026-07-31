@@ -57,6 +57,11 @@ public class PersistentStateAuditor {
         if (emptyVisits != null && emptyVisits > 0) violations.add(emptyVisits + " navigation visit record(s) hold a non-positive count.");
         Integer chunks = jdbc.queryForObject("SELECT COUNT(*) FROM world_chunk", Integer.class);
         if (chunks == null || chunks == 0) violations.add("Canonical geography is missing.");
+        // The domain registry records what the world knows how to be. A world with no
+        // registered domains has lost the Architect's ledger and cannot know what schema
+        // it already carries — the foundation domains must always be present.
+        Integer domains = jdbc.queryForObject("SELECT COUNT(*) FROM domain_registry", Integer.class);
+        if (domains == null || domains == 0) violations.add("The domain registry is empty.");
         return new AuditReport(violations.isEmpty(), List.copyOf(violations));
     }
 
