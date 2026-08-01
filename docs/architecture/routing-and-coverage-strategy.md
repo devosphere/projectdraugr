@@ -89,23 +89,27 @@ It is a backlog, not a log. Repeats increment `hit_count` rather than adding row
 
 Crucially it records **which gate rejected the action**, because that single field determines whether the fix is cheap or expensive.
 
-### Step 2 — Generate mechanics in bulk through the V53 gate
+### Step 2 — Generate mechanics in bulk through the V53 gate — **DONE (V57)**
 
-The real cost lever. M1/M2 bought correctness, not coverage — true coverage across the four simulations is roughly 5–10%.
+The real cost lever. M1/M2 bought correctness, not coverage — true coverage across the four simulations was roughly 5–10%.
 
-Generate 200–300 `material_process` definitions offline as `DRAFT`, validated by:
+`V57__foundation_process_expansion.sql` lands **109 new processes** (20 → 129) and ~105 new items across the eight areas the simulations named: timber preservation, joinery, building layers, salt and food preservation, fish processing, bow production, leather and armour, and the tools and containers those chains need to be reachable. Every row was written as `DRAFT` and put through the same deterministic gate, extended for the batch:
 
 - **V53 mass balance** (`process_mass_balance`) — catches recipes that create matter; it caught 9 of the 20 *hand-authored* originals
-- **V55 category agreement** — a process's own keywords must classify to its own declared category
-- **V51 reachability** — every input must have an acquisition path
-- **Derived subject terms** — from the process's own inputs and outputs, so it cannot drift out of agreement with itself
-- **Sampled human review** — for plausibility, which mass balance cannot check (design rule #5: a recipe can conserve mass and still be bad primitive technology)
+- **Category agreement (now BLOCKING)** — a process whose own keywords do not classify to its declared category is unreachable. V55 made this a migration-time exception for 20 rows; at 129 it is a blocking review finding instead, and it caught 3 in V57 (`spin_wool_yarn`, `plait_withy_rope`, `strip_bark_cordage`) before they shipped.
+- **Subject presence (now BLOCKING)** — a process with no subject terms can never match on the other axis.
+- **V51 reachability** — every input must have an acquisition path (the `UNOBTAINABLE_INPUT` check)
+- **Derived subject terms** — from each process's own inputs and outputs, so a recipe cannot drift out of agreement with itself
+- **Reachability probe** — [routing-reachability-probe.sql](routing-reachability-probe.sql), a SQL replica of the runtime rule, run over one representative sentence per process plus the originals as regression. It surfaced 7 collisions in the batch (missing joinery/trap vocabulary, bare split/rive keywords stealing "split the log", and two verbs leaking into subject terms) — all fixed in V57 rather than shipped.
+- **Sampled human review** — for plausibility, which mass balance cannot check (design rule #5: a recipe can conserve mass and still be bad primitive technology). Still owed on a sampled basis.
 
-Only rows passing all of it are promoted to `VERIFIED`. Scope is named by the gaps the simulations found: staged assembly, joinery, building layers, timber preservation, salt and food preservation, fish processing, bow production, leather armour.
+Outcome, verified from a clean database: **129 VERIFIED, 0 held, 0 advisories, 0 reachability misses.**
 
-### Step 3 — Re-measure, then revisit
+Staged assembly (M3) was deliberately excluded — it is a schema extension, not data, and collapsing multi-stage work into single processes would lie about how long things take to make.
 
-With the backlog populated and several hundred processes landed, ask the question again *with data*. If a large share of remaining misses are `VOCABULARY` or `SUBJECT` — the world has the mechanic but not the words — that is the case for authoring-time AI vocabulary work, and possibly the only case an inline layer would ever have had.
+### Step 3 — Re-measure, then revisit — **NEXT**
+
+With ~129 processes landed, re-run the four procedure simulations and read `routing_miss_backlog`. If a large share of remaining misses are `VOCABULARY` or `SUBJECT` — the world has the mechanic but not the words — that is the case for authoring-time AI vocabulary work, and possibly the only case an inline layer would ever have had. If `MECHANIC` still dominates, another authoring batch is the answer, not an AI classifier.
 
 ---
 

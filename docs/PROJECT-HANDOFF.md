@@ -100,7 +100,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 | `backend/src/main/java/com/devosphere/draugr/domain/ArchitectRouter.java` | Cost gate for the Architect — routes COVERED / POLISH / INVENT. |
 | `backend/src/main/java/com/devosphere/draugr/routing/ProcessMatcher.java` | The **only** implementation of the action→process resolution rule. Both `runProcess()` and `ArchitectRouter` go through it. |
 | `backend/src/main/java/com/devosphere/draugr/routing/RoutingMissRecorder.java` | Records unresolved actions into the V56 backlog. Separate bean on purpose — see its Javadoc. |
-| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V56. Next is V57. |
+| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V57. Next is V58. |
 | `backend/src/main/java/com/devosphere/draugr/domain/DomainRegistryService.java` | Reads domain_registry — the Architect's ledger of invented domains. |
 | `docs/architecture/domain-creation-pattern.md` | The exact recipe for adding a new domain. |
 | `docs/architecture/action-routing-hardening.md` | Sprint 003 spec — collisions, milestones M1–M5. |
@@ -119,7 +119,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 
 ---
 
-## What Is Built (Migrations V1–V56, all applied)
+## What Is Built (Migrations V1–V57, all applied)
 
 - V1–V30: World geography, ecology, chronicle lifecycle, physiology, action ledger, wildlife, items, equipment, carry capacity, capability adaptation, construction, literature, fire, weather, food preservation, tools, clothing, idempotency
 - V31: Writing materials (bark_sheet, charcoal, clay_lump; STRIP_BARK, MAKE_CHARCOAL, GATHER_CLAY, WRITE)
@@ -170,6 +170,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 - V54: Activity categories + subject gate (schema half of M1+M2). See below.
 - V55: Routing category corrections — four processes V54 made unreachable or mis-resolved, plus a migration-time check that a process's own keywords classify to its own category.
 - V56: Routing miss backlog — `routing_miss` (frequency-ranked, recorded on the play path only) + `routing_miss_backlog` and `routing_unknown_term` views. Answers the question that directs coverage work: is a gap missing *words* or a missing *mechanic*?
+- V57: Foundation process expansion — **the coverage batch.** 109 new processes (20 → 129) + ~105 items across the eight simulation-named gaps: timber preservation, joinery, building layers, salt/food preservation, fish processing, bow production, leather/armour, plus the tools and containers those chains need. Every row written as DRAFT and promoted only by the V53 gate (extended: category-agreement and subject-presence are now BLOCKING findings, not migration exceptions). Verified from a clean DB: 129 VERIFIED, 0 held, 0 advisories.
 
 **Why routing hardening exists:** matching was lexical and global. "Split the fish" matched `split_planks`; "weatherproof the shell" matched the weather domain. A wrong match doesn't throw — it silently suppresses the Architect call the moment needed, which is worse than an honest gap.
 
@@ -181,9 +182,11 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 
 **V55 corrects V54's data.** Wiring the Java and probing with ordinary phrasing exposed the opposite failure from the one V54 fixed: `dress_foundation`, `reinforce_timber` and `fire_vessel` had become unreachable by any plausible sentence, and `weave_large_basket` resolved to `weave_textile`. In every case a process's declared category disagreed with the category its own verbs classify to — an axis V54 introduced but never checked. V55 fixes the four and adds the check.
 
-**M1 + M2 are COMPLETE.** `ActivityClassifier` (classification) and `ProcessMatcher` (the full rule) live in `com.devosphere.draugr.routing`; both `PhysicalItemService.runProcess()` and `ArchitectRouter` route through `ProcessMatcher`, so the rule has exactly one implementation. The Auditor carries three new standing invariants. 88 DB-free unit tests green; 56 migrations apply clean from scratch.
+**M1 + M2 are COMPLETE.** `ActivityClassifier` (classification) and `ProcessMatcher` (the full rule) live in `com.devosphere.draugr.routing`; both `PhysicalItemService.runProcess()` and `ArchitectRouter` route through `ProcessMatcher`, so the rule has exactly one implementation. The Auditor carries three new standing invariants. 88 DB-free unit tests green; 57 migrations apply clean from scratch.
 
 **Verified:** 8/8 recorded collisions blocked, 21/21 processes reachable by ordinary phrasing, and every miss correctly diagnosed as vocabulary / keyword / subject / mechanic — `ProcessRoutingTest`.
+
+**Step 2 (coverage) is COMPLETE — V57.** 129 processes now VERIFIED (was 20). The V53 gate was extended to make category-agreement and subject-presence BLOCKING, so an unreachable process is held rather than shipped; it caught 3. A reusable reachability probe — [routing-reachability-probe.sql](architecture/routing-reachability-probe.sql), a SQL replica of the runtime rule — checks every process resolves from ordinary phrasing; it surfaced 7 in-batch collisions, all fixed before landing. Re-run it after any migration that adds processes.
 
 #### SETTLED: no AI at resolution time — read this before proposing one
 
@@ -196,9 +199,9 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 #### Resume point
 
 1. **DONE — Step 1: measure.** V56 shipped. The backlog is live and directs the rest.
-2. **NEXT — Step 2: bulk foundation generation through the V53 gate.** The actual API-cost lever; M1/M2 bought correctness, not coverage. Target 200–300 processes, generated offline as `DRAFT`, validated by V53 mass balance + V55 category agreement + V51 reachability + derived subject terms, sampled by hand for plausibility, and only then promoted to `VERIFIED`. Scope named by the simulations: staged assembly, joinery, building layers, timber preservation, salt/food preservation, fish processing, bow production, leather armour.
-3. **Then Step 3: re-measure** via `routing_miss_backlog` and let the `MECHANIC` share decide what the next cycle does.
-4. Then M3 (staged assembly), M3b (graded quality), M4 (vocabulary), M5 (coverage as standing measure).
+2. **DONE — Step 2: bulk foundation generation through the V53 gate.** V57 landed 109 processes (20 → 129) across the eight simulation-named gaps, promoted only by the extended gate, verified reachable from a clean DB. Still owed: sampled human plausibility review of the batch (design rule #5) — the gate proves conservation and reachability, not that a recipe is good primitive technology.
+3. **NEXT — Step 3: re-measure.** Re-run the four procedure simulations (cabin, fish, bow, armour) against the 129 processes; read `routing_miss_backlog`. Let the `MECHANIC` share decide whether another authoring batch or vocabulary work comes next. The AI-layer question stays settled either way (see below).
+4. Then M3 (staged assembly), M3b (graded quality), M4 (vocabulary), M5 (coverage as standing measure — promote the reachability probe into a build-time harness).
 
 #### Why coverage, not correctness, is the cost driver
 
