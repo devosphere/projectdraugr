@@ -305,6 +305,23 @@ public class PhysicalItemService {
     }
 
     /**
+     * True when this action text resolves to a VERIFIED material process, without side
+     * effects (no miss recorded — this is a question, not an attempt).
+     *
+     * <p>The intent classifier in {@code ChronicleActionService} matches on raw
+     * substrings and so cannot tell "salt the fish" (preserve) from "catch a fish"
+     * (angle), or "carve a spoon" (make) from "carve a blaze" (mark). This lets it
+     * defer those ambiguous, noun-driven intents to the two-axis matcher, which agrees
+     * on category, keyword and subject before it claims anything — the word boundaries
+     * the substring classifier lacks. It is the same authority {@code runProcess} uses,
+     * so a "yes" here means the very next fallback to PROCESS_MATERIAL will resolve.
+     */
+    @Transactional(readOnly = true)
+    public boolean actionMatchesProcess(String actionText) {
+        return matcher.match(actionText) != null;
+    }
+
+    /**
      * Run a material process from the declarative table (V52): splitting planks,
      * dressing stone, twisting cordage, tanning hide, rendering pitch, firing a pot.
      *

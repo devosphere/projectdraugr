@@ -74,6 +74,17 @@ INSERT INTO probes VALUES
   ('twist bark cordage from the bast','strip_bark_cordage'),('haft a stone adze','haft_stone_adze'),
   ('carve a wooden bowl','carve_wooden_bowl'),('sew a leather pouch','sew_leather_pouch'),
   ('weave a fish trap','weave_fish_trap'),('make tallow candles','make_tallow_candle'),
+  -- V57 remaining fish byproducts, preservation, tools, containers
+  ('smoke the fowl over green wood','smoke_fowl'),('brine the fish in salt water','brine_fish'),
+  ('skin the fish carefully','skin_fish'),('cure the fish skin into leather','cure_fish_skin'),
+  ('boil fish glue from the skins','boil_fish_glue'),('press fish oil from the trimmings','press_fish_oil'),
+  ('carve a bone fish hook','carve_fish_hook'),('weave a burden basket','weave_burden_basket'),
+  ('dry the mushrooms on a string','dry_mushrooms'),('preserve the berries in honey','preserve_berries'),
+  ('dry the herbs in bunches','dry_herbs'),('make a waterskin from the hide','make_waterskin'),
+  ('make rush lights','make_rush_light'),('smoke the meat high in the smoke','smoke_meat'),
+  ('carve a wooden spoon','carve_wooden_spoon'),('grind a bone awl','grind_bone_awl'),
+  ('grind a bone scraper','grind_bone_scraper'),('make a drop spindle','make_drop_spindle'),
+  ('make a quiver from bark','weave_quiver'),('salt the deer hide','salt_hide'),
   -- Originals: must not regress
   ('split the log into planks with an axe','split_planks'),('tan the deer hide with oak bark','tan_hide'),
   ('weave a large basket from plant fiber','weave_large_basket'),('gather ash from the hearth','gather_ash'),

@@ -54,11 +54,15 @@ DELETE FROM category_term WHERE category_key = 'PROCESS' AND term = 'fillet';
 -- compound CRAFT terms below win: making a trap is craft, setting one is not
 -- routed here at all (SET_TRAP is a separate intent path).
 UPDATE category_term SET weight = 1 WHERE category_key = 'HUNT' AND term = 'trap';
+-- 'cure' is a processing verb with no other reading. At weight 2 it tied with the
+-- HUNT pair fish+skin and lost the tie to precedence, so "cure the fish skin into
+-- leather" was heard as skinning a fish rather than making leather. Weight 3 settles it.
+UPDATE category_term SET weight = 3 WHERE category_key = 'PROCESS' AND term = 'cure';
 
 INSERT INTO category_term (category_key, term, weight) VALUES
 ('HUNT','fillet',3),('HUNT','go fishing',3),('HUNT','catch fish',3),('HUNT','land the fish',3),
 -- Processing verbs the world had no word for.
-('PROCESS','char',3),('PROCESS','scorch',2),('PROCESS','tar',2),('PROCESS','coat',2),
+('PROCESS','char',3),('PROCESS','scorch',2),('PROCESS','tar',2),('PROCESS','coat',2),('PROCESS','press',2),
 ('PROCESS','preserve',3),('PROCESS','tiller',3),('PROCESS','dehair',3),('PROCESS','felt',3),
 ('PROCESS','fish leather',3),('PROCESS','season the',2),('PROCESS','flesh out',2),
 -- Spinning, plying and plaiting are genuine fibre-processing verbs that V54 wrote
@@ -385,7 +389,7 @@ INSERT INTO material_process_input (process_key, item_key, quantity) VALUES
 
 -- --- Salt and food preservation --------------------------------------------
 INSERT INTO material_process (process_key, display_name, output_item_key, output_min, output_max, tool_class, requires_fire, requires_water, duration_minutes, domain_key, category_key, keywords, narration) VALUES
-('grind_salt','Grind rock salt','ground_salt',1,2,'STRIKING',FALSE,FALSE,25,'food_preservation','PROCESS','grind the salt,crush the salt,mill the salt,salt,grind,crush,pound',
+('grind_salt','Grind rock salt','ground_salt',1,2,'STRIKING',FALSE,FALSE,25,'food_preservation','PROCESS','grind the salt,crush the salt,mill the salt,grind,crush,pound',
  'You pound the crystal down between two stones until it runs loose and white. Nothing else in the world keeps meat like this does.'),
 ('salt_fish','Salt fish','salted_fish',1,2,NULL,FALSE,FALSE,60,'food_preservation','PROCESS','salt the fish,salted fish,pack in salt,dry salt the fish,salt,cure',
  'You layer fish and salt and fish again, and set a weight on top. What comes out is stiff, pale, and will still be food in six months.'),
@@ -600,7 +604,7 @@ INSERT INTO material_process (process_key, display_name, output_item_key, output
  'You hollow the bowl first while there is still wood to hold, then take the handle down to something your hand likes.'),
 ('carve_wooden_bowl','Carve a wooden bowl','wooden_bowl',1,1,'CUTTING',FALSE,FALSE,120,'tools','CRAFT','wooden bowl,bowl,hollow a bowl,carve a bowl,carve,hollow',
  'You burn and scrape the middle out by turns, working across the grain, until the walls are even and thin enough to lift easily.'),
-('grind_bone_awl','Grind a bone awl','bone_awl',1,2,'CUTTING',FALSE,FALSE,30,'tools','CRAFT','bone awl,awl,grind an awl,make an awl,make,grind',
+('grind_bone_awl','Grind a bone awl','bone_awl',1,2,'CUTTING',FALSE,FALSE,30,'tools','PROCESS','bone awl,awl,grind an awl,make an awl,make,grind',
  'You take a splinter down to a long slow point on wet stone. It will punch leather that a needle will not.'),
 ('carve_fish_hook','Carve a fish hook','bone_fish_hook',1,3,'CUTTING',FALSE,FALSE,45,'tools','CRAFT','fish hook,bone hook,carve a hook,barbed hook,carve,whittle',
  'You cut the blank as a V, work the barb in with the point of the knife, and groove the shank for the line.'),
@@ -614,7 +618,7 @@ INSERT INTO material_process (process_key, display_name, output_item_key, output
  'You saw the teeth in one at a time, all the way down, and any one of them going wrong wastes the whole piece.'),
 ('make_drop_spindle','Make a drop spindle','drop_spindle',1,1,'CUTTING',FALSE,FALSE,40,'tools','CRAFT','drop spindle,spindle,whorl,make a spindle,make,fit',
  'You bore the whorl through the centre and seat the shaft tight. Off-centre by a little and it wobbles and fights you all day.'),
-('grind_bone_scraper','Grind a bone scraper','bone_scraper',1,2,'CUTTING',FALSE,FALSE,35,'tools','CRAFT','bone scraper,scraper,hide scraper,grind a scraper,grind,make',
+('grind_bone_scraper','Grind a bone scraper','bone_scraper',1,2,'CUTTING',FALSE,FALSE,35,'tools','PROCESS','bone scraper,scraper,hide scraper,grind a scraper,grind,make',
  'You take one edge of the blade down to a bevel and leave it just short of sharp, so it takes flesh off a hide without cutting through it.');
 
 INSERT INTO material_process_input (process_key, item_key, quantity) VALUES
@@ -785,6 +789,13 @@ DELETE FROM process_subject WHERE process_key = 'season_plank' AND subject_term 
 -- subject gate and the alphabetical tiebreak steals it from split_planks. A
 -- subject term names a thing worked on; a verb never does.
 DELETE FROM process_subject WHERE process_key = 'split_fish' AND subject_term = 'split';
+
+-- Reagent leak. The salt these processes consume (ground_salt) puts 'salt' into their
+-- derived subjects, but salt is what they apply, not what they preserve -- so "salt the
+-- deer hide" satisfied salt_fish's subject through 'salt' and the alphabetical tiebreak
+-- stole it. The material worked is fish/meat/hide; salt names the reagent alone.
+DELETE FROM process_subject WHERE subject_term = 'salt'
+  AND process_key IN ('salt_fish','brine_fish','salt_meat','salt_hide');
 
 -- ---------------------------------------------------------------------------
 -- 6. THE GATE

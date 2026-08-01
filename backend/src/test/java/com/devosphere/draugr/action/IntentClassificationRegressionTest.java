@@ -15,13 +15,57 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 class IntentClassificationRegressionTest {
 
-    /** classify(String) is private; it takes no collaborators, so reflection is safe and cheap here. */
-    private String classify(String text) throws Exception {
+    /** No material process matches — the ordinary case for the intent phrases below. */
+    private String classify(String text) throws Exception { return classify(text, false); }
+
+    /**
+     * classify(String) is private and pure over text plus one collaborator: it asks
+     * {@link com.devosphere.draugr.item.PhysicalItemService#actionMatchesProcess} whether
+     * the text is really a material process, so it can yield ambiguous noun-driven
+     * intents (FISH, MARK-by-carving) to the two-axis matcher. That answer is stubbed
+     * here — the routing itself is covered by ProcessRoutingTest and live E2E.
+     */
+    private String classify(String text, boolean processMatches) throws Exception {
         Method m = ChronicleActionService.class.getDeclaredMethod("classify", String.class);
         m.setAccessible(true);
-        // The instance is never touched by classify(), so a null-filled one is sufficient.
-        ChronicleActionService svc = new ChronicleActionService(null, null, null, null, null, null, null, null, null, null, null, null, new com.devosphere.draugr.narration.ActionInputClassifier());
+        com.devosphere.draugr.item.PhysicalItemService items =
+            new com.devosphere.draugr.item.PhysicalItemService(null, null, null) {
+                @Override public boolean actionMatchesProcess(String t) { return processMatches; }
+            };
+        ChronicleActionService svc = new ChronicleActionService(null, null, null, null, items, null, null, null, null, null, null, null, new com.devosphere.draugr.narration.ActionInputClassifier());
         return ((Enum<?>) m.invoke(svc, text)).name();
+    }
+
+    // --- V57 alignment: a large batch of material processes exposed the intent
+    // --- classifier's naive substring matching. "salt the fish" is not fishing,
+    // --- "carve a spoon" is not marking, "meat" is not "eat", "knap" is not "nap".
+    @Test void processActionsAreNotStolenByGreedyIntents() throws Exception {
+        // When the two-axis matcher claims the text, the ambiguous intent must yield,
+        // so the dispatch falls through to PROCESS_MATERIAL (classify returns UNKNOWN).
+        assertEquals("UNKNOWN", classify("salt the fish for winter", true));
+        assertEquals("UNKNOWN", classify("gut the fish", true));
+        assertEquals("UNKNOWN", classify("weave a fish trap", true));
+        assertEquals("UNKNOWN", classify("carve a wooden spoon", true));
+        // Genuine fishing and marking still classify when no process matches.
+        assertEquals("FISH", classify("fish the stream with a spear", false));
+        assertEquals("MARK", classify("carve a blaze into the tree", false));
+    }
+
+    /** Substring accidents that pre-date V57 but its vocabulary made reachable. */
+    @Test void wholeWordIntentsIgnoreSubstrings() throws Exception {
+        // "meat" contains "eat"; "feathers" contains "eat"; "knap" contains "nap".
+        assertEquals("UNKNOWN", classify("salt the meat down", false));
+        assertEquals("UNKNOWN", classify("fletch the arrows with feathers", false));
+        assertEquals("UNKNOWN", classify("knap stone arrowheads", false));
+        // The real words still classify.
+        assertEquals("EAT", classify("eat the ripe berries", false));
+        assertEquals("SLEEP", classify("take a nap by the fire", false));
+    }
+
+    /** A named specific basket yields to its process; the generic basket does not. */
+    @Test void specificBasketsYieldToTheProcess() throws Exception {
+        assertEquals("UNKNOWN", classify("weave a burden basket", false));
+        assertEquals("CRAFT_BASKET", classify("weave a basket", false));
     }
 
     // --- Found in E2E: "set a snare across the run" resolved to SNARE, so the
