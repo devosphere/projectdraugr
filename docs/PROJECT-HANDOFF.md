@@ -200,8 +200,8 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 
 1. **DONE — Step 1: measure.** V56 shipped. The backlog is live and directs the rest.
 2. **DONE — Step 2: bulk foundation generation through the V53 gate.** V57 landed 109 processes (20 → 129) across the eight simulation-named gaps, promoted only by the extended gate, verified reachable from a clean DB. Still owed: sampled human plausibility review of the batch (design rule #5) — the gate proves conservation and reachability, not that a recipe is good primitive technology.
-3. **NEXT — Step 3: re-measure.** Re-run the four procedure simulations (cabin, fish, bow, armour) against the 129 processes; read `routing_miss_backlog`. Let the `MECHANIC` share decide whether another authoring batch or vocabulary work comes next. The AI-layer question stays settled either way (see below).
-4. Then M3 (staged assembly), M3b (graded quality), M4 (vocabulary), M5 (coverage as standing measure — promote the reachability probe into a build-time harness).
+3. **DONE — Step 3: re-measure.** The four procedure simulations, re-run through the live dispatch, went from ~7/46 to **46/46 resolved**. `routing_miss_backlog` showed **0 `MECHANIC` misses** — the world has the mechanics; the residual gaps were vocabulary and were closed. No further bulk generation needed for the named procedures. Full write-up in [routing-and-coverage-strategy.md](architecture/routing-and-coverage-strategy.md). This pass also fixed the substring-shadowing class of intent-classifier bugs (see [feedback/project memory]) including plant⊃"ant".
+4. **NEXT:** M3 (staged assembly), M3b (graded quality), M4 (vocabulary), M5 (coverage as standing measure — promote `routing-reachability-probe.sql` into a build-time harness). Also Task #21 (AI narration).
 
 #### Why coverage, not correctness, is the cost driver
 

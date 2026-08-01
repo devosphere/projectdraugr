@@ -68,6 +68,15 @@ class IntentClassificationRegressionTest {
         assertEquals("CRAFT_BASKET", classify("weave a basket", false));
     }
 
+    /** "plant " contains the insect token "ant " — gathering fibre is not collecting ants. */
+    @Test void plantIsNotAnInsect() throws Exception {
+        assertEquals("GATHER_FIBER", classify("gather plant fiber from the undergrowth", false));
+        assertEquals("GATHER_PLANT", classify("gather herbs and plants", false));
+        // The real insects still classify.
+        assertEquals("COLLECT_INSECTS", classify("collect ants from the colony", false));
+        assertEquals("COLLECT_INSECTS", classify("dig for earthworms", false));
+    }
+
     // --- Found in E2E: "set a snare across the run" resolved to SNARE, so the
     // --- placed-trap path (V46) was unreachable through its most natural phrasing.
     @Test void settingASnareLeavesAPlacedTrap() throws Exception {

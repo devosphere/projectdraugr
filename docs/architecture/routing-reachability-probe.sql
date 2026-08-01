@@ -43,7 +43,9 @@ CREATE TEMP TABLE probes(txt text, want text);
 INSERT INTO probes VALUES
   -- V57 timber preservation
   ('season the oak timber for a year','season_timber'),('char the post before setting it in the ground','char_post'),
-  ('render birch tar from the bark','render_birch_tar'),
+  ('render birch tar from the bark','render_birch_tar'),('pitch the timber against rot','pitch_timber'),
+  ('coat the timber with pitch','pitch_timber'),('line the coat with fur','line_with_fur'),
+  ('tar the cordage','tar_cordage'),('season the planks','season_plank'),
   -- V57 joinery
   ('cut a mortise into the beam','cut_mortise'),('cut a tenon on the end of the beam','cut_tenon'),
   ('notch the log for the corner','notch_log'),('scarf the two beams together','scarf_joint'),
@@ -85,6 +87,8 @@ INSERT INTO probes VALUES
   ('carve a wooden spoon','carve_wooden_spoon'),('grind a bone awl','grind_bone_awl'),
   ('grind a bone scraper','grind_bone_scraper'),('make a drop spindle','make_drop_spindle'),
   ('make a quiver from bark','weave_quiver'),('salt the deer hide','salt_hide'),
+  ('make rawhide from the hide','make_rawhide'),('dehair the hide in lye','dehair_hide'),
+  ('sew a leather helm cap','sew_helm_cap'),('cut boot soles from the rawhide','cut_boot_soles'),
   -- Originals: must not regress
   ('split the log into planks with an axe','split_planks'),('tan the deer hide with oak bark','tan_hide'),
   ('weave a large basket from plant fiber','weave_large_basket'),('gather ash from the hearth','gather_ash'),

@@ -107,9 +107,23 @@ Outcome, verified from a clean database: **129 VERIFIED, 0 held, 0 advisories, 0
 
 Staged assembly (M3) was deliberately excluded — it is a schema extension, not data, and collapsing multi-stage work into single processes would lie about how long things take to make.
 
-### Step 3 — Re-measure, then revisit — **NEXT**
+### Step 3 — Re-measure — **DONE**
 
-With ~129 processes landed, re-run the four procedure simulations and read `routing_miss_backlog`. If a large share of remaining misses are `VOCABULARY` or `SUBJECT` — the world has the mechanic but not the words — that is the case for authoring-time AI vocabulary work, and possibly the only case an inline layer would ever have had. If `MECHANIC` still dominates, another authoring batch is the answer, not an AI classifier.
+The four procedure simulations were re-run against the 129 processes through the **live dispatch** (`POST /api/actions`, not the matcher in isolation), one action per step:
+
+| Procedure | Before (COVERED) | After (resolved) |
+|-----------|:---:|:---:|
+| 15 m² cabin (construction/joinery/layers) | 0/12 | **12/12** |
+| Fish preservation | 1/10 | **10/10** |
+| Bow production | 3/12 | **12/12** |
+| Leather armour | 3/12 | **12/12** |
+| **Total** | ~7/46 (~15%) | **46/46 (100%)** |
+
+The decisive number: after the first pass, `routing_miss_backlog` held **2 misses, both `SUBJECT`-kind, and zero `MECHANIC`**. The world is no longer short of *mechanics* for these procedures — the residual gaps were vocabulary, and both were closed (a `coat`→garment term collision, and `line_with_fur`/`make_rawhide` keyword/classification nits). There is no case here for another bulk generation batch, and — exactly as this document predicted — no case for an inline AI classifier: what remained was authoring-time vocabulary, fixed once in a migration.
+
+**This confirms the strategy end to end.** Correctness (M1/M2) then coverage (V57) then measurement (V56) drove the foundation from ~15% to complete on the named procedures, entirely deterministically, with the one AI-shaped question (novel-verb vocabulary) landing exactly where the plan said it would: at authoring time.
+
+Caveat that stands: this measures the four *named* procedures. New procedures a player invents will still miss, and that is what `routing_miss_backlog` is for — it is now a standing instrument, not a one-time check.
 
 ---
 

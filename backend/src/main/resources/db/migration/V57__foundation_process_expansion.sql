@@ -62,7 +62,11 @@ UPDATE category_term SET weight = 3 WHERE category_key = 'PROCESS' AND term = 'c
 INSERT INTO category_term (category_key, term, weight) VALUES
 ('HUNT','fillet',3),('HUNT','go fishing',3),('HUNT','catch fish',3),('HUNT','land the fish',3),
 -- Processing verbs the world had no word for.
-('PROCESS','char',3),('PROCESS','scorch',2),('PROCESS','tar',2),('PROCESS','coat',2),('PROCESS','press',2),
+-- 'coat' is deliberately NOT a classification term: it collides with the garment
+-- noun ("line the coat with fur" would classify PROCESS and lose line_with_fur).
+-- pitch_timber still reaches on its phrase keywords ('coat the timber', 'pitch the
+-- timber') under a null classification, and on 'tar'.
+('PROCESS','char',3),('PROCESS','scorch',2),('PROCESS','tar',2),('PROCESS','press',2),
 ('PROCESS','preserve',3),('PROCESS','tiller',3),('PROCESS','dehair',3),('PROCESS','felt',3),
 ('PROCESS','fish leather',3),('PROCESS','season the',2),('PROCESS','flesh out',2),
 -- Spinning, plying and plaiting are genuine fibre-processing verbs that V54 wrote
@@ -76,6 +80,10 @@ INSERT INTO category_term (category_key, term, weight) VALUES
 -- reinforce_timber instead of the mortising process. Weight 3 so the specific
 -- joinery term beats the generic structural noun.
 ('PROCESS','mortise',3),('PROCESS','tenon',3),
+-- 'rawhide' is a processing noun, not a craft object: "make rawhide" must classify
+-- PROCESS so make_rawhide is reachable rather than being filtered by the generic
+-- 'make'->CRAFT. Only make_rawhide and cut_boot_soles use it, so no collision.
+('PROCESS','rawhide',2),
 -- Building vocabulary. Wattle, daub and mortar are construction nouns that no
 -- verb accompanies -- "weave the wattle panel" would otherwise classify as
 -- textile work and never reach a building process.
@@ -546,9 +554,9 @@ INSERT INTO material_process (process_key, display_name, output_item_key, output
  'You cut it to your forearm, punch lacing holes down both edges, and lace it on. The string will stop taking skin off you now.'),
 ('sew_helm_cap','Sew a leather helm cap','leather_helm_cap',1,1,'CUTTING',FALSE,FALSE,60,'textiles','CRAFT','leather helm,helm cap,skull cap,sew,stitch',
  'You cut four gores and stitch them into a dome that sits close to the skull.'),
-('cut_boot_soles','Cut boot soles','leather_boot_sole',1,2,'CUTTING',FALSE,FALSE,35,'textiles','PROCESS','boot sole,cut soles,shoe sole,sole,cut,slice',
+('cut_boot_soles','Cut boot soles','leather_boot_sole',1,2,'CUTTING',FALSE,FALSE,35,'textiles','PROCESS','boot soles,boot sole,cut soles,shoe sole,soles,sole,cut,slice',
  'You cut them oversize from the thickest part of the hide, because a sole wears through long before the upper does.'),
-('line_with_fur','Line a garment with fur','fur_lining',1,1,'CUTTING',FALSE,FALSE,120,'textiles','CRAFT','fur lining,line with fur,sew in the fur,fur liner,sew',
+('line_with_fur','Line a garment with fur','fur_lining',1,1,'CUTTING',FALSE,FALSE,120,'textiles','CRAFT','fur lining,line with fur,sew in the fur,fur liner,fur,sew',
  'You sew the pelts fur-inward with the grain all running one way, so it lies flat and moves warm air toward you rather than away.');
 
 INSERT INTO material_process_input (process_key, item_key, quantity) VALUES
