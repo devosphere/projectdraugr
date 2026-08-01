@@ -2,6 +2,7 @@ package com.devosphere.draugr.item;
 
 import com.devosphere.draugr.ecology.ResourceEcologyService;
 import com.devosphere.draugr.routing.ProcessMatcher;
+import com.devosphere.draugr.quality.QualityGrade;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -78,12 +79,36 @@ public class PhysicalItemService {
     }
     @Transactional
     public UUID createCarriedItem(UUID chronicle, String itemKey, String displayName, Instant occurredAt, String transitionType) {
+        return createCarriedItem(chronicle, itemKey, displayName, occurredAt, transitionType, QualityGrade.SOUND);
+    }
+    /** As above, but with an explicit quality grade — used by processes and assemblies whose output grade flows from their inputs (M3b). */
+    public UUID createCarriedItem(UUID chronicle, String itemKey, String displayName, Instant occurredAt, String transitionType, QualityGrade grade) {
         UUID id = UUID.randomUUID();
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM',?,?)", id, displayName, chronicle);
-        jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,?,'SOUND')", id, itemKey);
+        jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state,quality_grade) VALUES (?,?,'SOUND',?)", id, itemKey, grade.name());
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,?,jsonb_build_object('itemKey',?))", id, Timestamp.from(occurredAt), transitionType, itemKey);
         assertCarryCapacity(chronicle);
         return id;
+    }
+
+    /**
+     * The worst quality grade among the chronicle's reachable items of the given keys
+     * — the grade that will flow into anything made from them. SOUND when none of the
+     * keys is actually held (an untracked or absent input does not drag quality down).
+     */
+    @Transactional(readOnly = true)
+    public QualityGrade worstGradeAmong(UUID chronicle, java.util.Collection<String> itemKeys) {
+        QualityGrade worst = null;
+        for (String k : itemKeys) {
+            String g = jdbc.query(
+                "WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' " +
+                "UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') " +
+                "SELECT i.quality_grade FROM reachable r JOIN item_instance i ON i.object_id=r.id WHERE i.item_key=? " +
+                "ORDER BY CASE i.quality_grade WHEN 'DEFECTIVE' THEN 0 WHEN 'POOR' THEN 1 WHEN 'SOUND' THEN 2 ELSE 3 END LIMIT 1",
+                rs -> rs.next() ? rs.getString(1) : null, chronicle, k);
+            if (g != null) { QualityGrade q = QualityGrade.of(g); worst = worst == null ? q : QualityGrade.worst(worst, q); }
+        }
+        return worst == null ? QualityGrade.SOUND : worst;
     }
     /** The id of one reachable item of a kind (carried or in a carried container), or null. */
     @Transactional(readOnly = true)
@@ -397,6 +422,13 @@ public class PhysicalItemService {
         if (capacityHeadroomUnits(chronicle, outKey) <= 0)
             return new String[]{"FAILED", "You could do the work, but you could not carry what it would make."};
 
+        // Quality flows: the output is never better than the worst input or the care
+        // of the attempt (M3b). Read the input grades before consuming them.
+        java.util.List<String> inputKeys = new java.util.ArrayList<>();
+        for (java.util.Map<String,Object> in : fixed) inputKeys.add((String) in.get("item_key"));
+        inputKeys.addAll(chosen.values());
+        QualityGrade grade = QualityGrade.worst(worstGradeAmong(chronicle, inputKeys), QualityGrade.attempt(actionText));
+
         for (java.util.Map<String,Object> in : fixed)
             for (int i = 0; i < ((Number) in.get("quantity")).intValue(); i++) consumeOne(chronicle, (String) in.get("item_key"), at);
         for (java.util.Map.Entry<String,String> e : chosen.entrySet()) {
@@ -407,7 +439,7 @@ public class PhysicalItemService {
         int lo = ((Number) match.get("output_min")).intValue(), hi = ((Number) match.get("output_max")).intValue();
         int made = Math.min(lo + (hi > lo ? (int)(Math.random()*(hi-lo+1)) : 0), Math.max(1, capacityHeadroomUnits(chronicle, outKey)));
         String outName = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, outKey);
-        for (int i = 0; i < made; i++) createCarriedItem(chronicle, outKey, outName, at, "PROCESSED");
+        for (int i = 0; i < made; i++) createCarriedItem(chronicle, outKey, outName, at, "PROCESSED", grade);
         assertCarryCapacity(chronicle);
         return new String[]{"SUCCEEDED", (String) match.get("narration")};
     }

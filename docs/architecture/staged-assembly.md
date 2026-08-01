@@ -78,10 +78,26 @@ Three of these also became **standing Auditor invariants** (`PersistentStateAudi
 
 ---
 
+## M3b — Production quality
+
+Quality is an **ordered grade** — `DEFECTIVE < POOR < SOUND < FINE` (V59) — carried by every made item (`item_instance.quality_grade`) and by every stage of a build (`assembly_stage_completion.quality_grade`). It is set when a thing is made and flows forward by one rule:
+
+> `outputGrade = worst(worst input grade, attempt grade)`
+
+The **attempt grade** is Layer 2 of the success model made concrete (`QualityGrade.attempt`): a careless description ("rush", "botch", "slap together") spoils the work to DEFECTIVE; a careful, detailed one ("carefully … evenly … slowly", ≥6 words) earns FINE; anything ordinary is SOUND. It never lifts an output above its inputs — `worst` sees to that — so a POOR hide can never yield a fine result, and a fine result needs both fine materials and care.
+
+- **Flow** — process outputs (`runProcess`) and craft outputs (final assembly stage) are graded by the rule; a cure stage carries its prerequisite's grade forward (waiting well is just waiting). A finished craft inherits the **worst** of its stages.
+- **Gating** — a defective material, or a defective prior stage, refuses to be built on: the next step fails with "…must be reworked before you can go on." This is why a defect can never reach a finished piece, and the Auditor invariant (no completed assembly holds a defective stage) is the backstop.
+- **`INSPECT`** — witness-stance, no advice: reports an in-progress assembly's grade stage by stage (naming any defective stage) or, with nothing in hand, how many carried pieces are defective or poor. It sits before the generic `OBSERVE` catch and needs a quality/assembly context to claim "inspect".
+- **`REWORK`** — strips the earliest defective stage completion and everything after it, returning the build to that step to be done again. The flawed work is undone, not the whole piece; the materials it spoiled are gone, so redoing it needs fresh ones (a botched sinew backing is scraped off, not recovered).
+
+Verified end-to-end: a bow whose backing was botched with "rush the work on the bow" completed that stage DEFECTIVE, which gated the cure; `INSPECT` named "the lay on the sinew backing" as defective; `REWORK` stripped it; a careful redo made it SOUND; and the finished `hunting_bow` came out SOUND with a clean audit. Separately, a POOR fibre run through `twist_cordage` yielded POOR cordage — quality flowing, deterministically.
+
 ## Notes for the next milestone
 
 - **Routing collisions with intents recur.** "drying rack" was initially stolen by `CRAFT_SHELF` (which treats "rack" as a shelf); the fix excluded "drying". Any new assembly whose keywords overlap an existing intent will be shadowed — the assembly engine sits in the fallback. See [[project-intent-classifier-substrings]] for the pattern; consider a general assembly-defer gate (like `actionMatchesProcess`) if collisions multiply.
-- **M3b (quality)** builds directly on this: grade set at creation and flowing input→output, `INSPECT`, defective inputs gating stages, and rework returning an instance to a prior stage rather than destroying it. The `assembly_instance` / `assembly_stage_completion` split is where per-instance quality and rework will live.
+- **FINE is reachable but rarely produced yet:** raw materials default SOUND, so FINE only appears from a careful attempt on already-fine inputs. FINE-yielding sources (a prime hide from a clean kill, select timber) are content for a later pass — the dimension and its flow are in place.
+- **M4** is mostly shipped as data already (V57); what remains is the cut-planning multi-output process form and wiring building materials to be consumed by stages, both of which sit naturally on this schema.
 
 ---
 

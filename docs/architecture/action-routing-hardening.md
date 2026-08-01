@@ -247,7 +247,9 @@ Delivered: `assembly_definition`/`assembly_stage`/`assembly_stage_requirement` d
 
 ---
 
-### M3b — Production quality: inspection and rework
+### M3b — Production quality: inspection and rework — **DONE (V59)**
+
+Delivered: `quality_grade` (DEFECTIVE < POOR < SOUND < FINE) on `item_instance` and `assembly_stage_completion`, set at creation and flowing forward as `worst(inputs, attempt)` — the attempt read from the action text (Layer 2 of the success model, `QualityGrade.attempt`). `INSPECT` reports an assembly's grade stage by stage or the grade of carried materials (witness-stance); a defective material or a defective prior stage **gates** the next step; `REWORK` strips the earliest defective stage and everything after it so it can be redone rather than discarded; and a standing Auditor invariant forbids a completed assembly from carrying a defective stage. Verified end-to-end: a bow whose backing was botched ("rush…") inspected as defective, was reworked, redone carefully, and finished SOUND; and quality flows deterministically (a POOR fibre yields POOR cordage). Design in [staged-assembly.md](staged-assembly.md#m3b--production-quality).
 
 **Scope:** The quality dimension every real workflow has and the foundation has none of, surfaced by the bow's inspect-and-rework phases.
 

@@ -135,6 +135,15 @@ public class PersistentStateAuditor {
             "WHERE NOT EXISTS (SELECT 1 FROM item_source src WHERE src.item_key=r.item_key)", Integer.class);
         if (unobtainableStageInputs != null && unobtainableStageInputs > 0)
             violations.add(unobtainableStageInputs + " assembly stage requirement(s) name an item with no acquisition path.");
+        // Production quality (V59). A finished assembly must never carry a defective
+        // stage: the stage gate refuses to advance past flawed work, so a completed
+        // instance holding one means the gate was bypassed. Reworking is the sanctioned
+        // way out, not shipping the flaw.
+        Integer completedWithDefect = jdbc.queryForObject(
+            "SELECT COUNT(DISTINCT ai.id) FROM assembly_instance ai JOIN assembly_stage_completion c ON c.instance_id=ai.id " +
+            "WHERE ai.state='COMPLETE' AND c.quality_grade='DEFECTIVE'", Integer.class);
+        if (completedWithDefect != null && completedWithDefect > 0)
+            violations.add(completedWithDefect + " completed assembly(ies) carry a defective stage that was never reworked.");
         // Navigation memory: a recorded visit means the chronicle has stood there at
         // least once, so a non-positive count is a corrupted route memory.
         Integer emptyVisits = jdbc.queryForObject("SELECT COUNT(*) FROM chronicle_chunk_visit WHERE visit_count <= 0", Integer.class);

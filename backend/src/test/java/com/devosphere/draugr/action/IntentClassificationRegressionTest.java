@@ -68,6 +68,16 @@ class IntentClassificationRegressionTest {
         assertEquals("CRAFT_BASKET", classify("weave a basket", false));
     }
 
+    /** Inspect/rework (M3b) claim their patterns before the generic OBSERVE catch. */
+    @Test void inspectAndReworkClassify() throws Exception {
+        assertEquals("INSPECT", classify("inspect the quality of my materials", false));
+        assertEquals("INSPECT", classify("check the bow for flaws", false));
+        assertEquals("REWORK", classify("rework the bow", false));
+        assertEquals("REWORK", classify("redo the flawed step", false));
+        // "inspect" with no quality/assembly context is still plain looking.
+        assertEquals("OBSERVE", classify("inspect the clearing", false));
+    }
+
     /** A drying rack is a staged structure (V58), not a shelf — it must reach the fallback. */
     @Test void dryingRackIsNotAShelf() throws Exception {
         assertEquals("UNKNOWN", classify("build a drying rack", false));   // falls through to the assembly engine
