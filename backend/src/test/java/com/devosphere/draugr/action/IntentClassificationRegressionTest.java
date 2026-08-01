@@ -32,7 +32,7 @@ class IntentClassificationRegressionTest {
             new com.devosphere.draugr.item.PhysicalItemService(null, null, null) {
                 @Override public boolean actionMatchesProcess(String t) { return processMatches; }
             };
-        ChronicleActionService svc = new ChronicleActionService(null, null, null, null, items, null, null, null, null, null, null, null, new com.devosphere.draugr.narration.ActionInputClassifier());
+        ChronicleActionService svc = new ChronicleActionService(null, null, null, null, items, null, null, null, null, null, null, null, new com.devosphere.draugr.narration.ActionInputClassifier(), null);
         return ((Enum<?>) m.invoke(svc, text)).name();
     }
 
@@ -66,6 +66,13 @@ class IntentClassificationRegressionTest {
     @Test void specificBasketsYieldToTheProcess() throws Exception {
         assertEquals("UNKNOWN", classify("weave a burden basket", false));
         assertEquals("CRAFT_BASKET", classify("weave a basket", false));
+    }
+
+    /** A drying rack is a staged structure (V58), not a shelf — it must reach the fallback. */
+    @Test void dryingRackIsNotAShelf() throws Exception {
+        assertEquals("UNKNOWN", classify("build a drying rack", false));   // falls through to the assembly engine
+        assertEquals("CRAFT_SHELF", classify("build a storage shelf", false));
+        assertEquals("CRAFT_SHELF", classify("make a rack", false));       // a bare rack is still a shelf
     }
 
     /** "plant " contains the insect token "ant " — gathering fibre is not collecting ants. */

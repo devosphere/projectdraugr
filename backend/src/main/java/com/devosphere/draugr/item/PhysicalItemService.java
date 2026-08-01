@@ -321,6 +321,12 @@ public class PhysicalItemService {
         return matcher.match(actionText) != null;
     }
 
+    /** Whether the chronicle could carry one more of an item without breaking capacity. */
+    @Transactional(readOnly = true)
+    public boolean hasCarryRoomFor(UUID chronicle, String itemKey) {
+        return capacityHeadroomUnits(chronicle, itemKey) > 0;
+    }
+
     /**
      * Run a material process from the declarative table (V52): splitting planks,
      * dressing stone, twisting cordage, tanning hide, rendering pitch, firing a pot.

@@ -227,7 +227,9 @@ Every matchable term carries its categories. A resolver that queries without a c
 
 ---
 
-### M3 — Staged assembly (sited **and** portable)
+### M3 — Staged assembly (sited **and** portable) — **DONE (V58)**
+
+Delivered: `assembly_definition`/`assembly_stage`/`assembly_stage_requirement` define stages in data; `assembly_instance`/`assembly_stage_completion` track progress; cure stages complete on elapsed world time; `ADVANCE_ASSEMBLY` resolves the next available stage for both a sited structure and a carried craft; an `assembly_review` gate and three standing Auditor invariants (no cyclic/forward prerequisite, no stageless assembly, no unobtainable requirement) mirror V53. Verified end-to-end: the bow builds through shape → back → **cure** (gated on world time) → string, producing `hunting_bow`; a drying rack raises entirely from data; lean-to and fire-pit are expressed as data while their existing intents still build them unchanged. Full design in [staged-assembly.md](staged-assembly.md).
 
 **Scope:** Give multi-stage things — structures *and* multi-component crafts — somewhere to exist. This is the gap that blocks the cabin and the bow outright. Revised from "sited construction only" after the bow fixture showed a portable craft hits the identical wall.
 

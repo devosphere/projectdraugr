@@ -111,6 +111,30 @@ public class PersistentStateAuditor {
         Integer orphanSources = jdbc.queryForObject(
             "SELECT COUNT(*) FROM item_source s LEFT JOIN item_definition d ON d.item_key=s.item_key WHERE d.item_key IS NULL", Integer.class);
         if (orphanSources != null && orphanSources > 0) violations.add(orphanSources + " item source(s) reference an item that does not exist.");
+        // Staged assembly (V58). A definition can be broken in ways that never throw at
+        // runtime — a stage depending on itself or a later one (a cycle that never
+        // resolves), an assembly with no stages to run, or a stage needing an item
+        // nobody can obtain. The migration gates these, but a migration only guards the
+        // rows present when it runs; these are the standing checks.
+        Integer verifiedButFlaggedAssemblies = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM assembly_definition d WHERE d.review_state='VERIFIED' AND EXISTS (" +
+            "  SELECT 1 FROM assembly_review r WHERE r.assembly_key=d.assembly_key AND r.severity='BLOCKING' AND r.resolved_at IS NULL)", Integer.class);
+        if (verifiedButFlaggedAssemblies != null && verifiedButFlaggedAssemblies > 0)
+            violations.add(verifiedButFlaggedAssemblies + " verified assembly(ies) still carry an unresolved blocking finding.");
+        Integer cyclicStages = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM assembly_stage s JOIN assembly_stage p ON p.stage_key=s.prerequisite_stage_key " +
+            "WHERE p.assembly_key <> s.assembly_key OR p.stage_order >= s.stage_order", Integer.class);
+        if (cyclicStages != null && cyclicStages > 0)
+            violations.add(cyclicStages + " assembly stage(s) depend on a later or foreign stage (a prerequisite cycle).");
+        Integer stagelessAssemblies = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM assembly_definition d WHERE NOT EXISTS (SELECT 1 FROM assembly_stage s WHERE s.assembly_key=d.assembly_key)", Integer.class);
+        if (stagelessAssemblies != null && stagelessAssemblies > 0)
+            violations.add(stagelessAssemblies + " assembly(ies) declare no stages and can never advance.");
+        Integer unobtainableStageInputs = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM assembly_stage_requirement r " +
+            "WHERE NOT EXISTS (SELECT 1 FROM item_source src WHERE src.item_key=r.item_key)", Integer.class);
+        if (unobtainableStageInputs != null && unobtainableStageInputs > 0)
+            violations.add(unobtainableStageInputs + " assembly stage requirement(s) name an item with no acquisition path.");
         // Navigation memory: a recorded visit means the chronicle has stood there at
         // least once, so a non-positive count is a corrupted route memory.
         Integer emptyVisits = jdbc.queryForObject("SELECT COUNT(*) FROM chronicle_chunk_visit WHERE visit_count <= 0", Integer.class);
