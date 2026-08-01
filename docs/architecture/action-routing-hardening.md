@@ -264,7 +264,9 @@ Delivered: `quality_grade` (DEFECTIVE < POOR < SOUND < FINE) on `item_instance` 
 
 ---
 
-### M4 — The building and preservation vocabulary
+### M4 — The building and preservation vocabulary — **DONE (V57 + V60)**
+
+The bulk of the vocabulary (framing, joinery, building layers, timber preservation, salt/food preservation, fish butchery, bow production, leather/armour, tools, containers) shipped in V57 — the four simulations resolve 46/46. V60 closed the three pieces V57 could not, because they were schema, not data: **multi-output cut-planning** (`material_process_output` — one hide laid out into panel + plates + cords + offcuts at once, yield scaled by the care of the attempt), **preservation shelf life** (salted/dried/smoked food keeps 30–60 days versus 18 h raw), and **leather armour as a staged assembly** (V58) consuming the laid-out components, plus a smoke rack and the fleshed/dehaired hide reconciled as tanning's input. Verified end-to-end; mass conservation holds across the combined multi-output (the gate caught and fixed a tanning over-yield in passing).
 
 **Scope:** Close the material and technique gaps the cabin and fish simulations exposed.
 
@@ -299,7 +301,9 @@ Leather and armour (from the armor fixture):
 
 ---
 
-### M5 — Coverage as a standing measure
+### M5 — Coverage as a standing measure — **DONE**
+
+Delivered: `/api/domains/coverage` now reports **per-category** verified-process counts and the ranked miss backlog (V56's `routing_miss_backlog` by gap kind). The build-time gate is [routing-reachability-probe.sql](routing-reachability-probe.sql): it routes every process and each of the four named fixtures through a SQL replica of the runtime rule, reports per-category coverage, and **raises an exception on any miss** — a step that no longer resolves, or a *false COVERED* where it resolves to the wrong process. Run under `ON_ERROR_STOP=1` in the migration-validation workflow (mandated for every migration), so a coverage regression fails validation rather than surfacing in play. Verified both ways: 84/84 passes clean, and a deliberately-wrong expectation aborts with `Coverage regression: 1 probe step(s)…`.
 
 **Scope:** Make foundation drift visible before it becomes API spend.
 

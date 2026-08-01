@@ -439,9 +439,43 @@ public class PhysicalItemService {
         int lo = ((Number) match.get("output_min")).intValue(), hi = ((Number) match.get("output_max")).intValue();
         int made = Math.min(lo + (hi > lo ? (int)(Math.random()*(hi-lo+1)) : 0), Math.max(1, capacityHeadroomUnits(chronicle, outKey)));
         String outName = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, outKey);
-        for (int i = 0; i < made; i++) createCarriedItem(chronicle, outKey, outName, at, "PROCESSED", grade);
+        String kind = preservationKind(outKey);
+        for (int i = 0; i < made; i++) {
+            UUID madeId = createCarriedItem(chronicle, outKey, outName, at, "PROCESSED", grade);
+            if (kind != null) registerPreserved(madeId, kind, at);
+        }
+        // Multi-output (V60): a process may yield several kinds in the same act, with
+        // yield scaled by the grade of the work — a well-planned layout wastes less.
+        double yieldFactor = switch (grade) { case DEFECTIVE -> 0.0; case POOR -> 0.34; case SOUND -> 0.67; case FINE -> 1.0; };
+        for (java.util.Map<String,Object> o : jdbc.queryForList("SELECT item_key, qty_min, qty_max FROM material_process_output WHERE process_key=?", key)) {
+            String ok = (String) o.get("item_key");
+            int omin = ((Number) o.get("qty_min")).intValue(), omax = ((Number) o.get("qty_max")).intValue();
+            int want = omin + (int) Math.round((omax - omin) * yieldFactor);
+            int n = Math.min(want, capacityHeadroomUnits(chronicle, ok));
+            if (n <= 0) continue;
+            String on = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, ok);
+            String okind = preservationKind(ok);
+            for (int i = 0; i < n; i++) { UUID mid = createCarriedItem(chronicle, ok, on, at, "PROCESSED", grade); if (okind != null) registerPreserved(mid, okind, at); }
+        }
         assertCarryCapacity(chronicle);
         return new String[]{"SUCCEEDED", (String) match.get("narration")};
+    }
+
+    /** The preservation kind a made food keeps as, or null if it is not a preserved food (V60/M4). */
+    private static String preservationKind(String itemKey) {
+        return switch (itemKey) {
+            case "salted_fish", "salted_meat" -> "SALTED";
+            case "smoked_fish", "smoked_meat", "smoked_fowl" -> "SMOKED";
+            case "dried_fish", "dried_meat", "dried_mushroom", "pemmican", "preserved_berries" -> "DRIED";
+            default -> null;
+        };
+    }
+
+    /** Preserved food keeps far longer than raw: salted longest, then dried, then smoked. */
+    private void registerPreserved(UUID item, String kind, Instant at) {
+        long hours = switch (kind) { case "SALTED" -> 1440; case "SMOKED" -> 720; default -> 1080; };
+        jdbc.update("INSERT INTO food_preservation_state (object_id,preparation_kind,safe_until) VALUES (?,?,?) ON CONFLICT (object_id) DO NOTHING",
+            item, kind, Timestamp.from(at.plus(java.time.Duration.ofHours(hours))));
     }
 
     /**

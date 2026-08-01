@@ -89,6 +89,8 @@ INSERT INTO probes VALUES
   ('make a quiver from bark','weave_quiver'),('salt the deer hide','salt_hide'),
   ('make rawhide from the hide','make_rawhide'),('dehair the hide in lye','dehair_hide'),
   ('sew a leather helm cap','sew_helm_cap'),('cut boot soles from the rawhide','cut_boot_soles'),
+  -- V60 cut-planning (multi-output)
+  ('lay out the hide and cut the pieces','lay_out_hide'),
   -- Originals: must not regress
   ('split the log into planks with an axe','split_planks'),('tan the deer hide with oak bark','tan_hide'),
   ('weave a large basket from plant fiber','weave_large_basket'),('gather ash from the hearth','gather_ash'),
@@ -101,5 +103,23 @@ FROM probes WHERE resolve(txt) IS DISTINCT FROM want ORDER BY want;
 \echo === TOTALS ===
 SELECT count(*) FILTER (WHERE resolve(txt) IS NOT DISTINCT FROM want) AS ok,
        count(*) FILTER (WHERE resolve(txt) IS DISTINCT FROM want) AS miss FROM probes;
+
+\echo === PER-CATEGORY VERIFIED PROCESSES (M5 coverage) ===
+SELECT ac.category_key,
+       (SELECT count(*) FROM material_process mp WHERE mp.category_key=ac.category_key AND mp.review_state='VERIFIED') AS verified
+FROM activity_category ac ORDER BY ac.precedence;
+
+-- The gate (M5): any miss is a coverage regression -- a step that no longer resolves,
+-- or a false COVERED where it resolves to the WRONG process. Under ON_ERROR_STOP=1 this
+-- aborts, so running the probe in the migration-validation workflow fails the build
+-- rather than letting the gap surface in play.
+DO $$
+DECLARE miss int;
+BEGIN
+    SELECT count(*) INTO miss FROM probes WHERE resolve(txt) IS DISTINCT FROM want;
+    IF miss > 0 THEN
+        RAISE EXCEPTION 'Coverage regression: % probe step(s) did not resolve to their expected process (unreachable or false COVERED).', miss;
+    END IF;
+END $$;
 
 DROP FUNCTION resolve(text); DROP FUNCTION classify(text); DROP FUNCTION whole(text,text); DROP FUNCTION norm(text);

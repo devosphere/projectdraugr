@@ -138,13 +138,39 @@ public class ArchitectRouter {
         Integer domains = jdbc.queryForObject("SELECT COUNT(*) FROM domain_registry", Integer.class);
         Integer techniques = jdbc.queryForObject("SELECT COUNT(*) FROM technique_definition", Integer.class);
         Integer processes = jdbc.queryForObject("SELECT COUNT(*) FROM material_process", Integer.class);
+        Integer verified = jdbc.queryForObject("SELECT COUNT(*) FROM material_process WHERE review_state='VERIFIED'", Integer.class);
         Integer items = jdbc.queryForObject("SELECT COUNT(*) FROM item_definition", Integer.class);
         Integer unreachable = jdbc.queryForObject(
             "SELECT COUNT(*) FROM item_definition d WHERE NOT EXISTS (SELECT 1 FROM item_source s WHERE s.item_key=d.item_key) " +
             "AND NOT EXISTS (SELECT 1 FROM item_unreachable_known k WHERE k.item_key=d.item_key)", Integer.class);
-        return new Coverage(n(domains), n(techniques), n(processes), n(items), n(unreachable));
+
+        // Per-category: how much of each kind of work the foundation can resolve without
+        // the Architect. A category that stops growing while play reaches for it is where
+        // spend will surface first (M5).
+        List<CategoryCoverage> byCategory = jdbc.query(
+            "SELECT ac.category_key, ac.display_name, " +
+            "  (SELECT COUNT(*) FROM material_process mp WHERE mp.category_key=ac.category_key AND mp.review_state='VERIFIED') AS verified, " +
+            "  (SELECT COUNT(*) FROM material_process mp WHERE mp.category_key=ac.category_key) AS total " +
+            "FROM activity_category ac ORDER BY ac.precedence",
+            (rs, row) -> new CategoryCoverage(rs.getString(1), rs.getString(2), rs.getInt(3), rs.getInt(4)));
+
+        // The miss backlog (V56) ranked by kind: what play asked for and the foundation
+        // could not answer. MECHANIC is the expensive kind and the one to watch.
+        List<GapKind> gaps = tableExists("routing_miss") ? jdbc.query(
+            "SELECT gap_kind, COUNT(*)::int AS distinct_texts, COALESCE(SUM(hit_count),0)::int AS occurrences " +
+            "FROM routing_miss_backlog GROUP BY gap_kind ORDER BY occurrences DESC",
+            (rs, row) -> new GapKind(rs.getString(1), rs.getInt(2), rs.getInt(3))) : List.of();
+
+        return new Coverage(n(domains), n(techniques), n(processes), n(verified), n(items), n(unreachable), byCategory, gaps);
     }
     private static int n(Integer i) { return i == null ? 0 : i; }
+    private boolean tableExists(String table) {
+        Boolean b = jdbc.queryForObject("SELECT to_regclass(?) IS NOT NULL", Boolean.class, table);
+        return Boolean.TRUE.equals(b);
+    }
 
-    public record Coverage(int domains, int techniques, int processes, int items, int unreachableItems) { }
+    public record Coverage(int domains, int techniques, int processes, int verifiedProcesses, int items,
+                           int unreachableItems, List<CategoryCoverage> byCategory, List<GapKind> backlog) { }
+    public record CategoryCoverage(String category, String displayName, int verifiedProcesses, int totalProcesses) { }
+    public record GapKind(String kind, int distinctTexts, int occurrences) { }
 }
