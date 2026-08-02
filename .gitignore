@@ -7,3 +7,7 @@ backups/
 .app-profile/
 Project Draugr — Materials & Recipes.md
 CLAUDE.md
+
+# Local secrets: API keys, never committed
+secrets.local.ps1
+.secrets/

@@ -10,6 +10,24 @@ $root = Split-Path -Parent $PSScriptRoot
 $maven = Join-Path $root '.tools\apache-maven-3.9.11\bin\mvn.cmd'
 $runtimeFile = Join-Path $root '.draugr-runtime.json'
 
+# Anthropic API key, encrypted AT REST with Windows DPAPI (set it via scripts\Set-DraugrApiKey.ps1).
+# The encrypted file (.secrets\anthropic.key) is gitignored and is decryptable ONLY by this Windows
+# user on this machine — copying it elsewhere or opening it as another user yields ciphertext. It is
+# decrypted here in-memory only, set as an in-process env var the backend inherits, and never written
+# to disk in plaintext nor persisted as a user/system environment variable. If it is missing or
+# cannot be decrypted, the game simply runs with the AI layer off — never a crash.
+$keyFile = Join-Path $root '.secrets\anthropic.key'
+if (Test-Path $keyFile) {
+    try {
+        $secure = ((Get-Content -Path $keyFile -Raw).Trim()) | ConvertTo-SecureString
+        $env:ANTHROPIC_API_KEY = [System.Net.NetworkCredential]::new('', $secure).Password
+        $env:DRAUGR_AI_ENABLED = 'true'
+        $secure = $null
+    } catch {
+        Write-Warning 'Draugr: could not decrypt the stored API key (wrong Windows user/machine?). Running with AI off.'
+    }
+}
+
 $splashState = $null
 function Show-Splash {
     Add-Type -AssemblyName System.Windows.Forms
