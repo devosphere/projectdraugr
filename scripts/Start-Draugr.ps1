@@ -10,21 +10,61 @@ $root = Split-Path -Parent $PSScriptRoot
 $maven = Join-Path $root '.tools\apache-maven-3.9.11\bin\mvn.cmd'
 $runtimeFile = Join-Path $root '.draugr-runtime.json'
 
-# Anthropic API key, encrypted AT REST with Windows DPAPI (set it via scripts\Set-DraugrApiKey.ps1).
-# The encrypted file (.secrets\anthropic.key) is gitignored and is decryptable ONLY by this Windows
-# user on this machine — copying it elsewhere or opening it as another user yields ciphertext. It is
-# decrypted here in-memory only, set as an in-process env var the backend inherits, and never written
-# to disk in plaintext nor persisted as a user/system environment variable. If it is missing or
-# cannot be decrypted, the game simply runs with the AI layer off — never a crash.
+# Masked password prompt (GUI, because the launcher runs windowless). Returns the entered password, or $null.
+function Read-DraugrPassword {
+    try {
+        Add-Type -AssemblyName System.Windows.Forms
+        Add-Type -AssemblyName System.Drawing
+        $form = New-Object System.Windows.Forms.Form
+        $form.Text = 'Project Draugr'
+        $form.ClientSize = New-Object System.Drawing.Size(370,132)
+        $form.StartPosition = 'CenterScreen'
+        $form.FormBorderStyle = 'FixedDialog'; $form.MaximizeBox = $false; $form.MinimizeBox = $false; $form.TopMost = $true
+        $label = New-Object System.Windows.Forms.Label
+        $label.Text = 'Enter your password to enable AI (Cancel to play without it):'
+        $label.AutoSize = $true; $label.Location = New-Object System.Drawing.Point(12,14)
+        $box = New-Object System.Windows.Forms.TextBox
+        $box.UseSystemPasswordChar = $true; $box.Location = New-Object System.Drawing.Point(12,44); $box.Size = New-Object System.Drawing.Size(346,24)
+        $ok = New-Object System.Windows.Forms.Button; $ok.Text = 'OK'; $ok.DialogResult = [System.Windows.Forms.DialogResult]::OK; $ok.Location = New-Object System.Drawing.Point(202,90); $ok.Size = New-Object System.Drawing.Size(75,26)
+        $cancel = New-Object System.Windows.Forms.Button; $cancel.Text = 'Cancel'; $cancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel; $cancel.Location = New-Object System.Drawing.Point(283,90); $cancel.Size = New-Object System.Drawing.Size(75,26)
+        $form.Controls.AddRange(@($label, $box, $ok, $cancel)); $form.AcceptButton = $ok; $form.CancelButton = $cancel
+        $result = $form.ShowDialog()
+        $val = $box.Text; $form.Dispose()
+        if ($result -eq [System.Windows.Forms.DialogResult]::OK -and -not [string]::IsNullOrEmpty($val)) { return $val }
+        return $null
+    } catch { return $null }
+}
+
+# Anthropic API key, encrypted at rest in .secrets\anthropic.key (set via scripts\Set-DraugrApiKey.ps1;
+# see SECURITY.md). Two schemes: 'DPAPI' (bound to this Windows user + machine, auto) or 'PWD' (also
+# needs your password, prompted above). Decrypted in-memory only, set as an in-process env var the
+# backend inherits, never written to disk in plaintext nor persisted as an environment variable.
+# Missing / wrong password / different user or machine -> the game runs with AI off, never a crash.
 $keyFile = Join-Path $root '.secrets\anthropic.key'
 if (Test-Path $keyFile) {
     try {
-        $secure = ((Get-Content -Path $keyFile -Raw).Trim()) | ConvertTo-SecureString
-        $env:ANTHROPIC_API_KEY = [System.Net.NetworkCredential]::new('', $secure).Password
-        $env:DRAUGR_AI_ENABLED = 'true'
-        $secure = $null
+        $lines = @(Get-Content -Path $keyFile)
+        if ($lines.Count -ge 2) { $scheme = $lines[0].Trim(); $blob = $lines[1].Trim() }
+        else { $scheme = 'DPAPI'; $blob = ($lines[0]).Trim() }
+        $apiKey = $null
+        if ($scheme -eq 'PWD') {
+            $pw = Read-DraugrPassword
+            if ($pw) {
+                $sha = [System.Security.Cryptography.SHA256]::Create()
+                $aes = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($pw)); $sha.Dispose(); $pw = $null
+                $innerSecure = $blob | ConvertTo-SecureString -ErrorAction Stop
+                $inner = [System.Net.NetworkCredential]::new('', $innerSecure).Password
+                $apiSecure = $inner | ConvertTo-SecureString -Key $aes -ErrorAction Stop
+                $apiKey = [System.Net.NetworkCredential]::new('', $apiSecure).Password
+                [Array]::Clear($aes, 0, $aes.Length)
+            }
+        } else {
+            $apiSecure = $blob | ConvertTo-SecureString -ErrorAction Stop
+            $apiKey = [System.Net.NetworkCredential]::new('', $apiSecure).Password
+        }
+        if ($apiKey) { $env:ANTHROPIC_API_KEY = $apiKey; $env:DRAUGR_AI_ENABLED = 'true'; $apiKey = $null }
     } catch {
-        Write-Warning 'Draugr: could not decrypt the stored API key (wrong Windows user/machine?). Running with AI off.'
+        Write-Warning 'Draugr: could not unlock the API key (wrong password, or different Windows user/machine). Running with AI off.'
     }
 }
 

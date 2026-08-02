@@ -156,7 +156,10 @@ Simulation Agent needs no separate UI — its output is the narration in the pla
 | `timeout` | `DRAUGR_AI_TIMEOUT` | `20s` | Per-call wall-clock bound. |
 
 **To go live:** set `DRAUGR_AI_ENABLED=true` and export `ANTHROPIC_API_KEY`; restart the backend.
-Turn it off by unsetting `DRAUGR_AI_ENABLED` — no code change, no data change.
+Turn it off by unsetting `DRAUGR_AI_ENABLED` — no code change, no data change. The key is stored
+encrypted at rest ([SECURITY.md](../../SECURITY.md)). To give **internal testers** the AI-enabled
+experience without exposing your key, see
+[sharing-the-ai-with-testers.md](sharing-the-ai-with-testers.md).
 
 ---
 
