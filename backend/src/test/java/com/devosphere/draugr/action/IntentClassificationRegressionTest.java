@@ -114,6 +114,20 @@ class IntentClassificationRegressionTest {
         assertEquals("CHECK_TRAP", classify("inspect the snare"));
     }
 
+    /** "split the oak log into planks" is log processing, not felling another tree (#17). */
+    @Test void splittingALogIsNotFellingATree() throws Exception {
+        // When the two-axis matcher claims the text (split_planks / timber_from_log),
+        // FELL_TREE must yield so the log is processed, not another tree dropped.
+        assertEquals("UNKNOWN", classify("split the oak log into planks with my hatchet", true));
+        assertEquals("UNKNOWN", classify("saw the log into planks", true));
+        assertEquals("UNKNOWN", classify("square the pine log into a baulk", true));
+        // Bare "log" no longer triggers felling on its own — it needs a felling verb.
+        assertEquals("UNKNOWN", classify("haul the oak log back to camp", false));
+        // A genuine felling still classifies when no process matches.
+        assertEquals("FELL_TREE", classify("fell the oak tree with my stone axe", false));
+        assertEquals("FELL_TREE", classify("chop down the pine", false));
+    }
+
     @Test void sprintTwoIntentsClassify() throws Exception {
         assertEquals("GATHER_PLANT", classify("gather mushrooms from the forest floor"));
         assertEquals("FELL_TREE",    classify("fell the oak tree with my stone axe"));

@@ -77,6 +77,39 @@ public class PhysicalItemService {
         UUID item=jdbc.query("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT r.id FROM reachable r JOIN item_instance i ON i.object_id=r.id WHERE i.item_key=? ORDER BY r.id FOR UPDATE LIMIT 1",rs->rs.next()?rs.getObject(1,UUID.class):null,chronicle,itemKey);
         if(item==null)return false; retire(item,occurredAt,"CONSUMED",itemKey); return true;
     }
+
+    /**
+     * True when the chronicle can reach at least {@code required} of an item — carried,
+     * in a carried container, OR lying on the ground at their current location. A felled
+     * log is worked where it fell; you do not have to shoulder a whole trunk to split it,
+     * which is exactly the deadlock that made felling impossible for anything too heavy
+     * to carry (GitHub #17).
+     */
+    @Transactional(readOnly = true)
+    public boolean hasAtLeastHere(UUID chronicle, UUID location, String itemKey, int required) {
+        Integer count = jdbc.queryForObject(
+            "WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' " +
+            "UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') " +
+            "SELECT COUNT(*) FROM item_instance i JOIN world_object w ON w.id=i.object_id " +
+            "WHERE i.item_key=? AND w.lifecycle_state='ACTIVE' AND " +
+            "(w.id IN (SELECT id FROM reachable) OR (w.current_owner_id IS NULL AND w.current_location_id=?))",
+            Integer.class, chronicle, itemKey, location);
+        return count != null && count >= required;
+    }
+
+    /** Consume one such item, taking what is carried first and then what lies on the ground here. */
+    @Transactional
+    public boolean consumeOneHere(UUID chronicle, UUID location, String itemKey, Instant occurredAt) {
+        if (consumeOne(chronicle, itemKey, occurredAt)) return true;
+        UUID ground = jdbc.query(
+            "SELECT w.id FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
+            "WHERE i.item_key=? AND w.current_owner_id IS NULL AND w.current_location_id=? AND w.lifecycle_state='ACTIVE' " +
+            "ORDER BY w.id FOR UPDATE LIMIT 1",
+            rs -> rs.next() ? rs.getObject(1, UUID.class) : null, itemKey, location);
+        if (ground == null) return false;
+        retire(ground, occurredAt, "CONSUMED", itemKey);
+        return true;
+    }
     @Transactional
     public UUID createCarriedItem(UUID chronicle, String itemKey, String displayName, Instant occurredAt, String transitionType) {
         return createCarriedItem(chronicle, itemKey, displayName, occurredAt, transitionType, QualityGrade.SOUND);
@@ -308,23 +341,27 @@ public class PhysicalItemService {
         if (drops.isEmpty()) return new String[]{"FAILED", "The tree stands but offers nothing your axe can shape."};
 
         String logKey = (String) drops.get(0).get("item_key");
-        int logYield = ((Number)drops.get(0).get("yield_min")).intValue();
+        int yieldMin = ((Number)drops.get(0).get("yield_min")).intValue();
+        int yieldMax = ((Number)drops.get(0).get("yield_max")).intValue();
+        int count = Math.max(1, yieldMin + (yieldMax > yieldMin ? (int)(Math.random() * (yieldMax - yieldMin + 1)) : 0));
         String logName = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, logKey);
 
-        int available = capacityHeadroomUnits(chronicle, logKey);
-        int count = Math.min(logYield, Math.max(1, available));
-        if (available <= 0) return new String[]{"FAILED", "You cannot carry the logs — your hands and back are full."};
-
+        // A felled trunk is not shouldered whole — it lies where it fell, on the ground at
+        // this location (no owner), for the chronicle to buck and split into pieces they can
+        // actually carry. Felling therefore never fails on carry capacity (GitHub #17); the
+        // wood becomes portable only once worked (e.g. "split the log into planks").
         for (int i = 0; i < count; i++) {
             UUID id = UUID.randomUUID();
-            jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM',?,?)", id, logName, chronicle);
+            jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ITEM',?,?)", id, logName, location);
             jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,?,'SOUND')", id, logKey);
-            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'FELLED',jsonb_build_object('floraKey',?,'biome',?))", id, Timestamp.from(occurredAt), floraKey, biome);
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'FELLED',jsonb_build_object('floraKey',?,'biome',?,'placedAt',?::text))", id, Timestamp.from(occurredAt), floraKey, biome, location.toString());
         }
         jdbc.update("UPDATE chunk_flora SET quantity=GREATEST(0,quantity-1), last_harvested_at=? WHERE chunk_id=? AND flora_key=?", Timestamp.from(occurredAt), location, floraKey);
-        assertCarryCapacity(chronicle);
         String treeName = floraKey.replace("_", " ");
-        return new String[]{"SUCCEEDED", "The " + treeName + " comes down with a crack that carries across the ground. You take up " + count + " " + logName.toLowerCase() + (count > 1 ? "s" : "") + " from what lies."};
+        String logLower = logName.toLowerCase();
+        return new String[]{"SUCCEEDED", "The " + treeName + " comes down with a crack that carries across the ground. " +
+            count + " " + logLower + (count > 1 ? "s lie" : " lies") + " where " + (count > 1 ? "they" : "it") +
+            " fell — far too heavy to shoulder whole. You will need to buck and split the wood into pieces you can carry."};
     }
 
     @Transactional(readOnly = true)
@@ -404,10 +441,12 @@ public class PhysicalItemService {
         }
 
         // Fixed inputs, then each either/or group.
+        // Inputs may be carried OR lying on the ground at the chronicle's location, so a
+        // felled log is worked where it fell rather than needing to be shouldered whole (#17).
         java.util.List<java.util.Map<String,Object>> fixed = jdbc.queryForList(
             "SELECT item_key, quantity FROM material_process_input WHERE process_key=?", key);
         for (java.util.Map<String,Object> in : fixed)
-            if (!hasAtLeast(chronicle, (String) in.get("item_key"), ((Number) in.get("quantity")).intValue()))
+            if (!hasAtLeastHere(chronicle, location, (String) in.get("item_key"), ((Number) in.get("quantity")).intValue()))
                 return new String[]{"FAILED", "You have not got enough to hand for that."};
 
         java.util.List<String> groups = jdbc.queryForList(
@@ -417,7 +456,7 @@ public class PhysicalItemService {
             String pick = null;
             for (java.util.Map<String,Object> o : jdbc.queryForList(
                     "SELECT item_key, quantity FROM material_process_input_group WHERE process_key=? AND group_name=?", key, g))
-                if (hasAtLeast(chronicle, (String) o.get("item_key"), ((Number) o.get("quantity")).intValue())) { pick = (String) o.get("item_key"); break; }
+                if (hasAtLeastHere(chronicle, location, (String) o.get("item_key"), ((Number) o.get("quantity")).intValue())) { pick = (String) o.get("item_key"); break; }
             if (pick == null) return new String[]{"FAILED", "You have nothing suitable to work from."};
             chosen.put(g, pick);
         }
@@ -434,10 +473,10 @@ public class PhysicalItemService {
         QualityGrade grade = QualityGrade.worst(worstGradeAmong(chronicle, inputKeys), QualityGrade.attempt(actionText));
 
         for (java.util.Map<String,Object> in : fixed)
-            for (int i = 0; i < ((Number) in.get("quantity")).intValue(); i++) consumeOne(chronicle, (String) in.get("item_key"), at);
+            for (int i = 0; i < ((Number) in.get("quantity")).intValue(); i++) consumeOneHere(chronicle, location, (String) in.get("item_key"), at);
         for (java.util.Map.Entry<String,String> e : chosen.entrySet()) {
             Integer q = jdbc.queryForObject("SELECT quantity FROM material_process_input_group WHERE process_key=? AND group_name=? AND item_key=?", Integer.class, key, e.getKey(), e.getValue());
-            for (int i = 0; i < (q == null ? 1 : q); i++) consumeOne(chronicle, e.getValue(), at);
+            for (int i = 0; i < (q == null ? 1 : q); i++) consumeOneHere(chronicle, location, e.getValue(), at);
         }
 
         int lo = ((Number) match.get("output_min")).intValue(), hi = ((Number) match.get("output_max")).intValue();

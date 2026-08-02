@@ -353,4 +353,43 @@ class FullTickPlaythroughIntegrationTest {
         assertNotNull(chronicles.active(), "the newborn must still be living after acting");
         assertEquals(id, chronicles.active().id(), "the living chronicle must be the one just awakened");
     }
+
+    @Test
+    @Order(9)
+    void fellingLeavesTheLogOnTheGroundToBeSplitIntoCarriablePlanks() {
+        // Regression for #17. A felled trunk is far too bulky to carry; the old code put
+        // it straight into the chronicle's load and then failed the whole action on carry
+        // capacity, so a tree could never actually be felled. Now the log lands on the
+        // GROUND at the location, and is worked where it lies into carriable planks.
+        UUID chronicle = livingChronicle();
+        UUID forest = jdbc.queryForObject(
+                "SELECT id FROM world_chunk WHERE biome='TEMPERATE_FOREST' ORDER BY grid_y, grid_x LIMIT 1", UUID.class);
+        jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", forest, chronicle);
+        items.createCarriedItem(chronicle, "stone_hatchet", "Stone hatchet", simNow(), "TEST_SEED");
+
+        ChronicleActionService.ActionResult felled = actions.resolve("I fell the oak tree with my stone hatchet");
+        assertEquals("SUCCEEDED", felled.outcome(), "felling must succeed and never fail on carry capacity (#17)");
+        Integer onGround = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
+                "WHERE i.item_key='oak_log' AND w.current_owner_id IS NULL AND w.current_location_id=? AND w.lifecycle_state='ACTIVE'",
+                Integer.class, forest);
+        assertTrue(onGround != null && onGround >= 1, "a felled trunk must lie on the ground, not be shouldered whole");
+        Integer carriedLogs = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
+                "WHERE i.item_key='oak_log' AND w.current_owner_id=? AND w.lifecycle_state='ACTIVE'",
+                Integer.class, chronicle);
+        assertEquals(0, carriedLogs, "felling must not put the whole log into the chronicle's load (#17)");
+
+        ChronicleActionService.ActionResult split = actions.resolve("I split the oak log into planks with my hatchet");
+        assertEquals("PROCESS_MATERIAL", split.intent(), "splitting a log is processing, not felling another tree (#17)");
+        assertEquals("SUCCEEDED", split.outcome(), "the ground log must be splittable where it lies");
+        Integer planks = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
+                "WHERE i.item_key='timber_plank' AND w.current_owner_id=? AND w.lifecycle_state='ACTIVE'",
+                Integer.class, chronicle);
+        assertTrue(planks != null && planks >= 1, "splitting the ground log must yield carriable planks");
+
+        assertTrue(auditor.inspect().consistent(),
+                () -> "auditor must stay consistent after fell + split: " + auditor.inspect().violations());
+    }
 }
