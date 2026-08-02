@@ -79,8 +79,25 @@ request path; one call per novel verb/process, ever. Framing in
   kind (VOCABULARY / KEYWORD / SUBJECT / MECHANIC). It **proposes; it never commits** — a proposal
   is text a human puts through the V53 gate. Unit-tested against a stub model (proposes on the
   architect model when enabled, silent when off/declined). Not yet wired to any runner or endpoint.
-- **Next:** an offline surface to drive it (an admin-only endpoint or a CLI/scheduled job) that
-  presents proposals for review, plus applying a reviewed proposal as a real `V*.sql`.
+- **Surface (this session):** `GET /api/architect/backlog` and `POST /api/architect/propose-top`,
+  shown in the Overseer UI (`OverseerAgents`).
+
+#### Applying a proposal (deliberately a human step, not an endpoint)
+
+There is **no runtime "apply".** `core-agent-boundaries.md` is explicit: runtime code may not alter
+schemas, and a new domain arrives *only* as a reviewed Flyway migration. An endpoint that executed
+an AI-drafted `INSERT`/`CREATE` against the live schema would break that boundary and hand a model a
+write it must never have. So applying a proposal is a person's job, and the workflow is:
+
+1. The Architect drafts a proposal (`propose-top`, or the Overseer button) — SQL + a rationale.
+2. A human **reads it**, checks it references only existing keys and conserves mass.
+3. If good, they save it as the next `backend/src/main/resources/db/migration/V{n}__{name}.sql`.
+4. On the next boot/migrate, Flyway applies it and the **V53 review gate** (and the reachability
+   probe in CI) validate it exactly as they validate a hand-authored migration — the draft's origin
+   (human or AI) is irrelevant to the gate. Only then is it canon.
+
+The AI shortens step 1; steps 2–4 are the same safety pipeline every migration already passes
+through. This is the whole "apply" story — no auto-apply is planned, by design.
 
 ### Phase 3 — Persistent State Auditor (read-only) — *done*
 

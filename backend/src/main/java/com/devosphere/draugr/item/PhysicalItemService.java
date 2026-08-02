@@ -535,9 +535,23 @@ public class PhysicalItemService {
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
         String v = actionText.toLowerCase(java.util.Locale.ROOT);
 
+        // A chunk carrying a resource deposit reads as that deposit for mineral affinity, on top of
+        // its underlying biome: a salt flat is a SALT_DEPOSIT, a clay bank a CLAY_DEPOSIT. This is
+        // what makes the SALT_DEPOSIT affinity resolve to the salt sites the generator already places
+        // (a saline spring/flat), so rock salt is gatherable there and not only on the oceanside.
+        java.util.List<String> affinity = new java.util.ArrayList<>();
+        if (biome != null) affinity.add("%" + biome + "%");
+        for (String deposit : jdbc.queryForList(
+                "SELECT DISTINCT CASE WHEN lower(site_kind) LIKE '%salt%' THEN 'SALT_DEPOSIT' " +
+                "WHEN lower(site_kind) LIKE '%clay%' THEN 'CLAY_DEPOSIT' END FROM ecology_site " +
+                "WHERE chunk_id=? AND site_category='RESOURCE' AND (lower(site_kind) LIKE '%salt%' OR lower(site_kind) LIKE '%clay%')",
+                String.class, location)) {
+            affinity.add("%" + deposit + "%");
+        }
+        String affinityOr = affinity.stream().map(a -> "biome_affinity ILIKE ?").collect(java.util.stream.Collectors.joining(" OR "));
         java.util.List<java.util.Map<String,Object>> here = jdbc.queryForList(
             "SELECT mineral_key, display_name, rarity, tool_required, yield_min, yield_max FROM mineral_definition " +
-            "WHERE biome_affinity ILIKE ? ORDER BY rarity DESC", "%" + biome + "%");
+            "WHERE " + affinityOr + " ORDER BY rarity DESC", affinity.toArray());
         if (here.isEmpty())
             return new String[]{"FAILED", "You turn over what stone there is. This ground has nothing in it but dirt."};
 
@@ -565,11 +579,16 @@ public class PhysicalItemService {
         int room = capacityHeadroomUnits(chronicle, key);
         int take = Math.min(want, room);
         if (take <= 0) return new String[]{"FAILED", "You find what you were after and cannot carry another thing."};
+        // Minerals are the quality materials — tool stone, flint — that seed the craft chains, so a
+        // careful, deliberate search selects a FINE nodule while a careless one turns up poor stock.
+        // This is the reachable source of FINE-grade inputs: careful gathering here, then careful work
+        // downstream, is what lets a chain finish FINE rather than being capped at SOUND.
+        QualityGrade grade = QualityGrade.attempt(actionText);
         for (int i = 0; i < take; i++) {
             UUID id = UUID.randomUUID();
             jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM',?,?)", id, name, chronicle);
-            jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,?,'SOUND')", id, key);
-            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'GATHERED',jsonb_build_object('mineral',?,'biome',?))", id, Timestamp.from(occurredAt), key, biome);
+            jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state,quality_grade) VALUES (?,?,'SOUND',?)", id, key, grade.name());
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'GATHERED',jsonb_build_object('mineral',?,'biome',?,'grade',?))", id, Timestamp.from(occurredAt), key, biome, grade.name());
         }
         assertCarryCapacity(chronicle);
         return new String[]{"SUCCEEDED", "You work it loose and turn it over in your hand: " + name.toLowerCase() + (take > 1 ? ", and more of it nearby." : ".")};

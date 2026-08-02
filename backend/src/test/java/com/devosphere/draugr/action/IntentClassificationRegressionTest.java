@@ -192,6 +192,11 @@ class IntentClassificationRegressionTest {
         assertEquals("GATHER_MINERAL", classify("prospect for quartz crystal"));
         assertEquals("GATHER_MINERAL", classify("gather tool stone"));
         assertEquals("GATHER_MINERAL", classify("dig for ore in the hillside"));
+        // Salt is a mineral you gather (sea salt at the shore, rock salt in a deposit) — #salt chain.
+        assertEquals("GATHER_MINERAL", classify("gather sea salt at the shore"));
+        assertEquals("GATHER_MINERAL", classify("dig for rock salt in the flat"));
+        // But "salt the …" as preservation carries no gathering verb and is not mineral-gathering.
+        assertEquals("UNKNOWN", classify("salt the meat down for winter"));
     }
 
     /** "forest" contains "ore" — a word-boundary bug that stole plant gathering. */

@@ -544,7 +544,10 @@ public class ChronicleActionService {
         if((value.contains("search")||value.contains("look for")||value.contains("prospect")||value.contains("dig for")||value.contains("find")||value.contains("gather")||value.contains("collect")||value.contains("split")||value.contains("break"))
            // "ore" needs a word boundary — without it "forest" matches, and gathering
            // mushrooms in a forest was being heard as prospecting for ore.
-           &&(value.contains("flint")||value.contains("pyrite")||value.contains("quartz")||value.contains("crystal")||value.contains("mineral")||value.matches("(?s).*\\bore\\b.*")||value.contains("tool stone"))) return Intent.GATHER_MINERAL;
+           // "salt" makes rock/sea salt reachable by phrasing (gather sea salt, dig for rock salt);
+           // it can't steal "salt the fish/meat" — that carries no gathering verb and falls through
+           // to the preservation process.
+           &&(value.contains("flint")||value.contains("pyrite")||value.contains("quartz")||value.contains("crystal")||value.contains("mineral")||value.contains("salt")||value.matches("(?s).*\\bore\\b.*")||value.contains("tool stone"))) return Intent.GATHER_MINERAL;
         // Naming a real ignition technique IS asking for fire (V49). A player who
         // writes "strike flint against pyrite" or "spin the bow drill" should not
         // have to also say the word "fire" to be understood.
