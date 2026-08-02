@@ -82,10 +82,26 @@ request path; one call per novel verb/process, ever. Framing in
 - **Next:** an offline surface to drive it (an admin-only endpoint or a CLI/scheduled job) that
   presents proposals for review, plus applying a reviewed proposal as a real `V*.sql`.
 
-### Phase 3 — Persistent State Auditor (read-only)
+### Phase 3 — Persistent State Auditor (read-only) — *done*
 
-Let the model summarize `PersistentStateAuditor` findings in prose for the Overseer surface —
-strictly read-only, never repairing or narrating player-facing text.
+`AuditorSummarizer` (Sonnet 4.6) turns a read-only `AuditReport` (consistency flag + violated
+invariants) into a plain operator summary for the Overseer. Strictly describes; never proposes a
+repair/migration/deletion and never writes player-facing prose. Exposed at
+`GET /api/audit/summary` (raw `consistent`/`violations` always present; `summary` is null when AI
+is off, so the surface works with or without a key). Unit-tested against a stub model.
+
+---
+
+## Reachable surfaces (so all three engines are exercisable)
+
+| Engine | Where it runs | Surface |
+|---|---|---|
+| Simulation Agent | On the action path, gated by `NarrationRouter` | Any routed action — the refined `perception` |
+| Architect | Authoring-time, operator-driven | `GET /api/architect/backlog`, `POST /api/architect/propose-top` (returns a draft; **never applies**) |
+| Auditor | Read-only, operator-driven | `GET /api/audit/summary` |
+
+With the feature off, every surface still responds on deterministic data (`summary`/proposal null),
+so the mechanism is testable before a key exists and the AI is a pure upgrade when one is set.
 
 ---
 
