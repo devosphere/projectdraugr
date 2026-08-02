@@ -10,7 +10,7 @@ const previewBody = [
 ];
 
 type BodySnapshot = { health: string; condition: string; hunger: string; thirst: string; energy: string; temperature: string; wetness: string; bladder: string; bowel: string; hygiene: string };
-type ActionResult = { actionId: string; intent: string; outcome: string; durationMinutes: number; resolvedAt: string; perception: string; body: BodySnapshot };
+type ActionResult = { actionId: string; intent: string; outcome: string; durationMinutes: number; resolvedAt: string; perception: string; body: BodySnapshot | null; died?: boolean };
 type LocationSnapshot = { biome: string; presentationKey: string };
 type EnvironmentSnapshot = { simulatedAt: string; weatherKind: string; ambientTemperatureC: number | null; windSpeedKph: number | null };
 type ItemState = { carried: { id: string; displayName: string; itemKey: string; containerId: string | null }[]; equipped: { id: string; displayName: string; bodyPosition: string; layer: string }[]; load: { massGrams: number; bulkMl: number; heaviestObjectGrams: number; sustainedMassCapacityGrams: number; directBulkCapacityMl: number; maximumSingleLiftGrams: number }; containers: { id: string; displayName: string; maxMassGrams: number; maxVolumeMl: number; usedMassGrams: number; usedVolumeMl: number }[] };
@@ -35,7 +35,8 @@ const backdropByBiome: Record<string, { art: string; label: string }> = {
   CLAY_DEPOSIT: { art: clayDepositArt, label: 'Clay deposit' },
 };
 
-function toBodyRows(snapshot: BodySnapshot) {
+function toBodyRows(snapshot: BodySnapshot | null) {
+  if (!snapshot) return [] as string[][];
   return [['Health', snapshot.health], ['Condition', snapshot.condition], ['Hunger', snapshot.hunger], ['Thirst', snapshot.thirst], ['Energy', snapshot.energy], ['Temperature', snapshot.temperature], ['Wetness', snapshot.wetness], ['Bladder', snapshot.bladder], ['Bowel', snapshot.bowel], ['Hygiene', snapshot.hygiene]];
 }
 
@@ -95,6 +96,7 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
   const [openDoc, setOpenDoc] = useState<LiteratureRevision | null>(null);
   const [items, setItems] = useState<ItemState | null>(null);
   const [discoveries, setDiscoveries] = useState<DiscoveryContext | null>(null);
+  const [deathNarration, setDeathNarration] = useState<string | null>(null);
   const actionField = useRef<HTMLTextAreaElement>(null);
   const narrationTimeline = useRef<HTMLDivElement>(null);
 
@@ -185,7 +187,11 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
       const result = await response.json().catch(() => null) as ActionResult | { message?: string } | null;
       if (!response.ok || !result || !('perception' in result)) throw new Error(result && 'message' in result && result.message ? result.message : 'The simulation could not resolve that action.');
       setNarrations(entries => [...entries, { id: result.actionId, occurredAt: result.resolvedAt, text: result.perception }]);
-      setBody(toBodyRows(result.body));
+      requestAnimationFrame(() => { const t = narrationTimeline.current; if (t) t.scrollTop = t.scrollHeight; });
+      if (result.body) setBody(toBodyRows(result.body));
+      // The chronicle died this action: close the composer with a witnessed ending and
+      // send the player back to the shore. Permanent death is the heart of the game.
+      if (result.died) { setDeathNarration(result.perception); return; }
       fetch(`${apiUrl}/api/chronicles/active/location`).then(response => response.ok ? response.json() : null).then((snapshot: LocationSnapshot | null) => {
         if (snapshot) setLocation(backdropByBiome[snapshot.presentationKey] ?? backdropByBiome[snapshot.biome] ?? backdropByBiome.TEMPERATE_FOREST);
       }).catch(() => undefined);
@@ -198,7 +204,9 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
       setActionError(error instanceof Error ? error.message : 'The simulation could not resolve that action.');
     } finally {
       setResolving(false);
-      actionField.current?.focus();
+      // Focus after the field re-enables on the next frame — focusing a still-disabled
+      // textarea silently fails and the cursor is lost (issue #6).
+      requestAnimationFrame(() => actionField.current?.focus());
     }
   }
 
@@ -280,10 +288,18 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
       </section>
       <form className="action-composer" onSubmit={submit}>
         <label htmlFor="action">What do you do?</label>
-        <div><span aria-hidden="true">&gt;</span><textarea ref={actionField} id="action" value={action} maxLength={2500} rows={1} disabled={resolving} onChange={event => setAction(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} placeholder="Describe an action..." autoComplete="off" /><button aria-label="Submit action" type="submit" disabled={resolving}>{resolving ? '⌛' : 'Submit'}</button></div>
+        <div><span aria-hidden="true">&gt;</span><textarea ref={actionField} id="action" value={action} maxLength={2500} rows={1} readOnly={resolving} onChange={event => setAction(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); if (!resolving) event.currentTarget.form?.requestSubmit(); } }} placeholder="Describe an action..." autoComplete="off" /><button aria-label="Submit action" type="submit" disabled={resolving}>{resolving ? '⌛' : 'Submit'}</button></div>
         <p className="action-count">{action.length}/2500 · Shift + Enter for a new line</p>
         {actionError && <p className="action-error" role="status">{actionError}</p>}
       </form>
     </div>
+    {deathNarration && <div className="death-backdrop" role="presentation">
+      <section className="death-dialog" role="dialog" aria-modal="true" aria-label="The chronicle has died">
+        <p className="dialog-kicker">The chronicle has died</p>
+        <p className="death-copy">{deathNarration}</p>
+        <p className="death-copy final">The world keeps their mark. Another soul may yet cross over.</p>
+        <button className="dialog-close" onClick={() => { setDeathNarration(null); onReturnToMainMenu(); }}>OK</button>
+      </section>
+    </div>}
   </main>;
 }

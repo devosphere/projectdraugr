@@ -701,14 +701,13 @@ public class PhysicalItemService {
         jdbc.update("INSERT INTO container_properties (object_id,max_mass_grams,max_volume_ml) VALUES (?,12000,18000)",basket);
         for(UUID material:fiber.subList(0,8)) { retire(material,now,"CONSUMED_FOR_CRAFTING","plant_fiber"); }
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CRAFTED',jsonb_build_object('recipe','woven_basket'))",basket,Timestamp.from(now));
-        // Equip to BACK immediately — a basket is worn, not clutched. Falls back to carried if BACK is occupied.
-        boolean backFree = jdbc.queryForObject("SELECT COUNT(*)=0 FROM equipment_attachment WHERE chronicle_id=? AND body_position='BACK'", Boolean.class, chronicle);
-        if (Boolean.TRUE.equals(backFree)) { jdbc.update("INSERT INTO equipment_attachment (item_id,chronicle_id,body_position,layer) VALUES (?,?,'BACK','CARRIED')",basket,chronicle); jdbc.update("UPDATE world_object SET current_owner_id=? WHERE id=?",chronicle,basket); }
+        // A crafted thing goes to the carried load, not onto the body — the Chronicle
+        // decides what to wear or wield. "Sling the basket on my back" equips it.
         assertCarryCapacity(chronicle);
         return new ItemView(basket,"Woven basket","woven_basket",chronicle,null);
     }
-    @Transactional public ItemView craftPrimitiveSpear(Instant at) { UUID chronicle=activeChronicle(); if(!hasAtLeast(chronicle,"dry_branch",1)||!hasAtLeast(chronicle,"field_stone",1)||!hasAtLeast(chronicle,"plant_fiber",1))throw new IllegalStateException("Insufficient physical material."); if(!consumeOne(chronicle,"dry_branch",at)||!consumeOne(chronicle,"field_stone",at)||!consumeOne(chronicle,"plant_fiber",at))throw new IllegalStateException("Material changed."); UUID spear=createCarriedItem(chronicle,"primitive_spear","Primitive spear",at,"CRAFTED"); equip(spear,"HAND_RIGHT","ATTACHED"); return new ItemView(spear,"Primitive spear","primitive_spear",chronicle,null); }
-    @Transactional public ItemView craftPrimitiveTool(String itemKey, String displayName, boolean needsBranch, Instant at) { UUID chronicle=activeChronicle(); if(!hasAtLeast(chronicle,"field_stone",1)||!hasAtLeast(chronicle,"plant_fiber",1)||(needsBranch&&!hasAtLeast(chronicle,"dry_branch",1)))throw new IllegalStateException("Insufficient physical material."); if(!consumeOne(chronicle,"field_stone",at)||!consumeOne(chronicle,"plant_fiber",at)||(needsBranch&&!consumeOne(chronicle,"dry_branch",at)))throw new IllegalStateException("Material changed."); UUID tool=createCarriedItem(chronicle,itemKey,displayName,at,"CRAFTED"); equip(tool,"HAND_RIGHT","ATTACHED"); return new ItemView(tool,displayName,itemKey,chronicle,null); }
+    @Transactional public ItemView craftPrimitiveSpear(Instant at) { UUID chronicle=activeChronicle(); if(!hasAtLeast(chronicle,"dry_branch",1)||!hasAtLeast(chronicle,"field_stone",1)||!hasAtLeast(chronicle,"plant_fiber",1))throw new IllegalStateException("Insufficient physical material."); if(!consumeOne(chronicle,"dry_branch",at)||!consumeOne(chronicle,"field_stone",at)||!consumeOne(chronicle,"plant_fiber",at))throw new IllegalStateException("Material changed."); UUID spear=createCarriedItem(chronicle,"primitive_spear","Primitive spear",at,"CRAFTED"); return new ItemView(spear,"Primitive spear","primitive_spear",chronicle,null); }
+    @Transactional public ItemView craftPrimitiveTool(String itemKey, String displayName, boolean needsBranch, Instant at) { UUID chronicle=activeChronicle(); if(!hasAtLeast(chronicle,"field_stone",1)||!hasAtLeast(chronicle,"plant_fiber",1)||(needsBranch&&!hasAtLeast(chronicle,"dry_branch",1)))throw new IllegalStateException("Insufficient physical material."); if(!consumeOne(chronicle,"field_stone",at)||!consumeOne(chronicle,"plant_fiber",at)||(needsBranch&&!consumeOne(chronicle,"dry_branch",at)))throw new IllegalStateException("Material changed."); UUID tool=createCarriedItem(chronicle,itemKey,displayName,at,"CRAFTED"); return new ItemView(tool,displayName,itemKey,chronicle,null); }
 
     /** True if the Chronicle can reach any blade capable of carving wood. */
     @Transactional(readOnly = true)
@@ -818,7 +817,12 @@ public class PhysicalItemService {
         UUID chronicle=activeChronicle(); assertAccessible(item,chronicle);
         Integer compatible=jdbc.queryForObject("SELECT COUNT(*) FROM item_instance i JOIN item_equipment_compatibility c ON c.item_key=i.item_key WHERE i.object_id=? AND c.body_position=? AND c.layer=?",Integer.class,item,position,layer);
         if(compatible==null||compatible==0) throw new IllegalArgumentException("This item cannot be attached at that body position and layer.");
-        jdbc.update("DELETE FROM item_containment WHERE item_id=?",item); jdbc.update("INSERT INTO equipment_attachment (item_id,chronicle_id,body_position,layer) VALUES (?,?,?,?)",item,chronicle,position,layer);
+        // Whatever already occupies this slot is displaced back to carried — a new tool
+        // taken in hand puts the old one away rather than colliding on the unique slot
+        // key. Without this, auto-equipping a crafted tool into an occupied hand, or
+        // equipping over one, throws a duplicate-key error that poisons the whole action.
+        jdbc.update("DELETE FROM equipment_attachment WHERE chronicle_id=? AND body_position=? AND layer=? AND item_id<>?",chronicle,position,layer,item);
+        jdbc.update("DELETE FROM item_containment WHERE item_id=?",item); jdbc.update("INSERT INTO equipment_attachment (item_id,chronicle_id,body_position,layer) VALUES (?,?,?,?) ON CONFLICT (item_id) DO NOTHING",item,chronicle,position,layer);
         jdbc.update("UPDATE world_object SET current_owner_id=?,current_location_id=NULL WHERE id=?",chronicle,item);
         assertCarryCapacity(chronicle);
         jdbc.update("INSERT INTO object_transition (object_id,transition_type,to_attachment,payload) VALUES (?,'EQUIPPED',?, '{}'::jsonb)",item,position+":"+layer);

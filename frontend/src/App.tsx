@@ -46,5 +46,12 @@ export function App() {
     } catch { setEntryError('The world could not be reached. Start Project Draugr, then try again.'); }
   }
   if (new URLSearchParams(window.location.search).get('mode') === 'overseer') return <OverseerMap />;
-  return playing ? <PlaythroughScreen apiUrl={apiUrl} onReturnToMainMenu={() => setPlaying(false)} /> : <OnboardingScreen hasLivingChronicle={hasLivingChronicle} onAwaken={() => void enterWorld()} entryError={entryError} apiUrl={apiUrl} />;
+  // Returning to the shore — after a death or by choice — re-checks whether a chronicle
+  // still lives, so the onboarding button reads "Awaken" for a fresh start rather than
+  // "Soul Link" into a chronicle that is already gone.
+  function returnToMainMenu() {
+    setPlaying(false);
+    findLivingChronicle().then(active => setHasLivingChronicle(Boolean(active))).catch(() => setHasLivingChronicle(false));
+  }
+  return playing ? <PlaythroughScreen apiUrl={apiUrl} onReturnToMainMenu={returnToMainMenu} /> : <OnboardingScreen hasLivingChronicle={hasLivingChronicle} onAwaken={() => void enterWorld()} entryError={entryError} apiUrl={apiUrl} />;
 }

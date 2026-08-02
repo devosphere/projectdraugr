@@ -69,10 +69,10 @@ public class ChronicleActionService {
         if (idempotencyKey != null) {
             // A duplicate submission returns the original outcome without resolving
             // again, so the world never advances twice for one intended action.
-            ActionResult prior = jdbc.query("SELECT id, intent_type, outcome, duration_minutes, resolved_at, narration FROM chronicle_action WHERE idempotency_key = ?", rs -> rs.next() ? new ActionResult(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3), rs.getInt(4), rs.getTimestamp(5).toInstant(), rs.getString(6), null, null) : null, idempotencyKey);
+            ActionResult prior = jdbc.query("SELECT id, intent_type, outcome, duration_minutes, resolved_at, narration FROM chronicle_action WHERE idempotency_key = ?", rs -> rs.next() ? new ActionResult(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3), rs.getInt(4), rs.getTimestamp(5).toInstant(), rs.getString(6), null, null, false) : null, idempotencyKey);
             // A replayed action does not advance the world, so no fresh frame is built;
             // the durable perception prose and current body state are returned as-is.
-            if (prior != null) return new ActionResult(prior.actionId(), prior.intent(), prior.outcome(), prior.durationMinutes(), prior.resolvedAt(), prior.perception(), physiology.activeBody(), null);
+            if (prior != null) return new ActionResult(prior.actionId(), prior.intent(), prior.outcome(), prior.durationMinutes(), prior.resolvedAt(), prior.perception(), physiology.activeBody(), null, physiology.activeBody() == null);
         }
         ActiveChronicle chronicle = jdbc.query("SELECT c.id, w.current_location_id FROM chronicle c JOIN world_object w ON w.id=c.id WHERE c.life_state='LIVING' FOR UPDATE", rs -> rs.next() ? new ActiveChronicle(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class)) : null);
         if (chronicle == null) throw new IllegalStateException("No living Chronicle exists.");
@@ -85,7 +85,7 @@ public class ChronicleActionService {
         ActionInputClassifier.InputClass inputClass = inputClassifier.classify(text);
         if (inputClass == ActionInputClassifier.InputClass.NONSENSICAL || inputClass == ActionInputClassifier.InputClass.PHYSICALLY_IMPOSSIBLE) {
             Instant nowSim = ticks.current().simulatedAt();
-            return new ActionResult(UUID.randomUUID(), inputClass.name(), "NO_EFFECT", 0, nowSim, inputClassifier.narrate(inputClass, text), physiology.activeBody(), null);
+            return new ActionResult(UUID.randomUUID(), inputClass.name(), "NO_EFFECT", 0, nowSim, inputClassifier.narrate(inputClass, text), physiology.activeBody(), null, false);
         }
         Intent intent = switch (inputClass) {
             case PERSONAL_PHYSICAL_ACT -> Intent.PERSONAL_ACT;
@@ -253,7 +253,17 @@ public class ChronicleActionService {
         if ("SUCCEEDED".equals(outcome) && buildsCapability) capability.record(chronicle.id(), actionId, (intent==Intent.GATHER_FIBER||intent==Intent.GATHER_STONE)?"LOAD":intent==Intent.OBSERVE?"ATTENTION":(intent==Intent.REST||intent==Intent.SLEEP)?"RECOVERY":intent==Intent.CONFRONT_WILDLIFE?"AIM":intent==Intent.MOVE?"LOCOMOTION":"FINE_MOTOR", minutes, (intent==Intent.GATHER_FIBER||intent==Intent.GATHER_STONE)?.18:.05, (intent==Intent.REST||intent==Intent.SLEEP)?.75:.45, resolvedAt);
         narration.validate(perception);
         ChroniclePhysiologyService.BodyHudSnapshot afterBody = physiology.activeBody();
-        return new ActionResult(actionId, intent.name(), outcome, minutes, resolvedAt, perception, afterBody, buildFrame(chronicle, intent, outcome, perception, resolvedAt, beforeBody, afterBody, beforeWeather, attention));
+        // If the body is gone, the chronicle died this action: activeBody() only reports a
+        // LIVING chronicle. Keep the last-living snapshot so the HUD has a final state
+        // rather than a null the client would choke on, close the narration with a witnessed
+        // ending, and flag the death so the client can send the player back to the shore.
+        boolean died = afterBody == null;
+        if (died) {
+            afterBody = beforeBody;
+            String cause = jdbc.query("SELECT death_cause FROM chronicle WHERE id=?", rs -> rs.next() ? rs.getString(1) : null, chronicle.id());
+            perception = perception + deathCoda(cause);
+        }
+        return new ActionResult(actionId, intent.name(), outcome, minutes, resolvedAt, perception, afterBody, buildFrame(chronicle, intent, outcome, perception, resolvedAt, beforeBody, afterBody, beforeWeather, attention), died);
     }
     @Transactional(readOnly = true)
     public NarrationPage narrationHistory(Instant before, UUID beforeId, int requestedLimit) {
@@ -659,7 +669,12 @@ public class ChronicleActionService {
         java.util.List<java.util.Map<String,Object>> candidates = jdbc.queryForList("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT w.id,w.display_name,c.body_position,c.layer FROM reachable r JOIN world_object w ON w.id=r.id JOIN item_instance i ON i.object_id=w.id JOIN item_equipment_compatibility c ON c.item_key=i.item_key LEFT JOIN equipment_attachment e ON e.item_id=w.id WHERE e.item_id IS NULL ORDER BY w.display_name", chronicle.id());
         if (candidates.isEmpty()) return new String[]{"FAILED","You have nothing unequipped that can be worn or wielded."};
         String lower = text.toLowerCase(Locale.ROOT);
-        var match = candidates.stream().filter(c->lower.contains(((String)c.get("display_name")).toLowerCase(Locale.ROOT))).findFirst().orElse(candidates.get(0));
+        // Candidate rows for the item the text actually names (one row per compatible slot).
+        var named = candidates.stream().filter(c->lower.contains(((String)c.get("display_name")).toLowerCase(Locale.ROOT))).collect(java.util.stream.Collectors.toList());
+        var pool = named.isEmpty() ? candidates : named;
+        // Honour a hand the player names ("on my left hand"); otherwise take the first slot.
+        String preferredPos = lower.contains("left") ? "HAND_LEFT" : (lower.contains("right") ? "HAND_RIGHT" : null);
+        var match = pool.stream().filter(c->preferredPos!=null && preferredPos.equals(c.get("body_position"))).findFirst().orElse(pool.get(0));
         UUID item = (UUID) match.get("id"); String pos = (String) match.get("body_position"); String layer = (String) match.get("layer");
         try { items.equip(item, pos, layer); return new String[]{"SUCCEEDED","You settle the "+match.get("display_name")+" into place."}; }
         catch (Exception e) { return new String[]{"FAILED","The "+match.get("display_name")+" cannot be fitted there — something else is already in the way."}; }
@@ -801,7 +816,21 @@ public class ChronicleActionService {
         if (h < 22) return "DUSK";
         return "NIGHT";
     }
-    public record ActionResult(UUID actionId, String intent, String outcome, int durationMinutes, Instant resolvedAt, String perception, ChroniclePhysiologyService.BodyHudSnapshot body, PerceptionFrame frame) { }
+    public record ActionResult(UUID actionId, String intent, String outcome, int durationMinutes, Instant resolvedAt, String perception, ChroniclePhysiologyService.BodyHudSnapshot body, PerceptionFrame frame, boolean died) { }
+
+    /** A witnessed closing line for a chronicle that died this action, by cause. */
+    private static String deathCoda(String cause) {
+        String c = cause == null ? null : switch (cause) {
+            case "Critical Dehydration" -> "thirst";
+            case "Critical Starvation" -> "hunger";
+            case "Critical Blood Loss" -> "blood loss";
+            case "Fatal Trauma" -> "trauma";
+            case "Severe Hypothermia" -> "cold";
+            case "Severe Hyperthermia" -> "heat";
+            default -> "sickness";
+        };
+        return (c == null ? " " : " The " + c + " takes the last of you. ") + "Your chronicle's journey ends here.";
+    }
     public record PerceptionFrame(String intent, String outcome, LocationView location, String timeOfDay, WeatherView weather, String attention, List<String> nearbyObjects, ChroniclePhysiologyService.BodyHudSnapshot physiology, List<StateChange> sinceLastFrame, String narration) { }
     public record LocationView(UUID chunkId, String name, String biome, int gridX, int gridY) { }
     public record WeatherView(String kind, int intensity) { }
