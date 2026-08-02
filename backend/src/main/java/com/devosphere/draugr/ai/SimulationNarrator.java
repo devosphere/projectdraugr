@@ -53,7 +53,7 @@ public class SimulationNarrator {
             return backendNarration;
         }
         String user = buildUser(frame, backendNarration);
-        return model.generate(SYSTEM, user)
+        return model.generate(props.getNarrationModel(), SYSTEM, user)
                 .map(String::trim)
                 .filter(extra -> !extra.isBlank())
                 .map(extra -> backendNarration + " " + extra)

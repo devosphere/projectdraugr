@@ -14,9 +14,10 @@ import java.util.Optional;
 public interface LanguageModel {
 
     /**
+     * @param model  the model id to run this call on (each agent chooses its own)
      * @param system the system prompt (role + hard constraints)
      * @param user   the user turn (the concrete request)
      * @return the model's text, or empty if the call did not cleanly produce usable text
      */
-    Optional<String> generate(String system, String user);
+    Optional<String> generate(String model, String system, String user);
 }

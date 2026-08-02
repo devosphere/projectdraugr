@@ -57,19 +57,30 @@ The first and highest-value AI; its seam (`NarrationRouter` + `PerceptionFrame`)
   turns a `PerceptionFrame` + the deterministic prose into a refinement prompt and returns the
   deterministic prose **plus** at most one AI sentence — or the deterministic prose alone on any
   failure. Unit-tested against a stub client (no network, no DB, no key).
-- **1b. Wire into `ChronicleActionService.resolve()`.** After `perception` is final and the
-  frame is built, `if (router.shouldUseAI(...)) perception = narrator.refine(frame, perception)`,
-  then persist and return the refined string. One edit, behind the gate.
-- **1c. Live verification.** With `DRAUGR_AI_ENABLED=true` + a key, confirm a routed moment
-  (a kill, a death, a HIGH-attention observe) gains a sentence and that disabling it is invisible.
+- **1b. Wired into `ChronicleActionService.resolve()` — done.** After `perception` is final and
+  the frame built, `if (narrationRouter.shouldUseAI(...)) perception = simulationNarrator.refine(frame, perception)`;
+  a genuine change is re-persisted (`UPDATE chronicle_action`) and reflected in the returned frame.
+  Verified: a HIGH-attention observe (which the router *would* route to AI) resolves unchanged with
+  the feature off, and the whole context boots clean.
+- **1c. Live verification — pending a key.** With `DRAUGR_AI_ENABLED=true` + `ANTHROPIC_API_KEY`,
+  confirm a routed moment (a kill, a death, a HIGH-attention observe) gains a sentence and that
+  disabling it is invisible. Needs the operator's key; nothing in the repo handles it.
 
-### Phase 2 — Persistent State Architect (authoring-time)
+### Phase 2 — Persistent State Architect (authoring-time) — *groundwork landed*
 
-Drain `routing_miss_backlog` offline: the model proposes a `category_term` for a novel verb or a
-`material_process` / `mineral_definition` row for a missing mechanic, emitted **as a Flyway
-migration** and passed through the existing V53 review gate before it is canon. Never in the
+Drain `routing_miss_backlog` offline: the model (Opus 4.8) proposes a `category_term` for a novel
+verb or a `material_process` / `mineral_definition` row for a missing mechanic, emitted **as a
+Flyway migration** and passed through the existing V53 review gate before it is canon. Never in the
 request path; one call per novel verb/process, ever. Framing in
 [world-progression.md](world-progression.md) (Bucket A) and routing-and-coverage-strategy.md.
+
+- **Groundwork (this session):** `PersistentStateArchitect` reads the frequency-ranked backlog
+  (`backlog(limit)`) and drafts a migration proposal per gap (`propose(entry)`), keyed on the gap
+  kind (VOCABULARY / KEYWORD / SUBJECT / MECHANIC). It **proposes; it never commits** — a proposal
+  is text a human puts through the V53 gate. Unit-tested against a stub model (proposes on the
+  architect model when enabled, silent when off/declined). Not yet wired to any runner or endpoint.
+- **Next:** an offline surface to drive it (an admin-only endpoint or a CLI/scheduled job) that
+  presents proposals for review, plus applying a reviewed proposal as a real `V*.sql`.
 
 ### Phase 3 — Persistent State Auditor (read-only)
 

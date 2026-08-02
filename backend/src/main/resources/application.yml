@@ -23,6 +23,9 @@ draugr:
   ai:
     enabled: ${DRAUGR_AI_ENABLED:false}
     api-key: ${DRAUGR_AI_API_KEY:${ANTHROPIC_API_KEY:}}
-    model: ${DRAUGR_AI_MODEL:claude-opus-5}
     max-tokens: ${DRAUGR_AI_MAX_TOKENS:1024}
     timeout: ${DRAUGR_AI_TIMEOUT:20s}
+    # Per-agent models: Simulation Agent (narration) → Haiku; Architect → Opus 4.8; Auditor → Sonnet 4.6.
+    narration-model: ${DRAUGR_AI_NARRATION_MODEL:claude-haiku-4-5}
+    architect-model: ${DRAUGR_AI_ARCHITECT_MODEL:claude-opus-4-8}
+    auditor-model: ${DRAUGR_AI_AUDITOR_MODEL:claude-sonnet-4-6}

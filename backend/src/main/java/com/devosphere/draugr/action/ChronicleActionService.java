@@ -3,7 +3,9 @@ package com.devosphere.draugr.action;
 import com.devosphere.draugr.assembly.AssemblyService;
 import com.devosphere.draugr.chronicle.ChroniclePhysiologyService;
 import com.devosphere.draugr.narration.NarrationPolicy;
+import com.devosphere.draugr.narration.NarrationRouter;
 import com.devosphere.draugr.narration.ActionInputClassifier;
+import com.devosphere.draugr.ai.SimulationNarrator;
 import com.devosphere.draugr.item.PhysicalItemService;
 import com.devosphere.draugr.capability.CapabilityAdaptationService;
 import com.devosphere.draugr.construction.ConstructionService;
@@ -57,8 +59,8 @@ public class ChronicleActionService {
         "look around","look about","glance around","take in","survey","scan","scout","observe","examine",
         "inspect","study the","study my","search the","search for","scour","peer","gaze","watch the",
         "keep watch","keep an eye","listen","carefully","cautiously","warily","alert","note the","eye the");
-    private final JdbcTemplate jdbc; private final SimulationTickService ticks; private final ChroniclePhysiologyService physiology; private final NarrationPolicy narration; private final PhysicalItemService items; private final CapabilityAdaptationService capability; private final ConstructionService construction; private final ChronicleDiscoveryService discoveries; private final WildlifeEncounterService wildlife; private final FireService fire; private final LiteratureService literature; private final FoodPreservationService food; private final ActionInputClassifier inputClassifier; private final AssemblyService assembly;
-    public ChronicleActionService(JdbcTemplate jdbc, SimulationTickService ticks, ChroniclePhysiologyService physiology, NarrationPolicy narration, PhysicalItemService items, CapabilityAdaptationService capability, ConstructionService construction, ChronicleDiscoveryService discoveries, WildlifeEncounterService wildlife, FireService fire, LiteratureService literature, FoodPreservationService food, ActionInputClassifier inputClassifier, AssemblyService assembly) { this.jdbc = jdbc; this.ticks = ticks; this.physiology = physiology; this.narration = narration; this.items=items; this.capability=capability; this.construction=construction; this.discoveries=discoveries; this.wildlife=wildlife; this.fire=fire; this.literature=literature; this.food=food; this.inputClassifier=inputClassifier; this.assembly=assembly; }
+    private final JdbcTemplate jdbc; private final SimulationTickService ticks; private final ChroniclePhysiologyService physiology; private final NarrationPolicy narration; private final PhysicalItemService items; private final CapabilityAdaptationService capability; private final ConstructionService construction; private final ChronicleDiscoveryService discoveries; private final WildlifeEncounterService wildlife; private final FireService fire; private final LiteratureService literature; private final FoodPreservationService food; private final ActionInputClassifier inputClassifier; private final AssemblyService assembly; private final NarrationRouter narrationRouter; private final SimulationNarrator simulationNarrator;
+    public ChronicleActionService(JdbcTemplate jdbc, SimulationTickService ticks, ChroniclePhysiologyService physiology, NarrationPolicy narration, PhysicalItemService items, CapabilityAdaptationService capability, ConstructionService construction, ChronicleDiscoveryService discoveries, WildlifeEncounterService wildlife, FireService fire, LiteratureService literature, FoodPreservationService food, ActionInputClassifier inputClassifier, AssemblyService assembly, NarrationRouter narrationRouter, SimulationNarrator simulationNarrator) { this.jdbc = jdbc; this.ticks = ticks; this.physiology = physiology; this.narration = narration; this.items=items; this.capability=capability; this.construction=construction; this.discoveries=discoveries; this.wildlife=wildlife; this.fire=fire; this.literature=literature; this.food=food; this.inputClassifier=inputClassifier; this.assembly=assembly; this.narrationRouter=narrationRouter; this.simulationNarrator=simulationNarrator; }
 
     @Transactional
     public ActionResult resolve(String text) { return resolve(text, null); }
@@ -264,7 +266,22 @@ public class ChronicleActionService {
             String cause = jdbc.query("SELECT death_cause FROM chronicle WHERE id=?", rs -> rs.next() ? rs.getString(1) : null, chronicle.id());
             perception = perception + deathCoda(cause);
         }
-        return new ActionResult(actionId, intent.name(), outcome, minutes, resolvedAt, perception, afterBody, buildFrame(chronicle, intent, outcome, perception, resolvedAt, beforeBody, afterBody, beforeWeather, attention), died);
+        PerceptionFrame frame = buildFrame(chronicle, intent, outcome, perception, resolvedAt, beforeBody, afterBody, beforeWeather, attention);
+        // The Simulation Agent's voice (Task #21). On moments the router judges worth a call, it
+        // appends one atmospheric sentence on top of the deterministic prose. The router is a pure,
+        // free function that gates ~90% of actions away from the network; refine() is total and, when
+        // the feature is off or the model fails, returns the deterministic prose unchanged — so the
+        // world's own narration is always what stands. Only a genuine change is re-persisted.
+        int stateChanges = frame.sinceLastFrame() == null ? 0 : frame.sinceLastFrame().size();
+        if (narrationRouter.shouldUseAI(intent.name(), outcome, attention, text, stateChanges, 0, null, died, false)) {
+            String refined = simulationNarrator.refine(frame, perception);
+            if (!refined.equals(perception)) {
+                perception = refined;
+                jdbc.update("UPDATE chronicle_action SET narration = ? WHERE id = ?", perception, actionId);
+                frame = new PerceptionFrame(frame.intent(), frame.outcome(), frame.location(), frame.timeOfDay(), frame.weather(), frame.attention(), frame.nearbyObjects(), frame.physiology(), frame.sinceLastFrame(), perception);
+            }
+        }
+        return new ActionResult(actionId, intent.name(), outcome, minutes, resolvedAt, perception, afterBody, frame, died);
     }
     @Transactional(readOnly = true)
     public NarrationPage narrationHistory(Instant before, UUID beforeId, int requestedLimit) {

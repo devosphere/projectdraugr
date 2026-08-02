@@ -33,10 +33,10 @@ public class AnthropicLanguageModel implements LanguageModel {
     }
 
     @Override
-    public Optional<String> generate(String system, String user) {
+    public Optional<String> generate(String model, String system, String user) {
         try {
             MessageCreateParams params = MessageCreateParams.builder()
-                    .model(props.getModel())
+                    .model(model)
                     .maxTokens(props.getMaxTokens())
                     .system(system)
                     .addUserMessage(user)

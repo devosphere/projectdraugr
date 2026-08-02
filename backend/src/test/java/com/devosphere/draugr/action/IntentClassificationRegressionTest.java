@@ -32,7 +32,7 @@ class IntentClassificationRegressionTest {
             new com.devosphere.draugr.item.PhysicalItemService(null, null, null) {
                 @Override public boolean actionMatchesProcess(String t) { return processMatches; }
             };
-        ChronicleActionService svc = new ChronicleActionService(null, null, null, null, items, null, null, null, null, null, null, null, new com.devosphere.draugr.narration.ActionInputClassifier(), null);
+        ChronicleActionService svc = new ChronicleActionService(null, null, null, null, items, null, null, null, null, null, null, null, new com.devosphere.draugr.narration.ActionInputClassifier(), null, null, null);
         return ((Enum<?>) m.invoke(svc, text)).name();
     }
 

@@ -22,12 +22,13 @@ public class AiConfig {
     @Bean
     public LanguageModel languageModel(AiProperties props) {
         if (props.isUsable()) {
-            log.info("AI narration enabled — model '{}'.", props.getModel());
+            log.info("AI enabled — narration '{}', architect '{}', auditor '{}'.",
+                    props.getNarrationModel(), props.getArchitectModel(), props.getAuditorModel());
             return new AnthropicLanguageModel(props);
         }
         // Disabled or unconfigured: a no-op model. Narration stays fully deterministic.
         log.info("AI narration disabled (draugr.ai.enabled={}, key present={}). Using deterministic prose only.",
                 props.isEnabled(), props.getApiKey() != null && !props.getApiKey().isBlank());
-        return (system, user) -> Optional.empty();
+        return (model, system, user) -> Optional.empty();
     }
 }

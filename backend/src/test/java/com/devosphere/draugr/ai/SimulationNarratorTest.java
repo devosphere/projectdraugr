@@ -41,7 +41,7 @@ class SimulationNarratorTest {
 
     @Test
     void appendsOneSentenceWhenEnabledAndModelResponds() {
-        LanguageModel model = (system, user) -> Optional.of("Rain ticks against the fresh stump.");
+        LanguageModel model = (m, system, user) -> Optional.of("Rain ticks against the fresh stump.");
         SimulationNarrator narrator = new SimulationNarrator(model, props(true));
 
         String out = narrator.refine(frame(), DETERMINISTIC);
@@ -53,7 +53,7 @@ class SimulationNarratorTest {
     @Test
     void returnsDeterministicProseWhenDisabled() {
         // Even a chatty model is never called when the feature is off.
-        LanguageModel model = (system, user) -> Optional.of("SHOULD NOT APPEAR");
+        LanguageModel model = (m, system, user) -> Optional.of("SHOULD NOT APPEAR");
         SimulationNarrator narrator = new SimulationNarrator(model, props(false));
 
         assertEquals(DETERMINISTIC, narrator.refine(frame(), DETERMINISTIC),
@@ -63,7 +63,7 @@ class SimulationNarratorTest {
     @Test
     void fallsBackToDeterministicProseWhenModelReturnsEmpty() {
         // Timeout / transport error / refusal all surface as Optional.empty().
-        LanguageModel model = (system, user) -> Optional.empty();
+        LanguageModel model = (m, system, user) -> Optional.empty();
         SimulationNarrator narrator = new SimulationNarrator(model, props(true));
 
         assertEquals(DETERMINISTIC, narrator.refine(frame(), DETERMINISTIC),
@@ -72,7 +72,7 @@ class SimulationNarratorTest {
 
     @Test
     void fallsBackWhenModelReturnsBlank() {
-        LanguageModel model = (system, user) -> Optional.of("   ");
+        LanguageModel model = (m, system, user) -> Optional.of("   ");
         SimulationNarrator narrator = new SimulationNarrator(model, props(true));
 
         assertEquals(DETERMINISTIC, narrator.refine(frame(), DETERMINISTIC),
@@ -80,16 +80,19 @@ class SimulationNarratorTest {
     }
 
     @Test
-    void theContextPromptCarriesTheFrameFacts() {
-        // Capture the user prompt to confirm the frame's facts reach the model.
-        String[] captured = new String[2];
-        LanguageModel model = (system, user) -> { captured[0] = system; captured[1] = user; return Optional.of("x"); };
-        new SimulationNarrator(model, props(true)).refine(frame(), DETERMINISTIC);
+    void runsOnTheConfiguredNarrationModelAndCarriesTheFrameFacts() {
+        // Capture the call to confirm the narration model and the frame's facts reach the API.
+        String[] captured = new String[3];
+        LanguageModel model = (m, system, user) -> { captured[0] = m; captured[1] = system; captured[2] = user; return Optional.of("x"); };
+        AiProperties p = props(true);
+        p.setNarrationModel("claude-haiku-4-5");
+        new SimulationNarrator(model, p).refine(frame(), DETERMINISTIC);
 
-        assertTrue(captured[0].contains("ONE sentence"), "the system prompt states the one-sentence rule");
-        assertTrue(captured[1].contains("FELL_TREE"), "the user prompt carries the intent");
-        assertTrue(captured[1].contains("TEMPERATE_FOREST"), "the user prompt carries the biome");
-        assertTrue(captured[1].contains(DETERMINISTIC), "the user prompt carries the existing narration");
-        assertTrue(captured[1].contains("energy Rested"), "the user prompt carries the state change");
+        assertEquals("claude-haiku-4-5", captured[0], "narration runs on the configured narration model");
+        assertTrue(captured[1].contains("ONE sentence"), "the system prompt states the one-sentence rule");
+        assertTrue(captured[2].contains("FELL_TREE"), "the user prompt carries the intent");
+        assertTrue(captured[2].contains("TEMPERATE_FOREST"), "the user prompt carries the biome");
+        assertTrue(captured[2].contains(DETERMINISTIC), "the user prompt carries the existing narration");
+        assertTrue(captured[2].contains("energy Rested"), "the user prompt carries the state change");
     }
 }

@@ -22,11 +22,14 @@ public class AiProperties {
     private String apiKey = "";
 
     /**
-     * Model id. Defaults to Anthropic's standing recommendation; we do not silently downgrade.
-     * For high-frequency, low-stakes narration refinement, an operator may prefer
-     * {@code claude-haiku-4-5} for latency/cost — set DRAUGR_AI_MODEL to choose.
+     * Per-agent model ids. Each of the three agents runs on the model best suited to its job:
+     * the Simulation Agent's narration is a high-frequency, low-stakes single sentence (fast/cheap
+     * Haiku); the Architect proposes schema/data at authoring time and wants deep reasoning (Opus);
+     * the Auditor summarizes consistency findings (Sonnet).
      */
-    private String model = "claude-opus-5";
+    private String narrationModel = "claude-haiku-4-5";
+    private String architectModel = "claude-opus-4-8";
+    private String auditorModel = "claude-sonnet-4-6";
 
     /** Output cap. Generous so a one- or two-sentence reply is never truncated. */
     private long maxTokens = 1024;
@@ -43,8 +46,12 @@ public class AiProperties {
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
     public String getApiKey() { return apiKey; }
     public void setApiKey(String apiKey) { this.apiKey = apiKey; }
-    public String getModel() { return model; }
-    public void setModel(String model) { this.model = model; }
+    public String getNarrationModel() { return narrationModel; }
+    public void setNarrationModel(String narrationModel) { this.narrationModel = narrationModel; }
+    public String getArchitectModel() { return architectModel; }
+    public void setArchitectModel(String architectModel) { this.architectModel = architectModel; }
+    public String getAuditorModel() { return auditorModel; }
+    public void setAuditorModel(String auditorModel) { this.auditorModel = auditorModel; }
     public long getMaxTokens() { return maxTokens; }
     public void setMaxTokens(long maxTokens) { this.maxTokens = maxTokens; }
     public Duration getTimeout() { return timeout; }
