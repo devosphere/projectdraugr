@@ -254,13 +254,37 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
   }
 
   function exportChronicle() {
-    if (prototypeMode && olderNarrationPage < olderNarrationPages.length) {
-      setNarrations(entries => [...olderNarrationPages.slice(olderNarrationPage).flat(), ...entries]);
-      setOlderNarrationPage(olderNarrationPages.length);
+    // No backend in prototype mode — flatten every page and fall back to the
+    // browser's print-to-PDF over the print stylesheet.
+    if (prototypeMode) {
+      if (olderNarrationPage < olderNarrationPages.length) {
+        setNarrations(entries => [...olderNarrationPages.slice(olderNarrationPage).flat(), ...entries]);
+        setOlderNarrationPage(olderNarrationPages.length);
+      }
       requestAnimationFrame(() => window.print());
       return;
     }
-    window.print();
+    // Real mode: the server renders the chronicle's ENTIRE narration to a PDF —
+    // not just the pages currently held in memory — and streams it back.
+    void downloadChroniclePdf(`${apiUrl}/api/chronicles/active/narration.pdf`, 'chronicle.pdf');
+  }
+
+  async function downloadChroniclePdf(url: string, filename: string) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error();
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch {
+      setActionError('The chronicle could not be exported.');
+    }
   }
 
   const menuItems = (prototypeMode ? [['chronicle','Chronicle'],['equipment','Equipment'],['load','Load'],['storage','Storage'],['crafting','Crafting'],['construction','Construction'],['knowledge','Knowledge'],['map','Chronicle Map'],['literature','Literature']] : [['chronicle','Chronicle'],['equipment','Equipment'],['load','Load'],...(items?.containers.length ? [['storage','Storage']] : []),...(discoveries?.discoveries.includes('WOVEN_BASKET') ? [['crafting','Crafting']] : []),...(discoveries?.constructions.length ? [['construction','Construction']] : []),...(discoveries?.discoveries.length ? [['knowledge','Knowledge']] : [])]) as [Panel,string][];

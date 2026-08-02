@@ -40,6 +40,27 @@ export function OnboardingScreen({ hasLivingChronicle, onAwaken, entryError, api
       .then(raw => { if (raw) setJourney(JSON.parse(raw)); })
       .catch(() => setArchiveError('That life could not be read back.'));
   }
+
+  // The server renders the whole life's narration to a PDF — every action, not
+  // just what is on screen — and streams it back for download.
+  async function exportJourneyPdf(id: string, sequenceNumber: number) {
+    if (!apiUrl) return;
+    try {
+      const response = await fetch(`${apiUrl}/api/chronicles/${id}/narration.pdf`);
+      if (!response.ok) throw new Error();
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = `chronicle-${sequenceNumber}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch {
+      setArchiveError('That life could not be exported.');
+    }
+  }
   const primaryLabel = hasLivingChronicle ? 'Soul Link' : 'Awaken';
   const canExitApplication = window.location.protocol === 'file:' || ['localhost', '127.0.0.1'].includes(window.location.hostname);
 
@@ -120,6 +141,7 @@ export function OnboardingScreen({ hasLivingChronicle, onAwaken, entryError, api
 
           <div className="archive-footer">
             {journey && <button className="dialog-close" onClick={() => setJourney(null)}>Back to archive</button>}
+            {journey && <button className="dialog-close" onClick={() => exportJourneyPdf(journey.summary.id, journey.summary.sequenceNumber)}>Export PDF</button>}
             <button className="dialog-close" onClick={() => { setPanel('none'); setJourney(null); }}>Return</button>
           </div>
         </>}
