@@ -191,7 +191,8 @@ public class PhysicalItemService {
 
         // Find a flora in this biome that the action text names (or any available)
         java.util.List<java.util.Map<String,Object>> candidates = jdbc.queryForList(
-            "SELECT fd.flora_key, fd.organism_type, fd.tool_required, fd.is_poisonous " +
+            "SELECT fd.flora_key, fd.organism_type, fd.tool_required, fd.is_poisonous, " +
+            "  (SELECT d.item_key FROM flora_drop d WHERE d.flora_key=fd.flora_key ORDER BY d.item_key LIMIT 1) AS drop_item " +
             "FROM flora_definition fd " +
             "JOIN chunk_flora cf ON cf.flora_key=fd.flora_key " +
             "WHERE cf.chunk_id=? AND cf.quantity > 0 AND fd.organism_type <> 'TREE' " +
@@ -200,16 +201,19 @@ public class PhysicalItemService {
         if (candidates.isEmpty()) {
             // No chunk_flora rows — fall back to biome affinity check
             candidates = jdbc.queryForList(
-                "SELECT flora_key, organism_type, tool_required, is_poisonous " +
-                "FROM flora_definition " +
-                "WHERE organism_type <> 'TREE' AND biome_affinity ILIKE ? " +
-                "ORDER BY flora_key", "%" + biome + "%");
+                "SELECT fd.flora_key, fd.organism_type, fd.tool_required, fd.is_poisonous, " +
+                "  (SELECT d.item_key FROM flora_drop d WHERE d.flora_key=fd.flora_key ORDER BY d.item_key LIMIT 1) AS drop_item " +
+                "FROM flora_definition fd " +
+                "WHERE fd.organism_type <> 'TREE' AND fd.biome_affinity ILIKE ? " +
+                "ORDER BY fd.flora_key", "%" + biome + "%");
         }
         if (candidates.isEmpty()) return new String[]{"FAILED", "You search through the growth, but find nothing here worth taking."};
 
-        // Prefer species the action text names
+        // Prefer species the action text names — by the plant's own name, or by what it
+        // yields (so "gather vines" finds the climbing vine that drops vine).
         java.util.Map<String,Object> target = candidates.stream()
-            .filter(c -> lower.contains(((String)c.get("flora_key")).replace("_"," ")))
+            .filter(c -> lower.contains(((String)c.get("flora_key")).replace("_"," "))
+                || (c.get("drop_item") != null && lower.contains(((String)c.get("drop_item")).replace("_"," "))))
             .findFirst()
             .orElse(candidates.get(0));
 

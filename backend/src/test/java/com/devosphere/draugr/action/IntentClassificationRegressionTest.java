@@ -92,6 +92,8 @@ class IntentClassificationRegressionTest {
         // The real insects still classify.
         assertEquals("COLLECT_INSECTS", classify("collect ants from the colony", false));
         assertEquals("COLLECT_INSECTS", classify("dig for earthworms", false));
+        // Vines are gatherable growth, not fibre-stripping.
+        assertEquals("GATHER_PLANT", classify("gather loose vines from the tree", false));
     }
 
     // --- Found in E2E: "set a snare across the run" resolved to SNARE, so the
