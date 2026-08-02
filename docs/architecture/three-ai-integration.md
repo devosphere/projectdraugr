@@ -103,6 +103,12 @@ is off, so the surface works with or without a key). Unit-tested against a stub 
 With the feature off, every surface still responds on deterministic data (`summary`/proposal null),
 so the mechanism is testable before a key exists and the AI is a pure upgrade when one is set.
 
+**Overseer UI.** The Auditor and Architect are surfaced in the creator Overseer (`?mode=overseer`)
+via `OverseerAgents`: an Auditor card (consistency badge + AI prose summary) and an Architect card
+(the routing-miss backlog + a "draft a proposal for the worst gap" button that shows the drafted
+migration — for review, never applied). Both render on deterministic data with the AI off. The
+Simulation Agent needs no separate UI — its output is the narration in the playthrough.
+
 ---
 
 ## Runtime contract (the shared client)

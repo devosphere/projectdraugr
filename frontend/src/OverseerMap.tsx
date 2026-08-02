@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import atlasArt from './assets/overseer-atlas-v1.png';
+import { OverseerAgents } from './OverseerAgents';
 
 // Keep the public GitHub Pages Atlas fully static: it must not request access
 // to a visitor's local backend. Local development still uses the Spring API.
@@ -50,5 +51,6 @@ export function OverseerMap() {
         {error ? <p className="error">{error}</p> : ready ? <div className="atlas-art"><img className="atlas-map" src={atlasArt} alt="Illustrated ancient wilderness atlas, used only as a creator reference" />{markers.map(marker => <span key={`${marker.category}-${marker.label}`} className={`atlas-marker ${marker.category.toLowerCase()}`} style={{ left: `${((marker.x + .5) / 28) * 100}%`, top: `${((marker.y + .5) / 20) * 100}%` }} title={`${marker.category.toLowerCase()}: ${marker.label}`} aria-label={`${marker.category.toLowerCase()}: ${marker.label}`} />)}</div> : <p className="atlas-loading">Generating deterministic geography…</p>}
       </div>
     </section>
+    <OverseerAgents apiUrl={apiUrl} />
   </main>;
 }
