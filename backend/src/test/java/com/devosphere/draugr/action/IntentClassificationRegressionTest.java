@@ -141,6 +141,7 @@ class IntentClassificationRegressionTest {
     @Test void existingCraftIntentsAreUnaffected() throws Exception {
         assertEquals("CRAFT_SPEAR", classify("craft a spear"));
         assertEquals("CRAFT_KNIFE", classify("make a knife"));
+        assertEquals("CRAFT_HATCHET", classify("craft a stone hatchet")); // the felling tool
         assertEquals("CRAFT_BASKET", classify("weave a basket"));
         assertEquals("CRAFT_DESK", classify("build a desk"));
     }
