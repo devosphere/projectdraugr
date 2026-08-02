@@ -100,7 +100,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 | `backend/src/main/java/com/devosphere/draugr/domain/ArchitectRouter.java` | Cost gate for the Architect — routes COVERED / POLISH / INVENT. |
 | `backend/src/main/java/com/devosphere/draugr/routing/ProcessMatcher.java` | The **only** implementation of the action→process resolution rule. Both `runProcess()` and `ArchitectRouter` go through it. |
 | `backend/src/main/java/com/devosphere/draugr/routing/RoutingMissRecorder.java` | Records unresolved actions into the V56 backlog. Separate bean on purpose — see its Javadoc. |
-| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V57. Next is V58. |
+| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V63. Next is V64. |
 | `backend/src/main/java/com/devosphere/draugr/domain/DomainRegistryService.java` | Reads domain_registry — the Architect's ledger of invented domains. |
 | `docs/architecture/domain-creation-pattern.md` | The exact recipe for adding a new domain. |
 | `docs/architecture/action-routing-hardening.md` | Sprint 003 spec — collisions, milestones M1–M5. |
@@ -119,7 +119,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 
 ---
 
-## What Is Built (Migrations V1–V57, all applied)
+## What Is Built (Migrations V1–V63, all applied)
 
 - V1–V30: World geography, ecology, chronicle lifecycle, physiology, action ledger, wildlife, items, equipment, carry capacity, capability adaptation, construction, literature, fire, weather, food preservation, tools, clothing, idempotency
 - V31: Writing materials (bark_sheet, charcoal, clay_lump; STRIP_BARK, MAKE_CHARCOAL, GATHER_CLAY, WRITE)
@@ -158,7 +158,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 - **F7** domain_registry (V38) + DomainRegistryService + GET /api/domains + docs/architecture/domain-creation-pattern.md.
 - **F8** DECIDED: monotonic schema, world-scoped objects, chronicle-scoped capability.
 
-### Sprint 003 — Materials Foundation + Routing Hardening (IN PROGRESS)
+### Sprint 003 — Materials Foundation + Routing Hardening (COMPLETE — M1–M5, V47–V63)
 
 - V47: Phase 0 heritage — the Wolf Kingdom's proven technology folded into the schema
 - V48: Thermal insulation + garments (`insulation_value`; hide_coat/fur_cloak/hide_leggings/hide_boots/fiber_tunic). Fixed 100% hypothermia mortality (three compounding physics bugs: uncapped wind term, no metabolic heat, zero clothing insulation).
@@ -174,6 +174,9 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 - V58: **Staged assembly (M3).** `assembly_definition` + `assembly_stage` (+ `assembly_stage_requirement`) define multi-stage structures and crafts in data; `assembly_instance` + `assembly_stage_completion` track one chronicle's progress. A **cure stage** completes on elapsed world time (the same tick the body runs on), which no single-shot process can express. Its own review gate (`assembly_review`) mirrors V53: bad prerequisite (cycle/forward), no stages, unobtainable requirement are BLOCKING. Seeds the bow (portable craft, with a cure), a drying rack (sited structure, entirely in data), and lean-to/fire-pit as data-proof of migration. Engine: `AssemblyService`; dispatched as the `ADVANCE_ASSEMBLY` intent ahead of the material-process fallback.
 - V59: **Production quality (M3b).** `quality_grade` (DEFECTIVE < POOR < SOUND < FINE) on `item_instance` and `assembly_stage_completion`, set at creation and flowing `worst(inputs, attempt)` — the attempt read from the action text (`QualityGrade.attempt`, Layer 2 of the success model). `INSPECT` reports grade/defects (witness-stance); a defective input or prior stage gates the next step; `REWORK` rolls an assembly back to its earliest defective stage; a standing Auditor invariant forbids a completed assembly holding a defective stage.
 - V60: **Cut-planning + preservation (M4).** `material_process_output` gives a process several outputs at once (yield scaled by grade) — `lay_out_hide` lays a hide into panel + lamellae + cords + offcuts; a reviewed multi-output mass check joins the V53 gate. Preserved food (salted/dried/smoked) now keeps 30–60 days vs 18 h raw (`FoodPreservationService` kinds + `runProcess` registration). Leather armour becomes a V58 staged assembly (`leather_armour`) consuming the laid-out components; a `smoke_rack` structure; fleshed/dehaired hides accepted by `tan_hide` (yield capped to 1 to conserve mass).
+- V61–V63: **Felling tool + wider gathering.** One-handed craftable `stone_hatchet` (left-hand) so a tree can be felled without planks; oceanside/`SALT_DEPOSIT` salt (deliberately not rivers/streams — drinkable freshwater); flint/pyrite eroding out on `RIVER_BANK`; loose vines on forest trees. `SALT_DEPOSIT` is now a functional deposit overlay (resolved in `gatherMineral` + `activeLocation` presentation + the classifier's `salt` vocabulary) — no migration needed for placement.
+
+**Post-M5 (this phase), all applied and verified:** playtest bug fixes #14–#18 (see resume point below); chronicle-narration **PDF export**; the **three-AI integration** (Simulation Agent narration wired into `resolve()`, Persistent State Architect + Auditor with Overseer UI — all gated off by default); FINE-grade material source reachable via careful mineral gathering. Full suite: 111 backend tests green; core-loop smoke clean.
 
 **Why routing hardening exists:** matching was lexical and global. "Split the fish" matched `split_planks`; "weatherproof the shell" matched the weather domain. A wrong match doesn't throw — it silently suppresses the Architect call the moment needed, which is worse than an honest gap.
 
@@ -219,7 +222,7 @@ The question "should an AI layer help the ActivityClassifier work out what the p
    - **#17 (felling vs carry capacity).** A felled trunk was created *owned by the chronicle* and the action then failed on carry capacity, so a tree could never actually come down. Now `fellTree` drops the log(s) on the **ground at the location** (owner NULL) and never fails on weight; the chronicle works the log **where it lies** into carriable pieces. Two supporting changes in `PhysicalItemService`: new `hasAtLeastHere`/`consumeOneHere` let `runProcess` source inputs from carried items **or** items on the ground at the chronicle's location, so `split_planks`/`timber_from_log` consume the felled log in place. Also fixed the classifier: `FELL_TREE` no longer triggers on bare `"log"` and now yields via `actionMatchesProcess` — *"split the oak log into planks"* is `PROCESS_MATERIAL`, not a second felling (it was chopping another tree). Verified E2E (fell → 1 log on ground, 0 carried → split → 2 carried planks) and guarded by `@Order(9)` in `FullTickPlaythroughIntegrationTest` plus a DB-free `IntentClassificationRegressionTest` case.
    - **#18 (Materials & Recipes doc).** The gitignored local `Project Draugr — Materials & Recipes.md` refined to set the right expectation: the resolver matches **one action to one process by verb+material** — it does not read a paragraph of procedure and simulate it (no AI yet). Added a "How the resolver reads your action" section, a step-by-step **fire** sequence (the exact example the issue cited — five declared steps, one per action), and the felling→ground-log→split update. Snapshot bumped to V1–V63. (Local file; not in git.)
 9. **DONE — chronicle narration PDF export (pre-3-AI playtest tooling).** A backend endpoint renders a chronicle's *entire* ordered narration (from `ChronicleService.journey`, not the paginated on-screen slice) to a real PDF via OpenPDF (`ChronicleNarrationExporter`): `GET /api/chronicles/{id}/narration.pdf` (any life, living or archived) and `GET /api/chronicles/active/narration.pdf` (the living one), both `application/pdf` with a `chronicle-{seq}.pdf` attachment name; an unknown id is 404. Layout: header + fate/stats line, each entry as a `DAY n · HH:mm UTC` marker + its narration prose, the final-body snapshot for the dead, closing line. Frontend wired at both entry points — the playthrough menu's **Export Chronicle** and the Archive's per-life **Export PDF** (both fetch→blob→download). Verified E2E: valid `%PDF`, correct headers/content, both buttons fire `→ 200` in-browser. A DB-free `ChronicleNarrationExporterTest` reads the output back with OpenPDF's `PdfReader` and asserts a 240-entry life spans **≥15 pages** with opening/middle/closing sentinels all extractable, plus a one-page empty-life case.
-10. **IN PROGRESS — three-AI integration.** Plan and boundaries in [architecture/three-ai-integration.md](architecture/three-ai-integration.md). Phased: (1) Simulation Agent narration = Task #21, first; (2) Persistent State Architect = authoring-time only (drains `routing_miss_backlog` into reviewed migrations); (3) Persistent State Auditor = read-only summaries.
+10. **DONE — three-AI integration (built, gated off until an API key is set).** Plan and boundaries in [architecture/three-ai-integration.md](architecture/three-ai-integration.md). Phased and all delivered: (1) Simulation Agent narration = Task #21, wired into `resolve()`; (2) Persistent State Architect = authoring-time, drafts reviewed migrations from `routing_miss_backlog`; (3) Persistent State Auditor = read-only summaries. All three have Overseer surfaces and unit tests; the whole mechanism is inert until `DRAUGR_AI_ENABLED=true` + `ANTHROPIC_API_KEY`.
     - **DONE — Phase 1a: shared model-client foundation (this session), gated OFF by default.** New `com.devosphere.draugr.ai` package: `AiProperties` (`draugr.ai.*` config), a provider-agnostic `LanguageModel` seam, `AnthropicLanguageModel` on the official `com.anthropic:anthropic-java` SDK, and `AiConfig` which yields a no-op model unless `enabled=true` + a key is present. `SimulationNarrator` turns a `PerceptionFrame` + the deterministic prose into a witness-stance refinement prompt and appends **one** AI sentence — or returns the deterministic prose unchanged on disabled/timeout/error/blank (`LanguageModel.generate` never throws). Config: `DRAUGR_AI_ENABLED` (default false), `DRAUGR_AI_API_KEY`/`ANTHROPIC_API_KEY`, `DRAUGR_AI_MODEL` (default `claude-opus-5`), max-tokens, timeout. Verified: 5 DB-free unit tests (stub model, every fallback branch) green; the Spring context boots clean with the feature off (`AiConfig` logs "AI narration disabled … deterministic prose only").
     - **DONE — Phase 1b: wired into `ChronicleActionService.resolve()`.** After `perception` is final and the frame built: `if (narrationRouter.shouldUseAI(intent,outcome,attention,text,stateChanges,0,null,died,false)) perception = simulationNarrator.refine(frame, perception);` a genuine change re-persists (`UPDATE chronicle_action`) and updates the returned frame. Verified: a HIGH-attention observe (a would-route moment) resolves unchanged with AI off, and the whole context boots clean (30 DB-free tests green).
     - **DONE — Phase 2 groundwork: `PersistentStateArchitect`.** Reads the frequency-ranked `routing_miss_backlog` and drafts a migration proposal per gap (VOCABULARY/KEYWORD/SUBJECT/MECHANIC) on Opus 4.8 — **proposes, never commits** (a human runs it through the V53 gate). Unit-tested against a stub model. Not wired to any runner/endpoint yet.
@@ -258,13 +261,15 @@ GATHER, HARVEST, CRAFT, EQUIP, UNEQUIP, DROP, BUILD, REPAIR, ABANDON, RESUME, LI
 
 ---
 
-## Three-AI Architecture (NOT YET WIRED)
+## Three-AI Architecture (WIRED — gated off until an API key is set)
 
-**1. Simulation Agent** — Physics, Ecology, Weather, Wildlife, Narration. Reads committed state, mutates runtime state, witnesses outcomes. Never hints. Maps to existing backend services + future AI narration layer.
+The full mechanism is built and inert-until-keyed; see [architecture/three-ai-integration.md](architecture/three-ai-integration.md) for the plan, boundaries, config, and surfaces. Package `com.devosphere.draugr.ai`: a provider-agnostic `LanguageModel` seam on the official `com.anthropic:anthropic-java` SDK, `AiProperties` (`draugr.ai.*`), and per-agent models (the launch-tiering lever). To go live: `DRAUGR_AI_ENABLED=true` + `ANTHROPIC_API_KEY`.
 
-**2. Persistent State Architect** — Owns schema, evolves it, creates new domains when civilization invents them. Writes Flyway migrations. NEVER narrates. Structural authority only. Gated by `ArchitectRouter` (COVERED / POLISH / INVENT).
+**1. Simulation Agent** (Haiku 4.5) — narration voice. `SimulationNarrator` is wired into `ChronicleActionService.resolve()`: on moments `NarrationRouter` judges worth a call, it appends one atmospheric sentence to the deterministic prose; on disabled/timeout/error it returns the deterministic prose unchanged, so the world's own narration always stands.
 
-**3. Persistent State Auditor** — Read-only guardian. Verifies invariants. NEVER modifies data. `PersistentStateAuditor.java` is the implementation; V53 gives it authority over process definitions before they become canon.
+**2. Persistent State Architect** (Opus 4.8) — authoring-time. `PersistentStateArchitect` reads the `routing_miss_backlog` and **drafts** a migration proposal per gap; it proposes, never commits (a human saves an approved draft as a `V*.sql` through the V53 gate). Surface: `GET /api/architect/backlog`, `POST /api/architect/propose-top`, Overseer UI.
+
+**3. Persistent State Auditor** (Sonnet 4.6) — read-only. `AuditorSummarizer` turns a read-only `AuditReport` into a plain operator summary; it only describes, never repairs. Surface: `GET /api/audit/summary`, Overseer UI. `PersistentStateAuditor.java` remains the invariant engine.
 
 **F8 DECIDED (2026-07-31):** Schema is MONOTONIC. One shared schema, world-scoped objects, chronicle-scoped capability. When pottery is invented for the first time, the Architect adds the tables ONCE globally. Subsequent chronicles inherit a world where those tables exist but start with zero familiarity. Branching schemas rejected — impossible when world_object rows persist across chronicle deaths and a new chronicle might find the old chronicle's kiln.
 
@@ -289,7 +294,8 @@ GATHER, HARVEST, CRAFT, EQUIP, UNEQUIP, DROP, BUILD, REPAIR, ABANDON, RESUME, LI
 ## Deferred
 
 - **Task #13** — Verify writing flow end-to-end (live playthrough): STRIP_BARK → MAKE_CHARCOAL → WRITE
-- **Task #21** — AI narration API integration (foundation now complete; unblocked)
+- **Task #21** — AI narration API integration: **DONE** (Simulation Agent narration wired; whole three-AI mechanism built). Only live activation remains — set `DRAUGR_AI_ENABLED=true` + `ANTHROPIC_API_KEY` and tune prompts against real output.
+- Prior world/material deferrals (`SALT_DEPOSIT` placement, FINE-grade sources, apply-a-proposal workflow) are all **cleared** — see the resume point.
 
 ---
 

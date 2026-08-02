@@ -76,9 +76,9 @@ Complete — all design documents, schemas, and vision documents authored. Activ
 
 ## Status
 
-**In Progress** — as of 2026-07-31
+**Status** — as of 2026-08-02
 
-Backend: Java 21 / Spring Boot / PostgreSQL. Migrations V1–V38 applied. All core systems built (physiology, fire, wildlife, items, construction, literature, navigation, cartography, sleep, capability adaptation, three-layer success model, perception frame, domain registry). Foundation tasks F1–F8 all complete. Frontend: React/Vite/TypeScript playable UI.
+Backend: Java 21 / Spring Boot / PostgreSQL. Migrations **V1–V63** applied. All core systems built (physiology, fire, wildlife, items, construction, literature, navigation, cartography, sleep, capability adaptation, three-layer success model, perception frame, domain registry). Foundation tasks F1–F8 complete; routing-hardening M1–M5 complete; the **three-AI mechanism is wired** (Simulation narration in `resolve()`, Architect + Auditor with Overseer UI — gated off until an API key is set). Chronicle-narration PDF export shipped. Frontend: React/Vite/TypeScript playable UI. See [PROJECT-HANDOFF.md](../PROJECT-HANDOFF.md) for the authoritative current status.
 
 ### Completed in Phase 1 so far
 
