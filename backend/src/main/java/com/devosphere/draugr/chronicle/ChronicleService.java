@@ -86,7 +86,14 @@ public class ChronicleService {
         int sequence = (priorLives == null ? 0 : priorLives) + 1;
         UUID spawnChunk = selectSpawn(world, sequence);
         UUID chronicleId = UUID.randomUUID();
-        Instant now = Instant.now();
+        // Baseline the new life to SIMULATED world time, not the wall clock. The
+        // physiology tick measures elapsed metabolic hours against the simulated
+        // clock (ChroniclePhysiologyService.advanceTo), and that clock is already
+        // far ahead of real time once any prior chronicle has acted. Seeding
+        // arrived_at / last_metabolic_update to Instant.now() made the very first
+        // action compute a huge elapsed span and starve the newborn on turn one
+        // (issue #16). The simulation_clock row is the single source of "now".
+        Instant now = jdbc.queryForObject("SELECT simulated_at FROM simulation_clock WHERE id = 1", Timestamp.class).toInstant();
         Timestamp occurredAt = Timestamp.from(now);
         jdbc.update("INSERT INTO world_object (id, object_type, display_name, current_location_id) VALUES (?, 'CHRONICLE', ?, ?)", chronicleId, "Unrecorded arrival " + sequence, spawnChunk);
         jdbc.update("INSERT INTO chronicle (id, world_id, sequence_number, life_state, arrived_at) VALUES (?, ?, ?, 'LIVING', ?)", chronicleId, world.id(), sequence, occurredAt);

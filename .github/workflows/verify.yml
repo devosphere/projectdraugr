@@ -21,7 +21,47 @@ jobs:
           cache: maven
       - name: Run backend tests
         working-directory: backend
+        # Testcontainers uses the runner's Docker engine; the full-tick playthrough
+        # (incl. the #16 fresh-awakening regression) and the migration-driven boot
+        # all execute here rather than skipping as they do on a Docker-less machine.
         run: mvn --batch-mode test
+
+  routing:
+    name: Routing reachability (coverage gate)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: pw
+          POSTGRES_DB: draugr
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGPASSWORD: pw
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Apply every migration in numeric order
+        # Mirrors the machine-local validation in CLAUDE.md: pgcrypto first, then the
+        # Flyway migrations applied V1..Vn with ON_ERROR_STOP so any ordering or DDL
+        # regression fails the build here, not in a player's first boot.
+        run: |
+          psql -h localhost -U postgres -d draugr -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS pgcrypto;"
+          for f in $(ls backend/src/main/resources/db/migration/V*.sql | sort -V); do
+            echo "-- applying $f"
+            psql -h localhost -U postgres -d draugr -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+      - name: Reachability probe — every VERIFIED process must route, none may collide
+        # routing-reachability-probe.sql RAISEs on any miss, so a process whose inputs
+        # are unobtainable or whose phrasing no longer routes exits non-zero and fails.
+        run: psql -h localhost -U postgres -d draugr -v ON_ERROR_STOP=1 -q -f docs/architecture/routing-reachability-probe.sql
 
   frontend:
     name: Frontend production build

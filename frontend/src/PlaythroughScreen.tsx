@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import forestArt from './assets/playthrough-forest-v1.png';
 import streamArt from './assets/playthrough-stream-v1.png';
 import quarryArt from './assets/playthrough-quarry-v1.png';
@@ -99,6 +99,10 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
   const [deathNarration, setDeathNarration] = useState<string | null>(null);
   const actionField = useRef<HTMLTextAreaElement>(null);
   const narrationTimeline = useRef<HTMLDivElement>(null);
+  // When true, the timeline snaps to the newest line after its content changes.
+  // Appending a resolved action sets it; loading older entries clears it so the
+  // reader's scroll position is preserved instead of yanked to the bottom (#15).
+  const pinToBottom = useRef(true);
 
   useEffect(() => {
     if (!apiUrl) return;
@@ -172,6 +176,16 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
     field.style.height = `${Math.min(field.scrollHeight, 102)}px`;
   }, [action]);
 
+  // Keep the newest narration line in view whenever the timeline grows from an
+  // action (#15). Runs after layout so there is no visible jump, and defers to
+  // loadOlderNarrations — which clears the flag and restores its own position —
+  // when the growth came from prepending earlier moments.
+  useLayoutEffect(() => {
+    if (!pinToBottom.current) return;
+    const timeline = narrationTimeline.current;
+    if (timeline) timeline.scrollTop = timeline.scrollHeight;
+  }, [narrations]);
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     const text = action.trim();
@@ -186,8 +200,8 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
       const response = await fetch(`${apiUrl}/api/actions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, idempotencyKey }) });
       const result = await response.json().catch(() => null) as ActionResult | { message?: string } | null;
       if (!response.ok || !result || !('perception' in result)) throw new Error(result && 'message' in result && result.message ? result.message : 'The simulation could not resolve that action.');
+      pinToBottom.current = true;
       setNarrations(entries => [...entries, { id: result.actionId, occurredAt: result.resolvedAt, text: result.perception }]);
-      requestAnimationFrame(() => { const t = narrationTimeline.current; if (t) t.scrollTop = t.scrollHeight; });
       if (result.body) setBody(toBodyRows(result.body));
       // The chronicle died this action: close the composer with a witnessed ending and
       // send the player back to the shore. Permanent death is the heart of the game.
@@ -212,6 +226,8 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
 
   async function loadOlderNarrations() {
     if (loadingOlderNarrations || !hasOlderNarrations) return;
+    // Prepending earlier moments must not snap the view to the newest line (#15).
+    pinToBottom.current = false;
     const timeline = narrationTimeline.current;
     const previousHeight = timeline?.scrollHeight ?? 0;
     if (prototypeMode) {

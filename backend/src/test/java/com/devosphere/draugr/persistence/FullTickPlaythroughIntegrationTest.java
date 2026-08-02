@@ -30,6 +30,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -321,5 +322,35 @@ class FullTickPlaythroughIntegrationTest {
 
         PersistentStateAuditor.AuditReport report = auditor.inspect();
         assertTrue(report.consistent(), () -> "auditor must report a consistent world after death and possession relocation: " + report.violations());
+    }
+
+    @Test
+    @Order(8)
+    void aFreshAwakeningBaselinesToSimulatedTimeAndSurvivesItsFirstAction() {
+        // Regression for #16. The ordered scenarios above have driven the simulated
+        // clock far ahead of the wall clock, then killed the chronicle. A brand-new
+        // life must baseline its metabolic clock to SIMULATED time — the clock the
+        // physiology pass measures against — not Instant.now(). Baselining to the wall
+        // clock made the very first physiology pass read the whole wall-to-simulated
+        // gap as elapsed metabolic hours and starve/dehydrate the newborn on turn one.
+        assertNull(chronicles.active(), "the prior chronicle must be dead before this awakening");
+        Timestamp clockBeforeAwaken = jdbc.queryForObject("SELECT simulated_at FROM simulation_clock WHERE id=1", Timestamp.class);
+
+        ChronicleService.ChronicleSummary reborn = chronicles.awaken();
+        assertNotNull(reborn, "a new chronicle must awaken after the prior one died");
+        UUID id = reborn.id();
+
+        // The new life's clocks are seeded from simulated time, not the wall clock.
+        Timestamp metabolic = jdbc.queryForObject("SELECT last_metabolic_update FROM chronicle_physiology WHERE chronicle_id=?", Timestamp.class, id);
+        Timestamp arrived = jdbc.queryForObject("SELECT arrived_at FROM chronicle WHERE id=?", Timestamp.class, id);
+        assertEquals(clockBeforeAwaken, metabolic, "a new life's metabolic clock must baseline to simulated time, not the wall clock");
+        assertEquals(clockBeforeAwaken, arrived, "a new life's arrival must be stamped in simulated time");
+
+        // The decisive proof: one ordinary action must not kill the newborn, and it
+        // must remain the living chronicle afterward.
+        ChronicleActionService.ActionResult first = actions.resolve("I look carefully around me.");
+        assertFalse(first.died(), "a newly awakened chronicle must not die from its first action (#16)");
+        assertNotNull(chronicles.active(), "the newborn must still be living after acting");
+        assertEquals(id, chronicles.active().id(), "the living chronicle must be the one just awakened");
     }
 }
