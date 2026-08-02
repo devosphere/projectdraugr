@@ -42,6 +42,11 @@ public class SimulationNarrator {
         this.props = props;
     }
 
+    /** The model id the narrator refines with — recorded on the narration overlay so a later review can judge quality per model. */
+    public String modelName() {
+        return props.getNarrationModel();
+    }
+
     /**
      * @param frame              the resolved action's context
      * @param backendNarration   the deterministic prose (the source of truth, always returned)

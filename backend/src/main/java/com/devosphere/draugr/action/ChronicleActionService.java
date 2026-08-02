@@ -71,7 +71,7 @@ public class ChronicleActionService {
         if (idempotencyKey != null) {
             // A duplicate submission returns the original outcome without resolving
             // again, so the world never advances twice for one intended action.
-            ActionResult prior = jdbc.query("SELECT id, intent_type, outcome, duration_minutes, resolved_at, narration FROM chronicle_action WHERE idempotency_key = ?", rs -> rs.next() ? new ActionResult(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3), rs.getInt(4), rs.getTimestamp(5).toInstant(), rs.getString(6), null, null, false) : null, idempotencyKey);
+            ActionResult prior = jdbc.query("SELECT ca.id, ca.intent_type, ca.outcome, ca.duration_minutes, ca.resolved_at, COALESCE(can.narration, ca.narration) FROM chronicle_action ca LEFT JOIN chronicle_action_narration can ON can.action_id = ca.id WHERE ca.idempotency_key = ?", rs -> rs.next() ? new ActionResult(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3), rs.getInt(4), rs.getTimestamp(5).toInstant(), rs.getString(6), null, null, false) : null, idempotencyKey);
             // A replayed action does not advance the world, so no fresh frame is built;
             // the durable perception prose and current body state are returned as-is.
             if (prior != null) return new ActionResult(prior.actionId(), prior.intent(), prior.outcome(), prior.durationMinutes(), prior.resolvedAt(), prior.perception(), physiology.activeBody(), null, physiology.activeBody() == null);
@@ -245,6 +245,15 @@ public class ChronicleActionService {
             String ambush = wildlife.passiveEncounter(chronicle.id(), chronicle.location(), actionId, resolvedAt, attention);
             if (ambush != null) perception = perception + " " + ambush;
         }
+        // chronicle_action is append-only IMMUTABLE history (the prevent_chronicle_action_mutation
+        // trigger blocks any UPDATE/DELETE). Persist the deterministic prose ONCE, here, and never
+        // touch the row again — the source of truth stays untouched. The death coda and the Simulation
+        // Agent's sentence are added afterward and captured in a SEPARATE overlay row (below), never a
+        // write-back. This also makes the (paid) AI call the last fallible thing resolve() does: every
+        // operation that can throw a hard persistence error runs and commits-in-transaction BEFORE a
+        // token is spent, so a DB failure — or a retry of one — costs nothing.
+        narration.validate(perception);
+        String deterministicNarration = perception; // the durable source of truth, before coda/AI
         jdbc.update("INSERT INTO chronicle_action (id, chronicle_id, resolved_at, action_text, intent_type, outcome, duration_minutes, narration, idempotency_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", actionId, chronicle.id(), resolvedTs, text.trim(), intent.name(), outcome, minutes, perception, idempotencyKey);
         jdbc.update("INSERT INTO chronicle_action_effect (action_id, effect_domain, effect_type, payload) VALUES (?, 'TIME', 'TIME_ADVANCED', jsonb_build_object('minutes', ?))", actionId, minutes);
         if (gatherEffectType != null) jdbc.update("INSERT INTO chronicle_action_effect (action_id, effect_domain, effect_type, payload) VALUES (?, 'ITEM', ?, jsonb_build_object(?, ?))", actionId, gatherEffectType, gatherPayloadKey, gatherCount);
@@ -254,7 +263,9 @@ public class ChronicleActionService {
         // Personal acts and venting build no capability — there is no skill in them.
         boolean buildsCapability = intent != Intent.PERSONAL_ACT && intent != Intent.AGGRESSION_INANIMATE && intent != Intent.AGGRESSION_WILDLIFE;
         if ("SUCCEEDED".equals(outcome) && buildsCapability) capability.record(chronicle.id(), actionId, (intent==Intent.GATHER_FIBER||intent==Intent.GATHER_STONE)?"LOAD":intent==Intent.OBSERVE?"ATTENTION":(intent==Intent.REST||intent==Intent.SLEEP)?"RECOVERY":intent==Intent.CONFRONT_WILDLIFE?"AIM":intent==Intent.MOVE?"LOCOMOTION":"FINE_MOTOR", minutes, (intent==Intent.GATHER_FIBER||intent==Intent.GATHER_STONE)?.18:.05, (intent==Intent.REST||intent==Intent.SLEEP)?.75:.45, resolvedAt);
-        narration.validate(perception);
+        // The base row is now durable. Everything below shapes the DISPLAYED narration (death coda,
+        // AI sentence). It is written only to the separate overlay table — never back to the base row —
+        // so nothing here can raise the immutability trigger.
         ChroniclePhysiologyService.BodyHudSnapshot afterBody = physiology.activeBody();
         // If the body is gone, the chronicle died this action: activeBody() only reports a
         // LIVING chronicle. Keep the last-living snapshot so the HUD has a final state
@@ -267,19 +278,30 @@ public class ChronicleActionService {
             perception = perception + deathCoda(cause);
         }
         PerceptionFrame frame = buildFrame(chronicle, intent, outcome, perception, resolvedAt, beforeBody, afterBody, beforeWeather, attention);
-        // The Simulation Agent's voice (Task #21). On moments the router judges worth a call, it
-        // appends one atmospheric sentence on top of the deterministic prose. The router is a pure,
-        // free function that gates ~90% of actions away from the network; refine() is total and, when
-        // the feature is off or the model fails, returns the deterministic prose unchanged — so the
-        // world's own narration is always what stands. Only a genuine change is re-persisted.
+        // The Simulation Agent's voice (Task #21) — the last fallible thing resolve() does, and the only
+        // network call. On moments the router judges worth one, it appends a single atmospheric sentence
+        // on top of the deterministic prose. The router is a pure, free function that gates ~90% of
+        // actions away from the network; refine() is total and, when the feature is off or the model
+        // fails, returns the deterministic prose unchanged — so the world's own narration always stands.
+        boolean aiContributed = false;
         int stateChanges = frame.sinceLastFrame() == null ? 0 : frame.sinceLastFrame().size();
         if (narrationRouter.shouldUseAI(intent.name(), outcome, attention, text, stateChanges, 0, null, died, false)) {
             String refined = simulationNarrator.refine(frame, perception);
             if (!refined.equals(perception)) {
                 perception = refined;
-                jdbc.update("UPDATE chronicle_action SET narration = ? WHERE id = ?", perception, actionId);
+                aiContributed = true;
                 frame = new PerceptionFrame(frame.intent(), frame.outcome(), frame.location(), frame.timeOfDay(), frame.weather(), frame.attention(), frame.nearbyObjects(), frame.physiology(), frame.sinceLastFrame(), perception);
             }
+        }
+        // Persist the DISPLAYED narration as an overlay so history, the journey archive, and the PDF
+        // export show exactly what the player saw — the AI sentence and/or the death coda — instead of
+        // reverting to the bare deterministic prose on reload. Only when it actually differs. This is a
+        // fresh INSERT into a separate, trigger-free table whose only FK (action_id) was just satisfied,
+        // so it cannot raise the immutability error; record the model for a later narration-quality
+        // review (null when only the death coda, not AI, changed the text).
+        if (!perception.equals(deterministicNarration)) {
+            jdbc.update("INSERT INTO chronicle_action_narration (action_id, narration, model) VALUES (?, ?, ?)",
+                actionId, perception, aiContributed ? simulationNarrator.modelName() : null);
         }
         return new ActionResult(actionId, intent.name(), outcome, minutes, resolvedAt, perception, afterBody, frame, died);
     }
@@ -289,9 +311,12 @@ public class ChronicleActionService {
         UUID chronicle = jdbc.query("SELECT id FROM chronicle WHERE life_state='LIVING'", rs -> rs.next() ? rs.getObject(1, UUID.class) : null);
         if (chronicle == null) return new NarrationPage(List.of(), false);
         if ((before == null) != (beforeId == null)) throw new IllegalArgumentException("Narration cursor requires both time and action identity.");
+        // COALESCE the overlay over the base narration so scroll-back shows the enriched prose the
+        // player saw live (AI sentence / death coda) when one was stored, and the deterministic prose
+        // otherwise. The base row is the join anchor and the fallback.
         List<NarrationEntry> entries = before == null
-                ? jdbc.query("SELECT id, resolved_at, narration FROM chronicle_action WHERE chronicle_id = ? AND narration IS NOT NULL ORDER BY resolved_at DESC, id DESC LIMIT ?", (rs, row) -> new NarrationEntry(rs.getObject(1, UUID.class), rs.getTimestamp(2).toInstant(), rs.getString(3)), chronicle, limit + 1)
-                : jdbc.query("SELECT id, resolved_at, narration FROM chronicle_action WHERE chronicle_id = ? AND narration IS NOT NULL AND (resolved_at, id) < (?, ?) ORDER BY resolved_at DESC, id DESC LIMIT ?", (rs, row) -> new NarrationEntry(rs.getObject(1, UUID.class), rs.getTimestamp(2).toInstant(), rs.getString(3)), chronicle, java.sql.Timestamp.from(before), beforeId, limit + 1);
+                ? jdbc.query("SELECT ca.id, ca.resolved_at, COALESCE(can.narration, ca.narration) FROM chronicle_action ca LEFT JOIN chronicle_action_narration can ON can.action_id = ca.id WHERE ca.chronicle_id = ? AND ca.narration IS NOT NULL ORDER BY ca.resolved_at DESC, ca.id DESC LIMIT ?", (rs, row) -> new NarrationEntry(rs.getObject(1, UUID.class), rs.getTimestamp(2).toInstant(), rs.getString(3)), chronicle, limit + 1)
+                : jdbc.query("SELECT ca.id, ca.resolved_at, COALESCE(can.narration, ca.narration) FROM chronicle_action ca LEFT JOIN chronicle_action_narration can ON can.action_id = ca.id WHERE ca.chronicle_id = ? AND ca.narration IS NOT NULL AND (ca.resolved_at, ca.id) < (?, ?) ORDER BY ca.resolved_at DESC, ca.id DESC LIMIT ?", (rs, row) -> new NarrationEntry(rs.getObject(1, UUID.class), rs.getTimestamp(2).toInstant(), rs.getString(3)), chronicle, java.sql.Timestamp.from(before), beforeId, limit + 1);
         boolean hasMore = entries.size() > limit;
         if (hasMore) entries = entries.subList(0, limit);
         return new NarrationPage(List.copyOf(entries), hasMore);

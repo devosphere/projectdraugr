@@ -55,9 +55,13 @@ public class ChronicleService {
             chronicleId);
         if (summary == null) throw new IllegalArgumentException("No such Chronicle.");
 
+        // COALESCE the narration overlay over the base row so the archive and the PDF export show the
+        // enriched prose the player saw live (AI sentence / death coda) when one was stored, and the
+        // deterministic prose otherwise. The immutable base row remains the join anchor and the fallback.
         List<JourneyEntry> entries = jdbc.query(
-            "SELECT resolved_at, intent_type, outcome, narration FROM chronicle_action " +
-            "WHERE chronicle_id=? AND narration IS NOT NULL ORDER BY resolved_at, id",
+            "SELECT ca.resolved_at, ca.intent_type, ca.outcome, COALESCE(can.narration, ca.narration) " +
+            "FROM chronicle_action ca LEFT JOIN chronicle_action_narration can ON can.action_id = ca.id " +
+            "WHERE ca.chronicle_id=? AND ca.narration IS NOT NULL ORDER BY ca.resolved_at, ca.id",
             (rs, row) -> new JourneyEntry(rs.getTimestamp(1).toInstant(), rs.getString(2), rs.getString(3), rs.getString(4)),
             chronicleId);
 

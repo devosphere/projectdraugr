@@ -57,9 +57,20 @@ The first and highest-value AI; its seam (`NarrationRouter` + `PerceptionFrame`)
   turns a `PerceptionFrame` + the deterministic prose into a refinement prompt and returns the
   deterministic prose **plus** at most one AI sentence — or the deterministic prose alone on any
   failure. Unit-tested against a stub client (no network, no DB, no key).
-- **1b. Wired into `ChronicleActionService.resolve()` — done.** After `perception` is final and
-  the frame built, `if (narrationRouter.shouldUseAI(...)) perception = simulationNarrator.refine(frame, perception)`;
-  a genuine change is re-persisted (`UPDATE chronicle_action`) and reflected in the returned frame.
+- **1b. Wired into `ChronicleActionService.resolve()` — done.** The deterministic prose is INSERTed
+  once into the append-only `chronicle_action` row (the immutable source of truth). The death coda and,
+  when `narrationRouter.shouldUseAI(...)` fires, the Simulation Agent's one refined sentence are added
+  afterward and stored in a **separate overlay table** (`chronicle_action_narration`, V65) keyed by
+  `action_id` — never a write-back to the base row. The read paths (`narrationHistory`, `journey` →
+  archive + PDF, the idempotency replay) `LEFT JOIN` the overlay and `COALESCE(overlay, base)`, so
+  history, the archive, and the PDF show exactly the enriched prose the player saw live, falling back to
+  the deterministic prose when no overlay exists. The overlay records the `model` id for a later
+  narration-quality review. **Ordering is deliberate:** the single paid model call is the last fallible
+  step — every operation that can throw a hard persistence error commits-in-transaction *before* a token
+  is spent, so a DB failure (or a retry of one) costs nothing. The overlay INSERT that follows targets a
+  trigger-free table with an already-satisfied FK, so it cannot raise the immutability error that an
+  earlier `UPDATE chronicle_action` did. Hard errors are also recorded to `system_error_log`
+  (`GET /api/system/errors`) so a fault can't hide behind its clean HTTP response.
   Verified: a HIGH-attention observe (which the router *would* route to AI) resolves unchanged with
   the feature off, and the whole context boots clean.
 - **1c. Live verification — pending a key.** With `DRAUGR_AI_ENABLED=true` + `ANTHROPIC_API_KEY`,
