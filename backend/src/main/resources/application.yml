@@ -15,3 +15,14 @@ spring:
 server:
   error:
     include-message: always
+
+# Optional AI narration (the Simulation Agent's voice). Off by default: the game runs on
+# deterministic prose alone until you switch it on and supply a key. Never commit a key here.
+# See docs/architecture/three-ai-integration.md.
+draugr:
+  ai:
+    enabled: ${DRAUGR_AI_ENABLED:false}
+    api-key: ${DRAUGR_AI_API_KEY:${ANTHROPIC_API_KEY:}}
+    model: ${DRAUGR_AI_MODEL:claude-opus-5}
+    max-tokens: ${DRAUGR_AI_MAX_TOKENS:1024}
+    timeout: ${DRAUGR_AI_TIMEOUT:20s}
