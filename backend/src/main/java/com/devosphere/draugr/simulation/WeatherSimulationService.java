@@ -21,11 +21,12 @@ import java.util.UUID;
  * rain moderate, and snow belongs to winter and never falls in summer. This replaces the old
  * {@code (seed+day) mod 4} cycle, which made a storm strike every fourth day and never produced snow.
  *
- * <p><b>Scope note:</b> {@code world_weather} holds one row per world, so this is a single global sky.
- * Per-region climate (weather rational to a specific biome / ecology site) needs a schema change to a
- * per-region weather model and is tracked as a follow-up on #28. The temperature already varies by
- * season and hour, and narration grounds it against the local biome, so the sky reads differently in
- * different places even while the kind is shared.
+ * <p><b>Scope note:</b> {@code world_weather} holds one row per world, so this is a single global front —
+ * WHEN it rains or storms is world-wide. How that front is FELT, though, is derived per chunk from its own
+ * geography by {@link BiomeClimate}: altitude cools it (lapse rate), latitude shifts it, and humidity biases
+ * rain↔snow — so temperature, wind, and precipitation phase all vary by region with no schema change. The
+ * one remaining piece of #28 is spatial variation of the KIND itself (a rain shadow behind a range, so it
+ * rains one side and not the other); that needs a per-region weather model and stays a tracked follow-up.
  */
 @Service
 public class WeatherSimulationService {

@@ -878,14 +878,19 @@ public class ChronicleActionService {
      */
     private String groundPerception(String core, UUID location, String attention, String beforeWeather, Instant at) {
         java.util.Map<String,Object> env = jdbc.queryForMap(
-            "SELECT wc.biome, ww.weather_kind, COALESCE(ww.ambient_temperature_c,18.0) AS t, COALESCE(ww.wind_speed_kph,6) AS w " +
-            "FROM world_chunk wc LEFT JOIN world_weather ww ON ww.world_id=wc.world_id WHERE wc.id=?", location);
+            "SELECT wc.biome, wc.elevation, wc.moisture, wc.grid_y, wg.height_chunks, ww.weather_kind, " +
+            "COALESCE(ww.ambient_temperature_c,18.0) AS t, COALESCE(ww.wind_speed_kph,6) AS w " +
+            "FROM world_chunk wc JOIN world_genesis wg ON wg.world_id=wc.world_id " +
+            "LEFT JOIN world_weather ww ON ww.world_id=wc.world_id WHERE wc.id=?", location);
         String biome = (String) env.get("biome");
         String globalKind = (String) env.get("weather_kind");
-        // The prose reports the weather as FELT in this biome (#28): the same front that rains below
-        // falls as snow on the mountain. A front CHANGING is a global event, so that flag stays global.
+        // The prose reports the weather as FELT here (#28), derived from the chunk's own geography: altitude
+        // cools it, latitude shifts it, humidity biases rain↔snow — so the same front that rains below falls
+        // as snow on the peak. A front CHANGING is a global event, so that flag stays global.
         com.devosphere.draugr.simulation.BiomeClimate.Local local = com.devosphere.draugr.simulation.BiomeClimate.at(
-            biome, globalKind, ((Number) env.get("t")).doubleValue(), ((Number) env.get("w")).intValue());
+            biome, ((Number) env.get("elevation")).intValue(), ((Number) env.get("moisture")).intValue(),
+            ((Number) env.get("grid_y")).intValue(), ((Number) env.get("height_chunks")).intValue(),
+            globalKind, ((Number) env.get("t")).doubleValue(), ((Number) env.get("w")).intValue());
         boolean weatherChanged = beforeWeather != null && globalKind != null && !beforeWeather.equals(globalKind);
         return narrationEngine.ground(core, biome, timeOfDayLabel(at), local.kind(), attention, weatherChanged);
     }
