@@ -59,6 +59,17 @@ public class ChronicleActionService {
         "look around","look about","glance around","take in","survey","scan","scout","observe","examine",
         "inspect","study the","study my","search the","search for","scour","peer","gaze","watch the",
         "keep watch","keep an eye","listen","carefully","cautiously","warily","alert","note the","eye the");
+    /**
+     * Witness-stance prose for an action the world could not resolve at all — a real procedure it has
+     * no mechanic for, or something that does not connect to the physical world here. Varied by the
+     * action text so distinct attempts do not read identically (#1: failed attempts felt ambiguous and
+     * repetitive). Names no reason and gives no hint — the world simply does not answer to it; the
+     * player must bring the knowledge of what would.
+     */
+    private static final String[] UNRESOLVED_ATTEMPT = {
+        "You work at it for a while, but nothing here answers to the attempt, and the moment passes into the rest.",
+        "Whatever you meant by that, your hands find no purchase on it. The world around you goes on unchanged.",
+        "You try, and the effort goes into the air. The ground and everything on it is exactly as it was."};
     private final JdbcTemplate jdbc; private final SimulationTickService ticks; private final ChroniclePhysiologyService physiology; private final NarrationPolicy narration; private final PhysicalItemService items; private final CapabilityAdaptationService capability; private final ConstructionService construction; private final ChronicleDiscoveryService discoveries; private final WildlifeEncounterService wildlife; private final FireService fire; private final LiteratureService literature; private final FoodPreservationService food; private final ActionInputClassifier inputClassifier; private final AssemblyService assembly; private final NarrationRouter narrationRouter; private final SimulationNarrator simulationNarrator; private final com.devosphere.draugr.narration.NarrationEngine narrationEngine;
     public ChronicleActionService(JdbcTemplate jdbc, SimulationTickService ticks, ChroniclePhysiologyService physiology, NarrationPolicy narration, PhysicalItemService items, CapabilityAdaptationService capability, ConstructionService construction, ChronicleDiscoveryService discoveries, WildlifeEncounterService wildlife, FireService fire, LiteratureService literature, FoodPreservationService food, ActionInputClassifier inputClassifier, AssemblyService assembly, NarrationRouter narrationRouter, SimulationNarrator simulationNarrator, com.devosphere.draugr.narration.NarrationEngine narrationEngine) { this.jdbc = jdbc; this.ticks = ticks; this.physiology = physiology; this.narration = narration; this.items=items; this.capability=capability; this.construction=construction; this.discoveries=discoveries; this.wildlife=wildlife; this.fire=fire; this.literature=literature; this.food=food; this.inputClassifier=inputClassifier; this.assembly=assembly; this.narrationRouter=narrationRouter; this.simulationNarrator=simulationNarrator; this.narrationEngine=narrationEngine; }
 
@@ -233,7 +244,7 @@ public class ChronicleActionService {
                 String[] r = items.runProcess(chronicle.id(), chronicle.location(), text, resolvedAt);
                 if ("SUCCEEDED".equals(r[0]) || !r[1].startsWith("You turn the material over")) {
                     intent = Intent.PROCESS_MATERIAL; outcome = r[0]; perception = r[1];
-                } else { outcome = "FAILED"; perception = "The attempt passes without changing the immediate world around you."; }
+                } else { outcome = "FAILED"; perception = UNRESOLVED_ATTEMPT[Math.floorMod(text.hashCode(), UNRESOLVED_ATTEMPT.length)]; }
             }
         }
         // The world's turn (V44). While the chronicle was occupied, anything hunting
