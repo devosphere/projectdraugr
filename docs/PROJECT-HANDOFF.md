@@ -234,13 +234,14 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 
 #### Resume point
 
-> **▶ ACTIVE NOW (2026-08-03): post-playtest work.** A live playthrough surfaced GitHub issues #19–24
+> **▶ ACTIVE NOW (2026-08-04): post-playtest work.** A live playthrough surfaced GitHub issues #19–28
 > and a design discussion that produced **[DR-0021](systems/06.3-Decision-Log.md#dr-0021)** (runtime
 > procedure-authoring, five AI roles). **The single live tracker is
 > [06.4-Runtime-Authoring-Build-Plan.md](systems/06.4-Runtime-Authoring-Build-Plan.md) — go there first;
-> its RESUME POINT says exactly what to do next.** Order: Bucket A deterministic bugs (#24/#23/#21/#19)
-> → narration contract → the DR-0021 pipeline (spec before build). The numbered history below is the
-> prior milestone sequence, all DONE.
+> its RESUME POINT says exactly what to do next.** **The GitHub playtest backlog #21–#28 is now CLEARED**
+> (migrations through **V67**; 142 backend tests green). The DR-0021 pipeline is BUILT and gated off; what
+> remains is two dev-facing surfaces + live AI-on verification with the operator key. The numbered history
+> below is the prior milestone sequence, all DONE.
 
 1. **DONE — Step 1: measure.** V56 shipped. The backlog is live and directs the rest.
 2. **DONE — Step 2: bulk foundation generation through the V53 gate.** V57 landed 109 processes (20 → 129) across the eight simulation-named gaps, promoted only by the extended gate, verified reachable from a clean DB. Still owed: sampled human plausibility review of the batch (design rule #5) — the gate proves conservation and reachability, not that a recipe is good primitive technology.
@@ -274,6 +275,11 @@ The question "should an AI layer help the ActivityClassifier work out what the p
     - **DONE — stabilization sweep.** Full backend suite green (**111 tests, 0 failures**; the 3 Testcontainers integration tests run in CI — they abort locally on the Docker-npipe quirk). Frontend builds clean. Booted-stack core-loop smoke (observe → gather fiber/stone/branches/berries → craft knife/hammer/hatchet → build fire pit → strip bark → rest/drink/eat → hygiene): **23 actions, 0 non-201 responses, auditor consistent, chronicle LIVING**. Each of this session's specific paths was also verified E2E along the way (all 3 AIs inert-when-off, fell→ground→split, salt gather at a SALT_DEPOSIT, FINE mineral, PDF export, #14–#18).
     - **NEXT:** flip the AI switch and live-verify all three with a real key (`DRAUGR_AI_ENABLED=true` + `ANTHROPIC_API_KEY`, next usage-limit cycle); tune prompts against real playthrough output.
     - Still deferred: FINE-grade material sources, and the `SALT_DEPOSIT` world-generator placement.
+11. **DONE — GitHub playtest backlog cleared (#25 + #28), migrations through V67.**
+    - **#25 Inspect / Analyze / Investigate — examination verbs scaled by mastery.** `ExaminationService` (deterministic, witness-stance) resolves a subject — a reachable item the text names, else the place itself — and returns tiered facts at a depth set by the relevant mastery: INSPECT/`EXAMINE` (perception), ANALYZE (insight), INVESTIGATE (perception+insight+knowledge). **V67** added two hidden per-chronicle capability dimensions — `insight_familiarity` + `knowledge_familiarity` — so the families are now **8** (LOAD, LOCOMOTION, FINE_MOTOR, AIM, ATTENTION, RECOVERY, INSIGHT, KNOWLEDGE). Each verb builds the mastery it leans on; AI enrichment of the deepest tier is the non-load-bearing future layer. Classifier: ANALYZE/INVESTIGATE own their words, `EXAMINE` needs a pointed determiner (this/my), bare looking stays OBSERVE. Commit baf8151.
+    - **#28 regional weather — geography-driven, no schema change.** `BiomeClimate` no longer keys off the biome label with hand-tuned constants; it derives the felt climate from the chunk's own geography: temperature follows the environmental lapse rate from real `elevation` (a high peak is genuinely colder than a low one, continuous not bucketed), a latitude gradient from `grid_y`×world-height, and a wet-bulb rain↔snow bias from `moisture`. The biome label now contributes only the non-altitude residual (sea damp, canopy shelter, open-ground sun/wind). Both callers (`groundPerception`, `activeEnvironment`) feed it the geography; SQL EXPLAIN-validated on a throwaway Postgres. **Open follow-up:** the weather KIND is still one world-wide front, so spatial variation of the kind itself (a rain shadow behind a range) needs a per-region weather model. Commit 640b783.
+    - **Materials & Recipes doc regenerated from the live DB** (`Project Draugr — Materials & Recipes.md`, gitignored local file): every item/process/assembly count and every input→output quantity verified against a throwaway Postgres at V67. Now a complete, specific catalogue — all 130 processes by domain, 6 assemblies with exact stages, flora/wildlife/mineral acquisition by biome. Snapshot V1–V67.
+    - Full suite **142 tests green**; `BiomeClimateTest` (8 cases) and `ExaminationServiceTest` guard the new behaviour, `IntentClassificationRegressionTest` covers the new verbs.
 
 #### Why coverage, not correctness, is the cost driver
 
@@ -286,7 +292,7 @@ The unlock: V53's review gate already makes machine-authored processes safe to a
 **THEN: Task #21 — AI narration (the Simulation Agent's voice).** The seam is built: `NarrationRouter` decides whether to call, `NarrationEngine` supplies the `backendNarration` the refinement prompt builds on. See `docs/architecture/narration-engine.md` for the prompt template and cost model.
 
 ### Intents implemented (ChronicleActionService)
-GATHER, HARVEST, CRAFT, EQUIP, UNEQUIP, DROP, BUILD, REPAIR, ABANDON, RESUME, LIGHT_FIRE, ADD_FUEL, MAKE_CHARCOAL, COOK, SLEEP, STRIP_BARK, GATHER_CLAY, GATHER_STONE_SLAB, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, WRITE, EDIT_DOCUMENT, SKETCH_MAP, DESIGNATE, MARK, TRAVEL, CONFRONT_WILDLIFE, REFINE, OBSERVE, GATHER_PLANT, FELL_TREE, RAID_HIVE, COLLECT_INSECTS, FISH, SNARE, TRACK, TAME, LURE, SET_TRAP, CHECK_TRAP, ADVANCE_ASSEMBLY, INSPECT, REWORK, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE (multi-output & preserved-food outputs handled inside PROCESS_MATERIAL)
+GATHER, HARVEST, CRAFT, EQUIP, UNEQUIP, DROP, BUILD, REPAIR, ABANDON, RESUME, LIGHT_FIRE, ADD_FUEL, MAKE_CHARCOAL, COOK, SLEEP, STRIP_BARK, GATHER_CLAY, GATHER_STONE_SLAB, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, WRITE, EDIT_DOCUMENT, SKETCH_MAP, DESIGNATE, MARK, TRAVEL, CONFRONT_WILDLIFE, REFINE, OBSERVE, GATHER_PLANT, FELL_TREE, RAID_HIVE, COLLECT_INSECTS, FISH, SNARE, TRACK, TAME, LURE, SET_TRAP, CHECK_TRAP, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, REWORK, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE (multi-output & preserved-food outputs handled inside PROCESS_MATERIAL)
 
 ### Known limitations (acceptable for now)
 - Friction fire kit never wears out — infinite fires once made (wear/degradation future task)
