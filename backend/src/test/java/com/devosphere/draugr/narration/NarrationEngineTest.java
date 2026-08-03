@@ -90,4 +90,21 @@ class NarrationEngineTest {
                                   "WRITE|SUCCEEDED","SKETCH_MAP|SUCCEEDED"))
             assertTrue(engine.coveredScenes().contains(key), "missing coverage: " + key);
     }
+
+    @Test void groundingPunctuatesRatherThanTaggingEveryLine() {
+        String c = "You take what is worth taking.";
+        // Heads-down work in steady, unchanged clear weather adds nothing.
+        assertEquals(c, engine.ground(c, "TEMPERATE_FOREST", "MIDDAY", "CLEAR", "LOW", false));
+        // Heads-down in steady rain (not changing) — tuned out, still nothing.
+        assertEquals(c, engine.ground(c, "TEMPERATE_FOREST", "MIDDAY", "RAIN", "LOW", false));
+        // But the moment the rain starts, it is felt even heads-down.
+        assertTrue(engine.ground(c, "TEMPERATE_FOREST", "MIDDAY", "RAIN", "LOW", true).contains("Rain"));
+        // Moving through rain feels it.
+        assertTrue(engine.ground(c, "TEMPERATE_FOREST", "MIDDAY", "RAIN", "MODERATE", false).contains("Rain"));
+        // Deliberate looking adds the land even in clear weather; and no HUD state is ever named.
+        String high = engine.ground(c, "TEMPERATE_FOREST", "AFTERNOON", "CLEAR", "HIGH", false);
+        assertTrue(high.length() > c.length() && high.contains("trees stand close"));
+        for (String hud : List.of("hunger","thirst","energy","health"))
+            assertFalse(high.toLowerCase().contains(hud), "grounding must name no HUD state");
+    }
 }

@@ -219,6 +219,34 @@ public class NarrationEngine {
         return pool[Math.floorMod(h, pool.length)];
     }
 
+    /**
+     * Punctuate a witness-stance core with a clause of setting, so the world is present in the
+     * prose and not just the act — the difference between "You take what is worth taking." and
+     * "You take what is worth taking. Rain moves through steadily." It lands when it means
+     * something rather than tagging every line:
+     * <ul>
+     *   <li><b>Weather</b> (rain, storm, snow, fog) is felt while moving or looking, and always the
+     *       moment it changes — so a chronicle heads-down on a task in steady rain has tuned it out,
+     *       but feels it start, or notices it when they look up.</li>
+     *   <li><b>The look of the land</b> is added only on deliberate attention (HIGH) — the chronicle
+     *       taking the place in, not glancing past it.</li>
+     * </ul>
+     * Clear weather and heads-down work get nothing added. Pure function; no HUD state named.
+     */
+    public String ground(String core, String biome, String timeOfDay, String weather, String attention, boolean weatherChanged) {
+        boolean low = "LOW".equals(attention), high = "HIGH".equals(attention);
+        String w = weather == null ? null : WEATHER_COLOR.get(weather);
+        if (w != null && !w.isEmpty() && (weatherChanged || !low)) core = core + " " + w + ".";
+        if (high) {
+            String b = biome == null ? null : BIOME_COLOR.get(biome);
+            if (b != null) {
+                String t = timeOfDay == null ? null : TIME_COLOR.get(timeOfDay);
+                core = core + " " + (t == null || t.isEmpty() ? b + "." : b + ", " + t + ".");
+            }
+        }
+        return core;
+    }
+
     /** Intents the engine has hand-written prose for — used by tests and by the router. */
     public boolean hasSpecificProse(String intent, String outcome) {
         return BY_INTENT_OUTCOME.containsKey(intent + "|" + outcome);

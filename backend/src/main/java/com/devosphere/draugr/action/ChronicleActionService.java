@@ -59,8 +59,8 @@ public class ChronicleActionService {
         "look around","look about","glance around","take in","survey","scan","scout","observe","examine",
         "inspect","study the","study my","search the","search for","scour","peer","gaze","watch the",
         "keep watch","keep an eye","listen","carefully","cautiously","warily","alert","note the","eye the");
-    private final JdbcTemplate jdbc; private final SimulationTickService ticks; private final ChroniclePhysiologyService physiology; private final NarrationPolicy narration; private final PhysicalItemService items; private final CapabilityAdaptationService capability; private final ConstructionService construction; private final ChronicleDiscoveryService discoveries; private final WildlifeEncounterService wildlife; private final FireService fire; private final LiteratureService literature; private final FoodPreservationService food; private final ActionInputClassifier inputClassifier; private final AssemblyService assembly; private final NarrationRouter narrationRouter; private final SimulationNarrator simulationNarrator;
-    public ChronicleActionService(JdbcTemplate jdbc, SimulationTickService ticks, ChroniclePhysiologyService physiology, NarrationPolicy narration, PhysicalItemService items, CapabilityAdaptationService capability, ConstructionService construction, ChronicleDiscoveryService discoveries, WildlifeEncounterService wildlife, FireService fire, LiteratureService literature, FoodPreservationService food, ActionInputClassifier inputClassifier, AssemblyService assembly, NarrationRouter narrationRouter, SimulationNarrator simulationNarrator) { this.jdbc = jdbc; this.ticks = ticks; this.physiology = physiology; this.narration = narration; this.items=items; this.capability=capability; this.construction=construction; this.discoveries=discoveries; this.wildlife=wildlife; this.fire=fire; this.literature=literature; this.food=food; this.inputClassifier=inputClassifier; this.assembly=assembly; this.narrationRouter=narrationRouter; this.simulationNarrator=simulationNarrator; }
+    private final JdbcTemplate jdbc; private final SimulationTickService ticks; private final ChroniclePhysiologyService physiology; private final NarrationPolicy narration; private final PhysicalItemService items; private final CapabilityAdaptationService capability; private final ConstructionService construction; private final ChronicleDiscoveryService discoveries; private final WildlifeEncounterService wildlife; private final FireService fire; private final LiteratureService literature; private final FoodPreservationService food; private final ActionInputClassifier inputClassifier; private final AssemblyService assembly; private final NarrationRouter narrationRouter; private final SimulationNarrator simulationNarrator; private final com.devosphere.draugr.narration.NarrationEngine narrationEngine;
+    public ChronicleActionService(JdbcTemplate jdbc, SimulationTickService ticks, ChroniclePhysiologyService physiology, NarrationPolicy narration, PhysicalItemService items, CapabilityAdaptationService capability, ConstructionService construction, ChronicleDiscoveryService discoveries, WildlifeEncounterService wildlife, FireService fire, LiteratureService literature, FoodPreservationService food, ActionInputClassifier inputClassifier, AssemblyService assembly, NarrationRouter narrationRouter, SimulationNarrator simulationNarrator, com.devosphere.draugr.narration.NarrationEngine narrationEngine) { this.jdbc = jdbc; this.ticks = ticks; this.physiology = physiology; this.narration = narration; this.items=items; this.capability=capability; this.construction=construction; this.discoveries=discoveries; this.wildlife=wildlife; this.fire=fire; this.literature=literature; this.food=food; this.inputClassifier=inputClassifier; this.assembly=assembly; this.narrationRouter=narrationRouter; this.simulationNarrator=simulationNarrator; this.narrationEngine=narrationEngine; }
 
     @Transactional
     public ActionResult resolve(String text) { return resolve(text, null); }
@@ -245,6 +245,12 @@ public class ChronicleActionService {
             String ambush = wildlife.passiveEncounter(chronicle.id(), chronicle.location(), actionId, resolvedAt, attention);
             if (ambush != null) perception = perception + " " + ambush;
         }
+        // Bucket B — the narration contract: wrap the deterministic core in a clause of setting, so the
+        // world is present in the prose and not just the act. Success and failure alike are grounded;
+        // the punctuation rule (weather when felt/changing, the land on deliberate looking) lives in the
+        // NarrationEngine so it lands when it means something rather than tagging every line. OBSERVE is
+        // excluded — its own survey prose already IS the setting, in far more detail.
+        if (intent != Intent.OBSERVE) perception = groundPerception(perception, chronicle.location(), attention, beforeWeather, resolvedAt);
         // chronicle_action is append-only IMMUTABLE history (the prevent_chronicle_action_mutation
         // trigger blocks any UPDATE/DELETE). Persist the deterministic prose ONCE, here, and never
         // touch the row again — the source of truth stays untouched. The death coda and the Simulation
@@ -818,6 +824,19 @@ public class ChronicleActionService {
      * the qualitative transitions the tick and this action wrought since the previous
      * frame, so the passage of time is surfaced rather than silently swallowed.
      */
+    /**
+     * Ground a deterministic core in a clause of setting (the world's weather and, on deliberate
+     * attention, the look of the land) via the {@link com.devosphere.draugr.narration.NarrationEngine}.
+     * One light read of the chunk's biome and the world's weather; the engine holds the punctuation rule.
+     */
+    private String groundPerception(String core, UUID location, String attention, String beforeWeather, Instant at) {
+        java.util.Map<String,Object> env = jdbc.queryForMap(
+            "SELECT wc.biome, ww.weather_kind FROM world_chunk wc LEFT JOIN world_weather ww ON ww.world_id=wc.world_id WHERE wc.id=?", location);
+        String biome = (String) env.get("biome");
+        String weather = (String) env.get("weather_kind");
+        boolean weatherChanged = beforeWeather != null && weather != null && !beforeWeather.equals(weather);
+        return narrationEngine.ground(core, biome, timeOfDayLabel(at), weather, attention, weatherChanged);
+    }
     private PerceptionFrame buildFrame(ActiveChronicle chronicle, Intent intent, String outcome, String perception, Instant at, ChroniclePhysiologyService.BodyHudSnapshot before, ChroniclePhysiologyService.BodyHudSnapshot after, String beforeWeather, String attention) {
         UUID loc = chronicle.location();
         java.util.Map<String,Object> here = jdbc.queryForMap("SELECT world_id, grid_x, grid_y, biome FROM world_chunk WHERE id=?", loc);
