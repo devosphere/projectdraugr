@@ -62,6 +62,19 @@ public class ActivityClassifier {
     }
 
     /**
+     * Like {@link #containsTerm}, but a single-word term also matches its regular English plural.
+     * Used ONLY for a process's subject terms, so a player writing the natural "split the
+     * <b>logs</b> into <b>planks</b>" satisfies the singular subjects {@code log}/{@code plank}
+     * (GitHub #21). Deliberately not applied to the activity vocabulary or process keywords:
+     * pluralising verbs would shift category weights and re-open the false-match collisions the
+     * two-axis rule exists to prevent (DR-0020).
+     */
+    public static boolean containsSubject(String normalised, String term) {
+        if (containsTerm(normalised, term)) return true;
+        return term.indexOf(' ') < 0 && (normalised.contains(" " + term + "s ") || normalised.contains(" " + term + "es "));
+    }
+
+    /**
      * The rule, in full and without a database.
      *
      * <p>Sum the weight of every vocabulary term present in the text, per category.

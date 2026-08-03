@@ -107,7 +107,7 @@ public class ProcessMatcher {
                 continue;
             }
             boolean subject = false;
-            for (String s : c.subjects()) if (ActivityClassifier.containsTerm(v, s)) { subject = true; break; }
+            for (String s : c.subjects()) if (ActivityClassifier.containsSubject(v, s)) { subject = true; break; }
             if (!subject) {
                 // Right work, right verb, wrong material — the closest kind of miss.
                 if (!"KEYWORD".equals(gate)) { gate = "KEYWORD"; nearKey = c.processKey(); }

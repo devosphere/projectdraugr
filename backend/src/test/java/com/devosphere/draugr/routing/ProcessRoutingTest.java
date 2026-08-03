@@ -141,4 +141,20 @@ class ProcessRoutingTest {
         assertNull(RoutingFixture.resolve("   "));
         assertNull(RoutingFixture.resolve("i sit down and think about home"));
     }
+
+    /**
+     * GitHub #21: a natural plural on the subject must still resolve. "split the logs into planks"
+     * used to return null because the subjects are singular ('log', 'plank') and matching was
+     * whole-word — so a correct, common phrasing did nothing. Plural tolerance is on the SUBJECT
+     * only; the verb/collision guards below must stay intact.
+     */
+    @Test
+    @DisplayName("a plural subject still resolves (#21)")
+    void pluralSubjectsResolve() {
+        assertEquals("split_planks", RoutingFixture.resolve("split the logs into planks"));
+        assertEquals("split_planks", RoutingFixture.resolve("split logs into planks"));
+        assertEquals("split_planks", RoutingFixture.resolve("saw the logs into planks"));
+        // Pluralising the subject must not defeat the collision guard: fish is still not timber.
+        assertNull(RoutingFixture.resolve("split the fish into thin strips"));
+    }
 }
