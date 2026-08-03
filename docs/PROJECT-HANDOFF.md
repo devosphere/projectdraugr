@@ -194,15 +194,34 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 
 **Step 2 (coverage) is COMPLETE — V57.** 129 processes now VERIFIED (was 20). The V53 gate was extended to make category-agreement and subject-presence BLOCKING, so an unreachable process is held rather than shipped; it caught 3. A reusable reachability probe — [routing-reachability-probe.sql](architecture/routing-reachability-probe.sql), a SQL replica of the runtime rule — checks every process resolves from ordinary phrasing; it surfaced 7 in-batch collisions, all fixed before landing. Re-run it after any migration that adds processes.
 
-#### SETTLED: no AI at resolution time — read this before proposing one
+#### AMENDED by DR-0021 (2026-08-03): a BOUNDED AI at resolution time is now approved
 
-**`docs/architecture/routing-and-coverage-strategy.md` is the decision record. Read it rather than re-deriving it.**
+**⚠ The old "no AI at resolution time, ever" stance below is SUPERSEDED for the composition/authoring
+case. Read [DR-0021](systems/06.3-Decision-Log.md#dr-0021) and the live build tracker
+[06.4-Runtime-Authoring-Build-Plan.md](systems/06.4-Runtime-Authoring-Build-Plan.md) before doing any
+of this work — the architecture is DECIDED; do not re-open the discussion.**
 
-The question "should an AI layer help the ActivityClassifier work out what the player meant?" has been asked and answered: **no.** Four reasons, in short — (1) ~39 of ~46 probed actions missed because *the mechanic does not exist*, so a classifier would pay a call to confirm emptiness; (2) an LLM handed 20 candidates finds the nearest one, which manufactures exactly the false COVERED that V54/V55 exist to prevent; (3) `runProcess` writes permanent history, and V53's gate works precisely because what it gates is data sitting still — an inline classifier's output is a decision already executed, with nothing left to gate; (4) it grants a fourth agent authority that `core-agent-boundaries.md` never gave it.
+Why it changed: the four arguments below were measured at **~5–10% mechanic coverage**, where most misses
+were *missing mechanics*. At **129 processes** that premise flipped — the belt and the planks already
+exist, and playtest failures are increasingly *interpretation/decomposition* against present mechanics.
+DR-0021 introduces a bounded resolution-time pipeline that neutralises each old argument structurally:
+the deterministic gate rejects nearest-neighbour false-matches (arg 2); the runtime Architect writes only
+**per-chronicle scoped, physics-gated data — never an outcome, never canon, never schema** (args 1, 3);
+and canon promotion stays human-gated (arg 4). Governing invariant: **every AI is non-load-bearing over a
+complete deterministic core.** New *domains/tables* still require a human migration (DR-0009/DR-0013 intact).
 
-**AI goes at authoring time instead** — one call per novel verb ever, one call per process ever, both permanent and compounding. The strategy doc carries the full argument, the backlog queries, the invariants that must not be broken, and the specific evidence that would justify reopening the question.
+*Historical record — the original stance (still the reasoning for why runtime authoring is tightly bounded):*
+The question "should an AI layer help the ActivityClassifier work out what the player meant?" was first answered **no.** Four reasons — (1) ~39 of ~46 probed actions missed because *the mechanic does not exist*, so a classifier would pay a call to confirm emptiness; (2) an LLM handed 20 candidates finds the nearest one, which manufactures exactly the false COVERED that V54/V55 exist to prevent; (3) `runProcess` writes permanent history, and V53's gate works precisely because what it gates is data sitting still; (4) it grants a fourth agent authority that `core-agent-boundaries.md` never gave it. `docs/architecture/routing-and-coverage-strategy.md` carries the full original argument; DR-0021 records exactly which evidence reopened it.
 
 #### Resume point
+
+> **▶ ACTIVE NOW (2026-08-03): post-playtest work.** A live playthrough surfaced GitHub issues #19–24
+> and a design discussion that produced **[DR-0021](systems/06.3-Decision-Log.md#dr-0021)** (runtime
+> procedure-authoring, five AI roles). **The single live tracker is
+> [06.4-Runtime-Authoring-Build-Plan.md](systems/06.4-Runtime-Authoring-Build-Plan.md) — go there first;
+> its RESUME POINT says exactly what to do next.** Order: Bucket A deterministic bugs (#24/#23/#21/#19)
+> → narration contract → the DR-0021 pipeline (spec before build). The numbered history below is the
+> prior milestone sequence, all DONE.
 
 1. **DONE — Step 1: measure.** V56 shipped. The backlog is live and directs the rest.
 2. **DONE — Step 2: bulk foundation generation through the V53 gate.** V57 landed 109 processes (20 → 129) across the eight simulation-named gaps, promoted only by the extended gate, verified reachable from a clean DB. Still owed: sampled human plausibility review of the batch (design rule #5) — the gate proves conservation and reachability, not that a recipe is good primitive technology.
