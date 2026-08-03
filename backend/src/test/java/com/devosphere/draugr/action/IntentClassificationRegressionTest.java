@@ -32,7 +32,7 @@ class IntentClassificationRegressionTest {
             new com.devosphere.draugr.item.PhysicalItemService(null, null, null) {
                 @Override public boolean actionMatchesProcess(String t) { return processMatches; }
             };
-        ChronicleActionService svc = new ChronicleActionService(null, null, null, null, items, null, null, null, null, null, null, null, new com.devosphere.draugr.narration.ActionInputClassifier(), null, null, null, new com.devosphere.draugr.narration.NarrationEngine(), (com.devosphere.draugr.ai.RuntimeAuthoringService) null);
+        ChronicleActionService svc = new ChronicleActionService(null, null, null, null, items, null, null, null, null, null, null, null, new com.devosphere.draugr.narration.ActionInputClassifier(), null, null, null, new com.devosphere.draugr.narration.NarrationEngine(), (com.devosphere.draugr.ai.RuntimeAuthoringService) null, (ExaminationService) null);
         return ((Enum<?>) m.invoke(svc, text)).name();
     }
 
@@ -76,6 +76,23 @@ class IntentClassificationRegressionTest {
         assertEquals("REWORK", classify("redo the flawed step", false));
         // "inspect" with no quality/assembly context is still plain looking.
         assertEquals("OBSERVE", classify("inspect the clearing", false));
+    }
+
+    /**
+     * The examination verbs (#25): ANALYZE and INVESTIGATE own their words and carry the two new
+     * masteries (insight, knowledge); EXAMINE claims a focused inspect of one pointed-at object.
+     */
+    @Test void examinationVerbsClassify() throws Exception {
+        assertEquals("ANALYZE", classify("analyze the strange stone"));
+        assertEquals("ANALYZE", classify("analyse my knife"));
+        assertEquals("INVESTIGATE", classify("investigate the ruined wall"));
+        // A pointed determiner marks a specific object to examine.
+        assertEquals("EXAMINE", classify("examine my knife"));
+        assertEquals("EXAMINE", classify("inspect this branch"));
+        assertEquals("EXAMINE", classify("examine that carcass"));
+        // Bare/scenery looking stays the whole-surroundings survey, not a focused examination.
+        assertEquals("OBSERVE", classify("examine the area"));
+        assertEquals("OBSERVE", classify("look around the clearing"));
     }
 
     /** A drying rack is a staged structure (V58), not a shelf — it must reach the fallback. */

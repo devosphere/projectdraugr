@@ -10,12 +10,12 @@ import java.time.Instant; import java.sql.Timestamp; import java.util.UUID;
   Timestamp ts=Timestamp.from(at);
   jdbc.update("INSERT INTO chronicle_capability_adaptation (chronicle_id) VALUES (?) ON CONFLICT DO NOTHING",chronicle);
   jdbc.update("INSERT INTO chronicle_capability_evidence (chronicle_id,action_id,occurred_at,domain,exposure_minutes,load_ratio,recovery_context,payload) VALUES (?,?,?,?,?,?,?,jsonb_build_object('source','resolved_action'))",chronicle,action,ts,domain,minutes,load,recovery);
-  String field=switch(domain){case "LOAD"->"load_conditioning";case "LOCOMOTION"->"locomotion_familiarity";case "FINE_MOTOR"->"fine_motor_familiarity";case "AIM"->"visual_aim_familiarity";default->"attention_resilience";};
+  String field=switch(domain){case "LOAD"->"load_conditioning";case "LOCOMOTION"->"locomotion_familiarity";case "FINE_MOTOR"->"fine_motor_familiarity";case "AIM"->"visual_aim_familiarity";case "INSIGHT"->"insight_familiarity";case "KNOWLEDGE"->"knowledge_familiarity";default->"attention_resilience";};
   jdbc.update("UPDATE chronicle_capability_adaptation SET "+field+"=LEAST(1, "+field+" + ?), recovery_readiness=LEAST(1, GREATEST(0, recovery_readiness + ?)), updated_at=? WHERE chronicle_id=?", Math.min(.003,minutes*.00002*(.35+load)), (recovery-.5)*.002,ts,chronicle);
  }
  /** The chronicle's accumulated familiarity (0..1) in a domain — the passive-knowledge layer that lets a practiced hand succeed on a terse command. 0 when never practiced. */
  @Transactional(readOnly=true) public double familiarity(UUID chronicle, String domain){
-  String field=switch(domain){case "LOAD"->"load_conditioning";case "LOCOMOTION"->"locomotion_familiarity";case "FINE_MOTOR"->"fine_motor_familiarity";case "AIM"->"visual_aim_familiarity";default->"attention_resilience";};
+  String field=switch(domain){case "LOAD"->"load_conditioning";case "LOCOMOTION"->"locomotion_familiarity";case "FINE_MOTOR"->"fine_motor_familiarity";case "AIM"->"visual_aim_familiarity";case "INSIGHT"->"insight_familiarity";case "KNOWLEDGE"->"knowledge_familiarity";default->"attention_resilience";};
   Double v=jdbc.query("SELECT "+field+" FROM chronicle_capability_adaptation WHERE chronicle_id=?", rs->rs.next()?(Double)rs.getDouble(1):null, chronicle);
   return v==null?0.0:v;
  }
