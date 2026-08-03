@@ -287,7 +287,14 @@ public class ChronicleActionService {
         if ("SUCCEEDED".equals(outcome) && intent == Intent.BUILD_FIRE_PIT) discoveries.record(chronicle.id(), "STONE_FIRE_PIT", actionId, resolvedAt);
         // Personal acts and venting build no capability — there is no skill in them.
         boolean buildsCapability = intent != Intent.PERSONAL_ACT && intent != Intent.AGGRESSION_INANIMATE && intent != Intent.AGGRESSION_WILDLIFE;
-        if ("SUCCEEDED".equals(outcome) && buildsCapability) capability.record(chronicle.id(), actionId, (intent==Intent.GATHER_FIBER||intent==Intent.GATHER_STONE)?"LOAD":intent==Intent.OBSERVE?"ATTENTION":(intent==Intent.REST||intent==Intent.SLEEP)?"RECOVERY":intent==Intent.CONFRONT_WILDLIFE?"AIM":intent==Intent.MOVE?"LOCOMOTION":"FINE_MOTOR", minutes, (intent==Intent.GATHER_FIBER||intent==Intent.GATHER_STONE)?.18:.05, (intent==Intent.REST||intent==Intent.SLEEP)?.75:.45, resolvedAt);
+        if ("SUCCEEDED".equals(outcome) && buildsCapability) {
+            // Every successful action feeds the capability family it actually exercises (GitHub #26):
+            // hauling and breaking ground build LOAD, hunting and trapping build AIM, looking and
+            // tracking build ATTENTION, travel builds LOCOMOTION, rest builds RECOVERY, and the skilled
+            // hand-work of crafting/processing/writing builds FINE_MOTOR — no longer all lumped together.
+            String domain = capabilityDomainOf(intent);
+            capability.record(chronicle.id(), actionId, domain, minutes, "LOAD".equals(domain) ? .18 : .05, "RECOVERY".equals(domain) ? .75 : .45, resolvedAt);
+        }
         // The base row is now durable. Everything below shapes the DISPLAYED narration (death coda,
         // AI sentence). It is written only to the separate overlay table — never back to the base row —
         // so nothing here can raise the immutability trigger.
@@ -882,6 +889,24 @@ public class ChronicleActionService {
      * narrator witnesses the act and little else. This is the seam that lets a player
      * who does not look remain, dangerously, uninformed.
      */
+    /**
+     * The capability family an action exercises, so repetition builds the RELEVANT mastery (GitHub #26).
+     * LOAD = strength/carrying, AIM = precision at a target, ATTENTION = perception, LOCOMOTION = travel,
+     * RECOVERY = rest, FINE_MOTOR = skilled hand-work. One family per intent; the growth itself is slow,
+     * hidden, and lifelong (CapabilityAdaptationService).
+     */
+    private String capabilityDomainOf(Intent intent) {
+        return switch (intent) {
+            case FELL_TREE, GATHER_STONE, GATHER_STONE_SLAB, GATHER_MINERAL, GATHER_CLAY, GATHER_FIBER,
+                 GATHER_BRANCHES, GATHER_BERRIES, GATHER_PLANT, HARVEST_CARCASS, RAID_HIVE, COLLECT_INSECTS,
+                 BUILD_FIRE_PIT, START_LEAN_TO, WORK_LEAN_TO, REPAIR_LEAN_TO -> "LOAD";
+            case CONFRONT_WILDLIFE, FISH, SNARE, SET_TRAP, CHECK_TRAP, LURE, TAME -> "AIM";
+            case OBSERVE, TRACK, INSPECT -> "ATTENTION";
+            case MOVE, TRAVEL -> "LOCOMOTION";
+            case REST, SLEEP -> "RECOVERY";
+            default -> "FINE_MOTOR"; // crafts, processing, assembly, writing, fire-tending, handling gear, wound care
+        };
+    }
     /** The physical cost of an action beyond the passive tick (GitHub #27): energy spent, hygiene lost. */
     private record Labor(int energy, int hygiene) { }
     private Labor laborOf(Intent intent) {
