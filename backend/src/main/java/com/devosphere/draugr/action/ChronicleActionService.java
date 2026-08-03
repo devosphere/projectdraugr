@@ -70,8 +70,8 @@ public class ChronicleActionService {
         "You work at it for a while, but nothing here answers to the attempt, and the moment passes into the rest.",
         "Whatever you meant by that, your hands find no purchase on it. The world around you goes on unchanged.",
         "You try, and the effort goes into the air. The ground and everything on it is exactly as it was."};
-    private final JdbcTemplate jdbc; private final SimulationTickService ticks; private final ChroniclePhysiologyService physiology; private final NarrationPolicy narration; private final PhysicalItemService items; private final CapabilityAdaptationService capability; private final ConstructionService construction; private final ChronicleDiscoveryService discoveries; private final WildlifeEncounterService wildlife; private final FireService fire; private final LiteratureService literature; private final FoodPreservationService food; private final ActionInputClassifier inputClassifier; private final AssemblyService assembly; private final NarrationRouter narrationRouter; private final SimulationNarrator simulationNarrator; private final com.devosphere.draugr.narration.NarrationEngine narrationEngine; private final com.devosphere.draugr.ai.ProcedureInterpreter interpreter;
-    public ChronicleActionService(JdbcTemplate jdbc, SimulationTickService ticks, ChroniclePhysiologyService physiology, NarrationPolicy narration, PhysicalItemService items, CapabilityAdaptationService capability, ConstructionService construction, ChronicleDiscoveryService discoveries, WildlifeEncounterService wildlife, FireService fire, LiteratureService literature, FoodPreservationService food, ActionInputClassifier inputClassifier, AssemblyService assembly, NarrationRouter narrationRouter, SimulationNarrator simulationNarrator, com.devosphere.draugr.narration.NarrationEngine narrationEngine, com.devosphere.draugr.ai.ProcedureInterpreter interpreter) { this.jdbc = jdbc; this.ticks = ticks; this.physiology = physiology; this.narration = narration; this.items=items; this.capability=capability; this.construction=construction; this.discoveries=discoveries; this.wildlife=wildlife; this.fire=fire; this.literature=literature; this.food=food; this.inputClassifier=inputClassifier; this.assembly=assembly; this.narrationRouter=narrationRouter; this.simulationNarrator=simulationNarrator; this.narrationEngine=narrationEngine; this.interpreter=interpreter; }
+    private final JdbcTemplate jdbc; private final SimulationTickService ticks; private final ChroniclePhysiologyService physiology; private final NarrationPolicy narration; private final PhysicalItemService items; private final CapabilityAdaptationService capability; private final ConstructionService construction; private final ChronicleDiscoveryService discoveries; private final WildlifeEncounterService wildlife; private final FireService fire; private final LiteratureService literature; private final FoodPreservationService food; private final ActionInputClassifier inputClassifier; private final AssemblyService assembly; private final NarrationRouter narrationRouter; private final SimulationNarrator simulationNarrator; private final com.devosphere.draugr.narration.NarrationEngine narrationEngine; private final com.devosphere.draugr.ai.RuntimeAuthoringService authoring;
+    public ChronicleActionService(JdbcTemplate jdbc, SimulationTickService ticks, ChroniclePhysiologyService physiology, NarrationPolicy narration, PhysicalItemService items, CapabilityAdaptationService capability, ConstructionService construction, ChronicleDiscoveryService discoveries, WildlifeEncounterService wildlife, FireService fire, LiteratureService literature, FoodPreservationService food, ActionInputClassifier inputClassifier, AssemblyService assembly, NarrationRouter narrationRouter, SimulationNarrator simulationNarrator, com.devosphere.draugr.narration.NarrationEngine narrationEngine, com.devosphere.draugr.ai.RuntimeAuthoringService authoring) { this.jdbc = jdbc; this.ticks = ticks; this.physiology = physiology; this.narration = narration; this.items=items; this.capability=capability; this.construction=construction; this.discoveries=discoveries; this.wildlife=wildlife; this.fire=fire; this.literature=literature; this.food=food; this.inputClassifier=inputClassifier; this.assembly=assembly; this.narrationRouter=narrationRouter; this.simulationNarrator=simulationNarrator; this.narrationEngine=narrationEngine; this.authoring=authoring; }
 
     @Transactional
     public ActionResult resolve(String text) { return resolve(text, null); }
@@ -245,10 +245,10 @@ public class ChronicleActionService {
                 if ("SUCCEEDED".equals(r[0]) || !r[1].startsWith("You turn the material over")) {
                     intent = Intent.PROCESS_MATERIAL; outcome = r[0]; perception = r[1];
                 } else {
-                    // Deterministic miss. The Procedure Interpreter (DR-0021) may compose the action from
-                    // EXISTING processes run in order, each still gated by executeProcess. Inert with AI off
-                    // (empty plan) — the game then behaves exactly as before. Never invents a mechanic.
-                    String[] composed = composeViaInterpreter(chronicle, text, resolvedAt);
+                    // Deterministic miss. The runtime authoring pipeline (DR-0021) may compose it from
+                    // EXISTING processes, or — if authoring is enabled — author a new scoped mechanic under
+                    // the physics gate + QA. Inert with AI off (empty) — the game behaves exactly as before.
+                    String[] composed = authoring.attempt(chronicle.id(), chronicle.location(), text, resolvedAt).orElse(null);
                     if (composed != null) { intent = Intent.PROCESS_MATERIAL; outcome = composed[0]; perception = composed[1]; }
                     else { outcome = "FAILED"; perception = UNRESOLVED_ATTEMPT[Math.floorMod(text.hashCode(), UNRESOLVED_ATTEMPT.length)]; }
                 }
@@ -857,27 +857,6 @@ public class ChronicleActionService {
      * the qualitative transitions the tick and this action wrought since the previous
      * frame, so the passage of time is surfaced rather than silently swallowed.
      */
-    /**
-     * DR-0021 composition. When the deterministic classifier misses, ask the Procedure Interpreter to
-     * express the action as an ordered sequence of EXISTING processes, then run each through the same
-     * gated executor. Returns the composed result, or null when AI is off, nothing composes, or the
-     * very first step's gate stops it (a wrong plan falls through to the ordinary miss rather than a
-     * confusing wrong-process failure). If an earlier step succeeded and a later one fails, the real
-     * intermediates stand and that step's failure is returned — the chronicle genuinely made them.
-     */
-    private String[] composeViaInterpreter(ActiveChronicle chronicle, String text, Instant at) {
-        java.util.List<String> plan = interpreter.plan(text, items.reachableItemKeys(chronicle.id(), chronicle.location()));
-        if (plan.isEmpty()) return null;
-        String[] last = null;
-        boolean anySucceeded = false;
-        for (String key : plan) {
-            if (!items.processExists(key)) return anySucceeded ? last : null;
-            last = items.executeProcess(chronicle.id(), chronicle.location(), key, text, at);
-            if ("SUCCEEDED".equals(last[0])) anySucceeded = true;
-            else return anySucceeded ? last : null;
-        }
-        return last;
-    }
     /**
      * Ground a deterministic core in a clause of setting (the world's weather and, on deliberate
      * attention, the look of the land) via the {@link com.devosphere.draugr.narration.NarrationEngine}.
