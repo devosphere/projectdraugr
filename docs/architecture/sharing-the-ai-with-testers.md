@@ -7,7 +7,7 @@
 
 **Status:** Decision record + build plan for when we hand AI-enabled builds to internal testers.
 Nothing here is built yet — today, testers run with `DRAUGR_AI_ENABLED=false` (full game on
-deterministic prose). See [three-ai-integration.md](three-ai-integration.md) and [SECURITY.md](../../SECURITY.md).
+deterministic prose). See [ai-integration.md](ai-integration.md) and [SECURITY.md](../../SECURITY.md).
 
 ---
 

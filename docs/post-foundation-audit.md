@@ -2,7 +2,7 @@
 
 > Written 2026-08-01, on completing the routing-hardening sequence (M1–M5, migrations V54–V60). Grounds the next phase so cycles don't re-derive it. See [[feedback-decide-and-document]].
 >
-> **Update 2026-08-02:** the next phase this doc grounds is now built — the three-AI mechanism is wired (Simulation narration, Architect, Auditor + Overseer UI), gated off until an API key is set, and the prior world/material deferrals are cleared. Authoritative current status lives in [PROJECT-HANDOFF.md](PROJECT-HANDOFF.md) and [architecture/three-ai-integration.md](architecture/three-ai-integration.md). The analysis below remains the historical rationale for that phase.
+> **Update 2026-08-02:** the next phase this doc grounds is now built — the three-AI mechanism is wired (Simulation narration, Architect, Auditor + Overseer UI), gated off until an API key is set, and the prior world/material deferrals are cleared. Authoritative current status lives in [PROJECT-HANDOFF.md](PROJECT-HANDOFF.md) and [architecture/ai-integration.md](architecture/ai-integration.md). The analysis below remains the historical rationale for that phase.
 
 ## Where the project stands
 

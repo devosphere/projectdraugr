@@ -18,7 +18,7 @@ server:
 
 # Optional AI narration (the Simulation Agent's voice). Off by default: the game runs on
 # deterministic prose alone until you switch it on and supply a key. Never commit a key here.
-# See docs/architecture/three-ai-integration.md.
+# See docs/architecture/ai-integration.md.
 draugr:
   ai:
     enabled: ${DRAUGR_AI_ENABLED:false}

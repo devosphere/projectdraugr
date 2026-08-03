@@ -20,7 +20,7 @@ import java.util.Optional;
  *       human puts it through the V53 review gate as a real migration. This service never mutates
  *       schema or data.</li>
  * </ul>
- * See docs/architecture/three-ai-integration.md § Phase 2 and routing-and-coverage-strategy.md.
+ * See docs/architecture/ai-integration.md § Phase 2 and routing-and-coverage-strategy.md.
  */
 @Service
 public class PersistentStateArchitect {

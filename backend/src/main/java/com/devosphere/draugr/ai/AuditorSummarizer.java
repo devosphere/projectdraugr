@@ -17,7 +17,7 @@ import java.util.stream.IntStream;
  * <p>The Auditor's boundary is absolute and mirrored here: it <b>only describes</b>. This service
  * reads a report and produces prose; it never proposes a repair, a migration, a deletion, or any
  * write, and it never emits player-facing narration. See core-agent-boundaries.md and
- * docs/architecture/three-ai-integration.md § Phase 3.
+ * docs/architecture/ai-integration.md § Phase 3.
  */
 @Service
 public class AuditorSummarizer {

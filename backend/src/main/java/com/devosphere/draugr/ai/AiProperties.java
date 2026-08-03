@@ -10,7 +10,7 @@ import java.time.Duration;
  * no API key, the game runs on deterministic prose alone and never touches the network.
  *
  * <p>The API key comes only from configuration/environment and is never committed or logged.
- * See docs/architecture/three-ai-integration.md for the runtime contract.
+ * See docs/architecture/ai-integration.md for the runtime contract.
  */
 @ConfigurationProperties(prefix = "draugr.ai")
 public class AiProperties {

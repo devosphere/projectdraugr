@@ -1,4 +1,4 @@
-# Three-AI Integration — Plan & Contract
+# AI Integration — Plan & Contract
 
 > **Project Draugr — Architecture**
 >
