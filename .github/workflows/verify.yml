@@ -63,6 +63,17 @@ jobs:
         # are unobtainable or whose phrasing no longer routes exits non-zero and fails.
         run: psql -h localhost -U postgres -d draugr -v ON_ERROR_STOP=1 -q -f docs/architecture/routing-reachability-probe.sql
 
+      - name: SQL regression replays — pinned past bugs at the schema layer
+        # Each tests/regression/*.sql replay RAISEs on the old-bug behaviour (e.g. an
+        # UPDATE against the append-only chronicle_action ledger, or a broken narration
+        # overlay COALESCE), so a regression exits non-zero here. The replays are
+        # self-contained (temp tables, BEGIN/ROLLBACK) and do not disturb the applied schema.
+        run: |
+          for f in $(ls tests/regression/*.sql | sort); do
+            echo "-- applying regression replay $f"
+            psql -h localhost -U postgres -d draugr -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
   frontend:
     name: Frontend production build
     runs-on: ubuntu-latest

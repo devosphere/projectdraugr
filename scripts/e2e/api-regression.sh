@@ -70,5 +70,22 @@ echo "### 7. Invariants still hold after the run"
 AUD=$(curl -s $API/api/audit)
 chk "audit consistent after playthrough" "$(echo "$AUD"|grep -o '\"consistent\":[a-z]*'|cut -d: -f2)" "true"
 
+echo "### 8. Narration persists and reads back (overlay COALESCE path)"
+# A resolved action's narration must be readable from history. With AI off this is the
+# deterministic base; with AI on the overlay is COALESCEd over it. Either way the read path
+# must return the resolved action, proving the join wiring works.
+LASTACT=$(act "observe the surroundings closely")
+AID=$(echo "$LASTACT" | grep -o '"actionId":"[^"]*"' | head -1 | cut -d'"' -f4)
+HIST=$(curl -s "$API/api/actions/history?limit=10")
+chk "resolved action appears in history" "$(printf '%s' "$HIST" | grep -o "\"id\":\"$AID\"" | head -1)" "\"id\":\"$AID\""
+chknz "history entries carry narration" "$(printf '%s' "$HIST" | grep -o '"narration":"[^"]' | head -1)"
+
+echo "### 9. Dormant-bug tracker surface"
+chk "GET /api/system/errors -> 200" "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/system/errors")" "200"
+ERRS=$(curl -s "$API/api/system/errors")
+chk "system errors is a JSON array" "$(printf '%s' "$ERRS" | head -c1)" "["
+# The immutability violation this suite guards against must never appear as a live hard error.
+chk "no immutable-history errors logged this run" "$(printf '%s' "$ERRS" | grep -c 'immutable history')" "0"
+
 echo ""; echo "======== E2E RESULT: $pass passed, $fail failed ========"
 [ "$fail" -eq 0 ] || exit 1
