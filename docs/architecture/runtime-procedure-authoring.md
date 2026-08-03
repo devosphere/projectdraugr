@@ -107,8 +107,100 @@ narration/interpretation can run without ever authoring scoped mechanics until t
 7. **Loading overlay** (frontend).
 8. **AI-on live verification** — needs the operator key; deferred, like the existing three agents.
 
+## AI reasoning quality — making it good, cheap, and measurable
+
+The user observed the Interpreter/Narrator "burn tokens for weak output." That is a *quality-and-cost*
+problem, not an integrity problem, and it is solved by measurement + the gate, not by hoping a bigger model
+behaves. This is the plan for turning "iterative tuning" into a bounded, data-driven loop, and for making
+the cost-vs-richness model decision on evidence.
+
+### Principle 0 — the gate makes weak output cheap, never catastrophic
+Every reasoning output passes the deterministic **physics gate** (mass balance, reachability) → **QA**
+(plausibility) → **Auditor** before anything persists. A weak Architect draft is **rejected**, not shipped.
+So the cost of poor reasoning is *latency + a failed action*, never a corrupted world. Tuning therefore
+targets **first-pass acceptance rate and readable quality** — it never carries the integrity burden (the gate
+does). This is what lets us iterate boldly without risk.
+
+### 1. Output is a validated schema, not prose
+Each reasoning role returns **strict JSON** the code validates before use — the Architect returns a
+`ProcessDraft` (`output_item`, `inputs[{item_key, quantity}]`, `tool_class`, `new_items[]`, `attributes`),
+not free text. Malformed or implausible → rejected at zero downstream cost. Prompt *asks* for reasoning;
+**code enforces the contract.** Boundaries (scoped-data-only, never-outcome) are enforced in code, never
+trusted to the prompt.
+
+### 2. Quantified, sourced input + template exemplars (the "guides")
+The reasoning roles receive: the **quantified, sourced reachable pool** (Layer 1 of 06.5 — counts + where),
+the raw action text, and a curated set of the **130 real processes as few-shot exemplars** (DR-0022 §3), so
+authored recipes are patterned on known-good primitive technology. Weak output usually means weak *input* —
+fix the context before the model.
+
+### 3. Prompt caching = the token fix
+The big static prefix — role contract + template exemplars + invariant catalog — is identical across calls.
+Use **Anthropic prompt caching** so repeated authoring calls pay for the exemplars **once**; only the small
+per-action tail (action text + reachable pool) is fresh. This directly removes the "burned tokens" cost of a
+large exemplar block.
+
+### 4. The evaluation harness (you cannot tune what you cannot measure)
+Build `ai-eval/` — a **golden set** of action inputs (the acceptance suite A1–A10 + the broader Phase-0
+vocabulary + known-bad cases), each tagged with its expected disposition: `COMPOSE(existing process)`,
+`AUTHOR(recipe ≈ these inputs, mass-balanced)`, or `REJECT(must fail the gate)`. Run the pipeline **offline**
+against it and score, **automatically where possible**:
+- compose hit-rate; author gate-accept rate; mass-balance correctness; reachability; **round-trip** (does the
+  authored item persist and grab with correct counts); QA rounds to converge; input tokens (cached vs fresh);
+  output tokens; latency.
+- **human rating** only for the part machines can't judge: does the recipe read as *good, plausible primitive
+  technology* (design rule #5).
+
+This runs without a live playthrough, so iteration is fast and cheap.
+
+### 5. Model-tier strategy — the cost-vs-richness call, made on evidence
+Match model to cognitive load, and note that **cost aligns with rarity**:
+
+| Role | Load | Default | Frequency → cost |
+|---|---|---|---|
+| Narrator | low (witness flavor over deterministic templates) | Haiku | frequent → keep cheap |
+| Interpreter | mid (decompose to existing processes) | Sonnet | on miss → moderate |
+| Architect | **high (invent a physically-valid recipe with exact numbers)** | Opus | **rare — once per novel mechanic, then free** |
+| QA Critic | high + **independent of Architect** | Opus (distinct) | rare (only when authoring) |
+| Auditor | mid (summarize a read-only report) | Sonnet | occasional |
+
+The expensive roles fire **only on genuine novel authoring** — rare, once per mechanic, then **zero** after
+canonisation/dedup — so a strong Architect is affordable *because* it is rare. **Don't guess the frontier —
+measure it:** run the eval with the Architect on the strongest model to set the quality ceiling, then step
+models down and watch acceptance/quality on the golden set; **pick the cheapest model that still passes the
+acceptance suite** and lock it. Subscription tiers select stronger models per account (the business model);
+the eval produces the data to price tiers honestly.
+
+### 6. The author↔critic loop is a prompt-quality signal
+`qaMaxRounds = 2`. Track the convergence distribution (0/1/2 rounds): mostly-2 ⇒ the **Architect prompt** is
+weak (fix the prompt/exemplars, do **not** raise the cap); mostly-0 ⇒ QA is too lenient. The loop count tunes
+the prompts, not just the safety cap.
+
+### 7. Dedup → cost converges to zero
+Once `hand_carry_basket_handled` is authored (scoped), the next similar request resolves **deterministically**
+via that scoped process — no AI. Cross-chronicle pending-draft dedup avoids re-authoring the same mechanic.
+Cost scales with the world's **finite, converging vocabulary**, not with play.
+
+### 8. Observability (Overseer)
+Log every AI call: role, model, tokens (cached/fresh), latency, gate result + reasons, QA verdict + rounds,
+accept/reject, final disposition — per-action and aggregate, on the Overseer. "Disappointing performance"
+becomes a number we drive down, and the token/latency budget becomes visible.
+
+### 9. The tuning workflow (the iterative loop, concretely)
+1. Assemble the golden set (A1–A10 + Phase-0 vocab + bad cases).
+2. Run offline; collect auto-scores; sample for human quality rating.
+3. Fix the **weakest role's** prompt / exemplars / output schema; re-run; compare deltas.
+4. Sweep models per role; find the quality/cost frontier.
+5. Lock the config when the acceptance suite passes **and reads richly**.
+6. **Only then** flip AI-on for the live verification playthrough (06.5 confidence gate).
+
+**Honest expectation:** step 5 is not one-shot. Budget a handful of eval→fix iterations before the live run.
+But because the harness is offline and auto-scored, those iterations are cheap and fast — the expensive,
+slow thing (a live keyed playthrough) happens once, at the end, against an already-tuned pipeline.
+
 ## What stays true
 
 - No LLM is ever the final authority: gate (physics) → QA (plausibility) → human (canon).
 - Runtime authoring writes scoped DATA only — never schema, never canon, never an outcome.
 - Every role degrades to deterministic on disable/timeout/error. The game never depends on any of them.
+- Quality/cost is **measured** (offline eval + Overseer telemetry), never assumed; the model tier is chosen on that evidence.
