@@ -109,3 +109,10 @@ button:disabled { opacity: .6; cursor: wait; }.error { padding: 1rem; color: #ff
 .death-copy.final { color: #b9a06e; font-style: italic; }
 .death-dialog .dialog-close { margin-top: 1rem; padding: .6rem 1.6rem; border: 1px solid #a58d4e; background: #14100a; color: #e8d9a6; font-size: .95rem; cursor: pointer; }
 .death-dialog .dialog-close:hover { background: #1c160d; }
+
+/* Proportional loading overlay — raised only while a genuinely slow action (the AI pipeline) resolves.
+   Covers the whole screen and takes the pointer, so nothing beneath can be clicked while the world works. */
+.resolving-overlay { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; background: rgba(10, 12, 14, 0.55); backdrop-filter: blur(1.5px); cursor: wait; }
+.resolving-hourglass { font-size: 4rem; line-height: 1; filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.6)); animation: hourglass-turn 1.6s ease-in-out infinite; }
+@keyframes hourglass-turn { 0% { transform: rotate(0deg); } 50% { transform: rotate(180deg); } 100% { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .resolving-hourglass { animation: hourglass-fade 1.6s ease-in-out infinite; } @keyframes hourglass-fade { 0%, 100% { opacity: .5; } 50% { opacity: 1; } } }

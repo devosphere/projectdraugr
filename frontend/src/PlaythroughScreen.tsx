@@ -84,6 +84,8 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
   const [hasOlderNarrations, setHasOlderNarrations] = useState(prototypeMode);
   const [loadingOlderNarrations, setLoadingOlderNarrations] = useState(false);
   const [resolving, setResolving] = useState(false);
+  const [showOverlay, setShowOverlay] = useState(false);
+  const overlayTimer = useRef<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [location, setLocation] = useState(backdropByBiome.TEMPERATE_FOREST);
   const [environment, setEnvironment] = useState({ time: 'Early morning', weather: 'Light rain', season: 'Early spring' });
@@ -192,6 +194,11 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
     if (!text || resolving) return;
     if (!apiUrl) { setActionError('The local simulation service is unavailable.'); return; }
     setResolving(true);
+    // Proportional loading: raise the full overlay only if the action is actually slow — the AI
+    // pipeline convening. Fast deterministic actions (the ~99% common case) resolve before this
+    // fires, so the screen never flashes for ordinary play.
+    if (overlayTimer.current) window.clearTimeout(overlayTimer.current);
+    overlayTimer.current = window.setTimeout(() => setShowOverlay(true), 450);
     setActionError(null);
     // A per-submission key so a duplicated delivery of this exact request resolves
     // once on the backend rather than advancing the world twice.
@@ -217,6 +224,8 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'The simulation could not resolve that action.');
     } finally {
+      if (overlayTimer.current) { window.clearTimeout(overlayTimer.current); overlayTimer.current = null; }
+      setShowOverlay(false);
       setResolving(false);
       // Focus after the field re-enables on the next frame — focusing a still-disabled
       // textarea silently fails and the cursor is lost (issue #6).
@@ -291,6 +300,11 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
 
   return <main className="playthrough" style={{ backgroundImage: `url(${location.art})` }}>
     <div className="playthrough-vignette" />
+    {showOverlay && (
+      <div className="resolving-overlay" role="status" aria-live="polite" aria-label="The world is resolving your action">
+        <div className="resolving-hourglass" aria-hidden="true">⏳</div>
+      </div>
+    )}
     <header className="world-header">
       <div><p className="eyebrow">{location.label}</p><strong>{environment.time}</strong></div>
       <div className="world-signs" aria-label="Environmental conditions"><span title="Daylight">{environment.time}</span><span title="Weather">{environment.weather}</span><span title="Environment">{environment.season}</span></div>
