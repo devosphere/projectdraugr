@@ -60,6 +60,24 @@ public class RuntimeProcessGate {
         return Result.ok();
     }
 
+    /**
+     * Routability floor: at least one of the draft's keywords must classify to its declared category —
+     * mirrors the Auditor invariant exactly (a process whose keywords do not agree with its category is
+     * unreachable by the two-axis rule AND makes the world auditor-inconsistent). Rejected here so an
+     * AI-authored process can never trip that invariant after it is written. Needs the DB (category_term).
+     */
+    @Transactional(readOnly = true)
+    public Result categoryAgreement(ProcessDraft d) {
+        if (d == null || blank(d.keywords()) || blank(d.category())) return Result.fail("no keywords or category to route by");
+        Boolean routable = jdbc.query(
+            "SELECT EXISTS (SELECT 1 FROM unnest(string_to_array(?, ',')) k " +
+            "JOIN category_term ct ON ct.category_key = ? " +
+            "WHERE ' ' || btrim(k) || ' ' LIKE '% ' || ct.term || ' %' OR ' ' || ct.term || ' ' LIKE '% ' || btrim(k) || ' %')",
+            rs -> rs.next() && rs.getBoolean(1), d.keywords(), d.category());
+        return Boolean.TRUE.equals(routable) ? Result.ok()
+            : Result.fail("no keyword classifies to category '" + d.category() + "' — unroutable; use a category the keywords match");
+    }
+
     /** Mass from the draft's own new items, else the canonical catalogue, else null (unknown item). */
     private Integer massOf(Map<String, Integer> known, String itemKey) {
         if (known.containsKey(itemKey)) return known.get(itemKey);

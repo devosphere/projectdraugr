@@ -66,6 +66,12 @@ public class RuntimeAuthoringService {
         return author(chronicle, location, text, inventory, at);
     }
 
+    /** Both deterministic floors: physics (mass balance / reachability) AND routability (category agreement). */
+    private RuntimeProcessGate.Result gateAll(ProcessDraft draft) {
+        RuntimeProcessGate.Result physics = gate.check(draft);
+        return physics.passed() ? gate.categoryAgreement(draft) : physics;
+    }
+
     /** Run an ordered plan of existing process keys; null if empty/first-step-fails, else the last result. */
     private String[] runPlan(UUID chronicle, UUID location, List<String> plan, String text, Instant at) {
         if (plan == null || plan.isEmpty()) return null;
@@ -85,7 +91,7 @@ public class RuntimeAuthoringService {
         if (drafted.isEmpty()) { record(chronicle, text, null, "no draft", "n/a", null); return Optional.empty(); }
 
         ProcessDraft draft = drafted.get();
-        RuntimeProcessGate.Result gateResult = gate.check(draft);
+        RuntimeProcessGate.Result gateResult = gateAll(draft);
         QaCritic.Verdict verdict = gateResult.passed() ? qa.review(draft)
             : new QaCritic.Verdict(false, "blocked before QA by physics: " + gateResult.reason());
 
@@ -98,7 +104,7 @@ public class RuntimeAuthoringService {
             Optional<ProcessDraft> revised = architect.revise(draft, reasons);
             if (revised.isEmpty()) break;
             draft = revised.get();
-            gateResult = gate.check(draft);
+            gateResult = gateAll(draft);
             verdict = gateResult.passed() ? qa.review(draft)
                 : new QaCritic.Verdict(false, "blocked before QA by physics: " + gateResult.reason());
         }
@@ -149,6 +155,12 @@ public class RuntimeAuthoringService {
             pk, trunc(draft.processKey(), 118), outKey, Math.max(1, draft.outputQty()), Math.max(1, draft.outputQty()),
             tool, domain, trunc(draft.keywords(), 200), draft.narration() == null ? "You work it into shape." : draft.narration(),
             draft.category() == null ? "PROCESS" : draft.category(), chronicle);
+
+        // Register each new item's acquisition path so the world stays auditor-consistent — every
+        // item_definition needs an item_source row, and a runtime-authored item is obtained by running
+        // its process (source_kind TECHNIQUE, detail = the process key).
+        for (String scopedItem : remap.values())
+            jdbc.update("INSERT INTO item_source (item_key, source_kind, detail) VALUES (?, 'TECHNIQUE', ?) ON CONFLICT DO NOTHING", scopedItem, pk);
 
         if (draft.inputs() != null) for (ProcessDraft.Ingredient in : draft.inputs())
             jdbc.update("INSERT INTO material_process_input (process_key, item_key, quantity) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
