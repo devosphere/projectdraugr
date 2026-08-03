@@ -502,7 +502,7 @@ public class PhysicalItemService {
         // the world simply does not yet know how to do it.
         // matchAndRecord, not match: this is the play path, so a miss here is a real
         // gap a player walked into and belongs in the backlog (V56).
-        String key = matcher.matchAndRecord(actionText);
+        String key = matcher.matchAndRecord(actionText, chronicle);
         if (key != null) return executeProcess(chronicle, location, key, actionText, at);
         // A deterministic miss. The AI Procedure Interpreter may compose this from existing processes
         // (DR-0021), but that orchestration lives in ChronicleActionService where the AI seam is; here

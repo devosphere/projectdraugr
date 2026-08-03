@@ -144,9 +144,9 @@ public class ProcessMatcher {
      * a player actually tried to do material work and the world could not. An action
      * merely being assessed for routing is not evidence of anything.
      */
-    public String matchAndRecord(String actionText) {
+    public String matchAndRecord(String actionText, java.util.UUID chronicle) {
         String category = classifier.classify(actionText);
-        Result r = resolve(actionText, category, candidates());
+        Result r = resolve(actionText, category, candidates(chronicle));
         if (!r.matched()) misses.record(actionText, category, r);
         return r.processKey();
     }
@@ -162,12 +162,22 @@ public class ProcessMatcher {
      * change without a migration, and serving a stale one would defeat the gate.
      */
     @Transactional(readOnly = true)
-    public List<Candidate> candidates() {
+    public List<Candidate> candidates() { return candidates(null); }
+
+    /**
+     * Verified processes visible to a chronicle: canonical (owner NULL — everyone's) PLUS that
+     * chronicle's own runtime-discovered ones (DR-0021). A null chronicle yields canonical only, for
+     * read-only callers with no chronicle in hand. Existing play is unchanged — every canonical row has
+     * a NULL owner, so with no scoped rows the result is identical to before.
+     */
+    @Transactional(readOnly = true)
+    public List<Candidate> candidates(java.util.UUID chronicle) {
         return jdbc.query(
             "SELECT mp.process_key, mp.category_key, mp.keywords, " +
             "       (SELECT string_agg(s.subject_term, ',') FROM process_subject s " +
             "        WHERE s.process_key = mp.process_key) AS subjects " +
-            "FROM material_process mp WHERE mp.review_state = 'VERIFIED'",
-            (rs, row) -> Candidate.of(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4)));
+            "FROM material_process mp WHERE mp.review_state = 'VERIFIED' " +
+            "  AND (mp.discovered_by_chronicle_id IS NULL OR mp.discovered_by_chronicle_id = ?)",
+            (rs, row) -> Candidate.of(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4)), chronicle);
     }
 }
