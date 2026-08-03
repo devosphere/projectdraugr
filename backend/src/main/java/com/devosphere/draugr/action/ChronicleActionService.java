@@ -256,6 +256,14 @@ public class ChronicleActionService {
             String ambush = wildlife.passiveEncounter(chronicle.id(), chronicle.location(), actionId, resolvedAt, attention);
             if (ambush != null) perception = perception + " " + ambush;
         }
+        // Bucket D (#27) — the physical cost of the work itself, on top of the passive metabolic tick:
+        // hard labour tires and dirties the body, so felling and hauling are not free the way standing
+        // still is. A failed attempt is still effort, at half. Recovery and self-costing acts (rest,
+        // sleep, eat, drink, wash, personal/aggression) carry no labour cost — they run their own
+        // physiology. Applied before the body snapshot is read, so the drain shows in the frame delta.
+        Labor labor = laborOf(intent);
+        boolean failed = "FAILED".equals(outcome);
+        physiology.applyLabor(chronicle.id(), failed ? (labor.energy() + 1) / 2 : labor.energy(), failed ? labor.hygiene() / 2 : labor.hygiene());
         // Bucket B — the narration contract: wrap the deterministic core in a clause of setting, so the
         // world is present in the prose and not just the act. Success and failure alike are grounded;
         // the punctuation rule (weather when felt/changing, the land on deliberate looking) lives in the
@@ -874,6 +882,27 @@ public class ChronicleActionService {
      * narrator witnesses the act and little else. This is the seam that lets a player
      * who does not look remain, dangerously, uninformed.
      */
+    /** The physical cost of an action beyond the passive tick (GitHub #27): energy spent, hygiene lost. */
+    private record Labor(int energy, int hygiene) { }
+    private Labor laborOf(Intent intent) {
+        return switch (intent) {
+            // Heavy, dirty labour — swinging, hauling, breaking ground, butchering, building, fighting.
+            case FELL_TREE, GATHER_MINERAL, GATHER_STONE, GATHER_STONE_SLAB, GATHER_CLAY, HARVEST_CARCASS,
+                 CONFRONT_WILDLIFE, PROCESS_MATERIAL, ADVANCE_ASSEMBLY, BUILD_FIRE_PIT, START_LEAN_TO,
+                 WORK_LEAN_TO, REPAIR_LEAN_TO -> new Labor(12, 8);
+            // Steady work — foraging, fishing, trapping, tending, and the bench crafts.
+            case GATHER_FIBER, GATHER_BRANCHES, GATHER_BERRIES, GATHER_PLANT, RAID_HIVE, COLLECT_INSECTS,
+                 FISH, SNARE, SET_TRAP, CHECK_TRAP, TRACK, TAME, LURE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE,
+                 COOK_MEAT, MOVE, TRAVEL, REFINE, REWORK, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER,
+                 CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_GARMENT, CRAFT_FIRE_TOOL,
+                 CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF -> new Labor(6, 3);
+            // Light acts — looking, marking, writing, handling gear, dressing a wound, tending a fire.
+            case OBSERVE, MARK, DESIGNATE, EQUIP, UNEQUIP, DROP, WRITE, EDIT_DOCUMENT, SKETCH_MAP, INSPECT,
+                 TREAT_WOUND, FEED_FIRE -> new Labor(2, 0);
+            // Rest, sleep, eat, drink, wash, relief, personal/aggression acts run their own physiology.
+            default -> new Labor(0, 0);
+        };
+    }
     private String attentionLevel(String text, Intent intent) {
         if (intent == Intent.OBSERVE) return "HIGH";
         String v = text.toLowerCase(Locale.ROOT);

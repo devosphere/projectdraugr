@@ -137,6 +137,20 @@ public class ChroniclePhysiologyService {
         jdbc.update("UPDATE chronicle_physiology SET energy_level=GREATEST(0,energy_level-?) WHERE chronicle_id=?", Math.max(0, energyCost), chronicleId);
         refreshBody(chronicleId);
     }
+
+    /**
+     * The physical cost of doing work, on top of the passive metabolic tick — hard labour tires and
+     * dirties the body, so felling a tree or hauling stone is not free the way standing still is
+     * (GitHub #27). Energy and hygiene fall by the intensity of the act; the survival loop then has to
+     * answer for it with food, rest, and washing. No effect when both costs are zero.
+     */
+    @Transactional
+    public void applyLabor(UUID chronicleId, int energyCost, int hygieneCost) {
+        if (energyCost <= 0 && hygieneCost <= 0) return;
+        jdbc.update("UPDATE chronicle_physiology SET energy_level=GREATEST(0,energy_level-?), hygiene_level=GREATEST(0,hygiene_level-?) WHERE chronicle_id=?",
+            Math.max(0, energyCost), Math.max(0, hygieneCost), chronicleId);
+        refreshBody(chronicleId);
+    }
     @Transactional
     public void eat(UUID chronicleId) {
         jdbc.update("UPDATE chronicle_physiology SET hours_without_food=GREATEST(0,hours_without_food-8), energy_level=LEAST(100,energy_level+6) WHERE chronicle_id=?", chronicleId);
