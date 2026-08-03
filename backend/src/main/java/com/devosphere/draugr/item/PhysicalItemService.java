@@ -72,10 +72,43 @@ public class PhysicalItemService {
         int count=resources.take(location,"dry_branch",desired,occurredAt);
         for(int i=0;i<count;i++){UUID id=UUID.randomUUID();jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM','Dry branch',?)",id,chronicle);jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,'dry_branch','SOUND')",id);jdbc.update("INSERT INTO object_transition (object_id,transition_type,payload) VALUES (?,'GATHERED','{}'::jsonb)",id);} assertCarryCapacity(chronicle); return count;
     }
+    /**
+     * The ONE reachability model (DR-0022 Layer 1): everything the Chronicle can physically reach from where
+     * it stands — carried, nested in a carried container, loose on the ground here, AND inside any container or
+     * storage sited at its location (a bin, a shelf, a tool rack). Roots at carried ∪ location-sited, then
+     * descends {@code item_containment} from both, so the contents of an on-site store are in reach without
+     * being owned. Bind order is always {@code (chronicle, location)}. Every input-sourcing, tool, and grade
+     * check routes through this so no code path can disagree about what is "in reach" — unlike the historical
+     * carried-only CTEs, which left materials in a bin and tools on a rack unreachable (the stone-shelf gap).
+     * The inventory/HUD view (carried load, capacity) deliberately stays carried-only elsewhere.
+     */
+    static final String REACHABLE_CTE =
+        "WITH RECURSIVE reachable(id) AS (" +
+        "SELECT id FROM world_object WHERE lifecycle_state='ACTIVE' AND (current_owner_id=? OR (current_owner_id IS NULL AND current_location_id=?)) " +
+        "UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') ";
+
+    /** How many of an item the Chronicle can reach from {@code location} (carried + ground + on-site storage). */
+    private int reachCount(UUID chronicle, UUID location, String itemKey) {
+        Integer c = jdbc.queryForObject(REACHABLE_CTE +
+            "SELECT COUNT(*) FROM reachable r JOIN item_instance i ON i.object_id=r.id WHERE i.item_key=?",
+            Integer.class, chronicle, location, itemKey);
+        return c == null ? 0 : c;
+    }
+
+    /** Consume one reachable such item — what is carried first, then the nearest in reach — or false if none. */
+    private boolean consumeFromReach(UUID chronicle, UUID location, String itemKey, Instant occurredAt) {
+        UUID item = jdbc.query(REACHABLE_CTE +
+            "SELECT r.id FROM reachable r JOIN item_instance i ON i.object_id=r.id JOIN world_object w ON w.id=r.id " +
+            "WHERE i.item_key=? ORDER BY CASE WHEN w.current_owner_id=? THEN 0 ELSE 1 END, r.id FOR UPDATE OF i LIMIT 1",
+            rs -> rs.next() ? rs.getObject(1, UUID.class) : null, chronicle, location, itemKey, chronicle);
+        if (item == null) return false;
+        retire(item, occurredAt, "CONSUMED", itemKey);
+        return true;
+    }
+
     @Transactional
     public boolean consumeOne(UUID chronicle, String itemKey, Instant occurredAt) {
-        UUID item=jdbc.query("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT r.id FROM reachable r JOIN item_instance i ON i.object_id=r.id WHERE i.item_key=? ORDER BY r.id FOR UPDATE LIMIT 1",rs->rs.next()?rs.getObject(1,UUID.class):null,chronicle,itemKey);
-        if(item==null)return false; retire(item,occurredAt,"CONSUMED",itemKey); return true;
+        return consumeFromReach(chronicle, chronicleLocation(chronicle), itemKey, occurredAt);
     }
 
     /**
@@ -110,12 +143,10 @@ public class PhysicalItemService {
 
     /** Reachable FOOD-category items as [item_key, display_name] pairs. */
     private java.util.List<String[]> reachableFoods(UUID chronicle) {
-        return jdbc.query(
-            "WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' " +
-            "UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') " +
+        return jdbc.query(REACHABLE_CTE +
             "SELECT DISTINCT i.item_key, d.display_name FROM reachable r JOIN item_instance i ON i.object_id=r.id JOIN item_definition d ON d.item_key=i.item_key " +
             "WHERE d.category='FOOD' ORDER BY i.item_key",
-            (rs, row) -> new String[]{rs.getString(1), rs.getString(2)}, chronicle);
+            (rs, row) -> new String[]{rs.getString(1), rs.getString(2)}, chronicle, chronicleLocation(chronicle));
     }
 
     /**
@@ -127,28 +158,13 @@ public class PhysicalItemService {
      */
     @Transactional(readOnly = true)
     public boolean hasAtLeastHere(UUID chronicle, UUID location, String itemKey, int required) {
-        Integer count = jdbc.queryForObject(
-            "WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' " +
-            "UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') " +
-            "SELECT COUNT(*) FROM item_instance i JOIN world_object w ON w.id=i.object_id " +
-            "WHERE i.item_key=? AND w.lifecycle_state='ACTIVE' AND " +
-            "(w.id IN (SELECT id FROM reachable) OR (w.current_owner_id IS NULL AND w.current_location_id=?))",
-            Integer.class, chronicle, itemKey, location);
-        return count != null && count >= required;
+        return reachCount(chronicle, location, itemKey) >= required;
     }
 
-    /** Consume one such item, taking what is carried first and then what lies on the ground here. */
+    /** Consume one such item, taking what is carried first and then the nearest in reach (ground or on-site store). */
     @Transactional
     public boolean consumeOneHere(UUID chronicle, UUID location, String itemKey, Instant occurredAt) {
-        if (consumeOne(chronicle, itemKey, occurredAt)) return true;
-        UUID ground = jdbc.query(
-            "SELECT w.id FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
-            "WHERE i.item_key=? AND w.current_owner_id IS NULL AND w.current_location_id=? AND w.lifecycle_state='ACTIVE' " +
-            "ORDER BY w.id FOR UPDATE LIMIT 1",
-            rs -> rs.next() ? rs.getObject(1, UUID.class) : null, itemKey, location);
-        if (ground == null) return false;
-        retire(ground, occurredAt, "CONSUMED", itemKey);
-        return true;
+        return consumeFromReach(chronicle, location, itemKey, occurredAt);
     }
     @Transactional
     public UUID createCarriedItem(UUID chronicle, String itemKey, String displayName, Instant occurredAt, String transitionType) {
@@ -201,21 +217,21 @@ public class PhysicalItemService {
     @Transactional(readOnly = true)
     public QualityGrade worstGradeAmong(UUID chronicle, java.util.Collection<String> itemKeys) {
         QualityGrade worst = null;
+        UUID location = chronicleLocation(chronicle);
         for (String k : itemKeys) {
-            String g = jdbc.query(
-                "WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' " +
-                "UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') " +
+            String g = jdbc.query(REACHABLE_CTE +
                 "SELECT i.quality_grade FROM reachable r JOIN item_instance i ON i.object_id=r.id WHERE i.item_key=? " +
                 "ORDER BY CASE i.quality_grade WHEN 'DEFECTIVE' THEN 0 WHEN 'POOR' THEN 1 WHEN 'SOUND' THEN 2 ELSE 3 END LIMIT 1",
-                rs -> rs.next() ? rs.getString(1) : null, chronicle, k);
+                rs -> rs.next() ? rs.getString(1) : null, chronicle, location, k);
             if (g != null) { QualityGrade q = QualityGrade.of(g); worst = worst == null ? q : QualityGrade.worst(worst, q); }
         }
         return worst == null ? QualityGrade.SOUND : worst;
     }
-    /** The id of one reachable item of a kind (carried or in a carried container), or null. */
+    /** The id of one reachable item of a kind — carried, in a carried container, or in an on-site store — or null. */
     @Transactional(readOnly = true)
     public UUID findReachable(UUID chronicle, String itemKey) {
-        return jdbc.query("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT r.id FROM reachable r JOIN item_instance i ON i.object_id=r.id WHERE i.item_key=? ORDER BY r.id LIMIT 1", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, chronicle, itemKey);
+        return jdbc.query(REACHABLE_CTE + "SELECT r.id FROM reachable r JOIN item_instance i ON i.object_id=r.id WHERE i.item_key=? ORDER BY r.id LIMIT 1",
+            rs -> rs.next() ? rs.getObject(1, UUID.class) : null, chronicle, chronicleLocation(chronicle), itemKey);
     }
     /** Strip a workable sheet of bark from a tree — a writing surface. Wooded terrain only. */
     @Transactional
@@ -452,8 +468,7 @@ public class PhysicalItemService {
 
     @Transactional(readOnly = true)
     public boolean hasAtLeast(UUID chronicle, String itemKey, int required) {
-        Integer count = jdbc.queryForObject("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT COUNT(*) FROM reachable r JOIN item_instance i ON i.object_id=r.id WHERE i.item_key=?", Integer.class, chronicle, itemKey);
-        return count != null && count >= required;
+        return reachCount(chronicle, chronicleLocation(chronicle), itemKey) >= required;
     }
 
     /**
@@ -520,11 +535,8 @@ public class PhysicalItemService {
     /** The distinct item keys the chronicle can reach — carried, in carried containers, or on the ground here. */
     @Transactional(readOnly = true)
     public java.util.List<String> reachableItemKeys(UUID chronicle, UUID location) {
-        return jdbc.query(
-            "WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' " +
-            "UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') " +
-            "SELECT DISTINCT i.item_key FROM item_instance i JOIN world_object w ON w.id=i.object_id " +
-            "WHERE w.lifecycle_state='ACTIVE' AND (w.id IN (SELECT id FROM reachable) OR (w.current_owner_id IS NULL AND w.current_location_id=?)) ORDER BY i.item_key",
+        return jdbc.query(REACHABLE_CTE +
+            "SELECT DISTINCT i.item_key FROM reachable r JOIN item_instance i ON i.object_id=r.id ORDER BY i.item_key",
             (rs, row) -> rs.getString(1), chronicle, location);
     }
 
