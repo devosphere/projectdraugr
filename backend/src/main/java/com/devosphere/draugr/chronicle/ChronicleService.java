@@ -25,7 +25,16 @@ public class ChronicleService {
     }
     @Transactional(readOnly = true)
     public ChronicleEnvironment activeEnvironment() {
-        return jdbc.query("SELECT sc.simulated_at,COALESCE(ww.weather_kind,'CLEAR'),COALESCE(ww.ambient_temperature_c,18.0),COALESCE(ww.wind_speed_kph,6) FROM chronicle c JOIN simulation_clock sc ON sc.id=1 LEFT JOIN world_weather ww ON ww.world_id=c.world_id WHERE c.life_state='LIVING'",rs->rs.next()?new ChronicleEnvironment(rs.getTimestamp(1).toInstant(),rs.getString(2),rs.getBigDecimal(3).doubleValue(),rs.getInt(4)):null);
+        // The world's single sky, then modulated to what is FELT in the chronicle's biome (#28): a
+        // mountain is colder and windier and turns the lowlands' rain to snow. See BiomeClimate.
+        return jdbc.query("SELECT sc.simulated_at,COALESCE(ww.weather_kind,'CLEAR'),COALESCE(ww.ambient_temperature_c,18.0),COALESCE(ww.wind_speed_kph,6),wc.biome " +
+            "FROM chronicle c JOIN simulation_clock sc ON sc.id=1 JOIN world_object w ON w.id=c.id LEFT JOIN world_chunk wc ON wc.id=w.current_location_id LEFT JOIN world_weather ww ON ww.world_id=c.world_id WHERE c.life_state='LIVING'",
+            rs -> {
+                if (!rs.next()) return null;
+                com.devosphere.draugr.simulation.BiomeClimate.Local local = com.devosphere.draugr.simulation.BiomeClimate.at(
+                    rs.getString(5), rs.getString(2), rs.getBigDecimal(3).doubleValue(), rs.getInt(4));
+                return new ChronicleEnvironment(rs.getTimestamp(1).toInstant(), local.kind(), local.temperatureC(), local.windKph());
+            });
     }
 
     @Transactional(readOnly = true)
