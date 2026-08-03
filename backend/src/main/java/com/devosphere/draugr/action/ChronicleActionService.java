@@ -399,6 +399,10 @@ public class ChronicleActionService {
         // How well this ground is known.
         Integer visits = jdbc.queryForObject("SELECT COALESCE((SELECT visit_count FROM chronicle_chunk_visit WHERE chronicle_id=? AND chunk_id=?),0)", Integer.class, chronicle.id(), loc);
         if (visits != null && visits >= 5) s.append("You know this ground well; your feet have worn a familiarity into it. ");
+        // What actually LIVES here (#37/#33): flora, wildlife, fish, insects the chunk really holds, named and
+        // scaled by the eye that looks — a deliberate survey is high-attention, sharpened by perception mastery.
+        String life = examination.presentLife(loc, Math.min(1.0, 0.7 + capability.familiarity(chronicle.id(), "ATTENTION")));
+        if (!life.isEmpty()) s.append(life).append(" ");
         return s.toString().trim();
     }
     private String biomeDescription(String biome) {

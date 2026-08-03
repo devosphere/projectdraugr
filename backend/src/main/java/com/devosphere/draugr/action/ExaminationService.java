@@ -58,7 +58,93 @@ public class ExaminationService {
             case ANALYZE     -> analyzePlace(biome, tier(insight));
             case INVESTIGATE -> investigatePlace(biome, tier(perception + insight + knowledge));
         };
-        return new String[]{"SUCCEEDED", out};
+        // Deliberate looking reveals what is actually alive here (#33/#37), scaled by mastery: a base acuity
+        // for looking on purpose, plus the perception/insight/knowledge the mode leans on.
+        double acuity = switch (mode) {
+            case INSPECT     -> 0.6 + perception + insight;
+            case ANALYZE     -> 0.6 + perception + insight;
+            case INVESTIGATE -> 0.6 + perception + insight + knowledge;
+        };
+        String life = presentLife(location, Math.min(1.0, acuity));
+        return new String[]{"SUCCEEDED", life.isEmpty() ? out : out + " " + life};
+    }
+
+    /**
+     * Witness-stance naming of the life actually present in a chunk — flora, wildlife, fish, insects — scaled
+     * by {@code acuity} (0..1, from attention + perception mastery). The world stored these rows all along
+     * (#37/#33), but perception never named them, so a Chronicle could not know what was here to hunt, gather,
+     * or avoid. A keener eye sees more kinds and reads the shy ones out of their sign. Deterministic and
+     * read-only; the AI narrator may later enrich the deepest tier without becoming load-bearing.
+     */
+    @Transactional(readOnly = true)
+    public String presentLife(UUID chunk, double acuity) {
+        if (chunk == null) return "";
+        StringBuilder b = new StringBuilder();
+
+        // Flora — plants are in plain sight; a keener eye names more kinds.
+        int floraCap = acuity >= 0.6 ? 4 : acuity >= 0.3 ? 3 : 2;
+        List<String> flora = orEmpty(jdbc.query(
+            "SELECT flora_key FROM chunk_flora WHERE chunk_id=? AND quantity>0 ORDER BY quantity DESC LIMIT " + floraCap,
+            (rs, i) -> humanize(rs.getString(1)), chunk));
+        if (!flora.isEmpty())
+            b.append(capitalize(joinAnd(flora))).append(flora.size() == 1 ? " grows within reach. " : " grow within reach. ");
+
+        // Wildlife — the conspicuous graze in the open; the shy leave only sign; a keener eye reads more.
+        List<Map<String, Object>> animals = orEmpty(jdbc.queryForList(
+            "SELECT wp.species_key, wp.ecological_role, COALESCE(ws.size_tier,'SMALL') AS size_tier, wp.activity_cycle " +
+            "FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id " +
+            "LEFT JOIN wildlife_species ws ON ws.species_key=wp.species_key " +
+            "WHERE es.chunk_id=? AND wp.population_count>0 ORDER BY wp.population_count DESC", chunk));
+        int named = 0, cap = acuity >= 0.6 ? 3 : acuity >= 0.3 ? 2 : 1;
+        for (Map<String, Object> a : animals) {
+            if (named >= cap) break;
+            double vis = visibility((String) a.get("size_tier"), (String) a.get("ecological_role"), (String) a.get("activity_cycle"));
+            String name = humanize((String) a.get("species_key"));
+            if (vis >= 1.0 - acuity) { b.append(seenLine(name, (String) a.get("ecological_role"))); named++; }
+            else if (acuity >= 0.5) { b.append("You find the sign of ").append(name).append(" — tracks pressed into the ground. "); named++; }
+        }
+
+        // Fish — visible in the water to a moderate eye, where the biome holds them.
+        if (acuity >= 0.4) {
+            String biome = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : null, chunk);
+            List<String> fish = orEmpty(jdbc.query(
+                "SELECT species_key FROM wildlife_species WHERE movement_class='AQUATIC' AND biome_affinity ILIKE ? ORDER BY species_key LIMIT 1",
+                (rs, i) -> humanize(rs.getString(1)), "%" + biome + "%"));
+            if (!fish.isEmpty()) b.append("Fish hang in the water — ").append(fish.get(0)).append(" among them. ");
+        }
+
+        // Insects — hives and colonies announce themselves.
+        List<String> colonies = orEmpty(jdbc.query(
+            "SELECT colony_kind FROM insect_colony WHERE chunk_id=? ORDER BY colony_kind LIMIT 2",
+            (rs, i) -> humanize(rs.getString(1)), chunk));
+        for (String c : colonies) b.append("A ").append(c).append(" stirs nearby. ");
+
+        return b.toString().trim();
+    }
+
+    private static <T> List<T> orEmpty(List<T> l) { return l == null ? List.of() : l; }
+    private static String humanize(String key) { return key == null ? "" : key.replace('_', ' '); }
+    private static String capitalize(String s) { return s == null || s.isEmpty() ? s : Character.toUpperCase(s.charAt(0)) + s.substring(1); }
+    private static String joinAnd(List<String> xs) {
+        if (xs.isEmpty()) return "";
+        if (xs.size() == 1) return xs.get(0);
+        if (xs.size() == 2) return xs.get(0) + " and " + xs.get(1);
+        return String.join(", ", xs.subList(0, xs.size() - 1)) + ", and " + xs.get(xs.size() - 1);
+    }
+    private static double visibility(String size, String role, String activity) {
+        double v = switch (size == null ? "" : size) {
+            case "HUGE" -> 1.0; case "LARGE" -> 0.85; case "MEDIUM" -> 0.6; case "SMALL" -> 0.4; case "TINY" -> 0.25; default -> 0.4; };
+        if ("CARNIVORE".equals(role)) v -= 0.15; else if ("HERBIVORE".equals(role)) v += 0.1;
+        if ("NOCTURNAL".equals(activity)) v -= 0.25; else if ("CREPUSCULAR".equals(activity)) v -= 0.1;
+        return Math.max(0, Math.min(1, v));
+    }
+    private static String seenLine(String name, String role) {
+        return switch (role == null ? "" : role) {
+            case "HERBIVORE" -> "A " + name + " grazes the open ground. ";
+            case "CARNIVORE" -> "A " + name + " moves along the treeline, watchful. ";
+            case "OMNIVORE" -> "A " + name + " forages nearby. ";
+            default -> "A " + name + " is here. ";
+        };
     }
 
     /** A reachable item the text names, or null — then the place is the subject. */
