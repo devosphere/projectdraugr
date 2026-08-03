@@ -51,10 +51,18 @@ return empty/no-op when `!props.isUsable()`. Model per call via `props.get*Model
    every round: mass balance (outputs ≤ inputs, no matter created), reachability (inputs obtainable),
    category/subject agreement. This is the floor QA sits above and the human sits above that.
 
-5. **Auditor integrity split.** Hot-path, per action, **deterministic** (`ChronicleActionService` already
-   grounds + validates; add: a scoped-tech action's effects satisfy the invariant catalog incrementally).
-   Off-path LLM Auditor (`AuditorSummarizer`, existing) only on a flagged anomaly + the operator report.
-   The LLM Auditor is never in the action loop.
+5. **Auditor integrity split + canon-promotion owner.** Hot-path, per action, **deterministic**
+   (`ChronicleActionService` already grounds + validates; add: a scoped-tech action's effects satisfy the
+   invariant catalog incrementally). Off-path LLM Auditor (`AuditorSummarizer`, existing) only on a flagged
+   anomaly + the operator report. The LLM Auditor is never in the action loop.
+   **The Auditor — not the Architect — drives canon promotion.** The Architect only ever writes *scoped* data
+   (it must never touch canon/schema, per DR-0009/0013), so the read-only integrity role is the correct one to
+   endorse a discovery upward: once a scoped discovery has run consistently in the data file, the Auditor
+   validates its persisted rows and **surfaces it as a canon-promotion candidate** — the integrity report + the
+   generated migration draft — into the Tech Discovery Queue. A **human approves** there and the V53 gate +
+   Flyway finalize it; the Auditor prepares and drives promotion but is **never the final authority**. This
+   applies uniformly to **both** producers: the Architect's authored *mechanics* and the Interpreter's learned
+   *aliases/composites* (below) are promoted the same way, by the Auditor.
 
 **Orchestrator:** `RuntimeAuthoringService.attempt(...)` runs Interpreter → (compose | Architect+QA →
 gate → insert scoped rows) → execute via the same runProcess machinery → write `chronicle_tech_discovery`.
@@ -115,7 +123,9 @@ being hand-built. Four parts, and the discipline that keeps each true.
 
 **1. Architect + QA + Auditor — one call per novel mechanic, then free forever.** *(✅ built)* Authoring
 writes a scoped `material_process` (with keywords); the very next identical action hits it **deterministically**
-— no AI. The Tech Discovery Queue promotes it to canon for all players. This part already converges to zero.
+— no AI. Then the **Auditor** (not the Architect) validates the persisted rows and surfaces the discovery as a
+canon-promotion candidate in the Tech Discovery Queue, where a **human approves** it into canon for all players.
+This part already converges to zero at runtime.
 
 **2. Narrator — cheap flavor over free templates.** Refine the hardcoded templates to high quality (#30, free
 at runtime); the Narrator fires **low-token only to add flavor**, never load-bearing.
@@ -129,7 +139,8 @@ on a classifier miss to do the reasoning the classifier can't. Today it is **exe
 composition persists nothing, so the same missed phrasing re-fires and re-pays. **Required:** memoize every
 resolved miss so the second occurrence is deterministic and free —
 - a successful **composition** → persist a scoped **keyword/alias → plan** (or a small composite process);
-- record it for promotion so it becomes **canon** (free for all players) through the same queue;
+- the **Auditor** validates that scoped alias and surfaces it for **canon** promotion through the same queue —
+  identical path to an authored mechanic, so a learned phrasing becomes free for all players once a human approves;
 - a cheap **deterministic pre-filter** (normalize + fuzzy-match against existing keywords/aliases/prior misses)
   resolves near-misses with **no AI call**.
 Result: the Interpreter fires **once per novel phrasing**, then that phrasing is deterministic and free — the
@@ -147,7 +158,7 @@ prior's work. This is what prevents a cost spike when the pipeline convenes to a
 | **Interpreter / Analyzer** *(paid, on miss)* | the miss + structured context | a **composition plan** (existing `process_key`s), **or** a complete **authoring brief** — intended output (+ attributes/dimensions from the player's text), inputs with quantities drawn from the pool, tool, procedural rationale, and *why nothing existing fits* | hand the Architect raw text to re-interpret |
 | **Architect** *(paid, only if "author")* | the Interpreter's brief | a validated `ProcessDraft` (exact rows) | re-reason the player's intent — it **formalizes**, it does not re-think |
 | **QA Critic** *(paid)* | the draft | plausibility verdict | re-check physics (the gate's job) or intent (the Interpreter's job) |
-| **Auditor** | the written rows | consistency confirmation | do anything but read |
+| **Auditor** *(read-only; promotion owner)* | the written scoped rows (mechanic **or** alias/composite) | consistency confirmation **+ a canon-promotion candidate** (integrity report + migration draft) into the Tech Discovery Queue | write anything, or promote to canon itself — it prepares; the **human approves** and the V53 gate finalizes |
 
 **The principle in one line:** *if each role does its job completely, the next role has nothing to redo.* A
 complete Interpreter brief means the Architect **formalizes cheaply** instead of **re-reasoning expensively** —
