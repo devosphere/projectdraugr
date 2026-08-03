@@ -79,6 +79,46 @@ public class PhysicalItemService {
     }
 
     /**
+     * The item_key of a reachable, edible item (category FOOD) the action text names — by the
+     * item's own key or its display name — or null. This is what lets "eat the oyster mushroom"
+     * find the mushroom the chronicle actually foraged, rather than the EAT handler only knowing a
+     * hardcoded few (GitHub #24). Meat is included, but the caller routes it through the
+     * spoilage-tracked food service.
+     */
+    @Transactional(readOnly = true)
+    public String namedFoodInReach(UUID chronicle, String lowerText) {
+        return reachableFoods(chronicle).stream()
+            .filter(f -> lowerText.contains(f[0].replace("_", " ")) || lowerText.contains(f[1].toLowerCase(java.util.Locale.ROOT)))
+            .map(f -> f[0]).findFirst().orElse(null);
+    }
+
+    /** The item_key of any reachable edible (category FOOD) item, or null — the fallback when the player just says "eat". */
+    @Transactional(readOnly = true)
+    public String anyFoodInReach(UUID chronicle) {
+        java.util.List<String[]> foods = reachableFoods(chronicle);
+        return foods.isEmpty() ? null : foods.get(0)[0];
+    }
+
+    /** True if eating this item is dangerous — it drops from a flora marked poisonous (e.g. death cap, fly agaric). */
+    @Transactional(readOnly = true)
+    public boolean isPoisonousForage(String itemKey) {
+        Boolean poisonous = jdbc.query(
+            "SELECT bool_or(fd.is_poisonous) FROM flora_drop d JOIN flora_definition fd ON fd.flora_key=d.flora_key WHERE d.item_key=?",
+            rs -> rs.next() ? (Boolean) rs.getObject(1) : null, itemKey);
+        return Boolean.TRUE.equals(poisonous);
+    }
+
+    /** Reachable FOOD-category items as [item_key, display_name] pairs. */
+    private java.util.List<String[]> reachableFoods(UUID chronicle) {
+        return jdbc.query(
+            "WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' " +
+            "UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') " +
+            "SELECT DISTINCT i.item_key, d.display_name FROM reachable r JOIN item_instance i ON i.object_id=r.id JOIN item_definition d ON d.item_key=i.item_key " +
+            "WHERE d.category='FOOD' ORDER BY i.item_key",
+            (rs, row) -> new String[]{rs.getString(1), rs.getString(2)}, chronicle);
+    }
+
+    /**
      * True when the chronicle can reach at least {@code required} of an item — carried,
      * in a carried container, OR lying on the ground at their current location. A felled
      * log is worked where it fell; you do not have to shoulder a whole trunk to split it,
@@ -225,7 +265,8 @@ public class PhysicalItemService {
         // Find a flora in this biome that the action text names (or any available)
         java.util.List<java.util.Map<String,Object>> candidates = jdbc.queryForList(
             "SELECT fd.flora_key, fd.organism_type, fd.tool_required, fd.is_poisonous, " +
-            "  (SELECT d.item_key FROM flora_drop d WHERE d.flora_key=fd.flora_key ORDER BY d.item_key LIMIT 1) AS drop_item " +
+            "  (SELECT d.item_key FROM flora_drop d WHERE d.flora_key=fd.flora_key ORDER BY d.item_key LIMIT 1) AS drop_item, " +
+            "  (SELECT id.category FROM item_definition id JOIN flora_drop d ON d.item_key=id.item_key WHERE d.flora_key=fd.flora_key ORDER BY d.item_key LIMIT 1) AS drop_category " +
             "FROM flora_definition fd " +
             "JOIN chunk_flora cf ON cf.flora_key=fd.flora_key " +
             "WHERE cf.chunk_id=? AND cf.quantity > 0 AND fd.organism_type <> 'TREE' " +
@@ -235,20 +276,36 @@ public class PhysicalItemService {
             // No chunk_flora rows — fall back to biome affinity check
             candidates = jdbc.queryForList(
                 "SELECT fd.flora_key, fd.organism_type, fd.tool_required, fd.is_poisonous, " +
-                "  (SELECT d.item_key FROM flora_drop d WHERE d.flora_key=fd.flora_key ORDER BY d.item_key LIMIT 1) AS drop_item " +
+                "  (SELECT d.item_key FROM flora_drop d WHERE d.flora_key=fd.flora_key ORDER BY d.item_key LIMIT 1) AS drop_item, " +
+                "  (SELECT id.category FROM item_definition id JOIN flora_drop d ON d.item_key=id.item_key WHERE d.flora_key=fd.flora_key ORDER BY d.item_key LIMIT 1) AS drop_category " +
                 "FROM flora_definition fd " +
                 "WHERE fd.organism_type <> 'TREE' AND fd.biome_affinity ILIKE ? " +
                 "ORDER BY fd.flora_key", "%" + biome + "%");
         }
         if (candidates.isEmpty()) return new String[]{"FAILED", "You search through the growth, but find nothing here worth taking."};
 
-        // Prefer species the action text names — by the plant's own name, or by what it
-        // yields (so "gather vines" finds the climbing vine that drops vine).
-        java.util.Map<String,Object> target = candidates.stream()
+        // Choose what to take, in order of how specific the request is:
+        //   1. A species the text names outright — by the plant's own name, or by what it yields
+        //      (so "gather vines" finds the climbing vine that drops vine, "gather birch polypore"
+        //      finds the polypore).
+        //   2. A generic food word — "mushroom"/"fungi" wants an EDIBLE fungus, "berries" wants a
+        //      berry — so these no longer fall through to whatever sorts first.
+        //   3. Failing a name, prefer anything EDIBLE (a FOOD drop) over a MATERIAL.
+        // (GitHub #23: the old fallback took candidates.get(0), alphabetically birch_polypore — a
+        // MATERIAL tinder fungus — so "gather mushrooms"/"gather berries" credited the wrong thing.)
+        boolean wantsMushroom = lower.contains("mushroom") || lower.contains("fungi") || lower.contains("fungus");
+        boolean wantsBerry = lower.contains("berr");
+        final java.util.List<java.util.Map<String,Object>> pool = candidates;
+        java.util.Map<String,Object> target = pool.stream()
             .filter(c -> lower.contains(((String)c.get("flora_key")).replace("_"," "))
                 || (c.get("drop_item") != null && lower.contains(((String)c.get("drop_item")).replace("_"," "))))
             .findFirst()
-            .orElse(candidates.get(0));
+            .or(() -> pool.stream().filter(c -> !Boolean.TRUE.equals(c.get("is_poisonous")) && (
+                (wantsMushroom && "FUNGI".equals(c.get("organism_type")) && "FOOD".equals(c.get("drop_category")))
+                || (wantsBerry && c.get("drop_item") != null && ((String)c.get("drop_item")).contains("berr"))))
+                .findFirst())
+            .or(() -> pool.stream().filter(c -> "FOOD".equals(c.get("drop_category")) && !Boolean.TRUE.equals(c.get("is_poisonous"))).findFirst())
+            .orElse(pool.get(0));
 
         String floraKey = (String) target.get("flora_key");
         String toolRequired = (String) target.get("tool_required");

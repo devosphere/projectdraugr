@@ -145,7 +145,7 @@ public class ChronicleActionService {
         else if (intent == Intent.SNARE) { WildlifeEncounterService.EncounterResult r=wildlife.snare(chronicle.id(),chronicle.location(),actionId,resolvedAt); outcome=r.outcome(); perception=r.narration(); }
         else if (intent == Intent.RAID_HIVE) { PhysicalItemService.InsectHarvest r=items.raidHive(chronicle.id(),chronicle.location(),text,resolvedAt); outcome=r.outcome(); perception=r.narration(); applyInsectHazard(chronicle.id(),r,actionId,resolvedAt); }
         else if (intent == Intent.COLLECT_INSECTS) { PhysicalItemService.InsectHarvest r=items.collectInsects(chronicle.id(),chronicle.location(),text,resolvedAt); outcome=r.outcome(); perception=r.narration(); applyInsectHazard(chronicle.id(),r,actionId,resolvedAt); }
-        else if (intent == Intent.EAT) { FoodPreservationService.Consumption cooked=food.consume(chronicle.id(),"cooked_game_meat",resolvedAt); FoodPreservationService.Consumption raw=cooked.consumed()?new FoodPreservationService.Consumption(false,false):food.consume(chronicle.id(),"raw_game_meat",resolvedAt); if(cooked.consumed()){physiology.eatCookedMeal(chronicle.id()); if(cooked.spoiled())physiology.applyFoodborneIllness(chronicle.id(),actionId,resolvedAt); perception="The cooked meat is warm and dense, and the meal settles heavily but well.";} else if(items.consumeOne(chronicle.id(),"wild_berries",resolvedAt)){physiology.eat(chronicle.id()); perception="The berries break softly between your teeth, leaving a faint sweetness behind.";} else if(raw.consumed()){physiology.eat(chronicle.id()); if(raw.spoiled())physiology.applyFoodborneIllness(chronicle.id(),actionId,resolvedAt); perception="The raw meat is cold and difficult to swallow, but it settles the immediate emptiness.";} else {outcome="FAILED";perception="You search through what you can reach, then lower your hand again.";} }
+        else if (intent == Intent.EAT) { String[] r = eat(chronicle.id(), text, actionId, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.COOK_MEAT) { if(fire.cookGameMeat(chronicle.id(),chronicle.location(),resolvedAt)) perception="You hold the meat over the steady heat until its surface changes and darkens."; else {outcome="FAILED";perception="You prepare the meat for a moment, then set it aside unchanged.";} }
         else if (intent == Intent.DRINK) { String biome=jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?",String.class,chronicle.location()); if("WETLAND".equals(biome)){physiology.drink(chronicle.id());perception="You drink from the moving water and let the cold settle in your throat.";}else{outcome="FAILED";perception="You pause, but find nothing here that you can drink.";} }
         else if (intent == Intent.WASH) { String biome=jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?",String.class,chronicle.location()); if("WETLAND".equals(biome)){physiology.wash(chronicle.id());perception="Cold water runs over your hands and skin, carrying away some of the dirt.";}else{outcome="FAILED";perception="You pause, but find no water here to wash with.";} }
@@ -636,6 +636,44 @@ public class ChronicleActionService {
         return (value.contains("work") || value.contains("continue") || value.contains("build") || value.contains("weave") || value.contains("bind")) ? Intent.WORK_LEAN_TO : Intent.START_LEAN_TO;
     }
     private Intent classifyLegacy(String action) { String value = action.toLowerCase(Locale.ROOT); if ((value.contains("cook") || value.contains("roast")) && (value.contains("meat") || value.contains("game"))) return Intent.COOK_MEAT; if ((value.contains("harvest") || value.contains("butcher") || value.contains("skin")) && (value.contains("carcass") || value.contains("remains") || value.contains("animal"))) return Intent.HARVEST_CARCASS; if ((value.contains("bind") || value.contains("bandage") || value.contains("dress")) && (value.contains("wound") || value.contains("injury") || value.contains("bleeding"))) return Intent.TREAT_WOUND; if ((value.contains("feed") || value.contains("stoke") || value.contains("add wood")) && value.contains("fire")) return Intent.FEED_FIRE; if ((value.contains("light")||value.contains("ignite")) && value.contains("fire")) return Intent.LIGHT_FIRE; if (value.contains("fire pit") || value.contains("firepit")) return Intent.BUILD_FIRE_PIT; if ((value.contains("fight")||value.contains("attack")||value.contains("strike")) && (value.contains("animal")||value.contains("wildlife")||value.contains("creature"))) return Intent.CONFRONT_WILDLIFE; if ((value.contains("weave") || value.contains("craft") || value.contains("make")) && value.contains("basket") && !value.contains("burden") && !value.contains("pack") && !value.contains("large") && !value.contains("big") && !value.contains("pannier") && !value.contains("carrying")) return Intent.CRAFT_BASKET; if ((value.contains("gather")||value.contains("collect")) && value.contains("fiber")) return Intent.GATHER_FIBER; if ((value.contains("gather")||value.contains("collect")) && (value.contains("branch")||value.contains("stick"))) return Intent.GATHER_BRANCHES; if ((value.contains("gather")||value.contains("collect")) && (value.contains("berry")||value.contains("berries"))) return Intent.GATHER_BERRIES; if ((value.contains("gather")||value.contains("collect")) && (value.contains("stone")||value.contains("rock"))) return Intent.GATHER_STONE; if (word(value,"eat")||value.contains("consume")) return Intent.EAT; if (value.contains("drink")) return Intent.DRINK; if (Direction.from(value) != null && (value.contains("walk") || value.contains("travel") || value.contains("go ") || value.contains("move"))) return Intent.MOVE; if (value.contains("observe") || value.contains("look") || value.contains("inspect") || value.contains("survey") || value.contains("scout") || value.contains("scan") || value.contains("explore") || value.contains("examine") || value.contains("study the") || value.contains("take in")) return Intent.OBSERVE; if (value.contains("sleep") || word(value,"nap") || value.contains("lie down to sleep") || value.contains("bed down") || value.contains("go to sleep")) return Intent.SLEEP; if (value.contains("rest") || value.contains("wait")) return Intent.REST; if (value.contains("urinate") || value.contains("pee")) return Intent.URINATE; if (value.contains("defecate") || value.contains("poop")) return Intent.DEFECATE; return Intent.UNKNOWN; }
+    /**
+     * Eat whatever food is to hand. A food the player explicitly names wins ("eat the oyster
+     * mushroom"); otherwise cooked meat, then raw meat — both spoilage-tracked through the food
+     * service — then any other food the chronicle carries: foraged mushrooms, plants, berries, dried
+     * stores. Only truly having nothing edible in reach fails. (GitHub #24: EAT previously knew only
+     * cooked/raw meat and wild berries, so a foraged mushroom could never be eaten.)
+     */
+    private String[] eat(UUID chronicle, String text, UUID actionId, Instant at) {
+        String named = items.namedFoodInReach(chronicle, text.toLowerCase(Locale.ROOT));
+        // A named non-meat food is eaten directly; meat always routes through the spoilage-tracked service below.
+        if (named != null && !named.contains("meat")) return eatItem(chronicle, named, actionId, at);
+        FoodPreservationService.Consumption cooked = food.consume(chronicle, "cooked_game_meat", at);
+        if (cooked.consumed()) { physiology.eatCookedMeal(chronicle); if (cooked.spoiled()) physiology.applyFoodborneIllness(chronicle, actionId, at); return new String[]{"SUCCEEDED", "The cooked meat is warm and dense, and the meal settles heavily but well."}; }
+        FoodPreservationService.Consumption raw = food.consume(chronicle, "raw_game_meat", at);
+        if (raw.consumed()) { physiology.eat(chronicle); if (raw.spoiled()) physiology.applyFoodborneIllness(chronicle, actionId, at); return new String[]{"SUCCEEDED", "The raw meat is cold and difficult to swallow, but it settles the immediate emptiness."}; }
+        String any = named != null ? named : items.anyFoodInReach(chronicle);
+        if (any != null) return eatItem(chronicle, any, actionId, at);
+        return new String[]{"FAILED", "You search through what you can reach, then lower your hand again."};
+    }
+    private String[] eatItem(UUID chronicle, String itemKey, UUID actionId, Instant at) {
+        items.consumeOne(chronicle, itemKey, at);
+        // A forage marked poisonous (death cap, fly agaric) nourishes nothing — it sickens. The world
+        // applies physics, not a warning: the player had to know which mushroom before they ate it.
+        if (items.isPoisonousForage(itemKey)) {
+            physiology.applyFoodborneIllness(chronicle, actionId, at);
+            return new String[]{"SUCCEEDED", "You eat it. The taste turns sharp, then bitter, and a cold unease is spreading through your gut before you have finished."};
+        }
+        physiology.eat(chronicle);
+        return new String[]{"SUCCEEDED", eatProse(itemKey)};
+    }
+    /** Witness-stance prose for eating a foraged food, keyed loosely by what it is. */
+    private String eatProse(String itemKey) {
+        if (itemKey.contains("berr")) return "The berries break softly between your teeth, leaving a faint sweetness behind.";
+        if (itemKey.contains("mushroom") || itemKey.contains("porcini") || itemKey.contains("chanterelle")) return "The mushroom is earthy and dense, and chewing it slowly dulls the edge of your hunger.";
+        if (itemKey.contains("honey")) return "The honey is thick and over-sweet, and a brief warmth follows it down.";
+        if (itemKey.contains("meat") || itemKey.contains("pemmican")) return "You work the food down slowly, and the immediate emptiness eases.";
+        return "You eat what you foraged. It is plain, but it quiets the hunger for a while.";
+    }
     private String[] writeOrDraw(ActiveChronicle chronicle, String text, UUID actionId, Instant at) {
         Matcher m = WRITE_CONTENT.matcher(text);
         if (!m.find() || m.group(1).trim().isEmpty()) return new String[]{"FAILED", "You hold the charcoal a moment, then set nothing down."};
