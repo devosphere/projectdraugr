@@ -6,6 +6,15 @@
 
 **Status:** Phase 1 groundwork in progress. **Last updated:** 2026-08-02.
 
+> **⚠ SUPERSEDED/EXTENDED by [DR-0021](../systems/06.3-Decision-Log.md#dr-0021) (2026-08-03).** The
+> architecture grew from three AIs to **five runtime roles** — this doc's three (Simulation Agent,
+> Persistent State Architect, Persistent State Auditor) plus a **Procedure Interpreter** and a **QA
+> Critic** — and the Architect now also authors mechanics **at runtime as per-chronicle scoped data**
+> (never canon). The full pipeline design and build are in
+> [runtime-procedure-authoring.md](runtime-procedure-authoring.md); the live build state is in
+> [systems/06.4-Runtime-Authoring-Build-Plan.md](../systems/06.4-Runtime-Authoring-Build-Plan.md). The
+> boundaries and the "AI is an upgrade layer, never a dependency" invariant below still hold verbatim.
+
 ---
 
 ## Why this document exists

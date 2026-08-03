@@ -100,7 +100,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 | `backend/src/main/java/com/devosphere/draugr/domain/ArchitectRouter.java` | Cost gate for the Architect — routes COVERED / POLISH / INVENT. |
 | `backend/src/main/java/com/devosphere/draugr/routing/ProcessMatcher.java` | The **only** implementation of the action→process resolution rule. Both `runProcess()` and `ArchitectRouter` go through it. |
 | `backend/src/main/java/com/devosphere/draugr/routing/RoutingMissRecorder.java` | Records unresolved actions into the V56 backlog. Separate bean on purpose — see its Javadoc. |
-| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V63. Next is V64. |
+| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V66. Next is V67. |
 | `backend/src/main/java/com/devosphere/draugr/domain/DomainRegistryService.java` | Reads domain_registry — the Architect's ledger of invented domains. |
 | `docs/architecture/domain-creation-pattern.md` | The exact recipe for adding a new domain. |
 | `docs/architecture/action-routing-hardening.md` | Sprint 003 spec — collisions, milestones M1–M5. |
@@ -119,7 +119,26 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 
 ---
 
-## What Is Built (Migrations V1–V63, all applied)
+## What Is Built (Migrations V1–V66, all applied)
+
+> **Post-playtest cycle (2026-08-03) — summary; full detail + resume point in
+> [systems/06.4-Runtime-Authoring-Build-Plan.md](systems/06.4-Runtime-Authoring-Build-Plan.md).**
+> A live playthrough drove four buckets of work, all committed to every branch:
+> - **Bucket A** — playtest bugs fixed & closed: #24 eat-any-food, #23 gather-right-resource, #21 plural
+>   subjects route ("split the **logs**"), #19 crafts drop in front instead of a raw carry error.
+> - **Bucket B** — the `NarrationEngine` (previously dead) now grounds every action in its setting;
+>   varied failure prose. The "robotic" fix.
+> - **Bucket D** — calibration: #27 per-action energy/hygiene labour cost, #26 relevant mastery per
+>   action, #28 realistic seasonal weather (storms ~8%, not every-4th-day).
+> - **Bucket C** — the **DR-0021 runtime procedure-authoring pipeline** ([DR-0021](systems/06.3-Decision-Log.md#dr-0021),
+>   [runtime-procedure-authoring.md](architecture/runtime-procedure-authoring.md)): five AI roles (Narrator,
+>   Interpreter, Runtime Architect, QA Critic, Auditor) + a deterministic physics gate, V66 chronicle-scoped
+>   tech schema + discovery ledger, the authoring orchestrator, `GET /api/system/tech-discoveries`, and a
+>   player loading overlay. **Built, gated behind `draugr.ai.enabled` (+ `authoring-enabled`), stub-tested,
+>   and verified inert AI-off.** AI-on live verification of the whole layer awaits the operator key.
+>
+> 131 backend unit tests green; SQL regression replays in `tests/regression/` (incl. the tech-scope
+> isolation guarantee) pass; frontend builds clean.
 
 - V1–V30: World geography, ecology, chronicle lifecycle, physiology, action ledger, wildlife, items, equipment, carry capacity, capability adaptation, construction, literature, fire, weather, food preservation, tools, clothing, idempotency
 - V31: Writing materials (bark_sheet, charcoal, clay_lump; STRIP_BARK, MAKE_CHARCOAL, GATHER_CLAY, WRITE)

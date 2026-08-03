@@ -17,7 +17,7 @@ class RuntimeArchitectTest {
          "outputQty":1,"narration":"You twist the fibers into a cord.",
          "newItems":[{"itemKey":"twisted_cord","displayName":"Twisted cord","category":"MATERIAL","unitMassGrams":180,"unitVolumeMl":120}]}""";
 
-    private AiProperties enabled() { AiProperties p = new AiProperties(); p.setEnabled(true); p.setApiKey("sk-ant-stub"); return p; }
+    private AiProperties enabled() { AiProperties p = new AiProperties(); p.setEnabled(true); p.setApiKey("test-key-not-a-real-secret"); return p; }
 
     @Test void inertWhenDisabled() {
         assertTrue(new RuntimeArchitect((m, s, u) -> Optional.of(JSON), new AiProperties()).draft("twist fibers", List.of()).isEmpty());

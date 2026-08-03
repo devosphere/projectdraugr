@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** The QA critic against a stub model — PASS passes, FAIL fails, and it is fail-CLOSED on off/no-answer. */
 class QaCriticTest {
 
-    private AiProperties enabled() { AiProperties p = new AiProperties(); p.setEnabled(true); p.setApiKey("sk-ant-stub"); return p; }
+    private AiProperties enabled() { AiProperties p = new AiProperties(); p.setEnabled(true); p.setApiKey("test-key-not-a-real-secret"); return p; }
 
     private ProcessDraft draft() {
         return new ProcessDraft("p", "PROCESS", "k", "s", null,

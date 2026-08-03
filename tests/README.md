@@ -86,6 +86,7 @@ tests/regression/run-sql-regressions.sh
 | Replay | Pins |
 |---|---|
 | `immutability-and-overlay.sql` | `chronicle_action` rejects UPDATE/DELETE (the immutability trigger); the `chronicle_action_narration` overlay INSERTs cleanly and `COALESCE(overlay, base)` returns the enriched prose on read — the exact bug where AI narration issued an illegal `UPDATE chronicle_action` |
+| `runtime-tech-scope.sql` | DR-0021/V66 scope isolation: a chronicle's runtime-authored tech (`discovered_by` set) is visible to that chronicle and to **no one else**, while canonical mechanics (`discovered_by NULL`) are everyone's; the `ProcessMatcher.candidates(chronicle)` filter and the discovery-ledger open-queue read |
 
 ---
 

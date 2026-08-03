@@ -21,7 +21,7 @@ class ProcedureInterpreterTest {
     private AiProperties enabledStub() {
         AiProperties p = new AiProperties();
         p.setEnabled(true);
-        p.setApiKey("sk-ant-stub"); // isUsable() needs a key present; the stub model never calls the network
+        p.setApiKey("test-key-not-a-real-secret"); // isUsable() needs a non-blank key; the stub model never touches the network
         return p;
     }
 
