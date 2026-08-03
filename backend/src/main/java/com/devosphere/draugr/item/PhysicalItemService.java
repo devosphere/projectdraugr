@@ -164,6 +164,35 @@ public class PhysicalItemService {
         return id;
     }
 
+    /** The chunk the Chronicle currently stands in — where a too-heavy craft is set down. */
+    private UUID chronicleLocation(UUID chronicle) {
+        return jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+    }
+
+    /** Non-throwing carry-capacity test — the same rule as {@link #assertCarryCapacity} without the exception. */
+    @Transactional(readOnly = true)
+    public boolean withinCarryCapacity(UUID chronicle) {
+        LoadState s = loadState(chronicle);
+        return s.massGrams() <= s.sustainedMassCapacityGrams()
+            && s.bulkMl() <= s.directBulkCapacityMl()
+            && s.heaviestObjectGrams() <= s.maximumSingleLiftGrams();
+    }
+
+    /**
+     * Place a freshly made object: carried if the Chronicle can bear it, otherwise set on the ground
+     * in front of them. A craft must never fail with a raw carry-capacity error (GitHub #19) — if your
+     * arms and pack are full, the thing you just made lies at your feet to pick up or leave. Never
+     * throws. Returns true if it ended up carried, false if it was set down in front.
+     */
+    public boolean createCraftedItem(UUID chronicle, UUID location, UUID id, String itemKey, String displayName, Instant occurredAt, String transitionType, QualityGrade grade) {
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM',?,?)", id, displayName, chronicle);
+        jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state,quality_grade) VALUES (?,?,'SOUND',?)", id, itemKey, grade.name());
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,?,jsonb_build_object('itemKey',?))", id, Timestamp.from(occurredAt), transitionType, itemKey);
+        if (withinCarryCapacity(chronicle)) return true;
+        jdbc.update("UPDATE world_object SET current_owner_id=NULL, current_location_id=? WHERE id=?", location, id);
+        return false;
+    }
+
     /**
      * The worst quality grade among the chronicle's reachable items of the given keys
      * — the grade that will flow into anything made from them. SOUND when none of the
@@ -519,8 +548,6 @@ public class PhysicalItemService {
         }
 
         String outKey = (String) match.get("output_item_key");
-        if (capacityHeadroomUnits(chronicle, outKey) <= 0)
-            return new String[]{"FAILED", "You could do the work, but you could not carry what it would make."};
 
         // Quality flows: the output is never better than the worst input or the care
         // of the attempt (M3b). Read the input grades before consuming them.
@@ -537,11 +564,14 @@ public class PhysicalItemService {
         }
 
         int lo = ((Number) match.get("output_min")).intValue(), hi = ((Number) match.get("output_max")).intValue();
-        int made = Math.min(lo + (hi > lo ? (int)(Math.random()*(hi-lo+1)) : 0), Math.max(1, capacityHeadroomUnits(chronicle, outKey)));
+        int made = Math.max(1, lo + (hi > lo ? (int)(Math.random()*(hi-lo+1)) : 0));
         String outName = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, outKey);
         String kind = preservationKind(outKey);
+        // Carried while there is room, then set on the ground in front — a process never fails for
+        // want of carrying room (GitHub #19); the worked material lies where it was made.
         for (int i = 0; i < made; i++) {
-            UUID madeId = createCarriedItem(chronicle, outKey, outName, at, "PROCESSED", grade);
+            UUID madeId = UUID.randomUUID();
+            createCraftedItem(chronicle, location, madeId, outKey, outName, at, "PROCESSED", grade);
             if (kind != null) registerPreserved(madeId, kind, at);
         }
         // Multi-output (V60): a process may yield several kinds in the same act, with
@@ -550,14 +580,12 @@ public class PhysicalItemService {
         for (java.util.Map<String,Object> o : jdbc.queryForList("SELECT item_key, qty_min, qty_max FROM material_process_output WHERE process_key=?", key)) {
             String ok = (String) o.get("item_key");
             int omin = ((Number) o.get("qty_min")).intValue(), omax = ((Number) o.get("qty_max")).intValue();
-            int want = omin + (int) Math.round((omax - omin) * yieldFactor);
-            int n = Math.min(want, capacityHeadroomUnits(chronicle, ok));
+            int n = omin + (int) Math.round((omax - omin) * yieldFactor);
             if (n <= 0) continue;
             String on = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, ok);
             String okind = preservationKind(ok);
-            for (int i = 0; i < n; i++) { UUID mid = createCarriedItem(chronicle, ok, on, at, "PROCESSED", grade); if (okind != null) registerPreserved(mid, okind, at); }
+            for (int i = 0; i < n; i++) { UUID mid = UUID.randomUUID(); createCraftedItem(chronicle, location, mid, ok, on, at, "PROCESSED", grade); if (okind != null) registerPreserved(mid, okind, at); }
         }
-        assertCarryCapacity(chronicle);
         return new String[]{"SUCCEEDED", (String) match.get("narration")};
     }
 
@@ -820,13 +848,14 @@ public class PhysicalItemService {
         jdbc.update("INSERT INTO container_properties (object_id,max_mass_grams,max_volume_ml) VALUES (?,12000,18000)",basket);
         for(UUID material:fiber.subList(0,8)) { retire(material,now,"CONSUMED_FOR_CRAFTING","plant_fiber"); }
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CRAFTED',jsonb_build_object('recipe','woven_basket'))",basket,Timestamp.from(now));
-        // A crafted thing goes to the carried load, not onto the body — the Chronicle
-        // decides what to wear or wield. "Sling the basket on my back" equips it.
-        assertCarryCapacity(chronicle);
+        // A crafted thing goes to the carried load if it fits, not onto the body — the Chronicle
+        // decides what to wear or wield ("sling the basket on my back" equips it). If there is no
+        // room to carry it, it is set on the ground in front rather than failing (GitHub #19).
+        if (!withinCarryCapacity(chronicle)) jdbc.update("UPDATE world_object SET current_owner_id=NULL, current_location_id=? WHERE id=?", chronicleLocation(chronicle), basket);
         return new ItemView(basket,"Woven basket","woven_basket",chronicle,null);
     }
-    @Transactional public ItemView craftPrimitiveSpear(Instant at) { UUID chronicle=activeChronicle(); if(!hasAtLeast(chronicle,"dry_branch",1)||!hasAtLeast(chronicle,"field_stone",1)||!hasAtLeast(chronicle,"plant_fiber",1))throw new IllegalStateException("Insufficient physical material."); if(!consumeOne(chronicle,"dry_branch",at)||!consumeOne(chronicle,"field_stone",at)||!consumeOne(chronicle,"plant_fiber",at))throw new IllegalStateException("Material changed."); UUID spear=createCarriedItem(chronicle,"primitive_spear","Primitive spear",at,"CRAFTED"); return new ItemView(spear,"Primitive spear","primitive_spear",chronicle,null); }
-    @Transactional public ItemView craftPrimitiveTool(String itemKey, String displayName, boolean needsBranch, Instant at) { UUID chronicle=activeChronicle(); if(!hasAtLeast(chronicle,"field_stone",1)||!hasAtLeast(chronicle,"plant_fiber",1)||(needsBranch&&!hasAtLeast(chronicle,"dry_branch",1)))throw new IllegalStateException("Insufficient physical material."); if(!consumeOne(chronicle,"field_stone",at)||!consumeOne(chronicle,"plant_fiber",at)||(needsBranch&&!consumeOne(chronicle,"dry_branch",at)))throw new IllegalStateException("Material changed."); UUID tool=createCarriedItem(chronicle,itemKey,displayName,at,"CRAFTED"); return new ItemView(tool,displayName,itemKey,chronicle,null); }
+    @Transactional public ItemView craftPrimitiveSpear(Instant at) { UUID chronicle=activeChronicle(); if(!hasAtLeast(chronicle,"dry_branch",1)||!hasAtLeast(chronicle,"field_stone",1)||!hasAtLeast(chronicle,"plant_fiber",1))throw new IllegalStateException("Insufficient physical material."); if(!consumeOne(chronicle,"dry_branch",at)||!consumeOne(chronicle,"field_stone",at)||!consumeOne(chronicle,"plant_fiber",at))throw new IllegalStateException("Material changed."); UUID spear=UUID.randomUUID(); createCraftedItem(chronicle,chronicleLocation(chronicle),spear,"primitive_spear","Primitive spear",at,"CRAFTED",QualityGrade.SOUND); return new ItemView(spear,"Primitive spear","primitive_spear",chronicle,null); }
+    @Transactional public ItemView craftPrimitiveTool(String itemKey, String displayName, boolean needsBranch, Instant at) { UUID chronicle=activeChronicle(); if(!hasAtLeast(chronicle,"field_stone",1)||!hasAtLeast(chronicle,"plant_fiber",1)||(needsBranch&&!hasAtLeast(chronicle,"dry_branch",1)))throw new IllegalStateException("Insufficient physical material."); if(!consumeOne(chronicle,"field_stone",at)||!consumeOne(chronicle,"plant_fiber",at)||(needsBranch&&!consumeOne(chronicle,"dry_branch",at)))throw new IllegalStateException("Material changed."); UUID tool=UUID.randomUUID(); createCraftedItem(chronicle,chronicleLocation(chronicle),tool,itemKey,displayName,at,"CRAFTED",QualityGrade.SOUND); return new ItemView(tool,displayName,itemKey,chronicle,null); }
 
     /** True if the Chronicle can reach any blade capable of carving wood. */
     @Transactional(readOnly = true)

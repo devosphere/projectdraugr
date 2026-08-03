@@ -666,13 +666,13 @@ public class ChronicleActionService {
         physiology.eat(chronicle);
         return new String[]{"SUCCEEDED", eatProse(itemKey)};
     }
-    /** Witness-stance prose for eating a foraged food, keyed loosely by what it is. */
+    /** Witness-stance prose for eating a foraged food, keyed loosely by what it is. Must name no Body-HUD state (NarrationPolicy / DR-0010). */
     private String eatProse(String itemKey) {
         if (itemKey.contains("berr")) return "The berries break softly between your teeth, leaving a faint sweetness behind.";
-        if (itemKey.contains("mushroom") || itemKey.contains("porcini") || itemKey.contains("chanterelle")) return "The mushroom is earthy and dense, and chewing it slowly dulls the edge of your hunger.";
+        if (itemKey.contains("mushroom") || itemKey.contains("porcini") || itemKey.contains("chanterelle")) return "The mushroom is earthy and dense on the tongue, and you chew it down slowly.";
         if (itemKey.contains("honey")) return "The honey is thick and over-sweet, and a brief warmth follows it down.";
         if (itemKey.contains("meat") || itemKey.contains("pemmican")) return "You work the food down slowly, and the immediate emptiness eases.";
-        return "You eat what you foraged. It is plain, but it quiets the hunger for a while.";
+        return "You eat what you foraged. It is plain, but there is something in it worth the chewing.";
     }
     private String[] writeOrDraw(ActiveChronicle chronicle, String text, UUID actionId, Instant at) {
         Matcher m = WRITE_CONTENT.matcher(text);
