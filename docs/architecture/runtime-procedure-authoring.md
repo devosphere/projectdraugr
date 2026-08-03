@@ -107,6 +107,54 @@ narration/interpretation can run without ever authoring scoped mechanics until t
 7. **Loading overlay** (frontend).
 8. **AI-on live verification** — needs the operator key; deferred, like the existing three agents.
 
+## Cost model & role economics (pay once, then free)
+
+The framework's economics: **AI cost is a one-time investment per novel thing, not a per-play tax.** New
+features are *discovered during play* for a single API call and then implemented for a lifetime — instead of
+being hand-built. Four parts, and the discipline that keeps each true.
+
+**1. Architect + QA + Auditor — one call per novel mechanic, then free forever.** *(✅ built)* Authoring
+writes a scoped `material_process` (with keywords); the very next identical action hits it **deterministically**
+— no AI. The Tech Discovery Queue promotes it to canon for all players. This part already converges to zero.
+
+**2. Narrator — cheap flavor over free templates.** Refine the hardcoded templates to high quality (#30, free
+at runtime); the Narrator fires **low-token only to add flavor**, never load-bearing.
+
+**3. The deterministic classifier does the maximum free work.** It resolves the ~99% common case; the AI fires
+only on a genuine miss. A well-written classifier + reachability is precisely what keeps the paid layer idle —
+the better the deterministic logic, the less the Interpreter ever has to think.
+
+**4. Interpreter/Analyzer — the only recurring cost, and it must converge too.** *(⚠ NOT yet built)* It fires
+on a classifier miss to do the reasoning the classifier can't. Today it is **execute-and-forget** — a
+composition persists nothing, so the same missed phrasing re-fires and re-pays. **Required:** memoize every
+resolved miss so the second occurrence is deterministic and free —
+- a successful **composition** → persist a scoped **keyword/alias → plan** (or a small composite process);
+- record it for promotion so it becomes **canon** (free for all players) through the same queue;
+- a cheap **deterministic pre-filter** (normalize + fuzzy-match against existing keywords/aliases/prior misses)
+  resolves near-misses with **no AI call**.
+Result: the Interpreter fires **once per novel phrasing**, then that phrasing is deterministic and free — the
+same amortization as the Architect, applied to reasoning. **Recommended option: the scoped alias** (lightest;
+rides the existing promotion pipeline). Recurring spend then reduces to genuinely novel reasoning the world has
+never seen — finite, and converging as the vocabulary saturates. Prompt caching keeps even first-time calls cheap.
+
+### The hand-off contract — no re-derivation, no cost spike
+Each role adds its **narrow** value over the previous role's *structured* output and **never repeats** the
+prior's work. This is what prevents a cost spike when the pipeline convenes to author a discovery.
+
+| Stage | Consumes | Produces for the next role | Must NOT |
+|---|---|---|---|
+| Classifier + reachability *(free)* | raw action text | resolved intent, **or** a miss + the quantified/sourced reachable pool + nearest existing processes | make the AI re-gather context the deterministic layer already has |
+| **Interpreter / Analyzer** *(paid, on miss)* | the miss + structured context | a **composition plan** (existing `process_key`s), **or** a complete **authoring brief** — intended output (+ attributes/dimensions from the player's text), inputs with quantities drawn from the pool, tool, procedural rationale, and *why nothing existing fits* | hand the Architect raw text to re-interpret |
+| **Architect** *(paid, only if "author")* | the Interpreter's brief | a validated `ProcessDraft` (exact rows) | re-reason the player's intent — it **formalizes**, it does not re-think |
+| **QA Critic** *(paid)* | the draft | plausibility verdict | re-check physics (the gate's job) or intent (the Interpreter's job) |
+| **Auditor** | the written rows | consistency confirmation | do anything but read |
+
+**The principle in one line:** *if each role does its job completely, the next role has nothing to redo.* A
+complete Interpreter brief means the Architect **formalizes cheaply** instead of **re-reasoning expensively** —
+so authoring a discovery does not spike cost. A well-written classifier means the Interpreter fires rarely; with
+memoization, it never fires twice for the same phrasing. The roles must be built to this contract, not as five
+independent models each re-deriving the player's intent.
+
 ## AI reasoning quality — making it good, cheap, and measurable
 
 The user observed the Interpreter/Narrator "burn tokens for weak output." That is a *quality-and-cost*
