@@ -30,6 +30,14 @@ public class AiProperties {
     private String narrationModel = "claude-haiku-4-5";
     private String architectModel = "claude-opus-4-8";
     private String auditorModel = "claude-sonnet-4-6";
+    /** The Procedure Interpreter (DR-0021): maps a miss to a sequence of existing processes. Mid-tier, read-only reasoning. */
+    private String interpreterModel = "claude-sonnet-4-6";
+    /** Independent QA critic for runtime-authored mechanics — deliberately a different model from the Architect. */
+    private String qaModel = "claude-opus-4-8";
+    /** Even with AI on, runtime authoring of NEW scoped mechanics stays off until this is set — interpretation of existing ones does not need it. */
+    private boolean authoringEnabled = false;
+    /** Author↔critic loop cap (DR-0021). */
+    private int qaMaxRounds = 2;
 
     /** Output cap. Generous so a one- or two-sentence reply is never truncated. */
     private long maxTokens = 1024;
@@ -52,6 +60,14 @@ public class AiProperties {
     public void setArchitectModel(String architectModel) { this.architectModel = architectModel; }
     public String getAuditorModel() { return auditorModel; }
     public void setAuditorModel(String auditorModel) { this.auditorModel = auditorModel; }
+    public String getInterpreterModel() { return interpreterModel; }
+    public void setInterpreterModel(String interpreterModel) { this.interpreterModel = interpreterModel; }
+    public String getQaModel() { return qaModel; }
+    public void setQaModel(String qaModel) { this.qaModel = qaModel; }
+    public boolean isAuthoringEnabled() { return authoringEnabled; }
+    public void setAuthoringEnabled(boolean authoringEnabled) { this.authoringEnabled = authoringEnabled; }
+    public int getQaMaxRounds() { return qaMaxRounds; }
+    public void setQaMaxRounds(int qaMaxRounds) { this.qaMaxRounds = qaMaxRounds; }
     public long getMaxTokens() { return maxTokens; }
     public void setMaxTokens(long maxTokens) { this.maxTokens = maxTokens; }
     public Duration getTimeout() { return timeout; }

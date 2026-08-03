@@ -503,7 +503,39 @@ public class PhysicalItemService {
         // matchAndRecord, not match: this is the play path, so a miss here is a real
         // gap a player walked into and belongs in the backlog (V56).
         String key = matcher.matchAndRecord(actionText);
-        if (key == null) return new String[]{"FAILED", "You turn the material over without settling on what to do with it."};
+        if (key != null) return executeProcess(chronicle, location, key, actionText, at);
+        // A deterministic miss. The AI Procedure Interpreter may compose this from existing processes
+        // (DR-0021), but that orchestration lives in ChronicleActionService where the AI seam is; here
+        // the world simply does not yet know how, and says so.
+        return new String[]{"FAILED", "You turn the material over without settling on what to do with it."};
+    }
+
+    /** True if a verified process by this key exists (canonical). Used to validate an AI-composed plan. */
+    @Transactional(readOnly = true)
+    public boolean processExists(String processKey) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM material_process WHERE process_key=? AND review_state='VERIFIED')", Boolean.class, processKey));
+    }
+
+    /** The distinct item keys the chronicle can reach — carried, in carried containers, or on the ground here. */
+    @Transactional(readOnly = true)
+    public java.util.List<String> reachableItemKeys(UUID chronicle, UUID location) {
+        return jdbc.query(
+            "WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' " +
+            "UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') " +
+            "SELECT DISTINCT i.item_key FROM item_instance i JOIN world_object w ON w.id=i.object_id " +
+            "WHERE w.lifecycle_state='ACTIVE' AND (w.id IN (SELECT id FROM reachable) OR (w.current_owner_id IS NULL AND w.current_location_id=?)) ORDER BY i.item_key",
+            (rs, row) -> rs.getString(1), chronicle, location);
+    }
+
+    /**
+     * Run one specific, already-chosen material process end to end — the executor shared by a direct
+     * matcher hit and an AI-composed plan step. Every gate (tool, fire, water, inputs, mass via the
+     * fixed yields) still applies, so a composed step that does not physically fit fails exactly as a
+     * typed one would.
+     */
+    @Transactional
+    public String[] executeProcess(UUID chronicle, UUID location, String key, String actionText, Instant at) {
         java.util.Map<String,Object> match = jdbc.queryForMap(
             "SELECT process_key, display_name, output_item_key, output_min, output_max, tool_class, " +
             "requires_fire, requires_water, narration FROM material_process WHERE process_key=?", key);
