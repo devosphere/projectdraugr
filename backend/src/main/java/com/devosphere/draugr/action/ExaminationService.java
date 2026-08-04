@@ -168,6 +168,7 @@ public class ExaminationService {
         String name = (String) it.get("display_name");
         String cond = condition((String) it.get("condition_state"));
         StringBuilder b = new StringBuilder("You take up the ").append(name.toLowerCase(Locale.ROOT)).append(" and look it over. ").append(cond);
+        b.append(features(it.get("object_id")));
         if (tier >= 2) b.append(" ").append(heftLine(number(it.get("unit_mass_grams"))));
         if (tier >= 3) b.append(" ").append(gradeLine((String) it.get("quality_grade")));
         return b.toString();
@@ -189,8 +190,25 @@ public class ExaminationService {
             rs -> rs.next() ? rs.getString(1) : null, it.get("object_id"));
         StringBuilder b = new StringBuilder("You turn the ").append(name).append(" over, reading it for its history. ").append(originLine(origin));
         if (tier >= 2) b.append(" ").append(gradeLine((String) it.get("quality_grade")));
+        b.append(modificationHistory(it.get("object_id"))).append(features(it.get("object_id")));
         if (tier >= 3) b.append(" You are as sure of this as of anything you have not seen with your own eyes.");
         return b.toString();
+    }
+
+    /** The dated improvements a specific object has taken over its life (V68 object_modification) — its evolving story. */
+    private String modificationHistory(Object objectId) {
+        List<String> notes = orEmpty(jdbc.query(
+            "SELECT note FROM object_modification WHERE object_id=? ORDER BY occurred_at DESC LIMIT 3",
+            (rs, i) -> rs.getString(1), objectId));
+        return notes.isEmpty() ? "" : " It carries the marks of later work: " + joinAnd(notes) + ".";
+    }
+
+    /** The bespoke features a specific object carries (V68 object_attribute) — a handle, a holder, a measured dimension. */
+    private String features(Object objectId) {
+        List<String> feats = orEmpty(jdbc.query(
+            "SELECT attr_key, attr_value FROM object_attribute WHERE object_id=? ORDER BY attr_key",
+            (rs, i) -> "true".equalsIgnoreCase(rs.getString(2)) ? humanize(rs.getString(1)) : humanize(rs.getString(1)) + " " + rs.getString(2), objectId));
+        return feats.isEmpty() ? "" : " Its making shows " + joinAnd(feats) + ".";
     }
 
     // ---- place ---------------------------------------------------------------------------------------

@@ -861,7 +861,20 @@ public class ChronicleActionService {
         String newName = base + " Revision " + toRoman(revision);
         jdbc.update("UPDATE world_object SET display_name=? WHERE id=?", newName, id);
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'REFINED',jsonb_build_object('revision',?))", id, java.sql.Timestamp.from(at), revision);
+        // Record WHAT changed as a thick-object modification (V68), so the improvement is a readable part of the
+        // object's history — "added a stone hammer holder" — not just an anonymous revision bump (#25 / Phase-0
+        // Utility Belt Revision III). The chronicle reads this back when it investigates the thing.
+        jdbc.update("INSERT INTO object_modification (object_id,occurred_at,note) VALUES (?,?,?)", id, java.sql.Timestamp.from(at), refinementNote(text, revision));
         return new String[]{"SUCCEEDED","You work over the "+base+", reinforcing and improving it. It is now the "+newName+"."};
+    }
+    /** A readable note of what a REFINE actually changed — the added feature if the player named one, else a generic improvement. */
+    private String refinementNote(String text, int revision) {
+        int i = text.toLowerCase(Locale.ROOT).indexOf("add ");
+        if (i >= 0) {
+            String what = text.substring(i + 4).trim();
+            if (!what.isEmpty()) { String s = "Added " + what; return s.length() > 190 ? s.substring(0, 190) : s; }
+        }
+        return "Reinforced and improved to Revision " + toRoman(revision);
     }
     private String baseName(String displayName) { return displayName.replaceAll("(?i)\\s+Revision\\s+[IVXLC0-9]+$", "").trim(); }
     private String toRoman(int n) { if(n<=0) return String.valueOf(n); int[] v={100,90,50,40,10,9,5,4,1}; String[] s={"C","XC","L","XL","X","IX","V","IV","I"}; StringBuilder b=new StringBuilder(); for(int i=0;i<v.length;i++) while(n>=v[i]){b.append(s[i]);n-=v[i];} return b.toString(); }
