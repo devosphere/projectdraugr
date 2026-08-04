@@ -55,7 +55,7 @@ public class RuntimeAuthoringService {
     @Transactional
     public Optional<String[]> attempt(UUID chronicle, UUID location, String text, Instant at) {
         if (!props.isUsable()) return Optional.empty();
-        List<String> inventory = items.reachableItemKeys(chronicle, location);
+        List<String> inventory = items.reachableInventory(chronicle, location); // quantified (F2): "dry_branch x5", so the AI can weigh whether it is enough
 
         // Stage 1 — compose from existing processes.
         String[] composed = runPlan(chronicle, location, interpreter.plan(text, inventory), text, at);

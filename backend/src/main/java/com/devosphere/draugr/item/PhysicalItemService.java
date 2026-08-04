@@ -541,6 +541,33 @@ public class PhysicalItemService {
     }
 
     /**
+     * The reachable pool as quantified "item_key x&lt;count&gt;" lines — the inventory the AI reasons over, so
+     * it can weigh "5 branches is enough" rather than only "branches present" (F2). Same reachability model as
+     * everything else (carried + on-site storage + racked tools), grouped with counts.
+     */
+    @Transactional(readOnly = true)
+    public java.util.List<String> reachableInventory(UUID chronicle, UUID location) {
+        return jdbc.query(REACHABLE_CTE +
+            "SELECT i.item_key, COUNT(*) FROM reachable r JOIN item_instance i ON i.object_id=r.id GROUP BY i.item_key ORDER BY i.item_key",
+            (rs, row) -> rs.getString(1) + " x" + rs.getInt(2), chronicle, location);
+    }
+
+    /**
+     * If a needed item is not here but sits at a place the chronicle has NAMED in another chunk, the name of
+     * that place — so a reject becomes a decision ("what there is of it sits at your Wood Store") rather than a
+     * blank wall (DR-0022 reachability principle). Null when there is no such known store. Scoped to the
+     * chronicle's own named settlements, never the whole world.
+     */
+    private String knownLocationOf(UUID chronicle, String itemKey, UUID currentLocation) {
+        return jdbc.query(
+            "SELECT nl.name FROM chronicle_named_location nl " +
+            "JOIN world_object w ON w.current_location_id=nl.chunk_id AND w.lifecycle_state='ACTIVE' " +
+            "JOIN item_instance i ON i.object_id=w.id " +
+            "WHERE nl.chronicle_id=? AND nl.chunk_id<>? AND i.item_key=? LIMIT 1",
+            rs -> rs.next() ? rs.getString(1) : null, chronicle, currentLocation, itemKey);
+    }
+
+    /**
      * Run one specific, already-chosen material process end to end — the executor shared by a direct
      * matcher hit and an AI-composed plan step. Every gate (tool, fire, water, inputs, mass via the
      * fixed yields) still applies, so a composed step that does not physically fit fails exactly as a
@@ -583,8 +610,13 @@ public class PhysicalItemService {
         java.util.List<java.util.Map<String,Object>> fixed = jdbc.queryForList(
             "SELECT item_key, quantity FROM material_process_input WHERE process_key=?", key);
         for (java.util.Map<String,Object> in : fixed)
-            if (!hasAtLeastHere(chronicle, location, (String) in.get("item_key"), ((Number) in.get("quantity")).intValue()))
-                return new String[]{"FAILED", "You have not got enough of what this needs within reach. What is missing is not here — it lies wherever you last set it down, and you have not brought it."};
+            if (!hasAtLeastHere(chronicle, location, (String) in.get("item_key"), ((Number) in.get("quantity")).intValue())) {
+                String need = ((String) in.get("item_key")).replace('_', ' ');
+                String where = knownLocationOf(chronicle, (String) in.get("item_key"), location);
+                return new String[]{"FAILED", where != null
+                    ? "You have not got enough " + need + " within reach. What there is of it sits at " + where + ", not here."
+                    : "You have not got enough " + need + " within reach. What is missing is not here — it lies wherever you last set it down, and you have not brought it."};
+            }
 
         java.util.List<String> groups = jdbc.queryForList(
             "SELECT DISTINCT group_name FROM material_process_input_group WHERE process_key=?", String.class, key);

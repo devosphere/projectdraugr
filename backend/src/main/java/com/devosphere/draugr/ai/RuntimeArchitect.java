@@ -51,7 +51,7 @@ public class RuntimeArchitect {
 
     public Optional<ProcessDraft> draft(String procedureText, List<String> inventory) {
         if (!props.isUsable() || procedureText == null || procedureText.isBlank()) return Optional.empty();
-        String user = "Procedure:\n" + procedureText + "\n\nCarrying: "
+        String user = "Procedure:\n" + procedureText + "\n\nWithin reach (quantities): "
             + (inventory == null || inventory.isEmpty() ? "nothing of note" : String.join(", ", inventory));
         return parse(model.generate(props.getArchitectModel(), SYSTEM, user));
     }
