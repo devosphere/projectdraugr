@@ -109,7 +109,10 @@ public class ChronicleActionService {
         // Travel time is resolved before the tick advances, because it scales with
         // the distance to a place the chronicle can actually find its way to.
         TravelPlan travel = intent == Intent.TRAVEL ? planTravel(chronicle, text) : null;
-        int minutes = intent == Intent.TRAVEL ? (travel == null ? 20 : Math.max(15, travel.distance() * 18)) : durationFor(text, intent);
+        // "go to the Tool Shed" names a zone in the CURRENT settlement — a short walk within the chunk, not an
+        // inter-chunk journey (V70/F8). Reachability is unaffected (it's chunk-wide either way).
+        String localZone = intent == Intent.TRAVEL ? matchLocalZone(chronicle, text) : null;
+        int minutes = localZone != null ? 5 : (intent == Intent.TRAVEL ? (travel == null ? 20 : Math.max(15, travel.distance() * 18)) : durationFor(text, intent));
         // F2 — capture the body and the sky as they stood before the tick runs, so
         // the frame can report what the passage of time changed, not just the state
         // it left behind. A chronicle who lies down hungry and wakes starving must
@@ -125,7 +128,10 @@ public class ChronicleActionService {
         String gatherEffectType = null; String gatherPayloadKey = null; int gatherCount = 0;
         if (intent == Intent.OBSERVE) perception = survey(chronicle, resolvedAt);
         else if (intent == Intent.MOVE) perception = move(chronicle, text, actionId, resolvedAt);
-        else if (intent == Intent.TRAVEL) { String[] r = travelTo(chronicle, travel, resolvedAt); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.TRAVEL) {
+            if (localZone != null) { jdbc.update("UPDATE chronicle SET current_zone=? WHERE id=?", localZone, chronicle.id()); perception = "You cross the settlement to " + localZone + ", a short walk over ground you know by heart."; }
+            else { String[] r = travelTo(chronicle, travel, resolvedAt); outcome = r[0]; perception = r[1]; }
+        }
         else if (intent == Intent.MARK) { String[] r = markLandmark(chronicle, text, actionId, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.URINATE || intent == Intent.DEFECATE) {
             boolean bowel = intent == Intent.DEFECATE;
@@ -388,8 +394,15 @@ public class ChronicleActionService {
         java.util.Map<String,Object> here = jdbc.queryForMap("SELECT world_id, grid_x, grid_y, biome, elevation FROM world_chunk WHERE id=?", loc);
         UUID world = (UUID) here.get("world_id"); int gx=(int)here.get("grid_x"); int gy=(int)here.get("grid_y"); String biome=(String)here.get("biome");
         StringBuilder s = new StringBuilder();
-        String named = jdbc.query("SELECT name FROM chronicle_named_location WHERE chunk_id=? AND chronicle_id=? LIMIT 1", rs -> rs.next() ? rs.getString(1) : null, loc, chronicle.id());
-        if (named != null) s.append("This is ").append(named).append(", a place you named and made your own. ");
+        // The settlement's named zones (V70/F8): the one you stand in, and the others you have raised here — the
+        // shape of a place you built, not a bare chunk. current_zone can be stale from another chunk, so it only
+        // counts as "here" when it is actually one of this chunk's named zones.
+        String currentZone = jdbc.query("SELECT current_zone FROM chronicle WHERE id=?", rs -> rs.next() ? rs.getString(1) : null, chronicle.id());
+        java.util.List<String> zones = jdbc.query("SELECT name FROM chronicle_named_location WHERE chronicle_id=? AND chunk_id=? ORDER BY name", (rs, i) -> rs.getString(1), chronicle.id(), loc);
+        boolean hereIsCurrent = currentZone != null && zones.contains(currentZone);
+        if (hereIsCurrent) s.append("This is ").append(currentZone).append(", a place you named and made your own. ");
+        java.util.List<String> others = zones.stream().filter(z -> !(hereIsCurrent && z.equals(currentZone))).toList();
+        if (!others.isEmpty()) s.append(others.size() == 1 ? "Nearby stands " : "Nearby stand ").append(joinAnd(others)).append(" — the marks of a settlement you have raised here. ");
         s.append(biomeDescription(biome)).append(" ");
         s.append(timeOfDay(at)).append(" ");
         String weather = jdbc.query("SELECT weather_kind,intensity FROM world_weather WHERE world_id=?", rs -> rs.next() ? weatherPhrase(rs.getString(1), rs.getInt(2)) : null, world);
@@ -473,6 +486,21 @@ public class ChronicleActionService {
         };
     }
     /** Give the current chunk a name and a role, or rename it. The chronicle's sense of place is built from these designations. */
+    /** The named zone in the chronicle's CURRENT chunk that the text refers to, or null — so "go to the Tool
+     *  Shed" is a short walk within the settlement, not an inter-chunk journey (V70/F8). */
+    private String matchLocalZone(ActiveChronicle chronicle, String text) {
+        String lower = text.toLowerCase(Locale.ROOT);
+        return jdbc.query("SELECT name FROM chronicle_named_location WHERE chronicle_id=? AND chunk_id=? ORDER BY length(name) DESC",
+            rs -> { while (rs.next()) { String n = rs.getString(1); if (lower.contains(n.toLowerCase(Locale.ROOT))) return n; } return null; },
+            chronicle.id(), chronicle.location());
+    }
+    /** "a", "a and b", or "a, b, and c" — for listing a settlement's named zones. */
+    private static String joinAnd(java.util.List<String> xs) {
+        if (xs.isEmpty()) return "";
+        if (xs.size() == 1) return xs.get(0);
+        if (xs.size() == 2) return xs.get(0) + " and " + xs.get(1);
+        return String.join(", ", xs.subList(0, xs.size() - 1)) + ", and " + xs.get(xs.size() - 1);
+    }
     private String[] designate(ActiveChronicle chronicle, String text, UUID actionId, Instant at) {
         String name = extractDesignatedName(text);
         if (name == null || name.isBlank()) return new String[]{"FAILED", "You mean to give this place a name, but no clear name forms."};
@@ -480,7 +508,11 @@ public class ChronicleActionService {
         String purpose = value.contains("sleep") ? "SLEEPING" : (value.contains("urinat")||value.contains("latrine")||value.contains("defecat")||value.contains("toilet")) ? "SANITATION" : (value.contains("drink")||value.contains("water")) ? "WATER" : (value.contains("store")||value.contains("storage")) ? "STORAGE" : (value.contains("craft")||value.contains("work")||value.contains("forge")||value.contains("manufactur")) ? "WORKSHOP" : (value.contains("archive")||value.contains("library")||value.contains("knowledge")) ? "KNOWLEDGE" : null;
         boolean memorize = value.contains("memoriz") || value.contains("memoris") || value.contains("remember") || value.contains("commit to memory") || value.contains("fix in") || value.contains("by heart");
         java.sql.Timestamp ts = java.sql.Timestamp.from(at);
-        jdbc.update("INSERT INTO chronicle_named_location (chronicle_id,chunk_id,name,purpose_tag,designated_at,source_action_id,memorized,last_visited_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT (chronicle_id,chunk_id) DO UPDATE SET name=EXCLUDED.name, purpose_tag=EXCLUDED.purpose_tag, designated_at=EXCLUDED.designated_at, source_action_id=EXCLUDED.source_action_id, memorized=chronicle_named_location.memorized OR EXCLUDED.memorized, last_visited_at=EXCLUDED.last_visited_at", chronicle.id(), chronicle.location(), name, purpose, ts, actionId, memorize, ts);
+        // Many named zones per chunk now (V70/F8): conflict on the name, so a chronicle may name several
+        // distinct spots in one settlement, and re-naming the same one updates it. Standing at the place you
+        // just named makes it your current zone.
+        jdbc.update("INSERT INTO chronicle_named_location (chronicle_id,chunk_id,name,purpose_tag,designated_at,source_action_id,memorized,last_visited_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT (chronicle_id,chunk_id,name) DO UPDATE SET purpose_tag=EXCLUDED.purpose_tag, designated_at=EXCLUDED.designated_at, source_action_id=EXCLUDED.source_action_id, memorized=chronicle_named_location.memorized OR EXCLUDED.memorized, last_visited_at=EXCLUDED.last_visited_at", chronicle.id(), chronicle.location(), name, purpose, ts, actionId, memorize, ts);
+        jdbc.update("UPDATE chronicle SET current_zone=? WHERE id=?", name, chronicle.id());
         boolean markerHere = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM location_marker WHERE chunk_id=?)", Boolean.class, chronicle.location()));
         String tail = memorize
             ? (markerHere ? " You fix it firmly in memory, and with your marker already standing here, you will find your way back to it without fail." : " You fix it firmly in memory — though without a marker or a map, memory alone may dim if you stay away too long.")
@@ -503,6 +535,7 @@ public class ChronicleActionService {
         if (destination == null) return "The ground gives way toward the edge of what you can cross. You turn back before leaving the land behind.";
         java.sql.Timestamp occurredTs = java.sql.Timestamp.from(occurredAt);
         jdbc.update("UPDATE world_object SET current_location_id=?, updated_at=? WHERE id=?", destination, occurredTs, chronicle.id());
+        jdbc.update("UPDATE chronicle SET current_zone=NULL WHERE id=?", chronicle.id()); // left the settlement's zones behind
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'MOVED',jsonb_build_object('fromLocationId',?::text,'toLocationId',?::text,'direction',?))", chronicle.id(), occurredTs, chronicle.location().toString(), destination.toString(), direction.name());
         jdbc.update("INSERT INTO chronicle_event (chronicle_id,occurred_at,event_type,payload) VALUES (?,?,'CHRONICLE_MOVED',jsonb_build_object('fromLocationId',?::text,'toLocationId',?::text,'direction',?))", chronicle.id(), occurredTs, chronicle.location().toString(), destination.toString(), direction.name());
         recordVisit(chronicle.id(), destination, occurredAt);
@@ -550,6 +583,7 @@ public class ChronicleActionService {
         if (plan.destination().equals(chronicle.location())) return new String[]{"SUCCEEDED", "You are already at the place you meant to reach."};
         java.sql.Timestamp ts = java.sql.Timestamp.from(at);
         jdbc.update("UPDATE world_object SET current_location_id=?, updated_at=? WHERE id=?", plan.destination(), ts, chronicle.id());
+        jdbc.update("UPDATE chronicle SET current_zone=NULL WHERE id=?", chronicle.id()); // arrived at a new place; old zones are behind
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'MOVED',jsonb_build_object('fromLocationId',?::text,'toLocationId',?::text,'wayfinding',?))", chronicle.id(), ts, chronicle.location().toString(), plan.destination().toString(), plan.reason());
         jdbc.update("INSERT INTO chronicle_event (chronicle_id,occurred_at,event_type,payload) VALUES (?,?,'CHRONICLE_MOVED',jsonb_build_object('fromLocationId',?::text,'toLocationId',?::text,'wayfinding',?))", chronicle.id(), ts, chronicle.location().toString(), plan.destination().toString(), plan.reason());
         recordVisit(chronicle.id(), plan.destination(), at);
