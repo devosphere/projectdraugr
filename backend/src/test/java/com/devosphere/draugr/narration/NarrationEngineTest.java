@@ -24,6 +24,20 @@ class NarrationEngineTest {
         return new NarrationEngine.Scene(intent, outcome, "TEMPERATE_FOREST", "MIDDAY", "CLEAR", null, null, null);
     }
 
+    /** #30: ground() scales immersion with attention — rich on deliberate looking, terse when heads-down — and never advises. */
+    @Test void groundScalesImmersionWithAttention() {
+        // Deliberate looking takes the place in: the land, the light, and a sound/smell — three grounded sentences.
+        String high = engine.ground("You take what is worth taking.", "TEMPERATE_FOREST", "MORNING", "CLEAR", "HIGH", false);
+        assertTrue(high.contains("trees stand close"), high);
+        assertTrue(high.contains("light coming in low"), high);
+        assertTrue(high.contains("bird falls quiet"), high);
+        assertDoesNotThrow(() -> policy.validate(high));
+        // Heads-down in clear weather gets no scenery tacked on — the chronicle is not looking.
+        assertEquals("You twist the fibre.", engine.ground("You twist the fibre.", "TEMPERATE_FOREST", "MORNING", "CLEAR", "LOW", false));
+        // But weather beginning is felt even heads-down.
+        assertTrue(engine.ground("You twist the fibre.", "TEMPERATE_FOREST", "MORNING", "RAIN", "LOW", true).contains("Rain moves through"));
+    }
+
     @Test void everyCoveredSceneProducesProse() {
         for (String key : engine.coveredScenes()) {
             String[] parts = key.split("\\|");

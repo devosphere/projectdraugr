@@ -131,27 +131,36 @@ public class NarrationEngine {
     );
 
     private static final Map<String, String> BIOME_COLOR = Map.of(
-        "TEMPERATE_FOREST", "The trees stand close here",
-        "HIGHLAND", "The ground falls away in long slopes",
-        "MOUNTAIN", "Bare rock shows through everywhere",
-        "GRASSLAND", "The grass runs out flat in every direction",
-        "WETLAND", "The ground gives underfoot and water stands in the low places",
-        "OCEAN", "There is water to the horizon");
+        "TEMPERATE_FOREST", "The trees stand close and dark around you, the floor deep in leaf-mould",
+        "HIGHLAND", "The ground falls away in long open slopes, and the wind is never quite still",
+        "MOUNTAIN", "Bare rock shows through everywhere, the air thin and hard to draw",
+        "GRASSLAND", "The grass runs out flat to every horizon, bending in slow waves",
+        "WETLAND", "The ground gives underfoot, and water stands dark and still in the low places",
+        "OCEAN", "Water reaches grey to the edge of sight, restless and without end");
 
     private static final Map<String, String> TIME_COLOR = Map.of(
-        "DAWN", "the light still grey and flat",
-        "MORNING", "the light coming in low and long",
-        "MIDDAY", "the shadows short and hard",
-        "AFTERNOON", "the light going gold at the edges",
-        "DUSK", "the colour draining out of everything",
-        "NIGHT", "and it is dark enough that sound matters more than sight");
+        "DAWN", "the light still grey and unformed",
+        "MORNING", "the light coming in low and long across the ground",
+        "MIDDAY", "the shadows short and hard underfoot",
+        "AFTERNOON", "the light going gold at the edges of things",
+        "DUSK", "the colour draining slowly out of the land",
+        "NIGHT", "the dark near complete, so that sound carries further than sight");
 
     private static final Map<String, String> WEATHER_COLOR = Map.of(
-        "RAIN", "Rain moves through steadily",
-        "STORM", "The wind comes in hard enough to lean against",
-        "SNOW", "Snow comes down without any hurry",
-        "FOG", "What is more than a few paces off is only a suggestion",
+        "RAIN", "Rain moves through steadily, cold on the back of the neck",
+        "STORM", "The wind comes in hard enough to lean against, and drives the rain sidelong",
+        "SNOW", "Snow comes down without any hurry, muffling every sound to nothing",
+        "FOG", "What lies more than a few paces off is only a suggestion of itself",
         "CLEAR", "");
+
+    /** A sound or smell of the place, surfaced only on deliberate attention — the world reaching a sense other than sight. */
+    private static final Map<String, String> AMBIENT = Map.of(
+        "TEMPERATE_FOREST", "Somewhere off among the trunks a bird falls quiet, then takes it up again.",
+        "HIGHLAND", "The wind pulls steadily at you and carries the dry smell of turf and stone.",
+        "MOUNTAIN", "The cold has a mineral edge to it, and nothing moves that you can hear.",
+        "GRASSLAND", "Insects work unseen in the grass, and the whole plain smells of dry seed.",
+        "WETLAND", "The air hangs thick with the green smell of standing water and slow rot.",
+        "OCEAN", "Salt hangs in the air, and the water works without pause at the shore.");
 
     private static final String[] GENERIC_SUCCESS = {
         "It is done. The world carries the difference.",
@@ -235,16 +244,25 @@ public class NarrationEngine {
      */
     public String ground(String core, String biome, String timeOfDay, String weather, String attention, boolean weatherChanged) {
         boolean low = "LOW".equals(attention), high = "HIGH".equals(attention);
+        StringBuilder out = new StringBuilder(core);
+        // Weather is felt while moving or looking, and always the moment it changes — a chronicle heads-down
+        // on a task in steady rain has tuned it out, but feels it begin, or notices it when they look up.
         String w = weather == null ? null : WEATHER_COLOR.get(weather);
-        if (w != null && !w.isEmpty() && (weatherChanged || !low)) core = core + " " + w + ".";
+        if (w != null && !w.isEmpty() && (weatherChanged || !low)) out.append(" ").append(w).append(".");
+        // Deliberate looking (HIGH) takes the place in fully: the shape of the land, the quality of the light,
+        // and a sound or smell reaching a sense other than sight — three grounded sentences where it means
+        // something. Heads-down work gets none of it; the chronicle is not looking, so the world stays at arm's
+        // length. This scales immersion with attention rather than tagging every trivial act with scenery.
         if (high) {
             String b = biome == null ? null : BIOME_COLOR.get(biome);
             if (b != null) {
                 String t = timeOfDay == null ? null : TIME_COLOR.get(timeOfDay);
-                core = core + " " + (t == null || t.isEmpty() ? b + "." : b + ", " + t + ".");
+                out.append(" ").append(t == null || t.isEmpty() ? b + "." : b + ", " + t + ".");
+                String amb = AMBIENT.get(biome);
+                if (amb != null) out.append(" ").append(amb);
             }
         }
-        return core;
+        return out.toString();
     }
 
     /** Intents the engine has hand-written prose for — used by tests and by the router. */
