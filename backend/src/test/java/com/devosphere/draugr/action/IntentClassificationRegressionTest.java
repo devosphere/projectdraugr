@@ -95,6 +95,18 @@ class IntentClassificationRegressionTest {
         assertEquals("OBSERVE", classify("look around the clearing"));
     }
 
+    /** #32: bathing/taking a bath is washing; #36: making a net is not fishing. */
+    @Test void bathIsWashingAndMakingANetIsNotFishing() throws Exception {
+        assertEquals("WASH", classify("take a bath in the stream"));
+        assertEquals("WASH", classify("bathe in the river"));
+        assertEquals("WASH", classify("wash myself"));
+        // "fishing net" / "weave a fish net" contain "fish" but are CRAFTING a net — not angling (#36).
+        assertEquals("UNKNOWN", classify("weave a fishing net"));
+        assertEquals("UNKNOWN", classify("knot a fish net from cordage"));
+        // Genuine fishing still classifies.
+        assertEquals("FISH", classify("fish the stream with a spear"));
+    }
+
     /** A drying rack is a staged structure (V58), not a shelf — it must reach the fallback. */
     @Test void dryingRackIsNotAShelf() throws Exception {
         assertEquals("UNKNOWN", classify("build a drying rack", false));   // falls through to the assembly engine

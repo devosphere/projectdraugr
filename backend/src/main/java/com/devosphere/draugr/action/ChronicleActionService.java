@@ -158,8 +158,8 @@ public class ChronicleActionService {
         else if (intent == Intent.COLLECT_INSECTS) { PhysicalItemService.InsectHarvest r=items.collectInsects(chronicle.id(),chronicle.location(),text,resolvedAt); outcome=r.outcome(); perception=r.narration(); applyInsectHazard(chronicle.id(),r,actionId,resolvedAt); }
         else if (intent == Intent.EAT) { String[] r = eat(chronicle.id(), text, actionId, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.COOK_MEAT) { if(fire.cookGameMeat(chronicle.id(),chronicle.location(),resolvedAt)) perception="You hold the meat over the steady heat until its surface changes and darkens."; else {outcome="FAILED";perception="You prepare the meat for a moment, then set it aside unchanged.";} }
-        else if (intent == Intent.DRINK) { String biome=jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?",String.class,chronicle.location()); if("WETLAND".equals(biome)){physiology.drink(chronicle.id());perception="You drink from the moving water and let the cold settle in your throat.";}else{outcome="FAILED";perception="You pause, but find nothing here that you can drink.";} }
-        else if (intent == Intent.WASH) { String biome=jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?",String.class,chronicle.location()); if("WETLAND".equals(biome)){physiology.wash(chronicle.id());perception="Cold water runs over your hands and skin, carrying away some of the dirt.";}else{outcome="FAILED";perception="You pause, but find no water here to wash with.";} }
+        else if (intent == Intent.DRINK) { if(waterInReach(chronicle.location())){physiology.drink(chronicle.id());perception="You drink from the moving water and let the cold settle in your throat.";}else{outcome="FAILED";perception="You pause, but find nothing here that you can drink.";} }
+        else if (intent == Intent.WASH) { if(waterInReach(chronicle.location())){physiology.wash(chronicle.id());perception="Cold water runs over your hands and skin, carrying away some of the dirt.";}else{outcome="FAILED";perception="You pause, but find no water here to wash with.";} }
         else if (intent == Intent.TREAT_WOUND) { if (physiology.bindWound(chronicle.id(), items, actionId, resolvedAt)) perception="You press and bind the wounded place until the immediate bleeding eases."; else { outcome="FAILED"; perception="You work at yourself for a moment, then stop without changing the wound."; } }
         else if (intent == Intent.EDIT_DOCUMENT) { try { reviseDocument(chronicle.id(), actionId, resolvedAt, text); perception="Your marks remain on the physical page."; } catch (IllegalArgumentException | IllegalStateException ignored) { outcome="FAILED"; perception="You handle the page for a while, then set it aside unchanged."; } }
         else if (intent == Intent.CONFRONT_WILDLIFE) { double spec=SuccessModel.specificity(text,HUNT_SIGNALS); double fam=capability.familiarity(chronicle.id(),"AIM"); int tactic=(int)Math.round(spec*30 + Math.min(0.20,fam*3.0)*100); WildlifeEncounterService.EncounterResult result=wildlife.confront(chronicle.id(),chronicle.location(),actionId,resolvedAt,tactic); outcome=result.outcome(); perception=result.narration(); }
@@ -643,7 +643,11 @@ public class ChronicleActionService {
         // are processing, not angling. Defer to the material-process matcher, which
         // agrees on category, keyword and subject before it claims anything; only text
         // that resolves to no process is heard as an attempt to catch one.
-        if((value.contains("fish")||value.contains("angle")||((value.contains("catch")||value.contains("spear"))&&(value.contains("trout")||value.contains("perch")||value.contains("pike")||value.contains("carp")||value.contains("eel")||value.contains("catfish")||value.contains("crayfish"))))&&!items.actionMatchesProcess(action)) return Intent.FISH;
+        // "fishing net" / "weave a fish net" contain "fish" but are CRAFTING a net, not angling (#36): the
+        // false FISH match returned "no water here". Making a net is not fishing — let it fall through to the
+        // process/authoring path where a net can be made.
+        boolean craftingNet = value.contains("net")&&(value.contains("weave")||value.contains("craft")||value.contains("make")||value.contains("knot")||value.contains("braid")||value.contains("tie")||value.contains("net a"));
+        if((value.contains("fish")||value.contains("angle")||((value.contains("catch")||value.contains("spear"))&&(value.contains("trout")||value.contains("perch")||value.contains("pike")||value.contains("carp")||value.contains("eel")||value.contains("catfish")||value.contains("crayfish"))))&&!craftingNet&&!items.actionMatchesProcess(action)) return Intent.FISH;
         if(value.contains("snare")||value.contains("set a trap")||value.contains("set trap")||((value.contains("trap")||value.contains("noose"))&&(value.contains("rabbit")||value.contains("hare")||value.contains("bird")||value.contains("fowl")||value.contains("small")||value.contains("run")))) return Intent.SNARE;
         if((value.contains("raid")||value.contains("harvest")||value.contains("smoke")||value.contains("rob")||value.contains("take")||value.contains("collect")||value.contains("gather"))&&(value.contains("hive")||value.contains("nest")||value.contains("honey")||value.contains("beeswax")||value.contains("bees")||value.contains("hornet"))) return Intent.RAID_HIVE;
         if((value.contains("collect")||value.contains("gather")||value.contains("catch")||value.contains("dig")||value.contains("pick")||value.contains("forage")||value.contains("harvest"))&&(value.contains("insect")||value.contains("silk")||value.contains("cocoon")||value.contains("silkworm")||word(value,"ant")||word(value,"ants")||value.contains("chitin")||value.contains("grasshopper")||value.contains("cricket")||value.contains("earthworm")||word(value,"worm")||value.contains("spider")||word(value,"grub")||value.contains("larva"))) return Intent.COLLECT_INSECTS;
@@ -654,7 +658,7 @@ public class ChronicleActionService {
         if((value.contains("gather")||value.contains("pick")||value.contains("collect")||value.contains("harvest")||value.contains("forage"))&&(value.contains("mushroom")||value.contains("fungi")||value.contains("herb")||value.contains("plant")||value.contains("berries")||value.contains("flower")||value.contains("leaf")||value.contains("root")||value.contains("nettle")||value.contains("yarrow")||value.contains("comfrey")||value.contains("mint")||value.contains("dandelion")||value.contains("garlic")||value.contains("burdock")||value.contains("watercress")||value.contains("cattail")||value.contains("reed")||value.contains("bulrush")||value.contains("chanterelle")||value.contains("porcini")||value.contains("oyster")||value.contains("polypore")||value.contains("lion")||value.contains("hazel rod")||value.contains("hazel")&&value.contains("rod")||value.contains("willow")&&value.contains("branch")||value.contains("pine resin")||value.contains("maple sap")||value.contains("rose hip")||value.contains("elderberry")||value.contains("hawthorn")||value.contains("juniper berry")||value.contains("vine"))&&!value.contains("fiber")) return Intent.GATHER_PLANT;
         if(value.contains("clay")&&(value.contains("gather")||value.contains("dig")||value.contains("collect")||value.contains("find")||value.contains("get")||value.contains("scoop")||value.contains("pull"))) return Intent.GATHER_CLAY;
         if(value.contains("slab")&&(value.contains("gather")||value.contains("split")||value.contains("pry")||value.contains("cut")||value.contains("make")||value.contains("get")||value.contains("collect")||value.contains("quarry")||value.contains("shape")||value.contains("break"))) return Intent.GATHER_STONE_SLAB;
-        if(value.contains("wash")||value.contains("bathe")||value.contains("clean myself")) return Intent.WASH;
+        if(value.contains("wash")||value.contains("bathe")||value.contains("bath")||value.contains("clean myself")) return Intent.WASH;
         if(value.contains("charcoal")&&(value.contains("make")||value.contains("take")||value.contains("gather")||value.contains("get")||value.contains("collect"))) return Intent.MAKE_CHARCOAL;
         if(value.contains("bark")&&(value.contains("strip")||value.contains("peel")||value.contains("gather")||value.contains("cut")||value.contains("collect")||value.contains("pull"))) return Intent.STRIP_BARK;
         if((value.contains("go to")||value.contains("head to")||value.contains("head for")||value.contains("make for")||value.contains("travel to")||value.contains("walk to")||value.contains("return to")||value.contains("go back to")||value.contains("head back to")||value.contains("journey to")||value.contains("set out for"))&&Direction.from(value)==null) return Intent.TRAVEL;
@@ -964,6 +968,19 @@ public class ChronicleActionService {
             // Rest, sleep, eat, drink, wash, relief, personal/aggression acts run their own physiology.
             default -> new Labor(0, 0);
         };
+    }
+    /**
+     * Fresh water the Chronicle can reach here — a wetland, a river bank, or a freshwater spring/stream site
+     * at this chunk (#32: bathing/drinking used to succeed only in WETLAND, so a stream or river bank failed).
+     * The ocean is salt and does not count.
+     */
+    private boolean waterInReach(UUID location) {
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
+        if ("WETLAND".equals(biome) || "RIVER_BANK".equals(biome)) return true;
+        Integer sites = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM ecology_site WHERE chunk_id=? AND (site_kind ILIKE '%spring%' OR site_kind ILIKE '%stream%' OR site_kind ILIKE '%river%' OR site_kind ILIKE '%freshwater%')",
+            Integer.class, location);
+        return sites != null && sites > 0;
     }
     private String attentionLevel(String text, Intent intent) {
         if (intent == Intent.OBSERVE) return "HIGH";
