@@ -43,14 +43,22 @@ public class LiteratureService {
         jdbc.update("UPDATE world_object SET display_name=? WHERE id=?", title, surfaceObjectId);
         return revise(surfaceObjectId, chronicleId, actionId, occurredAt, Edit.INITIAL, content, null);
     }
+    // The one reachability model (DR-0022 Layer 1/4c): carried ∪ location-sited, descending containment — so a
+    // map or record kept in an on-site store (The Archives, a shelf) is readable, not just one carried in hand.
+    // This was the "view the map content returns nothing" bug: a stored document was never reachable (F3).
+    private static final String REACHABLE_CTE =
+        "WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE lifecycle_state='ACTIVE' AND (current_owner_id=? OR (current_owner_id IS NULL AND current_location_id=?)) " +
+        "UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') ";
+    private UUID locationOf(UUID chronicle) { return jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle); }
+
     /** The most recently made reachable document of a kind, so a player can refer to "my journal" / "my map" without an id. */
     @Transactional(readOnly = true)
     public UUID reachableDocumentOfKind(UUID chronicleId, String kind) {
-        return jdbc.query("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT d.object_id FROM reachable x JOIN literature_document d ON d.object_id=x.id JOIN world_object w ON w.id=d.object_id WHERE d.document_kind=? ORDER BY w.created_at DESC LIMIT 1", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, chronicleId, kind);
+        return jdbc.query(REACHABLE_CTE + "SELECT d.object_id FROM reachable x JOIN literature_document d ON d.object_id=x.id JOIN world_object w ON w.id=d.object_id WHERE d.document_kind=? ORDER BY w.created_at DESC LIMIT 1", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, chronicleId, locationOf(chronicleId), kind);
     }
     @Transactional(readOnly = true)
     public List<DocumentView> reachable(UUID chronicleId) {
-        return jdbc.query("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT d.object_id,d.document_kind,d.title,d.current_revision_id,COALESCE(r.revision_number,0) FROM reachable x JOIN literature_document d ON d.object_id=x.id LEFT JOIN literature_revision r ON r.id=d.current_revision_id ORDER BY d.title",(rs,row)->new DocumentView(rs.getObject(1,UUID.class),rs.getString(2),rs.getString(3),rs.getObject(4,UUID.class),rs.getInt(5)),chronicleId);
+        return jdbc.query(REACHABLE_CTE + "SELECT d.object_id,d.document_kind,d.title,d.current_revision_id,COALESCE(r.revision_number,0) FROM reachable x JOIN literature_document d ON d.object_id=x.id LEFT JOIN literature_revision r ON r.id=d.current_revision_id ORDER BY d.title",(rs,row)->new DocumentView(rs.getObject(1,UUID.class),rs.getString(2),rs.getString(3),rs.getObject(4,UUID.class),rs.getInt(5)),chronicleId,locationOf(chronicleId));
     }
     @Transactional(readOnly = true)
     public RevisionView current(UUID documentId, UUID chronicleId) {
@@ -60,10 +68,10 @@ public class LiteratureService {
     /** Read-only reachability check callers can use to avoid invoking a revision that would throw and poison the shared transaction. */
     @Transactional(readOnly = true)
     public boolean documentReachable(UUID documentId, UUID chronicleId) {
-        Integer count=jdbc.queryForObject("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT COUNT(*) FROM reachable x JOIN literature_document d ON d.object_id=x.id WHERE x.id=?",Integer.class,chronicleId,documentId);
+        Integer count=jdbc.queryForObject(REACHABLE_CTE + "SELECT COUNT(*) FROM reachable x JOIN literature_document d ON d.object_id=x.id WHERE x.id=?",Integer.class,chronicleId,locationOf(chronicleId),documentId);
         return count != null && count > 0;
     }
-    private void assertReachable(UUID documentId,UUID chronicleId) { Integer count=jdbc.queryForObject("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT COUNT(*) FROM reachable WHERE id=?",Integer.class,chronicleId,documentId); if(count==null||count==0)throw new IllegalArgumentException("The document is not physically reachable by the Chronicle."); }
+    private void assertReachable(UUID documentId,UUID chronicleId) { Integer count=jdbc.queryForObject(REACHABLE_CTE + "SELECT COUNT(*) FROM reachable WHERE id=?",Integer.class,chronicleId,locationOf(chronicleId),documentId); if(count==null||count==0)throw new IllegalArgumentException("The document is not physically reachable by the Chronicle."); }
     private String insertAtAnchor(String prior,String text,String anchor) { if(anchor==null||anchor.isBlank()) throw new IllegalArgumentException("An insertion needs an exact anchor."); int first=prior.indexOf(anchor); if(first<0||first!=prior.lastIndexOf(anchor)) throw new IllegalArgumentException("The anchor is absent or ambiguous."); return prior.substring(0,first)+text+prior.substring(first); }
     private String hash(String content) { try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content.getBytes(StandardCharsets.UTF_8)));}catch(Exception e){throw new IllegalStateException(e);} }
     private record Document(String title,UUID revisionId,int revisionNumber,String content){}
