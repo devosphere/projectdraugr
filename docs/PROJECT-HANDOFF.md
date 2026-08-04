@@ -100,7 +100,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 | `backend/src/main/java/com/devosphere/draugr/domain/ArchitectRouter.java` | Cost gate for the Architect — routes COVERED / POLISH / INVENT. |
 | `backend/src/main/java/com/devosphere/draugr/routing/ProcessMatcher.java` | The **only** implementation of the action→process resolution rule. Both `runProcess()` and `ArchitectRouter` go through it. |
 | `backend/src/main/java/com/devosphere/draugr/routing/RoutingMissRecorder.java` | Records unresolved actions into the V56 backlog. Separate bean on purpose — see its Javadoc. |
-| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V66. Next is V67. |
+| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V70. Next is V71. |
 | `backend/src/main/java/com/devosphere/draugr/domain/DomainRegistryService.java` | Reads domain_registry — the Architect's ledger of invented domains. |
 | `docs/architecture/domain-creation-pattern.md` | The exact recipe for adding a new domain. |
 | `docs/architecture/action-routing-hardening.md` | Sprint 003 spec — collisions, milestones M1–M5. |
@@ -119,7 +119,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 
 ---
 
-## What Is Built (Migrations V1–V66, all applied)
+## What Is Built (Migrations V1–V70, all applied)
 
 > **Post-playtest cycle (2026-08-03) — summary; full detail + resume point in
 > [systems/06.4-Runtime-Authoring-Build-Plan.md](systems/06.4-Runtime-Authoring-Build-Plan.md).**
@@ -234,14 +234,32 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 
 #### Resume point
 
-> **▶ ACTIVE NOW (2026-08-04): post-playtest work.** A live playthrough surfaced GitHub issues #19–28
-> and a design discussion that produced **[DR-0021](systems/06.3-Decision-Log.md#dr-0021)** (runtime
-> procedure-authoring, five AI roles). **The single live tracker is
-> [06.4-Runtime-Authoring-Build-Plan.md](systems/06.4-Runtime-Authoring-Build-Plan.md) — go there first;
-> its RESUME POINT says exactly what to do next.** **The GitHub playtest backlog #21–#28 is now CLEARED**
-> (migrations through **V67**; 142 backend tests green). The DR-0021 pipeline is BUILT and gated off; what
-> remains is two dev-facing surfaces + live AI-on verification with the operator key. The numbered history
-> below is the prior milestone sequence, all DONE.
+> **▶ ACTIVE NOW (2026-08-04): DR-0022 "Phase-0 parity" — make Phase 1 EXCEED the ChatGPT playthrough.**
+> After clearing the #21–#28 backlog, a review of the user's Phase-0 (single-ChatGPT) "Wolf Kingdom" save vs
+> Phase 1, plus issues #29–#37, produced **[DR-0022](systems/06.3-Decision-Log.md#dr-0022)**. **The single
+> live tracker is [06.5-Phase0-Parity-Build-Plan.md](systems/06.5-Phase0-Parity-Build-Plan.md) — go there
+> first; its ▶ CURRENT line is authoritative.**
+>
+> **ALL deterministic, key-free DR-0022 layers are SHIPPED** on `development` (~17 commits, **145 backend
+> tests + 3 SQL regressions green**, **migrations through V70**): unified reachability (on-site storage +
+> racked tools) · perception names the real flora/wildlife/fish/insects present · thick objects (V68
+> `object_attribute`/`object_modification`) · documents/maps read-back · narration overhaul (attention-scaled
+> grounding + flagship crafts + rejection prose) · **workstations (V69: efficiency + a minor bounded quality
+> assist, never a gate)** · **multi-zone settlements (V70: many named zones/chunk, "go to \<zone\>")** ·
+> quantified AI context (F2) · cross-chunk reject that names the store. Quick fixes #32 (bathe at any fresh
+> water) + #36 (net≠fishing) done; #25/#28 closed on GitHub earlier.
+>
+> **What remains (all non-blocking or key-gated):** craft fetch-time + workstation time/effort efficiency
+> (need a small `resolve()` restructure — the tick advances before the process resolves), per-action
+> success-core narration breadth, and the Interpreter memoization/convergence (F9). **The DR-0021 five-AI
+> pipeline is BUILT and gated off; AI-on verification is the operator's launcher run** (`DRAUGR_AI_ENABLED`
+> + the encrypted, password-gated key — the agent never handles the key/password). **Two locked design
+> principles (do not re-litigate):** DR-0022 → "Principles settled during Layer 4b" — (A) reachability is
+> knowledge-scoped & capped at the chunk/locality; (B) quality is majorly the craftsman (bare hands make
+> superior work), a workstation is efficiency + a minor bounded assist, never a gate.
+>
+> The DR-0021 tracker [06.4](systems/06.4-Runtime-Authoring-Build-Plan.md) is the companion (the AI pipeline
+> this builds on). The numbered history below is the prior milestone sequence, all DONE.
 
 1. **DONE — Step 1: measure.** V56 shipped. The backlog is live and directs the rest.
 2. **DONE — Step 2: bulk foundation generation through the V53 gate.** V57 landed 109 processes (20 → 129) across the eight simulation-named gaps, promoted only by the extended gate, verified reachable from a clean DB. Still owed: sampled human plausibility review of the batch (design rule #5) — the gate proves conservation and reachability, not that a recipe is good primitive technology.
@@ -280,6 +298,17 @@ The question "should an AI layer help the ActivityClassifier work out what the p
     - **#28 regional weather — geography-driven, no schema change.** `BiomeClimate` no longer keys off the biome label with hand-tuned constants; it derives the felt climate from the chunk's own geography: temperature follows the environmental lapse rate from real `elevation` (a high peak is genuinely colder than a low one, continuous not bucketed), a latitude gradient from `grid_y`×world-height, and a wet-bulb rain↔snow bias from `moisture`. The biome label now contributes only the non-altitude residual (sea damp, canopy shelter, open-ground sun/wind). Both callers (`groundPerception`, `activeEnvironment`) feed it the geography; SQL EXPLAIN-validated on a throwaway Postgres. **Open follow-up:** the weather KIND is still one world-wide front, so spatial variation of the kind itself (a rain shadow behind a range) needs a per-region weather model. Commit 640b783.
     - **Materials & Recipes doc regenerated from the live DB** (`Project Draugr — Materials & Recipes.md`, gitignored local file): every item/process/assembly count and every input→output quantity verified against a throwaway Postgres at V67. Now a complete, specific catalogue — all 130 processes by domain, 6 assemblies with exact stages, flora/wildlife/mineral acquisition by biome. Snapshot V1–V67.
     - Full suite **142 tests green**; `BiomeClimateTest` (8 cases) and `ExaminationServiceTest` guard the new behaviour, `IntentClassificationRegressionTest` covers the new verbs.
+12. **IN PROGRESS — DR-0022 "Phase-0 parity": make Phase 1 EXCEED the ChatGPT playthrough.** Live tracker: [06.5-Phase0-Parity-Build-Plan.md](systems/06.5-Phase0-Parity-Build-Plan.md) (its ▶ CURRENT line is authoritative). Origin: reviewing the user's Phase-0 (single-ChatGPT, 13 hand-saved JSONs) "Wolf Kingdom" save + issues #29–#37 showed Phase 1 was *sounder but thinner*. **ALL deterministic, key-free layers SHIPPED** (~17 commits, **145 tests + 3 SQL regressions green**, **migrations → V70**):
+    - **Unified reachability** — one CTE (carried ∪ location-sited, descending containment); on-site storage contents + racked tools are now reachable; every sourcing/tool/grade path routed through it. Fixed the "documents on a shelf can't be read" class. Regression `reachability-onsite-storage.sql`.
+    - **Perception names real life** — `ExaminationService.presentLife(chunk, acuity)` names the actual flora/wildlife/fish/insects present, scaled by attention+perception; wired into OBSERVE + the examination verbs. Fixes "can't hunt what you can't see" (#37/#33).
+    - **Thick objects (V68)** — additive `object_attribute` + `object_modification`; REFINE records *what* changed; examination surfaces an object's evolving history. Never touches the catalogue or mass balance.
+    - **Documents/maps read-back** — unified `LiteratureService` reachability, so a map in an on-site store lists and reads (was the "content returned nothing" bug).
+    - **Narration overhaul (#30)** — `ground()` scales immersion by attention (land + light + a sound/smell on deliberate looking); flagship craft success prose; **rejection prose** that says *why* and *where the lack is* ("what is missing is not here — it lies wherever you last set it down").
+    - **Workstations (V69)** — `station_kind` on `material_process`; a reachable bench/loom gives **efficiency (yield) + a minor bounded quality assist** (attempt +1 step, still capped by materials) — **never a gate, never carries the grade**; buildable benches/loom via `CRAFT_WORKSTATION`.
+    - **Multi-zone settlements (V70)** — many named zones per chunk (relaxed the PK), `chronicle.current_zone` label, "go to \<zone\>" intra-chunk walk, `survey()` lists the settlement's zones. **Reachability stayed chunk-wide** (the lighter model — no zone→chunk ripple).
+    - **Quantified AI context (F2)** — `reachableInventory` feeds the Interpreter/Architect "dry_branch x5", closing the counts-blind gap. **Cross-chunk reject names the store** ("what there is of it sits at your Wood Store, not here"). Quick fixes **#32** (bathe at any fresh water) + **#36** (net≠fishing).
+    - **Locked design principles (do not re-litigate)** — DR-0022 → "Principles settled during Layer 4b": (A) reachability is **knowledge-scoped & capped at the chunk/locality** (Layer 1 chunk reach is correct — do NOT tighten to the zone; other chunks are a journey the player takes, never auto-walked); (B) **quality is majorly the craftsman** (bare hands make superior work), a workstation is efficiency + a minor bounded assist, never a gate.
+    - **Remaining (all non-blocking or key-gated):** craft fetch-time + workstation time/effort efficiency (need a small `resolve()` restructure — `ticks.advanceBy` runs before the process resolves); per-action success-core narration breadth; Interpreter memoization/convergence (F9). **AI-on verification is the operator's launcher run** (`DRAUGR_AI_ENABLED` + the encrypted password-gated key; the agent never handles the key/password) — the whole deterministic substrate it rides on is now in place.
 
 #### Why coverage, not correctness, is the cost driver
 
@@ -292,7 +321,7 @@ The unlock: V53's review gate already makes machine-authored processes safe to a
 **THEN: Task #21 — AI narration (the Simulation Agent's voice).** The seam is built: `NarrationRouter` decides whether to call, `NarrationEngine` supplies the `backendNarration` the refinement prompt builds on. See `docs/architecture/narration-engine.md` for the prompt template and cost model.
 
 ### Intents implemented (ChronicleActionService)
-GATHER, HARVEST, CRAFT, EQUIP, UNEQUIP, DROP, BUILD, REPAIR, ABANDON, RESUME, LIGHT_FIRE, ADD_FUEL, MAKE_CHARCOAL, COOK, SLEEP, STRIP_BARK, GATHER_CLAY, GATHER_STONE_SLAB, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, WRITE, EDIT_DOCUMENT, SKETCH_MAP, DESIGNATE, MARK, TRAVEL, CONFRONT_WILDLIFE, REFINE, OBSERVE, GATHER_PLANT, FELL_TREE, RAID_HIVE, COLLECT_INSECTS, FISH, SNARE, TRACK, TAME, LURE, SET_TRAP, CHECK_TRAP, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, REWORK, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE (multi-output & preserved-food outputs handled inside PROCESS_MATERIAL)
+GATHER, HARVEST, CRAFT, EQUIP, UNEQUIP, DROP, BUILD, REPAIR, ABANDON, RESUME, LIGHT_FIRE, ADD_FUEL, MAKE_CHARCOAL, COOK, SLEEP, STRIP_BARK, GATHER_CLAY, GATHER_STONE_SLAB, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, WRITE, EDIT_DOCUMENT, SKETCH_MAP, DESIGNATE, MARK, TRAVEL, CONFRONT_WILDLIFE, REFINE, OBSERVE, GATHER_PLANT, FELL_TREE, RAID_HIVE, COLLECT_INSECTS, FISH, SNARE, TRACK, TAME, LURE, SET_TRAP, CHECK_TRAP, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, REWORK, CRAFT_WORKSTATION (V69 benches/loom), PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE (multi-output & preserved-food outputs handled inside PROCESS_MATERIAL)
 
 ### Known limitations (acceptable for now)
 - Friction fire kit never wears out — infinite fires once made (wear/degradation future task)
