@@ -298,6 +298,10 @@ Tool Requirement:
 Woodworking Tools
 Workstation Requirements
 Workstations improve crafting efficiency.
+> **As built (V69, DR-0022):** a workstation **eases** a craft — never *gates* it, never decides its grade.
+> Quality is majorly the craftsman (bare hands make superior work); a reachable bench/loom adds efficiency
+> (yield) + a minor, bounded quality assist. `station_kind` on `material_process` names the eased operations
+> (woodworking bench / stoneworking bench / loom). Bare-handed always works. See systems/14-Crafting.md.
 A workstation may be:
 Item-Based Workstation
 Example:

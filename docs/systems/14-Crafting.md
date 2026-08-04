@@ -31,7 +31,7 @@ Every crafted object requires:
 - appropriate tools
 - time
 - labor
-- suitable workstations (when required)
+- a suitable workstation *(optional — it eases and speeds the work; never required, see Workstations below)*
 
 Crafting never bypasses physical reality.
 
@@ -121,27 +121,28 @@ Without knowledge, crafting either:
 
 ## Workstations
 
-Some recipes require specialized workstations.
+**As built (V69, DR-0022): a workstation EASES a craft — it never *requires* it, and never decides its quality.**
+Skilled hands with basic tools make superior work bare-handed (ancient joiners cut fine mortises, weavers made
+fine cloth, masons dressed stone square with the ground, cord, and pegs). So quality is **majorly the craftsman**
+— skill/care + materials — and a workstation adds only **efficiency** (less waste; a follow-up will add less
+time/effort) plus a **minor, bounded quality assist** (a stable held surface aids precision at the margin: the
+attempt is lifted one step, still capped against the materials, so it never rescues poor work). **Bare-handed
+always works**, just rougher-yielding. Gating a craft behind a bench would re-introduce exactly the restriction
+Phase 1 exists to remove. This is why a settlement builds a manufacturing district: **throughput and less waste**,
+not a shortcut to quality.
 
-Examples:
+Detection is via the unified reachability model — a bench standing in your on-site workshop counts. `station_kind`
+on `material_process` names which of the 14 precision/large operations each of the three benches eases:
 
-General Workbench
+**Woodworking bench** (`woodworking_bench`) — mortise, tenon, dovetail, lap & scarf joints, edge-joined panels,
+pegged frames, dowels, wooden components.
 
-- handles
-- wooden bowls
-- furniture
+**Stoneworking bench** (`stoneworking_bench`) — dressing foundation/construction stone, knapping tool stone.
 
-Stone Workbench
+**Upright loom** (`loom`) — weaving textile and wool cloth.
 
-- stone blades
-- polished stone
-- stone bricks
-
-Weaving Workbench
-
-- cloth
-- rope
-- baskets
+Build them via **`CRAFT_WORKSTATION`** ("build a woodworking bench", "set up a loom") — they are sited, reachable
+structures like other furniture.
 
 Sewing Workbench
 
