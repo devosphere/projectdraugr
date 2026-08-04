@@ -550,7 +550,14 @@ public class PhysicalItemService {
     public String[] executeProcess(UUID chronicle, UUID location, String key, String actionText, Instant at) {
         java.util.Map<String,Object> match = jdbc.queryForMap(
             "SELECT process_key, display_name, output_item_key, output_min, output_max, tool_class, " +
-            "requires_fire, requires_water, narration FROM material_process WHERE process_key=?", key);
+            "requires_fire, requires_water, narration, station_kind FROM material_process WHERE process_key=?", key);
+
+        // A workstation (bench/loom) sited within reach EASES this operation — it never gates it (bare-handed
+        // always works) and never decides its grade (skill + materials do). See V69: it gives efficiency (less
+        // waste) plus a minor, bounded quality assist. Detected through the unified reachability model (Layer 1),
+        // so a bench standing in an on-site workshop counts.
+        String stationKind = (String) match.get("station_kind");
+        boolean atStation = stationKind != null && hasAtLeast(chronicle, stationKind, 1);
 
         String toolClass = (String) match.get("tool_class");
         if (toolClass != null) {
@@ -598,7 +605,12 @@ public class PhysicalItemService {
         java.util.List<String> inputKeys = new java.util.ArrayList<>();
         for (java.util.Map<String,Object> in : fixed) inputKeys.add((String) in.get("item_key"));
         inputKeys.addAll(chosen.values());
-        QualityGrade grade = QualityGrade.worst(worstGradeAmong(chronicle, inputKeys), QualityGrade.attempt(actionText));
+        // Quality is majorly the craftsman: the attempt (skill/care) and the materials. A reachable workstation
+        // lifts the attempt by ONE step (a stable held surface aids precision at the margin) — but worst() still
+        // caps it against the materials, so the assist is minor and never rescues poor stock or poor work.
+        QualityGrade attempt = QualityGrade.attempt(actionText);
+        if (atStation) attempt = attempt.up();
+        QualityGrade grade = QualityGrade.worst(worstGradeAmong(chronicle, inputKeys), attempt);
 
         for (java.util.Map<String,Object> in : fixed)
             for (int i = 0; i < ((Number) in.get("quantity")).intValue(); i++) consumeOneHere(chronicle, location, (String) in.get("item_key"), at);
@@ -607,8 +619,12 @@ public class PhysicalItemService {
             for (int i = 0; i < (q == null ? 1 : q); i++) consumeOneHere(chronicle, location, e.getValue(), at);
         }
 
+        // Yield: a workstation wastes less, so it biases the output toward the high end of the range (efficiency,
+        // the station's real payoff) — the max of two rolls rather than one. Never changes the min guarantee.
         int lo = ((Number) match.get("output_min")).intValue(), hi = ((Number) match.get("output_max")).intValue();
-        int made = Math.max(1, lo + (hi > lo ? (int)(Math.random()*(hi-lo+1)) : 0));
+        double roll = Math.random();
+        if (atStation && hi > lo) roll = Math.max(roll, Math.random());
+        int made = Math.max(1, lo + (hi > lo ? (int)(roll*(hi-lo+1)) : 0));
         String outName = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, outKey);
         String kind = preservationKind(outKey);
         // Carried while there is room, then set on the ground in front — a process never fails for

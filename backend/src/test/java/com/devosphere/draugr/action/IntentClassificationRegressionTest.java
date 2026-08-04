@@ -107,6 +107,14 @@ class IntentClassificationRegressionTest {
         assertEquals("FISH", classify("fish the stream with a spear"));
     }
 
+    /** Workstations (V69) claim their words before the generic desk/table rule; a plain table is still a desk. */
+    @Test void workstationsClassifyBeforePlainFurniture() throws Exception {
+        assertEquals("CRAFT_WORKSTATION", classify("build a woodworking bench"));
+        assertEquals("CRAFT_WORKSTATION", classify("set up a loom"));
+        assertEquals("CRAFT_WORKSTATION", classify("make a stoneworking table"));
+        assertEquals("CRAFT_DESK", classify("build a table"));
+    }
+
     /** A drying rack is a staged structure (V58), not a shelf — it must reach the fallback. */
     @Test void dryingRackIsNotAShelf() throws Exception {
         assertEquals("UNKNOWN", classify("build a drying rack", false));   // falls through to the assembly engine

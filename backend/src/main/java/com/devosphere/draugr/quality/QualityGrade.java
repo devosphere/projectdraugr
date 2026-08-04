@@ -19,6 +19,11 @@ public enum QualityGrade {
         return a.ordinal() <= b.ordinal() ? a : b;
     }
 
+    /** One step better, capped at FINE — the minor, bounded quality assist a reachable workstation gives an
+     *  attempt. It only nudges; {@code worst(materials, attempt)} still caps the result against the stock, so
+     *  a bench never rescues poor work or lifts quality past what the hands and materials already allow. */
+    public QualityGrade up() { QualityGrade[] v = values(); return v[Math.min(v.length - 1, ordinal() + 1)]; }
+
     /** Parse a stored grade, defaulting to SOUND for anything unrecognised or null. */
     public static QualityGrade of(String s) {
         if (s == null) return SOUND;
