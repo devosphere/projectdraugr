@@ -522,7 +522,7 @@ public class PhysicalItemService {
         // A deterministic miss. The AI Procedure Interpreter may compose this from existing processes
         // (DR-0021), but that orchestration lives in ChronicleActionService where the AI seam is; here
         // the world simply does not yet know how, and says so.
-        return new String[]{"FAILED", "You turn the material over without settling on what to do with it."};
+        return new String[]{"FAILED", "You turn the material over in your hands, but no way to work it into what you meant comes to you here. Whatever that would take, it is not a thing your hands find on their own."};
     }
 
     /** True if a verified process by this key exists (canonical). Used to validate an AI-composed plan. */
@@ -566,15 +566,15 @@ public class PhysicalItemService {
                 case "STRIKING" -> hasAtLeast(chronicle,"stone_hammer",1) || hasAtLeast(chronicle,"primitive_pickaxe",1) || hasAtLeast(chronicle,"field_stone",1);
                 case "AXE"      -> hasAtLeast(chronicle,"stone_axe",1) || hasAtLeast(chronicle,"stone_hatchet",1);
                 default -> true; };
-            if (!ok) return new String[]{"FAILED", "The work needs a tool you are not carrying."};
+            if (!ok) return new String[]{"FAILED", "This work turns on a tool you have not got in reach — an edge, a hammer, an axe, whatever it needs. Bare hands only bruise the material."};
         }
         if (Boolean.TRUE.equals(match.get("requires_fire"))) {
             Boolean fire = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM fire_state fs JOIN world_object w ON w.id=fs.construction_id WHERE w.current_location_id=? AND fs.active=true)", Boolean.class, location);
-            if (!Boolean.TRUE.equals(fire)) return new String[]{"FAILED", "It needs heat, and there is no fire burning here."};
+            if (!Boolean.TRUE.equals(fire)) return new String[]{"FAILED", "This work needs heat, and no fire burns within reach of it. Cold, the material will not give."};
         }
         if (Boolean.TRUE.equals(match.get("requires_water"))) {
             String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
-            if (!"WETLAND".equals(biome)) return new String[]{"FAILED", "It needs water, and there is none here to work with."};
+            if (!"WETLAND".equals(biome)) return new String[]{"FAILED", "This work needs water, and there is none at hand to work it with. Dry, the process cannot even begin."};
         }
 
         // Fixed inputs, then each either/or group.
@@ -584,7 +584,7 @@ public class PhysicalItemService {
             "SELECT item_key, quantity FROM material_process_input WHERE process_key=?", key);
         for (java.util.Map<String,Object> in : fixed)
             if (!hasAtLeastHere(chronicle, location, (String) in.get("item_key"), ((Number) in.get("quantity")).intValue()))
-                return new String[]{"FAILED", "You have not got enough to hand for that."};
+                return new String[]{"FAILED", "You have not got enough of what this needs within reach. What is missing is not here — it lies wherever you last set it down, and you have not brought it."};
 
         java.util.List<String> groups = jdbc.queryForList(
             "SELECT DISTINCT group_name FROM material_process_input_group WHERE process_key=?", String.class, key);
@@ -594,7 +594,7 @@ public class PhysicalItemService {
             for (java.util.Map<String,Object> o : jdbc.queryForList(
                     "SELECT item_key, quantity FROM material_process_input_group WHERE process_key=? AND group_name=?", key, g))
                 if (hasAtLeastHere(chronicle, location, (String) o.get("item_key"), ((Number) o.get("quantity")).intValue())) { pick = (String) o.get("item_key"); break; }
-            if (pick == null) return new String[]{"FAILED", "You have nothing suitable to work from."};
+            if (pick == null) return new String[]{"FAILED", "Nothing within reach is suitable to work from. What this step wants, you do not have here to give it."};
             chosen.put(g, pick);
         }
 
