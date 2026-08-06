@@ -52,7 +52,12 @@
       const records = bible.recipeRecords.filter(item => item.tab === tabId);
       view.innerHTML = `<section class="recipe-intro"><p class="eyebrow">${tab.label}</p><h2>${tab.description}</h2><p>Quantities are shown only when the World Bible has a concrete design value. <b>Quantity specification pending</b> keeps uncertain parts visibly incomplete instead of pretending a recipe is ready.</p></section><section class="recipe-grid">${records.map(record => recipeCard(record)).join('') || `<p class="empty">No records have been written for this category yet.</p>`}</section>`;
     };
-    const activate = tabId => { document.querySelectorAll('#catalogue-tabs button').forEach(button => button.classList.toggle('selected', button.dataset.tab === tabId)); tabId === 'world' ? showWorld() : showRecipes(tabId); };
+    const showCategory = tabId => {
+      const tab = bible.recipeTabs.find(item => item.id === tabId);
+      view.innerHTML = `<section class="catalogue-toolbar catalogue-category-toolbar"><label>Search <input id="search" placeholder="Search ${tab.label.toLowerCase()}…" /></label></section><section class="database-note"><span>${tab.label}</span><p>${tab.description} Browse the complete catalogue for this physical system.</p></section><section class="catalogue-grid" id="catalogue-grid"></section>`;
+      loadFullCatalogueGrid(document.querySelector('#catalogue-grid'), document.querySelector('#search'), null, tabId);
+    };
+    const activate = tabId => { document.querySelectorAll('#catalogue-tabs button').forEach(button => button.classList.toggle('selected', button.dataset.tab === tabId)); tabId === 'world' ? showWorld() : showCategory(tabId); };
     document.querySelector('#catalogue-tabs').addEventListener('click', event => { const button = event.target.closest('button'); if (button) activate(button.dataset.tab); });
     activate('world');
   }
@@ -62,7 +67,7 @@
     return `<article class="recipe-card"><header>${badge(record.state)}<h3>${record.name}</h3><p>${record.sources}</p></header><div class="recipe-chain">${list('Inputs',record.inputs)}${list('Tools & conditions',record.tools)}<div><h4>Site requirement</h4><p>${record.site}</p></div><div><h4>Procedure</h4><ol>${record.process.map(step => `<li>${step}</li>`).join('')}</ol></div><div><h4>Output</h4><p>${record.output}</p></div><div><h4>Applications</h4><p>${record.applications}</p></div></div></article>`;
   }
 
-  function loadFullCatalogueGrid(grid, search, filters) {
+  function loadFullCatalogueGrid(grid, search, filters, category = 'world') {
     const pager = document.createElement('div'); pager.className = 'complete-pagination'; grid.insertAdjacentElement('afterend', pager);
     const classify = title => {
       const value = title.toLowerCase();
@@ -73,27 +78,39 @@
       if (/material|ore|metal|clay|stone|industry|tool|weapon|equipment|storage|construction/.test(value)) return ['material','Material / crafted world','⚒'];
       return ['terrestrial','Terrestrial life & fieldcraft','✦'];
     };
+    const categoryFor = title => {
+      const value = title.toLowerCase();
+      if (/hunting|tracking|trapping|taming|husbandry|draft|animal-assisted/.test(value)) return 'fieldcraft';
+      if (/storage|logistics|hauling|stockpil|transport|vehicle|container/.test(value)) return 'storage';
+      if (/infrastructure|waterworks|bridge|road|stable|pen|coop|ranch|workshop/.test(value)) return 'infrastructure';
+      if (/construction|shelter|camp|settlement|perimeter|wall|gate|tower/.test(value)) return 'construction';
+      if (/industry|metal|ore|geolog|quarry|charcoal|kiln|furnace|agriculture|textile|forestry/.test(value)) return 'industry';
+      if (/craft|portable|tool|weapon|equipment|armou?r|material process|handwork|action|procedure/.test(value)) return 'crafting';
+      if (/wildlife|avian|flora|monster|native|world-seed|ecology|topology|biome|organism|animal|material|source/.test(value)) return 'world';
+      return 'crafting';
+    };
     const safe = value => value.replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
     const api = pageNo => `https://api.github.com/repos/devosphere/projectdraugr/issues?state=open&per_page=100&page=${pageNo}`;
     Promise.all([fetch(api(1)), fetch(api(2))])
       .then(results => Promise.all(results.map(result => result.ok ? result.json() : Promise.reject(new Error('catalogue unavailable')))))
       .then(pages => {
         const records = new Map();
-        bible.entries.forEach(entry => records.set(entry.id, { id:entry.id, name:entry.name, realm:({rabbit:'terrestrial','red-squirrel':'terrestrial',beaver:'aquatic',hare:'terrestrial','wild-boar':'terrestrial','river-trout':'aquatic','dire-wolf':'terrestrial','bog-wraith':'aquatic',wyvern:'aerial','goblin-band':'social','centaur-herd':'social',reedkin:'social',oak:'flora',nettle:'flora',cattail:'flora',blackberry:'flora',porcini:'flora',flint:'material',clay:'material',copper:'material',iron:'material',gold:'material'})[entry.id] || 'material', type:entry.type, icon:entry.icon, detail:`${entry.type} · ${entry.habitat}`, known:true }));
+        bible.entries.forEach(entry => records.set(entry.id, { id:entry.id, name:entry.name, category:'world', realm:({rabbit:'terrestrial','red-squirrel':'terrestrial',beaver:'aquatic',hare:'terrestrial','wild-boar':'terrestrial','river-trout':'aquatic','dire-wolf':'terrestrial','bog-wraith':'aquatic',wyvern:'aerial','goblin-band':'social','centaur-herd':'social',reedkin:'social',oak:'flora',nettle:'flora',cattail:'flora',blackberry:'flora',porcini:'flora',flint:'material',clay:'material',copper:'material',iron:'material',gold:'material'})[entry.id] || 'material', type:entry.type, icon:entry.icon, detail:`${entry.type} · ${entry.habitat}`, known:true }));
+        bible.recipeRecords.forEach((record, index) => records.set(`recipe-${index}`, { id:`recipe-${index}`, name:record.name, category:record.tab, realm:'material', type:record.tab.replace(/\b\w/g, letter => letter.toUpperCase()), icon:({crafting:'⚒',storage:'▣',infrastructure:'⌂',construction:'▤',fieldcraft:'◇',industry:'⚙'})[record.tab], detail:record.applications, known:false }));
         pages.flat().filter(issue => issue.number >= 45 && issue.number <= 221 && !issue.pull_request).forEach(issue => {
-          const [realm, type, icon] = classify(issue.title);
+          const [realm, type, icon] = classify(issue.title); const recordCategory = categoryFor(issue.title);
           [...new Set([...((issue.body || '').matchAll(/`([a-z][a-z0-9_]{2,})`/g))].map(match => match[1]))].forEach(id => {
-            if (!records.has(id)) records.set(id, { id, name:id.replaceAll('_',' '), realm, type, icon, detail:`${type} catalogue record`, known:false });
+            if (!records.has(id)) records.set(id, { id, name:id.replaceAll('_',' '), category:recordCategory, realm, type, icon, detail:`${type} catalogue record`, known:false });
           });
         });
         const all = [...records.values()].sort((a,b) => a.name.localeCompare(b.name)); let active = 'All', term = '', page = 0; const pageSize = 48;
         const render = () => {
-          const filtered = all.filter(record => (active === 'All' || record.realm === active) && `${record.name} ${record.type}`.toLowerCase().includes(term)); const pages = Math.max(1, Math.ceil(filtered.length / pageSize)); page = Math.min(page, pages - 1);
+          const filtered = all.filter(record => record.category === category && (category !== 'world' || active === 'All' || record.realm === active) && `${record.name} ${record.type}`.toLowerCase().includes(term)); const pages = Math.max(1, Math.ceil(filtered.length / pageSize)); page = Math.min(page, pages - 1);
           grid.innerHTML = filtered.slice(page * pageSize, page * pageSize + pageSize).map(record => `<a class="catalogue-card" href="entry.html#${record.known ? record.id : 'spec-' + encodeURIComponent(record.id)}"><span class="card-icon">${record.icon}</span><span class="card-body">${badge(record.known ? 'World record' : 'Catalogue record')}<strong>${safe(record.name)}</strong><small>${safe(record.detail)}</small></span><span class="arrow">↗</span></a>`).join('') || '<p class="empty">No catalogue entry matches that search.</p>';
           pager.innerHTML = `<span>${filtered.length.toLocaleString()} matching records</span><span>Page ${page + 1} of ${pages}</span><button data-page="previous" ${page === 0 ? 'disabled' : ''}>Previous</button><button data-page="next" ${page >= pages - 1 ? 'disabled' : ''}>Next</button>`;
         };
         search.addEventListener('input', event => { term = event.target.value.toLowerCase(); page = 0; render(); });
-        filters.addEventListener('click', event => { const button = event.target.closest('button'); if (!button) return; active = button.dataset.filter; page = 0; render(); });
+        if (filters) filters.addEventListener('click', event => { const button = event.target.closest('button'); if (!button) return; active = button.dataset.filter; page = 0; render(); });
         pager.addEventListener('click', event => { const button = event.target.closest('button'); if (!button || button.disabled) return; page += button.dataset.page === 'next' ? 1 : -1; render(); });
         render();
       })
@@ -310,8 +327,15 @@
     Promise.all([fetch(api(1)), fetch(api(2))]).then(results => Promise.all(results.map(result => result.ok ? result.json() : []))).then(pages => render(pages.flat().find(issue => !issue.pull_request && String(issue.body || '').includes('`' + id + '`')))).catch(() => render());
   }
 
+  function recipeEntry(index) {
+    const record = bible.recipeRecords[index];
+    if (!record) { specificationEntry(`recipe-${index}`); return; }
+    document.title = `${record.name} — Project Draugr World Bible`;
+    content.innerHTML = `<a class="back-link" href="catalogue.html">← Back to catalogue</a><section class="entry-hero"><div class="entry-icon">⚒</div><div><p class="eyebrow">${record.tab} · practical procedure</p>${badge(record.state)}<h1>${record.name}</h1><p>${record.sources}</p></div></section><section class="recipe-grid">${recipeCard(record)}</section>`;
+  }
+
   function entry() {
-    const id = decodeURIComponent(location.hash.slice(1)); if (id.startsWith('spec-')) { specificationEntry(id.slice(5)); return; } const e = bible.entries.find(x=>x.id===id) || bible.entries[0]; document.title = `${e.name} — Project Draugr World Bible`;
+    const id = decodeURIComponent(location.hash.slice(1)); if (id.startsWith('spec-recipe-')) { recipeEntry(Number(id.slice(12))); return; } if (id.startsWith('spec-')) { specificationEntry(id.slice(5)); return; } const e = bible.entries.find(x=>x.id===id) || bible.entries[0]; document.title = `${e.name} — Project Draugr World Bible`;
     content.innerHTML = `<a class="back-link" href="catalogue.html">← Back to catalogue</a><section class="entry-hero"><div class="entry-icon">${e.icon}</div><div><p class="eyebrow">${e.type} · ${e.latin}</p>${badge(e.status)}<h1>${e.name}</h1><p>${e.habitat}</p></div></section><section class="entry-layout"><article class="entry-main"><div><h2>Behaviour & presence</h2><p>${e.behaviour}</p></div><div><h2>Ecological role</h2><p>${e.role}</p></div><div><h2>Physical recovery / harvest</h2><p>${e.recovery}</p></div><div><h2>Risk & consequence</h2><p>${e.danger}</p></div></article><aside class="entry-meta"><p class="eyebrow">Classification</p><dl><div><dt>Type</dt><dd>${e.type}</dd></div><div><dt>Status</dt><dd>${e.status}</dd></div><div><dt>Habitat</dt><dd>${e.habitat}</dd></div><div><dt>Related work</dt><dd>${e.related}</dd></div></dl><p class="muted">Catalogue entries describe physical possibilities. They do not grant the Chronicle knowledge, ownership, access or safety.</p></aside></section>`;
   }
   ({home,atlas,catalogue,industries,rules,entry}[page] || home)();
