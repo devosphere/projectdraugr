@@ -36,26 +36,29 @@
   function catalogue() {
     const realms = { rabbit:'terrestrial', 'red-squirrel':'terrestrial', beaver:'aquatic', hare:'terrestrial', 'wild-boar':'terrestrial', 'river-trout':'aquatic', 'dire-wolf':'terrestrial', 'bog-wraith':'aquatic', wyvern:'aerial', 'goblin-band':'social', 'centaur-herd':'social', reedkin:'social', oak:'flora', nettle:'flora', cattail:'flora', blackberry:'flora', porcini:'flora', flint:'material', clay:'material', copper:'material', iron:'material', gold:'material' };
     const worldFilters = [['All','All living & material'],['terrestrial','Terrestrial'],['aquatic','Aquatic / amphibious'],['aerial','Aerial'],['subterranean','Subterranean'],['social','Native peoples'],['flora','Flora'],['material','Materials']];
-    const tabButtons = [['world','Living world'], ...bible.recipeTabs.map(tab => [tab.id,tab.label])];
+    const tabButtons = [['all','Complete catalogue'], ['world','Living world'], ...bible.recipeTabs.map(tab => [tab.id,tab.label])];
     content.innerHTML = `<section class="page-hero compact"><p class="eyebrow">No reward tables · only physical consequence</p><h1>WORLD CATALOGUE</h1><p>Browse the living world by ecology, or open a practical record for crafting, storage, infrastructure, construction, fieldcraft and industry. Every procedure record identifies its sources, inputs, process, output, applications and implementation state.</p></section><div class="catalogue-tabs" id="catalogue-tabs">${tabButtons.map(([id,label], index) => `<button data-tab="${id}" class="${index===0?'selected':''}">${label}</button>`).join('')}</div><section id="catalogue-view"></section>`;
     const view = document.querySelector('#catalogue-view');
-    const showWorld = () => {
+    const showWorld = (tabId = 'all') => {
       view.innerHTML = `<section class="catalogue-toolbar"><label>Search <input id="search" placeholder="Rabbit, flint, wetland…" /></label><div id="filters">${worldFilters.map(([id,label],index)=>`<button class="${index===0?'selected':''}" data-filter="${id}">${label}</button>`).join('')}</div></section><section class="database-note"><span>Creator database</span><p>Every record describes what exists in the world, where it belongs, and what a Chronicle can physically gain, lose, or disturb.</p></section><section class="catalogue-grid" id="catalogue-grid"></section>`;
       let active = 'All'; const grid = document.querySelector('#catalogue-grid'); const search = document.querySelector('#search');
       const render = () => { const term = search.value.toLowerCase(); grid.innerHTML = bible.entries.filter(entry => (active==='All' || realms[entry.id] === active) && `${entry.name} ${entry.type} ${entry.habitat} ${entry.status}`.toLowerCase().includes(term)).map(entry => linkEntry({...entry, type: `${entry.type} · ${realms[entry.id] || 'world'}`})).join('') || `<p class="empty">No world-bible entry matches that search.</p>`; };
       document.querySelector('#filters').addEventListener('click', event => { const button = event.target.closest('button'); if (!button) return; active = button.dataset.filter; document.querySelectorAll('#filters button').forEach(item => item.classList.toggle('selected', item === button)); render(); });
       search.addEventListener('input',render); render();
-      loadCatalogueCategory(view, 'world');
+      document.querySelector('.catalogue-toolbar').remove();
+      document.querySelector('.database-note').remove();
+      grid.remove();
+      loadCatalogueCategory(view, tabId);
     };
     const showRecipes = tabId => {
       const tab = bible.recipeTabs.find(item => item.id === tabId);
       const records = bible.recipeRecords.filter(item => item.tab === tabId);
-      view.innerHTML = `<section class="recipe-intro"><p class="eyebrow">${tab.label}</p><h2>${tab.description}</h2><p>Quantities are shown only when the World Bible has a concrete design value. <b>Quantity specification pending</b> keeps uncertain parts visibly incomplete instead of pretending a recipe is ready.</p></section><section class="recipe-grid">${records.map(record => recipeCard(record)).join('') || `<p class="empty">No records have been written for this category yet.</p>`}</section>`;
+      view.innerHTML = '';
       loadCatalogueCategory(view, tabId);
     };
-    const activate = tabId => { document.querySelectorAll('#catalogue-tabs button').forEach(button => button.classList.toggle('selected', button.dataset.tab === tabId)); tabId === 'world' ? showWorld() : showRecipes(tabId); };
+    const activate = tabId => { document.querySelectorAll('#catalogue-tabs button').forEach(button => button.classList.toggle('selected', button.dataset.tab === tabId)); (tabId === 'all' || tabId === 'world') ? showWorld(tabId) : showRecipes(tabId); };
     document.querySelector('#catalogue-tabs').addEventListener('click', event => { const button = event.target.closest('button'); if (button) activate(button.dataset.tab); });
-    activate('world');
+    activate('all');
   }
 
   function recipeCard(record) {
@@ -69,7 +72,7 @@
     target.innerHTML = `<p class="eyebrow">Complete catalogue</p><h2>Loading every relevant record…</h2><p class="section-copy">The World Bible compiles its curated records, the live backend catalogue and the approved world design into this one category view.</p><p class="register-loading">Compiling records…</p>`;
     view.append(target);
     const safe = value => value.replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
-    const icon = { world:'✦', crafting:'⚒', storage:'▣', infrastructure:'⌂', construction:'▤', fieldcraft:'◈', industry:'⚙' };
+    const icon = { all:'✦', world:'✦', crafting:'⚒', storage:'▣', infrastructure:'⌂', construction:'▤', fieldcraft:'◈', industry:'⚙' };
     const categoryFor = title => {
       const text = title.toLowerCase();
       if (/hunting|tracking|trapping|taming|husbandry|draft|animal-assisted/.test(text)) return 'fieldcraft';
@@ -95,12 +98,12 @@
       return [...records.values()];
     }).catch(() => []);
     Promise.all([issueRecords.catch(() => []), runtimeRecords]).then(([design, runtime]) => {
-      const curated = tab === 'world' ? bible.entries.map(entry => ({ name:entry.name, category:'world', detail:`${entry.type} · ${entry.habitat}` })) : bible.recipeRecords.filter(record => record.tab === tab).map(record => ({ name:record.name, category:tab, detail:record.applications }));
-      const all = [...curated, ...design, ...runtime].filter(record => record.category === tab).sort((a,b) => a.name.localeCompare(b.name));
+      const curated = tab === 'world' ? bible.entries.map(entry => ({ name:entry.name, category:'world', detail:`${entry.type} · ${entry.habitat}` })) : tab === 'all' ? [...bible.entries.map(entry => ({ name:entry.name, category:'world', detail:`${entry.type} · ${entry.habitat}` })), ...bible.recipeRecords.map(record => ({ name:record.name, category:record.tab, detail:record.applications }))] : bible.recipeRecords.filter(record => record.tab === tab).map(record => ({ name:record.name, category:tab, detail:record.applications }));
+      const all = [...curated, ...design, ...runtime].filter(record => tab === 'all' || record.category === tab).sort((a,b) => a.name.localeCompare(b.name));
       let term = '', page = 0; const pageSize = 48;
       const render = () => {
         const filtered = all.filter(record => `${record.name} ${record.detail}`.toLowerCase().includes(term)); const last = Math.max(1, Math.ceil(filtered.length / pageSize)); page = Math.min(page, last - 1); const slice = filtered.slice(page * pageSize, page * pageSize + pageSize);
-        target.innerHTML = `<p class="eyebrow">Complete catalogue</p><h2>${filtered.length.toLocaleString()} ${tab === 'world' ? 'world records' : 'relevant records'}</h2><div class="complete-toolbar"><label>Search <input id="unified-search" placeholder="Search this category…" value="${safe(term)}" /></label></div><div class="complete-summary"><span>${filtered.length.toLocaleString()} matching records</span><span>Page ${page + 1} of ${last}</span></div><div class="catalogue-grid complete-card-grid">${slice.map(record => `<article class="catalogue-card expansion-card"><span class="card-icon">${icon[tab]}</span><span class="card-body"><span class="badge">World catalogue</span><strong>${safe(record.name)}</strong><small>${safe(record.detail)}</small></span></article>`).join('') || '<p class="empty">No catalogue records match this search.</p>'}</div><div class="complete-pagination"><button data-page="previous" ${page === 0 ? 'disabled' : ''}>Previous</button><button data-page="next" ${page >= last - 1 ? 'disabled' : ''}>Next</button></div>`;
+        target.innerHTML = `<p class="eyebrow">Complete catalogue</p><h2>${filtered.length.toLocaleString()} records</h2><div class="complete-toolbar"><label>Search <input id="unified-search" placeholder="Search the whole catalogue…" value="${safe(term)}" /></label></div><div class="complete-summary"><span>${filtered.length.toLocaleString()} matching records</span><span>Page ${page + 1} of ${last}</span></div><div class="catalogue-grid complete-card-grid">${slice.map(record => `<article class="catalogue-card expansion-card"><span class="card-icon">${icon[record.category] || icon[tab]}</span><span class="card-body"><span class="badge">World catalogue</span><strong>${safe(record.name)}</strong><small>${safe(record.detail)}</small></span></article>`).join('') || '<p class="empty">No catalogue records match this search.</p>'}</div><div class="complete-pagination"><button data-page="previous" ${page === 0 ? 'disabled' : ''}>Previous</button><button data-page="next" ${page >= last - 1 ? 'disabled' : ''}>Next</button></div>`;
         target.querySelector('#unified-search').addEventListener('input', event => { term = event.target.value.toLowerCase(); page = 0; render(); });
         target.querySelector('.complete-pagination').addEventListener('click', event => { const button = event.target.closest('button'); if (!button) return; page += button.dataset.page === 'next' ? 1 : -1; render(); });
       };
