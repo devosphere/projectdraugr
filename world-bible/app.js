@@ -45,6 +45,8 @@
       const render = () => { const term = search.value.toLowerCase(); grid.innerHTML = bible.entries.filter(entry => (active==='All' || realms[entry.id] === active) && `${entry.name} ${entry.type} ${entry.habitat} ${entry.status}`.toLowerCase().includes(term)).map(entry => linkEntry({...entry, type: `${entry.type} · ${realms[entry.id] || 'world'}`})).join('') || `<p class="empty">No world-bible entry matches that search.</p>`; };
       document.querySelector('#filters').addEventListener('click', event => { const button = event.target.closest('button'); if (!button) return; active = button.dataset.filter; document.querySelectorAll('#filters button').forEach(item => item.classList.toggle('selected', item === button)); render(); });
       search.addEventListener('input',render); render();
+      loadImplementedCatalogue(view);
+      loadExpansionCatalogue(view);
     };
     const showRecipes = tabId => {
       const tab = bible.recipeTabs.find(item => item.id === tabId);
@@ -59,6 +61,90 @@
   function recipeCard(record) {
     const list = (title, values) => `<div><h4>${title}</h4><ul>${values.map(value => `<li>${value}</li>`).join('')}</ul></div>`;
     return `<article class="recipe-card"><header>${badge(record.state)}<h3>${record.name}</h3><p>${record.sources}</p></header><div class="recipe-chain">${list('Inputs',record.inputs)}${list('Tools & conditions',record.tools)}<div><h4>Site requirement</h4><p>${record.site}</p></div><div><h4>Procedure</h4><ol>${record.process.map(step => `<li>${step}</li>`).join('')}</ol></div><div><h4>Output</h4><p>${record.output}</p></div><div><h4>Applications</h4><p>${record.applications}</p></div></div></article>`;
+  }
+
+  function loadExpansionCatalogue(view) {
+    const target = document.createElement('section');
+    target.className = 'complete-catalogue';
+    target.innerHTML = `<p class="eyebrow">Complete planned catalogue</p><h2>Every named candidate</h2><p class="section-copy">This register transcribes every named object, organism, material, procedure and structure candidate from the approved expansion specifications. A name here is planned world content, not proof that it already exists in a playable save.</p><p class="register-loading">Opening the complete catalogue…</p>`;
+    view.append(target);
+    const api = pageNo => `https://api.github.com/repos/devosphere/projectdraugr/issues?state=open&per_page=100&page=${pageNo}`;
+    const safe = value => value.replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
+    const category = source => {
+      const text = source.toLowerCase();
+      if (/flora|forest|crop|agriculture|seed|fibre|textile/.test(text)) return 'Flora & fibre';
+      if (/wildlife|avian|animal|hunting|taming|husbandry/.test(text)) return 'Wildlife & husbandry';
+      if (/monster|native|creature|societ/.test(text)) return 'Monsters & peoples';
+      if (/construction|shelter|camp|structure|infrastructure/.test(text)) return 'Construction & infrastructure';
+      if (/material|clay|metal|geolog|industry|ore|stone/.test(text)) return 'Materials & industry';
+      if (/weapon|tool|equipment|armour|portable|storage|logistics/.test(text)) return 'Objects & equipment';
+      if (/action|procedure|craft|process|tracking|fieldcraft/.test(text)) return 'Procedures & actions';
+      return 'World systems';
+    };
+    Promise.all([fetch(api(1)), fetch(api(2))])
+      .then(results => Promise.all(results.map(result => result.ok ? result.json() : Promise.reject(new Error('unavailable')))))
+      .then(pages => {
+        const records = new Map();
+        pages.flat().filter(issue => issue.number >= 45 && issue.number <= 221 && !issue.pull_request).forEach(issue => {
+          const group = category(`${issue.title} ${issue.body || ''}`);
+          const title = issue.title.replace(/^\[[^\]]+\]\s*/, '');
+          [...new Set([...((issue.body || '').matchAll(/`([a-z][a-z0-9_]{2,})`/g))].map(match => match[1]))].forEach(id => {
+            if (!records.has(id)) records.set(id, { id, name:id.replaceAll('_',' '), group, title });
+          });
+        });
+        const all = [...records.values()].sort((a,b) => a.name.localeCompare(b.name));
+        let term = '', active = 'All', page = 0; const pageSize = 72;
+        const groups = ['All', ...new Set(all.map(record => record.group))];
+        const render = () => {
+          const filtered = all.filter(record => (active === 'All' || record.group === active) && `${record.name} ${record.title}`.includes(term));
+          const last = Math.max(1, Math.ceil(filtered.length / pageSize)); page = Math.min(page, last - 1);
+          const slice = filtered.slice(page * pageSize, page * pageSize + pageSize);
+          target.innerHTML = `<p class="eyebrow">Complete planned catalogue</p><h2>${all.length.toLocaleString()} named candidates</h2><p class="section-copy">Search and browse every named candidate from the expansion specifications. These are creator records, never player hints.</p><div class="complete-toolbar"><label>Search <input id="complete-search" placeholder="e.g. basket, rabbit, kiln…" value="${safe(term)}" /></label><div>${groups.map(group => `<button class="${group === active ? 'selected' : ''}" data-group="${safe(group)}">${group}</button>`).join('')}</div></div><div class="complete-summary"><span>${filtered.length.toLocaleString()} matching records</span><span>Page ${page + 1} of ${last}</span></div><div class="complete-grid">${slice.map(record => `<article><p>${safe(record.group)}</p><h3>${safe(record.name)}</h3><small>${safe(record.title)}</small></article>`).join('') || '<p class="empty">No planned records match this search.</p>'}</div><div class="complete-pagination"><button data-page="previous" ${page === 0 ? 'disabled' : ''}>Previous</button><button data-page="next" ${page >= last - 1 ? 'disabled' : ''}>Next</button></div>`;
+          target.querySelector('#complete-search').addEventListener('input', event => { term = event.target.value.toLowerCase(); page = 0; render(); });
+          target.querySelector('.complete-toolbar div').addEventListener('click', event => { const button = event.target.closest('button'); if (!button) return; active = button.dataset.group; page = 0; render(); });
+          target.querySelector('.complete-pagination').addEventListener('click', event => { const button = event.target.closest('button'); if (!button) return; page += button.dataset.page === 'next' ? 1 : -1; render(); });
+        };
+        render();
+      })
+      .catch(() => { target.innerHTML = `<p class="eyebrow">Complete planned catalogue</p><h2>Catalogue temporarily unavailable</h2><p class="section-copy">The local curated records remain available above. The complete expansion register will return when its public source can be reached.</p>`; });
+  }
+
+  function loadImplementedCatalogue(view) {
+    const target = document.createElement('section');
+    target.className = 'complete-catalogue implemented-catalogue';
+    target.innerHTML = `<p class="eyebrow">Runtime catalogue</p><h2>Implemented procedures & outputs</h2><p class="section-copy">This register is compiled from the current backend migration catalogue. It is separate from planned content: every record here has an implementation source in the game repository.</p><p class="register-loading">Reading the current runtime catalogue…</p>`;
+    view.append(target);
+    const safe = value => value.replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
+    fetch('https://api.github.com/repos/devosphere/projectdraugr/git/trees/main?recursive=1')
+      .then(response => response.ok ? response.json() : Promise.reject(new Error('tree unavailable')))
+      .then(tree => tree.tree.filter(file => /^backend\/src\/main\/resources\/db\/migration\/V\d+.*\.sql$/.test(file.path)).map(file => file.path))
+      .then(paths => Promise.all(paths.map(path => fetch(`https://raw.githubusercontent.com/devosphere/projectdraugr/main/${path}`).then(response => response.ok ? response.text() : ''))))
+      .then(files => {
+        const records = new Map();
+        files.forEach(sql => {
+          [...sql.matchAll(/INSERT\s+INTO\s+material_process\s*\([\s\S]*?\)\s*VALUES\s*([\s\S]*?);/gi)].forEach(block => {
+            [...block[1].matchAll(/\(\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*'([^']+)'/g)].forEach(match => {
+              const [id, name, output] = match.slice(1);
+              records.set(`process:${id}`, { name, kind:'Implemented procedure', detail:`Produces or advances: ${output.replaceAll('_',' ')}.` });
+            });
+          });
+          [...sql.matchAll(/INSERT\s+INTO\s+activity_category\s*\([\s\S]*?\)\s*VALUES\s*([\s\S]*?);/gi)].forEach(block => {
+            [...block[1].matchAll(/\(\s*'([^']+)'\s*,\s*'([^']+)'/g)].forEach(match => records.set(`activity:${match[1]}`, { name:match[2], kind:'Implemented action family', detail:'A recognised deterministic action-routing category.' }));
+          });
+        });
+        const all = [...records.values()].sort((a,b) => a.name.localeCompare(b.name));
+        let term = '', page = 0; const pageSize = 60;
+        const render = () => {
+          const filtered = all.filter(record => `${record.name} ${record.kind} ${record.detail}`.toLowerCase().includes(term));
+          const last = Math.max(1, Math.ceil(filtered.length / pageSize)); page = Math.min(page, last - 1);
+          const slice = filtered.slice(page * pageSize, page * pageSize + pageSize);
+          target.innerHTML = `<p class="eyebrow">Runtime catalogue</p><h2>${all.length.toLocaleString()} implemented records</h2><p class="section-copy">Compiled directly from current migration declarations. These are not planned candidates.</p><div class="complete-toolbar"><label>Search <input id="implemented-search" placeholder="e.g. spear, process, water…" value="${safe(term)}" /></label></div><div class="complete-summary"><span>${filtered.length.toLocaleString()} matching records</span><span>Page ${page + 1} of ${last}</span></div><div class="complete-grid">${slice.map(record => `<article><p>${safe(record.kind)}</p><h3>${safe(record.name)}</h3><small>${safe(record.detail)}</small></article>`).join('') || '<p class="empty">No implemented records match this search.</p>'}</div><div class="complete-pagination"><button data-page="previous" ${page === 0 ? 'disabled' : ''}>Previous</button><button data-page="next" ${page >= last - 1 ? 'disabled' : ''}>Next</button></div>`;
+          target.querySelector('#implemented-search').addEventListener('input', event => { term = event.target.value.toLowerCase(); page = 0; render(); });
+          target.querySelector('.complete-pagination').addEventListener('click', event => { const button = event.target.closest('button'); if (!button) return; page += button.dataset.page === 'next' ? 1 : -1; render(); });
+        };
+        render();
+      })
+      .catch(() => { target.innerHTML = `<p class="eyebrow">Runtime catalogue</p><h2>Runtime register temporarily unavailable</h2><p class="section-copy">The curated implemented records above remain available. This full runtime register will return when the public repository source can be reached.</p>`; });
   }
 
   async function loadIssueRegister() {
