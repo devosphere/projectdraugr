@@ -35,8 +35,8 @@
 
   function catalogue() {
     const realms = { rabbit:'terrestrial', 'red-squirrel':'terrestrial', beaver:'aquatic', hare:'terrestrial', 'wild-boar':'terrestrial', 'river-trout':'aquatic', 'dire-wolf':'terrestrial', 'bog-wraith':'aquatic', wyvern:'aerial', 'goblin-band':'social', 'centaur-herd':'social', reedkin:'social', oak:'flora', nettle:'flora', cattail:'flora', blackberry:'flora', porcini:'flora', flint:'material', clay:'material', copper:'material', iron:'material', gold:'material' };
-    const worldFilters = [['All','All living & material'],['terrestrial','Terrestrial'],['aquatic','Aquatic / amphibious'],['aerial','Aerial'],['subterranean','Subterranean'],['social','Native peoples'],['flora','Flora'],['material','Materials']];
-    const tabButtons = [['world','Living world'], ...bible.recipeTabs.map(tab => [tab.id,tab.label])];
+    const worldFilters = [['All','All living'],['wildlife-terrestrial','Wildlife · terrestrial'],['wildlife-aquatic','Wildlife · aquatic / amphibious'],['wildlife-aerial','Wildlife · aerial'],['wildlife-subterranean','Wildlife · subterranean'],['monster-terrestrial','Monsters · terrestrial'],['monster-aquatic','Monsters · aquatic / amphibious'],['monster-aerial','Monsters · aerial'],['monster-subterranean','Monsters · subterranean'],['native-terrestrial','Native peoples · terrestrial'],['native-aquatic','Native peoples · aquatic / amphibious'],['native-aerial','Native peoples · aerial'],['native-subterranean','Native peoples · subterranean'],['flora','Flora']];
+    const tabButtons = [['living','Living world'],['nonliving','Non-living world'],['actions','Actions'], ...bible.recipeTabs.map(tab => [tab.id,tab.label])];
     content.innerHTML = `<section class="page-hero compact"><p class="eyebrow">No reward tables · only physical consequence</p><h1>WORLD CATALOGUE</h1><p>Browse the living world by ecology, or open a practical record for crafting, storage, infrastructure, construction, fieldcraft and industry. Every procedure record identifies its sources, inputs, process, output, applications and implementation state.</p></section><div class="catalogue-tabs" id="catalogue-tabs">${tabButtons.map(([id,label], index) => `<button data-tab="${id}" class="${index===0?'selected':''}">${label}</button>`).join('')}</div><section id="catalogue-view"></section>`;
     const view = document.querySelector('#catalogue-view');
     const showWorld = () => {
@@ -45,21 +45,21 @@
       const render = () => { const term = search.value.toLowerCase(); grid.innerHTML = bible.entries.filter(entry => (active==='All' || realms[entry.id] === active) && `${entry.name} ${entry.type} ${entry.habitat} ${entry.status}`.toLowerCase().includes(term)).map(entry => linkEntry({...entry, type: `${entry.type} · ${realms[entry.id] || 'world'}`})).join('') || `<p class="empty">No world-bible entry matches that search.</p>`; };
       document.querySelector('#filters').addEventListener('click', event => { const button = event.target.closest('button'); if (!button) return; active = button.dataset.filter; document.querySelectorAll('#filters button').forEach(item => item.classList.toggle('selected', item === button)); render(); });
       search.addEventListener('input',render); render();
-      loadFullCatalogueGrid(grid, search, document.querySelector('#filters'));
+      loadFullCatalogueGrid(grid, search, document.querySelector('#filters'), 'living');
     };
     const showRecipes = tabId => {
-      const tab = bible.recipeTabs.find(item => item.id === tabId);
+      const tab = bible.recipeTabs.find(item => item.id === tabId) || { label: tabId === 'nonliving' ? 'Non-living world' : 'Actions', description: tabId === 'nonliving' ? 'Natural materials, deposits, terrain sources and non-living world objects.' : 'Recognised Chronicle actions and procedural intent.' };
       const records = bible.recipeRecords.filter(item => item.tab === tabId);
       view.innerHTML = `<section class="recipe-intro"><p class="eyebrow">${tab.label}</p><h2>${tab.description}</h2><p>Quantities are shown only when the World Bible has a concrete design value. <b>Quantity specification pending</b> keeps uncertain parts visibly incomplete instead of pretending a recipe is ready.</p></section><section class="recipe-grid">${records.map(record => recipeCard(record)).join('') || `<p class="empty">No records have been written for this category yet.</p>`}</section>`;
     };
     const showCategory = tabId => {
-      const tab = bible.recipeTabs.find(item => item.id === tabId);
+      const tab = bible.recipeTabs.find(item => item.id === tabId) || { label: tabId === 'nonliving' ? 'Non-living world' : 'Actions', description: tabId === 'nonliving' ? 'Natural materials, deposits, terrain sources and non-living world objects.' : 'Recognised Chronicle actions and procedural intent.' };
       view.innerHTML = `<section class="catalogue-toolbar catalogue-category-toolbar"><label>Search <input id="search" placeholder="Search ${tab.label.toLowerCase()}…" /></label></section><section class="database-note"><span>${tab.label}</span><p>${tab.description} Browse the complete catalogue for this physical system.</p></section><section class="catalogue-grid" id="catalogue-grid"></section>`;
       loadFullCatalogueGrid(document.querySelector('#catalogue-grid'), document.querySelector('#search'), null, tabId);
     };
-    const activate = tabId => { document.querySelectorAll('#catalogue-tabs button').forEach(button => button.classList.toggle('selected', button.dataset.tab === tabId)); tabId === 'world' ? showWorld() : showCategory(tabId); };
+    const activate = tabId => { document.querySelectorAll('#catalogue-tabs button').forEach(button => button.classList.toggle('selected', button.dataset.tab === tabId)); tabId === 'living' ? showWorld() : showCategory(tabId); };
     document.querySelector('#catalogue-tabs').addEventListener('click', event => { const button = event.target.closest('button'); if (button) activate(button.dataset.tab); });
-    activate('world');
+    activate('living');
   }
 
   function recipeCard(record) {
@@ -67,7 +67,7 @@
     return `<article class="recipe-card"><header>${badge(record.state)}<h3>${record.name}</h3><p>${record.sources}</p></header><div class="recipe-chain">${list('Inputs',record.inputs)}${list('Tools & conditions',record.tools)}<div><h4>Site requirement</h4><p>${record.site}</p></div><div><h4>Procedure</h4><ol>${record.process.map(step => `<li>${step}</li>`).join('')}</ol></div><div><h4>Output</h4><p>${record.output}</p></div><div><h4>Applications</h4><p>${record.applications}</p></div></div></article>`;
   }
 
-  function loadFullCatalogueGrid(grid, search, filters, category = 'world') {
+  function loadFullCatalogueGrid(grid, search, filters, category = 'living') {
     const pager = document.createElement('div'); pager.className = 'complete-pagination'; grid.insertAdjacentElement('afterend', pager);
     const classify = title => {
       const value = title.toLowerCase();
@@ -80,6 +80,7 @@
     };
     const categoryFor = title => {
       const value = title.toLowerCase();
+      if (/action|procedure|intent|verb|interaction/.test(value)) return 'actions';
       if (/hunting|tracking|trapping|taming|husbandry|draft|animal-assisted/.test(value)) return 'fieldcraft';
       if (/storage|logistics|hauling|stockpil|transport|vehicle|container/.test(value)) return 'storage';
       if (/infrastructure|waterworks|bridge|road|stable|pen|coop|ranch|workshop/.test(value)) return 'infrastructure';
@@ -89,6 +90,17 @@
       if (/wildlife|avian|flora|monster|native|world-seed|ecology|topology|biome|organism|animal|material|source/.test(value)) return 'world';
       return 'crafting';
     };
+    const recordClassFor = (title, id) => {
+      const text = `${title} ${id.replaceAll('_', ' ')}`.toLowerCase();
+      const realm = /subterranean|cave|burrow|underground|mine/.test(text) ? 'subterranean' : /aerial|avian|bird|wing|roost|sky/.test(text) ? 'aerial' : /aquatic|amphib|wetland|river|lake|water|fish|coast/.test(text) ? 'aquatic' : 'terrestrial';
+      if (/^(accept|acclimate|address|aid|aim|analy[sz]e|approach|assemble|attack|avoid|build|carry|collect|cook|craft|dig|draw|drop|eat|equip|examine|feed|gather|harvest|hunt|inspect|make|move|observe|prepare|read|repair|rest|set|sleep|track|train|travel|treat|use|wait|write)_/.test(id)) return { category:'actions', realm, lifeGroup:'action', type:'Chronicle action', icon:'›' };
+      if (/(ore|stone|clay|soil|sand|gravel|flint|chert|timber|wood|branch|bark|resin|fibre|fiber|reeds?|straw|seed|feather|bone|hide|pelt|horn|tusk|shell|water|salt|ash|charcoal|meat|fish|berry|mushroom|acorn)/.test(id)) return { category:'nonliving', realm:'material', lifeGroup:'material', type:'Material', icon:'⚒' };
+      if (/monster|wraith|wyvern|dire wolf|goblin|ogre|cyclops|orc|dragon/.test(text)) return { category:'living', realm, lifeGroup:`monster-${realm}`, type:'Monster', icon:'◇' };
+      if (/native|centaur|reedkin|druid/.test(text)) return { category:'living', realm, lifeGroup:`native-${realm}`, type:'Native people', icon:'◇' };
+      if (/flora|plant|tree|shrub|crop|fung|moss|algae|herb/.test(text)) return { category:'living', realm, lifeGroup:'flora', type:'Flora', icon:'🌿' };
+      if (/wildlife|animal|mammal|bird|fish|insect|reptile|amphib|beaver|boar|rabbit|hare|squirrel|ox|buffalo|donkey|horse/.test(text)) return { category:'living', realm, lifeGroup:`wildlife-${realm}`, type:'Wildlife', icon:realm === 'aerial' ? '🪶' : realm === 'aquatic' ? '🐟' : '✦' };
+      return { category:categoryFor(title), realm:'material', lifeGroup:'material', type:'Physical catalogue record', icon:'⚒' };
+    };
     const safe = value => value.replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
     const api = pageNo => `https://api.github.com/repos/devosphere/projectdraugr/issues?state=open&per_page=100&page=${pageNo}`;
     Promise.all([fetch(api(1)), fetch(api(2))])
@@ -96,16 +108,21 @@
       .then(pages => {
         const records = new Map();
         bible.entries.forEach(entry => records.set(entry.id, { id:entry.id, name:entry.name, category:'world', realm:({rabbit:'terrestrial','red-squirrel':'terrestrial',beaver:'aquatic',hare:'terrestrial','wild-boar':'terrestrial','river-trout':'aquatic','dire-wolf':'terrestrial','bog-wraith':'aquatic',wyvern:'aerial','goblin-band':'social','centaur-herd':'social',reedkin:'social',oak:'flora',nettle:'flora',cattail:'flora',blackberry:'flora',porcini:'flora',flint:'material',clay:'material',copper:'material',iron:'material',gold:'material'})[entry.id] || 'material', type:entry.type, icon:entry.icon, detail:`${entry.type} · ${entry.habitat}`, known:true }));
+        bible.entries.forEach(entry => {
+          const record = records.get(entry.id); const realm = record.realm === 'social' ? 'terrestrial' : record.realm;
+          const kind = entry.type === 'Monster' ? 'monster' : entry.type === 'Native people' ? 'native' : entry.type === 'Flora' ? 'flora' : entry.type === 'Material' ? 'material' : 'wildlife';
+          record.category = kind === 'material' ? 'nonliving' : 'living'; record.realm = realm; record.lifeGroup = kind === 'flora' ? 'flora' : kind === 'material' ? 'material' : `${kind}-${realm}`;
+        });
         bible.recipeRecords.forEach((record, index) => records.set(`recipe-${index}`, { id:`recipe-${index}`, name:record.name, category:record.tab, realm:'material', type:record.tab.replace(/\b\w/g, letter => letter.toUpperCase()), icon:({crafting:'⚒',storage:'▣',infrastructure:'⌂',construction:'▤',fieldcraft:'◇',industry:'⚙'})[record.tab], detail:record.applications, known:false }));
         pages.flat().filter(issue => issue.number >= 45 && issue.number <= 221 && !issue.pull_request).forEach(issue => {
-          const [realm, type, icon] = classify(issue.title); const recordCategory = categoryFor(issue.title);
           [...new Set([...((issue.body || '').matchAll(/`([a-z][a-z0-9_]{2,})`/g))].map(match => match[1]))].forEach(id => {
-            if (!records.has(id)) records.set(id, { id, name:id.replaceAll('_',' '), category:recordCategory, realm, type, icon, detail:`${type} catalogue record`, known:false });
+            const classification = recordClassFor(issue.title, id);
+            if (!records.has(id)) records.set(id, { id, name:id.replaceAll('_',' '), ...classification, detail:`${classification.type} catalogue record`, known:false });
           });
         });
         const all = [...records.values()].sort((a,b) => a.name.localeCompare(b.name)); let active = 'All', term = '', page = 0; const pageSize = 48;
         const render = () => {
-          const filtered = all.filter(record => record.category === category && (category !== 'world' || active === 'All' || record.realm === active) && `${record.name} ${record.type}`.toLowerCase().includes(term)); const pages = Math.max(1, Math.ceil(filtered.length / pageSize)); page = Math.min(page, pages - 1);
+          const filtered = all.filter(record => record.category === category && (category !== 'living' || active === 'All' || record.lifeGroup === active) && `${record.name} ${record.type}`.toLowerCase().includes(term)); const pages = Math.max(1, Math.ceil(filtered.length / pageSize)); page = Math.min(page, pages - 1);
           grid.innerHTML = filtered.slice(page * pageSize, page * pageSize + pageSize).map(record => `<a class="catalogue-card" href="entry.html#${record.known ? record.id : 'spec-' + encodeURIComponent(record.id)}"><span class="card-icon">${record.icon}</span><span class="card-body">${badge(record.known ? 'World record' : 'Catalogue record')}<strong>${safe(record.name)}</strong><small>${safe(record.detail)}</small></span><span class="arrow">↗</span></a>`).join('') || '<p class="empty">No catalogue entry matches that search.</p>';
           pager.innerHTML = `<span>${filtered.length.toLocaleString()} matching records</span><span>Page ${page + 1} of ${pages}</span><button data-page="previous" ${page === 0 ? 'disabled' : ''}>Previous</button><button data-page="next" ${page >= pages - 1 ? 'disabled' : ''}>Next</button>`;
         };
