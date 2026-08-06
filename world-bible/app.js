@@ -45,8 +45,8 @@
       const render = () => { const term = search.value.toLowerCase(); grid.innerHTML = bible.entries.filter(entry => (active==='All' || realms[entry.id] === active) && `${entry.name} ${entry.type} ${entry.habitat} ${entry.status}`.toLowerCase().includes(term)).map(entry => linkEntry({...entry, type: `${entry.type} · ${realms[entry.id] || 'world'}`})).join('') || `<p class="empty">No world-bible entry matches that search.</p>`; };
       document.querySelector('#filters').addEventListener('click', event => { const button = event.target.closest('button'); if (!button) return; active = button.dataset.filter; document.querySelectorAll('#filters button').forEach(item => item.classList.toggle('selected', item === button)); render(); });
       search.addEventListener('input',render); render();
-      loadImplementedCatalogue(view);
       loadExpansionCatalogue(view);
+      loadImplementedCatalogue(view);
     };
     const showRecipes = tabId => {
       const tab = bible.recipeTabs.find(item => item.id === tabId);
@@ -66,7 +66,7 @@
   function loadExpansionCatalogue(view) {
     const target = document.createElement('section');
     target.className = 'complete-catalogue';
-    target.innerHTML = `<p class="eyebrow">Complete planned catalogue</p><h2>Every named candidate</h2><p class="section-copy">This register transcribes every named object, organism, material, procedure and structure candidate from the approved expansion specifications. A name here is planned world content, not proof that it already exists in a playable save.</p><p class="register-loading">Opening the complete catalogue…</p>`;
+    target.innerHTML = `<p class="eyebrow">Complete world catalogue</p><h2>Every named candidate</h2><p class="section-copy">This register transcribes every named object, organism, material, procedure and structure from the approved expansion design. It is the full intended world reference for the next playable era.</p><p class="register-loading">Opening the complete catalogue…</p>`;
     view.append(target);
     const api = pageNo => `https://api.github.com/repos/devosphere/projectdraugr/issues?state=open&per_page=100&page=${pageNo}`;
     const safe = value => value.replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
@@ -99,7 +99,7 @@
           const filtered = all.filter(record => (active === 'All' || record.group === active) && `${record.name} ${record.title}`.includes(term));
           const last = Math.max(1, Math.ceil(filtered.length / pageSize)); page = Math.min(page, last - 1);
           const slice = filtered.slice(page * pageSize, page * pageSize + pageSize);
-          target.innerHTML = `<p class="eyebrow">Complete planned catalogue</p><h2>${all.length.toLocaleString()} named candidates</h2><p class="section-copy">Search and browse every named candidate from the expansion specifications. These are creator records, never player hints.</p><div class="complete-toolbar"><label>Search <input id="complete-search" placeholder="e.g. basket, rabbit, kiln…" value="${safe(term)}" /></label><div>${groups.map(group => `<button class="${group === active ? 'selected' : ''}" data-group="${safe(group)}">${group}</button>`).join('')}</div></div><div class="complete-summary"><span>${filtered.length.toLocaleString()} matching records</span><span>Page ${page + 1} of ${last}</span></div><div class="complete-grid">${slice.map(record => `<article><p>${safe(record.group)}</p><h3>${safe(record.name)}</h3><small>${safe(record.title)}</small></article>`).join('') || '<p class="empty">No planned records match this search.</p>'}</div><div class="complete-pagination"><button data-page="previous" ${page === 0 ? 'disabled' : ''}>Previous</button><button data-page="next" ${page >= last - 1 ? 'disabled' : ''}>Next</button></div>`;
+          target.innerHTML = `<p class="eyebrow">Complete world catalogue</p><h2>${all.length.toLocaleString()} named candidates</h2><p class="section-copy">Search and browse the complete intended world: creatures, materials, tools, procedures, structures and systems.</p><div class="complete-toolbar"><label>Search <input id="complete-search" placeholder="e.g. basket, rabbit, kiln…" value="${safe(term)}" /></label><div>${groups.map(group => `<button class="${group === active ? 'selected' : ''}" data-group="${safe(group)}">${group}</button>`).join('')}</div></div><div class="complete-summary"><span>${filtered.length.toLocaleString()} matching records</span><span>Page ${page + 1} of ${last}</span></div><div class="complete-grid">${slice.map(record => `<article><p>${safe(record.group)}</p><h3>${safe(record.name)}</h3><small>${safe(record.title)}</small></article>`).join('') || '<p class="empty">No catalogue records match this search.</p>'}</div><div class="complete-pagination"><button data-page="previous" ${page === 0 ? 'disabled' : ''}>Previous</button><button data-page="next" ${page >= last - 1 ? 'disabled' : ''}>Next</button></div>`;
           target.querySelector('#complete-search').addEventListener('input', event => { term = event.target.value.toLowerCase(); page = 0; render(); });
           target.querySelector('.complete-toolbar div').addEventListener('click', event => { const button = event.target.closest('button'); if (!button) return; active = button.dataset.group; page = 0; render(); });
           target.querySelector('.complete-pagination').addEventListener('click', event => { const button = event.target.closest('button'); if (!button) return; page += button.dataset.page === 'next' ? 1 : -1; render(); });
