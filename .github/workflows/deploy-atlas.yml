@@ -31,6 +31,11 @@ jobs:
         working-directory: frontend
       - run: npm run build
         working-directory: frontend
+      - name: Add Overseer World Bible
+        run: |
+          mkdir -p frontend/dist/world-bible/assets
+          cp -R world-bible/. frontend/dist/world-bible/
+          cp frontend/src/assets/overseer-atlas-v1.png frontend/dist/world-bible/assets/overseer-atlas-v1.png
       - uses: actions/upload-pages-artifact@v3
         with:
           path: frontend/dist
