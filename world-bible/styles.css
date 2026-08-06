@@ -71,6 +71,8 @@ dd { margin:.16rem 0 0; color:#e2e5da; }
 .atlas-pin.ruin,.zone-card.ruin .zone-symbol,.legend-symbol.ruin { --marker:var(--ruin); }
 .atlas-pin.future,.zone-card.future .zone-symbol,.legend-symbol.future { --marker:var(--future); }
 .atlas-pin.native,.atlas-pin.future { border-style:dashed; }
+.atlas-pin.future { width:1.2rem; height:1.2rem; font-size:.6rem; opacity:.92; }
+.atlas-pin.future:hover,.atlas-pin.future.selected { transform:scale(1.55); opacity:1; }
 .atlas-compass { position:absolute; right:1.2rem; bottom:1rem; z-index:3; display:grid; place-items:center; width:2.3rem; color:#eadb9d; text-shadow:0 .1rem .5rem #000; font:.64rem system-ui,sans-serif; }
 .atlas-compass i { font-size:1.4rem; font-style:normal; }
 .atlas-side { padding:1.5rem; }
