@@ -45,6 +45,7 @@
       const render = () => { const term = search.value.toLowerCase(); grid.innerHTML = bible.entries.filter(entry => (active==='All' || realms[entry.id] === active) && `${entry.name} ${entry.type} ${entry.habitat} ${entry.status}`.toLowerCase().includes(term)).map(entry => linkEntry({...entry, type: `${entry.type} · ${realms[entry.id] || 'world'}`})).join('') || `<p class="empty">No world-bible entry matches that search.</p>`; };
       document.querySelector('#filters').addEventListener('click', event => { const button = event.target.closest('button'); if (!button) return; active = button.dataset.filter; document.querySelectorAll('#filters button').forEach(item => item.classList.toggle('selected', item === button)); render(); });
       search.addEventListener('input',render); render();
+      loadFullCatalogueGrid(grid, search, document.querySelector('#filters'));
     };
     const showRecipes = tabId => {
       const tab = bible.recipeTabs.find(item => item.id === tabId);
@@ -59,6 +60,44 @@
   function recipeCard(record) {
     const list = (title, values) => `<div><h4>${title}</h4><ul>${values.map(value => `<li>${value}</li>`).join('')}</ul></div>`;
     return `<article class="recipe-card"><header>${badge(record.state)}<h3>${record.name}</h3><p>${record.sources}</p></header><div class="recipe-chain">${list('Inputs',record.inputs)}${list('Tools & conditions',record.tools)}<div><h4>Site requirement</h4><p>${record.site}</p></div><div><h4>Procedure</h4><ol>${record.process.map(step => `<li>${step}</li>`).join('')}</ol></div><div><h4>Output</h4><p>${record.output}</p></div><div><h4>Applications</h4><p>${record.applications}</p></div></div></article>`;
+  }
+
+  function loadFullCatalogueGrid(grid, search, filters) {
+    const pager = document.createElement('div'); pager.className = 'complete-pagination'; grid.insertAdjacentElement('afterend', pager);
+    const classify = title => {
+      const value = title.toLowerCase();
+      if (/flora|agriculture|seed|crop|textile|forestry/.test(value)) return ['flora','Flora','🌿'];
+      if (/avian|bird/.test(value)) return ['aerial','Aerial life','🪶'];
+      if (/water|fish|aquatic|wetland|river|coast/.test(value)) return ['aquatic','Aquatic / amphibious','🐟'];
+      if (/monster|native|goblin|centaur|orc|ogre|cyclops/.test(value)) return ['social','Native beings','◇'];
+      if (/material|ore|metal|clay|stone|industry|tool|weapon|equipment|storage|construction/.test(value)) return ['material','Material / crafted world','⚒'];
+      return ['terrestrial','Terrestrial life & fieldcraft','✦'];
+    };
+    const safe = value => value.replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
+    const api = pageNo => `https://api.github.com/repos/devosphere/projectdraugr/issues?state=open&per_page=100&page=${pageNo}`;
+    Promise.all([fetch(api(1)), fetch(api(2))])
+      .then(results => Promise.all(results.map(result => result.ok ? result.json() : Promise.reject(new Error('catalogue unavailable')))))
+      .then(pages => {
+        const records = new Map();
+        bible.entries.forEach(entry => records.set(entry.id, { id:entry.id, name:entry.name, realm:({rabbit:'terrestrial','red-squirrel':'terrestrial',beaver:'aquatic',hare:'terrestrial','wild-boar':'terrestrial','river-trout':'aquatic','dire-wolf':'terrestrial','bog-wraith':'aquatic',wyvern:'aerial','goblin-band':'social','centaur-herd':'social',reedkin:'social',oak:'flora',nettle:'flora',cattail:'flora',blackberry:'flora',porcini:'flora',flint:'material',clay:'material',copper:'material',iron:'material',gold:'material'})[entry.id] || 'material', type:entry.type, icon:entry.icon, detail:`${entry.type} · ${entry.habitat}`, known:true }));
+        pages.flat().filter(issue => issue.number >= 45 && issue.number <= 221 && !issue.pull_request).forEach(issue => {
+          const [realm, type, icon] = classify(issue.title);
+          [...new Set([...((issue.body || '').matchAll(/`([a-z][a-z0-9_]{2,})`/g))].map(match => match[1]))].forEach(id => {
+            if (!records.has(id)) records.set(id, { id, name:id.replaceAll('_',' '), realm, type, icon, detail:`${type} catalogue record`, known:false });
+          });
+        });
+        const all = [...records.values()].sort((a,b) => a.name.localeCompare(b.name)); let active = 'All', term = '', page = 0; const pageSize = 48;
+        const render = () => {
+          const filtered = all.filter(record => (active === 'All' || record.realm === active) && `${record.name} ${record.type}`.toLowerCase().includes(term)); const pages = Math.max(1, Math.ceil(filtered.length / pageSize)); page = Math.min(page, pages - 1);
+          grid.innerHTML = filtered.slice(page * pageSize, page * pageSize + pageSize).map(record => `<a class="catalogue-card" href="entry.html#${record.known ? record.id : 'spec-' + encodeURIComponent(record.id)}"><span class="card-icon">${record.icon}</span><span class="card-body">${badge(record.known ? 'World record' : 'Catalogue record')}<strong>${safe(record.name)}</strong><small>${safe(record.detail)}</small></span><span class="arrow">↗</span></a>`).join('') || '<p class="empty">No catalogue entry matches that search.</p>';
+          pager.innerHTML = `<span>${filtered.length.toLocaleString()} matching records</span><span>Page ${page + 1} of ${pages}</span><button data-page="previous" ${page === 0 ? 'disabled' : ''}>Previous</button><button data-page="next" ${page >= pages - 1 ? 'disabled' : ''}>Next</button>`;
+        };
+        search.addEventListener('input', event => { term = event.target.value.toLowerCase(); page = 0; render(); });
+        filters.addEventListener('click', event => { const button = event.target.closest('button'); if (!button) return; active = button.dataset.filter; page = 0; render(); });
+        pager.addEventListener('click', event => { const button = event.target.closest('button'); if (!button || button.disabled) return; page += button.dataset.page === 'next' ? 1 : -1; render(); });
+        render();
+      })
+      .catch(() => { pager.remove(); });
   }
 
   function loadCatalogueCategory(view, tab) {
@@ -245,8 +284,34 @@
     content.innerHTML = `<section class="page-hero compact"><p class="eyebrow">The Overseer’s contract</p><h1>WORLD LAWS</h1><p>These are not flavour text. They are the rules every future catalogue entry, industry and simulation feature must satisfy.</p></section><section class="rule-list">${bible.rules.map(([title,copy],index)=>`<article><span>${String(index+1).padStart(2,'0')}</span><div><h2>${title}</h2><p>${copy}</p></div></article>`).join('')}</section>${section('Activity impact','What every meaningful procedure must leave behind','A procedure is only complete when it has actor cost, physical inputs, footprint, output/waste, affected beings, time/neglect consequences and recovery paths.', `<div class="impact-line"><span>Actor</span><b>→</b><span>Inputs</span><b>→</b><span>Footprint</span><b>→</b><span>World response</span><b>→</b><span>History</span></div>`)}`;
   }
 
+  function specificationEntry(id) {
+    const safe = value => String(value || '').replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
+    const title = id.replaceAll('_', ' ').replace(/\b\w/g, character => character.toUpperCase());
+    const classify = text => {
+      const value = text.toLowerCase();
+      if (/flora|agriculture|seed|crop|textile|forestry/.test(value)) return ['Flora','Flora and fibre','🌿'];
+      if (/avian|bird/.test(value)) return ['Aerial life','Canopy, cliff and open-sky habitat','🪶'];
+      if (/water|fish|aquatic|wetland|river|coast/.test(value)) return ['Aquatic / amphibious','Wetland, river, lake or coast','🐟'];
+      if (/monster|native|goblin|centaur|orc|ogre|cyclops/.test(value)) return ['Native being','Territory, settlement or roaming range','◇'];
+      if (/material|ore|metal|clay|stone|industry|tool|weapon|equipment|storage|construction/.test(value)) return ['Material / craft','Ground source, carried object or work site','⚒'];
+      return ['Terrestrial life & fieldcraft','Ground, forest edge, grassland or field range','✦'];
+    };
+    const render = (source = {}) => {
+      const [type, habitat, icon] = classify(`${source.title || ''} ${id}`);
+      const exactLines = String(source.body || '').split(/\r?\n/).map(line => line.replace(/[`*_#]/g, '').trim()).filter(line => line && !/^add\s+\d+|^acceptance|^test |^implementation/i.test(line) && (line.toLowerCase().includes(id.replaceAll('_', ' ')) || line.toLowerCase().includes(id))).slice(0, 4);
+      const presence = exactLines[0] || `${title} is a named ${type.toLowerCase()} record in the world catalogue.`;
+      const recovery = exactLines.find(line => /harvest|loot|yield|gather|source|material|recover|drop/i.test(line)) || 'Its physical recovery, use, loss and disturbance are governed by the surrounding site and procedure.';
+      const consequence = exactLines.find(line => /risk|hazard|danger|failure|consequence|welfare|ecolog|territory/i.test(line)) || 'Use or disturbance must leave a physical consequence in the local world state.';
+      document.title = `${title} — Project Draugr World Bible`;
+      content.innerHTML = `<a class="back-link" href="catalogue.html">← Back to catalogue</a><section class="entry-hero"><div class="entry-icon">${icon}</div><div><p class="eyebrow">${safe(type)} · world catalogue</p>${badge('Catalogue record')}<h1>${safe(title)}</h1><p>${safe(habitat)}</p></div></section><section class="entry-layout"><article class="entry-main"><div><h2>Behaviour & presence</h2><p>${safe(presence)}</p></div><div><h2>Ecological role</h2><p>${safe(type)} candidate within the persistent world seed. Its location, reachability and effect on nearby life are part of its world-state record.</p></div><div><h2>Physical recovery / harvest</h2><p>${safe(recovery)}</p></div><div><h2>Risk & consequence</h2><p>${safe(consequence)}</p></div></article><aside class="entry-meta"><p class="eyebrow">Classification</p><dl><div><dt>Type</dt><dd>${safe(type)}</dd></div><div><dt>Status</dt><dd>World catalogue</dd></div><div><dt>Habitat</dt><dd>${safe(habitat)}</dd></div></dl><p class="muted">This record describes the physical world. It does not grant the Chronicle knowledge, ownership, access or safety.</p></aside></section>`;
+    };
+    content.innerHTML = `<p class="empty">Opening catalogue record…</p>`;
+    const api = pageNo => `https://api.github.com/repos/devosphere/projectdraugr/issues?state=open&per_page=100&page=${pageNo}`;
+    Promise.all([fetch(api(1)), fetch(api(2))]).then(results => Promise.all(results.map(result => result.ok ? result.json() : []))).then(pages => render(pages.flat().find(issue => !issue.pull_request && String(issue.body || '').includes('`' + id + '`')))).catch(() => render());
+  }
+
   function entry() {
-    const id = location.hash.slice(1); const e = bible.entries.find(x=>x.id===id) || bible.entries[0]; document.title = `${e.name} — Project Draugr World Bible`;
+    const id = decodeURIComponent(location.hash.slice(1)); if (id.startsWith('spec-')) { specificationEntry(id.slice(5)); return; } const e = bible.entries.find(x=>x.id===id) || bible.entries[0]; document.title = `${e.name} — Project Draugr World Bible`;
     content.innerHTML = `<a class="back-link" href="catalogue.html">← Back to catalogue</a><section class="entry-hero"><div class="entry-icon">${e.icon}</div><div><p class="eyebrow">${e.type} · ${e.latin}</p>${badge(e.status)}<h1>${e.name}</h1><p>${e.habitat}</p></div></section><section class="entry-layout"><article class="entry-main"><div><h2>Behaviour & presence</h2><p>${e.behaviour}</p></div><div><h2>Ecological role</h2><p>${e.role}</p></div><div><h2>Physical recovery / harvest</h2><p>${e.recovery}</p></div><div><h2>Risk & consequence</h2><p>${e.danger}</p></div></article><aside class="entry-meta"><p class="eyebrow">Classification</p><dl><div><dt>Type</dt><dd>${e.type}</dd></div><div><dt>Status</dt><dd>${e.status}</dd></div><div><dt>Habitat</dt><dd>${e.habitat}</dd></div><div><dt>Related work</dt><dd>${e.related}</dd></div></dl><p class="muted">Catalogue entries describe physical possibilities. They do not grant the Chronicle knowledge, ownership, access or safety.</p></aside></section>`;
   }
   ({home,atlas,catalogue,industries,rules,entry}[page] || home)();
