@@ -78,8 +78,16 @@
       if (/material|ore|metal|clay|stone|industry|tool|weapon|equipment|storage|construction/.test(value)) return ['material','Material / crafted world','⚒'];
       return ['terrestrial','Terrestrial life & fieldcraft','✦'];
     };
-    const categoryFor = title => {
+    const categoryFor = (number, title) => {
       const value = title.toLowerCase();
+      if ([65,66,67,68,69,70,71,72,73,103,107,112,113,128,149,192,216].includes(number)) return 'actions';
+      if ([45,75,80,133,155,156,157,158,159,160,181].includes(number)) return 'nonliving';
+      if ([48,49,50,51,74,84,85,86,109,110,111,114,115,117,118,119,120,121,122,150,151,154].includes(number)) return 'living';
+      if ([52,79,87,88,89,90,91,92,100,101,105].includes(number)) return 'fieldcraft';
+      if ([56,57,102,103,168].includes(number)) return 'storage';
+      if ([47,61,77,127,130].includes(number)) return 'construction';
+      if ([104,106,108,169,176].includes(number)) return 'infrastructure';
+      if ((number >= 162 && number <= 190) || (number >= 200 && number <= 206) || [59,171,172,173,174,175,177,178,179,182,183,184,185,186,187,188,189].includes(number)) return 'industry';
       if (/action|procedure|intent|verb|interaction/.test(value)) return 'actions';
       if (/hunting|tracking|trapping|taming|husbandry|draft|animal-assisted/.test(value)) return 'fieldcraft';
       if (/storage|logistics|hauling|stockpil|transport|vehicle|container/.test(value)) return 'storage';
@@ -90,16 +98,22 @@
       if (/wildlife|avian|flora|monster|native|world-seed|ecology|topology|biome|organism|animal|material|source/.test(value)) return 'world';
       return 'crafting';
     };
-    const recordClassFor = (title, id) => {
+    const recordClassFor = (number, title, id) => {
       const text = `${title} ${id.replaceAll('_', ' ')}`.toLowerCase();
       const realm = /subterranean|cave|burrow|underground|mine/.test(text) ? 'subterranean' : /aerial|avian|bird|wing|roost|sky/.test(text) ? 'aerial' : /aquatic|amphib|wetland|river|lake|water|fish|coast/.test(text) ? 'aquatic' : 'terrestrial';
       if (/^(accept|acclimate|address|aid|aim|analy[sz]e|approach|assemble|attack|avoid|build|carry|collect|cook|craft|dig|draw|drop|eat|equip|examine|feed|gather|harvest|hunt|inspect|make|move|observe|prepare|read|repair|rest|set|sleep|track|train|travel|treat|use|wait|write)_/.test(id)) return { category:'actions', realm, lifeGroup:'action', type:'Chronicle action', icon:'›' };
+      const sourceCategory = categoryFor(number, title);
+      const manufactured = /(scraper|burin|maul|mortar|pestle|rake|hoe|spear|sling|trap|backpack|basket|bucket|crate|bedroll|adze|chisel|awl|hook|shovel|waterskin|quiver|arrow|knife|hammer|pickaxe|axe|yoke|harness|cart|sledge|travois|pen|coop|stable|trough|wall|gate|tower|hearth|hut|bridge|road|kiln|loom|garment|boot|hood|vest|belt|rope)$/i.test(id);
+      if (sourceCategory === 'actions') return { category:'actions', realm, lifeGroup:'action', type:'Chronicle action', icon:'›' };
+      if (sourceCategory === 'nonliving') return { category:'nonliving', realm:'material', lifeGroup:'material', type:'Material', icon:'⚒' };
+      if (manufactured && !['living','nonliving','actions'].includes(sourceCategory)) return { category:sourceCategory, realm:'material', lifeGroup:'material', type:'Crafted object', icon:'⚒' };
       if (/(ore|stone|clay|soil|sand|gravel|flint|chert|timber|wood|branch|bark|resin|fibre|fiber|reeds?|straw|seed|feather|bone|hide|pelt|horn|tusk|shell|water|salt|ash|charcoal|meat|fish|berry|mushroom|acorn)/.test(id)) return { category:'nonliving', realm:'material', lifeGroup:'material', type:'Material', icon:'⚒' };
       if (/monster|wraith|wyvern|dire wolf|goblin|ogre|cyclops|orc|dragon/.test(text)) return { category:'living', realm, lifeGroup:`monster-${realm}`, type:'Monster', icon:'◇' };
       if (/native|centaur|reedkin|druid/.test(text)) return { category:'living', realm, lifeGroup:`native-${realm}`, type:'Native people', icon:'◇' };
       if (/flora|plant|tree|shrub|crop|fung|moss|algae|herb/.test(text)) return { category:'living', realm, lifeGroup:'flora', type:'Flora', icon:'🌿' };
       if (/wildlife|animal|mammal|bird|fish|insect|reptile|amphib|beaver|boar|rabbit|hare|squirrel|ox|buffalo|donkey|horse/.test(text)) return { category:'living', realm, lifeGroup:`wildlife-${realm}`, type:'Wildlife', icon:realm === 'aerial' ? '🪶' : realm === 'aquatic' ? '🐟' : '✦' };
-      return { category:categoryFor(title), realm:'material', lifeGroup:'material', type:'Physical catalogue record', icon:'⚒' };
+      const category = sourceCategory;
+      return { category, realm:'material', lifeGroup:'material', type:category === 'actions' ? 'Chronicle action' : 'Physical catalogue record', icon:category === 'actions' ? '›' : '⚒' };
     };
     const safe = value => value.replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
     const api = pageNo => `https://api.github.com/repos/devosphere/projectdraugr/issues?state=open&per_page=100&page=${pageNo}`;
@@ -114,9 +128,9 @@
           record.category = kind === 'material' ? 'nonliving' : 'living'; record.realm = realm; record.lifeGroup = kind === 'flora' ? 'flora' : kind === 'material' ? 'material' : `${kind}-${realm}`;
         });
         bible.recipeRecords.forEach((record, index) => records.set(`recipe-${index}`, { id:`recipe-${index}`, name:record.name, category:record.tab, realm:'material', type:record.tab.replace(/\b\w/g, letter => letter.toUpperCase()), icon:({crafting:'⚒',storage:'▣',infrastructure:'⌂',construction:'▤',fieldcraft:'◇',industry:'⚙'})[record.tab], detail:record.applications, known:false }));
-        pages.flat().filter(issue => issue.number >= 45 && issue.number <= 221 && !issue.pull_request).forEach(issue => {
+        pages.flat().filter(issue => issue.number >= 45 && issue.number <= 221 && !issue.pull_request && !/^\[(EPIC|Audit)\]|\b(regression|fixture|auditor|test coverage|long-play audit)\b/i.test(issue.title)).sort((left, right) => left.number - right.number).forEach(issue => {
           [...new Set([...((issue.body || '').matchAll(/`([a-z][a-z0-9_]{2,})`/g))].map(match => match[1]))].forEach(id => {
-            const classification = recordClassFor(issue.title, id);
+            const classification = recordClassFor(issue.number, issue.title, id);
             if (!records.has(id)) records.set(id, { id, name:id.replaceAll('_',' '), ...classification, detail:`${classification.type} catalogue record`, known:false });
           });
         });
