@@ -212,6 +212,10 @@ public class PhysicalItemService {
     public boolean createCraftedItem(UUID chronicle, UUID location, UUID id, String itemKey, String displayName, Instant occurredAt, String transitionType, QualityGrade grade) {
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM',?,?)", id, displayName, chronicle);
         jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state,quality_grade) VALUES (?,?,'SOUND',?)", id, itemKey, grade.name());
+        // If this kind is a container with a declared default capacity, give the new object its container
+        // properties so it can actually hold things (#56). Process-made containers (bark_container, leather_pouch,
+        // burden_basket, and the V75 batch) used to be created without this and so could store nothing.
+        jdbc.update("INSERT INTO container_properties (object_id,max_mass_grams,max_volume_ml) SELECT ?,max_mass_grams,max_volume_ml FROM container_capacity_default WHERE item_key=? ON CONFLICT (object_id) DO NOTHING", id, itemKey);
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,?,jsonb_build_object('itemKey',?))", id, Timestamp.from(occurredAt), transitionType, itemKey);
         if (withinCarryCapacity(chronicle)) return true;
         jdbc.update("UPDATE world_object SET current_owner_id=NULL, current_location_id=? WHERE id=?", location, id);

@@ -224,6 +224,27 @@ class PlaytestBugFixesIntegrationTest {
         assertTrue(ownedCount("field_stone") >= 3, "dismantling a stone fire pit recovers some of its stones");
     }
 
+    /** M1 #56 — a process-made container (hide sack) gets container_properties and can actually hold things. */
+    @Test @Order(9)
+    void processMadeContainerCanHoldThings() {
+        UUID chronicle = chronicle();
+        items.createCarriedItem(chronicle, "tanned_leather", "Tanned leather", now(), "TEST_SEED");
+        items.createCarriedItem(chronicle, "leather_cord", "Leather cord", now(), "TEST_SEED");
+        ChronicleActionService.ActionResult made = actions.resolve("I sew a hide sack.");
+        assertEquals("SUCCEEDED", made.outcome(), () -> "sewing a hide sack must succeed: " + made.perception());
+        UUID sack = jdbc.queryForObject(
+            "SELECT i.object_id FROM item_instance i JOIN world_object w ON w.id=i.object_id " +
+            "WHERE i.item_key='hide_sack' AND w.lifecycle_state='ACTIVE' AND w.current_owner_id=? LIMIT 1", UUID.class, chronicle);
+        assertEquals(1, (int) jdbc.queryForObject("SELECT COUNT(*) FROM container_properties WHERE object_id=?", Integer.class, sack),
+            "a process-made container must have container_properties so it can hold things (#56)");
+        items.createCarriedItem(chronicle, "field_stone", "Field stone", now(), "TEST_SEED");
+        ChronicleActionService.ActionResult stored = actions.resolve("I put the field stone in the hide sack.");
+        assertEquals("SUCCEEDED", stored.outcome(), () -> "storing into the process-made sack must succeed: " + stored.perception());
+        assertEquals(1, (int) jdbc.queryForObject(
+            "SELECT COUNT(*) FROM item_containment ic JOIN item_instance i ON i.object_id=ic.item_id WHERE ic.container_id=? AND i.item_key='field_stone'", Integer.class, sack),
+            "the stone is now inside the hide sack");
+    }
+
     /** #39 — carving a mark and naming the place in one act must not raise a raw persistence error. */
     @Test @Order(5)
     void markAndNameDoesNotRaiseAPersistenceError() {
