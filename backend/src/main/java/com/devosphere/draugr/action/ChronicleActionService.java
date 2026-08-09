@@ -248,6 +248,8 @@ public class ChronicleActionService {
         else if (intent == Intent.EQUIP) { String[] r = equipByName(chronicle, text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.UNEQUIP) { String[] r = unequipByName(chronicle, text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.DROP) { String[] r = dropByName(chronicle, text, resolvedAt); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.PICK_UP) { String[] r = items.pickUp(chronicle.id(), chronicle.location(), text, resolvedAt); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.STORE) { String[] r = items.storeInContainer(chronicle.id(), chronicle.location(), text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.DESIGNATE) { String[] r = designate(chronicle, text, actionId, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.REFINE) { String[] r = refineByName(chronicle, text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.INSPECT) { String[] r = assembly.inspect(chronicle.id(), text); outcome = r[0]; perception = r[1]; }
@@ -433,6 +435,14 @@ public class ChronicleActionService {
         if (markers != null && markers > 0) s.append("A marker you left catches your eye, quietly confirming this is a place you have been. ");
         if (sites != null && sites > 0) s.append("The ground shows signs of living things that pass through or feed here. ");
         if (carcasses != null && carcasses > 0) s.append("A fallen animal lies nearby, not yet returned to the earth. ");
+        // Loose objects left on this ground — anything dropped or set down here, so a dropped thing stays
+        // visible and can be taken up again rather than seeming to vanish (#29/#41).
+        java.util.List<String> ground = jdbc.query(
+            "SELECT w.display_name FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
+            "WHERE w.current_location_id=? AND w.current_owner_id IS NULL AND w.lifecycle_state='ACTIVE' " +
+            "ORDER BY w.display_name LIMIT 6", (rs, i) -> rs.getString(1).toLowerCase(Locale.ROOT), loc);
+        if (!ground.isEmpty()) s.append(ground.size() == 1 ? "On the ground here lies " : "On the ground here lie ")
+            .append(joinAnd(ground)).append(ground.size() == 1 ? ", left where it was set down. " : ", left where they were set down. ");
         // What lies around — read from the neighbouring chunks, so the chronicle can choose a direction.
         String around = neighbourHints(world, gx, gy);
         if (!around.isEmpty()) s.append(around);
@@ -671,6 +681,15 @@ public class ChronicleActionService {
         // A primitive utility belt (#35): a fibre strap with tool loops. A making verb + "belt" — never the
         // wearing of one (that carries no craft verb and falls to EQUIP below).
         if((value.contains("make")||value.contains("craft")||value.contains("assemble")||value.contains("fashion")||value.contains("weave")||value.contains("build"))&&value.contains("belt")&&!value.contains("belt out")) return Intent.CRAFT_BELT;
+        // Physical logistics (#29/#40/#41). Storing something IN a container is checked before DROP and before
+        // the gather verbs, so "put the stones in the basket" is containment, not dropping or gathering. It
+        // needs a store verb, an in/into/inside, and a container noun together.
+        boolean containerNoun = value.contains("basket")||value.contains("container")||value.contains("pouch")||value.contains("bag")||value.contains("sack")||value.contains("pot")||value.contains("crate")||value.contains("chest")||value.contains("quiver")||value.contains("box")||value.contains("pannier")||value.contains("backpack");
+        if((value.contains(" in ")||value.contains(" into ")||value.contains(" inside "))&&(value.contains("put")||value.contains("place")||value.contains("store")||value.contains("stow")||value.contains("stash")||value.contains("load")||value.contains("pack")||value.contains("drop"))&&containerNoun) return Intent.STORE;
+        // Taking a dropped or stored object back into the carried load. Explicit retrieval verbs, or "take/get/
+        // remove X out of/from the <container/ground>" — distinct from gathering raw growth from the world.
+        if(value.contains("pick up")||value.contains("pick it up")||value.contains("pick them up")||value.contains("pick it back")||value.contains("picked up")||value.contains("grab")||value.contains("retrieve")||value.contains("recover")||value.contains("take back")||value.contains("take it back")||value.contains("fetch")
+           ||((value.contains("take")||value.contains("get")||value.contains("remove")||value.contains("pull"))&&(value.contains(" out of ")||value.contains(" from the ")||value.contains(" off the ground")||value.contains(" from where"))&&(containerNoun||value.contains("ground")||value.contains("where i")||value.contains("where it")))) return Intent.PICK_UP;
         if(value.contains("lean-to") || value.contains("lean to")) return classifyLeanTo(value);
         // Garment work before the generic craft rules, so "sew a hide coat" is not
         // swallowed by the furniture or tool branches.
@@ -949,7 +968,7 @@ public class ChronicleActionService {
     private String baseName(String displayName) { return displayName.replaceAll("(?i)\\s+Revision\\s+[IVXLC0-9]+$", "").trim(); }
     private String toRoman(int n) { if(n<=0) return String.valueOf(n); int[] v={100,90,50,40,10,9,5,4,1}; String[] s={"C","XC","L","XL","X","IX","V","IV","I"}; StringBuilder b=new StringBuilder(); for(int i=0;i<v.length;i++) while(n>=v[i]){b.append(s[i]);n-=v[i];} return b.toString(); }
     private void reviseDocument(UUID chronicleId, UUID actionId, Instant resolvedAt, String text) { Matcher match=DOCUMENT_EDIT.matcher(text); if(!match.matches()) throw new IllegalArgumentException("Unrecognized document edit."); UUID documentId=UUID.fromString(match.group(2)); LiteratureService.Edit edit="append".equalsIgnoreCase(match.group(1))?LiteratureService.Edit.APPEND:LiteratureService.Edit.REPLACE; if(!literature.documentReachable(documentId,chronicleId)) throw new IllegalArgumentException("The document is not physically reachable."); literature.revise(documentId,chronicleId,actionId,resolvedAt,edit,match.group(3),null); }
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, RAID_HIVE, COLLECT_INSECTS, FISH, SNARE, TRACK, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, WASH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, EQUIP, UNEQUIP, DROP, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, RAID_HIVE, COLLECT_INSECTS, FISH, SNARE, TRACK, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, WASH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;} }
     /**
      * The structured perception frame — the seam every future Simulation Agent reads
@@ -1046,7 +1065,7 @@ public class ChronicleActionService {
                  CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_GARMENT, CRAFT_FIRE_TOOL,
                  CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT -> new Labor(6, 3);
             // Light acts — looking, marking, writing, handling gear, dressing a wound, tending a fire.
-            case OBSERVE, MARK, DESIGNATE, EQUIP, UNEQUIP, DROP, WRITE, EDIT_DOCUMENT, SKETCH_MAP, INSPECT,
+            case OBSERVE, MARK, DESIGNATE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, WRITE, EDIT_DOCUMENT, SKETCH_MAP, INSPECT,
                  EXAMINE, ANALYZE, INVESTIGATE, TREAT_WOUND, FEED_FIRE -> new Labor(2, 0);
             // Rest, sleep, eat, drink, wash, relief, personal/aggression acts run their own physiology.
             default -> new Labor(0, 0);

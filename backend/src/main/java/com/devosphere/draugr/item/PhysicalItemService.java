@@ -1145,6 +1145,90 @@ public class PhysicalItemService {
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'DROPPED',jsonb_build_object('locationId',?::text))", item, Timestamp.from(occurredAt), location.toString());
         return true;
     }
+    /**
+     * Take a named object up into the carried load — from the ground where it was dropped (#29/#41) or out of a
+     * reachable container (#40 retrieve). The object keeps its UUID and full history; only its owner changes.
+     * Fails specifically (not carried by that name / no room) rather than with generic no-effect narration.
+     */
+    @Transactional
+    public String[] pickUp(UUID chronicle, UUID location, String text, Instant at) {
+        String lower = text.toLowerCase(java.util.Locale.ROOT);
+        java.util.List<java.util.Map<String,Object>> cands = jdbc.queryForList(
+            "WITH RECURSIVE reach(id) AS (" +
+            "SELECT id FROM world_object WHERE lifecycle_state='ACTIVE' AND (current_owner_id=? OR (current_owner_id IS NULL AND current_location_id=?)) " +
+            "UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reach r ON r.id=ic.container_id JOIN world_object n ON n.id=ic.item_id WHERE n.lifecycle_state='ACTIVE') " +
+            "SELECT w.id, w.display_name, i.item_key FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
+            "WHERE w.lifecycle_state='ACTIVE' AND (" +
+            "  (w.current_owner_id IS NULL AND w.current_location_id=?) " +                                  // on the ground here
+            "  OR w.id IN (SELECT c.item_id FROM item_containment c WHERE c.container_id IN (SELECT id FROM reach))) " + // in a reachable store
+            "ORDER BY length(w.display_name) DESC",
+            chronicle, location, location);
+        if (cands.isEmpty()) return new String[]{"FAILED", "There is nothing here on the ground or in your stores to pick up."};
+        java.util.Map<String,Object> match = cands.stream()
+            .filter(c -> lower.contains(((String)c.get("display_name")).toLowerCase(java.util.Locale.ROOT))).findFirst().orElse(null);
+        if (match == null) return new String[]{"FAILED", "You look about, but nothing here by that name lies within reach to take up."};
+        UUID id = (UUID) match.get("id"); String key = (String) match.get("item_key"); String name = ((String) match.get("display_name")).toLowerCase(java.util.Locale.ROOT);
+        if (capacityHeadroomUnits(chronicle, key) < 1)
+            return new String[]{"FAILED", "You cannot carry the " + name + " — your load is already as much as you can bear. Set something down first."};
+        jdbc.update("DELETE FROM item_containment WHERE item_id=?", id);
+        jdbc.update("UPDATE world_object SET current_owner_id=?, current_location_id=NULL WHERE id=?", chronicle, id);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'PICKED_UP',jsonb_build_object('itemKey',?))", id, Timestamp.from(at), key);
+        return new String[]{"SUCCEEDED", "You take up the " + name + " and add it to what you carry."};
+    }
+
+    /** Free (mass_grams, volume_ml) left in a container after its full nested contents. */
+    private int[] containerFreeSpace(UUID container) {
+        return jdbc.query(
+            "WITH RECURSIVE contents(id) AS (SELECT item_id FROM item_containment WHERE container_id=? " +
+            "UNION ALL SELECT ic.item_id FROM item_containment ic JOIN contents c ON ic.container_id=c.id) " +
+            "SELECT cp.max_mass_grams - COALESCE((SELECT SUM(d.unit_mass_grams) FROM contents JOIN item_instance ii ON ii.object_id=contents.id JOIN item_definition d ON d.item_key=ii.item_key),0), " +
+            "       cp.max_volume_ml  - COALESCE((SELECT SUM(d.unit_volume_ml)  FROM contents JOIN item_instance ii ON ii.object_id=contents.id JOIN item_definition d ON d.item_key=ii.item_key),0) " +
+            "FROM container_properties cp WHERE cp.object_id=?",
+            rs -> rs.next() ? new int[]{rs.getInt(1), rs.getInt(2)} : new int[]{0, 0}, container, container);
+    }
+
+    /**
+     * Move a named reachable item into a named reachable container (#40): the same UUID moves into the
+     * container's containment, if mass/volume allow. Capacity is pre-checked in Java so a full container fails
+     * gracefully rather than tripping the containment trigger into a hard rollback of the whole action.
+     */
+    @Transactional
+    public String[] storeInContainer(UUID chronicle, UUID location, String text, Instant at) {
+        String lower = text.toLowerCase(java.util.Locale.ROOT);
+        java.util.List<java.util.Map<String,Object>> containers = jdbc.query(REACHABLE_CTE +
+            "SELECT w.id, w.display_name FROM reachable r JOIN world_object w ON w.id=r.id JOIN container_properties cp ON cp.object_id=w.id ORDER BY length(w.display_name) DESC",
+            (rs,row) -> java.util.Map.of("id", rs.getObject(1,UUID.class), "name", rs.getString(2)), chronicle, location);
+        if (containers.isEmpty()) return new String[]{"FAILED", "You have no container within reach to store anything in."};
+        java.util.Map<String,Object> container = containers.stream()
+            .filter(c -> lower.contains(((String)c.get("name")).toLowerCase(java.util.Locale.ROOT))).findFirst()
+            .orElse(containers.size() == 1 ? containers.get(0) : null);
+        if (container == null) return new String[]{"FAILED", "You cannot tell which container you mean — name the one to store it in."};
+        UUID containerId = (UUID) container.get("id"); String containerName = ((String) container.get("name")).toLowerCase(java.util.Locale.ROOT);
+        java.util.List<java.util.Map<String,Object>> stock = jdbc.query(REACHABLE_CTE +
+            "SELECT w.id, w.display_name, i.item_key FROM reachable r JOIN world_object w ON w.id=r.id JOIN item_instance i ON i.object_id=w.id " +
+            "WHERE w.id<>? AND w.id NOT IN (SELECT item_id FROM item_containment WHERE container_id=?) ORDER BY length(w.display_name) DESC",
+            (rs,row) -> java.util.Map.of("id", rs.getObject(1,UUID.class), "name", rs.getString(2), "key", rs.getString(3)), chronicle, location, containerId, containerId);
+        java.util.Map<String,Object> item = stock.stream()
+            .filter(c -> lower.contains(((String)c.get("name")).toLowerCase(java.util.Locale.ROOT))).findFirst().orElse(null);
+        if (item == null) return new String[]{"FAILED", "You have nothing by that name within reach to put in the " + containerName + "."};
+        UUID itemId = (UUID) item.get("id"); String itemName = ((String) item.get("name")).toLowerCase(java.util.Locale.ROOT);
+        // Nesting rule: a container that forbids nested containers rejects another container.
+        Boolean isContainer = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM container_properties WHERE object_id=?)", Boolean.class, itemId);
+        Boolean allowsNested = jdbc.queryForObject("SELECT allows_nested_containers FROM container_properties WHERE object_id=?", Boolean.class, containerId);
+        if (Boolean.TRUE.equals(isContainer) && Boolean.FALSE.equals(allowsNested))
+            return new String[]{"FAILED", "The " + containerName + " will not take another container inside it."};
+        int[] free = containerFreeSpace(containerId);
+        Integer im = jdbc.queryForObject("SELECT d.unit_mass_grams FROM item_instance i JOIN item_definition d ON d.item_key=i.item_key WHERE i.object_id=?", Integer.class, itemId);
+        Integer iv = jdbc.queryForObject("SELECT d.unit_volume_ml  FROM item_instance i JOIN item_definition d ON d.item_key=i.item_key WHERE i.object_id=?", Integer.class, itemId);
+        if (im != null && iv != null && (im > free[0] || iv > free[1]))
+            return new String[]{"FAILED", "The " + containerName + " has no room left for the " + itemName + "."};
+        jdbc.update("DELETE FROM equipment_attachment WHERE item_id=?", itemId);
+        jdbc.update("INSERT INTO item_containment (item_id, container_id, placed_at) VALUES (?,?,?)", itemId, containerId, Timestamp.from(at));
+        jdbc.update("UPDATE world_object SET current_owner_id=?, current_location_id=NULL WHERE id=?", containerId, itemId);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'STORED',jsonb_build_object('containerId',?::text))", itemId, Timestamp.from(at), containerId.toString());
+        return new String[]{"SUCCEEDED", "You place the " + itemName + " into the " + containerName + "."};
+    }
+
     /** Retires a physical item without deleting its identity or immutable transition history. */
     @Transactional
     public void retire(UUID item, Instant occurredAt, String transitionType, String itemKey) {

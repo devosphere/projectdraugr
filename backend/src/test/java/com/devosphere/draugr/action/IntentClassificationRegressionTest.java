@@ -124,6 +124,26 @@ class IntentClassificationRegressionTest {
         assertEquals("EQUIP", classify("wear the belt"));
     }
 
+    /**
+     * Physical logistics (#29/#40/#41): storing into a container, picking a dropped/stored object back up,
+     * and the boundary against DROP and the gather verbs.
+     */
+    @Test void storeAndPickUpClassify() throws Exception {
+        // Storing INTO a container is containment, not dropping and not gathering.
+        assertEquals("STORE", classify("put the stones in the basket"));
+        assertEquals("STORE", classify("place the knife into the pouch"));
+        assertEquals("STORE", classify("stow the cordage inside the pack basket"));
+        // Plain dropping and setting-down stay DROP (no container / no "in").
+        assertEquals("DROP", classify("put down the basket"));
+        assertEquals("DROP", classify("drop the stone axe"));
+        // Taking something back up — from the ground or out of a store.
+        assertEquals("PICK_UP", classify("pick up the woven basket"));
+        assertEquals("PICK_UP", classify("grab the stone knife"));
+        assertEquals("PICK_UP", classify("retrieve the basket i left here"));
+        assertEquals("PICK_UP", classify("take the cordage out of the basket"));
+        assertEquals("PICK_UP", classify("pick it back up off the ground"));
+    }
+
     /** Workstations (V69) claim their words before the generic desk/table rule; a plain table is still a desk. */
     @Test void workstationsClassifyBeforePlainFurniture() throws Exception {
         assertEquals("CRAFT_WORKSTATION", classify("build a woodworking bench"));
