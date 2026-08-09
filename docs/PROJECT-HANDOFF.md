@@ -239,7 +239,7 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 > finish M1, then continue into M2, WITHOUT interruption or permission requests — choose the engineering strategy
 > yourself, land verifiable increments, commit/push, and close a story only when its acceptance is fully met.**
 > Everything is on `development` (pushed) as `devosphere.tech` (never `johncalado`). **Migrations through V74.**
-> Full suite **156 backend tests + 11 SQL regressions green** on the V1–V74 chain; each commit compiles with tests
+> Full suite **158 backend tests + 11 SQL regressions green** on the V1–V74 chain; each commit compiles with tests
 > green and the routing-reachability probe clean.
 >
 > **EPIC #64 Action Catalogue — scorecard:**
@@ -261,10 +261,23 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 >   the staged-building verbs (clear_site/stake_out/level/dig_posthole/set_post/raise_frame/brace/weave_wall/daub/
 >   thatch/line_hearth/pave/fence/gate/drain) — a from-scratch staged-assembly content effort — plus general
 >   structure repair/maintain beyond the lean-to.
-> - **NEXT, in order:** finish **#67** (tie/stack/drag) → **#71** fire/water/cooking/camp → **#72** travel/terrain/
->   wildlife/husbandry → **#73** resolver fallback/aliases/telemetry → the big catalogue stories **#75–#78** ("add
->   100 …", large per-entry bodies) → **EPIC #54** supply chains (#55–#62) → **#191** bare-hand handwork →
->   **#123** survival viability → then **M2** (84 issues). **Full M1+M2 spans many sessions.**
+> - **#71 fire/water/cooking/camp — OPEN (fire management done).** `EXTINGUISH_FIRE` (put out/douse, fuel→0),
+>   `BANK_FIRE` (cover coals, embers hold longer), tend→`FEED_FIRE`. *Remaining:* collect/filter/boil water
+>   (needs a **water-in-container** persistence model — no `water` item / vessel-fill state yet), make_bed,
+>   maintain_camp, full cooking-verb coverage.
+> - **#72 travel/terrain/wildlife/husbandry — OPEN (terrain + disengage done).** terrain crossing (wade/ford/
+>   swim/cross/climb + direction → MOVE); `DISENGAGE` (retreat/flee/hide, non-exposing). *Remaining:* husbandry
+>   (feed/lead/tether — needs a **tamed-companion ownership model**), stalk/watch tactics.
+> - **#73 resolver fallback/telemetry — OPEN (functional intent met; commented).** routing-miss telemetry +
+>   grounded failures + no-mutation guarantee + growing regression matrix already in place. *Deliberately
+>   deferred:* the data-owned **alias-catalogue table** and distinct **outcome codes** (a focused infra refactor,
+>   not to be rushed — see the issue comment).
+> - **NEXT, in order:** **EPIC #54 supply chains** (#55 gatherable building stock → #56 containers/storage [much
+>   already done via #67] → #57 logistics/hauling [much done] → #58 tool gaps → #59 clay/ceramic/water → #60
+>   preservation → #61 shelter assemblies → #62 routing aliases) → the big catalogue stories **#75–#78** ("add
+>   100 …") → **#191** bare-hand handwork → **#123** survival viability → then **M2** (84 issues). Deferred M1
+>   tails: #67 tie/stack/drag, #70 staged-building verbs, #71 water model, #72 husbandry, #73 infra — each needs
+>   a new model/content effort. **Full M1+M2 spans many sessions.**
 >
 > **How the work is done (the proven rhythm):** read the story's exact action catalogue → check current coverage
 > (spin a throwaway Postgres, apply V1..Vn, query `category_term`/`material_process`; grep the classifier/services)
@@ -275,7 +288,8 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 > Test` → `mvn -o test` (all green) + re-run `routing-reachability-probe.sql` after any process/vocab migration →
 > commit `-F` a scratch file, push, close/comment the issue. **New intents this session:** `CRAFT_NET`,
 > `CRAFT_BELT`, `PICK_UP`, `STORE`, `OPEN_CONTAINER`, `CLOSE_CONTAINER`, `SEARCH`, `LISTEN`, `SMELL`, `FEEL`,
-> `READ`, `MEASURE`, `WARM_BODY`, `DRY_BODY`, `COOL_BODY`, `SHELTER_BODY`, `STRETCH`, `REPAIR_ITEM`, `DISMANTLE`.
+> `READ`, `MEASURE`, `WARM_BODY`, `DRY_BODY`, `COOL_BODY`, `SHELTER_BODY`, `STRETCH`, `REPAIR_ITEM`, `DISMANTLE`,
+> `EXTINGUISH_FIRE`, `BANK_FIRE`, `DISENGAGE`.
 >
 > **DR-0022 "Phase-0 parity" — ALL deterministic layers SHIPPED last cycle** (migrations → V70; full detail in
 > milestone #12 below; tracker [06.5](systems/06.5-Phase0-Parity-Build-Plan.md)). **Two locked design principles
@@ -371,7 +385,7 @@ The unlock: V53's review gate already makes machine-authored processes safe to a
 **THEN: Task #21 — AI narration (the Simulation Agent's voice).** The seam is built: `NarrationRouter` decides whether to call, `NarrationEngine` supplies the `backendNarration` the refinement prompt builds on. See `docs/architecture/narration-engine.md` for the prompt template and cost model.
 
 ### Intents implemented (ChronicleActionService)
-GATHER, HARVEST, CRAFT, EQUIP, UNEQUIP, DROP, BUILD, REPAIR, ABANDON, RESUME, LIGHT_FIRE, ADD_FUEL, MAKE_CHARCOAL, COOK, SLEEP, STRIP_BARK, GATHER_CLAY, GATHER_STONE_SLAB, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, WRITE, EDIT_DOCUMENT, SKETCH_MAP, DESIGNATE, MARK, TRAVEL, CONFRONT_WILDLIFE, REFINE, OBSERVE, GATHER_PLANT, FELL_TREE, RAID_HIVE, COLLECT_INSECTS, FISH, SNARE, TRACK, TAME, LURE, SET_TRAP, CHECK_TRAP, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, REWORK, CRAFT_WORKSTATION (V69 benches/loom), PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE (multi-output & preserved-food outputs handled inside PROCESS_MATERIAL), **CRAFT_NET, CRAFT_BELT** (V71), **PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER** (M1 #67; V72 access-state), **SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE** (M1 #65 perception; identify folds into EXAMINE), **WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH** (M1 #66 body care), **REPAIR_ITEM** (M1 #69 mend a worn/broken item), **DISMANTLE** (M1 #70 take a construction apart + salvage)
+GATHER, HARVEST, CRAFT, EQUIP, UNEQUIP, DROP, BUILD, REPAIR, ABANDON, RESUME, LIGHT_FIRE, ADD_FUEL, MAKE_CHARCOAL, COOK, SLEEP, STRIP_BARK, GATHER_CLAY, GATHER_STONE_SLAB, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, WRITE, EDIT_DOCUMENT, SKETCH_MAP, DESIGNATE, MARK, TRAVEL, CONFRONT_WILDLIFE, REFINE, OBSERVE, GATHER_PLANT, FELL_TREE, RAID_HIVE, COLLECT_INSECTS, FISH, SNARE, TRACK, TAME, LURE, SET_TRAP, CHECK_TRAP, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, REWORK, CRAFT_WORKSTATION (V69 benches/loom), PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE (multi-output & preserved-food outputs handled inside PROCESS_MATERIAL), **CRAFT_NET, CRAFT_BELT** (V71), **PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER** (M1 #67; V72 access-state), **SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE** (M1 #65 perception; identify folds into EXAMINE), **WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH** (M1 #66 body care), **REPAIR_ITEM** (M1 #69 mend a worn/broken item), **DISMANTLE** (M1 #70 take a construction apart + salvage), **EXTINGUISH_FIRE, BANK_FIRE** (M1 #71 fire management), **DISENGAGE** (M1 #72 retreat/flee/hide)
 
 ### Known limitations (acceptable for now)
 - Friction fire kit never wears out — infinite fires once made (wear/degradation future task)
