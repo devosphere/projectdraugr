@@ -203,6 +203,27 @@ class PlaytestBugFixesIntegrationTest {
             "a worn item must mend the last step to SOUND");
     }
 
+    /** M1 #70 — dismantling a construction recovers a fraction of its material and preserves its history. */
+    @Test @Order(8)
+    void dismantleRecoversMaterialAndPreservesHistory() {
+        UUID chronicle = chronicle();
+        for (int i = 0; i < 4; i++) items.createCarriedItem(chronicle, "field_stone", "Field stone", now(), "TEST_SEED");
+        ChronicleActionService.ActionResult built = actions.resolve("I build a stone fire pit.");
+        assertEquals("SUCCEEDED", built.outcome(), () -> "building a fire pit must succeed: " + built.perception());
+        UUID pit = jdbc.queryForObject(
+            "SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "WHERE cp.project_kind='STONE_FIRE_PIT' AND w.lifecycle_state='ACTIVE' ORDER BY w.created_at DESC LIMIT 1", UUID.class);
+
+        ChronicleActionService.ActionResult r = actions.resolve("I dismantle the stone fire pit.");
+        assertEquals("SUCCEEDED", r.outcome(), () -> "dismantling must succeed: " + r.perception());
+        assertEquals("DESTROYED", jdbc.queryForObject("SELECT lifecycle_state FROM world_object WHERE id=?", String.class, pit),
+            "a dismantled construction is marked DESTROYED, not deleted");
+        assertEquals("DISMANTLED", jdbc.queryForObject("SELECT destroyed_cause FROM world_object WHERE id=?", String.class, pit));
+        assertEquals(1, (int) jdbc.queryForObject("SELECT COUNT(*) FROM object_transition WHERE object_id=? AND transition_type='DISMANTLED'", Integer.class, pit),
+            "history preserves the dismantle event");
+        assertTrue(ownedCount("field_stone") >= 3, "dismantling a stone fire pit recovers some of its stones");
+    }
+
     /** #39 — carving a mark and naming the place in one act must not raise a raw persistence error. */
     @Test @Order(5)
     void markAndNameDoesNotRaiseAPersistenceError() {

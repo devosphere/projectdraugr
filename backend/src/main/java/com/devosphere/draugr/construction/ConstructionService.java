@@ -44,4 +44,37 @@ public class ConstructionService {
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CONSTRUCTED',jsonb_build_object('projectKind','STONE_FIRE_PIT'))", projectId, occurred);
         return true;
     }
+
+    /**
+     * Dismantle / salvage a reachable construction here (#70): the named one, else the only one. It keeps its
+     * UUID and full history (marked DESTROYED with cause DISMANTLED, never deleted) and yields only a FRACTION
+     * of its materials — some is always lost in the taking-apart, and only what physically comes out is recovered.
+     */
+    @Transactional
+    public String[] dismantle(UUID chronicle, UUID location, String text, Instant at) {
+        String lower = text == null ? "" : text.toLowerCase(java.util.Locale.ROOT);
+        java.util.List<java.util.Map<String,Object>> projects = jdbc.queryForList(
+            "SELECT cp.object_id, w.display_name, cp.project_kind FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' AND cp.state<>'DESTROYED' ORDER BY length(w.display_name) DESC", location);
+        if (projects.isEmpty()) return new String[]{"FAILED", "There is nothing built here to take apart."};
+        java.util.Map<String,Object> proj = projects.stream()
+            .filter(p -> lower.contains(((String)p.get("display_name")).toLowerCase(java.util.Locale.ROOT))
+                || lower.contains(((String)p.get("project_kind")).toLowerCase(java.util.Locale.ROOT).replace('_', ' ')))
+            .findFirst().orElse(projects.size() == 1 ? projects.get(0) : null);
+        if (proj == null) return new String[]{"FAILED", "There is more than one thing built here — name the one to take apart."};
+        UUID id = (UUID) proj.get("object_id"); String name = ((String) proj.get("display_name")).toLowerCase(java.util.Locale.ROOT); String kind = (String) proj.get("project_kind");
+        java.util.List<String[]> salvage = switch (kind) {
+            case "LEAN_TO" -> java.util.List.<String[]>of(new String[]{"dry_branch","Dry branch"}, new String[]{"dry_branch","Dry branch"}, new String[]{"plant_fiber","Plant fiber bundle"});
+            case "STONE_FIRE_PIT" -> java.util.List.<String[]>of(new String[]{"field_stone","Field stone"}, new String[]{"field_stone","Field stone"}, new String[]{"field_stone","Field stone"});
+            default -> java.util.List.<String[]>of(new String[]{"dry_branch","Dry branch"});
+        };
+        int recovered = 0;
+        for (String[] s : salvage) if (items.hasCarryRoomFor(chronicle, s[0])) { items.createCarriedItem(chronicle, s[0], s[1], at, "SALVAGED"); recovered++; }
+        Timestamp ts = Timestamp.from(at);
+        jdbc.update("UPDATE construction_project SET state='DESTROYED' WHERE object_id=?", id);
+        jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED', destroyed_at=?, destroyed_location_id=?, destroyed_cause='DISMANTLED', current_location_id=NULL WHERE id=?", ts, location, id);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'DISMANTLED',jsonb_build_object('recovered',?))", id, ts, recovered);
+        String got = recovered == 0 ? "nothing worth keeping — your load is full" : recovered + " usable piece" + (recovered == 1 ? "" : "s") + " of material";
+        return new String[]{"SUCCEEDED", "You take the " + name + " apart piece by piece, recovering " + got + ". Where it stood is bare ground again."};
+    }
 }

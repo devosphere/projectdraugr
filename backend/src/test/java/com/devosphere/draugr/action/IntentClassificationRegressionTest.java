@@ -297,6 +297,18 @@ class IntentClassificationRegressionTest {
         assertEquals("SLEEP", classify("bed down for the night"));
     }
 
+    /** M1 #70 dismantle/salvage: taking a construction apart, even a lean-to (before the lean-to build check). */
+    @Test void dismantleAndSalvageClassify() throws Exception {
+        assertEquals("DISMANTLE", classify("dismantle the lean-to"));
+        assertEquals("DISMANTLE", classify("take apart the fire pit"));
+        assertEquals("DISMANTLE", classify("pull down the shelter"));
+        assertEquals("DISMANTLE", classify("salvage the timber from the wall"));
+        assertEquals("DISMANTLE", classify("tear down the fence"));
+        // Building/working a lean-to still routes to the lean-to path (not stolen by DISMANTLE).
+        assertEquals("WORK_LEAN_TO", classify("build a lean-to"));
+        assertEquals("WORK_LEAN_TO", classify("work on the lean-to"));
+    }
+
     /** Workstations (V69) claim their words before the generic desk/table rule; a plain table is still a desk. */
     @Test void workstationsClassifyBeforePlainFurniture() throws Exception {
         assertEquals("CRAFT_WORKSTATION", classify("build a woodworking bench"));
