@@ -95,16 +95,33 @@ class IntentClassificationRegressionTest {
         assertEquals("OBSERVE", classify("look around the clearing"));
     }
 
-    /** #32: bathing/taking a bath is washing; #36: making a net is not fishing. */
+    /** #32: bathing/taking a bath is washing; #36/#43/#44: making a net is an explicit craft, not fishing. */
     @Test void bathIsWashingAndMakingANetIsNotFishing() throws Exception {
         assertEquals("WASH", classify("take a bath in the stream"));
         assertEquals("WASH", classify("bathe in the river"));
         assertEquals("WASH", classify("wash myself"));
-        // "fishing net" / "weave a fish net" contain "fish" but are CRAFTING a net — not angling (#36).
-        assertEquals("UNKNOWN", classify("weave a fishing net"));
-        assertEquals("UNKNOWN", classify("knot a fish net from cordage"));
+        // "fishing net" / "weave a fish net" contain "fish" but are CRAFTING a net — the explicit CRAFT_NET
+        // route (#36/#43/#44), never angling. It holds even when a process matcher would claim it.
+        assertEquals("CRAFT_NET", classify("weave a fishing net", true));
+        assertEquals("CRAFT_NET", classify("knot a fish net from cordage"));
+        assertEquals("CRAFT_NET", classify("make a landing net"));
+        assertEquals("CRAFT_NET", classify("braid a net from the cordage"));
+        // Using a net to fish is still fishing, not net-making.
+        assertEquals("FISH", classify("cast the net across the pool"));
+        assertEquals("FISH", classify("haul the net in"));
         // Genuine fishing still classifies.
         assertEquals("FISH", classify("fish the stream with a spear"));
+    }
+
+    /** #35: the primitive utility belt is an explicit craft; wearing one is not making one. */
+    @Test void makingAUtilityBeltClassifies() throws Exception {
+        assertEquals("CRAFT_BELT", classify("make a primitive utility belt"));
+        assertEquals("CRAFT_BELT", classify("craft a tool belt from cordage"));
+        assertEquals("CRAFT_BELT", classify("weave a utility belt"));
+        assertEquals("CRAFT_BELT", classify("fashion a belt with tool loops"));
+        // Wearing/putting on a belt carries no craft verb — it equips, it does not build.
+        assertEquals("EQUIP", classify("put on my utility belt"));
+        assertEquals("EQUIP", classify("wear the belt"));
     }
 
     /** Workstations (V69) claim their words before the generic desk/table rule; a plain table is still a desk. */

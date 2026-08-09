@@ -341,10 +341,26 @@ public class PhysicalItemService {
         boolean wantsMushroom = lower.contains("mushroom") || lower.contains("fungi") || lower.contains("fungus");
         boolean wantsBerry = lower.contains("berr");
         final java.util.List<java.util.Map<String,Object>> pool = candidates;
-        java.util.Map<String,Object> target = pool.stream()
+
+        // A specifically named material (vine, bark, root, reed, sap...) that does not grow on this
+        // ground must fail as "not here", never silently become whatever food sorts first — the plain
+        // was crediting "gather tree vines" as berries (#42). Only a GENERIC forage ("gather plants",
+        // "forage for greens") may fall through to best-available food below.
+        String namedTarget = null;
+        for (String s : new String[]{"vine","bark","root","reed","rush","cattail","bulrush","sap","resin",
+                "nettle","yarrow","comfrey","mint","dandelion","wild garlic","burdock","watercress",
+                "chanterelle","porcini","oyster mushroom","polypore","rose hip","elderberry","hawthorn",
+                "juniper","hazel","willow","flax","hemp","withy","thatch","tuber"})
+            if (lower.contains(s)) { namedTarget = s; break; }
+
+        java.util.Optional<java.util.Map<String,Object>> named = pool.stream()
             .filter(c -> lower.contains(((String)c.get("flora_key")).replace("_"," "))
                 || (c.get("drop_item") != null && lower.contains(((String)c.get("drop_item")).replace("_"," "))))
-            .findFirst()
+            .findFirst();
+        if (named.isEmpty() && namedTarget != null && !wantsMushroom && !wantsBerry) {
+            return new String[]{"FAILED", "You look for " + namedTarget + " here, but none grows within reach — this is the wrong ground for it. It wants damper cover, or the trees you would find it under."};
+        }
+        java.util.Map<String,Object> target = named
             .or(() -> pool.stream().filter(c -> !Boolean.TRUE.equals(c.get("is_poisonous")) && (
                 (wantsMushroom && "FUNGI".equals(c.get("organism_type")) && "FOOD".equals(c.get("drop_category")))
                 || (wantsBerry && c.get("drop_item") != null && ((String)c.get("drop_item")).contains("berr"))))
@@ -948,6 +964,48 @@ public class PhysicalItemService {
     }
     @Transactional public ItemView craftPrimitiveSpear(Instant at) { UUID chronicle=activeChronicle(); if(!hasAtLeast(chronicle,"dry_branch",1)||!hasAtLeast(chronicle,"field_stone",1)||!hasAtLeast(chronicle,"plant_fiber",1))throw new IllegalStateException("Insufficient physical material."); if(!consumeOne(chronicle,"dry_branch",at)||!consumeOne(chronicle,"field_stone",at)||!consumeOne(chronicle,"plant_fiber",at))throw new IllegalStateException("Material changed."); UUID spear=UUID.randomUUID(); createCraftedItem(chronicle,chronicleLocation(chronicle),spear,"primitive_spear","Primitive spear",at,"CRAFTED",QualityGrade.SOUND); return new ItemView(spear,"Primitive spear","primitive_spear",chronicle,null); }
     @Transactional public ItemView craftPrimitiveTool(String itemKey, String displayName, boolean needsBranch, Instant at) { UUID chronicle=activeChronicle(); if(!hasAtLeast(chronicle,"field_stone",1)||!hasAtLeast(chronicle,"plant_fiber",1)||(needsBranch&&!hasAtLeast(chronicle,"dry_branch",1)))throw new IllegalStateException("Insufficient physical material."); if(!consumeOne(chronicle,"field_stone",at)||!consumeOne(chronicle,"plant_fiber",at)||(needsBranch&&!consumeOne(chronicle,"dry_branch",at)))throw new IllegalStateException("Material changed."); UUID tool=UUID.randomUUID(); createCraftedItem(chronicle,chronicleLocation(chronicle),tool,itemKey,displayName,at,"CRAFTED",QualityGrade.SOUND); return new ItemView(tool,displayName,itemKey,chronicle,null); }
+
+    /** Reachable count of a material — carried, in carried containers, or on the ground/store at {@code location}. */
+    @Transactional(readOnly = true)
+    public int reachCountAt(UUID chronicle, UUID location, String itemKey) { return reachCount(chronicle, location, itemKey); }
+
+    /**
+     * Weave a net from processed fibre cordage (#43/#44). A full fishing net is mesh only; a landing net
+     * adds a bent-branch hoop. The knotting needs a blade to trim and start the cordage, so a cutting tool
+     * is required as with the other primitive crafts. Materials are consumed from reach (carried + on-site
+     * store), and the finished net is a persistent object carried or set down if the load is already full.
+     */
+    @Transactional public ItemView craftFishingNet(boolean landing, Instant at) {
+        UUID chronicle = activeChronicle();
+        int cordage = landing ? 3 : 6;
+        if (!hasCuttingTool(chronicle)) throw new IllegalStateException("A blade is needed to cut and start the cordage.");
+        if (!hasAtLeast(chronicle, "fiber_cordage", cordage) || (landing && !hasAtLeast(chronicle, "dry_branch", 2)))
+            throw new IllegalStateException("Insufficient physical material.");
+        for (int i = 0; i < cordage; i++) if (!consumeOne(chronicle, "fiber_cordage", at)) throw new IllegalStateException("Material changed.");
+        if (landing) for (int i = 0; i < 2; i++) if (!consumeOne(chronicle, "dry_branch", at)) throw new IllegalStateException("Material changed.");
+        String key = landing ? "landing_net" : "fishing_net";
+        String name = landing ? "Hoop landing net" : "Woven fishing net";
+        UUID net = UUID.randomUUID();
+        createCraftedItem(chronicle, chronicleLocation(chronicle), net, key, name, at, "CRAFTED", QualityGrade.SOUND);
+        return new ItemView(net, name, key, chronicle, null);
+    }
+
+    /**
+     * Make a primitive utility belt (#35): a fibre strap with tool loops. Catalogued in Phase 0 with a
+     * technique but no runnable route, so it never assembled. Cordage for the strap + plant fibre for the
+     * loops, and a blade to cut and fit them; the belt equips to the waist (compatibility seeded in V47).
+     */
+    @Transactional public ItemView craftUtilityBelt(Instant at) {
+        UUID chronicle = activeChronicle();
+        if (!hasCuttingTool(chronicle)) throw new IllegalStateException("A blade is needed to cut and fit the strap.");
+        if (!hasAtLeast(chronicle, "fiber_cordage", 2) || !hasAtLeast(chronicle, "plant_fiber", 2))
+            throw new IllegalStateException("Insufficient physical material.");
+        for (int i = 0; i < 2; i++) if (!consumeOne(chronicle, "fiber_cordage", at)) throw new IllegalStateException("Material changed.");
+        for (int i = 0; i < 2; i++) if (!consumeOne(chronicle, "plant_fiber", at)) throw new IllegalStateException("Material changed.");
+        UUID belt = UUID.randomUUID();
+        createCraftedItem(chronicle, chronicleLocation(chronicle), belt, "utility_belt", "Primitive utility belt", at, "CRAFTED", QualityGrade.SOUND);
+        return new ItemView(belt, "Primitive utility belt", "utility_belt", chronicle, null);
+    }
 
     /** True if the Chronicle can reach any blade capable of carving wood. */
     @Transactional(readOnly = true)
