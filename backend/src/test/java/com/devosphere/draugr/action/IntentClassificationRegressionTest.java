@@ -201,6 +201,23 @@ class IntentClassificationRegressionTest {
         assertEquals("STORE", classify("put the stone in the basket"));
     }
 
+    /** M1 #65 non-visual senses: listen / smell / feel / search resolve to their canonical perception intents. */
+    @Test void sensoryPerceptionVerbsClassify() throws Exception {
+        assertEquals("LISTEN", classify("listen closely for anything moving"));
+        assertEquals("SMELL", classify("smell the air"));
+        assertEquals("SMELL", classify("sniff the water"));
+        assertEquals("FEEL", classify("feel the ground for damp"));
+        assertEquals("FEEL", classify("touch the bark"));
+        assertEquals("SEARCH", classify("search the ground here", false));
+        assertEquals("SEARCH", classify("check beneath the fallen leaves", false));
+        assertEquals("SEARCH", classify("rummage through the leaf litter", false));
+        // Boundaries: specific prospecting and tracking still claim their own searches.
+        assertEquals("GATHER_MINERAL", classify("search the rocks for flint"));
+        assertEquals("TRACK", classify("look for tracks on the ground"));
+        // A bare look-around is still the whole-scene survey, not a sense.
+        assertEquals("OBSERVE", classify("look around carefully"));
+    }
+
     /** Workstations (V69) claim their words before the generic desk/table rule; a plain table is still a desk. */
     @Test void workstationsClassifyBeforePlainFurniture() throws Exception {
         assertEquals("CRAFT_WORKSTATION", classify("build a woodworking bench"));

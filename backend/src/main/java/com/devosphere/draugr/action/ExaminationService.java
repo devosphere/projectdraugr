@@ -122,6 +122,81 @@ public class ExaminationService {
         return b.toString().trim();
     }
 
+    /** The non-visual senses (#65): what the ground, air, water, fire, weather, and living things here give to
+     *  ears, nose, and hands — or a careful search of the ground. Witness-stance, read-only, bounded by weather
+     *  and perception; never a hint at an undiscovered recipe. */
+    public enum Sense { SEARCH, LISTEN, SMELL, FEEL }
+
+    @Transactional(readOnly = true)
+    public String[] sense(UUID chronicle, UUID location, String actionText, Sense sense) {
+        if (location == null) return new String[]{"SUCCEEDED", "Your senses find nothing here to fix on."};
+        String biome = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : "unknown", location);
+        String weather = jdbc.query("SELECT ww.weather_kind FROM world_weather ww JOIN world_chunk c ON c.world_id=ww.world_id WHERE c.id=?", rs -> rs.next() ? rs.getString(1) : null, location);
+        boolean fire = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM fire_state fs JOIN world_object w ON w.id=fs.construction_id WHERE w.current_location_id=? AND fs.active=true)", Boolean.class, location));
+        boolean water = "WETLAND".equals(biome) || "RIVER_BANK".equals(biome) || Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM ecology_site WHERE chunk_id=? AND (site_kind ILIKE '%spring%' OR site_kind ILIKE '%stream%' OR site_kind ILIKE '%river%' OR site_kind ILIKE '%freshwater%'))", Boolean.class, location));
+        boolean wet = "RAIN".equals(weather) || "STORM".equals(weather);
+        double acuity = Math.min(1.0, 0.55 + capability.familiarity(chronicle, "ATTENTION"));
+        StringBuilder b = new StringBuilder();
+        switch (sense) {
+            case LISTEN -> {
+                b.append("You hold still and listen. ");
+                if (wet) b.append("Rain hisses across leaf and ground. ");
+                else if ("SNOW".equals(weather)) b.append("The snow deadens everything to a hush. ");
+                else b.append(switch (biome == null ? "" : biome) {
+                    case "TEMPERATE_FOREST" -> "Wind moves in the high branches. ";
+                    case "GRASSLAND" -> "Wind combs steadily through the grass. ";
+                    case "MOUNTAIN", "HIGHLAND" -> "The wind knocks about the bare rock. ";
+                    default -> "The air is mostly still. "; });
+                if (fire) b.append("Your fire ticks and settles close by. ");
+                if (water) b.append("Somewhere near, water runs over stone. ");
+                String life = presentLife(location, acuity);
+                if (!life.isEmpty()) b.append(life);
+            }
+            case SMELL -> {
+                b.append("You draw a slow breath through your nose. ");
+                if (fire) b.append("Woodsmoke hangs sharp in the air. ");
+                if (wet) b.append("The ground gives up a wet, mineral smell. ");
+                if (water) b.append("There is the cool, green smell of open water. ");
+                b.append(switch (biome == null ? "" : biome) {
+                    case "TEMPERATE_FOREST" -> "Leaf mould and resin underlie it all. ";
+                    case "GRASSLAND" -> "Crushed grass and sun-dried earth. ";
+                    case "WETLAND" -> "Damp rot and standing water. ";
+                    case "MOUNTAIN", "HIGHLAND" -> "Cold, thin air with little scent to it. ";
+                    default -> "Little reaches you but cold air. "; });
+                Integer carc = jdbc.queryForObject("SELECT COUNT(*) FROM world_object WHERE current_location_id=? AND object_type='CARCASS' AND lifecycle_state='ACTIVE'", Integer.class, location);
+                if (carc != null && carc > 0) b.append("Under it runs the faint rot of something dead nearby. ");
+            }
+            case FEEL -> {
+                Map<String, Object> item = resolveItem(chronicle, actionText == null ? "" : actionText.toLowerCase(Locale.ROOT));
+                if (item != null) { b.append("You run your hands over it. ").append(inspectItem(item, tier(capability.familiarity(chronicle, "ATTENTION")))); }
+                else {
+                    b.append("You set your hand to the ground. ");
+                    b.append(switch (biome == null ? "" : biome) {
+                        case "TEMPERATE_FOREST" -> "It is soft with damp leaf litter. ";
+                        case "GRASSLAND" -> "Dry grass over firm, warm earth. ";
+                        case "MOUNTAIN", "HIGHLAND" -> "Cold, hard, gritted stone. ";
+                        case "WETLAND" -> "Wet, yielding mud that clings. ";
+                        default -> "Bare, ordinary ground. "; });
+                    if (wet) b.append("Everything is slick and cold with rain. ");
+                    else if ("SNOW".equals(weather)) b.append("The cold bites at your fingers. ");
+                }
+            }
+            case SEARCH -> {
+                b.append("You go over the ground with care. ");
+                List<String> ground = orEmpty(jdbc.query(
+                    "SELECT w.display_name FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
+                    "WHERE w.current_location_id=? AND w.current_owner_id IS NULL AND w.lifecycle_state='ACTIVE' ORDER BY w.display_name LIMIT 6",
+                    (rs, i) -> rs.getString(1).toLowerCase(Locale.ROOT), location));
+                if (!ground.isEmpty()) b.append("On the ground you turn up ").append(joinAnd(ground)).append(". ");
+                String life = presentLife(location, acuity);
+                if (!life.isEmpty()) b.append(life);
+                if (ground.isEmpty() && (life == null || life.isEmpty())) b.append("Nothing here rewards the search. ");
+            }
+        }
+        return new String[]{"SUCCEEDED", b.toString().trim()};
+    }
+
     private static <T> List<T> orEmpty(List<T> l) { return l == null ? List.of() : l; }
     private static String humanize(String key) { return key == null ? "" : key.replace('_', ' '); }
     private static String capitalize(String s) { return s == null || s.isEmpty() ? s : Character.toUpperCase(s.charAt(0)) + s.substring(1); }
