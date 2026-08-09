@@ -121,6 +121,28 @@ public class FireService {
         jdbc.update("UPDATE fire_state SET fuel_minutes=fuel_minutes+45,last_updated_at=? WHERE construction_id=?",Timestamp.from(now),pit);
         return true;
     }
+    /** The active fire burning here, or null (#71). */
+    private UUID activeFirePit(UUID location) {
+        return jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id JOIN fire_state fs ON fs.construction_id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='STONE_FIRE_PIT' AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' AND fs.active=true LIMIT 1 FOR UPDATE", rs->rs.next()?rs.getObject(1,UUID.class):null, location);
+    }
+    /** Put a fire out (#71): the flame dies and the fuel is done. */
+    @Transactional
+    public boolean extinguish(UUID location, Instant now) {
+        UUID pit=activeFirePit(location);
+        if(pit==null) return false;
+        jdbc.update("UPDATE fire_state SET active=false, fuel_minutes=0, last_updated_at=? WHERE construction_id=?",Timestamp.from(now),pit);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'FIRE_EXTINGUISHED','{}'::jsonb)",pit,Timestamp.from(now));
+        return true;
+    }
+    /** Bank a fire (#71): rake the coals together and cover them so the embers hold far longer than an open flame. */
+    @Transactional
+    public boolean bank(UUID location, Instant now) {
+        UUID pit=activeFirePit(location);
+        if(pit==null) return false;
+        jdbc.update("UPDATE fire_state SET fuel_minutes=LEAST(fuel_minutes+90,240), last_updated_at=? WHERE construction_id=?",Timestamp.from(now),pit);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'FIRE_BANKED','{}'::jsonb)",pit,Timestamp.from(now));
+        return true;
+    }
     @Transactional
     public boolean cookGameMeat(UUID chronicle, UUID location, Instant now) {
         Integer active = jdbc.queryForObject("SELECT COUNT(*) FROM construction_project cp JOIN world_object w ON w.id=cp.object_id JOIN fire_state fs ON fs.construction_id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='STONE_FIRE_PIT' AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' AND fs.active=true", Integer.class, location);

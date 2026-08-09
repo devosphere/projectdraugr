@@ -309,6 +309,19 @@ class IntentClassificationRegressionTest {
         assertEquals("WORK_LEAN_TO", classify("work on the lean-to"));
     }
 
+    /** M1 #71 fire management: extinguish/bank/tend, checked before the ignition rules. */
+    @Test void fireManagementClassify() throws Exception {
+        assertEquals("EXTINGUISH_FIRE", classify("put out the fire"));
+        assertEquals("EXTINGUISH_FIRE", classify("extinguish the fire"));
+        assertEquals("EXTINGUISH_FIRE", classify("douse the fire with water"));
+        assertEquals("BANK_FIRE", classify("bank the fire for the night"));
+        assertEquals("BANK_FIRE", classify("cover the coals to keep the embers"));
+        assertEquals("FEED_FIRE", classify("tend the fire"));
+        assertEquals("FEED_FIRE", classify("keep the fire going"));
+        // Lighting a fire is still LIGHT_FIRE, not extinguishing.
+        assertEquals("LIGHT_FIRE", classify("light a fire with the bow drill"));
+    }
+
     /** Workstations (V69) claim their words before the generic desk/table rule; a plain table is still a desk. */
     @Test void workstationsClassifyBeforePlainFurniture() throws Exception {
         assertEquals("CRAFT_WORKSTATION", classify("build a woodworking bench"));
