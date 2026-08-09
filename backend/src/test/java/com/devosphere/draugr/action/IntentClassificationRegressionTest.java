@@ -82,6 +82,26 @@ class IntentClassificationRegressionTest {
         assertEquals("SLEEP", classify("sleep for a few hours", false));
     }
 
+    /**
+     * #71 camp upkeep: make_bed and maintain_camp classify, without stealing "bed down" (sleep) or the
+     * raised-platform assembly phrase; and the cooking-verb aliases reach COOK_MEAT when flesh is named.
+     */
+    @Test void campUpkeepAndCookingAliasesClassify() throws Exception {
+        assertEquals("MAKE_BED", classify("make a bed of dry grass", false));
+        assertEquals("MAKE_BED", classify("prepare bedding for the night", false));
+        assertEquals("MAKE_BED", classify("lay a bed of reeds", false));
+        assertEquals("MAINTAIN_CAMP", classify("tidy the camp", false));
+        assertEquals("MAINTAIN_CAMP", classify("arrange the campsite", false));
+        assertEquals("MAINTAIN_CAMP", classify("protect the camp supplies", false));
+        // "bed down for the night" is sleeping, and the raised platform is an assembly, not a bed.
+        assertEquals("SLEEP", classify("bed down for the night", false));
+        assertEquals("UNKNOWN", classify("build a raised sleeping platform", false));
+        // Cooking verbs reach COOK_MEAT when flesh is named.
+        assertEquals("COOK_MEAT", classify("grill the meat over the fire", false));
+        assertEquals("COOK_MEAT", classify("stew the game in a pot", false));
+        assertEquals("COOK_MEAT", classify("bake the meat in the coals", false));
+    }
+
     /** A named specific basket yields to its process; the generic basket does not. */
     @Test void specificBasketsYieldToTheProcess() throws Exception {
         assertEquals("UNKNOWN", classify("weave a burden basket", false));

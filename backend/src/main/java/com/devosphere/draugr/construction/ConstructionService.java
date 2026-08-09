@@ -45,6 +45,60 @@ public class ConstructionService {
         return true;
     }
 
+    /** Bedding material a bed can be laid from, best first — all reachable first-era plant stock (#71 make_bed). */
+    private static final String[][] BEDDING = {{"straw_bundle","straw"},{"reed_bundle","reed"},{"thatch_bundle","thatch"},{"plant_fiber","plant fibre"}};
+
+    /**
+     * Lay (or freshen) a bedding pallet here (#71 make_bed): a persistent GROUND_BED construction gathered from
+     * carried plant stock. It is not shelter — it does not stop weather — but a body off the cold, wet ground
+     * sleeps less broken, and the exposure model reads the bed from its completed form, not from having tried.
+     * Fails grounded with no bedding stuff to hand; refreshes an existing bed here rather than stacking a second.
+     */
+    @Transactional
+    public String[] makeBed(UUID chronicle, UUID location, Instant at) {
+        String used = null, label = null;
+        for (String[] b : BEDDING) if (items.hasAtLeast(chronicle, b[0], 1)) { used = b[0]; label = b[1]; break; }
+        if (used == null) return new String[]{"FAILED", "You cast about for something soft and dry to lie on, but you have nothing to make a bed of — no grass, reed, straw, or fibre to hand."};
+        UUID existing = jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='GROUND_BED' AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' LIMIT 1 FOR UPDATE", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, location);
+        if (!items.consumeOne(chronicle, used, at)) throw new IllegalStateException("Reachable bedding material changed during the action.");
+        Timestamp ts = Timestamp.from(at);
+        if (existing != null) {
+            jdbc.update("UPDATE construction_project SET integrity_percent=100,last_structural_update=? WHERE object_id=?", ts, existing);
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'BEDDING_REFRESHED',jsonb_build_object('material',?))", existing, ts, used);
+            return new String[]{"SUCCEEDED", "You work fresh " + label + " into the bedding, and the bed lies dry and springing again."};
+        }
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CONSTRUCTION','Bedding pallet',?)", id, location);
+        jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at) VALUES (?,'GROUND_BED','COMPLETED',100,?)", id, ts);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CONSTRUCTED',jsonb_build_object('projectKind','GROUND_BED','material',?))", id, ts, used);
+        return new String[]{"SUCCEEDED", "You gather " + label + " into a thick, dry pallet and lay it out — a place to sleep up off the bare cold ground."};
+    }
+
+    /**
+     * Tend the camp here (#71 maintain_camp): go over what stands, setting decayed constructions a little back
+     * toward true and ordering the site around them. Grounded — with nothing built here there is no camp to tend.
+     * Its benefit is the real integrity it restores; the small easing of mind is applied by the caller.
+     */
+    @Transactional
+    public String[] maintainCamp(UUID chronicle, UUID location, Instant at) {
+        List<UUID> here = jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' AND cp.state='COMPLETED' FOR UPDATE", (rs, r) -> rs.getObject(1, UUID.class), location);
+        if (here.isEmpty()) return new String[]{"FAILED", "You look around to set a camp in order, but there is nothing built here to tend."};
+        Timestamp ts = Timestamp.from(at);
+        int tended = 0;
+        for (UUID id : here) {
+            Integer integ = jdbc.queryForObject("SELECT integrity_percent FROM construction_project WHERE object_id=?", Integer.class, id);
+            if (integ != null && integ < 100) {
+                jdbc.update("UPDATE construction_project SET integrity_percent=LEAST(100,integrity_percent+10),last_structural_update=? WHERE object_id=?", ts, id);
+                jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CAMP_MAINTAINED','{}'::jsonb)", id, ts);
+                tended++;
+            }
+        }
+        String tail = tended == 0
+            ? "Everything here already stands sound; you set what little is astray back in its place."
+            : "You go over what stands here, working " + tended + " thing" + (tended == 1 ? "" : "s") + " back toward true and ordering the camp around them.";
+        return new String[]{"SUCCEEDED", "You tidy the camp — stowing what is loose, righting what has shifted. " + tail};
+    }
+
     /**
      * Dismantle / salvage a reachable construction here (#70): the named one, else the only one. It keeps its
      * UUID and full history (marked DESTROYED with cause DISMANTLED, never deleted) and yields only a FRACTION

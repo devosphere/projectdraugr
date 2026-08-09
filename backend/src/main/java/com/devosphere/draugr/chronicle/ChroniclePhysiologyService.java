@@ -208,12 +208,26 @@ public class ChroniclePhysiologyService {
         jdbc.update("UPDATE chronicle_physiology SET stress_level=GREATEST(0,stress_level-5), pain_level=GREATEST(0,pain_level-2) WHERE chronicle_id=?", chronicleId);
         refreshBody(chronicleId);
     }
+    /** The small easing of mind that comes of setting a camp in order (#71 maintain_camp). */
+    @Transactional
+    public void settleCamp(UUID chronicleId) {
+        jdbc.update("UPDATE chronicle_physiology SET stress_level=GREATEST(0,stress_level-6) WHERE chronicle_id=?", chronicleId);
+        refreshBody(chronicleId);
+    }
+    /**
+     * A bed the chronicle can lie on here (#71): a laid pallet or a raised platform, off the cold, wet ground.
+     * Not shelter — it turns no weather — but it makes rest and even exposed sleep markedly less broken.
+     */
+    private boolean beddedAt(UUID chronicleId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object bed ON bed.id=cp.object_id JOIN world_object body ON body.current_location_id=bed.current_location_id WHERE body.id=? AND cp.project_kind IN ('GROUND_BED','RAISED_SLEEPING_PLATFORM') AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND bed.lifecycle_state='ACTIVE')", Boolean.class, chronicleId));
+    }
     @Transactional
     public void rest(UUID chronicleId, int minutes) {
         double hours = minutes / 60.0;
         Boolean sheltered = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object shelter ON shelter.id=cp.object_id JOIN world_object body ON body.current_location_id=shelter.current_location_id WHERE body.id=? AND cp.project_kind IN ('LEAN_TO','WATTLE_AND_DAUB_HUT','EARTH_SHELTERED_HUT') AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND shelter.lifecycle_state='ACTIVE')", Boolean.class, chronicleId);
-        double recovery = Boolean.TRUE.equals(sheltered) ? 1.25 : 1.0;
-        int drying = Boolean.TRUE.equals(sheltered) ? Math.max(1, (int)Math.round(hours * 8)) : 0;
+        boolean bed = beddedAt(chronicleId);
+        double recovery = Boolean.TRUE.equals(sheltered) ? 1.25 : (bed ? 1.12 : 1.0);
+        int drying = Boolean.TRUE.equals(sheltered) ? Math.max(1, (int)Math.round(hours * 8)) : (bed ? Math.max(1, (int)Math.round(hours * 3)) : 0);
         jdbc.update("UPDATE chronicle_physiology SET sleep_debt_hours=GREATEST(0,sleep_debt_hours-?),energy_level=LEAST(100,energy_level+?),pain_level=GREATEST(0,pain_level-?),stress_level=GREATEST(0,stress_level-?),wetness_level=GREATEST(0,wetness_level-?) WHERE chronicle_id=?", hours * .85 * recovery, Math.max(1, (int)Math.round(hours * 9 * recovery)), Math.max(0, (int)Math.round(hours * recovery)), Math.max(0, (int)Math.round(hours * 2 * recovery)), drying, chronicleId);
         refreshBody(chronicleId);
     }
@@ -223,10 +237,11 @@ public class ChroniclePhysiologyService {
         double hours = minutes / 60.0;
         Boolean sheltered = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object shelter ON shelter.id=cp.object_id JOIN world_object body ON body.current_location_id=shelter.current_location_id WHERE body.id=? AND cp.project_kind IN ('LEAN_TO','WATTLE_AND_DAUB_HUT','EARTH_SHELTERED_HUT') AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND shelter.lifecycle_state='ACTIVE')", Boolean.class, chronicleId);
         boolean safe = Boolean.TRUE.equals(sheltered);
-        // Sheltered sleep is deep and restorative; exposed sleep on bare ground is
-        // broken and shallow, clearing far less debt and leaving stress behind.
-        double recovery = safe ? 1.5 : 0.7;
-        int drying = safe ? Math.max(1, (int)Math.round(hours * 9)) : 0;
+        boolean bed = beddedAt(chronicleId);
+        // Sheltered sleep is deep and restorative; a bed off the cold, wet ground makes
+        // exposed sleep far less broken than lying on bare earth, though it turns no weather.
+        double recovery = safe ? 1.5 : (bed ? 1.0 : 0.7);
+        int drying = safe ? Math.max(1, (int)Math.round(hours * 9)) : (bed ? Math.max(1, (int)Math.round(hours * 4)) : 0);
         jdbc.update("UPDATE chronicle_physiology SET sleep_debt_hours=GREATEST(0,sleep_debt_hours-?),energy_level=LEAST(100,energy_level+?),pain_level=GREATEST(0,pain_level-?),stress_level=GREATEST(0,stress_level-?),wetness_level=GREATEST(0,wetness_level-?) WHERE chronicle_id=?", hours * 1.1 * recovery, Math.max(1, (int)Math.round(hours * 12 * recovery)), Math.max(0, (int)Math.round(hours * 1.5 * recovery)), Math.max(0, (int)Math.round(hours * 3 * recovery)), drying, chronicleId);
         refreshBody(chronicleId);
         return safe;
