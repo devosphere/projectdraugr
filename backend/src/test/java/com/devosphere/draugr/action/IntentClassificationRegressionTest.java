@@ -162,6 +162,33 @@ class IntentClassificationRegressionTest {
         assertEquals("PICK_UP", classify("pick it back up off the ground"));
     }
 
+    /**
+     * M1 #67 action-catalogue aliases: the exact take/place/store/retrieve synonyms must resolve to their
+     * canonical manipulation intent, never a generic validation handler.
+     */
+    @Test void manipulationCatalogueAliasesResolve() throws Exception {
+        // take / retrieve family -> PICK_UP
+        assertEquals("PICK_UP", classify("lift the log"));
+        assertEquals("PICK_UP", classify("fetch the basket"));
+        assertEquals("PICK_UP", classify("unpack the cordage from the pack basket"));
+        assertEquals("PICK_UP", classify("take the knife from storage"));
+        assertEquals("PICK_UP", classify("recover my spear"));
+        // place / drop family -> DROP
+        assertEquals("DROP", classify("lay down the bundle"));
+        assertEquals("DROP", classify("place the stone on the ground"));
+        assertEquals("DROP", classify("set the log down here"));
+        assertEquals("DROP", classify("put the axe aside"));
+        // store / cache family -> STORE
+        assertEquals("STORE", classify("put the meat away"));
+        assertEquals("STORE", classify("cache the dried meat"));
+        assertEquals("STORE", classify("stockpile the firewood"));
+        assertEquals("STORE", classify("stow the tools in the chest"));
+        // Boundary: bathing, gathering raw growth, and setting traps are NOT manipulation-catalogue verbs.
+        assertEquals("WASH", classify("take a bath in the stream"));
+        assertEquals("GATHER_FIBER", classify("collect plant fiber from the undergrowth", false));
+        assertEquals("SET_TRAP", classify("place a fish trap in the shallows"));
+    }
+
     /** Workstations (V69) claim their words before the generic desk/table rule; a plain table is still a desk. */
     @Test void workstationsClassifyBeforePlainFurniture() throws Exception {
         assertEquals("CRAFT_WORKSTATION", classify("build a woodworking bench"));
