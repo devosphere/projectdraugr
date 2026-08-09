@@ -193,6 +193,34 @@ public class PhysicalItemService {
     @Transactional(readOnly = true)
     public int sustainedMassCapacity(UUID chronicle) { return loadState(chronicle).sustainedMassCapacityGrams(); }
 
+    // ---- water handling (#71) ----------------------------------------------------------------------------
+    private static final String[] WATER_VESSELS = {"waterskin","wooden_bucket","clay_pot","clay_jar","fired_bowl","fired_cup","clay_water_filter","wooden_bowl","wooden_trough"};
+    /** Whether the Chronicle carries anything that can hold water to fill or boil in (#71). */
+    @Transactional(readOnly = true)
+    public boolean hasWaterVessel(UUID chronicle) { for (String v : WATER_VESSELS) if (hasAtLeast(chronicle, v, 1)) return true; return false; }
+    /** Create up to {@code count} units of a water kind, capped by carry room. Returns how many were made. */
+    @Transactional
+    public int makeWater(UUID chronicle, String key, String name, int count, Instant at) {
+        int made = 0;
+        for (int i = 0; i < count; i++) { if (capacityHeadroomUnits(chronicle, key) < 1) break; createCarriedItem(chronicle, key, name, at, "COLLECTED"); made++; }
+        return made;
+    }
+    /** Convert up to {@code max} carried units of one water kind into another (raw→filtered, raw→boiled). */
+    @Transactional
+    public int convertWater(UUID chronicle, String fromKey, String toKey, String toName, int max, Instant at) {
+        int n = 0;
+        for (int i = 0; i < max; i++) { if (!hasAtLeast(chronicle, fromKey, 1) || !consumeOne(chronicle, fromKey, at)) break; createCarriedItem(chronicle, toKey, toName, at, "PROCESSED"); n++; }
+        return n;
+    }
+    /** The safest water the Chronicle carries — boiled &gt; filtered &gt; raw — or null if none. */
+    @Transactional(readOnly = true)
+    public String bestWaterCarried(UUID chronicle) {
+        if (hasAtLeast(chronicle, "clean_water", 1)) return "clean_water";
+        if (hasAtLeast(chronicle, "filtered_water", 1)) return "filtered_water";
+        if (hasAtLeast(chronicle, "raw_water", 1)) return "raw_water";
+        return null;
+    }
+
     /** The chunk the Chronicle currently stands in — where a too-heavy craft is set down. */
     private UUID chronicleLocation(UUID chronicle) {
         return jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);

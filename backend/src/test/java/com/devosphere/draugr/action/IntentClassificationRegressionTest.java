@@ -337,6 +337,18 @@ class IntentClassificationRegressionTest {
         assertEquals("UNKNOWN", classify("tan the animal hide", true));
     }
 
+    /** M1 #71 water handling: collect / boil / filter water route distinctly; drinking still classifies. */
+    @Test void waterHandlingClassify() throws Exception {
+        assertEquals("COLLECT_WATER", classify("collect water from the stream"));
+        assertEquals("COLLECT_WATER", classify("fill my waterskin"));
+        assertEquals("COLLECT_WATER", classify("fetch water"));
+        assertEquals("BOIL_WATER", classify("boil the water to make it safe"));
+        assertEquals("FILTER_WATER", classify("filter the water through the clay filter"));
+        // Drinking is still DRINK; collecting is not gathering.
+        assertEquals("DRINK", classify("drink from the stream"));
+        assertEquals("DRINK", classify("take a drink of water"));
+    }
+
     /** Workstations (V69) claim their words before the generic desk/table rule; a plain table is still a desk. */
     @Test void workstationsClassifyBeforePlainFurniture() throws Exception {
         assertEquals("CRAFT_WORKSTATION", classify("build a woodworking bench"));

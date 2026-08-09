@@ -261,6 +261,24 @@ class PlaytestBugFixesIntegrationTest {
         assertTrue(items.sustainedMassCapacity(chronicle) > baseline, "an equipped carrying aid raises sustained mass capacity (#57)");
     }
 
+    /** M1 #71 — boiling converts raw water to clean, and DRINK prefers the safest water carried. */
+    @Test @Order(11)
+    void waterBoilsCleanAndDrinkPrefersIt() {
+        UUID chronicle = chronicle();
+        items.createCarriedItem(chronicle, "raw_water", "Raw water", now(), "TEST_SEED");
+        items.createCarriedItem(chronicle, "raw_water", "Raw water", now(), "TEST_SEED");
+        int boiled = items.convertWater(chronicle, "raw_water", "clean_water", "Boiled water", 3, now());
+        assertEquals(2, boiled, "boiling converts all carried raw water to clean water");
+        assertEquals("clean_water", items.bestWaterCarried(chronicle), "boiled water is the safest carried");
+        // Add a raw unit back; DRINK must still prefer the clean water first.
+        items.createCarriedItem(chronicle, "raw_water", "Raw water", now(), "TEST_SEED");
+        int cleanBefore = (int) jdbc.queryForObject("SELECT COUNT(*) FROM item_instance i JOIN world_object w ON w.id=i.object_id WHERE i.item_key='clean_water' AND w.lifecycle_state='ACTIVE' AND w.current_owner_id=?", Integer.class, chronicle);
+        ChronicleActionService.ActionResult drank = actions.resolve("I drink from my waterskin.");
+        assertEquals("SUCCEEDED", drank.outcome(), () -> "drinking must succeed: " + drank.perception());
+        int cleanAfter = (int) jdbc.queryForObject("SELECT COUNT(*) FROM item_instance i JOIN world_object w ON w.id=i.object_id WHERE i.item_key='clean_water' AND w.lifecycle_state='ACTIVE' AND w.current_owner_id=?", Integer.class, chronicle);
+        assertEquals(cleanBefore - 1, cleanAfter, "DRINK consumes the boiled water first, not the raw");
+    }
+
     /** #39 — carving a mark and naming the place in one act must not raise a raw persistence error. */
     @Test @Order(5)
     void markAndNameDoesNotRaiseAPersistenceError() {

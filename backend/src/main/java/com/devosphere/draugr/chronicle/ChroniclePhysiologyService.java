@@ -166,6 +166,13 @@ public class ChroniclePhysiologyService {
         jdbc.update("UPDATE chronicle_physiology SET hours_without_water=GREATEST(0,hours_without_water-10) WHERE chronicle_id=?", chronicleId);
         refreshBody(chronicleId);
     }
+    /** Gut-illness load from drinking untreated water (#71/#59): a small rise in illness that accumulates —
+     *  drinking raw or from a standing source repeatedly is how a Chronicle sickens. Boiled water carries none. */
+    @Transactional
+    public void applyWaterborneRisk(UUID chronicleId, int severity) {
+        jdbc.update("UPDATE chronicle_physiology SET illness_severity=LEAST(100,illness_severity+?) WHERE chronicle_id=?", Math.max(0, severity), chronicleId);
+        refreshBody(chronicleId);
+    }
     @Transactional
     public void wash(UUID chronicleId) {
         jdbc.update("UPDATE chronicle_physiology SET hygiene_level=LEAST(100,hygiene_level+28),wetness_level=LEAST(100,wetness_level+18),stress_level=GREATEST(0,stress_level-4) WHERE chronicle_id=?", chronicleId);
