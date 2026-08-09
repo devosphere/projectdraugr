@@ -322,6 +322,21 @@ class IntentClassificationRegressionTest {
         assertEquals("LIGHT_FIRE", classify("light a fire with the bow drill"));
     }
 
+    /** M1 #72 terrain crossing + disengage: wade/ford/swim/climb toward a direction is movement; retreat/flee/hide break off. */
+    @Test void terrainCrossingAndDisengageClassify() throws Exception {
+        assertEquals("MOVE", classify("wade across the stream to the north"));
+        assertEquals("MOVE", classify("swim north across the river"));
+        assertEquals("MOVE", classify("climb up the slope to the east"));
+        assertEquals("MOVE", classify("ford the river heading west"));
+        assertEquals("DISENGAGE", classify("back away from the bear"));
+        assertEquals("DISENGAGE", classify("flee the wolves"));
+        assertEquals("DISENGAGE", classify("retreat to safer ground"));
+        assertEquals("DISENGAGE", classify("hide from the boar"));
+        assertEquals("DISENGAGE", classify("run away"));
+        // "hide" as a noun (working leather) is untouched — needs a process/harvest verb, routed elsewhere.
+        assertEquals("UNKNOWN", classify("tan the animal hide", true));
+    }
+
     /** Workstations (V69) claim their words before the generic desk/table rule; a plain table is still a desk. */
     @Test void workstationsClassifyBeforePlainFurniture() throws Exception {
         assertEquals("CRAFT_WORKSTATION", classify("build a woodworking bench"));
