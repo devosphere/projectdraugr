@@ -95,6 +95,24 @@ class IntentClassificationRegressionTest {
         assertEquals("OBSERVE", classify("look around the clearing"));
     }
 
+    /**
+     * #33: "inspect/examine the <subject>" scopes to that subject (routes to the subject-resolving EXAMINE),
+     * not the broad OBSERVE survey — while genuine scenery ("the area/clearing/around") stays OBSERVE.
+     */
+    @Test void inspectingASubjectScopesToIt() throws Exception {
+        assertEquals("EXAMINE", classify("inspect the branch"));
+        assertEquals("EXAMINE", classify("inspect the woven basket"));
+        assertEquals("EXAMINE", classify("examine the carcass"));
+        assertEquals("EXAMINE", classify("inspect the fire pit"));
+        assertEquals("EXAMINE", classify("examine a strange stone"));
+        // Scenery-scoped looks remain the whole-scene survey.
+        assertEquals("OBSERVE", classify("inspect the clearing"));
+        assertEquals("OBSERVE", classify("inspect the area around me"));
+        assertEquals("OBSERVE", classify("examine the surroundings"));
+        // Quality/assembly inspection still claims its context first (M3b).
+        assertEquals("INSPECT", classify("inspect the quality of my materials"));
+    }
+
     /** #32: bathing/taking a bath is washing; #36/#43/#44: making a net is an explicit craft, not fishing. */
     @Test void bathIsWashingAndMakingANetIsNotFishing() throws Exception {
         assertEquals("WASH", classify("take a bath in the stream"));

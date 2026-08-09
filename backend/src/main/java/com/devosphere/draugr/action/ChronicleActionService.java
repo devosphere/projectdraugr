@@ -767,7 +767,14 @@ public class ChronicleActionService {
         // "look around" stay OBSERVE, the whole-surroundings survey; "the …" is too often scenery to claim.
         if(value.contains("analyze")||value.contains("analyse")) return Intent.ANALYZE;
         if(value.contains("investigate")) return Intent.INVESTIGATE;
+        // The examination verbs scope to one subject (#25/#33). A pointed determiner (this/that/my...) always
+        // marks one, but so does "inspect/examine the <thing>" — the E2E defect (#33) was that "inspect the
+        // branch" fell through to the whole-scene OBSERVE. Only genuine SCENERY ("the area/clearing/around")
+        // stays OBSERVE; a named subject routes to EXAMINE, which resolves the reachable item the text names
+        // (or a specific feature) and falls back to the place gracefully when there is no such subject.
+        boolean examineScenery = value.contains("area")||value.contains("clearing")||value.contains("surrounding")||value.contains("around")||value.contains("horizon")||value.contains("distance")||value.contains("landscape")||value.contains("terrain")||value.contains("the view")||value.contains("the scene")||value.contains("whole place")||value.contains("everything");
         if((value.contains("inspect")||value.contains("examine"))&&(value.contains(" this ")||value.contains(" that ")||value.contains(" my ")||value.contains(" these ")||value.contains(" those "))) return Intent.EXAMINE;
+        if((value.contains("inspect")||value.contains("examine"))&&!examineScenery&&(value.contains(" the ")||value.contains(" a ")||value.contains(" an ")||value.contains(" its ")||value.contains(" his ")||value.contains(" her ")||value.contains(" their "))) return Intent.EXAMINE;
         if(value.contains("refine")||value.contains("improve")||value.contains("upgrade")||value.contains("revise")||value.contains("enhance")||(value.contains("add")&&value.contains("holder"))) return Intent.REFINE;
         if(value.contains("designate")||value.contains("christen")||((value.contains("name")||value.contains("call")||value.contains("establish")||value.contains("found")||value.contains("mark"))&&(value.contains("this place")||value.contains("this area")||value.contains("this spot")||value.contains("this location")||value.contains("here as")||value.contains("this as")||value.contains("this the")))) return Intent.DESIGNATE;
         if(value.contains("drop")||value.contains("leave behind")||value.contains("set down")||value.contains("put down")||value.contains("discard")) return Intent.DROP;
