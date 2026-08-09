@@ -218,6 +218,28 @@ class IntentClassificationRegressionTest {
         assertEquals("OBSERVE", classify("look around carefully"));
     }
 
+    /** M1 #65 read / measure / identify: the remaining perception verbs, with their substring boundaries. */
+    @Test void readMeasureIdentifyClassify() throws Exception {
+        // read / review_record -> READ
+        assertEquals("READ", classify("read my journal"));
+        assertEquals("READ", classify("reread the stone tablet"));
+        assertEquals("READ", classify("consult the record"));
+        assertEquals("READ", classify("study the writing on the slab"));
+        // "read the ground/tracks" is tracking, not reading a page; "bread" must not match "read".
+        assertEquals("TRACK", classify("read the ground for tracks"));
+        assertEquals("EAT", classify("eat the bread"));
+        // measure -> MEASURE
+        assertEquals("MEASURE", classify("weigh the stone in my hand"));
+        assertEquals("MEASURE", classify("count how many branches I have"));
+        assertEquals("MEASURE", classify("pace out the distance to the treeline"));
+        assertEquals("MEASURE", classify("test the depth of the water"));
+        // "account"/"discount" must not match "count".
+        assertEquals("UNKNOWN", classify("give an account of the day", false));
+        // identify -> folds into the subject-scoped EXAMINE
+        assertEquals("EXAMINE", classify("identify the mushroom"));
+        assertEquals("EXAMINE", classify("what kind of tree is this"));
+    }
+
     /** Workstations (V69) claim their words before the generic desk/table rule; a plain table is still a desk. */
     @Test void workstationsClassifyBeforePlainFurniture() throws Exception {
         assertEquals("CRAFT_WORKSTATION", classify("build a woodworking bench"));

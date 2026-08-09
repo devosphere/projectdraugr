@@ -197,6 +197,45 @@ public class ExaminationService {
         return new String[]{"SUCCEEDED", b.toString().trim()};
     }
 
+    /** Estimation (#65 measure): weigh/heft or count a named reachable item, sound a water depth, or pace out a
+     *  rough distance — bounded by having no instrument, so the figure is "near enough to plan by, not build to". */
+    @Transactional(readOnly = true)
+    public String[] measure(UUID chronicle, UUID location, String text) {
+        String lower = text == null ? "" : text.toLowerCase(Locale.ROOT);
+        if (lower.contains("weigh") || lower.contains("heavy") || lower.contains("heft") || lower.contains("how much does") || lower.contains("mass of")) {
+            Map<String, Object> item = resolveItem(chronicle, lower);
+            if (item == null) return new String[]{"SUCCEEDED", "You have nothing by that name in hand to weigh."};
+            int g = ((Number) item.get("unit_mass_grams")).intValue();
+            return new String[]{"SUCCEEDED", "You heft the " + ((String) item.get("display_name")).toLowerCase(Locale.ROOT) + " — " + heft(g) + " (about " + g + " g by a careful reckoning)."};
+        }
+        if (lower.contains("count") || lower.contains("how many") || lower.contains("tally")) {
+            Map<String, Object> item = resolveItem(chronicle, lower);
+            if (item == null) return new String[]{"SUCCEEDED", "You look over what you carry, but nothing by that name is here to count."};
+            String key = (String) item.get("item_key"); String name = ((String) item.get("display_name")).toLowerCase(Locale.ROOT);
+            Integer n = jdbc.queryForObject(
+                "WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' " +
+                "UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') " +
+                "SELECT COUNT(*) FROM reachable r JOIN item_instance i ON i.object_id=r.id WHERE i.item_key=?", Integer.class, chronicle, key);
+            int c = n == null ? 0 : n;
+            return new String[]{"SUCCEEDED", "You count " + c + " " + name + (c == 1 ? "" : "s") + " within reach."};
+        }
+        if (lower.contains("depth") || lower.contains("how deep") || lower.contains("sound the")) {
+            String biome = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : "", location);
+            boolean water = "WETLAND".equals(biome) || "RIVER_BANK".equals(biome) || Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM ecology_site WHERE chunk_id=? AND (site_kind ILIKE '%spring%' OR site_kind ILIKE '%stream%' OR site_kind ILIKE '%river%' OR site_kind ILIKE '%freshwater%'))", Boolean.class, location));
+            return water ? new String[]{"SUCCEEDED", "You sound the water with a stick — it shelves off gradually, past a safe wade before long."}
+                         : new String[]{"SUCCEEDED", "There is no standing water here to sound for depth."};
+        }
+        return new String[]{"SUCCEEDED", "You pace it out and reckon by eye. Without any instrument the figure is rough — near enough to plan by, not to build to."};
+    }
+    private static String heft(int g) {
+        if (g < 100) return "next to nothing in the hand";
+        if (g < 500) return "light";
+        if (g < 1500) return "a fair, solid weight";
+        if (g < 5000) return "heavy — a two-handed lift";
+        return "a real burden, awkward to carry far";
+    }
+
     private static <T> List<T> orEmpty(List<T> l) { return l == null ? List.of() : l; }
     private static String humanize(String key) { return key == null ? "" : key.replace('_', ' '); }
     private static String capitalize(String s) { return s == null || s.isEmpty() ? s : Character.toUpperCase(s.charAt(0)) + s.substring(1); }
