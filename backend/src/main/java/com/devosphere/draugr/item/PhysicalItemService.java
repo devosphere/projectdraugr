@@ -1186,6 +1186,11 @@ public class PhysicalItemService {
             .filter(c -> lower.contains(((String)c.get("display_name")).toLowerCase(java.util.Locale.ROOT))).findFirst().orElse(null);
         if (match == null) return new String[]{"FAILED", "You look about, but nothing here by that name lies within reach to take up."};
         UUID id = (UUID) match.get("id"); String key = (String) match.get("item_key"); String name = ((String) match.get("display_name")).toLowerCase(java.util.Locale.ROOT);
+        // A closed or sealed container must be opened before anything can be taken out of it (#67).
+        String contState = jdbc.query("SELECT cp.access_state FROM item_containment ic JOIN container_properties cp ON cp.object_id=ic.container_id WHERE ic.item_id=?",
+            rs -> rs.next() ? rs.getString(1) : null, id);
+        if (contState != null && !"OPEN".equals(contState))
+            return new String[]{"FAILED", "The " + name + " lies inside a " + contState.toLowerCase(java.util.Locale.ROOT) + " container — open it before you can take anything out."};
         if (capacityHeadroomUnits(chronicle, key) < 1)
             return new String[]{"FAILED", "You cannot carry the " + name + " — your load is already as much as you can bear. Set something down first."};
         jdbc.update("DELETE FROM item_containment WHERE item_id=?", id);
@@ -1222,6 +1227,8 @@ public class PhysicalItemService {
             .orElse(containers.size() == 1 ? containers.get(0) : null);
         if (container == null) return new String[]{"FAILED", "You cannot tell which container you mean — name the one to store it in."};
         UUID containerId = (UUID) container.get("id"); String containerName = ((String) container.get("name")).toLowerCase(java.util.Locale.ROOT);
+        String access = jdbc.queryForObject("SELECT access_state FROM container_properties WHERE object_id=?", String.class, containerId);
+        if (!"OPEN".equals(access)) return new String[]{"FAILED", "The " + containerName + " is " + access.toLowerCase(java.util.Locale.ROOT) + " — open it before you can put anything in it."};
         java.util.List<java.util.Map<String,Object>> stock = jdbc.query(REACHABLE_CTE +
             "SELECT w.id, w.display_name, i.item_key FROM reachable r JOIN world_object w ON w.id=r.id JOIN item_instance i ON i.object_id=w.id " +
             "WHERE w.id<>? AND w.id NOT IN (SELECT item_id FROM item_containment WHERE container_id=?) ORDER BY length(w.display_name) DESC",
@@ -1245,6 +1252,29 @@ public class PhysicalItemService {
         jdbc.update("UPDATE world_object SET current_owner_id=?, current_location_id=NULL WHERE id=?", containerId, itemId);
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'STORED',jsonb_build_object('containerId',?::text))", itemId, Timestamp.from(at), containerId.toString());
         return new String[]{"SUCCEEDED", "You place the " + itemName + " into the " + containerName + "."};
+    }
+
+    /**
+     * Open, close, or seal a named reachable container (#67). Storing and retrieving both require it OPEN, so a
+     * closed or sealed one must be opened first. The change is recorded in the container's immutable history.
+     */
+    @Transactional
+    public String[] setContainerAccess(UUID chronicle, UUID location, String text, String newState, Instant at) {
+        String lower = text.toLowerCase(java.util.Locale.ROOT);
+        java.util.List<java.util.Map<String,Object>> containers = jdbc.query(REACHABLE_CTE +
+            "SELECT w.id, w.display_name, cp.access_state FROM reachable r JOIN world_object w ON w.id=r.id JOIN container_properties cp ON cp.object_id=w.id ORDER BY length(w.display_name) DESC",
+            (rs,row) -> java.util.Map.of("id", rs.getObject(1,UUID.class), "name", rs.getString(2), "state", rs.getString(3)), chronicle, location);
+        if (containers.isEmpty()) return new String[]{"FAILED", "There is no container within reach to open or close."};
+        java.util.Map<String,Object> container = containers.stream()
+            .filter(c -> lower.contains(((String)c.get("name")).toLowerCase(java.util.Locale.ROOT))).findFirst()
+            .orElse(containers.size() == 1 ? containers.get(0) : null);
+        if (container == null) return new String[]{"FAILED", "You cannot tell which container you mean — name the one to open or close."};
+        UUID id = (UUID) container.get("id"); String name = ((String) container.get("name")).toLowerCase(java.util.Locale.ROOT); String cur = (String) container.get("state");
+        if (cur.equals(newState)) return new String[]{"SUCCEEDED", "The " + name + " is already " + newState.toLowerCase(java.util.Locale.ROOT) + "."};
+        jdbc.update("UPDATE container_properties SET access_state=? WHERE object_id=?", newState, id);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'ACCESS_CHANGED',jsonb_build_object('from',?,'to',?))", id, Timestamp.from(at), cur, newState);
+        String verb = switch (newState) { case "OPEN" -> "open"; case "SEALED" -> "seal shut"; default -> "close"; };
+        return new String[]{"SUCCEEDED", "You " + verb + " the " + name + "."};
     }
 
     /** Retires a physical item without deleting its identity or immutable transition history. */

@@ -189,6 +189,18 @@ class IntentClassificationRegressionTest {
         assertEquals("SET_TRAP", classify("place a fish trap in the shallows"));
     }
 
+    /** M1 #67 open/close/seal: container access verbs, scoped to a container noun. */
+    @Test void containerAccessVerbsClassify() throws Exception {
+        assertEquals("OPEN_CONTAINER", classify("open the basket"));
+        assertEquals("OPEN_CONTAINER", classify("unstopper the clay pot"));
+        assertEquals("OPEN_CONTAINER", classify("take the lid off the chest"));
+        assertEquals("CLOSE_CONTAINER", classify("close the basket"));
+        assertEquals("CLOSE_CONTAINER", classify("put the lid on the pot"));
+        assertEquals("CLOSE_CONTAINER", classify("seal the pouch"));
+        // Storing into a container is still STORE, not an access change.
+        assertEquals("STORE", classify("put the stone in the basket"));
+    }
+
     /** Workstations (V69) claim their words before the generic desk/table rule; a plain table is still a desk. */
     @Test void workstationsClassifyBeforePlainFurniture() throws Exception {
         assertEquals("CRAFT_WORKSTATION", classify("build a woodworking bench"));

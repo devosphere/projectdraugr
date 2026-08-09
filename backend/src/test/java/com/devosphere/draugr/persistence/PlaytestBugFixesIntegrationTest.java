@@ -153,6 +153,36 @@ class PlaytestBugFixesIntegrationTest {
             "picking the basket back up must keep its contents");
     }
 
+    /** M1 #67 — a closed/sealed container gates store and retrieve until it is opened; state is recorded. */
+    @Test @Order(6)
+    void containerAccessStateGatesStoreAndRetrieve() {
+        UUID chronicle = chronicle();
+        UUID basket = jdbc.queryForObject(
+            "SELECT i.object_id FROM item_instance i JOIN world_object w ON w.id=i.object_id " +
+            "WHERE i.item_key='woven_basket' AND w.lifecycle_state='ACTIVE' AND w.current_owner_id=? LIMIT 1", UUID.class, chronicle);
+
+        // Close the basket; its access state is recorded.
+        ChronicleActionService.ActionResult closed = actions.resolve("I close the woven basket.");
+        assertEquals("SUCCEEDED", closed.outcome(), () -> "closing the basket must succeed: " + closed.perception());
+        assertEquals("CLOSED", jdbc.queryForObject("SELECT access_state FROM container_properties WHERE object_id=?", String.class, basket));
+
+        // Retrieving from a closed container fails until it is opened.
+        ChronicleActionService.ActionResult blockedTake = actions.resolve("I take the field stone out of the woven basket.");
+        assertEquals("FAILED", blockedTake.outcome(), "taking from a closed basket must fail");
+
+        // Storing into a closed container also fails.
+        items.createCarriedItem(chronicle, "field_stone", "Field stone", now(), "TEST_SEED");
+        ChronicleActionService.ActionResult blockedStore = actions.resolve("I put the field stone in the woven basket.");
+        assertEquals("FAILED", blockedStore.outcome(), "storing into a closed basket must fail");
+
+        // Open it, and both work again.
+        ChronicleActionService.ActionResult opened = actions.resolve("I open the woven basket.");
+        assertEquals("SUCCEEDED", opened.outcome(), () -> "opening the basket must succeed: " + opened.perception());
+        assertEquals("OPEN", jdbc.queryForObject("SELECT access_state FROM container_properties WHERE object_id=?", String.class, basket));
+        ChronicleActionService.ActionResult take = actions.resolve("I take the field stone out of the woven basket.");
+        assertEquals("SUCCEEDED", take.outcome(), () -> "taking from the reopened basket must succeed: " + take.perception());
+    }
+
     /** #39 — carving a mark and naming the place in one act must not raise a raw persistence error. */
     @Test @Order(5)
     void markAndNameDoesNotRaiseAPersistenceError() {
