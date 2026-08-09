@@ -183,6 +183,26 @@ class PlaytestBugFixesIntegrationTest {
         assertEquals("SUCCEEDED", take.outcome(), () -> "taking from the reopened basket must succeed: " + take.perception());
     }
 
+    /** M1 #69 — repairing a worn/broken reachable item mends it one condition step, consuming cordage. */
+    @Test @Order(7)
+    void repairMendsAWornItemStepByStep() {
+        UUID chronicle = chronicle();
+        // Seed a broken hammer directly and the cordage to mend it.
+        UUID hammer = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM','Stone hammer',?)", hammer, chronicle);
+        jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,'stone_hammer','BROKEN')", hammer);
+        for (int i = 0; i < 2; i++) items.createCarriedItem(chronicle, "fiber_cordage", "Processed fiber cordage", now(), "TEST_SEED");
+
+        ChronicleActionService.ActionResult r1 = actions.resolve("I repair the stone hammer.");
+        assertEquals("SUCCEEDED", r1.outcome(), () -> "repairing a broken hammer must succeed: " + r1.perception());
+        assertEquals("WORN", jdbc.queryForObject("SELECT condition_state FROM item_instance WHERE object_id=?", String.class, hammer),
+            "a broken item must mend one step to WORN");
+        ChronicleActionService.ActionResult r2 = actions.resolve("I reinforce the stone hammer.");
+        assertEquals("SUCCEEDED", r2.outcome(), () -> "mending again must succeed: " + r2.perception());
+        assertEquals("SOUND", jdbc.queryForObject("SELECT condition_state FROM item_instance WHERE object_id=?", String.class, hammer),
+            "a worn item must mend the last step to SOUND");
+    }
+
     /** #39 — carving a mark and naming the place in one act must not raise a raw persistence error. */
     @Test @Order(5)
     void markAndNameDoesNotRaiseAPersistenceError() {

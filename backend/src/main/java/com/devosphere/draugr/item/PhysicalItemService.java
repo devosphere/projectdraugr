@@ -523,7 +523,7 @@ public class PhysicalItemService {
     @Transactional(readOnly = true)
     public boolean isMaterialWork(String actionText) {
         String c = matcher.activityCategory(actionText);
-        return c != null && (c.equals("PROCESS") || c.equals("ACQUIRE") || c.equals("CRAFT") || c.equals("CONSTRUCT"));
+        return c != null && (c.equals("PROCESS") || c.equals("ACQUIRE") || c.equals("CRAFT") || c.equals("CONSTRUCT") || c.equals("MAINTAIN"));
     }
 
     /** Whether the chronicle could carry one more of an item without breaking capacity. */
@@ -1297,6 +1297,37 @@ public class PhysicalItemService {
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'ACCESS_CHANGED',jsonb_build_object('from',?,'to',?))", id, Timestamp.from(at), cur, newState);
         String verb = switch (newState) { case "OPEN" -> "open"; case "SEALED" -> "seal shut"; default -> "close"; };
         return new String[]{"SUCCEEDED", "You " + verb + " the " + name + "."};
+    }
+
+    /**
+     * Repair a worn or broken reachable item (#69 repair/fix/mend/reinforce/sharpen): binds and reinforces it
+     * one condition step better (BROKEN→WORN→SOUND), consuming a length of cordage or fibre. A sound item needs
+     * none; a destroyed one is past mending; with no binding material to hand it cannot be done. Keeps the item's
+     * UUID and history — repair is a state change on the same object, never a new one.
+     */
+    @Transactional
+    public String[] repairNamedItem(UUID chronicle, UUID location, String text, Instant at) {
+        String lower = text.toLowerCase(java.util.Locale.ROOT);
+        java.util.List<java.util.Map<String,Object>> items = jdbc.query(REACHABLE_CTE +
+            "SELECT w.id, w.display_name, i.condition_state FROM reachable r JOIN world_object w ON w.id=r.id JOIN item_instance i ON i.object_id=w.id ORDER BY length(w.display_name) DESC",
+            (rs,row) -> java.util.Map.of("id", rs.getObject(1,UUID.class), "name", rs.getString(2), "cond", rs.getString(3)), chronicle, location);
+        if (items.isEmpty()) return new String[]{"FAILED", "You have nothing within reach in need of mending."};
+        java.util.Map<String,Object> item = items.stream()
+            .filter(c -> lower.contains(((String)c.get("name")).toLowerCase(java.util.Locale.ROOT))).findFirst().orElse(null);
+        if (item == null) return new String[]{"FAILED", "You have nothing by that name within reach to mend."};
+        String name = ((String) item.get("name")).toLowerCase(java.util.Locale.ROOT); String cond = (String) item.get("cond");
+        if ("SOUND".equals(cond)) return new String[]{"SUCCEEDED", "You look the " + name + " over, but it is sound and whole — it needs no mending yet."};
+        if ("DESTROYED".equals(cond)) return new String[]{"FAILED", "The " + name + " is past mending — there is nothing left to work with."};
+        String binder = hasAtLeast(chronicle, "fiber_cordage", 1) ? "fiber_cordage"
+                       : hasAtLeast(chronicle, "leather_cord", 1) ? "leather_cord"
+                       : hasAtLeast(chronicle, "plant_fiber", 1) ? "plant_fiber" : null;
+        if (binder == null) return new String[]{"FAILED", "You turn the " + name + " over, but you have no cordage or fibre in reach to bind and reinforce it with."};
+        consumeOne(chronicle, binder, at);
+        String newCond = "BROKEN".equals(cond) ? "WORN" : "SOUND";
+        jdbc.update("UPDATE item_instance SET condition_state=? WHERE object_id=?", newCond, item.get("id"));
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'REPAIRED',jsonb_build_object('from',?,'to',?))", item.get("id"), Timestamp.from(at), cond, newCond);
+        String state = "SOUND".equals(newCond) ? "whole and sound again" : "holding together better, though still worn";
+        return new String[]{"SUCCEEDED", "You bind and reinforce the " + name + " with " + binder.replace('_', ' ') + ". It is " + state + "."};
     }
 
     /** Retires a physical item without deleting its identity or immutable transition history. */

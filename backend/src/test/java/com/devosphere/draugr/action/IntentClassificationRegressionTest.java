@@ -261,6 +261,23 @@ class IntentClassificationRegressionTest {
         assertEquals("UNKNOWN", classify("pan the gravel for gold", false));
     }
 
+    /** M1 #69 crafting/transformation: repair/mend an item (distinct from lean-to repair and from REFINE). */
+    @Test void repairAndCraftVerbsClassify() throws Exception {
+        assertEquals("REPAIR_ITEM", classify("repair my knife"));
+        assertEquals("REPAIR_ITEM", classify("mend the woven basket"));
+        assertEquals("REPAIR_ITEM", classify("reinforce the spear"));
+        assertEquals("REPAIR_ITEM", classify("sharpen the stone axe"));
+        assertEquals("REPAIR_ITEM", classify("fix the fishing net"));
+        // Repairing a shelter is still the lean-to path, not item repair.
+        assertEquals("REPAIR_LEAN_TO", classify("repair the lean-to"));
+        // Improving an already-sound thing is REFINE, not repair.
+        assertEquals("REFINE", classify("improve my knife"));
+        // Making a named tool still routes to its explicit craft.
+        assertEquals("CRAFT_KNIFE", classify("make a stone knife"));
+        // A process verb yields to the two-axis matcher when it claims the text.
+        assertEquals("UNKNOWN", classify("carve a wooden spoon", true));
+    }
+
     /** Workstations (V69) claim their words before the generic desk/table rule; a plain table is still a desk. */
     @Test void workstationsClassifyBeforePlainFurniture() throws Exception {
         assertEquals("CRAFT_WORKSTATION", classify("build a woodworking bench"));
