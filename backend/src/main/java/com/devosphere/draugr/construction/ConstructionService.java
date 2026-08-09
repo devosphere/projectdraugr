@@ -100,6 +100,46 @@ public class ConstructionService {
     }
 
     /**
+     * Repair / maintain a reachable standing structure here (#70 repair_structure / maintain_structure): the named
+     * one, else the only one. Works on any completed construction — not just the lean-to — restoring integrity
+     * from kind-appropriate material actually carried. Grounded throughout: nothing built here, nothing damaged, or
+     * no fit material to hand each fails without disclosing the recipe. Distinct from item repair (#69) and REFINE.
+     */
+    @Transactional
+    public String[] repairStructure(UUID chronicle, UUID location, String text, Instant at) {
+        String lower = text == null ? "" : text.toLowerCase(java.util.Locale.ROOT);
+        java.util.List<java.util.Map<String,Object>> projects = jdbc.queryForList(
+            "SELECT cp.object_id, w.display_name, cp.project_kind, cp.integrity_percent FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' AND cp.state='COMPLETED' ORDER BY length(w.display_name) DESC", location);
+        if (projects.isEmpty()) return new String[]{"FAILED", "You look for something built here to set right, but the ground is bare."};
+        java.util.Map<String,Object> proj = projects.stream()
+            .filter(p -> lower.contains(((String)p.get("display_name")).toLowerCase(java.util.Locale.ROOT))
+                || lower.contains(((String)p.get("project_kind")).toLowerCase(java.util.Locale.ROOT).replace('_', ' ')))
+            .findFirst().orElse(projects.size() == 1 ? projects.get(0) : null);
+        if (proj == null) return new String[]{"FAILED", "There is more than one thing standing here — name the one to work on."};
+        UUID id = (UUID) proj.get("object_id");
+        String name = ((String) proj.get("display_name")).toLowerCase(java.util.Locale.ROOT);
+        String kind = (String) proj.get("project_kind");
+        Integer integ = (Integer) proj.get("integrity_percent");
+        if (integ != null && integ >= 100) return new String[]{"SUCCEEDED", "You look the " + name + " over, but it already stands sound — there is nothing here that needs setting right."};
+        // Kind-appropriate repair stock, best first — earth and clay for the fired forms, poles and binding for the rest.
+        String[] mats = switch (kind) {
+            case "CLAY_LINED_HEARTH", "RAINWATER_CATCHMENT" -> new String[]{"clay_lump"};
+            case "SPLIT_RAIL_FENCE" -> new String[]{"straight_sapling", "dry_branch"};
+            case "WATTLE_AND_DAUB_HUT", "EARTH_SHELTERED_HUT" -> new String[]{"clay_lump", "straw_bundle", "withy_rope"};
+            default -> new String[]{"withy_rope", "plant_fiber", "dry_branch", "straight_sapling"};
+        };
+        String used = null;
+        for (String m : mats) if (items.hasAtLeast(chronicle, m, 1)) { used = m; break; }
+        if (used == null) return new String[]{"FAILED", "You set your hands to the " + name + ", but you have nothing fit to mend it with to hand."};
+        if (!items.consumeOne(chronicle, used, at)) throw new IllegalStateException("Reachable repair material changed during the action.");
+        Timestamp ts = Timestamp.from(at);
+        jdbc.update("UPDATE construction_project SET integrity_percent=LEAST(100,integrity_percent+25),last_structural_update=? WHERE object_id=?", ts, id);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CONSTRUCTION_REPAIRED',jsonb_build_object('material',?))", id, ts, used);
+        return new String[]{"SUCCEEDED", "You work over the " + name + ", setting what has weathered and worked loose back toward true. It stands the sounder for it."};
+    }
+
+    /**
      * Dismantle / salvage a reachable construction here (#70): the named one, else the only one. It keeps its
      * UUID and full history (marked DESTROYED with cause DISMANTLED, never deleted) and yields only a FRACTION
      * of its materials — some is always lost in the taking-apart, and only what physically comes out is recovered.

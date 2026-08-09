@@ -102,6 +102,21 @@ class IntentClassificationRegressionTest {
         assertEquals("COOK_MEAT", classify("bake the meat in the coals", false));
     }
 
+    /**
+     * #70 structure repair/maintain routes on structure nouns (a construction, not a carried tool), while item
+     * repair (#69) and the lean-to's own repair path keep what is theirs.
+     */
+    @Test void structureRepairClassifiesApartFromItemRepair() throws Exception {
+        assertEquals("REPAIR_STRUCTURE", classify("mend the fence", false));
+        assertEquals("REPAIR_STRUCTURE", classify("weatherproof the hut", false));
+        assertEquals("REPAIR_STRUCTURE", classify("patch the roof thatch", false));
+        assertEquals("REPAIR_STRUCTURE", classify("shore up the bridge", false));
+        // Carried gear still goes to item repair; the lean-to keeps its own repair path.
+        assertEquals("REPAIR_ITEM", classify("repair my stone knife", false));
+        assertEquals("REPAIR_ITEM", classify("mend the fishing net", false));
+        assertEquals("REPAIR_LEAN_TO", classify("repair the lean-to", false));
+    }
+
     /** A named specific basket yields to its process; the generic basket does not. */
     @Test void specificBasketsYieldToTheProcess() throws Exception {
         assertEquals("UNKNOWN", classify("weave a burden basket", false));
