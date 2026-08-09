@@ -100,7 +100,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 | `backend/src/main/java/com/devosphere/draugr/domain/ArchitectRouter.java` | Cost gate for the Architect — routes COVERED / POLISH / INVENT. |
 | `backend/src/main/java/com/devosphere/draugr/routing/ProcessMatcher.java` | The **only** implementation of the action→process resolution rule. Both `runProcess()` and `ArchitectRouter` go through it. |
 | `backend/src/main/java/com/devosphere/draugr/routing/RoutingMissRecorder.java` | Records unresolved actions into the V56 backlog. Separate bean on purpose — see its Javadoc. |
-| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V74. Next is V75. (V71 fishing nets, V72 container access-state, V73 gathering-prep vocabulary, V74 crafting-verb vocabulary.) |
+| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V75. Next is V76. (V71 nets, V72 container access-state, V73 gathering vocab, V74 crafting vocab, V75 container progression.) |
 | `backend/src/main/java/com/devosphere/draugr/domain/DomainRegistryService.java` | Reads domain_registry — the Architect's ledger of invented domains. |
 | `docs/architecture/domain-creation-pattern.md` | The exact recipe for adding a new domain. |
 | `docs/architecture/action-routing-hardening.md` | Sprint 003 spec — collisions, milestones M1–M5. |
@@ -119,7 +119,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 
 ---
 
-## What Is Built (Migrations V1–V74, all applied)
+## What Is Built (Migrations V1–V75, all applied)
 
 > **Post-playtest cycle (2026-08-03) — summary; full detail + resume point in
 > [systems/06.4-Runtime-Authoring-Build-Plan.md](systems/06.4-Runtime-Authoring-Build-Plan.md).**
@@ -239,7 +239,7 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 > finish M1, then continue into M2, WITHOUT interruption or permission requests — choose the engineering strategy
 > yourself, land verifiable increments, commit/push, and close a story only when its acceptance is fully met.**
 > Everything is on `development` (pushed) as `devosphere.tech` (never `johncalado`). **Migrations through V74.**
-> Full suite **158 backend tests + 11 SQL regressions green** on the V1–V74 chain; each commit compiles with tests
+> Full suite **158 backend tests + 11 SQL regressions green** on the V1–V75 chain; each commit compiles with tests
 > green and the routing-reachability probe clean.
 >
 > **EPIC #64 Action Catalogue — scorecard:**
@@ -272,12 +272,22 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 >   grounded failures + no-mutation guarantee + growing regression matrix already in place. *Deliberately
 >   deferred:* the data-owned **alias-catalogue table** and distinct **outcome codes** (a focused infra refactor,
 >   not to be rushed — see the issue comment).
-> - **NEXT, in order:** **EPIC #54 supply chains** (#55 gatherable building stock → #56 containers/storage [much
->   already done via #67] → #57 logistics/hauling [much done] → #58 tool gaps → #59 clay/ceramic/water → #60
->   preservation → #61 shelter assemblies → #62 routing aliases) → the big catalogue stories **#75–#78** ("add
->   100 …") → **#191** bare-hand handwork → **#123** survival viability → then **M2** (84 issues). Deferred M1
->   tails: #67 tie/stack/drag, #70 staged-building verbs, #71 water model, #72 husbandry, #73 infra — each needs
->   a new model/content effort. **Full M1+M2 spans many sessions.**
+> - **EPIC #54 supply chains — IN PROGRESS.** **#56 containers ADVANCED (V75):** fixed a latent bug —
+>   `createCraftedItem` never created `container_properties`, so every process-made container (bark_container/
+>   leather_pouch/burden_basket) could hold nothing; now populated from `container_capacity_default`. Added 6
+>   named portables (hide_sack/wooden_bucket/clay_jar/grain_sack/tool_roll/lidded_basket) as VERIFIED CRAFT
+>   procedures. *#56 remaining:* sited storage objects + the rest of the portables. **#57 logistics** — the
+>   generic pack/store/stockpile ops exist; its named objects (carry_pole/yoke/sledge/load_net) + the full
+>   handcart staged chain remain.
+> - **NEXT, in order:** finish **#56/#57** named objects → **#55** gatherable building stock → **#58** tool gaps
+>   → **#59** clay/ceramic/water → **#60** preservation → **#61** shelter assemblies → **#62** routing aliases →
+>   the big catalogue stories **#75–#78** ("add 100 …") → **#191** bare-hand handwork → **#123** survival
+>   viability → then **M2** (84 issues). Deferred M1 tails: #67 tie/stack/drag, #70 staged-building verbs, #71
+>   water-in-container model, #72 husbandry companions, #73 alias-catalogue infra — each a distinct new
+>   model/content effort. **Full M1+M2 spans many sessions.** *(Recurring pattern for new craftable objects: a
+>   migration like V75 — item_definition + container_capacity_default + material_process [CRAFT, keyword that
+>   classifies to its category, subjects, obtainable inputs, output mass < input mass, review_state VERIFIED] —
+>   then apply on a throwaway Postgres and run `routing-reachability-probe.sql` until clean.)*
 >
 > **How the work is done (the proven rhythm):** read the story's exact action catalogue → check current coverage
 > (spin a throwaway Postgres, apply V1..Vn, query `category_term`/`material_process`; grep the classifier/services)
