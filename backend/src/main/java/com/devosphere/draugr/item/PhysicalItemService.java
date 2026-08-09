@@ -189,6 +189,10 @@ public class PhysicalItemService {
         return id;
     }
 
+    /** The Chronicle's current sustained mass-carrying capacity in grams, including any equipped carrying aid (#57). */
+    @Transactional(readOnly = true)
+    public int sustainedMassCapacity(UUID chronicle) { return loadState(chronicle).sustainedMassCapacityGrams(); }
+
     /** The chunk the Chronicle currently stands in — where a too-heavy craft is set down. */
     private UUID chronicleLocation(UUID chronicle) {
         return jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
@@ -1368,7 +1372,13 @@ public class PhysicalItemService {
         if(load.mass()>cap.mass()||load.volume()>cap.volume()||load.largest()>cap.singleLift()) throw new IllegalStateException("The Chronicle cannot physically carry that load.");
     }
     private LoadState loadState(UUID chronicle) {
-        Capacity cap=jdbc.query("SELECT c.sustained_mass_grams, c.direct_bulk_ml, c.maximum_single_lift_grams, COALESCE(a.load_conditioning,0), COALESCE(a.recovery_readiness,.5) FROM chronicle_carry_capacity c LEFT JOIN chronicle_capability_adaptation a ON a.chronicle_id=c.chronicle_id WHERE c.chronicle_id=?",rs->rs.next()?new Capacity((int)(rs.getInt(1)*(1+rs.getDouble(4)*.12*rs.getDouble(5))),rs.getInt(2),(int)(rs.getInt(3)*(1+rs.getDouble(4)*.08*rs.getDouble(5)))):new Capacity(0,0,0),chronicle);
+        // A carrying aid (pole/yoke/harness/pack frame) worn or held adds its bonus to sustained mass / bulk
+        // capacity while equipped (#57 carry_aid_bonus). The single-object lift limit is unchanged — an aid
+        // spreads a load, it does not make one object lighter to heave.
+        Capacity cap=jdbc.query("SELECT c.sustained_mass_grams, c.direct_bulk_ml, c.maximum_single_lift_grams, COALESCE(a.load_conditioning,0), COALESCE(a.recovery_readiness,.5), " +
+            "COALESCE((SELECT SUM(b.mass_bonus_grams) FROM equipment_attachment e JOIN item_instance ii ON ii.object_id=e.item_id JOIN carry_aid_bonus b ON b.item_key=ii.item_key WHERE e.chronicle_id=c.chronicle_id),0), " +
+            "COALESCE((SELECT SUM(b.bulk_bonus_ml)    FROM equipment_attachment e JOIN item_instance ii ON ii.object_id=e.item_id JOIN carry_aid_bonus b ON b.item_key=ii.item_key WHERE e.chronicle_id=c.chronicle_id),0) " +
+            "FROM chronicle_carry_capacity c LEFT JOIN chronicle_capability_adaptation a ON a.chronicle_id=c.chronicle_id WHERE c.chronicle_id=?",rs->rs.next()?new Capacity((int)(rs.getInt(1)*(1+rs.getDouble(4)*.12*rs.getDouble(5)))+rs.getInt(6),rs.getInt(2)+rs.getInt(7),(int)(rs.getInt(3)*(1+rs.getDouble(4)*.08*rs.getDouble(5)))):new Capacity(0,0,0),chronicle);
         Load load=jdbc.query("WITH RECURSIVE carried(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN carried c ON ic.container_id=c.id) SELECT COALESCE(SUM(d.unit_mass_grams),0),COALESCE(SUM(d.unit_volume_ml),0),COALESCE(MAX(d.unit_mass_grams),0) FROM carried JOIN item_instance i ON i.object_id=carried.id JOIN item_definition d ON d.item_key=i.item_key",rs->rs.next()?new Load(rs.getInt(1),rs.getInt(2),rs.getInt(3)):new Load(0,0,0),chronicle);
         return new LoadState(load.mass(),load.volume(),load.largest(),cap.mass(),cap.volume(),cap.singleLift());
     }

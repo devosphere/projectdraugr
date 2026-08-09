@@ -245,6 +245,22 @@ class PlaytestBugFixesIntegrationTest {
             "the stone is now inside the hide sack");
     }
 
+    /** M1 #57 — a crafted, equipped carrying aid raises carry capacity; the bonus applies only while equipped. */
+    @Test @Order(10)
+    void carryingAidRaisesCapacityWhileEquipped() {
+        UUID chronicle = chronicle();
+        int baseline = items.sustainedMassCapacity(chronicle);
+        for (int i = 0; i < 3; i++) items.createCarriedItem(chronicle, "dry_branch", "Dry branch", now(), "TEST_SEED");
+        for (int i = 0; i < 2; i++) items.createCarriedItem(chronicle, "fiber_cordage", "Processed fiber cordage", now(), "TEST_SEED");
+        ChronicleActionService.ActionResult made = actions.resolve("I lash a burden frame.");
+        assertEquals("SUCCEEDED", made.outcome(), () -> "lashing a burden frame must succeed: " + made.perception());
+        // Not equipped yet -> capacity unchanged.
+        assertEquals(baseline, items.sustainedMassCapacity(chronicle), "an unequipped aid does not raise capacity");
+        ChronicleActionService.ActionResult worn = actions.resolve("I sling the burden frame on my back.");
+        assertEquals("SUCCEEDED", worn.outcome(), () -> "equipping the burden frame must succeed: " + worn.perception());
+        assertTrue(items.sustainedMassCapacity(chronicle) > baseline, "an equipped carrying aid raises sustained mass capacity (#57)");
+    }
+
     /** #39 — carving a mark and naming the place in one act must not raise a raw persistence error. */
     @Test @Order(5)
     void markAndNameDoesNotRaiseAPersistenceError() {
