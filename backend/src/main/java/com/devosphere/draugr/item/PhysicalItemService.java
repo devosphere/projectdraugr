@@ -504,6 +504,17 @@ public class PhysicalItemService {
         return matcher.match(actionText) != null;
     }
 
+    /**
+     * Whether the text reads as physical work on materials or the world (#68) — its verb classifies to a
+     * material category — even when no process matches it yet. Lets an unresolved gather/prep/craft verb fail
+     * with a grounded "you work the material but find no way" rather than the generic gibberish line.
+     */
+    @Transactional(readOnly = true)
+    public boolean isMaterialWork(String actionText) {
+        String c = matcher.activityCategory(actionText);
+        return c != null && (c.equals("PROCESS") || c.equals("ACQUIRE") || c.equals("CRAFT") || c.equals("CONSTRUCT"));
+    }
+
     /** Whether the chronicle could carry one more of an item without breaking capacity. */
     @Transactional(readOnly = true)
     public boolean hasCarryRoomFor(UUID chronicle, String itemKey) {

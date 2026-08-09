@@ -137,6 +137,13 @@ public class ProcessMatcher {
         return resolve(actionText, classifier.classify(actionText), candidates()).processKey();
     }
 
+    /** The activity category this text classifies to (PROCESS/ACQUIRE/CRAFT/…), or null if the vocabulary
+     *  recognises no verb in it. Lets a caller tell "material work the world can't yet do" from true gibberish. */
+    @Transactional(readOnly = true)
+    public String activityCategory(String actionText) {
+        return classifier.classify(actionText);
+    }
+
     /**
      * Apply the rule on the play path, recording a miss when nothing resolves.
      *

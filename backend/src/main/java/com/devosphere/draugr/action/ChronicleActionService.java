@@ -70,6 +70,13 @@ public class ChronicleActionService {
         "You work at it for a while, but nothing here answers to the attempt, and the moment passes into the rest.",
         "Whatever you meant by that, your hands find no purchase on it. The world around you goes on unchanged.",
         "You try, and the effort goes into the air. The ground and everything on it is exactly as it was."};
+    // A recognised piece of material/world work the world cannot yet resolve (#68): a grounded "no way comes to
+    // you" that names the material effort, rather than the flat gibberish line above. The routing miss is still
+    // recorded (inside runProcess) so the gap is on the backlog for review.
+    private static final String[] MATERIAL_UNRESOLVED = {
+        "You work the material over, turning it for a way in, but no method for what you meant comes to your hands here.",
+        "You set to it in earnest, but the working of it into that is beyond what your hands and knowledge can find on this ground.",
+        "You handle and test it, feeling for the trick of it, but the way to make what you intend does not come to you yet."};
     private final JdbcTemplate jdbc; private final SimulationTickService ticks; private final ChroniclePhysiologyService physiology; private final NarrationPolicy narration; private final PhysicalItemService items; private final CapabilityAdaptationService capability; private final ConstructionService construction; private final ChronicleDiscoveryService discoveries; private final WildlifeEncounterService wildlife; private final FireService fire; private final LiteratureService literature; private final FoodPreservationService food; private final ActionInputClassifier inputClassifier; private final AssemblyService assembly; private final NarrationRouter narrationRouter; private final SimulationNarrator simulationNarrator; private final com.devosphere.draugr.narration.NarrationEngine narrationEngine; private final com.devosphere.draugr.ai.RuntimeAuthoringService authoring; private final ExaminationService examination;
     public ChronicleActionService(JdbcTemplate jdbc, SimulationTickService ticks, ChroniclePhysiologyService physiology, NarrationPolicy narration, PhysicalItemService items, CapabilityAdaptationService capability, ConstructionService construction, ChronicleDiscoveryService discoveries, WildlifeEncounterService wildlife, FireService fire, LiteratureService literature, FoodPreservationService food, ActionInputClassifier inputClassifier, AssemblyService assembly, NarrationRouter narrationRouter, SimulationNarrator simulationNarrator, com.devosphere.draugr.narration.NarrationEngine narrationEngine, com.devosphere.draugr.ai.RuntimeAuthoringService authoring, ExaminationService examination) { this.jdbc = jdbc; this.ticks = ticks; this.physiology = physiology; this.narration = narration; this.items=items; this.capability=capability; this.construction=construction; this.discoveries=discoveries; this.wildlife=wildlife; this.fire=fire; this.literature=literature; this.food=food; this.inputClassifier=inputClassifier; this.assembly=assembly; this.narrationRouter=narrationRouter; this.simulationNarrator=simulationNarrator; this.narrationEngine=narrationEngine; this.authoring=authoring; this.examination=examination; }
 
@@ -301,7 +308,7 @@ public class ChronicleActionService {
                     // the physics gate + QA. Inert with AI off (empty) — the game behaves exactly as before.
                     String[] composed = authoring.attempt(chronicle.id(), chronicle.location(), text, resolvedAt).orElse(null);
                     if (composed != null) { intent = Intent.PROCESS_MATERIAL; outcome = composed[0]; perception = composed[1]; }
-                    else { outcome = "FAILED"; perception = UNRESOLVED_ATTEMPT[Math.floorMod(text.hashCode(), UNRESOLVED_ATTEMPT.length)]; }
+                    else { outcome = "FAILED"; String[] pool = items.isMaterialWork(text) ? MATERIAL_UNRESOLVED : UNRESOLVED_ATTEMPT; perception = pool[Math.floorMod(text.hashCode(), pool.length)]; }
                 }
             }
         }
