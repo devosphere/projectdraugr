@@ -100,7 +100,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 | `backend/src/main/java/com/devosphere/draugr/domain/ArchitectRouter.java` | Cost gate for the Architect — routes COVERED / POLISH / INVENT. |
 | `backend/src/main/java/com/devosphere/draugr/routing/ProcessMatcher.java` | The **only** implementation of the action→process resolution rule. Both `runProcess()` and `ArchitectRouter` go through it. |
 | `backend/src/main/java/com/devosphere/draugr/routing/RoutingMissRecorder.java` | Records unresolved actions into the V56 backlog. Separate bean on purpose — see its Javadoc. |
-| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V81. Next is V82. (…V78 clay/ceramic, V79 provisioning, V80 route vocab, V81 water handling.) |
+| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V83. Next is V84. (…V80 route vocab, V81 water handling, V82 building stock, V83 first-era shelters.) |
 | `backend/src/main/java/com/devosphere/draugr/domain/DomainRegistryService.java` | Reads domain_registry — the Architect's ledger of invented domains. |
 | `docs/architecture/domain-creation-pattern.md` | The exact recipe for adding a new domain. |
 | `docs/architecture/action-routing-hardening.md` | Sprint 003 spec — collisions, milestones M1–M5. |
@@ -119,7 +119,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 
 ---
 
-## What Is Built (Migrations V1–V81, all applied)
+## What Is Built (Migrations V1–V83, all applied)
 
 > **Post-playtest cycle (2026-08-03) — summary; full detail + resume point in
 > [systems/06.4-Runtime-Authoring-Build-Plan.md](systems/06.4-Runtime-Authoring-Build-Plan.md).**
@@ -238,9 +238,9 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 > All **13 playtest [BUG] issues (#29–#44)** are FIXED and **CLOSED**. **The user granted autonomous execution:
 > finish M1, then continue into M2, WITHOUT interruption or permission requests — choose the engineering strategy
 > yourself, land verifiable increments, commit/push, and close a story only when its acceptance is fully met.**
-> Everything is on `development` (pushed) as `devosphere.tech` (never `johncalado`). **Migrations through V74.**
-> Full suite **159 backend tests + 11 SQL regressions green** on the V1–V81 chain; each commit compiles with tests
-> green and the routing-reachability probe clean.
+> Everything is on `development` (pushed) as `devosphere.tech` (never `johncalado`). **Migrations through V83.**
+> Full suite **162 backend tests + 12 SQL regressions green** on the V1–V83 chain; each commit compiles with tests
+> green and the routing-reachability probe clean (84 ok / 0 miss).
 >
 > **EPIC #64 Action Catalogue — scorecard:**
 > - **#65 perception — ✅ CLOSED.** observe/inspect/examine/analyze/investigate (incl. #33 subject scoping) +
@@ -256,15 +256,18 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 > - **#69 crafting/transformation — ✅ CLOSED.** most verbs already routed; added **REPAIR_ITEM** (mends a
 >   worn/broken item one condition step, consuming cordage/fibre) filling the empty MAINTAIN category; **V74**
 >   craft-verb synonyms.
-> - **#70 construction/site-work — OPEN (dismantle done).** `DISMANTLE` (ConstructionService.dismantle: take a
->   construction apart, DESTROYED+DISMANTLED, UUID+history kept, recover a fraction of materials). *Remaining:*
->   the staged-building verbs (clear_site/stake_out/level/dig_posthole/set_post/raise_frame/brace/weave_wall/daub/
->   thatch/line_hearth/pave/fence/gate/drain) — a from-scratch staged-assembly content effort — plus general
->   structure repair/maintain beyond the lean-to.
-> - **#71 fire/water/cooking/camp — OPEN (fire management done).** `EXTINGUISH_FIRE` (put out/douse, fuel→0),
->   `BANK_FIRE` (cover coals, embers hold longer), tend→`FEED_FIRE`. *Remaining:* collect/filter/boil water
->   (needs a **water-in-container** persistence model — no `water` item / vessel-fill state yet), make_bed,
->   maintain_camp, full cooking-verb coverage.
+> - **#70 construction/site-work — OPEN (dismantle + repair done).** `DISMANTLE` (ConstructionService.dismantle:
+>   take a construction apart, DESTROYED+DISMANTLED, UUID+history kept, recover a fraction of materials);
+>   **`REPAIR_STRUCTURE`** (ConstructionService.repairStructure: mend/maintain any standing construction — not just
+>   the lean-to — +25 integrity from kind-appropriate carried material; grounded). *Remaining:* the staged-building
+>   verbs (clear_site/stake_out/level/dig_posthole/set_post/raise_frame/brace/weave_wall/daub/thatch/line_hearth/
+>   pave/fence/gate/drain) — **now with a real home** in the V83 staged assemblies (they ARE those assemblies'
+>   stages); what's left is a routing layer mapping each bare verb to advance the relevant in-progress assembly.
+> - **#71 fire/water/cooking/camp — ✅ CLOSED.** Fire management (`EXTINGUISH_FIRE`/`BANK_FIRE`/tend→`FEED_FIRE`);
+>   water handling (**V81** raw/filtered/clean water axis: `COLLECT_WATER`/`BOIL_WATER`/`FILTER_WATER`/`DRINK` +
+>   `applyWaterborneRisk`); **`MAKE_BED`** (persistent GROUND_BED off the cold ground → rest/sleep bonus via
+>   `beddedAt`), **`MAINTAIN_CAMP`** (site upkeep + `settleCamp`), and cooking-verb aliases
+>   (grill/bake/broil/simmer/stew/braise → COOK_MEAT on flesh).
 > - **#72 travel/terrain/wildlife/husbandry — OPEN (terrain + disengage done).** terrain crossing (wade/ford/
 >   swim/cross/climb + direction → MOVE); `DISENGAGE` (retreat/flee/hide, non-exposing). *Remaining:* husbandry
 >   (feed/lead/tether — needs a **tamed-companion ownership model**), stalk/watch tactics.
@@ -272,18 +275,19 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 >   grounded failures + no-mutation guarantee + growing regression matrix already in place. *Deliberately
 >   deferred:* the data-owned **alias-catalogue table** and distinct **outcome codes** (a focused infra refactor,
 >   not to be rushed — see the issue comment).
-> - **EPIC #54 supply chains — IN PROGRESS.** **EPIC #54 supply chains — #56 containers, #57 aids, #58 tools, #59 clay/ceramic, #60 provisioning, #62 route coverage ADVANCED (V75-V80):** fixed a latent bug —
->   `createCraftedItem` never created `container_properties`, so every process-made container (bark_container/
->   leather_pouch/burden_basket) could hold nothing; now populated from `container_capacity_default`. Added 6
->   named portables (hide_sack/wooden_bucket/clay_jar/grain_sack/tool_roll/lidded_basket) as VERIFIED CRAFT
->   procedures. *#56 remaining:* sited storage objects + the rest of the portables. **#57 logistics** — the
->   generic pack/store/stockpile ops exist; its named objects (carry_pole/yoke/sledge/load_net) + the full
->   handcart staged chain remain.
-> - **NEXT, in order:** finish **#56/#57** named objects → **#55** gatherable building stock → **#58** tool gaps
->   → **#59** clay/ceramic/water → **#60** preservation → **#61** shelter assemblies → **#62** routing aliases →
->   the big catalogue stories **#75–#78** ("add 100 …") → **#191** bare-hand handwork → **#123** survival
->   viability → then **M2** (84 issues). Deferred M1 tails: #67 tie/stack/drag, #70 staged-building verbs, #71
->   water-in-container model, #72 husbandry companions, #73 alias-catalogue infra — each a distinct new
+> - **EPIC #54 supply chains — ADVANCED (V75–V83).** #56 containers, #57 aids, #58 tools, #59 clay/ceramic,
+>   #60 provisioning, #62 route coverage. Fixed a latent bug — `createCraftedItem` never created
+>   `container_properties`, so every process-made container could hold nothing; now populated from
+>   `container_capacity_default`. **#55 gatherable building stock — done (V82):** straight_sapling + straw via the
+>   flora system (geological stock deferred with the lime chain). **#61 staged shelters — done (V83):** all twelve
+>   settlement-core structures as staged assemblies (huts, fences, hearth, catchment, platform, bridge, gate,
+>   wood store, landing), the two enclosing huts wired into the exposure model. **#62 route coverage — mechanism
+>   done** (tracks catalogue completion). *Remaining:* #56 sited storage objects + more portables; #57 named
+>   logistics objects (carry_pole/yoke/sledge) + handcart chain; #59/#60 the deferred lime chain.
+> - **NEXT, in order:** the big catalogue stories **#75–#78 / #45–#47** ("add 100 …" raw materials / portables /
+>   structures / procedures) → **#191** bare-hand handwork → **#123** survival viability → remaining #54 named
+>   objects → then **M2** (84 issues). Deferred M1 tails: #67 tie/stack/drag, #70 staged-building-verb routing,
+>   #72 husbandry companions, #73 alias-catalogue infra — each a distinct new
 >   model/content effort. **Full M1+M2 spans many sessions.** *(Recurring pattern for new craftable objects: a
 >   migration like V75 — item_definition + container_capacity_default + material_process [CRAFT, keyword that
 >   classifies to its category, subjects, obtainable inputs, output mass < input mass, review_state VERIFIED] —
@@ -395,7 +399,7 @@ The unlock: V53's review gate already makes machine-authored processes safe to a
 **THEN: Task #21 — AI narration (the Simulation Agent's voice).** The seam is built: `NarrationRouter` decides whether to call, `NarrationEngine` supplies the `backendNarration` the refinement prompt builds on. See `docs/architecture/narration-engine.md` for the prompt template and cost model.
 
 ### Intents implemented (ChronicleActionService)
-GATHER, HARVEST, CRAFT, EQUIP, UNEQUIP, DROP, BUILD, REPAIR, ABANDON, RESUME, LIGHT_FIRE, ADD_FUEL, MAKE_CHARCOAL, COOK, SLEEP, STRIP_BARK, GATHER_CLAY, GATHER_STONE_SLAB, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, WRITE, EDIT_DOCUMENT, SKETCH_MAP, DESIGNATE, MARK, TRAVEL, CONFRONT_WILDLIFE, REFINE, OBSERVE, GATHER_PLANT, FELL_TREE, RAID_HIVE, COLLECT_INSECTS, FISH, SNARE, TRACK, TAME, LURE, SET_TRAP, CHECK_TRAP, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, REWORK, CRAFT_WORKSTATION (V69 benches/loom), PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE (multi-output & preserved-food outputs handled inside PROCESS_MATERIAL), **CRAFT_NET, CRAFT_BELT** (V71), **PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER** (M1 #67; V72 access-state), **SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE** (M1 #65 perception; identify folds into EXAMINE), **WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH** (M1 #66 body care), **REPAIR_ITEM** (M1 #69 mend a worn/broken item), **DISMANTLE** (M1 #70 take a construction apart + salvage), **EXTINGUISH_FIRE, BANK_FIRE** (M1 #71 fire management), **DISENGAGE** (M1 #72 retreat/flee/hide)
+GATHER, HARVEST, CRAFT, EQUIP, UNEQUIP, DROP, BUILD, REPAIR, ABANDON, RESUME, LIGHT_FIRE, ADD_FUEL, MAKE_CHARCOAL, COOK, SLEEP, STRIP_BARK, GATHER_CLAY, GATHER_STONE_SLAB, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, WRITE, EDIT_DOCUMENT, SKETCH_MAP, DESIGNATE, MARK, TRAVEL, CONFRONT_WILDLIFE, REFINE, OBSERVE, GATHER_PLANT, FELL_TREE, RAID_HIVE, COLLECT_INSECTS, FISH, SNARE, TRACK, TAME, LURE, SET_TRAP, CHECK_TRAP, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, REWORK, CRAFT_WORKSTATION (V69 benches/loom), PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE (multi-output & preserved-food outputs handled inside PROCESS_MATERIAL), **CRAFT_NET, CRAFT_BELT** (V71), **PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER** (M1 #67; V72 access-state), **SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE** (M1 #65 perception; identify folds into EXAMINE), **WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH** (M1 #66 body care), **REPAIR_ITEM** (M1 #69 mend a worn/broken item), **DISMANTLE, REPAIR_STRUCTURE** (M1 #70 take a construction apart / mend any standing structure), **EXTINGUISH_FIRE, BANK_FIRE, COLLECT_WATER, BOIL_WATER, FILTER_WATER, MAKE_BED, MAINTAIN_CAMP** (M1 #71 fire/water/camp — closed), **DISENGAGE** (M1 #72 retreat/flee/hide)
 
 ### Known limitations (acceptable for now)
 - Friction fire kit never wears out — infinite fires once made (wear/degradation future task)
