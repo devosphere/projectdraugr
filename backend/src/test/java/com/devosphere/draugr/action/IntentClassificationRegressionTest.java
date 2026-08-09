@@ -310,6 +310,11 @@ class IntentClassificationRegressionTest {
         // #55 building stock: saplings and straw route to GATHER_PLANT (their flora sources).
         assertEquals("GATHER_PLANT", classify("gather a straight sapling", false));
         assertEquals("GATHER_PLANT", classify("harvest straw from the meadow", false));
+        // #75 fibre materials: milkweed / flax / hemp / root fibre reach their flora via GATHER_PLANT.
+        assertEquals("GATHER_PLANT", classify("gather milkweed from the meadow", false));
+        assertEquals("GATHER_PLANT", classify("harvest flax", false));
+        assertEquals("GATHER_PLANT", classify("collect hemp stalks", false));
+        assertEquals("GATHER_PLANT", classify("gather root fibre from the wet ground", false));
         // WASH is body-washing only; material washing/panning falls through to the process catalogue.
         assertEquals("WASH", classify("wash myself in the stream"));
         assertEquals("WASH", classify("take a bath in the river"));
