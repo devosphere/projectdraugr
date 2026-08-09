@@ -240,6 +240,27 @@ class IntentClassificationRegressionTest {
         assertEquals("EXAMINE", classify("what kind of tree is this"));
     }
 
+    /**
+     * M1 #68 gathering aliases + WASH scoping: forage/harvest/take-all/gather-up reach the specific gathers,
+     * and "wash/rinse the material" is no longer stolen by the body-washing WASH intent.
+     */
+    @Test void gatheringAliasesAndWashScoping() throws Exception {
+        // The specific gathers now accept the full gather-verb set, not just gather/collect.
+        assertEquals("GATHER_FIBER", classify("forage for plant fiber", false));
+        assertEquals("GATHER_BRANCHES", classify("harvest firewood from the forest floor", false));
+        assertEquals("GATHER_BRANCHES", classify("gather up the dry branches", false));
+        assertEquals("GATHER_STONE", classify("take all the loose stones", false));
+        // (Berries route to GATHER_PLANT's flora path, which handles them — that rule wins earlier.)
+        assertEquals("GATHER_PLANT", classify("collect wild berries", false));
+        // WASH is body-washing only; material washing/panning falls through to the process catalogue.
+        assertEquals("WASH", classify("wash myself in the stream"));
+        assertEquals("WASH", classify("take a bath in the river"));
+        assertEquals("WASH", classify("rinse my hands"));
+        assertEquals("UNKNOWN", classify("wash the sediment from the gravel", false));
+        assertEquals("UNKNOWN", classify("rinse the fleece", false));
+        assertEquals("UNKNOWN", classify("pan the gravel for gold", false));
+    }
+
     /** Workstations (V69) claim their words before the generic desk/table rule; a plain table is still a desk. */
     @Test void workstationsClassifyBeforePlainFurniture() throws Exception {
         assertEquals("CRAFT_WORKSTATION", classify("build a woodworking bench"));
