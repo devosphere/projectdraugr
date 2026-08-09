@@ -252,6 +252,9 @@ class IntentClassificationRegressionTest {
         assertEquals("GATHER_STONE", classify("take all the loose stones", false));
         // (Berries route to GATHER_PLANT's flora path, which handles them — that rule wins earlier.)
         assertEquals("GATHER_PLANT", classify("collect wild berries", false));
+        // #55 building stock: saplings and straw route to GATHER_PLANT (their flora sources).
+        assertEquals("GATHER_PLANT", classify("gather a straight sapling", false));
+        assertEquals("GATHER_PLANT", classify("harvest straw from the meadow", false));
         // WASH is body-washing only; material washing/panning falls through to the process catalogue.
         assertEquals("WASH", classify("wash myself in the stream"));
         assertEquals("WASH", classify("take a bath in the river"));
