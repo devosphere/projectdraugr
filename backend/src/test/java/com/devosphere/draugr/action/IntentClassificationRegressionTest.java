@@ -62,6 +62,26 @@ class IntentClassificationRegressionTest {
         assertEquals("SLEEP", classify("take a nap by the fire", false));
     }
 
+    /**
+     * The #61 staged shelters route through the assembly engine, which is reached only when
+     * classify() yields UNKNOWN. Two natural build phrases used to be stolen by greedy intents —
+     * "fishing landing" by FISH and "sleeping platform" by SLEEP — so those are now guarded, while
+     * genuine fishing and sleeping still classify.
+     */
+    @Test void stagedShelterPhrasesReachTheAssemblyEngine() throws Exception {
+        assertEquals("UNKNOWN", classify("build a fishing landing", false));
+        assertEquals("UNKNOWN", classify("build a landing stage", false));
+        assertEquals("UNKNOWN", classify("build a raised sleeping platform", false));
+        assertEquals("UNKNOWN", classify("build a wattle and daub hut", false));
+        assertEquals("UNKNOWN", classify("build an earth sheltered hut", false));
+        assertEquals("UNKNOWN", classify("build a wood store", false));
+        assertEquals("UNKNOWN", classify("build a footbridge", false));
+        assertEquals("UNKNOWN", classify("build a clay lined hearth", false));
+        // The real verbs still classify.
+        assertEquals("FISH", classify("fish the river with a line", false));
+        assertEquals("SLEEP", classify("sleep for a few hours", false));
+    }
+
     /** A named specific basket yields to its process; the generic basket does not. */
     @Test void specificBasketsYieldToTheProcess() throws Exception {
         assertEquals("UNKNOWN", classify("weave a burden basket", false));

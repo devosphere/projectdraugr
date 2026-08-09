@@ -211,7 +211,7 @@ public class ChroniclePhysiologyService {
     @Transactional
     public void rest(UUID chronicleId, int minutes) {
         double hours = minutes / 60.0;
-        Boolean sheltered = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object shelter ON shelter.id=cp.object_id JOIN world_object body ON body.current_location_id=shelter.current_location_id WHERE body.id=? AND cp.project_kind='LEAN_TO' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND shelter.lifecycle_state='ACTIVE')", Boolean.class, chronicleId);
+        Boolean sheltered = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object shelter ON shelter.id=cp.object_id JOIN world_object body ON body.current_location_id=shelter.current_location_id WHERE body.id=? AND cp.project_kind IN ('LEAN_TO','WATTLE_AND_DAUB_HUT','EARTH_SHELTERED_HUT') AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND shelter.lifecycle_state='ACTIVE')", Boolean.class, chronicleId);
         double recovery = Boolean.TRUE.equals(sheltered) ? 1.25 : 1.0;
         int drying = Boolean.TRUE.equals(sheltered) ? Math.max(1, (int)Math.round(hours * 8)) : 0;
         jdbc.update("UPDATE chronicle_physiology SET sleep_debt_hours=GREATEST(0,sleep_debt_hours-?),energy_level=LEAST(100,energy_level+?),pain_level=GREATEST(0,pain_level-?),stress_level=GREATEST(0,stress_level-?),wetness_level=GREATEST(0,wetness_level-?) WHERE chronicle_id=?", hours * .85 * recovery, Math.max(1, (int)Math.round(hours * 9 * recovery)), Math.max(0, (int)Math.round(hours * recovery)), Math.max(0, (int)Math.round(hours * 2 * recovery)), drying, chronicleId);
@@ -221,7 +221,7 @@ public class ChroniclePhysiologyService {
     @Transactional
     public boolean sleep(UUID chronicleId, int minutes) {
         double hours = minutes / 60.0;
-        Boolean sheltered = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object shelter ON shelter.id=cp.object_id JOIN world_object body ON body.current_location_id=shelter.current_location_id WHERE body.id=? AND cp.project_kind='LEAN_TO' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND shelter.lifecycle_state='ACTIVE')", Boolean.class, chronicleId);
+        Boolean sheltered = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object shelter ON shelter.id=cp.object_id JOIN world_object body ON body.current_location_id=shelter.current_location_id WHERE body.id=? AND cp.project_kind IN ('LEAN_TO','WATTLE_AND_DAUB_HUT','EARTH_SHELTERED_HUT') AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND shelter.lifecycle_state='ACTIVE')", Boolean.class, chronicleId);
         boolean safe = Boolean.TRUE.equals(sheltered);
         // Sheltered sleep is deep and restorative; exposed sleep on bare ground is
         // broken and shallow, clearing far less debt and leaving stress behind.
