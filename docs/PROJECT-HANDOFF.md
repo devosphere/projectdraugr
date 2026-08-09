@@ -100,7 +100,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 | `backend/src/main/java/com/devosphere/draugr/domain/ArchitectRouter.java` | Cost gate for the Architect — routes COVERED / POLISH / INVENT. |
 | `backend/src/main/java/com/devosphere/draugr/routing/ProcessMatcher.java` | The **only** implementation of the action→process resolution rule. Both `runProcess()` and `ArchitectRouter` go through it. |
 | `backend/src/main/java/com/devosphere/draugr/routing/RoutingMissRecorder.java` | Records unresolved actions into the V56 backlog. Separate bean on purpose — see its Javadoc. |
-| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V70. Next is V71. |
+| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V72. Next is V73. (V71 fishing nets, V72 container access-state.) |
 | `backend/src/main/java/com/devosphere/draugr/domain/DomainRegistryService.java` | Reads domain_registry — the Architect's ledger of invented domains. |
 | `docs/architecture/domain-creation-pattern.md` | The exact recipe for adding a new domain. |
 | `docs/architecture/action-routing-hardening.md` | Sprint 003 spec — collisions, milestones M1–M5. |
@@ -119,7 +119,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 
 ---
 
-## What Is Built (Migrations V1–V70, all applied)
+## What Is Built (Migrations V1–V72, all applied)
 
 > **Post-playtest cycle (2026-08-03) — summary; full detail + resume point in
 > [systems/06.4-Runtime-Authoring-Build-Plan.md](systems/06.4-Runtime-Authoring-Build-Plan.md).**
@@ -234,20 +234,46 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 
 #### Resume point
 
-> **▶ ACTIVE NOW (2026-08-04): DR-0022 "Phase-0 parity" — make Phase 1 EXCEED the ChatGPT playthrough.**
-> After clearing the #21–#28 backlog, a review of the user's Phase-0 (single-ChatGPT) "Wolf Kingdom" save vs
-> Phase 1, plus issues #29–#37, produced **[DR-0022](systems/06.3-Decision-Log.md#dr-0022)**. **The single
-> live tracker is [06.5-Phase0-Parity-Build-Plan.md](systems/06.5-Phase0-Parity-Build-Plan.md) — go there
-> first; its ▶ CURRENT line is authoritative.**
+> **▶ ACTIVE NOW (2026-08-09): Milestone 1 — Action Catalogue (EPIC #64), continuing from the playtest-bug sweep.**
+> All **13 playtest [BUG] issues (#29–#44, incl. #39)** are FIXED, tested, and **CLOSED on GitHub**; everything
+> is on `development` (pushed). **Migrations through V72.** The **GitHub milestones are the live plan now** —
+> **M1 "First-Era Core Survival Loop" (73 issues, 4 EPICs) is the active milestone**; the user's directive is to
+> **cover all four EPICs**, driven EPIC by EPIC in order (see "M1 progress" below). Full suite **151 backend
+> tests + 11 SQL regressions green** on the V1–V72 chain.
 >
-> **ALL deterministic, key-free DR-0022 layers are SHIPPED** on `development` (~17 commits, **145 backend
-> tests + 3 SQL regressions green**, **migrations through V70**): unified reachability (on-site storage +
-> racked tools) · perception names the real flora/wildlife/fish/insects present · thick objects (V68
-> `object_attribute`/`object_modification`) · documents/maps read-back · narration overhaul (attention-scaled
-> grounding + flagship crafts + rejection prose) · **workstations (V69: efficiency + a minor bounded quality
-> assist, never a gate)** · **multi-zone settlements (V70: many named zones/chunk, "go to \<zone\>")** ·
-> quantified AI context (F2) · cross-chunk reject that names the store. Quick fixes #32 (bathe at any fresh
-> water) + #36 (net≠fishing) done; #25/#28 closed on GitHub earlier.
+> **Playtest bugs (all closed):** net + belt crafts now exist (explicit `CRAFT_NET`/`CRAFT_BELT`; **V71** adds
+> `fishing_net`/`landing_net`) · baskets weave from ANY flexible stock (fibre/vine/cordage, cordage counts
+> double), not fibre-only · vine gathering fails with a wrong-site fact instead of silently substituting berries
+> · drop → visible on the ground (survey) → `PICK_UP`, and `STORE` into containers with a capacity pre-check ·
+> inspect scopes to the named subject (routes to `EXAMINE`) · bathe routing confirmed + test-guarded · mark-and-
+> name persistence (the V70-relaxed `(chronicle,chunk,name)` conflict target). Coverage: `IntentClassification
+> RegressionTest`, `tests/regression/dr-bugs-*.sql` + `dr0022-*.sql`, and `PlaytestBugFixesIntegrationTest`
+> (CI, drives the real action boundary).
+>
+> **M1 progress (EPIC #64 Action Catalogue — IN PROGRESS):**
+> - **#67** physical-object/load/storage/equipment — full take/place/store/retrieve/pack/unpack **alias
+>   coverage**; container **open/close/seal** access-state (**V72** `container_properties.access_state`) gates
+>   store & retrieve until opened, recorded in immutable history. *Remaining in #67:* tie/untie, stack, drag/push.
+> - **#65** perception — sensory verbs **search/listen/smell/feel** (`ExaminationService.sense`, grounded in real
+>   weather/water/fire/life/ground). Done earlier: observe/inspect/examine/analyze/investigate (incl. #33 subject
+>   scoping). *Remaining in #65:* read/review_record, measure, identify.
+> - **Next, in order:** finish #65 → **#68** gathering verbs → **#69** crafting verbs → **#70** construction →
+>   **#71** fire/water/cooking → **#72** travel/wildlife → **#73** resolver fallback; then **EPIC #54** supply
+>   chains, then **#191** bare-hand handwork, then **#123** survival viability. The "add 100 …" catalogue stories
+>   (#75–#78) are large per-entry bodies — **full M1 closure spans many sessions**; land verifiable increments and
+>   close a story only when its acceptance criteria are fully met.
+> - **New intents this cycle** (add to the list at "Intents implemented"): `CRAFT_NET`, `CRAFT_BELT`, `PICK_UP`,
+>   `STORE`, `OPEN_CONTAINER`, `CLOSE_CONTAINER`, `SEARCH`, `LISTEN`, `SMELL`, `FEEL`. New service methods:
+>   `PhysicalItemService.{pickUp, storeInContainer, setContainerAccess, craftFishingNet, craftUtilityBelt,
+>   basketWeaveUnitsInReach}` and `ExaminationService.sense`.
+>
+> **DR-0022 "Phase-0 parity" — ALL deterministic layers SHIPPED last cycle** (migrations → V70; full detail in
+> milestone #12 below; tracker [06.5](systems/06.5-Phase0-Parity-Build-Plan.md)). **Two locked design principles
+> stay in force — do not re-litigate:** (A) reachability is **knowledge-scoped & capped at the chunk/locality**
+> (do NOT tighten Layer-1 reach to the zone); (B) **quality is majorly the craftsman** (bare hands make superior
+> work), a workstation is efficiency + a minor bounded assist, **never a gate**. Key-gated remainder (AI-on
+> verification, F9 Interpreter memoization) unchanged — the operator's launcher run with the encrypted,
+> password-gated key; the agent never handles the key/password.
 >
 > **What remains (all non-blocking or key-gated):** craft fetch-time + workstation time/effort efficiency
 > (need a small `resolve()` restructure — the tick advances before the process resolves), per-action
@@ -310,6 +336,20 @@ The question "should an AI layer help the ActivityClassifier work out what the p
     - **Locked design principles (do not re-litigate)** — DR-0022 → "Principles settled during Layer 4b": (A) reachability is **knowledge-scoped & capped at the chunk/locality** (Layer 1 chunk reach is correct — do NOT tighten to the zone; other chunks are a journey the player takes, never auto-walked); (B) **quality is majorly the craftsman** (bare hands make superior work), a workstation is efficiency + a minor bounded assist, never a gate.
     - **Remaining (all non-blocking or key-gated):** craft fetch-time + workstation time/effort efficiency (need a small `resolve()` restructure — `ticks.advanceBy` runs before the process resolves); per-action success-core narration breadth; Interpreter memoization/convergence (F9). **AI-on verification is the operator's launcher run** (`DRAUGR_AI_ENABLED` + the encrypted password-gated key; the agent never handles the key/password) — the whole deterministic substrate it rides on is now in place.
 
+13. **DONE — playtest bugs #29–#44 all fixed & closed; IN PROGRESS — Milestone 1 (Action Catalogue).** The GitHub milestones (M1–M4) are now the live plan; M1 is active. Work on `development`, pushed, as `devosphere.tech` (never the `johncalado` account). **Migrations → V72. 151 backend tests + 11 SQL regressions green.**
+    - **All 13 playtest [BUG] issues resolved and CLOSED** (`fcb3e2f`, `e83d134`, `ebd1f89`, `d997346`, integration `1020c0f`). These came from a playthrough run *after* the DR-0022 work, so each was reproduced against the live code, not assumed fixed:
+      - **#43/#36/#44 nets, #35 belt** — catalogued as technique knowledge but with no runnable make-route. Added explicit crafts `CRAFT_NET` (mesh from cordage; **V71** `fishing_net`/`landing_net`) and `CRAFT_BELT` (`utility_belt` from cordage + fibre). *Using* a net (cast/haul) routes to `FISH`; *making* one does not.
+      - **#34/#31 baskets** — `craftBasket` demanded `plant_fiber ×8` only. Now weaves from any flexible stock: plant fibre or vine (1 weave unit) or cordage (2 units), eight units total (`basketWeaveUnitsInReach`).
+      - **#42 vine→berries** — a named-but-absent gather target (vine/bark/root/reed/sap…) fails with a wrong-site fact instead of substituting the nearest FOOD (berry).
+      - **#29/#41/#40 logistics** — drop already grounded objects correctly; added `survey()` ground-object listing (visible), `PICK_UP` (from ground or a reachable container), and `STORE` (into a container, capacity/nesting pre-checked so a full one fails gracefully, not as a hard rollback).
+      - **#33 inspect** — "inspect the &lt;subject&gt;" now routes to the subject-scoping `EXAMINE` (resolves the named reachable item, falls back to the place); scenery stays `OBSERVE`.
+      - **#39 mark-and-name** — `markLandmark` upserted on the pre-V70 `(chronicle,chunk)` key; fixed to the relaxed `(chronicle,chunk,name)` conflict target (the reported raw persistence error).
+      - **#32 bathe** — confirmed already working (WASH routing + `wash()` effect + `waterInReach` covers wetland/river-bank/spring/stream) and now pinned by a classifier test.
+    - **M1 EPIC #64 Action Catalogue — started, two stories advanced:**
+      - **#67** (`d8b3ced` aliases; `6dea580` access-state, **V72**) — full take/place/store/retrieve/pack/unpack alias coverage + container **open/close/seal** gating store & retrieve (recorded as an `ACCESS_CHANGED` transition). *Remaining:* tie/untie, stack/pile, move/drag/push.
+      - **#65** (`987249f`) — sensory verbs **search/listen/smell/feel** via `ExaminationService.sense`, grounded in the chunk's real weather/water/fire/life/ground. *Remaining:* read/review_record, measure, identify.
+    - **Resume:** finish #65 (read/measure/identify), then #68 → #69 → #70 → #71 → #72 → #73, then EPIC #54, #191, #123 — see the ▶ ACTIVE NOW banner. New regression/integration tests live in `backend/.../action/IntentClassificationRegressionTest.java`, `tests/regression/dr-bugs-*.sql`, and `backend/.../persistence/PlaytestBugFixesIntegrationTest.java`.
+
 #### Why coverage, not correctness, is the cost driver
 
 Four procedure simulations (15 m² cabin, fish preservation, bow production, leather armor) returned 0/12, 1/10, 3/12, 3/12 COVERED — and several of those were *false* COVERED. True coverage is roughly 5–10%. With only 20 processes, nearly every meaningful action still routes to the Architect.
@@ -321,7 +361,7 @@ The unlock: V53's review gate already makes machine-authored processes safe to a
 **THEN: Task #21 — AI narration (the Simulation Agent's voice).** The seam is built: `NarrationRouter` decides whether to call, `NarrationEngine` supplies the `backendNarration` the refinement prompt builds on. See `docs/architecture/narration-engine.md` for the prompt template and cost model.
 
 ### Intents implemented (ChronicleActionService)
-GATHER, HARVEST, CRAFT, EQUIP, UNEQUIP, DROP, BUILD, REPAIR, ABANDON, RESUME, LIGHT_FIRE, ADD_FUEL, MAKE_CHARCOAL, COOK, SLEEP, STRIP_BARK, GATHER_CLAY, GATHER_STONE_SLAB, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, WRITE, EDIT_DOCUMENT, SKETCH_MAP, DESIGNATE, MARK, TRAVEL, CONFRONT_WILDLIFE, REFINE, OBSERVE, GATHER_PLANT, FELL_TREE, RAID_HIVE, COLLECT_INSECTS, FISH, SNARE, TRACK, TAME, LURE, SET_TRAP, CHECK_TRAP, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, REWORK, CRAFT_WORKSTATION (V69 benches/loom), PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE (multi-output & preserved-food outputs handled inside PROCESS_MATERIAL)
+GATHER, HARVEST, CRAFT, EQUIP, UNEQUIP, DROP, BUILD, REPAIR, ABANDON, RESUME, LIGHT_FIRE, ADD_FUEL, MAKE_CHARCOAL, COOK, SLEEP, STRIP_BARK, GATHER_CLAY, GATHER_STONE_SLAB, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, WRITE, EDIT_DOCUMENT, SKETCH_MAP, DESIGNATE, MARK, TRAVEL, CONFRONT_WILDLIFE, REFINE, OBSERVE, GATHER_PLANT, FELL_TREE, RAID_HIVE, COLLECT_INSECTS, FISH, SNARE, TRACK, TAME, LURE, SET_TRAP, CHECK_TRAP, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, REWORK, CRAFT_WORKSTATION (V69 benches/loom), PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE (multi-output & preserved-food outputs handled inside PROCESS_MATERIAL), **CRAFT_NET, CRAFT_BELT** (V71), **PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER** (M1 #67; V72 access-state), **SEARCH, LISTEN, SMELL, FEEL** (M1 #65 sensory family)
 
 ### Known limitations (acceptable for now)
 - Friction fire kit never wears out — infinite fires once made (wear/degradation future task)
