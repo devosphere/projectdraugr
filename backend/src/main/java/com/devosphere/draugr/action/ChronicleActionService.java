@@ -52,6 +52,12 @@ public class ChronicleActionService {
         new String[]{"throat","neck","heart","eye","head","skull","chest","flank","side","leg","hamstring","belly"},
         new String[]{"ambush","flank","circle","corner","distract","downwind","sneak","creep","approach slowly","wait for","from behind"},
         new String[]{"pin","finish","again","repeated","hold it down","press the attack","keep"});
+    // Signal groups for effort put into a gather (#68): care, a thorough working of the ground, and a will to
+    // take as much as it holds. Their presence — plus the LOAD mastery — wins a little more where the source has it.
+    private static final List<String[]> GATHER_SIGNALS = List.of(
+        new String[]{"careful","carefully","patient","patiently","methodical","methodically","thorough","thoroughly","diligent"},
+        new String[]{"comb","scour","search","pick through","work loose","dig deep","turn over","strip the","go over"},
+        new String[]{"all","every","as much","fill","load up","armful","as many","the lot","clear the"});
     // Cues that the action text is spending effort on perceiving the surroundings,
     // rather than on a single heads-down task. Their presence lifts the frame's
     // ATTENTION, so the world it reveals matches what the chronicle actually looked at.
@@ -148,11 +154,11 @@ public class ChronicleActionService {
             perception = "You take a brief moment away from the immediate ground around you.";
         } else if (intent == Intent.REST) { physiology.rest(chronicle.id(), minutes); perception = "You remain still while the forest continues around you."; }
         else if (intent == Intent.SLEEP) { boolean safe = physiology.sleep(chronicle.id(), minutes); perception = safe ? "You lie down under cover and let sleep take you. You wake to a changed sky, the deep tiredness lifted from your limbs." : "You settle onto the bare ground and drift into a broken, shallow sleep, waking stiff and only half-rested as the light shifts."; }
-        else if (intent == Intent.GATHER_FIBER) { int bundles=items.gatherPlantFiber(chronicle.id(),chronicle.location(),resolvedAt); outcome=bundles>0?"SUCCEEDED":"FAILED"; perception=bundles>0?"You patiently separate usable plant fiber from the living growth around you.":"You search through the growth, but leave it as it is."; gatherEffectType="PLANT_FIBER_GATHERED"; gatherPayloadKey="bundles"; gatherCount=bundles; }
-        else if (intent == Intent.GATHER_STONE) { int stones=items.gatherFieldStones(chronicle.id(),chronicle.location(),resolvedAt); outcome=stones>0?"SUCCEEDED":"FAILED"; perception=stones>0?"You work loose a few stones from the ground and carry them with you.":"You turn over the ground for a while, then leave it undisturbed."; gatherEffectType="FIELD_STONE_GATHERED"; gatherPayloadKey="stones"; gatherCount=stones; }
-        else if (intent == Intent.GATHER_BERRIES) { int berries=items.gatherWildBerries(chronicle.id(),chronicle.location(),resolvedAt); outcome=berries>0?"SUCCEEDED":"FAILED"; perception=berries>0?"You gather a small handful of ripe berries from the living growth.":"You search the low growth carefully, then let it settle back into place."; gatherEffectType="WILD_BERRIES_GATHERED"; gatherPayloadKey="berries"; gatherCount=berries; }
-        else if (intent == Intent.GATHER_BRANCHES) { int branches=items.gatherDryBranches(chronicle.id(),chronicle.location(),resolvedAt); outcome=branches>0?"SUCCEEDED":"FAILED"; perception=branches>0?"You gather a few dry branches from beneath the trees.":"You search the leaf litter for dry wood, then leave with empty hands."; gatherEffectType="DRY_BRANCH_GATHERED"; gatherPayloadKey="branches"; gatherCount=branches; }
-        else if (intent == Intent.GATHER_CLAY) { int lumps=items.gatherClay(chronicle.id(),chronicle.location(),resolvedAt); outcome=lumps>0?"SUCCEEDED":"FAILED"; perception=lumps>0?"You work the earth with your hands and pull free a dense lump of wet clay.":"You search the ground for workable clay, but the earth here holds nothing useful."; gatherEffectType="CLAY_GATHERED"; gatherPayloadKey="lumps"; gatherCount=lumps; }
+        else if (intent == Intent.GATHER_FIBER) { int bundles=items.gatherPlantFiber(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())); outcome=bundles>0?"SUCCEEDED":"FAILED"; perception=bundles>0?"You patiently separate usable plant fiber from the living growth around you.":"You search through the growth, but leave it as it is."; gatherEffectType="PLANT_FIBER_GATHERED"; gatherPayloadKey="bundles"; gatherCount=bundles; }
+        else if (intent == Intent.GATHER_STONE) { int stones=items.gatherFieldStones(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())); outcome=stones>0?"SUCCEEDED":"FAILED"; perception=stones>0?"You work loose a few stones from the ground and carry them with you.":"You turn over the ground for a while, then leave it undisturbed."; gatherEffectType="FIELD_STONE_GATHERED"; gatherPayloadKey="stones"; gatherCount=stones; }
+        else if (intent == Intent.GATHER_BERRIES) { int berries=items.gatherWildBerries(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())); outcome=berries>0?"SUCCEEDED":"FAILED"; perception=berries>0?"You gather a small handful of ripe berries from the living growth.":"You search the low growth carefully, then let it settle back into place."; gatherEffectType="WILD_BERRIES_GATHERED"; gatherPayloadKey="berries"; gatherCount=berries; }
+        else if (intent == Intent.GATHER_BRANCHES) { int branches=items.gatherDryBranches(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())); outcome=branches>0?"SUCCEEDED":"FAILED"; perception=branches>0?"You gather a few dry branches from beneath the trees.":"You search the leaf litter for dry wood, then leave with empty hands."; gatherEffectType="DRY_BRANCH_GATHERED"; gatherPayloadKey="branches"; gatherCount=branches; }
+        else if (intent == Intent.GATHER_CLAY) { int lumps=items.gatherClay(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())); outcome=lumps>0?"SUCCEEDED":"FAILED"; perception=lumps>0?"You work the earth with your hands and pull free a dense lump of wet clay.":"You search the ground for workable clay, but the earth here holds nothing useful."; gatherEffectType="CLAY_GATHERED"; gatherPayloadKey="lumps"; gatherCount=lumps; }
         else if (intent == Intent.GATHER_STONE_SLAB) { int slabs=items.gatherStoneSlab(chronicle.id(),chronicle.location(),resolvedAt); outcome=slabs>0?"SUCCEEDED":"FAILED"; perception=slabs>0?"You work a broad, flat slab of stone free from the rock and take up its considerable weight.":"You search the rock for a slab flat enough to work, but nothing here breaks away clean."; gatherEffectType="STONE_SLAB_GATHERED"; gatherPayloadKey="slabs"; gatherCount=slabs; }
         else if (intent == Intent.GATHER_PLANT) { String[] r=items.gatherPlant(chronicle.id(),chronicle.location(),text,resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.FELL_TREE) { String[] r=items.fellTree(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
@@ -1160,6 +1166,17 @@ public class ChronicleActionService {
             "SELECT COUNT(*) FROM ecology_site WHERE chunk_id=? AND (site_kind ILIKE '%spring%' OR site_kind ILIKE '%stream%' OR site_kind ILIKE '%river%' OR site_kind ILIKE '%freshwater%')",
             Integer.class, location);
         return sites != null && sites > 0;
+    }
+    /**
+     * The effort/skill yield bonus for a gather (#68): 0–2 extra units where the source holds them. A careful,
+     * thorough, take-it-all wording (Layer 2) plus the LOAD mastery (Layer 3) win a little more; a bare command
+     * from an unpractised hand gets the biome baseline. Capacity and source depletion still cap the actual take.
+     */
+    private int gatherBonus(String text, UUID chronicle) {
+        double spec = SuccessModel.specificity(text, GATHER_SIGNALS);
+        double fam = capability.familiarity(chronicle, "LOAD");
+        int bonus = (int) Math.round(spec * 1.5 + Math.min(0.5, fam * 5.0));
+        return Math.max(0, Math.min(2, bonus));
     }
     private String attentionLevel(String text, Intent intent) {
         if (intent == Intent.OBSERVE) return "HIGH";

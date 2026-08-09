@@ -33,10 +33,13 @@ public class PhysicalItemService {
         return new ItemState(chronicle,carried,equipped,loadState(chronicle),containers(chronicle));
     }
     @Transactional
-    public int gatherPlantFiber(UUID chronicle, UUID location, Instant occurredAt) {
+    public int gatherPlantFiber(UUID chronicle, UUID location, Instant occurredAt) { return gatherPlantFiber(chronicle, location, occurredAt, 0); }
+    /** {@code extra} is the effort/skill yield bonus (#68): a careful, practised gather wins more where the source holds it. */
+    @Transactional
+    public int gatherPlantFiber(UUID chronicle, UUID location, Instant occurredAt, int extra) {
         String biome=jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?",String.class,location);
         if ("OCEAN".equals(biome) || "MOUNTAIN".equals(biome)) return 0; // No suitable fiber here; resolves as a graceful empty-handed attempt.
-        int desired=Math.min("WETLAND".equals(biome)?3:2, capacityHeadroomUnits(chronicle,"plant_fiber"));
+        int desired=Math.min(("WETLAND".equals(biome)?3:2)+extra, capacityHeadroomUnits(chronicle,"plant_fiber"));
         if(desired<=0) return 0; // The Chronicle cannot carry any more; a graceful empty-handed attempt.
         int count=resources.take(location,"plant_fiber",desired,occurredAt);
         for(int i=0;i<count;i++){UUID id=UUID.randomUUID();jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM','Plant fiber bundle',?)",id,chronicle);jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,'plant_fiber','SOUND')",id);jdbc.update("INSERT INTO object_transition (object_id,transition_type,payload) VALUES (?,'GATHERED',jsonb_build_object('biome',?))",id,biome);}
@@ -44,10 +47,12 @@ public class PhysicalItemService {
         return count;
     }
     @Transactional
-    public int gatherFieldStones(UUID chronicle, UUID location, Instant occurredAt) {
+    public int gatherFieldStones(UUID chronicle, UUID location, Instant occurredAt) { return gatherFieldStones(chronicle, location, occurredAt, 0); }
+    @Transactional
+    public int gatherFieldStones(UUID chronicle, UUID location, Instant occurredAt, int extra) {
         String biome=jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?",String.class,location);
         if ("OCEAN".equals(biome)) return 0; // No loose stone here; resolves as a graceful empty-handed attempt.
-        int desired=Math.min("MOUNTAIN".equals(biome) || "HIGHLAND".equals(biome) ? 3 : 2, capacityHeadroomUnits(chronicle,"field_stone"));
+        int desired=Math.min(("MOUNTAIN".equals(biome) || "HIGHLAND".equals(biome) ? 3 : 2)+extra, capacityHeadroomUnits(chronicle,"field_stone"));
         if(desired<=0) return 0; // The Chronicle cannot carry any more; a graceful empty-handed attempt.
         int count=resources.take(location,"field_stone",desired,occurredAt);
         for(int i=0;i<count;i++){UUID id=UUID.randomUUID();jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM','Field stone',?)",id,chronicle);jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,'field_stone','SOUND')",id);jdbc.update("INSERT INTO object_transition (object_id,transition_type,payload) VALUES (?,'GATHERED',jsonb_build_object('biome',?))",id,biome);}
@@ -55,19 +60,23 @@ public class PhysicalItemService {
         return count;
     }
     @Transactional
-    public int gatherWildBerries(UUID chronicle, UUID location, Instant occurredAt) {
+    public int gatherWildBerries(UUID chronicle, UUID location, Instant occurredAt) { return gatherWildBerries(chronicle, location, occurredAt, 0); }
+    @Transactional
+    public int gatherWildBerries(UUID chronicle, UUID location, Instant occurredAt, int extra) {
         String biome=jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?",String.class,location);
         if ("MOUNTAIN".equals(biome) || "OCEAN".equals(biome)) return 0; // No edible growth here; resolves as a graceful empty-handed attempt.
-        int desired=Math.min("WETLAND".equals(biome)?3:2, capacityHeadroomUnits(chronicle,"wild_berries"));
+        int desired=Math.min(("WETLAND".equals(biome)?3:2)+extra, capacityHeadroomUnits(chronicle,"wild_berries"));
         if(desired<=0) return 0; // The Chronicle cannot carry any more; a graceful empty-handed attempt.
         int count=resources.take(location,"wild_berries",desired,occurredAt);
         for(int i=0;i<count;i++){UUID id=UUID.randomUUID();jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM','Wild berries',?)",id,chronicle);jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,'wild_berries','SOUND')",id);jdbc.update("INSERT INTO object_transition (object_id,transition_type,payload) VALUES (?,'GATHERED',jsonb_build_object('biome',?))",id,biome);} assertCarryCapacity(chronicle); return count;
     }
     @Transactional
-    public int gatherDryBranches(UUID chronicle, UUID location, Instant occurredAt) {
+    public int gatherDryBranches(UUID chronicle, UUID location, Instant occurredAt) { return gatherDryBranches(chronicle, location, occurredAt, 0); }
+    @Transactional
+    public int gatherDryBranches(UUID chronicle, UUID location, Instant occurredAt, int extra) {
         String biome=jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?",String.class,location);
         if ("OCEAN".equals(biome)) return 0; // No branches here; resolves as a graceful empty-handed attempt.
-        int desired=Math.min("MOUNTAIN".equals(biome)?1:2, capacityHeadroomUnits(chronicle,"dry_branch"));
+        int desired=Math.min(("MOUNTAIN".equals(biome)?1:2)+extra, capacityHeadroomUnits(chronicle,"dry_branch"));
         if(desired<=0) return 0; // The Chronicle cannot carry any more; a graceful empty-handed attempt.
         int count=resources.take(location,"dry_branch",desired,occurredAt);
         for(int i=0;i<count;i++){UUID id=UUID.randomUUID();jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM','Dry branch',?)",id,chronicle);jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,'dry_branch','SOUND')",id);jdbc.update("INSERT INTO object_transition (object_id,transition_type,payload) VALUES (?,'GATHERED','{}'::jsonb)",id);} assertCarryCapacity(chronicle); return count;
@@ -247,7 +256,9 @@ public class PhysicalItemService {
     }
     /** Dig clay from wet earth. Yield scales with biome: CLAY_DEPOSIT > RIVER_BANK > WETLAND. Dry biomes yield nothing. */
     @Transactional
-    public int gatherClay(UUID chronicle, UUID location, Instant occurredAt) {
+    public int gatherClay(UUID chronicle, UUID location, Instant occurredAt) { return gatherClay(chronicle, location, occurredAt, 0); }
+    @Transactional
+    public int gatherClay(UUID chronicle, UUID location, Instant occurredAt, int extra) {
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
         int yield = switch (biome != null ? biome : "") {
             case "CLAY_DEPOSIT" -> 3;
@@ -256,7 +267,7 @@ public class PhysicalItemService {
             default -> 0;
         };
         if (yield == 0) return 0;
-        int desired = Math.min(yield, capacityHeadroomUnits(chronicle, "clay_lump"));
+        int desired = Math.min(yield + extra, capacityHeadroomUnits(chronicle, "clay_lump"));
         if (desired <= 0) return 0;
         for (int i = 0; i < desired; i++) {
             UUID id = UUID.randomUUID();
