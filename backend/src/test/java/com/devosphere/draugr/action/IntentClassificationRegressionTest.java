@@ -278,6 +278,25 @@ class IntentClassificationRegressionTest {
         assertEquals("UNKNOWN", classify("carve a wooden spoon", true));
     }
 
+    /** M1 #66 body care against the environment: warm/dry/cool/shelter/stretch, distinct from material processing. */
+    @Test void bodyCareAgainstEnvironmentClassify() throws Exception {
+        assertEquals("WARM_BODY", classify("warm myself by the fire"));
+        assertEquals("WARM_BODY", classify("warm up my hands"));
+        assertEquals("DRY_BODY", classify("dry off by the fire"));
+        assertEquals("DRY_BODY", classify("dry my clothes"));
+        assertEquals("COOL_BODY", classify("cool off in the shade"));
+        assertEquals("COOL_BODY", classify("get out of the sun"));
+        assertEquals("SHELTER_BODY", classify("take shelter from the rain"));
+        assertEquals("SHELTER_BODY", classify("get under cover"));
+        assertEquals("STRETCH", classify("stretch and loosen my limbs"));
+        // Boundary: drying a MATERIAL is processing, not body-drying; washing stays body care.
+        assertEquals("UNKNOWN", classify("dry the herbs on the rack", false));
+        assertEquals("WASH", classify("wash my hands"));
+        // Rest and sleep still classify (not swallowed by the new body-care rules).
+        assertEquals("REST", classify("rest for a while"));
+        assertEquals("SLEEP", classify("bed down for the night"));
+    }
+
     /** Workstations (V69) claim their words before the generic desk/table rule; a plain table is still a desk. */
     @Test void workstationsClassifyBeforePlainFurniture() throws Exception {
         assertEquals("CRAFT_WORKSTATION", classify("build a woodworking bench"));

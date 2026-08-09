@@ -171,6 +171,36 @@ public class ChroniclePhysiologyService {
         jdbc.update("UPDATE chronicle_physiology SET hygiene_level=LEAST(100,hygiene_level+28),wetness_level=LEAST(100,wetness_level+18),stress_level=GREATEST(0,stress_level-4) WHERE chronicle_id=?", chronicleId);
         refreshBody(chronicleId);
     }
+    /** Warm by a fire in reach (#66): core temperature climbs toward normal, and a little wet steams off. */
+    @Transactional
+    public void warmByFire(UUID chronicleId) {
+        jdbc.update("UPDATE chronicle_physiology SET core_temperature_c=LEAST(37.5, core_temperature_c+0.7), wetness_level=GREATEST(0,wetness_level-12), stress_level=GREATEST(0,stress_level-3) WHERE chronicle_id=?", chronicleId);
+        refreshBody(chronicleId);
+    }
+    /** Dry off by a fire or under cover (#66): wetness falls markedly. */
+    @Transactional
+    public void dryOff(UUID chronicleId) {
+        jdbc.update("UPDATE chronicle_physiology SET wetness_level=GREATEST(0,wetness_level-30), stress_level=GREATEST(0,stress_level-2) WHERE chronicle_id=?", chronicleId);
+        refreshBody(chronicleId);
+    }
+    /** Cool off in shade or water (#66): core temperature eases down toward normal when overheated. */
+    @Transactional
+    public void coolOff(UUID chronicleId) {
+        jdbc.update("UPDATE chronicle_physiology SET core_temperature_c=GREATEST(36.5, core_temperature_c-0.7), stress_level=GREATEST(0,stress_level-2) WHERE chronicle_id=?", chronicleId);
+        refreshBody(chronicleId);
+    }
+    /** Get under cover out of the weather (#66): a little drying and an easing of stress. */
+    @Transactional
+    public void shelterFromWeather(UUID chronicleId) {
+        jdbc.update("UPDATE chronicle_physiology SET wetness_level=GREATEST(0,wetness_level-15), stress_level=GREATEST(0,stress_level-4) WHERE chronicle_id=?", chronicleId);
+        refreshBody(chronicleId);
+    }
+    /** Stretch and loosen the limbs (#66): a small easing of stiffness and stress. */
+    @Transactional
+    public void stretch(UUID chronicleId) {
+        jdbc.update("UPDATE chronicle_physiology SET stress_level=GREATEST(0,stress_level-5), pain_level=GREATEST(0,pain_level-2) WHERE chronicle_id=?", chronicleId);
+        refreshBody(chronicleId);
+    }
     @Transactional
     public void rest(UUID chronicleId, int minutes) {
         double hours = minutes / 60.0;
