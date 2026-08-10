@@ -46,7 +46,7 @@ public class ConstructionService {
     }
 
     /** Bedding material a bed can be laid from, best first — all reachable first-era plant stock (#71 make_bed). */
-    private static final String[][] BEDDING = {{"straw_bundle","straw"},{"reed_bundle","reed"},{"thatch_bundle","thatch"},{"plant_fiber","plant fibre"}};
+    private static final String[][] BEDDING = {{"straw_bundle","straw"},{"reed_bundle","reed"},{"thatch_bundle","thatch"},{"plant_fiber","plant fibre"},{"reed_mat","reed matting"},{"cattail_stalk","cattail"},{"water_lily_pad","dry lily pads"}};
 
     /**
      * Lay (or freshen) a bedding pallet here (#71 make_bed): a persistent GROUND_BED construction gathered from

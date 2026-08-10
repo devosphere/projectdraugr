@@ -444,6 +444,10 @@ public class WildlifeEncounterService {
         else if (v.contains("spear") && items.hasAtLeast(chronicle,"primitive_spear",1)) { method="SPEAR"; chance=55; }
         else if (v.contains("line") || v.contains("hook")) { method="LINE"; chance=45; }
         else { method="BARE_HAND"; chance=20; }
+        // Bait (#75): a worm on the hook, in the trap, or in the hand draws fish that clear water would not —
+        // it is spent whether or not the fish takes. Bare-hand grabbing is the one method a worm does not help.
+        boolean baited = !method.equals("BARE_HAND") && items.hasAtLeast(chronicle,"earthworm",1) && items.consumeOne(chronicle,"earthworm",at);
+        if (baited) chance = Math.min(90, chance + 20);
         java.util.List<String> species = jdbc.queryForList("SELECT species_key FROM wildlife_species WHERE movement_class='AQUATIC' AND biome_affinity ILIKE ? ORDER BY species_key", String.class, "%"+biome+"%");
         if (species.isEmpty()) return new EncounterResult("FAILED","You watch the ground a while. There is no water here that holds anything worth taking.");
         if (Math.floorMod(action.hashCode(),100) >= chance)
