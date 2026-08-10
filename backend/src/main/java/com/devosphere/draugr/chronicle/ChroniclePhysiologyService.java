@@ -270,9 +270,14 @@ public class ChroniclePhysiologyService {
     @Transactional
     public boolean bindWound(UUID chronicleId, PhysicalItemService items, UUID actionId, Instant occurredAt) {
         Integer wounded = jdbc.queryForObject("SELECT COUNT(*) FROM chronicle_physiology WHERE chronicle_id=? AND (injury_severity>0 OR blood_loss_ml>0)", Integer.class, chronicleId);
-        if (wounded == null || wounded == 0 || !items.consumeOne(chronicleId, "plant_fiber", occurredAt)) return false;
-        jdbc.update("UPDATE chronicle_physiology SET blood_loss_ml=GREATEST(0,blood_loss_ml-180),pain_level=GREATEST(0,pain_level-5),stress_level=GREATEST(0,stress_level-3) WHERE chronicle_id=?", chronicleId);
-        jdbc.update("INSERT INTO chronicle_condition_event (chronicle_id,occurred_at,condition_kind,severity,source_action_id,payload) VALUES (?,?,?,?,?,jsonb_build_object('method','plant_fiber_binding'))", chronicleId, Timestamp.from(occurredAt), "WOUND_BOUND", 1, actionId);
+        if (wounded == null || wounded == 0) return false;
+        // A medicinal poultice (V87) dresses a wound far better than a bare fibre binding — it staunches more
+        // blood, eases more pain, and actually reduces the injury. Fall back to plant fibre when none is carried.
+        boolean poultice = items.consumeOne(chronicleId, "herbal_poultice", occurredAt);
+        if (!poultice && !items.consumeOne(chronicleId, "plant_fiber", occurredAt)) return false;
+        int blood = poultice ? 300 : 180, pain = poultice ? 9 : 5, injury = poultice ? 4 : 0;
+        jdbc.update("UPDATE chronicle_physiology SET blood_loss_ml=GREATEST(0,blood_loss_ml-?),pain_level=GREATEST(0,pain_level-?),stress_level=GREATEST(0,stress_level-3),injury_severity=GREATEST(0,injury_severity-?) WHERE chronicle_id=?", blood, pain, injury, chronicleId);
+        jdbc.update("INSERT INTO chronicle_condition_event (chronicle_id,occurred_at,condition_kind,severity,source_action_id,payload) VALUES (?,?,?,?,?,jsonb_build_object('method',?))", chronicleId, Timestamp.from(occurredAt), "WOUND_BOUND", 1, actionId, poultice ? "herbal_poultice" : "plant_fiber_binding");
         refreshBody(chronicleId);
         return true;
     }
