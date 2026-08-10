@@ -869,9 +869,12 @@ public class PhysicalItemService {
 
         // Pelts are warmer than plain hide, so a cloak asks for them specifically;
         // anything else takes whatever skin is to hand.
+        // Any worked skin or cloth serves as garment material; a fur cloak still asks for pelts specifically,
+        // but a coat/tunic/leggings/boots take tanned leathers and woven/felted cloth as well as raw hide.
         java.util.List<String> hideKeys = "pelt".equals(p.hideKind())
             ? java.util.List.of("wolf_pelt","bear_pelt","fox_pelt","lynx_pelt","rabbit_pelt","dire_wolf_pelt")
-            : java.util.List.of("animal_hide","deer_hide","boar_hide","troll_hide","wolf_pelt","bear_pelt","fox_pelt","lynx_pelt","rabbit_pelt");
+            : java.util.List.of("animal_hide","deer_hide","boar_hide","troll_hide","wolf_pelt","bear_pelt","fox_pelt","lynx_pelt","rabbit_pelt",
+                                "fish_skin_leather","leather_offcut","snake_skin","wool_cloth","felt_sheet","textile_material");
 
         int haveHides = 0;
         for (String k : hideKeys) { Integer n = jdbc.queryForObject(
@@ -881,13 +884,16 @@ public class PhysicalItemService {
         if (haveHides < p.hides())
             return new String[]{"FAILED", p.hides() == 0 ? "You have nothing to work with." :
                 "You spread out what skins you have and turn them over. There is not enough here to make " + p.name().toLowerCase() + " that would cover anything."};
-        if (!hasAtLeast(chronicle, "plant_fiber", p.fiber()) && !hasAtLeast(chronicle, "animal_sinew", p.fiber()) && !hasAtLeast(chronicle, "fiber_cordage", p.fiber()))
+        if (!hasAtLeast(chronicle, "plant_fiber", p.fiber()) && !hasAtLeast(chronicle, "animal_sinew", p.fiber()) && !hasAtLeast(chronicle, "fiber_cordage", p.fiber())
+                && !hasAtLeast(chronicle, "silk_fiber", p.fiber()) && !hasAtLeast(chronicle, "spider_silk_thread", p.fiber()))
             return new String[]{"FAILED", "The pieces sit together well enough, but you have nothing to stitch them with."};
 
         int taken = 0;
         for (String k : hideKeys) { while (taken < p.hides() && consumeOne(chronicle, k, occurredAt)) taken++; if (taken >= p.hides()) break; }
         for (int i = 0; i < p.fiber(); i++)
-            if (!consumeOne(chronicle,"animal_sinew",occurredAt) && !consumeOne(chronicle,"fiber_cordage",occurredAt)) consumeOne(chronicle,"plant_fiber",occurredAt);
+            if (!consumeOne(chronicle,"animal_sinew",occurredAt) && !consumeOne(chronicle,"fiber_cordage",occurredAt)
+                    && !consumeOne(chronicle,"silk_fiber",occurredAt) && !consumeOne(chronicle,"spider_silk_thread",occurredAt))
+                consumeOne(chronicle,"plant_fiber",occurredAt);
 
         createCarriedItem(chronicle, p.itemKey(), p.name(), occurredAt, "CRAFTED");
         return new String[]{"SUCCEEDED", "You work the material to shape and stitch it closed. The " + p.name().toLowerCase() + " is finished, and it is warm in the hand."};
