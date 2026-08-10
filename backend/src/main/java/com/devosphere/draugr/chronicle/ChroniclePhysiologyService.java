@@ -174,8 +174,12 @@ public class ChroniclePhysiologyService {
         refreshBody(chronicleId);
     }
     @Transactional
-    public void wash(UUID chronicleId) {
-        jdbc.update("UPDATE chronicle_physiology SET hygiene_level=LEAST(100,hygiene_level+28),wetness_level=LEAST(100,wetness_level+18),stress_level=GREATEST(0,stress_level-4) WHERE chronicle_id=?", chronicleId);
+    public void wash(UUID chronicleId) { wash(chronicleId, false); }
+    /** Wash in reachable water (#66). Soap (V89) lifts far more dirt than water alone and settles the mind more. */
+    @Transactional
+    public void wash(UUID chronicleId, boolean withSoap) {
+        int hygiene = withSoap ? 45 : 28, stress = withSoap ? 6 : 4;
+        jdbc.update("UPDATE chronicle_physiology SET hygiene_level=LEAST(100,hygiene_level+?),wetness_level=LEAST(100,wetness_level+18),stress_level=GREATEST(0,stress_level-?) WHERE chronicle_id=?", hygiene, stress, chronicleId);
         refreshBody(chronicleId);
     }
     /** Warm by a fire in reach (#66): core temperature climbs toward normal, and a little wet steams off. */
