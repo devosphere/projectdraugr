@@ -139,7 +139,14 @@ public class ChronicleActionService {
         // action row is written only after intent resolution. Gather effects are
         // therefore captured here and inserted after the parent row exists.
         String gatherEffectType = null; String gatherPayloadKey = null; int gatherCount = 0;
-        if (intent == Intent.OBSERVE) perception = survey(chronicle, resolvedAt);
+        // Light (#75): fine sight-work — reading, writing, sketching, close examination, measuring — cannot be
+        // done in the dark by feel alone. A fire in reach lights it for free; otherwise a portable light (a
+        // rushlight, a tallow candle, or an oil lamp burning fish oil) is lit and spent to see the work.
+        if (isSightWork(intent) && isDark(resolvedAt) && !fireInReach(chronicle.location()) && !items.consumePortableLight(chronicle.id(), resolvedAt)) {
+            outcome = "FAILED";
+            perception = "It is too dark to see the fine of it. With no fire and no light to work by, this is not something your hands can do by feel alone.";
+        }
+        else if (intent == Intent.OBSERVE) perception = survey(chronicle, resolvedAt);
         else if (intent == Intent.MOVE) perception = move(chronicle, text, actionId, resolvedAt);
         else if (intent == Intent.TRAVEL) {
             if (localZone != null) { jdbc.update("UPDATE chronicle SET current_zone=? WHERE id=?", localZone, chronicle.id()); perception = "You cross the settlement to " + localZone + ", a short walk over ground you know by heart."; }
@@ -1251,6 +1258,18 @@ public class ChronicleActionService {
     }
     /** Whether raw water here is safe to drink untreated (#71): moving water — a river bank, spring, or stream —
      *  is clean; standing water (a wetland) is not, and drinking it raw carries a gut-illness risk. */
+    /** Deep night, when there is no working light to see fine detail by (#75): before dawn or after dusk. */
+    private static boolean isDark(java.time.Instant at) {
+        int h = at.atZone(java.time.ZoneOffset.UTC).getHour();
+        return h < 6 || h >= 20;
+    }
+    /** Intents that are fine, close, sight-dependent work — impossible in the dark without a light (#75). */
+    private static boolean isSightWork(Intent intent) {
+        return switch (intent) {
+            case WRITE, EDIT_DOCUMENT, READ, EXAMINE, ANALYZE, INVESTIGATE, MEASURE, SKETCH_MAP -> true;
+            default -> false;
+        };
+    }
     private boolean safeWaterSource(UUID location) {
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
         if ("RIVER_BANK".equals(biome)) return true;

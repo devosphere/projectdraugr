@@ -1092,6 +1092,20 @@ public class PhysicalItemService {
     /** True if the Chronicle can reach any blade capable of carving wood. */
     @Transactional(readOnly = true)
     public boolean hasCuttingTool(UUID chronicle) { return hasAtLeast(chronicle,"stone_knife",1) || hasAtLeast(chronicle,"stone_hatchet",1) || hasAtLeast(chronicle,"stone_flake",1); }
+
+    /**
+     * Light and spend a portable light to work by in the dark (#75): a rushlight or tallow candle burns down to
+     * nothing for the task; an oil lamp keeps, but a measure of fish oil is burned. Returns false when the
+     * Chronicle has no light to strike — then the fine work cannot be done. A fire in reach is checked by the
+     * caller and needs none of these.
+     */
+    @Transactional
+    public boolean consumePortableLight(UUID chronicle, Instant at) {
+        if (hasAtLeast(chronicle,"rush_light",1))    return consumeOne(chronicle,"rush_light",at);
+        if (hasAtLeast(chronicle,"tallow_candle",1)) return consumeOne(chronicle,"tallow_candle",at);
+        if (hasAtLeast(chronicle,"oil_lamp",1) && hasAtLeast(chronicle,"fish_oil",1)) return consumeOne(chronicle,"fish_oil",at);
+        return false;
+    }
     /** Northern-hemisphere season derived from the simulated instant's month, until a dedicated world-clock season exists. */
     private static String seasonOf(Instant at) {
         int month = at.atZone(java.time.ZoneOffset.UTC).getMonthValue();
