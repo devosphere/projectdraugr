@@ -315,6 +315,10 @@ class IntentClassificationRegressionTest {
         assertEquals("GATHER_PLANT", classify("harvest flax", false));
         assertEquals("GATHER_PLANT", classify("collect hemp stalks", false));
         assertEquals("GATHER_PLANT", classify("gather root fibre from the wet ground", false));
+        // #75 nut foods: acorns and tree nuts reach GATHER_PLANT (their flora sources).
+        assertEquals("GATHER_PLANT", classify("gather acorns under the oak", false));
+        assertEquals("GATHER_PLANT", classify("collect hazelnuts", false));
+        assertEquals("GATHER_PLANT", classify("forage for chestnuts", false));
         // WASH is body-washing only; material washing/panning falls through to the process catalogue.
         assertEquals("WASH", classify("wash myself in the stream"));
         assertEquals("WASH", classify("take a bath in the river"));
