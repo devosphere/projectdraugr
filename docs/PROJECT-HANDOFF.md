@@ -284,9 +284,21 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 >   wood store, landing), the two enclosing huts wired into the exposure model. **#62 route coverage — mechanism
 >   done** (tracks catalogue completion). *Remaining:* #56 sited storage objects + more portables; #57 named
 >   logistics objects (carry_pole/yoke/sledge) + handcart chain; #59/#60 the deferred lime chain.
-> - **NEXT, in order:** the big catalogue stories **#75–#78 / #45–#47** ("add 100 …" raw materials / portables /
->   structures / procedures) → **#191** bare-hand handwork → **#123** survival viability → remaining #54 named
->   objects → then **M2** (84 issues). Deferred M1 tails: #67 tie/stack/drag, #70 staged-building-verb routing,
+> - **#75 raw-materials catalogue — IN PROGRESS (V84–V89, 6 slices).** fibre→cordage (V84), knappable stone
+>   (V85), nut foods (V86), medicinal poultices (V87), wild foods (V88), soap/ash→lye→soap (V89). Each slice:
+>   real ecological source + a VERIFIED use (or edible FOOD via EAT) + a `dr00NN` journey regression + the
+>   named-material-beats-generic matcher discipline. **Highest-value next target for #75:** an *orphan-materials
+>   audit* — many already-obtainable MATERIALs have NO use (an #75 acceptance violation), e.g. `birch_tar`,
+>   `fish_glue`, `fish_oil`, animal parts (`boar_tusk`/`aurochs_horn`/pelts), and the woodworking intermediates
+>   (`board_panel`/`floorboard`/`joined_frame`/`lapped_plank`/`door_blank` — a dead-ended furniture chain).
+>   Closing them needs small new *terminal consumers* (a light/torch mechanic, dyeing, adhesive-hafting via a
+>   non-intent process, animal-drop routing, the furniture-assembly chain) — bounded mechanic additions, not pure
+>   data. Query to regenerate the list: obtainable item_definition with no `material_process_input`/
+>   `assembly_stage_requirement` row (exclude terminal code-path items like poultice/soap/flint_stone).
+> - **NEXT, in order:** continue **#75** (orphan-materials audit + remaining families: wood/bark, more
+>   stone/earth/mineral, dye/pigment, animal-derived, fuel/adhesive) → **#76–#78 / #46–#47** → **#191** bare-hand
+>   handwork → **#123** survival viability → remaining #54 named objects → then **M2** (84 issues). Deferred M1
+>   tails: #67 tie/stack/drag, #70 staged-building-verb routing,
 >   #72 husbandry companions, #73 alias-catalogue infra — each a distinct new
 >   model/content effort. **Full M1+M2 spans many sessions.** *(Recurring pattern for new craftable objects: a
 >   migration like V75 — item_definition + container_capacity_default + material_process [CRAFT, keyword that
