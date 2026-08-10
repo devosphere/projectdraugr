@@ -1171,13 +1171,16 @@ public class PhysicalItemService {
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CRAFTED',jsonb_build_object('recipe',?,'placedAt',?::text))", id, Timestamp.from(at), itemKey, location.toString());
         return true;
     }
-    /** Tease a plant-fiber bundle into a fine, dry nest that can catch an ember. */
+    /** Tease a fine, dry nest that can catch an ember — from plant fibre, or from cattail down or tinder
+     *  fungus, both of which take a spark as well or better (#75 real-world tinders). */
     @Transactional
     public boolean craftTinder(Instant at) {
         UUID chronicle=activeChronicle();
-        if(!hasAtLeast(chronicle,"plant_fiber",1)) return false;
         if(capacityHeadroomUnits(chronicle,"tinder_nest")<=0) return false;
-        if(!consumeOne(chronicle,"plant_fiber",at)) return false;
+        String from = null;
+        for (String k : new String[]{"cattail_fluff","birch_polypore","plant_fiber"})
+            if (hasAtLeast(chronicle, k, 1)) { from = k; break; }
+        if(from==null || !consumeOne(chronicle,from,at)) return false;
         createCarriedItem(chronicle,"tinder_nest","Tinder nest",at,"CRAFTED");
         return true;
     }
