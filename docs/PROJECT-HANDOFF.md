@@ -100,7 +100,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 | `backend/src/main/java/com/devosphere/draugr/domain/ArchitectRouter.java` | Cost gate for the Architect — routes COVERED / POLISH / INVENT. |
 | `backend/src/main/java/com/devosphere/draugr/routing/ProcessMatcher.java` | The **only** implementation of the action→process resolution rule. Both `runProcess()` and `ArchitectRouter` go through it. |
 | `backend/src/main/java/com/devosphere/draugr/routing/RoutingMissRecorder.java` | Records unresolved actions into the V56 backlog. Separate bean on purpose — see its Javadoc. |
-| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V93. Next is V94. (…V90 timber buildings, V91 logs→timber, V92 cooking recipes, V93 fletching/adhesives.) |
+| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V95. Next is V96. (…V92 cooking recipes, V93 fletching/adhesives, V94 worked points, V95 tea herbs.) |
 | `backend/src/main/java/com/devosphere/draugr/domain/DomainRegistryService.java` | Reads domain_registry — the Architect's ledger of invented domains. |
 | `docs/architecture/domain-creation-pattern.md` | The exact recipe for adding a new domain. |
 | `docs/architecture/action-routing-hardening.md` | Sprint 003 spec — collisions, milestones M1–M5. |
@@ -119,7 +119,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 
 ---
 
-## What Is Built (Migrations V1–V93, all applied)
+## What Is Built (Migrations V1–V95, all applied)
 
 > **Post-playtest cycle (2026-08-03) — summary; full detail + resume point in
 > [systems/06.4-Runtime-Authoring-Build-Plan.md](systems/06.4-Runtime-Authoring-Build-Plan.md).**
@@ -238,8 +238,8 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 > All **13 playtest [BUG] issues (#29–#44)** are FIXED and **CLOSED**. **The user granted autonomous execution:
 > finish M1, then continue into M2, WITHOUT interruption or permission requests — choose the engineering strategy
 > yourself, land verifiable increments, commit/push, and close a story only when its acceptance is fully met.**
-> Everything is on `development` (pushed) as `devosphere.tech` (never `johncalado`). **Migrations through V93.**
-> Full suite **162 backend tests + 22 SQL regressions green** on the V1–V93 chain; each commit compiles with tests
+> Everything is on `development` (pushed) as `devosphere.tech` (never `johncalado`). **Migrations through V95.**
+> Full suite **162 backend tests + 24 SQL regressions green** on the V1–V95 chain; each commit compiles with tests
 > green and the routing-reachability probe clean (84 ok / 0 miss).
 >
 > **EPIC #64 Action Catalogue — scorecard:**
@@ -305,17 +305,25 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 >     (pitch/birch_tar). Closed harpy_feather, roc_feather, birch_tar, fish_glue, propolis. **MATERIAL orphans
 >     now 53** (of which ~9 are code-path-used and fine: bear_pelt, char_tinder, ember_bundle, tinder_nest,
 >     flint_stone, iron_pyrite, lens_crystal, herbal_poultice, soap → ~44 true gaps left).
->   - **Remaining verticals (~44 true gaps):** **D animal parts → tools/points/ornaments/armour** (aurochs_horn,
->     boar_tusk, dire_wolf_fang, predator_claw/fang, raptor/harpy/roc/wyvern talons+fangs, wyvern_scale/
->     wing_membrane, troll_bone, turtle_shell, chitin_fragment, giant_stinger, snake_skin, snake/hornet venom,
->     formic_acid, wild_rose_thorn, hawthorn_thorn → carve points/awls/needles/fish-hooks, poison-coat arrows,
->     scale/bone armour); **E leather & textiles → garments/boots/cord/bags** (fish_skin_leather, leather_offcut,
->     leather_boot_sole→boots, felt_sheet, wool_cloth, textile_material, silk_fiber, spider_silk_thread,
->     dire_wolf_pelt, troll_hide; also tarred_cordage as a waterproof-cordage alternative wherever fiber_cordage
->     binds); **F misc** (cattail_fluff/birch_polypore → tinder for craftTinder; cattail_stalk/reed_mat/
->     water_lily_pad → matting/bedding/cover; dried_herb_bundle/elder_flower → tea/seasoning into the V92 recipe
->     groups; earthworm → fishing bait; **rush_light/tallow_candle/fish_oil → a light mechanic**; smoke_hood →
->     verify it is a construction, not an orphan). Regenerate the live list with the audit query above.
+>   - **Vertical D partial DONE (V94):** 13 animal hard parts (horn/tusk/fang/claw/talon/bone/stinger/thorn) →
+>     `carve_point` → `worked_point`, which tips arrows. **Vertical E DONE (craftGarment code):** fish_skin_leather,
+>     leather_offcut, snake_skin, wool_cloth, felt_sheet, textile_material → garments; silk_fiber/
+>     spider_silk_thread → stitching thread (dire_wolf_pelt/troll_hide were already garment-used). **Misc (V95 +
+>     craftTinder):** elder_flower/dried_herb_bundle → tea; cattail_fluff/birch_polypore → tinder.
+>   - **REMAINING ~15 true gaps — each needs a NEW GAMEPLAY SYSTEM, not just data** (surface to user for
+>     prioritisation; a feature apiece):
+>     - **Poison** — snake_venom, hornet_venom, formic_acid → coat arrows/points; needs a poison-on-hit effect in
+>       `WildlifeEncounterService` (no poison model today) + arrows must actually be consumed by a hunt.
+>     - **Armour/defence** — wyvern_scale, wyvern_wing_membrane, turtle_shell, chitin_fragment → armour; needs a
+>       defence stat in encounters (none exists today) + equippable armour pieces.
+>     - **Light/darkness** — rush_light, tallow_candle, fish_oil → a lamp/torch; needs a light-vs-dark mechanic
+>       (fish_oil also → leather dressing / a lamp fuel).
+>     - **Bedding/matting** — cattail_stalk, reed_mat, water_lily_pad → weave a mat, add to make_bed's BEDDING list
+>       (small code) and/or a floor-covering.
+>     - **Fishing bait** — earthworm → bait for FISH/traps (FISH takes no bait input today).
+>     - **Small/data** — tarred_cordage → waterproof-cordage alternative in binding input-groups (net/waterskin);
+>       leather_boot_sole → a boots-specific input; smoke_hood → verify it is a CONSTRUCTION (likely already, not
+>       an orphan). Regenerate the live list with the audit query above.
 > - **NEXT, in order:** continue the **#75 orphan audit** verticals B→F above → net-new families (dye/pigment,
 >   more mineral) → **#76–#78 / #46–#47** → **#191** bare-hand handwork → **#123** survival viability → remaining
 >   #54 named objects → then **M2** (84 issues). Deferred M1 tails: #67 tie/stack/drag, #70 staged-building-verb
