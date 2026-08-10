@@ -534,6 +534,9 @@ class IntentClassificationRegressionTest {
         assertEquals("GATHER_MINERAL", classify("prospect for quartz crystal"));
         assertEquals("GATHER_MINERAL", classify("gather tool stone"));
         assertEquals("GATHER_MINERAL", classify("dig for ore in the hillside"));
+        // #75 knappable stone: chert and obsidian reach the mineral gather.
+        assertEquals("GATHER_MINERAL", classify("gather chert from the rock"));
+        assertEquals("GATHER_MINERAL", classify("collect obsidian in the mountains"));
         // Salt is a mineral you gather (sea salt at the shore, rock salt in a deposit) — #salt chain.
         assertEquals("GATHER_MINERAL", classify("gather sea salt at the shore"));
         assertEquals("GATHER_MINERAL", classify("dig for rock salt in the flat"));

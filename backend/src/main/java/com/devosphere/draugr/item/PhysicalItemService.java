@@ -1085,7 +1085,7 @@ public class PhysicalItemService {
 
     /** True if the Chronicle can reach any blade capable of carving wood. */
     @Transactional(readOnly = true)
-    public boolean hasCuttingTool(UUID chronicle) { return hasAtLeast(chronicle,"stone_knife",1) || hasAtLeast(chronicle,"stone_hatchet",1); }
+    public boolean hasCuttingTool(UUID chronicle) { return hasAtLeast(chronicle,"stone_knife",1) || hasAtLeast(chronicle,"stone_hatchet",1) || hasAtLeast(chronicle,"stone_flake",1); }
     /** Northern-hemisphere season derived from the simulated instant's month, until a dedicated world-clock season exists. */
     private static String seasonOf(Instant at) {
         int month = at.atZone(java.time.ZoneOffset.UTC).getMonthValue();
