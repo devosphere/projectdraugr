@@ -100,7 +100,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 | `backend/src/main/java/com/devosphere/draugr/domain/ArchitectRouter.java` | Cost gate for the Architect — routes COVERED / POLISH / INVENT. |
 | `backend/src/main/java/com/devosphere/draugr/routing/ProcessMatcher.java` | The **only** implementation of the action→process resolution rule. Both `runProcess()` and `ArchitectRouter` go through it. |
 | `backend/src/main/java/com/devosphere/draugr/routing/RoutingMissRecorder.java` | Records unresolved actions into the V56 backlog. Separate bean on purpose — see its Javadoc. |
-| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V103. Next is V104. (…V99 tea/grain, V100 greens/roots/morel, V101 fruits, V102 cordage fibres, V103 wood shavings/fatwood.) |
+| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V108. Next is V109. (…V104 dye/pigment, V105 grain flour, V106 soapstone bowl, V107 whetstone, V108 hammerstones.) |
 | `backend/src/main/java/com/devosphere/draugr/domain/DomainRegistryService.java` | Reads domain_registry — the Architect's ledger of invented domains. |
 | `docs/architecture/domain-creation-pattern.md` | The exact recipe for adding a new domain. |
 | `docs/architecture/action-routing-hardening.md` | Sprint 003 spec — collisions, milestones M1–M5. |
@@ -119,7 +119,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 
 ---
 
-## What Is Built (Migrations V1–V103, all applied)
+## What Is Built (Migrations V1–V108, all applied)
 
 > **Post-playtest cycle (2026-08-03) — summary; full detail + resume point in
 > [systems/06.4-Runtime-Authoring-Build-Plan.md](systems/06.4-Runtime-Authoring-Build-Plan.md).**
@@ -238,8 +238,8 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 > All **13 playtest [BUG] issues (#29–#44)** are FIXED and **CLOSED**. **The user granted autonomous execution:
 > finish M1, then continue into M2, WITHOUT interruption or permission requests — choose the engineering strategy
 > yourself, land verifiable increments, commit/push, and close a story only when its acceptance is fully met.**
-> Everything is on `development` (pushed) as `devosphere.tech` (never `johncalado`). **Migrations through V103.**
-> Full suite **162 backend tests + 32 SQL regressions green** on the V1–V103 chain; each commit compiles with tests
+> Everything is on `development` (pushed) as `devosphere.tech` (never `johncalado`). **Migrations through V108.**
+> Full suite **162 backend tests + 32 SQL regressions green** on the V1–V108 chain; each commit compiles with tests
 > green and the routing-reachability probe clean (84 ok / 0 miss).
 >
 > **EPIC #64 Action Catalogue — scorecard:**
@@ -331,7 +331,10 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 >     hygiene (herbal_poultice → bindWound, soap → wash), firestarters (flint_stone, iron_pyrite, lens_crystal →
 >     `fire_method_requirement`, reusable so not consumed). **When auditing in future, subtract these before
 >     flagging.**
->   - **Net-new breadth so far (V99–V103):** tea/grain (chamomile, pine-needle, wild rice), greens/roots/morel
+>   - **Net-new breadth so far (V99–V108):** V104 dye/pigment (ochre → pigment → dyed cloth → garments), V105
+>     grain→flour→flatbread, V106 soapstone → carved bowl (container), V107 whetstone/grit → sharpening (rewired
+>     repairNamedItem: sharpen with a whetstone, not cordage), V108 granite/basalt cobbles → hammerstones
+>     (STRIKING). Earlier: tea/grain (chamomile, pine-needle, wild rice), greens/roots/morel
 >     (burdock/bulrush roots, nettle/watercress greens → cooked_greens, morel), fruits (crab apple, sloe,
 >     bilberry → compote), cordage fibres (bramble, cattail leaf, bulrush → cordage), tinder (wood shavings,
 >     fatwood). ~19 new materials, all real-world-functional via existing consumers (V92 recipes, twist_cordage,
