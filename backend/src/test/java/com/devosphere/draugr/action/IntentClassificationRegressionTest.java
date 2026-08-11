@@ -93,6 +93,9 @@ class IntentClassificationRegressionTest {
         assertEquals("MAINTAIN_CAMP", classify("tidy the camp", false));
         assertEquals("MAINTAIN_CAMP", classify("arrange the campsite", false));
         assertEquals("MAINTAIN_CAMP", classify("protect the camp supplies", false));
+        // #195 bare-hand cover: a windbreak is placed, distinct from camp upkeep and bedding.
+        assertEquals("PLACE_WINDBREAK", classify("make a windbreak", false));
+        assertEquals("PLACE_WINDBREAK", classify("raise a brush screen against the wind", false));
         // "bed down for the night" is sleeping, and the raised platform is an assembly, not a bed.
         assertEquals("SLEEP", classify("bed down for the night", false));
         assertEquals("UNKNOWN", classify("build a raised sleeping platform", false));

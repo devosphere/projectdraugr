@@ -182,10 +182,18 @@ public class ChroniclePhysiologyService {
         jdbc.update("UPDATE chronicle_physiology SET hygiene_level=LEAST(100,hygiene_level+?),wetness_level=LEAST(100,wetness_level+18),stress_level=GREATEST(0,stress_level-?) WHERE chronicle_id=?", hygiene, stress, chronicleId);
         refreshBody(chronicleId);
     }
-    /** Warm by a fire in reach (#66): core temperature climbs toward normal, and a little wet steams off. */
+    /** A bare-hand cover placed here (#195): a windbreak or brush screen keeps the wind off, so a fire warms
+     *  better and rest out of the wind eases the body more. Not shelter — it turns no rain and has no roof. */
+    private boolean windbreakAt(UUID chronicleId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id JOIN world_object body ON body.current_location_id=w.current_location_id WHERE body.id=? AND cp.project_kind='WINDBREAK' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')", Boolean.class, chronicleId));
+    }
+    /** Warm by a fire in reach (#66): core temperature climbs toward normal, and a little wet steams off. A
+     *  windbreak (#195) keeps the wind from stealing the heat, so more of it reaches the body. */
     @Transactional
     public void warmByFire(UUID chronicleId) {
-        jdbc.update("UPDATE chronicle_physiology SET core_temperature_c=LEAST(37.5, core_temperature_c+0.7), wetness_level=GREATEST(0,wetness_level-12), stress_level=GREATEST(0,stress_level-3) WHERE chronicle_id=?", chronicleId);
+        boolean wind = windbreakAt(chronicleId);
+        double tempGain = wind ? 1.0 : 0.7; int wetLoss = wind ? 16 : 12;
+        jdbc.update("UPDATE chronicle_physiology SET core_temperature_c=LEAST(37.5, core_temperature_c+?), wetness_level=GREATEST(0,wetness_level-?), stress_level=GREATEST(0,stress_level-3) WHERE chronicle_id=?", tempGain, wetLoss, chronicleId);
         refreshBody(chronicleId);
     }
     /** Dry off by a fire or under cover (#66): wetness falls markedly. */

@@ -74,6 +74,36 @@ public class ConstructionService {
         return new String[]{"SUCCEEDED", "You gather " + label + " into a thick, dry pallet and lay it out — a place to sleep up off the bare cold ground."};
     }
 
+    /** Brush/reed/grass a windbreak can be raised from by hand — all bare-hand stock (#195). */
+    private static final String[][] WINDBREAK_STOCK = {{"dry_branch","brush"},{"reed_bundle","reed"},{"dry_grass_bundle","grass"},{"thatch_bundle","thatch"},{"straw_bundle","straw"}};
+
+    /**
+     * Raise a windbreak here (#195, bare-hand handwork): a low screen of brush, reed, or grass leant and woven
+     * against the wind — no tool, no blade. It is not shelter: it turns no rain and has no roof, but out of the
+     * wind a fire warms better and rest eases the body more (see ChroniclePhysiologyService.windbreakAt). Fails
+     * grounded with not enough of any one brush stock to hand; refreshes an existing windbreak rather than
+     * stacking a second.
+     */
+    @Transactional
+    public String[] placeWindbreak(UUID chronicle, UUID location, Instant at) {
+        String used = null, label = null;
+        for (String[] b : WINDBREAK_STOCK) if (items.hasAtLeast(chronicle, b[0], 3)) { used = b[0]; label = b[1]; break; }
+        if (used == null) return new String[]{"FAILED", "You cast about for enough brush or reed to raise a windbreak, but you have not got enough of any one thing to hand."};
+        UUID existing = jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='WINDBREAK' AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' LIMIT 1 FOR UPDATE", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, location);
+        for (int i = 0; i < 3; i++) if (!items.consumeOne(chronicle, used, at)) throw new IllegalStateException("Reachable windbreak material changed during the action.");
+        Timestamp ts = Timestamp.from(at);
+        if (existing != null) {
+            jdbc.update("UPDATE construction_project SET integrity_percent=100,last_structural_update=? WHERE object_id=?", ts, existing);
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'WINDBREAK_REFRESHED',jsonb_build_object('material',?))", existing, ts, used);
+            return new String[]{"SUCCEEDED", "You work fresh " + label + " into the windbreak, and it stands close against the wind again."};
+        }
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CONSTRUCTION','Windbreak',?)", id, location);
+        jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at) VALUES (?,'WINDBREAK','COMPLETED',100,?)", id, ts);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CONSTRUCTED',jsonb_build_object('projectKind','WINDBREAK','material',?))", id, ts, used);
+        return new String[]{"SUCCEEDED", "You lean and weave " + label + " into a low screen against the wind — no roof and no wall, but it breaks the worst of the cold off you."};
+    }
+
     /**
      * Tend the camp here (#71 maintain_camp): go over what stands, setting decayed constructions a little back
      * toward true and ordering the site around them. Grounded — with nothing built here there is no camp to tend.
