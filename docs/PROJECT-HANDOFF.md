@@ -100,7 +100,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 | `backend/src/main/java/com/devosphere/draugr/domain/ArchitectRouter.java` | Cost gate for the Architect — routes COVERED / POLISH / INVENT. |
 | `backend/src/main/java/com/devosphere/draugr/routing/ProcessMatcher.java` | The **only** implementation of the action→process resolution rule. Both `runProcess()` and `ArchitectRouter` go through it. |
 | `backend/src/main/java/com/devosphere/draugr/routing/RoutingMissRecorder.java` | Records unresolved actions into the V56 backlog. Separate bean on purpose — see its Javadoc. |
-| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V108. Next is V109. (…V104 dye/pigment, V105 grain flour, V106 soapstone bowl, V107 whetstone, V108 hammerstones.) |
+| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V110. Next is V111. (…V106 soapstone bowl, V107 whetstone, V108 hammerstones, V109 bare-hand carrying, V110 bare-hand wraps.) |
 | `backend/src/main/java/com/devosphere/draugr/domain/DomainRegistryService.java` | Reads domain_registry — the Architect's ledger of invented domains. |
 | `docs/architecture/domain-creation-pattern.md` | The exact recipe for adding a new domain. |
 | `docs/architecture/action-routing-hardening.md` | Sprint 003 spec — collisions, milestones M1–M5. |
@@ -119,7 +119,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 
 ---
 
-## What Is Built (Migrations V1–V108, all applied)
+## What Is Built (Migrations V1–V110, all applied)
 
 > **Post-playtest cycle (2026-08-03) — summary; full detail + resume point in
 > [systems/06.4-Runtime-Authoring-Build-Plan.md](systems/06.4-Runtime-Authoring-Build-Plan.md).**
@@ -238,8 +238,8 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 > All **13 playtest [BUG] issues (#29–#44)** are FIXED and **CLOSED**. **The user granted autonomous execution:
 > finish M1, then continue into M2, WITHOUT interruption or permission requests — choose the engineering strategy
 > yourself, land verifiable increments, commit/push, and close a story only when its acceptance is fully met.**
-> Everything is on `development` (pushed) as `devosphere.tech` (never `johncalado`). **Migrations through V108.**
-> Full suite **162 backend tests + 32 SQL regressions green** on the V1–V108 chain; each commit compiles with tests
+> Everything is on `development` (pushed) as `devosphere.tech` (never `johncalado`). **Migrations through V110.**
+> Full suite **162 backend tests + 34 SQL regressions green** on the V1–V110 chain; each commit compiles with tests
 > green and the routing-reachability probe clean (84 ok / 0 miss).
 >
 > **EPIC #64 Action Catalogue — scorecard:**
@@ -339,6 +339,17 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 >     bilberry → compote), cordage fibres (bramble, cattail leaf, bulrush → cordage), tinder (wood shavings,
 >     fatwood). ~19 new materials, all real-world-functional via existing consumers (V92 recipes, twist_cordage,
 >     craftTinder). Same clean pattern: flora/process source → real use → dr00NN regression → GATHER_PLANT noun.
+> - **#191 Bare-hand handwork EPIC — STARTED (V109/V110 + code).** The contract: bare-hand procedures are
+>   material_processes with `tool_class=NULL`, producing improvised, low-capacity, short-lived results; the
+>   cut/knap/fell boundary stays enforced by tool requirements. Done: **#194 carrying objects** (V109 — leaf wrap,
+>   folded bark cup, bark fold container, grass sling, reed pouch; all no-tool, functional low-capacity
+>   containers; new hand-gathered big_leaf + dry_grass_bundle), **#198 body wraps** (V110 — grass ankle wraps +
+>   fibre hand wraps paired L/R, reed hat, bark hood, moss pad; worn+warming, not armour), **#195 bedding**
+>   (make_bed now takes dry grass / big leaves / moss). *Remaining child stories:* #192 more hand-materials
+>   (loose_bark_strip etc. — mind the STRIP_BARK collision), #193 fibre twist/braid/knot/lash (cordage mostly
+>   exists), #195 cover (windbreak/sunshade/groundsheet — placed structures), #196 food/water handling
+>   (wash/sort/peel/shell/husk), #197 clay/mud (coil/daub/pack mostly exist; add clay bead/seal), #199 handwork
+>   wear/fatigue/persistence.
 > - **NEXT, in order:** the #75 orphan audit is DONE — every existing material is functional; continuing *net-new*
 >   catalogue breadth toward "100" (unbuilt families: dye/pigment [needs a dyeing consumer], more stone/mineral
 >   [whetstone/grindstone needs a sharpening/grinding mechanic], more forageables) and its sibling stories
