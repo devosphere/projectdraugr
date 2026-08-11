@@ -1192,7 +1192,7 @@ public class PhysicalItemService {
         UUID chronicle=activeChronicle();
         if(capacityHeadroomUnits(chronicle,"tinder_nest")<=0) return false;
         String from = null;
-        for (String k : new String[]{"cattail_fluff","birch_polypore","plant_fiber"})
+        for (String k : new String[]{"cattail_fluff","birch_polypore","fatwood_stick","wood_shaving","plant_fiber"})
             if (hasAtLeast(chronicle, k, 1)) { from = k; break; }
         if(from==null || !consumeOne(chronicle,from,at)) return false;
         createCarriedItem(chronicle,"tinder_nest","Tinder nest",at,"CRAFTED");
