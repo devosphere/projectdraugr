@@ -234,13 +234,31 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 
 #### Resume point
 
-> **▶ ACTIVE NOW (2026-08-09): Milestone 1 — Action Catalogue (EPIC #64), building autonomously toward M1 then M2.**
+ **▶ ACTIVE NOW (2026-08-11): Milestone 1 — deep into the content EPICs, building autonomously toward M1 then M2.**
 > All **13 playtest [BUG] issues (#29–#44)** are FIXED and **CLOSED**. **The user granted autonomous execution:
 > finish M1, then continue into M2, WITHOUT interruption or permission requests — choose the engineering strategy
 > yourself, land verifiable increments, commit/push, and close a story only when its acceptance is fully met.**
 > Everything is on `development` (pushed) as `devosphere.tech` (never `johncalado`). **Migrations through V112.**
 > Full suite **162 backend tests + 36 SQL regressions green** on the V1–V112 chain; each commit compiles with tests
 > green and the routing-reachability probe clean (84 ok / 0 miss).
+>
+> **This session's major deliverables (V82→V112):**
+> - **EPIC #64 Action Catalogue — CLOSED** (all 9 stories: #65–#73). **EPIC #54 supply chains — ADVANCED** (#55
+>   building stock, #56–#60 objects, #61 twelve staged shelters, #62 route coverage; V82/V83).
+> - **The real-world-simulation principle** ([[feedback_real_world_simulation]]): every catalogue object must be
+>   functional as real-world logic dictates. **ORPHAN-MATERIALS AUDIT COMPLETE — 99 → 0 true gaps** (V90–V95 +
+>   code): timber buildings consume the carpentry chain, logs mill to timber, cooking recipes, fletching/
+>   adhesives, worked points, garments, tea/tinder/bedding/bait, and the code-path/fire-table closures.
+> - **Three new gameplay systems:** **armour + combat defence** (V97, confront blunts a mauling), **poison**
+>   (V98, venom-tipped spears), **light/darkness** (fine sight-work needs a fire or a lit lamp at night).
+> - **Net-new #75 catalogue breadth** (V99–V108): tea/grain, greens/roots/morel, fruits, cordage fibres, tinder,
+>   **dye→pigment→dyed cloth**, **grain→flour→flatbread**, **soapstone bowl**, **whetstone→sharpening**,
+>   **hammerstones** — each with a real consumer.
+> - **EPIC #191 Bare-hand handwork — STARTED** (V109–V111 + code): carrying objects, body wraps, bedding,
+>   **windbreak** (warms better out of the wind), hand-twisted root/bast cordage — all tool_class NULL.
+> - **EPIC #123 Survival viability — STARTED** (V112): the **arrival viability validator** (`arrival_viability()`
+>   + `ArrivalViabilityService`) — a generator invariant labelling starts VIABLE/CHALLENGING/REJECTED so a
+>   random Chronicle is never dropped somewhere unsurvivable.
 >
 > **EPIC #64 Action Catalogue — scorecard:**
 > - **#65 perception — ✅ CLOSED.** observe/inspect/examine/analyze/investigate (incl. #33 subject scoping) +
