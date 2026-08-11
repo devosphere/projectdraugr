@@ -294,7 +294,7 @@ public class AssemblyService {
     private boolean hasTool(UUID chronicle, String toolClass) {
         return switch (toolClass) {
             case "CUTTING"  -> items.hasCuttingTool(chronicle);
-            case "STRIKING" -> items.hasAtLeast(chronicle, "stone_hammer", 1) || items.hasAtLeast(chronicle, "primitive_pickaxe", 1) || items.hasAtLeast(chronicle, "field_stone", 1);
+            case "STRIKING" -> items.hasAtLeast(chronicle, "stone_hammer", 1) || items.hasAtLeast(chronicle, "primitive_pickaxe", 1) || items.hasAtLeast(chronicle, "field_stone", 1) || items.hasAtLeast(chronicle, "granite_cobble", 1) || items.hasAtLeast(chronicle, "basalt_cobble", 1);
             case "AXE"      -> items.hasAtLeast(chronicle, "stone_axe", 1) || items.hasAtLeast(chronicle, "stone_hatchet", 1);
             default -> true;
         };

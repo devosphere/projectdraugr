@@ -664,7 +664,7 @@ public class PhysicalItemService {
         if (toolClass != null) {
             boolean ok = switch (toolClass) {
                 case "CUTTING"  -> hasCuttingTool(chronicle);
-                case "STRIKING" -> hasAtLeast(chronicle,"stone_hammer",1) || hasAtLeast(chronicle,"primitive_pickaxe",1) || hasAtLeast(chronicle,"field_stone",1);
+                case "STRIKING" -> hasAtLeast(chronicle,"stone_hammer",1) || hasAtLeast(chronicle,"primitive_pickaxe",1) || hasAtLeast(chronicle,"field_stone",1) || hasAtLeast(chronicle,"granite_cobble",1) || hasAtLeast(chronicle,"basalt_cobble",1);
                 case "AXE"      -> hasAtLeast(chronicle,"stone_axe",1) || hasAtLeast(chronicle,"stone_hatchet",1);
                 default -> true; };
             if (!ok) return new String[]{"FAILED", "This work turns on a tool you have not got in reach — an edge, a hammer, an axe, whatever it needs. Bare hands only bruise the material."};
@@ -815,7 +815,7 @@ public class PhysicalItemService {
         String key = (String) target.get("mineral_key");
         String name = (String) target.get("display_name");
         String tool = (String) target.get("tool_required");
-        if (tool != null && !hasCuttingTool(chronicle) && !hasAtLeast(chronicle,"stone_hammer",1) && !hasAtLeast(chronicle,"primitive_pickaxe",1))
+        if (tool != null && !hasCuttingTool(chronicle) && !hasAtLeast(chronicle,"stone_hammer",1) && !hasAtLeast(chronicle,"primitive_pickaxe",1) && !hasAtLeast(chronicle,"granite_cobble",1) && !hasAtLeast(chronicle,"basalt_cobble",1))
             return new String[]{"FAILED", "The " + name.toLowerCase() + " is locked in the rock, and you have nothing to break it free with."};
 
         // Searching for one specific mineral is harder than taking what is plainly there.
