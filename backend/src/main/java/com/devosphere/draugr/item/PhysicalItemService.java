@@ -1377,6 +1377,16 @@ public class PhysicalItemService {
         String name = ((String) item.get("name")).toLowerCase(java.util.Locale.ROOT); String cond = (String) item.get("cond");
         if ("SOUND".equals(cond)) return new String[]{"SUCCEEDED", "You look the " + name + " over, but it is sound and whole — it needs no mending yet."};
         if ("DESTROYED".equals(cond)) return new String[]{"FAILED", "The " + name + " is past mending — there is nothing left to work with."};
+        // Sharpening (#75) is not mending: a dulled edge is drawn back against a whetstone or grit-stone, not
+        // bound with cordage. The stone is reusable, so it is used but not consumed.
+        if (lower.contains("sharpen") || lower.contains("whet") || lower.contains("hone") || (lower.contains("grind") && lower.contains("edge"))) {
+            if (!hasAtLeast(chronicle, "whetstone", 1) && !hasAtLeast(chronicle, "sandstone_piece", 1) && !hasAtLeast(chronicle, "pumice_piece", 1))
+                return new String[]{"FAILED", "You go to put an edge on the " + name + ", but you have no whetstone or grit-stone to draw it against."};
+            String honed = "BROKEN".equals(cond) ? "WORN" : "SOUND";
+            jdbc.update("UPDATE item_instance SET condition_state=? WHERE object_id=?", honed, item.get("id"));
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'SHARPENED',jsonb_build_object('from',?,'to',?))", item.get("id"), Timestamp.from(at), cond, honed);
+            return new String[]{"SUCCEEDED", "You draw the " + name + " against the stone in long, even strokes until a keen edge comes back to it."};
+        }
         String binder = hasAtLeast(chronicle, "fiber_cordage", 1) ? "fiber_cordage"
                        : hasAtLeast(chronicle, "leather_cord", 1) ? "leather_cord"
                        : hasAtLeast(chronicle, "plant_fiber", 1) ? "plant_fiber" : null;
