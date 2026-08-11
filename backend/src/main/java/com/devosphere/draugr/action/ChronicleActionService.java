@@ -792,7 +792,7 @@ public class ChronicleActionService {
            // "salt" makes rock/sea salt reachable by phrasing (gather sea salt, dig for rock salt);
            // it can't steal "salt the fish/meat" — that carries no gathering verb and falls through
            // to the preservation process.
-           &&(value.contains("flint")||value.contains("chert")||value.contains("obsidian")||value.contains("pyrite")||value.contains("quartz")||value.contains("crystal")||value.contains("mineral")||value.contains("salt")||value.matches("(?s).*\\bore\\b.*")||value.contains("tool stone"))) return Intent.GATHER_MINERAL;
+           &&(value.contains("flint")||value.contains("chert")||value.contains("obsidian")||value.contains("pyrite")||value.contains("quartz")||value.contains("crystal")||value.contains("mineral")||value.contains("salt")||value.contains("ochre")||value.matches("(?s).*\\bore\\b.*")||value.contains("tool stone"))) return Intent.GATHER_MINERAL;
         // Fire management (#71): put out, bank, or tend a fire — checked before the ignition rules so "put out
         // the fire" is not read as making one.
         if(value.contains("extinguish")||value.contains("put out the fire")||value.contains("put the fire out")||value.contains("douse")||value.contains("smother the fire")||value.contains("stamp out the fire")||value.contains("quench the fire")||((value.contains("put out")||value.contains("kill"))&&value.contains("fire"))) return Intent.EXTINGUISH_FIRE;

@@ -874,7 +874,7 @@ public class PhysicalItemService {
         java.util.List<String> hideKeys = "pelt".equals(p.hideKind())
             ? java.util.List.of("wolf_pelt","bear_pelt","fox_pelt","lynx_pelt","rabbit_pelt","dire_wolf_pelt")
             : java.util.List.of("animal_hide","deer_hide","boar_hide","troll_hide","wolf_pelt","bear_pelt","fox_pelt","lynx_pelt","rabbit_pelt",
-                                "fish_skin_leather","leather_offcut","snake_skin","wool_cloth","felt_sheet","textile_material","leather_boot_sole");
+                                "fish_skin_leather","leather_offcut","snake_skin","wool_cloth","felt_sheet","textile_material","leather_boot_sole","dyed_cloth");
 
         int haveHides = 0;
         for (String k : hideKeys) { Integer n = jdbc.queryForObject(
