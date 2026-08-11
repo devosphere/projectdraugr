@@ -344,12 +344,15 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 >   cut/knap/fell boundary stays enforced by tool requirements. Done: **#194 carrying objects** (V109 — leaf wrap,
 >   folded bark cup, bark fold container, grass sling, reed pouch; all no-tool, functional low-capacity
 >   containers; new hand-gathered big_leaf + dry_grass_bundle), **#198 body wraps** (V110 — grass ankle wraps +
->   fibre hand wraps paired L/R, reed hat, bark hood, moss pad; worn+warming, not armour), **#195 bedding**
->   (make_bed now takes dry grass / big leaves / moss). *Remaining child stories:* #192 more hand-materials
->   (loose_bark_strip etc. — mind the STRIP_BARK collision), #193 fibre twist/braid/knot/lash (cordage mostly
->   exists), #195 cover (windbreak/sunshade/groundsheet — placed structures), #196 food/water handling
->   (wash/sort/peel/shell/husk), #197 clay/mud (coil/daub/pack mostly exist; add clay bead/seal), #199 handwork
->   wear/fatigue/persistence.
+>   fibre hand wraps paired L/R, reed hat, bark hood, moss pad; worn+warming, not armour), **#195 bedding + cover**
+>   (make_bed now takes dry grass / big leaves / moss; **PLACE_WINDBREAK** raises a bare-hand WINDBREAK
+>   construction — no roof, but out of the wind warmByFire warms better). #197 clay/mud is **already largely
+>   bare-hand** (form_vessel/form_clay_jar/mix_daub/pack_earth_floor are all tool_class NULL); #193 cordage twist
+>   is already bare-hand. *Remaining child stories (lower-value/marginal):* #192 more hand-materials
+>   (loose_bark_strip — mind the STRIP_BARK collision), #193 braid/lash variants, #195 sunshade/groundsheet
+>   (lower-value: heat is a lesser threat, groundsheet ≈ bedding), #196 food/water handling (mostly hazard
+>   guardrails + wash/peel/shell), #197 clay bead/seal, #199 handwork wear/fatigue/persistence (a durability
+>   system).
 > - **NEXT, in order:** the #75 orphan audit is DONE — every existing material is functional; continuing *net-new*
 >   catalogue breadth toward "100" (unbuilt families: dye/pigment [needs a dyeing consumer], more stone/mineral
 >   [whetstone/grindstone needs a sharpening/grinding mechanic], more forageables) and its sibling stories
