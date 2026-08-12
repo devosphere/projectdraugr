@@ -310,13 +310,24 @@ public class ChroniclePhysiologyService {
     public boolean bindWound(UUID chronicleId, PhysicalItemService items, UUID actionId, Instant occurredAt) {
         Integer wounded = jdbc.queryForObject("SELECT COUNT(*) FROM chronicle_physiology WHERE chronicle_id=? AND (injury_severity>0 OR blood_loss_ml>0)", Integer.class, chronicleId);
         if (wounded == null || wounded == 0) return false;
-        // A medicinal poultice (V87) dresses a wound far better than a bare fibre binding — it staunches more
-        // blood, eases more pain, and actually reduces the injury. Fall back to plant fibre when none is carried.
+        // First aid grades by what the Chronicle can bring to bear (#125 Recovery). The binding: a medicinal
+        // poultice (V87) staunches best; a clean rolled bandage (V119) next; a raw fibre binding last — at least
+        // one is required. A bark splint and an arm sling (V119) are optional additions, each with its own effect:
+        // a splint immobilises a break (the biggest cut to injury), a sling rests the limb (pain, and above all
+        // stress). Poultice and bandage may both be applied — medicine dressed with a clean binding.
         boolean poultice = items.consumeOne(chronicleId, "herbal_poultice", occurredAt);
-        if (!poultice && !items.consumeOne(chronicleId, "plant_fiber", occurredAt)) return false;
-        int blood = poultice ? 300 : 180, pain = poultice ? 9 : 5, injury = poultice ? 4 : 0;
-        jdbc.update("UPDATE chronicle_physiology SET blood_loss_ml=GREATEST(0,blood_loss_ml-?),pain_level=GREATEST(0,pain_level-?),stress_level=GREATEST(0,stress_level-3),injury_severity=GREATEST(0,injury_severity-?) WHERE chronicle_id=?", blood, pain, injury, chronicleId);
-        jdbc.update("INSERT INTO chronicle_condition_event (chronicle_id,occurred_at,condition_kind,severity,source_action_id,payload) VALUES (?,?,?,?,?,jsonb_build_object('method',?))", chronicleId, Timestamp.from(occurredAt), "WOUND_BOUND", 1, actionId, poultice ? "herbal_poultice" : "plant_fiber_binding");
+        boolean bandage  = items.consumeOne(chronicleId, "fibre_bandage_roll", occurredAt);
+        boolean fibre    = (!poultice && !bandage) && items.consumeOne(chronicleId, "plant_fiber", occurredAt);
+        if (!poultice && !bandage && !fibre) return false;
+        boolean splint = items.consumeOne(chronicleId, "bark_splint_set", occurredAt);
+        boolean sling  = items.consumeOne(chronicleId, "cordage_arm_sling", occurredAt);
+        int blood  = (poultice ? 300 : 0) + (bandage ? 220 : 0) + (fibre ? 180 : 0);
+        int pain   = (poultice ? 9 : 0) + (bandage ? 6 : 0) + (fibre ? 5 : 0) + (splint ? 7 : 0) + (sling ? 4 : 0);
+        int injury = (poultice ? 4 : 0) + (bandage ? 2 : 0) + (splint ? 6 : 0) + (sling ? 1 : 0);
+        int stress = 3 + (sling ? 3 : 0);
+        jdbc.update("UPDATE chronicle_physiology SET blood_loss_ml=GREATEST(0,blood_loss_ml-?),pain_level=GREATEST(0,pain_level-?),stress_level=GREATEST(0,stress_level-?),injury_severity=GREATEST(0,injury_severity-?) WHERE chronicle_id=?", blood, pain, stress, injury, chronicleId);
+        String method = (poultice ? "herbal_poultice" : bandage ? "fibre_bandage" : "plant_fiber_binding") + (splint ? "+splint" : "") + (sling ? "+sling" : "");
+        jdbc.update("INSERT INTO chronicle_condition_event (chronicle_id,occurred_at,condition_kind,severity,source_action_id,payload) VALUES (?,?,?,?,?,jsonb_build_object('method',?))", chronicleId, Timestamp.from(occurredAt), "WOUND_BOUND", 1, actionId, method);
         refreshBody(chronicleId);
         return true;
     }
