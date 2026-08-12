@@ -239,7 +239,7 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 > finish M1, then continue into M2, WITHOUT interruption or permission requests — choose the engineering strategy
 > yourself, land verifiable increments, commit/push, and close a story only when its acceptance is fully met.**
 > Everything is on `development` (pushed) as `devosphere.tech` (never `johncalado`). **Migrations through V112.**
-> Full suite **162 backend tests + 40 SQL regressions green** on the V1–V115 chain; each commit compiles with tests
+> Full suite **162 backend tests + 41 SQL regressions green** on the V1–V115 chain; each commit compiles with tests
 > green and the routing-reachability probe clean (84 ok / 0 miss).
 >
 > **This session's major deliverables (V82→V112):**
@@ -255,7 +255,7 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 >   **dye→pigment→dyed cloth**, **grain→flour→flatbread**, **soapstone bowl**, **whetstone→sharpening**,
 >   **hammerstones** — each with a real consumer.
 > - **EPIC #191 Bare-hand handwork — STARTED** (V109–V113 + code): carrying objects (**#194 CLOSED**, V109+V113 —
->   all ten named carriers), **#196 food handling CLOSED** (V114), **#197 clay beads/seals CLOSED** (V115), body wraps, bedding, **windbreak** (warms better out of the wind), hand-twisted
+>   all ten named carriers), **#196 food handling CLOSED** (V114), **#197 clay beads/seals CLOSED** (V115), **#195 covers CLOSED** (sunshade/rain-cover/groundsheet/stone-ring), body wraps, bedding, **windbreak** (warms better out of the wind), hand-twisted
 >   root/bast cordage — all tool_class NULL.
 > - **EPIC #123 Survival viability — ADVANCED** (V112 + code): the **arrival viability validator** (`arrival_viability()`
 >   + `ArrivalViabilityService`) labels starts VIABLE/CHALLENGING/REJECTED from biome + 8-neighbour envelope +
@@ -369,9 +369,12 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 >   cordage carry loop, grass carry-mat, tied carry bundle; all ten no-tool, functional containers; new
 >   hand-gathered big_leaf + dry_grass_bundle; keywords tuned classifier-safe, dr0114 pins reachability),
 >   **#198 body wraps** (V110 — grass ankle wraps +
->   fibre hand wraps paired L/R, reed hat, bark hood, moss pad; worn+warming, not armour), **#195 bedding + cover**
->   (make_bed now takes dry grass / big leaves / moss; **PLACE_WINDBREAK** raises a bare-hand WINDBREAK
->   construction — no roof, but out of the wind warmByFire warms better). #193 cordage twist
+>   fibre hand wraps paired L/R, reed hat, bark hood, moss pad; worn+warming, not armour), **#195 bedding + cover —
+>   CLOSED** (make_bed dry grass/leaves/moss + **PLACE_WINDBREAK**; plus a generic **PLACE_COVER** intent placing
+>   SUNSHADE/RAIN_COVER/GROUNDSHEET/STONE_RING construction_projects — each with a graded, non-shelter weather
+>   effect in ChroniclePhysiologyService: windbreak now cuts tick wind ×0.5, rain-cover cuts rain wetness, sunshade
+>   cuts heat load when hot, groundsheet counts as a bed, stone-ring reflects fire heat; dr0117 pins co-location).
+>   #193 cordage twist
 >   is already bare-hand. **#196 food/water handling — CLOSED** (V114 — shell_hazelnut/peel_root/wash_root bare-hand,
 >   crack_walnut STRIKING-gated hard shell, handled roots feed cook_root_stew so handling ≠ safety; new PROCESS
 >   verbs peel/husk/shell/shuck; dr0115 pins reachability + the safety distinction). **#197 clay/mud/pigment —
@@ -379,8 +382,7 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 >   grind_pigment; added shape_clay_bead + press_clay_seal → fire_clay_trinkets (separate fire chain) →
 >   thread_trinket_cord wearable; unfired≠durable gate, dr0116). *Remaining child stories
 >   (lower-value/marginal):* #192 more hand-materials
->   (loose_bark_strip — mind the STRIP_BARK collision), #193 braid/lash variants, #195 sunshade/groundsheet
->   (lower-value: heat is a lesser threat, groundsheet ≈ bedding), #199 handwork wear/fatigue/persistence (a durability
+>   (loose_bark_strip — mind the STRIP_BARK collision), #193 braid/lash variants, #199 handwork wear/fatigue/persistence (a durability
 >   system).
 > - **NEXT, in order:** the #75 orphan audit is DONE — every existing material is functional; continuing *net-new*
 >   catalogue breadth toward "100" (unbuilt families: dye/pigment [needs a dyeing consumer], more stone/mineral
