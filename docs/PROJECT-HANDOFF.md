@@ -100,7 +100,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 | `backend/src/main/java/com/devosphere/draugr/domain/ArchitectRouter.java` | Cost gate for the Architect — routes COVERED / POLISH / INVENT. |
 | `backend/src/main/java/com/devosphere/draugr/routing/ProcessMatcher.java` | The **only** implementation of the action→process resolution rule. Both `runProcess()` and `ArchitectRouter` go through it. |
 | `backend/src/main/java/com/devosphere/draugr/routing/RoutingMissRecorder.java` | Records unresolved actions into the V56 backlog. Separate bean on purpose — see its Javadoc. |
-| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V113. Next is V114. (…V109 bare-hand carrying, V110 bare-hand wraps, V111 bare-hand cordage, V112 arrival viability, V113 bare-hand carrying completion.) |
+| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V114. Next is V115. (…V109 bare-hand carrying, V110 bare-hand wraps, V111 bare-hand cordage, V112 arrival viability, V113 bare-hand carrying completion, V114 bare-hand food handling.) |
 | `backend/src/main/java/com/devosphere/draugr/domain/DomainRegistryService.java` | Reads domain_registry — the Architect's ledger of invented domains. |
 | `docs/architecture/domain-creation-pattern.md` | The exact recipe for adding a new domain. |
 | `docs/architecture/action-routing-hardening.md` | Sprint 003 spec — collisions, milestones M1–M5. |
@@ -119,7 +119,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 
 ---
 
-## What Is Built (Migrations V1–V113, all applied)
+## What Is Built (Migrations V1–V114, all applied)
 
 > **Post-playtest cycle (2026-08-03) — summary; full detail + resume point in
 > [systems/06.4-Runtime-Authoring-Build-Plan.md](systems/06.4-Runtime-Authoring-Build-Plan.md).**
@@ -239,7 +239,7 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 > finish M1, then continue into M2, WITHOUT interruption or permission requests — choose the engineering strategy
 > yourself, land verifiable increments, commit/push, and close a story only when its acceptance is fully met.**
 > Everything is on `development` (pushed) as `devosphere.tech` (never `johncalado`). **Migrations through V112.**
-> Full suite **162 backend tests + 38 SQL regressions green** on the V1–V113 chain; each commit compiles with tests
+> Full suite **162 backend tests + 39 SQL regressions green** on the V1–V114 chain; each commit compiles with tests
 > green and the routing-reachability probe clean (84 ok / 0 miss).
 >
 > **This session's major deliverables (V82→V112):**
@@ -255,7 +255,7 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 >   **dye→pigment→dyed cloth**, **grain→flour→flatbread**, **soapstone bowl**, **whetstone→sharpening**,
 >   **hammerstones** — each with a real consumer.
 > - **EPIC #191 Bare-hand handwork — STARTED** (V109–V113 + code): carrying objects (**#194 CLOSED**, V109+V113 —
->   all ten named carriers), body wraps, bedding, **windbreak** (warms better out of the wind), hand-twisted
+>   all ten named carriers), **#196 food handling CLOSED** (V114), body wraps, bedding, **windbreak** (warms better out of the wind), hand-twisted
 >   root/bast cordage — all tool_class NULL.
 > - **EPIC #123 Survival viability — ADVANCED** (V112 + code): the **arrival viability validator** (`arrival_viability()`
 >   + `ArrivalViabilityService`) labels starts VIABLE/CHALLENGING/REJECTED from biome + 8-neighbour envelope +
@@ -373,10 +373,12 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 >   (make_bed now takes dry grass / big leaves / moss; **PLACE_WINDBREAK** raises a bare-hand WINDBREAK
 >   construction — no roof, but out of the wind warmByFire warms better). #197 clay/mud is **already largely
 >   bare-hand** (form_vessel/form_clay_jar/mix_daub/pack_earth_floor are all tool_class NULL); #193 cordage twist
->   is already bare-hand. *Remaining child stories (lower-value/marginal):* #192 more hand-materials
+>   is already bare-hand. **#196 food/water handling — CLOSED** (V114 — shell_hazelnut/peel_root/wash_root bare-hand,
+>   crack_walnut STRIKING-gated hard shell, handled roots feed cook_root_stew so handling ≠ safety; new PROCESS
+>   verbs peel/husk/shell/shuck; dr0115 pins reachability + the safety distinction). *Remaining child stories
+>   (lower-value/marginal):* #192 more hand-materials
 >   (loose_bark_strip — mind the STRIP_BARK collision), #193 braid/lash variants, #195 sunshade/groundsheet
->   (lower-value: heat is a lesser threat, groundsheet ≈ bedding), #196 food/water handling (mostly hazard
->   guardrails + wash/peel/shell), #197 clay bead/seal, #199 handwork wear/fatigue/persistence (a durability
+>   (lower-value: heat is a lesser threat, groundsheet ≈ bedding), #197 clay bead/seal, #199 handwork wear/fatigue/persistence (a durability
 >   system).
 > - **NEXT, in order:** the #75 orphan audit is DONE — every existing material is functional; continuing *net-new*
 >   catalogue breadth toward "100" (unbuilt families: dye/pigment [needs a dyeing consumer], more stone/mineral
