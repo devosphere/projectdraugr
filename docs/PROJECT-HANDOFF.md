@@ -100,7 +100,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 | `backend/src/main/java/com/devosphere/draugr/domain/ArchitectRouter.java` | Cost gate for the Architect — routes COVERED / POLISH / INVENT. |
 | `backend/src/main/java/com/devosphere/draugr/routing/ProcessMatcher.java` | The **only** implementation of the action→process resolution rule. Both `runProcess()` and `ArchitectRouter` go through it. |
 | `backend/src/main/java/com/devosphere/draugr/routing/RoutingMissRecorder.java` | Records unresolved actions into the V56 backlog. Separate bean on purpose — see its Javadoc. |
-| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V116. Next is V117. (…V109 bare-hand carrying, V110 bare-hand wraps, V111 bare-hand cordage, V112 arrival viability, V113 bare-hand carrying completion, V114 bare-hand food handling, V115 bare-hand clay ornaments, V116 bare-hand raw materials.) |
+| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V117. Next is V118. (…V109 bare-hand carrying, V110 bare-hand wraps, V111 bare-hand cordage, V112 arrival viability, V113 bare-hand carrying completion, V114 bare-hand food handling, V115 bare-hand clay ornaments, V116 bare-hand raw materials, V117 handwork mass-conservation.) |
 | `backend/src/main/java/com/devosphere/draugr/domain/DomainRegistryService.java` | Reads domain_registry — the Architect's ledger of invented domains. |
 | `docs/architecture/domain-creation-pattern.md` | The exact recipe for adding a new domain. |
 | `docs/architecture/action-routing-hardening.md` | Sprint 003 spec — collisions, milestones M1–M5. |
@@ -119,7 +119,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 
 ---
 
-## What Is Built (Migrations V1–V116, all applied)
+## What Is Built (Migrations V1–V117, all applied)
 
 > **Post-playtest cycle (2026-08-03) — summary; full detail + resume point in
 > [systems/06.4-Runtime-Authoring-Build-Plan.md](systems/06.4-Runtime-Authoring-Build-Plan.md).**
@@ -239,7 +239,7 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 > finish M1, then continue into M2, WITHOUT interruption or permission requests — choose the engineering strategy
 > yourself, land verifiable increments, commit/push, and close a story only when its acceptance is fully met.**
 > Everything is on `development` (pushed) as `devosphere.tech` (never `johncalado`). **Migrations through V112.**
-> Full suite **162 backend tests + 42 SQL regressions green** on the V1–V116 chain; each commit compiles with tests
+> Full suite **162 backend tests + 43 SQL regressions green** on the V1–V117 chain; each commit compiles with tests
 > green and the routing-reachability probe clean (84 ok / 0 miss).
 >
 > **This session's major deliverables (V82→V112):**
@@ -255,7 +255,7 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 >   **dye→pigment→dyed cloth**, **grain→flour→flatbread**, **soapstone bowl**, **whetstone→sharpening**,
 >   **hammerstones** — each with a real consumer.
 > - **EPIC #191 Bare-hand handwork — STARTED** (V109–V113 + code): carrying objects (**#194 CLOSED**, V109+V113 —
->   all ten named carriers), **#196 food handling CLOSED** (V114), **#197 clay beads/seals CLOSED** (V115), **#195 covers CLOSED** (sunshade/rain-cover/groundsheet/stone-ring), **#192 raw materials CLOSED** (V116), body wraps, bedding, **windbreak** (warms better out of the wind), hand-twisted
+>   all ten named carriers), **#196 food handling CLOSED** (V114), **#197 clay beads/seals CLOSED** (V115), **#195 covers CLOSED** (sunshade/rain-cover/groundsheet/stone-ring), **#192 raw materials CLOSED** (V116), **#199 limits-proof CLOSED** (V117+dr0119), **#193 twist/braid/knot/lash CLOSED**, body wraps, bedding, **windbreak** (warms better out of the wind), hand-twisted
 >   root/bast cordage — all tool_class NULL.
 > - **EPIC #123 Survival viability — ADVANCED** (V112 + code): the **arrival viability validator** (`arrival_viability()`
 >   + `ArrivalViabilityService`) labels starts VIABLE/CHALLENGING/REJECTED from biome + 8-neighbour envelope +
@@ -382,8 +382,14 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 >   grind_pigment; added shape_clay_bead + press_clay_seal → fire_clay_trinkets (separate fire chain) →
 >   thread_trinket_cord wearable; unfired≠durable gate, dr0116). **#192 raw materials — CLOSED** (V116 — ten
 >   bare-hand materials, each obtainable via NULL-tool flora_drop or NULL-tool mineral AND consumed via 7 feeder
->   processes or craftTinder; STRIP_BARK collision avoided; dr0118). *Only remaining child story:* #199 handwork wear/fatigue/persistence (a durability
->   system).
+>   processes or craftTinder; STRIP_BARK collision avoided; dr0118). **#199 limits-proof — CLOSED** (V117 + dr0119
+>   — proof suite over all 29 handwork processes: no tool routes bare-handed except crack_walnut, no creation from
+>   nothing, no mass gain [found+fixed flatten_bark/ret_bark_strip], carriers finite; persistence/Auditor covered by
+>   the standard world_object invariants). **#193 twist/braid/knot/lash — CLOSED** (all mechanics already exist:
+>   twist_*/ret_*/plait_withy_rope/knot_cordage_loop/lash_burden_frame/tie_*). **EPIC #191 is one item from done:**
+>   only **#198**'s `smoke_face_wrap` remains, deliberately deferred — it needs a new smoke-inhalation health vector
+>   (an active fire in an enclosed shelter without a vent → mild illness; hood or face wrap mitigates) to be
+>   functional rather than a decorative orphan. The other 8 #198 items shipped in V110 (wraps/hat/hood/pad).
 > - **NEXT, in order:** the #75 orphan audit is DONE — every existing material is functional; continuing *net-new*
 >   catalogue breadth toward "100" (unbuilt families: dye/pigment [needs a dyeing consumer], more stone/mineral
 >   [whetstone/grindstone needs a sharpening/grinding mechanic], more forageables) and its sibling stories
