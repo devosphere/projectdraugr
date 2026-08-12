@@ -1192,7 +1192,8 @@ public class PhysicalItemService {
         UUID chronicle=activeChronicle();
         if(capacityHeadroomUnits(chronicle,"tinder_nest")<=0) return false;
         String from = null;
-        for (String k : new String[]{"cattail_fluff","birch_polypore","fatwood_stick","wood_shaving","plant_fiber"})
+        // Bare-hand tinder stock (#192): dry leaf litter, dry twigs, and a tuft of shed fur all take a spark.
+        for (String k : new String[]{"cattail_fluff","birch_polypore","fatwood_stick","wood_shaving","plant_fiber","fallen_leaf_litter","dry_twig","shed_fur_tuft"})
             if (hasAtLeast(chronicle, k, 1)) { from = k; break; }
         if(from==null || !consumeOne(chronicle,from,at)) return false;
         createCarriedItem(chronicle,"tinder_nest","Tinder nest",at,"CRAFTED");
