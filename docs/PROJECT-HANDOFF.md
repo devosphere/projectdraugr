@@ -239,7 +239,7 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 > finish M1, then continue into M2, WITHOUT interruption or permission requests — choose the engineering strategy
 > yourself, land verifiable increments, commit/push, and close a story only when its acceptance is fully met.**
 > Everything is on `development` (pushed) as `devosphere.tech` (never `johncalado`). **Migrations through V112.**
-> Full suite **162 backend tests + 36 SQL regressions green** on the V1–V112 chain; each commit compiles with tests
+> Full suite **162 backend tests + 37 SQL regressions green** on the V1–V112 chain; each commit compiles with tests
 > green and the routing-reachability probe clean (84 ok / 0 miss).
 >
 > **This session's major deliverables (V82→V112):**
@@ -256,9 +256,13 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 >   **hammerstones** — each with a real consumer.
 > - **EPIC #191 Bare-hand handwork — STARTED** (V109–V111 + code): carrying objects, body wraps, bedding,
 >   **windbreak** (warms better out of the wind), hand-twisted root/bast cordage — all tool_class NULL.
-> - **EPIC #123 Survival viability — STARTED** (V112): the **arrival viability validator** (`arrival_viability()`
->   + `ArrivalViabilityService`) — a generator invariant labelling starts VIABLE/CHALLENGING/REJECTED so a
->   random Chronicle is never dropped somewhere unsurvivable.
+> - **EPIC #123 Survival viability — ADVANCED** (V112 + code): the **arrival viability validator** (`arrival_viability()`
+>   + `ArrivalViabilityService`) labels starts VIABLE/CHALLENGING/REJECTED from biome + 8-neighbour envelope +
+>   water + wildlife pressure. **`ChronicleService.selectSpawn` now awakens a Chronicle only on a validator-approved
+>   coordinate** (prefer VIABLE → fall back CHALLENGING → never REJECTED; old forest/grassland heuristic kept only as
+>   a last-ditch net). `dr0113-survival-coverage.sql` pins that all nine survival categories stay content-backed and
+>   every land start biome feeds and warms from its own ground. Remaining: the end-to-end first-day survival *run*
+>   across the six biomes under night/rain/cold/heat/injury/low-food-water (CI integration scenario).
 >
 > **EPIC #64 Action Catalogue — scorecard:**
 > - **#65 perception — ✅ CLOSED.** observe/inspect/examine/analyze/investigate (incl. #33 subject scoping) +
