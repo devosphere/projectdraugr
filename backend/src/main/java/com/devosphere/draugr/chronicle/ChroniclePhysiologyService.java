@@ -43,9 +43,14 @@ public class ChroniclePhysiologyService {
             int hygiene = clamp((int) Math.round(rs.getInt(10) - hours * .25));
             double sleepDebt = Math.min(72, rs.getBigDecimal(13).doubleValue() + hours);
             int pain = rs.getInt(14); int stress = rs.getInt(15); int injury = rs.getInt(16); int illness = rs.getInt(17); int bloodLoss = rs.getInt(18);
-            Environment environment = jdbc.query("SELECT ww.weather_kind,ww.intensity,ww.ambient_temperature_c,ww.wind_speed_kph,COALESCE((SELECT fs.fuel_minutes FROM construction_project cp JOIN fire_state fs ON fs.construction_id=cp.object_id JOIN world_object pit ON pit.id=cp.object_id JOIN world_object body ON body.current_location_id=pit.current_location_id WHERE body.id=c.id AND fs.active=true ORDER BY fs.fuel_minutes DESC LIMIT 1),0),EXISTS(SELECT 1 FROM construction_project cp JOIN world_object shelter ON shelter.id=cp.object_id JOIN world_object body ON body.current_location_id=shelter.current_location_id WHERE body.id=c.id AND cp.project_kind='LEAN_TO' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND shelter.lifecycle_state='ACTIVE') FROM chronicle c JOIN world_weather ww ON ww.world_id=c.world_id WHERE c.id=?", result -> result.next() ? new Environment(result.getString(1),result.getInt(2),result.getBigDecimal(3).doubleValue(),result.getInt(4),result.getInt(5),result.getBoolean(6)) : new Environment("CLEAR",0,18,0,0,false), id);
+            Environment environment = jdbc.query("SELECT ww.weather_kind,ww.intensity,ww.ambient_temperature_c,ww.wind_speed_kph,COALESCE((SELECT fs.fuel_minutes FROM construction_project cp JOIN fire_state fs ON fs.construction_id=cp.object_id JOIN world_object pit ON pit.id=cp.object_id JOIN world_object body ON body.current_location_id=pit.current_location_id WHERE body.id=c.id AND fs.active=true ORDER BY fs.fuel_minutes DESC LIMIT 1),0),EXISTS(SELECT 1 FROM construction_project cp JOIN world_object shelter ON shelter.id=cp.object_id JOIN world_object body ON body.current_location_id=shelter.current_location_id WHERE body.id=c.id AND cp.project_kind='LEAN_TO' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND shelter.lifecycle_state='ACTIVE')" +
+                ",EXISTS(SELECT 1 FROM construction_project cp JOIN world_object wb ON wb.id=cp.object_id JOIN world_object body ON body.current_location_id=wb.current_location_id WHERE body.id=c.id AND cp.project_kind='WINDBREAK' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND wb.lifecycle_state='ACTIVE')" +
+                ",EXISTS(SELECT 1 FROM construction_project cp JOIN world_object rc ON rc.id=cp.object_id JOIN world_object body ON body.current_location_id=rc.current_location_id WHERE body.id=c.id AND cp.project_kind='RAIN_COVER' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND rc.lifecycle_state='ACTIVE')" +
+                ",EXISTS(SELECT 1 FROM construction_project cp JOIN world_object ss ON ss.id=cp.object_id JOIN world_object body ON body.current_location_id=ss.current_location_id WHERE body.id=c.id AND cp.project_kind='SUNSHADE' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND ss.lifecycle_state='ACTIVE')" +
+                " FROM chronicle c JOIN world_weather ww ON ww.world_id=c.world_id WHERE c.id=?", result -> result.next() ? new Environment(result.getString(1),result.getInt(2),result.getBigDecimal(3).doubleValue(),result.getInt(4),result.getInt(5),result.getBoolean(6),result.getBoolean(7),result.getBoolean(8),result.getBoolean(9)) : new Environment("CLEAR",0,18,0,0,false,false,false,false), id);
             double core = rs.getBigDecimal(6).doubleValue();
-            double effectiveWind = environment.shelter() ? environment.wind() * .25 : environment.wind();
+            // Full shelter cuts the wind most; a bare-hand windbreak (#195) cuts it partly, but it is not shelter.
+            double effectiveWind = environment.shelter() ? environment.wind() * .25 : (environment.windbreak() ? environment.wind() * .5 : environment.wind());
             // What the chronicle is wearing finally counts. Summed insulation across worn
             // garments is capped at 80%, so no stack of rags makes a body invulnerable —
             // clothing buys time against the cold, it does not repeal it.
@@ -59,7 +64,11 @@ public class ChroniclePhysiologyService {
             // Wet clothing insulates far worse than dry — the classic way people die of
             // cold in weather that is not, in itself, lethal.
             if (wetness >= 60) retained = Math.min(1.0, retained * 1.6);
-            double exposure = ((environment.ambient() - core) * Math.min(.22, hours * .04) - effectiveWind * hours * .004) * retained;
+            double envExposure = ((environment.ambient() - core) * Math.min(.22, hours * .04) - effectiveWind * hours * .004) * retained;
+            // A leaf sunshade (#195) cuts the radiant heat load when the air is hotter than the body — partial
+            // relief from a hot day, not a cool room. It does nothing in the cold (envExposure is then negative).
+            if (environment.sunShade() && environment.ambient() > core) envExposure *= 0.6;
+            double exposure = envExposure;
             // A living body makes its own heat, and that is what actually holds core
             // temperature at 37C in air far colder than 37C. Without this term the model
             // had nothing opposing environmental drain, so core decayed toward ambient
@@ -84,7 +93,9 @@ public class ChroniclePhysiologyService {
             if (environment.fuelMinutes() == 0 && environment.ambient() < 37.0)
                 core = Math.max(Math.min(environment.ambient(), 36.6), core);
             core = Math.max(20, Math.min(45, core));
-            if ("RAIN".equals(environment.kind()) || "STORM".equals(environment.kind())) wetness = clamp((int)Math.round(wetness + hours * (environment.intensity() / (environment.shelter() ? 28.0 : 7.0))));
+            // Rain wets the body less under a roof; a leant rain cover (#195) sheds some of it, but far less than
+            // true shelter — it has no walls and turns only the worst of a shower.
+            if ("RAIN".equals(environment.kind()) || "STORM".equals(environment.kind())) wetness = clamp((int)Math.round(wetness + hours * (environment.intensity() / (environment.shelter() ? 28.0 : (environment.rainCover() ? 15.0 : 7.0)))));
             if (environment.fuelMinutes() > 0) wetness = clamp((int)Math.round(wetness - hours * 14));
             int illnessPressure = (hygiene <= 10 ? (int) Math.ceil(hours * .4) : 0) + (wetness >= 70 && core < 36.0 ? (int) Math.ceil(hours * .6) : 0) + (injury >= 60 ? (int) Math.ceil(hours * .15) : 0);
             illness = clamp(illness + illnessPressure);
@@ -189,10 +200,16 @@ public class ChroniclePhysiologyService {
     }
     /** Warm by a fire in reach (#66): core temperature climbs toward normal, and a little wet steams off. A
      *  windbreak (#195) keeps the wind from stealing the heat, so more of it reaches the body. */
+    /** A ring of stones set round the fire (#195): it holds the embers and throws their heat back, so a little
+     *  more of the fire's warmth reaches the body. Not a hearth — just gathered cobbles, but they help. */
+    private boolean stoneRingAt(UUID chronicleId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object r ON r.id=cp.object_id JOIN world_object body ON body.current_location_id=r.current_location_id WHERE body.id=? AND cp.project_kind='STONE_RING' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND r.lifecycle_state='ACTIVE')", Boolean.class, chronicleId));
+    }
     @Transactional
     public void warmByFire(UUID chronicleId) {
         boolean wind = windbreakAt(chronicleId);
-        double tempGain = wind ? 1.0 : 0.7; int wetLoss = wind ? 16 : 12;
+        boolean ring = stoneRingAt(chronicleId);
+        double tempGain = (wind ? 1.0 : 0.7) + (ring ? 0.2 : 0.0); int wetLoss = wind ? 16 : 12;
         jdbc.update("UPDATE chronicle_physiology SET core_temperature_c=LEAST(37.5, core_temperature_c+?), wetness_level=GREATEST(0,wetness_level-?), stress_level=GREATEST(0,stress_level-3) WHERE chronicle_id=?", tempGain, wetLoss, chronicleId);
         refreshBody(chronicleId);
     }
@@ -231,7 +248,9 @@ public class ChroniclePhysiologyService {
      * Not shelter — it turns no weather — but it makes rest and even exposed sleep markedly less broken.
      */
     private boolean beddedAt(UUID chronicleId) {
-        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object bed ON bed.id=cp.object_id JOIN world_object body ON body.current_location_id=bed.current_location_id WHERE body.id=? AND cp.project_kind IN ('GROUND_BED','RAISED_SLEEPING_PLATFORM') AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND bed.lifecycle_state='ACTIVE')", Boolean.class, chronicleId));
+        // A bark/grass groundsheet (#195) is the humblest of these — it turns no weather, but like any bed it gets
+        // the sleeper off the cold, wet ground, so it counts here for rest and drying.
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object bed ON bed.id=cp.object_id JOIN world_object body ON body.current_location_id=bed.current_location_id WHERE body.id=? AND cp.project_kind IN ('GROUND_BED','RAISED_SLEEPING_PLATFORM','GROUNDSHEET') AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND bed.lifecycle_state='ACTIVE')", Boolean.class, chronicleId));
     }
     @Transactional
     public void rest(UUID chronicleId, int minutes) {
@@ -318,6 +337,6 @@ public class ChroniclePhysiologyService {
     private static int clamp(int value) { return Math.max(0, Math.min(100, value)); }
     private static String health(int injury,int illness,int bloodLoss) { return bloodLoss > 2800 || illness > 80 || injury > 80 ? "Critical" : injury > 35 || illness > 35 ? "Injured" : "Healthy"; }
     private static String condition(String existing,int pain,int stress,double sleepDebt) { if (pain > 70) return "In pain"; if (stress > 75) return "Distressed"; if (sleepDebt > 28) return "Sleep deprived"; return existing; }
-    private record Environment(String kind,int intensity,double ambient,int wind,int fuelMinutes,boolean shelter) { }
+    private record Environment(String kind,int intensity,double ambient,int wind,int fuelMinutes,boolean shelter,boolean windbreak,boolean rainCover,boolean sunShade) { }
     public record BodyHudSnapshot(String health, String condition, String hunger, String thirst, String energy, String temperature, String wetness, String bladder, String bowel, String hygiene) { }
 }

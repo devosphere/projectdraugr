@@ -104,6 +104,55 @@ public class ConstructionService {
         return new String[]{"SUCCEEDED", "You lean and weave " + label + " into a low screen against the wind — no roof and no wall, but it breaks the worst of the cold off you."};
     }
 
+    /** Bare-hand stock for each partial cover (#195) — all no-blade, no-tool. {itemKey, spokenLabel}. */
+    private static final java.util.Map<String, String[][]> COVER_STOCK = java.util.Map.of(
+        "SUNSHADE",    new String[][]{{"big_leaf","leaves"},{"thatch_bundle","thatch"},{"dry_grass_bundle","grass"}},
+        "RAIN_COVER",  new String[][]{{"bark_sheet","bark"},{"big_leaf","broad leaves"},{"thatch_bundle","thatch"}},
+        "GROUNDSHEET", new String[][]{{"bark_sheet","bark"},{"big_leaf","broad leaves"},{"dry_grass_bundle","grass"}},
+        "STONE_RING",  new String[][]{{"granite_cobble","cobbles"},{"basalt_cobble","cobbles"}});
+    private static final java.util.Map<String, Integer> COVER_QTY = java.util.Map.of(
+        "SUNSHADE", 3, "RAIN_COVER", 3, "GROUNDSHEET", 3, "STONE_RING", 4);
+    private static final java.util.Map<String, String> COVER_NAME = java.util.Map.of(
+        "SUNSHADE", "Sunshade", "RAIN_COVER", "Rain cover", "GROUNDSHEET", "Groundsheet", "STONE_RING", "Stone ring");
+
+    /**
+     * Place a bare-hand partial cover here (#195): a leaf sunshade against the sun, a leant rain cover that sheds
+     * the worst of a shower, a bark/grass groundsheet off the cold damp ground, or a ring of gathered stones round
+     * a fire. No blade, no tool. None of these is secure shelter — a sunshade turns no rain, a rain cover has no
+     * walls, a groundsheet turns no weather, a stone ring is not a roof — so each gives only graded, partial relief
+     * (see ChroniclePhysiologyService). Fails grounded without enough of any one bare-hand stock to hand; refreshes
+     * an existing cover of the same kind rather than stacking a second.
+     */
+    @Transactional
+    public String[] placeCover(UUID chronicle, UUID location, Instant at, String kind) {
+        String[][] stock = COVER_STOCK.get(kind);
+        if (stock == null) return new String[]{"FAILED", "You are not sure what cover you mean to place."};
+        int need = COVER_QTY.get(kind);
+        String used = null, label = null;
+        for (String[] b : stock) if (items.hasAtLeast(chronicle, b[0], need)) { used = b[0]; label = b[1]; break; }
+        if (used == null) return new String[]{"FAILED", "You cast about for enough to raise a " + COVER_NAME.get(kind).toLowerCase() + ", but you have not got enough of any one thing to hand."};
+        UUID existing = jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind=? AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' LIMIT 1 FOR UPDATE", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, location, kind);
+        for (int i = 0; i < need; i++) if (!items.consumeOne(chronicle, used, at)) throw new IllegalStateException("Reachable cover material changed during the action.");
+        Timestamp ts = Timestamp.from(at);
+        String prose = switch (kind) {
+            case "SUNSHADE"    -> "You lean and lash " + label + " into a low sunshade overhead — no walls, but it throws a patch of shade off the worst of the sun.";
+            case "RAIN_COVER"  -> "You prop " + label + " into a leant cover pitched to shed water — it turns the worst of a shower, though it is no roof and no wall.";
+            case "GROUNDSHEET" -> "You spread " + label + " into a groundsheet to lie on — off the cold, wet earth, though it turns no weather above you.";
+            case "STONE_RING"  -> "You set " + label + " in a ring where a fire will sit — it holds the embers and throws their heat back, no more.";
+            default            -> "You place the cover.";
+        };
+        if (existing != null) {
+            jdbc.update("UPDATE construction_project SET integrity_percent=100,last_structural_update=? WHERE object_id=?", ts, existing);
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'COVER_REFRESHED',jsonb_build_object('projectKind',?,'material',?))", existing, ts, kind, used);
+            return new String[]{"SUCCEEDED", "You work fresh " + label + " into the " + COVER_NAME.get(kind).toLowerCase() + ", and it stands as it should again."};
+        }
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CONSTRUCTION',?,?)", id, COVER_NAME.get(kind), location);
+        jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at) VALUES (?,?,'COMPLETED',100,?)", id, kind, ts);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CONSTRUCTED',jsonb_build_object('projectKind',?,'material',?))", id, ts, kind, used);
+        return new String[]{"SUCCEEDED", prose};
+    }
+
     /**
      * Tend the camp here (#71 maintain_camp): go over what stands, setting decayed constructions a little back
      * toward true and ordering the site around them. Grounded — with nothing built here there is no camp to tend.
