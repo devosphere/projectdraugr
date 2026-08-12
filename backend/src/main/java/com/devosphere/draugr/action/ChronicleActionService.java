@@ -205,11 +205,17 @@ public class ChronicleActionService {
             else { int n = items.makeWater(chronicle.id(), "raw_water", "Raw water", 3, resolvedAt); outcome = n > 0 ? "SUCCEEDED" : "FAILED"; perception = n > 0 ? "You fill your vessel with water from the source here — raw yet, and better boiled before you trust it." : "Your vessels are already brimful; there is no room for more water."; }
         }
         else if (intent == Intent.BOIL_WATER) {
+            boolean fireproof = items.hasFireproofVessel(chronicle.id());
+            boolean stoneBoil = items.hasAtLeast(chronicle.id(), "boiling_stone_set", 1) && items.hasWaterVessel(chronicle.id());
             if (!fireInReach(chronicle.location())) { outcome = "FAILED"; perception = "There is no fire burning here to boil water over."; }
+            else if (!fireproof && !stoneBoil) { outcome = "FAILED"; perception = "You have nothing that can take a boil — a fireproof clay or soapstone vessel to set on the flame, or a set of hot stones to drop into a vessel of water."; }
             else {
                 int n = items.convertWater(chronicle.id(), "raw_water", "clean_water", "Boiled water", 3, resolvedAt);
                 if (n == 0 && waterInReach(chronicle.location()) && items.hasWaterVessel(chronicle.id())) n = items.makeWater(chronicle.id(), "clean_water", "Boiled water", 3, resolvedAt);
-                outcome = n > 0 ? "SUCCEEDED" : "FAILED"; perception = n > 0 ? "You bring the water to a hard, rolling boil over the fire until it is clean and safe to drink." : "You have no water to boil and no source and vessel to draw and boil it from.";
+                outcome = n > 0 ? "SUCCEEDED" : "FAILED";
+                perception = n == 0 ? "You have no water to boil and no source and vessel to draw and boil it from."
+                    : fireproof ? "You bring the water to a hard, rolling boil over the fire until it is clean and safe to drink."
+                    : "You heat the stones in the fire and drop them hissing into the vessel, one after another, until the water rolls to a clean boil.";
             }
         }
         else if (intent == Intent.FILTER_WATER) {

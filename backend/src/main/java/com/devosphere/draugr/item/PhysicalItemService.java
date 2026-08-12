@@ -198,6 +198,10 @@ public class PhysicalItemService {
     /** Whether the Chronicle carries anything that can hold water to fill or boil in (#71). */
     @Transactional(readOnly = true)
     public boolean hasWaterVessel(UUID chronicle) { for (String v : WATER_VESSELS) if (hasAtLeast(chronicle, v, 1)) return true; return false; }
+    /** Vessels that can sit on the flame without charring or melting — fired clay or soapstone (#125). Only these
+     *  boil water directly; a wooden or hide vessel needs a boiling_stone_set instead. */
+    private static final String[] FIREPROOF_VESSELS = {"clay_pot","clay_jar","fired_bowl","fired_cup","clay_water_filter","soapstone_bowl"};
+    public boolean hasFireproofVessel(UUID chronicle) { for (String v : FIREPROOF_VESSELS) if (hasAtLeast(chronicle, v, 1)) return true; return false; }
     /** Create up to {@code count} units of a water kind, capped by carry room. Returns how many were made. */
     @Transactional
     public int makeWater(UUID chronicle, String key, String name, int count, Instant at) {
