@@ -1101,6 +1101,7 @@ public class PhysicalItemService {
      */
     @Transactional
     public boolean consumePortableLight(UUID chronicle, Instant at) {
+        if (hasAtLeast(chronicle,"resin_torch",1))   return consumeOne(chronicle,"resin_torch",at); // the primitive bare-hand light (#125)
         if (hasAtLeast(chronicle,"rush_light",1))    return consumeOne(chronicle,"rush_light",at);
         if (hasAtLeast(chronicle,"tallow_candle",1)) return consumeOne(chronicle,"tallow_candle",at);
         if (hasAtLeast(chronicle,"oil_lamp",1) && hasAtLeast(chronicle,"fish_oil",1)) return consumeOne(chronicle,"fish_oil",at);
