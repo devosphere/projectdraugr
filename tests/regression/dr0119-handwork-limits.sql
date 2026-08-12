@@ -23,7 +23,7 @@ DECLARE
         'shell_hazelnut','peel_root','wash_root','crack_walnut',
         'shape_clay_bead','press_clay_seal','fire_clay_trinkets','thread_trinket_cord',
         'dry_grass','ready_reed_shaft','ret_bark_strip','flatten_bark','dress_feathers','clean_surface_clay','temper_clay_with_silt',
-        'twist_bast_cordage','twist_flexible_root_cordage','twist_milkweed_cordage','twist_root_cordage'];
+        'twist_bast_cordage','twist_flexible_root_cordage','twist_milkweed_cordage','twist_root_cordage','make_smoke_wrap'];
     pk text; bad text;
 BEGIN
     -- (A) Tool boundary.
