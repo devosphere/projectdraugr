@@ -100,7 +100,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 | `backend/src/main/java/com/devosphere/draugr/domain/ArchitectRouter.java` | Cost gate for the Architect — routes COVERED / POLISH / INVENT. |
 | `backend/src/main/java/com/devosphere/draugr/routing/ProcessMatcher.java` | The **only** implementation of the action→process resolution rule. Both `runProcess()` and `ArchitectRouter` go through it. |
 | `backend/src/main/java/com/devosphere/draugr/routing/RoutingMissRecorder.java` | Records unresolved actions into the V56 backlog. Separate bean on purpose — see its Javadoc. |
-| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V118. Next is V119. (…V109 bare-hand carrying, V110 bare-hand wraps, V111 bare-hand cordage, V112 arrival viability, V113 bare-hand carrying completion, V114 bare-hand food handling, V115 bare-hand clay ornaments, V116 bare-hand raw materials, V117 handwork mass-conservation, V118 smoke face wrap + smoke-exposure vector.) |
+| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V120. Next is V121. (…V109 bare-hand carrying, V110 bare-hand wraps, V111 bare-hand cordage, V112 arrival viability, V113 bare-hand carrying completion, V114 bare-hand food handling, V115 bare-hand clay ornaments, V116 bare-hand raw materials, V117 handwork mass-conservation, V118 smoke face wrap + smoke-exposure vector, V119 first-aid supplies, V120 bare-hand resin scavenge.) |
 | `backend/src/main/java/com/devosphere/draugr/domain/DomainRegistryService.java` | Reads domain_registry — the Architect's ledger of invented domains. |
 | `docs/architecture/domain-creation-pattern.md` | The exact recipe for adding a new domain. |
 | `docs/architecture/action-routing-hardening.md` | Sprint 003 spec — collisions, milestones M1–M5. |
@@ -119,7 +119,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 
 ---
 
-## What Is Built (Migrations V1–V118, all applied)
+## What Is Built (Migrations V1–V120, all applied)
 
 > **Post-playtest cycle (2026-08-03) — summary; full detail + resume point in
 > [systems/06.4-Runtime-Authoring-Build-Plan.md](systems/06.4-Runtime-Authoring-Build-Plan.md).**
@@ -239,7 +239,7 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 > finish M1, then continue into M2, WITHOUT interruption or permission requests — choose the engineering strategy
 > yourself, land verifiable increments, commit/push, and close a story only when its acceptance is fully met.**
 > Everything is on `development` (pushed) as `devosphere.tech` (never `johncalado`). **Migrations through V112.**
-> Full suite **162 backend tests + 44 SQL regressions green** on the V1–V118 chain; each commit compiles with tests
+> Full suite **162 backend tests + 46 SQL regressions green** on the V1–V120 chain; each commit compiles with tests
 > green and the routing-reachability probe clean (84 ok / 0 miss).
 >
 > **This session's major deliverables (V82→V112):**
@@ -264,8 +264,13 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 >   water + wildlife pressure. **`ChronicleService.selectSpawn` now awakens a Chronicle only on a validator-approved
 >   coordinate** (prefer VIABLE → fall back CHALLENGING → never REJECTED; old forest/grassland heuristic kept only as
 >   a last-ditch net). `dr0113-survival-coverage.sql` pins that all nine survival categories stay content-backed and
->   every land start biome feeds and warms from its own ground. Remaining: the end-to-end first-day survival *run*
->   across the six biomes under night/rain/cold/heat/injury/low-food-water (CI integration scenario).
+>   every land start biome feeds and warms from its own ground. **#124 CLOSED.** **#135 forest-floor materials
+>   CLOSED** (V120 — pine_resin now bare-hand scavenge-able; all 8 obtainable+used; dr0122). **#125 Recovery gap
+>   filled** (V119 — bare-hand first-aid tier bandage/splint/sling wired into bindWound with distinct effects;
+>   dr0121; rest of #125 audited as existing functional equivalents, only real gaps to follow). Remaining on the
+>   EPIC: #126/#127/#128 catalogues, and #129 the end-to-end first-day survival *run* across the six biomes under
+>   night/rain/cold/heat/injury/low-food-water (CI integration scenario). Method: **audit for existing equivalents,
+>   fill only genuine no-equivalent gaps with a real function** — never a decorative card.
 >
 > **EPIC #64 Action Catalogue — scorecard:**
 > - **#65 perception — ✅ CLOSED.** observe/inspect/examine/analyze/investigate (incl. #33 subject scoping) +
