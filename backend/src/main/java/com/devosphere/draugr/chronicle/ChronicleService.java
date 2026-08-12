@@ -123,7 +123,16 @@ public class ChronicleService {
     }
 
     private UUID selectSpawn(WorldSeed world, int sequence) {
-        List<UUID> candidates = jdbc.query("SELECT c.id FROM world_chunk c WHERE c.world_id = ? AND c.biome IN ('TEMPERATE_FOREST', 'GRASSLAND') AND NOT EXISTS (SELECT 1 FROM ecology_site e WHERE e.chunk_id = c.id AND e.site_category = 'MONSTER') ORDER BY c.grid_y, c.grid_x", (rs, row) -> rs.getObject(1, UUID.class), world.id());
+        // The arrival viability invariant (V112, #124): a Chronicle may only awaken on a coordinate the validator
+        // accepts — never a REJECTED tile (deep ocean, a predator's active range, no land escape, or an essential
+        // unreachable in the early envelope). Prefer a comfortable VIABLE start; fall back to a harsh-but-
+        // survivable CHALLENGING one; the old biome heuristic is kept only as a last-ditch safety net so a
+        // degenerate seed cannot leave a new life with nowhere to stand.
+        List<UUID> candidates = jdbc.query("SELECT c.id FROM world_chunk c WHERE c.world_id = ? AND arrival_viability(c.id) = 'VIABLE' ORDER BY c.grid_y, c.grid_x", (rs, row) -> rs.getObject(1, UUID.class), world.id());
+        if (candidates.isEmpty())
+            candidates = jdbc.query("SELECT c.id FROM world_chunk c WHERE c.world_id = ? AND arrival_viability(c.id) = 'CHALLENGING' ORDER BY c.grid_y, c.grid_x", (rs, row) -> rs.getObject(1, UUID.class), world.id());
+        if (candidates.isEmpty())
+            candidates = jdbc.query("SELECT c.id FROM world_chunk c WHERE c.world_id = ? AND c.biome IN ('TEMPERATE_FOREST', 'GRASSLAND') AND NOT EXISTS (SELECT 1 FROM ecology_site e WHERE e.chunk_id = c.id AND e.site_category = 'MONSTER') ORDER BY c.grid_y, c.grid_x", (rs, row) -> rs.getObject(1, UUID.class), world.id());
         if (candidates.isEmpty()) throw new IllegalStateException("No viable Chronicle spawn exists in the canonical world.");
         int index = Math.floorMod((int) (world.seed() ^ (sequence * 0x9E3779B9L)), candidates.size());
         return candidates.get(index);
