@@ -7,9 +7,12 @@ BEGIN
         IF NOT EXISTS (SELECT 1 FROM material_process_input_group WHERE item_key=k) THEN
             RAISE EXCEPTION 'REGRESSION: % has no cooking use', k; END IF;
     END LOOP;
-    -- stew root slot takes three roots and did not lose cattail.
-    IF (SELECT count(*) FROM material_process_input_group WHERE process_key='cook_root_stew' AND group_name='root') <> 3 THEN
-        RAISE EXCEPTION 'REGRESSION: stew root group should have 3 roots'; END IF;
+    -- stew root slot did not lose cattail, and holds the three gathered roots plus the two hand-handled forms
+    -- (peeled_root, washed_root) that V114 (#196) made cook-ready.
+    IF (SELECT count(*) FROM material_process_input_group WHERE process_key='cook_root_stew' AND group_name='root') <> 5 THEN
+        RAISE EXCEPTION 'REGRESSION: stew root group should have 5 roots (3 gathered + peeled + washed)'; END IF;
+    IF NOT EXISTS (SELECT 1 FROM material_process_input_group WHERE process_key='cook_root_stew' AND group_name='root' AND item_key='cattail_rhizome') THEN
+        RAISE EXCEPTION 'REGRESSION: stew root group lost cattail_rhizome'; END IF;
     IF NOT EXISTS (SELECT 1 FROM material_process_input_group WHERE process_key='cook_root_stew' AND group_name='root' AND item_key='cattail_rhizome') THEN
         RAISE EXCEPTION 'REGRESSION: stew lost cattail rhizome'; END IF;
     -- morel joins the mushroom pan; cooked greens is obtainable FOOD.
