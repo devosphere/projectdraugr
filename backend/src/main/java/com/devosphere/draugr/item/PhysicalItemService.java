@@ -101,10 +101,17 @@ public class PhysicalItemService {
         else if (v.contains("reed")) { key = "straight_reed"; name = "Straight reed"; }
         else if (v.contains("driftwood") || v.contains("deadwood") || v.contains("firewood") || v.contains("dry wood") || v.contains("windfall") || v.contains("branch")) { key = "dry_branch"; name = "Dry branch"; }
         else if (v.contains("twig") || v.contains("kindling")) { key = "dry_twig"; name = "Dry twig"; }
+        // Scavenged animal remains (#133): a gnawed bone or a shed antler off the ground — bone/antler for tools
+        // WITHOUT a kill, the whole point of the story. Uncommon, so a single piece per search.
+        else if (v.contains("antler")) { key = "deer_antler"; name = "Deer antler"; }
+        else if (v.contains("bone")) { key = "animal_bone"; name = "Animal bone"; }
         else { key = switch (biome) { case "WETLAND" -> "straight_reed"; case "GRASSLAND" -> "dry_grass_bundle"; default -> "dry_twig"; };
                name = switch (key) { case "straight_reed" -> "Straight reed"; case "dry_grass_bundle" -> "Dry grass bundle"; default -> "Dry twig"; }; }
         if ("straight_reed".equals(key) && !"WETLAND".equals(biome)) return new String[]{"FAILED", "You cast about for reeds, but there is no wet margin here where they grow."};
-        int desired = Math.min(2 + ("TEMPERATE_FOREST".equals(biome) || "WETLAND".equals(biome) ? 1 : 0), capacityHeadroomUnits(chronicle, key));
+        // Bone and antler are found singly and rarely; litter comes by the armful.
+        boolean scarce = "deer_antler".equals(key) || "animal_bone".equals(key);
+        int base = scarce ? 1 : 2 + ("TEMPERATE_FOREST".equals(biome) || "WETLAND".equals(biome) ? 1 : 0);
+        int desired = Math.min(base, capacityHeadroomUnits(chronicle, key));
         if (desired <= 0) return new String[]{"FAILED", "Your hands and packs are full; there is no room to carry more."};
         for (int i = 0; i < desired; i++) createCarriedItem(chronicle, key, name, at, "FORAGED_FROM_GROUND");
         assertCarryCapacity(chronicle);

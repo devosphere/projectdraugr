@@ -60,9 +60,13 @@ class IntentClassificationRegressionTest {
         assertEquals("FORAGE_GROUND", classify("gather driftwood from the shore"));
         assertEquals("FORAGE_GROUND", classify("comb under a log for kindling"));
         assertEquals("FORAGE_GROUND", classify("collect loose bark"));
-        // attached bark still needs a tool; a bare search of a place still just looks.
+        // Scavenged bone/antler without a kill (#133).
+        assertEquals("FORAGE_GROUND", classify("search the ground for a shed antler"));
+        assertEquals("FORAGE_GROUND", classify("collect gnawed bone from under the bushes"));
+        // attached bark still needs a tool; a bare search of a place still just looks; butchering a kill is not foraging.
         assertEquals("STRIP_BARK", classify("strip bark from the birch"));
         assertEquals("SEARCH", classify("search the ruins for anything useful"));
+        assertEquals("HARVEST_CARCASS", classify("butcher the carcass for bone and hide"));
     }
 
     /** Substring accidents that pre-date V57 but its vocabulary made reachable. */
