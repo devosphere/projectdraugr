@@ -81,6 +81,35 @@ public class PhysicalItemService {
         int count=resources.take(location,"dry_branch",desired,occurredAt);
         for(int i=0;i<count;i++){UUID id=UUID.randomUUID();jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM','Dry branch',?)",id,chronicle);jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,'dry_branch','SOUND')",id);jdbc.update("INSERT INTO object_transition (object_id,transition_type,payload) VALUES (?,'GATHERED','{}'::jsonb)",id);} assertCarryCapacity(chronicle); return count;
     }
+
+    /**
+     * Search the ground and natural debris for small ambient survival materials (#133): the forest-floor scavenge
+     * that #192 made gatherable. The action text names what is looked for (twigs, tinder/leaf litter, loose bark,
+     * shed feather/fur, driftwood, reeds); with no hint it yields the biome's default litter. A low, opportunistic
+     * yield — this is combing the ground, not harvesting a stand. Reeds want a wet margin; OCEAN has no ground.
+     */
+    @Transactional
+    public String[] forageGround(UUID chronicle, UUID location, String text, Instant at) {
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
+        if (biome == null || "OCEAN".equals(biome)) return new String[]{"FAILED", "There is no ground to comb here — only open water."};
+        String v = text.toLowerCase(java.util.Locale.ROOT);
+        String key, name;
+        if (v.contains("leaf litter") || v.contains("litter") || v.contains("fallen leaves") || v.contains("tinder")) { key = "fallen_leaf_litter"; name = "Fallen leaf litter"; }
+        else if (v.contains("bark")) { key = "loose_bark_strip"; name = "Loose bark strip"; }
+        else if (v.contains("feather")) { key = "shed_feather"; name = "Shed feather"; }
+        else if (v.contains("fur") || v.contains("hair")) { key = "shed_fur_tuft"; name = "Shed fur tuft"; }
+        else if (v.contains("reed")) { key = "straight_reed"; name = "Straight reed"; }
+        else if (v.contains("driftwood") || v.contains("deadwood") || v.contains("firewood") || v.contains("dry wood") || v.contains("windfall") || v.contains("branch")) { key = "dry_branch"; name = "Dry branch"; }
+        else if (v.contains("twig") || v.contains("kindling")) { key = "dry_twig"; name = "Dry twig"; }
+        else { key = switch (biome) { case "WETLAND" -> "straight_reed"; case "GRASSLAND" -> "dry_grass_bundle"; default -> "dry_twig"; };
+               name = switch (key) { case "straight_reed" -> "Straight reed"; case "dry_grass_bundle" -> "Dry grass bundle"; default -> "Dry twig"; }; }
+        if ("straight_reed".equals(key) && !"WETLAND".equals(biome)) return new String[]{"FAILED", "You cast about for reeds, but there is no wet margin here where they grow."};
+        int desired = Math.min(2 + ("TEMPERATE_FOREST".equals(biome) || "WETLAND".equals(biome) ? 1 : 0), capacityHeadroomUnits(chronicle, key));
+        if (desired <= 0) return new String[]{"FAILED", "Your hands and packs are full; there is no room to carry more."};
+        for (int i = 0; i < desired; i++) createCarriedItem(chronicle, key, name, at, "FORAGED_FROM_GROUND");
+        assertCarryCapacity(chronicle);
+        return new String[]{"SUCCEEDED", "You comb the ground and gather up " + name.toLowerCase() + " — " + desired + " to hand."};
+    }
     /**
      * The ONE reachability model (DR-0022 Layer 1): everything the Chronicle can physically reach from where
      * it stands — carried, nested in a carried container, loose on the ground here, AND inside any container or

@@ -51,6 +51,20 @@ class IntentClassificationRegressionTest {
         assertEquals("MARK", classify("carve a blaze into the tree", false));
     }
 
+    /** #133 ground scavenge: a pointed forest-floor search yields material (FORAGE_GROUND); a bare look-around
+     *  still just perceives (SEARCH); attached-bark stripping stays the tool path (STRIP_BARK), loose bark forages. */
+    @Test void groundScavengeClassifies() throws Exception {
+        assertEquals("FORAGE_GROUND", classify("search the forest floor for twigs"));
+        assertEquals("FORAGE_GROUND", classify("look for tinder"));
+        assertEquals("FORAGE_GROUND", classify("collect loose feathers from the ground"));
+        assertEquals("FORAGE_GROUND", classify("gather driftwood from the shore"));
+        assertEquals("FORAGE_GROUND", classify("comb under a log for kindling"));
+        assertEquals("FORAGE_GROUND", classify("collect loose bark"));
+        // attached bark still needs a tool; a bare search of a place still just looks.
+        assertEquals("STRIP_BARK", classify("strip bark from the birch"));
+        assertEquals("SEARCH", classify("search the ruins for anything useful"));
+    }
+
     /** Substring accidents that pre-date V57 but its vocabulary made reachable. */
     @Test void wholeWordIntentsIgnoreSubstrings() throws Exception {
         // "meat" contains "eat"; "feathers" contains "eat"; "knap" contains "nap".
