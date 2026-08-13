@@ -151,7 +151,7 @@ public class RuntimeAuthoringService {
         jdbc.update(
             "INSERT INTO material_process (process_key, display_name, output_item_key, output_min, output_max, tool_class, " +
             "requires_fire, requires_water, duration_minutes, domain_key, keywords, narration, category_key, review_state, discovered_by_chronicle_id) " +
-            "VALUES (?, ?, ?, ?, ?, ?, FALSE, FALSE, 30, ?, ?, ?, ?, 'VERIFIED', ?)",
+            "VALUES (?, ?, ?, ?, ?, ?, FALSE, FALSE, 30, ?, ?, ?, ?, 'VERIFIED', ?) ON CONFLICT (process_key) DO NOTHING",
             pk, trunc(draft.processKey(), 118), outKey, Math.max(1, draft.outputQty()), Math.max(1, draft.outputQty()),
             tool, domain, trunc(draft.keywords(), 200), draft.narration() == null ? "You work it into shape." : draft.narration(),
             draft.category() == null ? "PROCESS" : draft.category(), chronicle);
