@@ -54,7 +54,7 @@ public class SimulationNarrator {
      *         succeeds; otherwise the deterministic prose unchanged
      */
     public String refine(PerceptionFrame frame, String backendNarration) {
-        if (!props.isEnabled() || frame == null || backendNarration == null || backendNarration.isBlank()) {
+        if (!props.isNarrationActive() || frame == null || backendNarration == null || backendNarration.isBlank()) {
             return backendNarration;
         }
         String user = buildUser(frame, backendNarration);

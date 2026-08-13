@@ -56,7 +56,7 @@ public class ProcedureInterpreter {
      */
     @Transactional(readOnly = true)
     public List<String> plan(String actionText, List<String> inventory) {
-        if (!props.isUsable() || actionText == null || actionText.isBlank()) return List.of();
+        if (!props.isInterpreterActive() || actionText == null || actionText.isBlank()) return List.of();
         List<Map<String, Object>> catalog = jdbc.queryForList(
             "SELECT process_key, display_name FROM material_process WHERE review_state='VERIFIED' ORDER BY process_key");
         if (catalog.isEmpty()) return List.of();

@@ -37,7 +37,7 @@ public class QaCritic {
     }
 
     public Verdict review(ProcessDraft d) {
-        if (!props.isUsable() || d == null) return new Verdict(false, "QA unavailable");
+        if (!props.isQaActive() || d == null) return new Verdict(false, "QA unavailable");
         return model.generate(props.getQaModel(), SYSTEM, describe(d))
             .map(reply -> reply.trim().toUpperCase(Locale.ROOT).startsWith("PASS")
                 ? new Verdict(true, "PASS")

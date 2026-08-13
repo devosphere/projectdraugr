@@ -62,7 +62,7 @@ public class RuntimeAuthoringService {
         if (composed != null) return Optional.of(composed);
 
         // Stage 2 — author a new scoped mechanic (opt-in).
-        if (!props.isAuthoringEnabled()) return Optional.empty();
+        if (!props.isAuthoringActive()) return Optional.empty();
         return author(chronicle, location, text, inventory, at);
     }
 

@@ -5,12 +5,18 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import java.time.Duration;
 
 /**
- * Configuration for the AI layer (the Simulation Agent's narration voice, the Interpreter, the
- * Architect, and the Auditor). <b>The API key is the single switch:</b> with a key present the whole
- * pipeline — interpret → author new mechanics → narrate — is on; with no key the game runs on
- * deterministic prose alone and never touches the network. {@code enabled} and {@code authoring-enabled}
- * remain as explicit kill-switches (set either to {@code false} to force that part off even when a key
- * is present), but both default to on so that dropping in a key is all it takes.
+ * Configuration for the AI layer. The design is a <b>master switch over per-agent switches</b>:
+ * {@link #enabled} is the master, and every agent (narrator, interpreter, architect, auditor, QA)
+ * has its own on/off flag. <b>The master defaults OFF</b> — a present API key is necessary but not
+ * sufficient, so the AI never activates (and never spends tokens or bypasses launch security) until
+ * the master is deliberately switched on. Once it is, every agent comes on together: the per-agent
+ * flags all default on, so flipping the single master ({@code enabled}) lights up the whole pipeline
+ * with zero further toggling. Set any per-agent flag to {@code false} to silence just that agent.
+ * With the master off, or no key, the game runs on deterministic prose alone and never touches the network.
+ *
+ * <p>Effective rule for any agent X: it runs iff {@code isUsable()} (master on AND key present) AND
+ * that agent's own flag — see {@code isNarrationActive()}, {@code isInterpreterActive()},
+ * {@code isAuthoringActive()}, {@code isAuditorActive()}, {@code isQaActive()}.
  *
  * <p>The API key comes only from configuration/environment and is never committed or logged.
  * See docs/architecture/ai-integration.md for the runtime contract.
@@ -18,11 +24,17 @@ import java.time.Duration;
 @ConfigurationProperties(prefix = "draugr.ai")
 public class AiProperties {
 
-    /** Kill-switch, default on. The effective gate is key presence ({@link #isUsable()}); set false to force AI off even with a key. */
-    private boolean enabled = true;
+    /** MASTER switch, default OFF for security. Turn it on and — with a key present — every agent whose own flag is on runs. Off ⇒ the entire AI layer is inert. */
+    private boolean enabled = false;
 
     /** Anthropic API key. Supplied via env (DRAUGR_AI_API_KEY / ANTHROPIC_API_KEY); never committed. */
     private String apiKey = "";
+
+    // Per-agent switches — all default on, so the master + a key is all it takes. Set one false to silence just that agent.
+    private boolean narrationEnabled = true;
+    private boolean interpreterEnabled = true;
+    private boolean auditorEnabled = true;
+    private boolean qaEnabled = true;
 
     /**
      * Per-agent model ids. Each of the three agents runs on the model best suited to its job:
@@ -37,7 +49,7 @@ public class AiProperties {
     private String interpreterModel = "claude-sonnet-4-6";
     /** Independent QA critic for runtime-authored mechanics — deliberately a different model from the Architect. */
     private String qaModel = "claude-opus-4-8";
-    /** Runtime authoring of NEW scoped mechanics (the Architect). Default on when a key is present; set false to allow interpretation of existing processes without letting the Architect create new ones. */
+    /** The Architect's per-agent switch — runtime authoring of NEW scoped mechanics. Default on; set false to allow interpretation of existing processes without letting the Architect create new ones. */
     private boolean authoringEnabled = true;
     /** Author↔critic loop cap (DR-0021). */
     private int qaMaxRounds = 2;
@@ -48,13 +60,29 @@ public class AiProperties {
     /** Per-call wall-clock bound. A model that hangs must not hang the action loop. */
     private Duration timeout = Duration.ofSeconds(20);
 
-    /** True only when the feature is switched on AND a non-blank key is present. */
+    /** True only when the master is on AND a non-blank key is present. The base gate every agent builds on. */
     public boolean isUsable() {
         return enabled && apiKey != null && !apiKey.isBlank();
     }
 
+    // Per-agent activation = master usable AND that agent's own switch. With every per-agent flag
+    // defaulting on, flipping the single master turns all of these true at once.
+    public boolean isNarrationActive()   { return isUsable() && narrationEnabled; }
+    public boolean isInterpreterActive() { return isUsable() && interpreterEnabled; }
+    public boolean isAuthoringActive()   { return isUsable() && authoringEnabled; }
+    public boolean isAuditorActive()     { return isUsable() && auditorEnabled; }
+    public boolean isQaActive()          { return isUsable() && qaEnabled; }
+
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
+    public boolean isNarrationEnabled() { return narrationEnabled; }
+    public void setNarrationEnabled(boolean narrationEnabled) { this.narrationEnabled = narrationEnabled; }
+    public boolean isInterpreterEnabled() { return interpreterEnabled; }
+    public void setInterpreterEnabled(boolean interpreterEnabled) { this.interpreterEnabled = interpreterEnabled; }
+    public boolean isAuditorEnabled() { return auditorEnabled; }
+    public void setAuditorEnabled(boolean auditorEnabled) { this.auditorEnabled = auditorEnabled; }
+    public boolean isQaEnabled() { return qaEnabled; }
+    public void setQaEnabled(boolean qaEnabled) { this.qaEnabled = qaEnabled; }
     public String getApiKey() { return apiKey; }
     public void setApiKey(String apiKey) { this.apiKey = apiKey; }
     public String getNarrationModel() { return narrationModel; }

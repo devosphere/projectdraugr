@@ -52,7 +52,7 @@ public class AuditorSummarizer {
 
     /** Summarize a given report — the core, testable without invoking the auditor or a database. */
     public Optional<String> summarize(AuditReport report) {
-        if (!props.isEnabled() || report == null) return Optional.empty();
+        if (!props.isAuditorActive() || report == null) return Optional.empty();
         return model.generate(props.getAuditorModel(), SYSTEM, buildUser(report))
                 .map(String::trim)
                 .filter(s -> !s.isBlank());

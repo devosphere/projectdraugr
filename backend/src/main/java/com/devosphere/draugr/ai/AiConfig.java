@@ -22,17 +22,21 @@ public class AiConfig {
     @Bean
     public LanguageModel languageModel(AiProperties props) {
         if (props.isUsable()) {
-            // Surface the full effective state — including whether the Architect (runtime authoring) is on —
-            // so "is the Architect actually enabled?" is answerable from the boot log, not by reading code.
-            log.info("AI enabled — interpreter '{}', narration '{}', architect '{}' (authoring {}), qa '{}', auditor '{}'.",
-                    props.getInterpreterModel(), props.getNarrationModel(), props.getArchitectModel(),
-                    props.isAuthoringEnabled() ? "ON" : "OFF (set draugr.ai.authoring-enabled=true to let it create new mechanics)",
-                    props.getQaModel(), props.getAuditorModel());
+            // Master is on and a key is present — report every agent's effective state (ON/OFF + model),
+            // so "is the Architect actually running?" is answerable from the boot log, not by reading code.
+            log.info("AI master ON — narrator {} ({}), interpreter {} ({}), architect {} ({}), qa {} ({}), auditor {} ({}).",
+                    on(props.isNarrationActive()), props.getNarrationModel(),
+                    on(props.isInterpreterActive()), props.getInterpreterModel(),
+                    on(props.isAuthoringActive()), props.getArchitectModel(),
+                    on(props.isQaActive()), props.getQaModel(),
+                    on(props.isAuditorActive()), props.getAuditorModel());
             return new AnthropicLanguageModel(props);
         }
-        // Disabled or unconfigured: a no-op model. Narration stays fully deterministic.
-        log.info("AI narration disabled (draugr.ai.enabled={}, key present={}). Using deterministic prose only.",
+        // Master off or no key: a no-op model. The whole AI layer stays inert; narration is deterministic.
+        log.info("AI master OFF — deterministic prose only (draugr.ai.enabled={}, key present={}).",
                 props.isEnabled(), props.getApiKey() != null && !props.getApiKey().isBlank());
         return (model, system, user) -> Optional.empty();
     }
+
+    private static String on(boolean active) { return active ? "ON" : "OFF"; }
 }

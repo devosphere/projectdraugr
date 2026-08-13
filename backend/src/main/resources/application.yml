@@ -16,19 +16,24 @@ server:
   error:
     include-message: always
 
-# AI layer. THE API KEY IS THE SINGLE SWITCH: drop in a key and the whole pipeline — interpret a
-# real-world action → let the Architect CREATE the processes/objects it needs → narrate — is on. With
-# no key the game runs on deterministic prose alone and never touches the network. Never commit a key
-# here. See docs/architecture/ai-integration.md.
-#
-# `enabled` and `authoring-enabled` remain as explicit kill-switches (default on); set either to false
-# to force that part off even when a key is present — e.g. authoring-enabled=false lets the interpreter
-# reuse existing processes without the Architect authoring new ones (saves the Opus authoring calls).
+# AI layer — MASTER switch over per-agent switches.
+#   enabled (MASTER): default OFF. A key alone never activates AI — you must turn the master on. This
+#     keeps launch security and the secret key meaningful. Set DRAUGR_AI_ENABLED=true (with a key) and
+#     the WHOLE pipeline comes on at once: interpret → let the Architect CREATE new mechanics → narrate.
+#   Per-agent switches below default ON, so the single master lights up every agent with no further
+#     toggling. Set one to false to silence just that agent (e.g. authoring-enabled=false keeps
+#     interpretation of existing processes but stops the Architect's Opus authoring calls).
+# With the master off, or no key, the game runs on deterministic prose alone and never touches the network.
+# Never commit a key here. See docs/architecture/ai-integration.md.
 draugr:
   ai:
-    enabled: ${DRAUGR_AI_ENABLED:true}
+    enabled: ${DRAUGR_AI_ENABLED:false}
     api-key: ${DRAUGR_AI_API_KEY:${ANTHROPIC_API_KEY:}}
+    narration-enabled: ${DRAUGR_AI_NARRATION_ENABLED:true}
+    interpreter-enabled: ${DRAUGR_AI_INTERPRETER_ENABLED:true}
     authoring-enabled: ${DRAUGR_AI_AUTHORING_ENABLED:true}
+    auditor-enabled: ${DRAUGR_AI_AUDITOR_ENABLED:true}
+    qa-enabled: ${DRAUGR_AI_QA_ENABLED:true}
     max-tokens: ${DRAUGR_AI_MAX_TOKENS:1024}
     timeout: ${DRAUGR_AI_TIMEOUT:20s}
     # Per-agent models: Simulation Agent (narration) → Haiku; Interpreter → Sonnet 4.6; Architect + QA → Opus 4.8; Auditor → Sonnet 4.6.
