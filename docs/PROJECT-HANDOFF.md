@@ -100,7 +100,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 | `backend/src/main/java/com/devosphere/draugr/domain/ArchitectRouter.java` | Cost gate for the Architect — routes COVERED / POLISH / INVENT. |
 | `backend/src/main/java/com/devosphere/draugr/routing/ProcessMatcher.java` | The **only** implementation of the action→process resolution rule. Both `runProcess()` and `ArchitectRouter` go through it. |
 | `backend/src/main/java/com/devosphere/draugr/routing/RoutingMissRecorder.java` | Records unresolved actions into the V56 backlog. Separate bean on purpose — see its Javadoc. |
-| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V122. Next is V123. (…V109 bare-hand carrying, V110 bare-hand wraps, V111 bare-hand cordage, V112 arrival viability, V113 bare-hand carrying completion, V114 bare-hand food handling, V115 bare-hand clay ornaments, V116 bare-hand raw materials, V117 handwork mass-conservation, V118 smoke face wrap + smoke-exposure vector, V119 first-aid supplies, V120 bare-hand resin scavenge, V121 resin torch, V122 stone-boiling.) |
+| `backend/src/main/resources/db/migration/` | Flyway migrations V1–V123. Next is V124. (…V109 bare-hand carrying, V110 bare-hand wraps, V111 bare-hand cordage, V112 arrival viability, V113 bare-hand carrying completion, V114 bare-hand food handling, V115 bare-hand clay ornaments, V116 bare-hand raw materials, V117 handwork mass-conservation, V118 smoke face wrap + smoke-exposure vector, V119 first-aid supplies, V120 bare-hand resin scavenge, V121 resin torch, V122 stone-boiling, V123 early shields.) |
 | `backend/src/main/java/com/devosphere/draugr/domain/DomainRegistryService.java` | Reads domain_registry — the Architect's ledger of invented domains. |
 | `docs/architecture/domain-creation-pattern.md` | The exact recipe for adding a new domain. |
 | `docs/architecture/action-routing-hardening.md` | Sprint 003 spec — collisions, milestones M1–M5. |
@@ -119,7 +119,7 @@ Work on `development`; it tracks `origin/development`. If a local branch ever en
 
 ---
 
-## What Is Built (Migrations V1–V122, all applied)
+## What Is Built (Migrations V1–V123, all applied)
 
 > **Post-playtest cycle (2026-08-03) — summary; full detail + resume point in
 > [systems/06.4-Runtime-Authoring-Build-Plan.md](systems/06.4-Runtime-Authoring-Build-Plan.md).**
@@ -239,7 +239,7 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 > finish M1, then continue into M2, WITHOUT interruption or permission requests — choose the engineering strategy
 > yourself, land verifiable increments, commit/push, and close a story only when its acceptance is fully met.**
 > Everything is on `development` (pushed) as `devosphere.tech` (never `johncalado`). **Migrations through V112.**
-> Full suite **162 backend tests + 48 SQL regressions green** on the V1–V122 chain; each commit compiles with tests
+> Full suite **162 backend tests + 49 SQL regressions green** on the V1–V123 chain; each commit compiles with tests
 > green and the routing-reachability probe clean (84 ok / 0 miss).
 >
 > **This session's major deliverables (V82→V112):**
@@ -267,8 +267,11 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 >   every land start biome feeds and warms from its own ground. **#124 CLOSED.** **#135 forest-floor materials
 >   CLOSED** (V120 — pine_resin now bare-hand scavenge-able; all 8 obtainable+used; dr0122). **#125 Recovery gap
 >   filled** (V119 — bare-hand first-aid tier bandage/splint/sling wired into bindWound with distinct effects;
->   dr0121; plus V121 resin_torch portable light and V122 stone-boiling for safe water without a fireproof pot; rest of #125 audited as existing equivalents). Remaining on the
->   EPIC: #126/#127/#128 catalogues, and #129 the end-to-end first-day survival *run* across the six biomes under
+>   dr0121; plus V121 resin_torch portable light, V122 stone-boiling for safe water without a fireproof pot, and
+>   the existing (V57) digging_stick made functional — GATHER_CLAY +1 with one carried; rest of #125 audited as
+>   existing equivalents). **#126 defence — STARTED** (V123 — early graded shields bark/reed=4, rawhide=6 vs war
+>   shield 7 in confront; dr0125). Remaining on the
+>   EPIC: more of #126/#127/#128 catalogues, and #129 the end-to-end first-day survival *run* across the six biomes under
 >   night/rain/cold/heat/injury/low-food-water (CI integration scenario). Method: **audit for existing equivalents,
 >   fill only genuine no-equivalent gaps with a real function** — never a decorative card.
 >
