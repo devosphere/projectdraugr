@@ -40,7 +40,32 @@ public class WildlifeEncounterService {
         // immutable reference data.
         Encounter candidate=jdbc.query("SELECT wp.id,wp.species_key,wp.ecological_role,wp.behavior_state,wp.population_count,ws.movement_class,ws.base_resistance,ws.ambush_hunter FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id LEFT JOIN wildlife_species ws ON ws.species_key=wp.species_key WHERE es.chunk_id=? AND wp.population_count>0 ORDER BY CASE wp.ecological_role WHEN 'CARNIVORE' THEN 0 WHEN 'OMNIVORE' THEN 1 ELSE 2 END LIMIT 1 FOR UPDATE OF wp",rs->rs.next()?new Encounter(rs.getObject(1,UUID.class),rs.getString(2),rs.getString(3),rs.getString(4),rs.getInt(5),rs.getString(6),(Integer)rs.getObject(7),rs.getBoolean(8)):null,chunk);
         if(candidate==null)return new EncounterResult("FAILED","The ground answers only with rain and the small movements of the forest.");
-        Combatant body=jdbc.query("SELECT p.energy_level,p.injury_severity,p.pain_level,COALESCE((SELECT COUNT(*) FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id WHERE e.chronicle_id=? AND e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key IN ('stone_axe','primitive_spear','poisoned_spear')),0),COALESCE((SELECT COUNT(*) FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key='field_stone'),0),COALESCE((SELECT COUNT(*) FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id WHERE e.chronicle_id=? AND i.item_key IN ('scale_armour','chitin_helm','war_shield')),0),COALESCE((SELECT COUNT(*) FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id WHERE e.chronicle_id=? AND i.item_key='poisoned_spear'),0),COALESCE((SELECT COUNT(*) FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id WHERE e.chronicle_id=? AND i.item_key IN ('bark_shield','woven_reed_shield')),0),COALESCE((SELECT COUNT(*) FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id WHERE e.chronicle_id=? AND i.item_key='rawhide_shield'),0),COALESCE((SELECT COUNT(*) FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id WHERE e.chronicle_id=? AND e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key IN ('wooden_club','stone_club','stone_maul','stone_hammer')),0),COALESCE((SELECT COUNT(*) FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key='sling'),0),COALESCE((SELECT COUNT(*) FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key='javelin'),0),COALESCE((SELECT COUNT(*) FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key='hunting_bow'),0),COALESCE((SELECT COUNT(*) FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key='hunting_arrow'),0) FROM chronicle_physiology p WHERE p.chronicle_id=?",rs->rs.next()?new Combatant(rs.getInt(1),rs.getInt(2),rs.getInt(3),rs.getInt(4),rs.getInt(5),rs.getInt(6),rs.getInt(7),rs.getInt(8),rs.getInt(9),rs.getInt(10),rs.getInt(11),rs.getInt(12),rs.getInt(13),rs.getInt(14)):new Combatant(0,100,100,0,0,0,0,0,0,0,0,0,0,0),chronicle,chronicle,chronicle,chronicle,chronicle,chronicle,chronicle,chronicle,chronicle,chronicle,chronicle,chronicle);
+        // One pass over what is worn and one over what is carried, aggregated conditionally — the combat-relevant
+        // tally the encounter needs, replacing the dozen correlated COUNT subqueries this grew from. Column order
+        // is the Combatant record's: energy, injury, pain, handWeapon, stones, armour, poison, lightShield,
+        // rawhideShield, blunt, sling, javelin, bow, arrows. Worn items count from equipment_attachment; thrown/
+        // held stock (stones, sling, javelin, bow, arrows) counts from what the chronicle owns and carries.
+        Combatant body=jdbc.query(
+            "SELECT p.energy_level,p.injury_severity,p.pain_level,eq.hand_weapon,own.stones,eq.armour,eq.poison," +
+            "eq.light_shield,eq.rawhide_shield,eq.blunt,own.sling,own.javelin,own.bow,own.arrows " +
+            "FROM chronicle_physiology p " +
+            "LEFT JOIN LATERAL (SELECT " +
+            "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key IN ('stone_axe','primitive_spear','poisoned_spear') THEN 1 ELSE 0 END),0) hand_weapon," +
+            "  COALESCE(SUM(CASE WHEN i.item_key IN ('scale_armour','chitin_helm','war_shield') THEN 1 ELSE 0 END),0) armour," +
+            "  COALESCE(SUM(CASE WHEN i.item_key='poisoned_spear' THEN 1 ELSE 0 END),0) poison," +
+            "  COALESCE(SUM(CASE WHEN i.item_key IN ('bark_shield','woven_reed_shield') THEN 1 ELSE 0 END),0) light_shield," +
+            "  COALESCE(SUM(CASE WHEN i.item_key='rawhide_shield' THEN 1 ELSE 0 END),0) rawhide_shield," +
+            "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key IN ('wooden_club','stone_club','stone_maul','stone_hammer') THEN 1 ELSE 0 END),0) blunt" +
+            "  FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id WHERE e.chronicle_id=p.chronicle_id) eq ON true " +
+            "LEFT JOIN LATERAL (SELECT " +
+            "  COALESCE(SUM(CASE WHEN i.item_key='field_stone' THEN 1 ELSE 0 END),0) stones," +
+            "  COALESCE(SUM(CASE WHEN i.item_key='sling' THEN 1 ELSE 0 END),0) sling," +
+            "  COALESCE(SUM(CASE WHEN i.item_key='javelin' THEN 1 ELSE 0 END),0) javelin," +
+            "  COALESCE(SUM(CASE WHEN i.item_key='hunting_bow' THEN 1 ELSE 0 END),0) bow," +
+            "  COALESCE(SUM(CASE WHEN i.item_key='hunting_arrow' THEN 1 ELSE 0 END),0) arrows" +
+            "  FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=p.chronicle_id AND w.lifecycle_state='ACTIVE') own ON true " +
+            "WHERE p.chronicle_id=?",
+            rs->rs.next()?new Combatant(rs.getInt(1),rs.getInt(2),rs.getInt(3),rs.getInt(4),rs.getInt(5),rs.getInt(6),rs.getInt(7),rs.getInt(8),rs.getInt(9),rs.getInt(10),rs.getInt(11),rs.getInt(12),rs.getInt(13),rs.getInt(14)):new Combatant(0,100,100,0,0,0,0,0,0,0,0,0,0,0),chronicle);
         // A creature on the wing cannot be reached by a hand weapon. Throwing stones
         // is the only contact a chronicle has with it. The narrator witnesses the
         // futility without naming what would be needed.

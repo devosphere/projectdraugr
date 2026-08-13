@@ -274,10 +274,14 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 >   usable as weapons; V125 sling — amplifies thrown-stone capability (up-to-10→up-to-24, viable vs AERIAL); camp alarm — CAMP_ALARM cuts passive-ambush −15; carried raw kill (raw_game_meat/raw_fish) draws predators +10 (cook/store/cache to end it); dr0125–dr0129). Remaining on the
 >   EPIC: more of #126 (throwing_stick/sling+stones/alarms/escape aids)/#127/#128 catalogues, and #129 the end-to-end first-day survival *run* across the six biomes under
 >   night/rain/cold/heat/injury/low-food-water (CI integration scenario).
->   **TECH DEBT (flagged 2026-08-13):** `WildlifeEncounterService.confront` grew a per-item COUNT subquery for
->   every combat item across this session (handWeapon/stones/armour/poison/lightShield/rawhideShield/blunt/sling/
->   javelin/bow/arrows — ~13). It is correct and fully tested but due a refactor to ONE conditional-aggregation
->   pass over equipment_attachment ∪ owned items. Do this before adding a 14th modifier. **Ranged kit #132: sling
+>   **TECH DEBT — RESOLVED 2026-08-13:** `WildlifeEncounterService.confront` had grown a per-item COUNT subquery
+>   for every combat item (handWeapon/stones/armour/poison/lightShield/rawhideShield/blunt/sling/javelin/bow/arrows
+>   — ~13, with 12 chronicle params). Refactored to TWO LATERAL conditional-aggregation passes — one over
+>   `equipment_attachment` (worn) and one over owned `world_object` (carried) — collapsing 12 params to 1 and ~13
+>   subqueries to 2 scans, same Combatant column order/semantics. Proven behaviour-preserving: an old-vs-new
+>   set-wide `EXCEPT` on a 200-chronicle / 912-combat-item random dataset diverged by 0 rows (both directions);
+>   compile clean, backend suite green, 55/55 SQL regressions + routing probe (0 misses) green. Add future modifiers
+>   as new `SUM(CASE …)` terms in the relevant LATERAL, not another subquery. **Ranged kit #132: sling
 >   (V125), javelin (V126), and the pre-existing bow chain now wired (+40, opens AERIAL, needs arrows) — dr0130/dr0131.**
 >   **CHIEF-ENGINEER ASSESSMENT (2026-08-13):** the survival SYSTEMS are verified complete & correct — physiology
 >   (temp/water/food/illness/smoke/exposure), **food freshness+spoilage+preservation** (a finished wired subsystem,
