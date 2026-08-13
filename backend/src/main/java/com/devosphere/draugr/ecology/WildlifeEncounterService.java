@@ -40,7 +40,7 @@ public class WildlifeEncounterService {
         // immutable reference data.
         Encounter candidate=jdbc.query("SELECT wp.id,wp.species_key,wp.ecological_role,wp.behavior_state,wp.population_count,ws.movement_class,ws.base_resistance,ws.ambush_hunter FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id LEFT JOIN wildlife_species ws ON ws.species_key=wp.species_key WHERE es.chunk_id=? AND wp.population_count>0 ORDER BY CASE wp.ecological_role WHEN 'CARNIVORE' THEN 0 WHEN 'OMNIVORE' THEN 1 ELSE 2 END LIMIT 1 FOR UPDATE OF wp",rs->rs.next()?new Encounter(rs.getObject(1,UUID.class),rs.getString(2),rs.getString(3),rs.getString(4),rs.getInt(5),rs.getString(6),(Integer)rs.getObject(7),rs.getBoolean(8)):null,chunk);
         if(candidate==null)return new EncounterResult("FAILED","The ground answers only with rain and the small movements of the forest.");
-        Combatant body=jdbc.query("SELECT p.energy_level,p.injury_severity,p.pain_level,COALESCE((SELECT COUNT(*) FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id WHERE e.chronicle_id=? AND e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key IN ('stone_axe','primitive_spear','poisoned_spear')),0),COALESCE((SELECT COUNT(*) FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key='field_stone'),0),COALESCE((SELECT COUNT(*) FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id WHERE e.chronicle_id=? AND i.item_key IN ('scale_armour','chitin_helm','war_shield')),0),COALESCE((SELECT COUNT(*) FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id WHERE e.chronicle_id=? AND i.item_key='poisoned_spear'),0) FROM chronicle_physiology p WHERE p.chronicle_id=?",rs->rs.next()?new Combatant(rs.getInt(1),rs.getInt(2),rs.getInt(3),rs.getInt(4),rs.getInt(5),rs.getInt(6),rs.getInt(7)):new Combatant(0,100,100,0,0,0,0),chronicle,chronicle,chronicle,chronicle,chronicle);
+        Combatant body=jdbc.query("SELECT p.energy_level,p.injury_severity,p.pain_level,COALESCE((SELECT COUNT(*) FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id WHERE e.chronicle_id=? AND e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key IN ('stone_axe','primitive_spear','poisoned_spear')),0),COALESCE((SELECT COUNT(*) FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key='field_stone'),0),COALESCE((SELECT COUNT(*) FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id WHERE e.chronicle_id=? AND i.item_key IN ('scale_armour','chitin_helm','war_shield')),0),COALESCE((SELECT COUNT(*) FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id WHERE e.chronicle_id=? AND i.item_key='poisoned_spear'),0),COALESCE((SELECT COUNT(*) FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id WHERE e.chronicle_id=? AND i.item_key IN ('bark_shield','woven_reed_shield')),0),COALESCE((SELECT COUNT(*) FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id WHERE e.chronicle_id=? AND i.item_key='rawhide_shield'),0) FROM chronicle_physiology p WHERE p.chronicle_id=?",rs->rs.next()?new Combatant(rs.getInt(1),rs.getInt(2),rs.getInt(3),rs.getInt(4),rs.getInt(5),rs.getInt(6),rs.getInt(7),rs.getInt(8),rs.getInt(9)):new Combatant(0,100,100,0,0,0,0,0,0),chronicle,chronicle,chronicle,chronicle,chronicle,chronicle,chronicle);
         // A creature on the wing cannot be reached by a hand weapon. Throwing stones
         // is the only contact a chronicle has with it. The narrator witnesses the
         // futility without naming what would be needed.
@@ -100,9 +100,12 @@ public class WildlifeEncounterService {
                     monsterMark = "It comes in fast and close, and goes out again heavier. The " + name.toLowerCase() + " is no longer yours."; } }
             default -> { }
         }
-        // Armour worn takes part of the blow: scale, shell, and a shield each turn some of the wound aside
-        // (#75). It never makes a body untouchable — the worst a mauling can do is only blunted, not erased.
-        if (body.armour() > 0) severity = Math.max(1, severity - body.armour()*7);
+        // Armour and shields take part of the blow, graded by what they are (#75, #126): worn scale/shell/war
+        // shield turn the most aside; a rawhide shield rather less; a bark or woven-reed shield least of all — an
+        // improvised guard is better than a bare arm, but no cover makes a body untouchable, so the worst a
+        // mauling can do is only blunted, never erased.
+        int blunted = body.armour()*7 + body.rawhideShield()*6 + body.lightShield()*4;
+        if (blunted > 0) severity = Math.max(1, severity - blunted);
         physiology.applyInjury(chronicle,severity,action,at,"WILDLIFE_CONTACT");
         jdbc.update("UPDATE wildlife_population SET behavior_state='FLEEING' WHERE id=?",candidate.populationId());
         String mark = monsterMark != null ? monsterMark
@@ -498,7 +501,7 @@ public class WildlifeEncounterService {
     private int meatFor(String species) { return species.contains("bear") || species.contains("elk") ? 4 : species.contains("deer") || species.contains("boar") ? 3 : 1; }
     private String display(String species) { return species.replace('_',' '); }
     private record Encounter(UUID populationId,String species,String role,String behavior,int population,String movementClass,Integer baseResistance,boolean ambushHunter){}
-    private record Combatant(int energy,int injury,int pain,int handWeapon,int stones,int armour,int poison){}
+    private record Combatant(int energy,int injury,int pain,int handWeapon,int stones,int armour,int poison,int lightShield,int rawhideShield){}
     private record Carcass(UUID id,String species,int meat,boolean hide){}
     public record EncounterResult(String outcome,String narration){}
     public record HarvestResult(String outcome,String narration){}
