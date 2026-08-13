@@ -160,6 +160,10 @@ public class WildlifeEncounterService {
         if (threat.ambushHunter()) chance += 10;
         if ("HIGH".equals(attention)) chance -= 12;
         else if ("MODERATE".equals(attention)) chance -= 5;
+        // A camp alarm (#126) — a trip-line strung with anything that clatters — robs an ambush of its surprise:
+        // nothing crosses the perimeter unheard, so even a heads-down Chronicle is not caught wholly unaware.
+        boolean alarmed = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='CAMP_ALARM' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')", Boolean.class, chunk));
+        if (alarmed) chance -= 15;
         if (Math.floorMod(action.hashCode() >>> 8, 100) >= Math.max(0, chance)) return null;
 
         int resistance = threat.baseResistance() != null ? threat.baseResistance() : 50;

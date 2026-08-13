@@ -109,11 +109,13 @@ public class ConstructionService {
         "SUNSHADE",    new String[][]{{"big_leaf","leaves"},{"thatch_bundle","thatch"},{"dry_grass_bundle","grass"}},
         "RAIN_COVER",  new String[][]{{"bark_sheet","bark"},{"big_leaf","broad leaves"},{"thatch_bundle","thatch"}},
         "GROUNDSHEET", new String[][]{{"bark_sheet","bark"},{"big_leaf","broad leaves"},{"dry_grass_bundle","grass"}},
-        "STONE_RING",  new String[][]{{"granite_cobble","cobbles"},{"basalt_cobble","cobbles"}});
+        "STONE_RING",  new String[][]{{"granite_cobble","cobbles"},{"basalt_cobble","cobbles"}},
+        // A perimeter trip-line hung with anything that clatters (#126): strung from cordage, or a fence of dry brush.
+        "CAMP_ALARM",  new String[][]{{"fiber_cordage","cordage"},{"dry_branch","dry brush"},{"reed_bundle","reed"}});
     private static final java.util.Map<String, Integer> COVER_QTY = java.util.Map.of(
-        "SUNSHADE", 3, "RAIN_COVER", 3, "GROUNDSHEET", 3, "STONE_RING", 4);
+        "SUNSHADE", 3, "RAIN_COVER", 3, "GROUNDSHEET", 3, "STONE_RING", 4, "CAMP_ALARM", 3);
     private static final java.util.Map<String, String> COVER_NAME = java.util.Map.of(
-        "SUNSHADE", "Sunshade", "RAIN_COVER", "Rain cover", "GROUNDSHEET", "Groundsheet", "STONE_RING", "Stone ring");
+        "SUNSHADE", "Sunshade", "RAIN_COVER", "Rain cover", "GROUNDSHEET", "Groundsheet", "STONE_RING", "Stone ring", "CAMP_ALARM", "Camp alarm");
 
     /**
      * Place a bare-hand partial cover here (#195): a leaf sunshade against the sun, a leant rain cover that sheds
@@ -139,6 +141,7 @@ public class ConstructionService {
             case "RAIN_COVER"  -> "You prop " + label + " into a leant cover pitched to shed water — it turns the worst of a shower, though it is no roof and no wall.";
             case "GROUNDSHEET" -> "You spread " + label + " into a groundsheet to lie on — off the cold, wet earth, though it turns no weather above you.";
             case "STONE_RING"  -> "You set " + label + " in a ring where a fire will sit — it holds the embers and throws their heat back, no more.";
+            case "CAMP_ALARM"  -> "You string " + label + " across the approaches and hang it with anything that clatters — it will not stop a beast, but nothing crosses it in the dark without warning you first.";
             default            -> "You place the cover.";
         };
         if (existing != null) {
