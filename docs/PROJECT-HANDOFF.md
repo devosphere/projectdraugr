@@ -273,7 +273,17 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 >   shield 7; V124 early clubs — wooden/stone +22 blunt in confront, and the existing stone_maul/stone_hammer now
 >   usable as weapons; V125 sling — amplifies thrown-stone capability (up-to-10→up-to-24, viable vs AERIAL); camp alarm — CAMP_ALARM cuts passive-ambush −15; carried raw kill (raw_game_meat/raw_fish) draws predators +10 (cook/store/cache to end it); dr0125–dr0129). Remaining on the
 >   EPIC: more of #126 (throwing_stick/sling+stones/alarms/escape aids)/#127/#128 catalogues, and #129 the end-to-end first-day survival *run* across the six biomes under
->   night/rain/cold/heat/injury/low-food-water (CI integration scenario). Method: **audit for existing equivalents,
+>   night/rain/cold/heat/injury/low-food-water (CI integration scenario).
+>   **CHIEF-ENGINEER ASSESSMENT (2026-08-13):** the survival SYSTEMS are verified complete & correct — physiology
+>   (temp/water/food/illness/smoke/exposure), **food freshness+spoilage+preservation** (a finished wired subsystem,
+>   see [[reference_food_preservation_architecture]] — do NOT rebuild; RAW 18h<COOKED 72h<SMOKED 30d<DRIED 45d<SALTED
+>   60d; storage re-owns items so caching/cooking ends the raw-meat predator draw), danger/ambush/defence (shields,
+>   clubs, sling, poison, armour, alarm, fresh-kill draw), perception, fire, light. #127 camp infrastructure ~80%
+>   present as staged assemblies. **Remaining #123 catalogue items (#125 tail/#126 escape/#127 food-cache-privacy-
+>   lookout/#133) are mostly existing equivalents, or need PREREQUISITE subsystems (#218 sanitation, #220 decay for
+>   non-food rot, perception-range) or a ground-search resolver refactor — NOT quick clean fills.** Next high-value:
+>   either the #133 ambient-materials resolver language (canonical search_ground/look_for_tinder phrasings → existing
+>   gathers; intricate classifier work, do carefully) or pivot to M2. Method: **audit for existing equivalents,
 >   fill only genuine no-equivalent gaps with a real function** — never a decorative card.
 >
 > **EPIC #64 Action Catalogue — scorecard:**
