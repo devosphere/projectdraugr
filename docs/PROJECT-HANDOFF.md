@@ -234,6 +234,25 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 
 #### Resume point
 
+> **▶ LATEST (2026-08-13): confront query refactored (tech-debt cleared) + EPIC #222 backdrop registry story #223 landed.**
+> - **Tech debt RESOLVED:** `WildlifeEncounterService.confront` collapsed from ~13 correlated COUNT subqueries (12
+>   params) to two LATERAL conditional-aggregation passes (1 param). Proven behaviour-preserving by an old-vs-new
+>   set-wide `EXCEPT` on a 200-chronicle random dataset (0 rows diverge). Commit `f9c3b96`.
+> - **EPIC #222 / story #223 (#230 inventory + #231 validate) DONE (code):** canonical typed backdrop registry for all
+>   151 `playthrough-*.png`. New: `frontend/src/backdrops/{manifest.schema.ts, backdrop-manifest.json, README.md}`,
+>   `scripts/backdrops/{build-manifest.mjs, test-validation.mjs}` (Node built-ins, no deps), `docs/systems/backdrop-
+>   coverage.md`, npm `backdrops:{generate,check,report,test}`. Deterministic slug-token classification (biome ∈ the 6
+>   `BiomeClimate` bases + proximity + 14 families + fallback chains terminating at root `forest`), **boundary-safe token
+>   matching** (avoids the ore-in-forest / cave-in-scavenging substring trap — see [[project_intent_classifier_substrings]]).
+>   Validator rejects 15 drift classes; tsc clean. Commit `4764659`.
+>   - **⚠ DEFERRED (user decision 2026-08-13):** the **396 MB of backdrop PNGs** (147 untracked, ~2.7 MB each) are NOT
+>     committed yet, and the full directory⇄manifest **bijection** CI gate (`npm run backdrops:check`) is NOT wired —
+>     only the self-contained `backdrops:test` runs in CI. **NEXT: decide asset storage (Git LFS vs direct vs
+>     optimize/downscale — ties into task #229 budgets), land the PNGs, then wire `backdrops:check` into `verify.yml`
+>     and regenerate the manifest.** Until then a fresh clone's `backdrops:check` fails bijection by design.
+>   - Remaining #222 stories after assets land: #224 perception-safe visual-context API, #225 precedence resolver,
+>     #226 temporal/weather eligibility, #227 lazy frontend loader, #228 creature-free governance, #229 budgets.
+
  **▶ ACTIVE NOW (2026-08-11): Milestone 1 — deep into the content EPICs, building autonomously toward M1 then M2.**
 > All **13 playtest [BUG] issues (#29–#44)** are FIXED and **CLOSED**. **The user granted autonomous execution:
 > finish M1, then continue into M2, WITHOUT interruption or permission requests — choose the engineering strategy
