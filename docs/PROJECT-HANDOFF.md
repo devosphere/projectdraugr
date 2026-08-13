@@ -239,7 +239,7 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 > finish M1, then continue into M2, WITHOUT interruption or permission requests — choose the engineering strategy
 > yourself, land verifiable increments, commit/push, and close a story only when its acceptance is fully met.**
 > Everything is on `development` (pushed) as `devosphere.tech` (never `johncalado`). **Migrations through V112.**
-> Full suite **163 backend tests + 54 SQL regressions green** on the V1–V126 chain; each commit compiles with tests
+> Full suite **163 backend tests + 55 SQL regressions green** on the V1–V126 chain; each commit compiles with tests
 > green and the routing-reachability probe clean (84 ok / 0 miss).
 >
 > **This session's major deliverables (V82→V112):**
@@ -274,6 +274,11 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 >   usable as weapons; V125 sling — amplifies thrown-stone capability (up-to-10→up-to-24, viable vs AERIAL); camp alarm — CAMP_ALARM cuts passive-ambush −15; carried raw kill (raw_game_meat/raw_fish) draws predators +10 (cook/store/cache to end it); dr0125–dr0129). Remaining on the
 >   EPIC: more of #126 (throwing_stick/sling+stones/alarms/escape aids)/#127/#128 catalogues, and #129 the end-to-end first-day survival *run* across the six biomes under
 >   night/rain/cold/heat/injury/low-food-water (CI integration scenario).
+>   **TECH DEBT (flagged 2026-08-13):** `WildlifeEncounterService.confront` grew a per-item COUNT subquery for
+>   every combat item across this session (handWeapon/stones/armour/poison/lightShield/rawhideShield/blunt/sling/
+>   javelin/bow/arrows — ~13). It is correct and fully tested but due a refactor to ONE conditional-aggregation
+>   pass over equipment_attachment ∪ owned items. Do this before adding a 14th modifier. **Ranged kit #132: sling
+>   (V125), javelin (V126), and the pre-existing bow chain now wired (+40, opens AERIAL, needs arrows) — dr0130/dr0131.**
 >   **CHIEF-ENGINEER ASSESSMENT (2026-08-13):** the survival SYSTEMS are verified complete & correct — physiology
 >   (temp/water/food/illness/smoke/exposure), **food freshness+spoilage+preservation** (a finished wired subsystem,
 >   see [[reference_food_preservation_architecture]] — do NOT rebuild; RAW 18h<COOKED 72h<SMOKED 30d<DRIED 45d<SALTED
