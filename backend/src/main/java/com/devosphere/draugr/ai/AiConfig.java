@@ -22,8 +22,12 @@ public class AiConfig {
     @Bean
     public LanguageModel languageModel(AiProperties props) {
         if (props.isUsable()) {
-            log.info("AI enabled — narration '{}', architect '{}', auditor '{}'.",
-                    props.getNarrationModel(), props.getArchitectModel(), props.getAuditorModel());
+            // Surface the full effective state — including whether the Architect (runtime authoring) is on —
+            // so "is the Architect actually enabled?" is answerable from the boot log, not by reading code.
+            log.info("AI enabled — interpreter '{}', narration '{}', architect '{}' (authoring {}), qa '{}', auditor '{}'.",
+                    props.getInterpreterModel(), props.getNarrationModel(), props.getArchitectModel(),
+                    props.isAuthoringEnabled() ? "ON" : "OFF (set draugr.ai.authoring-enabled=true to let it create new mechanics)",
+                    props.getQaModel(), props.getAuditorModel());
             return new AnthropicLanguageModel(props);
         }
         // Disabled or unconfigured: a no-op model. Narration stays fully deterministic.

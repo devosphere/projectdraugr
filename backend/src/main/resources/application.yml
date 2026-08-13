@@ -16,16 +16,28 @@ server:
   error:
     include-message: always
 
-# Optional AI narration (the Simulation Agent's voice). Off by default: the game runs on
-# deterministic prose alone until you switch it on and supply a key. Never commit a key here.
-# See docs/architecture/ai-integration.md.
+# Optional AI layer. Off by default: the game runs on deterministic prose alone until you switch it on
+# and supply a key. Never commit a key here. See docs/architecture/ai-integration.md.
+#
+# THREE switches gate the full "type a real-world action → interpret → create it → narrate" experience:
+#   1. enabled=true            — master switch (narration + the Sonnet interpreter that decomposes a
+#                                multi-step action into an ordered plan of EXISTING processes)
+#   2. api-key present         — required for enabled to take effect (isUsable = enabled AND key)
+#   3. authoring-enabled=true  — lets the Persistent State Architect CREATE new processes/objects at
+#                                runtime when the interpreter finds no existing chain. Without this the
+#                                Architect never fires and unrecognised actions end as "nothing happened",
+#                                even with AI otherwise on. This is almost certainly the missing switch if
+#                                narration works but the Architect never does anything.
 draugr:
   ai:
     enabled: ${DRAUGR_AI_ENABLED:false}
     api-key: ${DRAUGR_AI_API_KEY:${ANTHROPIC_API_KEY:}}
+    authoring-enabled: ${DRAUGR_AI_AUTHORING_ENABLED:false}
     max-tokens: ${DRAUGR_AI_MAX_TOKENS:1024}
     timeout: ${DRAUGR_AI_TIMEOUT:20s}
-    # Per-agent models: Simulation Agent (narration) → Haiku; Architect → Opus 4.8; Auditor → Sonnet 4.6.
+    # Per-agent models: Simulation Agent (narration) → Haiku; Interpreter → Sonnet 4.6; Architect + QA → Opus 4.8; Auditor → Sonnet 4.6.
     narration-model: ${DRAUGR_AI_NARRATION_MODEL:claude-haiku-4-5}
+    interpreter-model: ${DRAUGR_AI_INTERPRETER_MODEL:claude-sonnet-4-6}
     architect-model: ${DRAUGR_AI_ARCHITECT_MODEL:claude-opus-4-8}
+    qa-model: ${DRAUGR_AI_QA_MODEL:claude-opus-4-8}
     auditor-model: ${DRAUGR_AI_AUDITOR_MODEL:claude-sonnet-4-6}
