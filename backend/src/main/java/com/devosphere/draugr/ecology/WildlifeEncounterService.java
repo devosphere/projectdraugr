@@ -164,6 +164,11 @@ public class WildlifeEncounterService {
         // nothing crosses the perimeter unheard, so even a heads-down Chronicle is not caught wholly unaware.
         boolean alarmed = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='CAMP_ALARM' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')", Boolean.class, chunk));
         if (alarmed) chance -= 15;
+        // A fresh kill carried on the body (#123/#127) is blood and scent on the wind — it draws a hungry predator
+        // in where it might otherwise have passed. Cook, store, or cache the meat and the draw is gone; carry a raw
+        // carcass through predator ground and you are the bait.
+        boolean freshKill = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key IN ('raw_game_meat','raw_fish'))", Boolean.class, chronicle));
+        if (freshKill) chance += 10;
         if (Math.floorMod(action.hashCode() >>> 8, 100) >= Math.max(0, chance)) return null;
 
         int resistance = threat.baseResistance() != null ? threat.baseResistance() : 50;
