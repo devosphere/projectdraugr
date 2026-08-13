@@ -5,9 +5,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import java.time.Duration;
 
 /**
- * Configuration for the optional AI layer (the Simulation Agent's narration voice, and later
- * the Architect and Auditor). Everything here is off by default: with {@code enabled=false} or
- * no API key, the game runs on deterministic prose alone and never touches the network.
+ * Configuration for the AI layer (the Simulation Agent's narration voice, the Interpreter, the
+ * Architect, and the Auditor). <b>The API key is the single switch:</b> with a key present the whole
+ * pipeline — interpret → author new mechanics → narrate — is on; with no key the game runs on
+ * deterministic prose alone and never touches the network. {@code enabled} and {@code authoring-enabled}
+ * remain as explicit kill-switches (set either to {@code false} to force that part off even when a key
+ * is present), but both default to on so that dropping in a key is all it takes.
  *
  * <p>The API key comes only from configuration/environment and is never committed or logged.
  * See docs/architecture/ai-integration.md for the runtime contract.
@@ -15,8 +18,8 @@ import java.time.Duration;
 @ConfigurationProperties(prefix = "draugr.ai")
 public class AiProperties {
 
-    /** Master switch. Off ⇒ pure deterministic narration; no model client is constructed. */
-    private boolean enabled = false;
+    /** Kill-switch, default on. The effective gate is key presence ({@link #isUsable()}); set false to force AI off even with a key. */
+    private boolean enabled = true;
 
     /** Anthropic API key. Supplied via env (DRAUGR_AI_API_KEY / ANTHROPIC_API_KEY); never committed. */
     private String apiKey = "";
@@ -34,8 +37,8 @@ public class AiProperties {
     private String interpreterModel = "claude-sonnet-4-6";
     /** Independent QA critic for runtime-authored mechanics — deliberately a different model from the Architect. */
     private String qaModel = "claude-opus-4-8";
-    /** Even with AI on, runtime authoring of NEW scoped mechanics stays off until this is set — interpretation of existing ones does not need it. */
-    private boolean authoringEnabled = false;
+    /** Runtime authoring of NEW scoped mechanics (the Architect). Default on when a key is present; set false to allow interpretation of existing processes without letting the Architect create new ones. */
+    private boolean authoringEnabled = true;
     /** Author↔critic loop cap (DR-0021). */
     private int qaMaxRounds = 2;
 
