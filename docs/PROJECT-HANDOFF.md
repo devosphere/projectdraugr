@@ -239,7 +239,7 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 > finish M1, then continue into M2, WITHOUT interruption or permission requests — choose the engineering strategy
 > yourself, land verifiable increments, commit/push, and close a story only when its acceptance is fully met.**
 > Everything is on `development` (pushed) as `devosphere.tech` (never `johncalado`). **Migrations through V112.**
-> Full suite **162 backend tests + 53 SQL regressions green** on the V1–V125 chain; each commit compiles with tests
+> Full suite **163 backend tests + 53 SQL regressions green** on the V1–V125 chain; each commit compiles with tests
 > green and the routing-reachability probe clean (84 ok / 0 miss).
 >
 > **This session's major deliverables (V82→V112):**
