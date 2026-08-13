@@ -239,7 +239,7 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 > finish M1, then continue into M2, WITHOUT interruption or permission requests — choose the engineering strategy
 > yourself, land verifiable increments, commit/push, and close a story only when its acceptance is fully met.**
 > Everything is on `development` (pushed) as `devosphere.tech` (never `johncalado`). **Migrations through V112.**
-> Full suite **162 backend tests + 52 SQL regressions green** on the V1–V125 chain; each commit compiles with tests
+> Full suite **162 backend tests + 53 SQL regressions green** on the V1–V125 chain; each commit compiles with tests
 > green and the routing-reachability probe clean (84 ok / 0 miss).
 >
 > **This session's major deliverables (V82→V112):**
@@ -271,7 +271,7 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 >   the existing (V57) digging_stick made functional — GATHER_CLAY +1 with one carried; rest of #125 audited as
 >   existing equivalents). **#126 defence — STARTED** (V123 early graded shields bark/reed=4, rawhide=6 vs war
 >   shield 7; V124 early clubs — wooden/stone +22 blunt in confront, and the existing stone_maul/stone_hammer now
->   usable as weapons; V125 sling — amplifies thrown-stone capability (up-to-10→up-to-24, viable vs AERIAL); camp alarm — placed CAMP_ALARM cuts passive-ambush chance −15 via placeCover; dr0125–dr0128). Remaining on the
+>   usable as weapons; V125 sling — amplifies thrown-stone capability (up-to-10→up-to-24, viable vs AERIAL); camp alarm — CAMP_ALARM cuts passive-ambush −15; carried raw kill (raw_game_meat/raw_fish) draws predators +10 (cook/store/cache to end it); dr0125–dr0129). Remaining on the
 >   EPIC: more of #126 (throwing_stick/sling+stones/alarms/escape aids)/#127/#128 catalogues, and #129 the end-to-end first-day survival *run* across the six biomes under
 >   night/rain/cold/heat/injury/low-food-water (CI integration scenario). Method: **audit for existing equivalents,
 >   fill only genuine no-equivalent gaps with a real function** — never a decorative card.
