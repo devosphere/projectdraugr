@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "backdrops:generate": "node ../scripts/backdrops/build-manifest.mjs generate",
+    "backdrops:check": "node ../scripts/backdrops/build-manifest.mjs check",
+    "backdrops:report": "node ../scripts/backdrops/build-manifest.mjs report",
+    "backdrops:test": "node ../scripts/backdrops/test-validation.mjs"
   },
   "dependencies": {
     "react": "18.3.1",

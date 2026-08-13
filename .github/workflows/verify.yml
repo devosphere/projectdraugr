@@ -87,6 +87,13 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
+      - name: Backdrop registry — validator self-tests (#223)
+        working-directory: frontend
+        # Self-contained: test-validation.mjs validates the committed manifest and proves the gate
+        # rejects each drift class, WITHOUT reading the image bytes — so it is green even while the
+        # 396 MB of backdrop PNGs are still deferred out of history. The full directory⇄manifest
+        # bijection gate (npm run backdrops:check) is wired in once the assets land.
+        run: npm run backdrops:test
       - name: Build frontend
         working-directory: frontend
         run: npm run build

@@ -1,0 +1,5117 @@
+{
+  "schemaVersion": 1,
+  "assetRoot": "frontend/src/assets",
+  "backdrops": [
+    {
+      "backdropKey": "alpine-goat-range",
+      "filename": "playthrough-alpine-goat-range-v1.png",
+      "version": 1,
+      "label": "Alpine Goat Range",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "HIGHLAND"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "alpine",
+        "goat",
+        "range"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "highland",
+      "precedenceWeight": 10,
+      "contentHash": "9b2563b15fa9f222b671c8ad20dc51cc6cf4776d402bf387c40b7a253a342d0b",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3315030,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "alpine-headwater",
+      "filename": "playthrough-alpine-headwater-v1.png",
+      "version": 1,
+      "label": "Alpine Headwater",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "HIGHLAND"
+      ],
+      "siteFamily": "FRESHWATER",
+      "contextKeys": [
+        "freshwater",
+        "alpine",
+        "headwater"
+      ],
+      "proximity": "ADJACENT_VISIBLE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "highland",
+      "precedenceWeight": 30,
+      "contentHash": "ba456ea7a628551ccf29103878f2fc3a2b8987fe46868cadf3d41ae35774bcc5",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2858135,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FRESHWATER"
+      }
+    },
+    {
+      "backdropKey": "ancient-observatory",
+      "filename": "playthrough-ancient-observatory-v1.png",
+      "version": 1,
+      "label": "Ancient Observatory",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "RUIN",
+      "contextKeys": [
+        "ruin",
+        "ancient",
+        "observatory"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "ed9f1a043fce1027fd10c2d303e8e02841833732b657b4ab018758715588421b",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2656733,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "RUIN"
+      }
+    },
+    {
+      "backdropKey": "archipelago-shoreline",
+      "filename": "playthrough-archipelago-shoreline-v1.png",
+      "version": 1,
+      "label": "Archipelago Shoreline",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "OCEAN"
+      ],
+      "siteFamily": "COAST",
+      "contextKeys": [
+        "coast",
+        "archipelago",
+        "shoreline"
+      ],
+      "proximity": "ADJACENT_VISIBLE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "open-ocean",
+      "precedenceWeight": 30,
+      "contentHash": "360536ff0247f97f8f6639af7c5662a8c34ea277a1586dfea610b629672bc51a",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2448966,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "COAST"
+      }
+    },
+    {
+      "backdropKey": "arctic-fox-snowfield-den",
+      "filename": "playthrough-arctic-fox-snowfield-den-v1.png",
+      "version": 1,
+      "label": "Arctic Fox Snowfield Den",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "HIGHLAND"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "arctic",
+        "fox",
+        "snowfield",
+        "den"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "highland",
+      "precedenceWeight": 40,
+      "contentHash": "8ae205f540c518360cfdb35990388c3323a5a9af78cbf462f13dd195cf2c0cdb",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 1490875,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "ash-hound-den",
+      "filename": "playthrough-ash-hound-den-v1.png",
+      "version": 1,
+      "label": "Ash Hound Den",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "MONSTER_TERRITORY",
+      "contextKeys": [
+        "monster_territory",
+        "ash",
+        "hound",
+        "den"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "8714d02d773dae62060feb271cf23293411c8891d2766bac0fd63c7eadf23cba",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2457842,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "MONSTER_TERRITORY"
+      }
+    },
+    {
+      "backdropKey": "aurochs-open-herd-range",
+      "filename": "playthrough-aurochs-open-herd-range-v1.png",
+      "version": 1,
+      "label": "Aurochs Open Herd Range",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "GRASSLAND"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "aurochs",
+        "open",
+        "herd",
+        "range"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "plains",
+      "precedenceWeight": 10,
+      "contentHash": "fa56b3332be77b6cc391fcc1fb622fdbe60a00e43ed8cd97e05e45706b6f564b",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2486820,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "badger-sett",
+      "filename": "playthrough-badger-sett-v1.png",
+      "version": 1,
+      "label": "Badger Sett",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "badger",
+        "sett"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "20307b7940340b6e0a5a35311e63d59fe2abf9928f6bce85ea1fed457e3dbc38",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2880153,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "bat-cave-insect-roost",
+      "filename": "playthrough-bat-cave-insect-roost-v1.png",
+      "version": 1,
+      "label": "Bat Cave Insect Roost",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "MOUNTAIN"
+      ],
+      "siteFamily": "KARST",
+      "contextKeys": [
+        "karst",
+        "bat",
+        "cave",
+        "insect",
+        "roost"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "mountain-crag",
+      "precedenceWeight": 40,
+      "contentHash": "6a525bcdae790cd4f685cedf1189eeb82e45823b61f30dcbc7eb006a8f6a4666",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2558891,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "KARST"
+      }
+    },
+    {
+      "backdropKey": "bear-den",
+      "filename": "playthrough-bear-den-v1.png",
+      "version": 1,
+      "label": "Bear Den",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "bear",
+        "den"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "a0bf943dc2af0f45a05328c66b2abbfa0363d5b65fecaa2ff2afaee2902493d4",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2768015,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "beaver-colony",
+      "filename": "playthrough-beaver-colony-v1.png",
+      "version": 1,
+      "label": "Beaver Colony",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FRESHWATER",
+      "contextKeys": [
+        "freshwater",
+        "beaver",
+        "colony"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "b55a1d1d0fb7409deca09e79044bbf454c33d88f0ed3ccff41dd9a67cf1ebe02",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2997396,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FRESHWATER"
+      }
+    },
+    {
+      "backdropKey": "blackberry-thorn-brush",
+      "filename": "playthrough-blackberry-thorn-brush-v1.png",
+      "version": 1,
+      "label": "Blackberry Thorn Brush",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FLORA_SITE",
+      "contextKeys": [
+        "flora_site",
+        "blackberry",
+        "thorn",
+        "brush"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 10,
+      "contentHash": "358598ae6191af38f63dc8f7eff5a1f3dd6d7b9b47ad5562b4d8da7b3af8a5e5",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2847137,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FLORA_SITE"
+      }
+    },
+    {
+      "backdropKey": "boar-wallow",
+      "filename": "playthrough-boar-wallow-v1.png",
+      "version": 1,
+      "label": "Boar Wallow",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "boar",
+        "wallow"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "ca40465ef8c36cd28509cb7f94fa6aacbe30a35d31db595f5d3f57f23538ad41",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3094823,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "bog-amphibian-nursery",
+      "filename": "playthrough-bog-amphibian-nursery-v1.png",
+      "version": 1,
+      "label": "Bog Amphibian Nursery",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "WETLAND"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "bog",
+        "amphibian",
+        "nursery"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "wetland",
+      "precedenceWeight": 40,
+      "contentHash": "70bf73118b01a7f8efab1a9d32cc9fa5463039a608896bdebde27dbc99d7c607",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3170897,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "bog-iron-iron-sand-bar",
+      "filename": "playthrough-bog-iron-iron-sand-bar-v1.png",
+      "version": 1,
+      "label": "Bog Iron Iron Sand Bar",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "WETLAND"
+      ],
+      "siteFamily": "RESOURCE_SITE",
+      "contextKeys": [
+        "resource_site",
+        "bog",
+        "iron",
+        "sand",
+        "bar"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "wetland",
+      "precedenceWeight": 40,
+      "contentHash": "247699df9ed971492c20c9966c547072015d536193fbe9dc0e350f1090e36b77",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2634965,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "RESOURCE_SITE"
+      }
+    },
+    {
+      "backdropKey": "bog-medicinal-toxic-flora",
+      "filename": "playthrough-bog-medicinal-toxic-flora-v1.png",
+      "version": 1,
+      "label": "Bog Medicinal Toxic Flora",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "WETLAND"
+      ],
+      "siteFamily": "FLORA_SITE",
+      "contextKeys": [
+        "flora_site",
+        "bog",
+        "medicinal",
+        "toxic",
+        "flora"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "wetland",
+      "precedenceWeight": 40,
+      "contentHash": "8af18defac2f030daed70a396d40ccde4af77bd02604a32140e63f97fa888858",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3185992,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FLORA_SITE"
+      }
+    },
+    {
+      "backdropKey": "bog-warden-lair",
+      "filename": "playthrough-bog-warden-lair-v1.png",
+      "version": 1,
+      "label": "Bog Warden Lair",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "WETLAND"
+      ],
+      "siteFamily": "MONSTER_TERRITORY",
+      "contextKeys": [
+        "monster_territory",
+        "bog",
+        "warden",
+        "lair"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "wetland",
+      "precedenceWeight": 40,
+      "contentHash": "0796a55ac40d6b2d8bd581ee82855348b7283ba4c2c0a40f4cb685f629082c8a",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2280631,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "MONSTER_TERRITORY"
+      }
+    },
+    {
+      "backdropKey": "broken-aqueduct",
+      "filename": "playthrough-broken-aqueduct-v1.png",
+      "version": 1,
+      "label": "Broken Aqueduct",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "RUIN",
+      "contextKeys": [
+        "ruin",
+        "broken",
+        "aqueduct"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "cedca13231a71c07cf8cf9bc62fd8fa530930b6c31640e6b51860aa9b4c4bef1",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2591141,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "RUIN"
+      }
+    },
+    {
+      "backdropKey": "buried-granary",
+      "filename": "playthrough-buried-granary-v1.png",
+      "version": 1,
+      "label": "Buried Granary",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "RUIN",
+      "contextKeys": [
+        "ruin",
+        "buried",
+        "granary"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "1ced32e09dfa69871802fefa49899e4b95b64720fe663be07ae7a95f3b558ead",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2651997,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "RUIN"
+      }
+    },
+    {
+      "backdropKey": "cave-bear-shelter",
+      "filename": "playthrough-cave-bear-shelter-v1.png",
+      "version": 1,
+      "label": "Cave Bear Shelter",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "MOUNTAIN"
+      ],
+      "siteFamily": "KARST",
+      "contextKeys": [
+        "karst",
+        "cave",
+        "bear",
+        "shelter"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "mountain-crag",
+      "precedenceWeight": 40,
+      "contentHash": "552031c995903fa50bc09efd5333efd436ba795f92a072b8ee4a27bcb38d48de",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2698340,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "KARST"
+      }
+    },
+    {
+      "backdropKey": "cave-mouth-lair",
+      "filename": "playthrough-cave-mouth-lair-v1.png",
+      "version": 1,
+      "label": "Cave Mouth Lair",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "MOUNTAIN"
+      ],
+      "siteFamily": "KARST",
+      "contextKeys": [
+        "karst",
+        "cave",
+        "mouth",
+        "lair"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "mountain-crag",
+      "precedenceWeight": 40,
+      "contentHash": "e2141fc300d41a28e6426184d5c9fcf9d21d12359fe2656f70988193d0fbbbbb",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3094248,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "KARST"
+      }
+    },
+    {
+      "backdropKey": "cave-troll-shelter",
+      "filename": "playthrough-cave-troll-shelter-v1.png",
+      "version": 1,
+      "label": "Cave Troll Shelter",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "MONSTER_TERRITORY",
+      "contextKeys": [
+        "monster_territory",
+        "cave",
+        "troll",
+        "shelter"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "8716d8e68a4b8885101c7a3171f53ab09f965087107a4283810ee0165c18b965",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2679479,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "MONSTER_TERRITORY"
+      }
+    },
+    {
+      "backdropKey": "centaur-territory-camp",
+      "filename": "playthrough-centaur-territory-camp-v1.png",
+      "version": 1,
+      "label": "Centaur Territory Camp",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "GRASSLAND"
+      ],
+      "siteFamily": "MONSTER_TERRITORY",
+      "contextKeys": [
+        "monster_territory",
+        "centaur",
+        "territory",
+        "camp"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "plains",
+      "precedenceWeight": 40,
+      "contentHash": "9ea0701602832a88628cc83fbb69a727702fa0e6116f6ec22c3b7df48581932b",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2317625,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "MONSTER_TERRITORY"
+      }
+    },
+    {
+      "backdropKey": "clay-deposit",
+      "filename": "playthrough-clay-deposit-v1.png",
+      "version": 1,
+      "label": "Clay Deposit",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "WETLAND"
+      ],
+      "siteFamily": "RESOURCE_SITE",
+      "contextKeys": [
+        "resource_site",
+        "clay",
+        "deposit"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "wetland",
+      "precedenceWeight": 40,
+      "contentHash": "2ec94196d752e4abdf9225ff73493794de9078730f45c36b0bdd57fb1fa78b0f",
+      "width": 1666,
+      "height": 944,
+      "aspectRatio": 1.765,
+      "bytes": 2931773,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "RESOURCE_SITE"
+      }
+    },
+    {
+      "backdropKey": "clear-quartz-crystal-pocket",
+      "filename": "playthrough-clear-quartz-crystal-pocket-v1.png",
+      "version": 1,
+      "label": "Clear Quartz Crystal Pocket",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "GEOLOGICAL",
+      "contextKeys": [
+        "geological",
+        "clear",
+        "quartz",
+        "crystal",
+        "pocket"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "a007de38aa4b61923089c5952e1abff7018246586236eaad51e804101965f58e",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2893166,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "GEOLOGICAL"
+      }
+    },
+    {
+      "backdropKey": "coast",
+      "filename": "playthrough-coast-v1.png",
+      "version": 1,
+      "label": "Coast",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "OCEAN"
+      ],
+      "siteFamily": "BASE_BIOME",
+      "contextKeys": [
+        "base_biome",
+        "coast"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "open-ocean",
+      "precedenceWeight": 10,
+      "contentHash": "5680c30fa5d0aa6dbb335b127e1ba15c9522edf63c7b062f01ece5e86547b0b8",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2504065,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "BASE_BIOME"
+      }
+    },
+    {
+      "backdropKey": "coastal-cliff-dune",
+      "filename": "playthrough-coastal-cliff-dune-v1.png",
+      "version": 1,
+      "label": "Coastal Cliff Dune",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "OCEAN"
+      ],
+      "siteFamily": "COAST",
+      "contextKeys": [
+        "coast",
+        "coastal",
+        "cliff",
+        "dune"
+      ],
+      "proximity": "ADJACENT_VISIBLE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "open-ocean",
+      "precedenceWeight": 30,
+      "contentHash": "7802bfdc8119ac7ce4837346cdf154dcd0f1f254690f3b7c76a3e31fafef776b",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2346810,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "COAST"
+      }
+    },
+    {
+      "backdropKey": "collapsed-causeway",
+      "filename": "playthrough-collapsed-causeway-v1.png",
+      "version": 1,
+      "label": "Collapsed Causeway",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "RUIN",
+      "contextKeys": [
+        "ruin",
+        "collapsed",
+        "causeway"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "e491f22e7fd2a692304d0d6522d25abd508547666d1d8889c940285d31376c54",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2509732,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "RUIN"
+      }
+    },
+    {
+      "backdropKey": "copper-seam",
+      "filename": "playthrough-copper-seam-v1.png",
+      "version": 1,
+      "label": "Copper Seam",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "RESOURCE_SITE",
+      "contextKeys": [
+        "resource_site",
+        "copper",
+        "seam"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "b06013c0580356f9d5516bbdc1ab89b657b15b95edfbae2fb3ccbeb0c4b2176e",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3288737,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "RESOURCE_SITE"
+      }
+    },
+    {
+      "backdropKey": "crayfish-stony-shallows",
+      "filename": "playthrough-crayfish-stony-shallows-v1.png",
+      "version": 1,
+      "label": "Crayfish Stony Shallows",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FRESHWATER",
+      "contextKeys": [
+        "freshwater",
+        "crayfish",
+        "stony",
+        "shallows"
+      ],
+      "proximity": "ADJACENT_VISIBLE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 30,
+      "contentHash": "b6cc85868d0956b86c21018165005afa9b036ef8c8dcdb3e9b590f45e4e545af",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3039411,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FRESHWATER"
+      }
+    },
+    {
+      "backdropKey": "cricket-night-meadow",
+      "filename": "playthrough-cricket-night-meadow-v1.png",
+      "version": 1,
+      "label": "Cricket Night Meadow",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "GRASSLAND"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "cricket",
+        "night",
+        "meadow"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [
+        "NIGHT"
+      ],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "plains",
+      "precedenceWeight": 10,
+      "contentHash": "7c79e35010688f98238cdfbf383a77d21de6323c4fd02cb3602b549052f2da11",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 1865892,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "crocodilian-river-ambush-bank",
+      "filename": "playthrough-crocodilian-river-ambush-bank-v1.png",
+      "version": 1,
+      "label": "Crocodilian River Ambush Bank",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "WETLAND"
+      ],
+      "siteFamily": "FRESHWATER",
+      "contextKeys": [
+        "freshwater",
+        "crocodilian",
+        "river",
+        "ambush",
+        "bank"
+      ],
+      "proximity": "ADJACENT_VISIBLE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "wetland",
+      "precedenceWeight": 30,
+      "contentHash": "25a2bcb1af9dcd8299ecda026e8fba8eeb1b2e2b77a56e2ae553a20fa40727bb",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2262019,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FRESHWATER"
+      }
+    },
+    {
+      "backdropKey": "deep-peat-bog",
+      "filename": "playthrough-deep-peat-bog-v1.png",
+      "version": 1,
+      "label": "Deep Peat Bog",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "WETLAND"
+      ],
+      "siteFamily": "BASE_BIOME",
+      "contextKeys": [
+        "base_biome",
+        "deep",
+        "peat",
+        "bog"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "wetland",
+      "precedenceWeight": 10,
+      "contentHash": "d4ffac0d09a57087326661dad77e6e4a64aad22536b59d55cf9bc5f84df8cf51",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2431178,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "BASE_BIOME"
+      }
+    },
+    {
+      "backdropKey": "deep-slow-river-pool",
+      "filename": "playthrough-deep-slow-river-pool-v1.png",
+      "version": 1,
+      "label": "Deep Slow River Pool",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FRESHWATER",
+      "contextKeys": [
+        "freshwater",
+        "deep",
+        "slow",
+        "river",
+        "pool"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 10,
+      "contentHash": "740967306165a5929d36ed1a2a76611d45e0afc27f86b40748150052c4c6cbbe",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2280853,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FRESHWATER"
+      }
+    },
+    {
+      "backdropKey": "deepwater-maw-territory",
+      "filename": "playthrough-deepwater-maw-territory-v1.png",
+      "version": 1,
+      "label": "Deepwater Maw Territory",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "OCEAN"
+      ],
+      "siteFamily": "MONSTER_TERRITORY",
+      "contextKeys": [
+        "monster_territory",
+        "deepwater",
+        "maw",
+        "territory"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "open-ocean",
+      "precedenceWeight": 40,
+      "contentHash": "9653fc2f95460ea0d8dc1f88316618a5b5793b07d76762bcd8f0c1147f778c66",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2195305,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "MONSTER_TERRITORY"
+      }
+    },
+    {
+      "backdropKey": "deer-range",
+      "filename": "playthrough-deer-range-v1.png",
+      "version": 1,
+      "label": "Deer Range",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "deer",
+        "range"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 10,
+      "contentHash": "f013b62e71f38f134d40d696d361e2824f07356103307e665b2d9a07b6f87189",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2861869,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "dense-forest",
+      "filename": "playthrough-dense-forest-v1.png",
+      "version": 1,
+      "label": "Dense Forest",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "BASE_BIOME",
+      "contextKeys": [
+        "base_biome",
+        "dense",
+        "forest"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 10,
+      "contentHash": "b5f38683a50b84b389070ea8ea1cd1f66494dc387477fdc14ba370def954021b",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2907062,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "BASE_BIOME"
+      }
+    },
+    {
+      "backdropKey": "dire-wolf-pack-ground",
+      "filename": "playthrough-dire-wolf-pack-ground-v1.png",
+      "version": 1,
+      "label": "Dire Wolf Pack Ground",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "dire",
+        "wolf",
+        "pack",
+        "ground"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 10,
+      "contentHash": "34f3123f01bb38674046477b7bf31126ce0c8bdf6eb2a1c0321c9aba23ed17ae",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2616468,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "domestication-paddock",
+      "filename": "playthrough-domestication-paddock-v1.png",
+      "version": 1,
+      "label": "Domestication Paddock",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "GRASSLAND"
+      ],
+      "siteFamily": "DOMESTICATION",
+      "contextKeys": [
+        "domestication",
+        "paddock"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "plains",
+      "precedenceWeight": 40,
+      "contentHash": "4f643e9f46420175e013f48b1855792a152744412e7b44addc10f458f1bacb56",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2772262,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "DOMESTICATION"
+      }
+    },
+    {
+      "backdropKey": "dry-scrub",
+      "filename": "playthrough-dry-scrub-v1.png",
+      "version": 1,
+      "label": "Dry Scrub",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "GRASSLAND"
+      ],
+      "siteFamily": "BASE_BIOME",
+      "contextKeys": [
+        "base_biome",
+        "dry",
+        "scrub"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "plains",
+      "precedenceWeight": 10,
+      "contentHash": "cd2a238d10dd19ffa8e3f0d90860865b31a5ac14c1181bdb65502e592e433819",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3098870,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "BASE_BIOME"
+      }
+    },
+    {
+      "backdropKey": "dusk-prowler-territory",
+      "filename": "playthrough-dusk-prowler-territory-v1.png",
+      "version": 1,
+      "label": "Dusk Prowler Territory",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "MONSTER_TERRITORY",
+      "contextKeys": [
+        "monster_territory",
+        "dusk",
+        "prowler",
+        "territory"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "b0ac34e01f9472637714b2ff40953158913353660e844b9f225e02c1353d5b2d",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2190983,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "MONSTER_TERRITORY"
+      }
+    },
+    {
+      "backdropKey": "earthworm-rich-forest-soil",
+      "filename": "playthrough-earthworm-rich-forest-soil-v1.png",
+      "version": 1,
+      "label": "Earthworm Rich Forest Soil",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "earthworm",
+        "rich",
+        "forest",
+        "soil"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "dea5b52de8f1c355a97609d475d3bb42023a3504af5b6b1e82f87e32b6083552",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2170780,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "edible-root-patch",
+      "filename": "playthrough-edible-root-patch-v1.png",
+      "version": 1,
+      "label": "Edible Root Patch",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FLORA_SITE",
+      "contextKeys": [
+        "flora_site",
+        "edible",
+        "root",
+        "patch"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 10,
+      "contentHash": "6d6d13c8ab9c35c21427c492b95d885a38ea44ed96552f3147fa8356eaf91493",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3016008,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FLORA_SITE"
+      }
+    },
+    {
+      "backdropKey": "elk-range",
+      "filename": "playthrough-elk-range-v1.png",
+      "version": 1,
+      "label": "Elk Range",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "HIGHLAND"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "elk",
+        "range"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "highland",
+      "precedenceWeight": 10,
+      "contentHash": "4c7249d878f9e8c3408edd94404b80c40cdb2bd6d9105a004da78e632ad6721e",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2607085,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "estuary",
+      "filename": "playthrough-estuary-v1.png",
+      "version": 1,
+      "label": "Estuary",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "OCEAN",
+        "WETLAND"
+      ],
+      "siteFamily": "COAST",
+      "contextKeys": [
+        "coast",
+        "estuary"
+      ],
+      "proximity": "ECOTONE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "open-ocean",
+      "precedenceWeight": 20,
+      "contentHash": "70b6ca39cc6ad477f859ae1e0049692730b39664236dcb23d1055c41029a8a5d",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2415303,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "COAST"
+      }
+    },
+    {
+      "backdropKey": "fallen-city-exterior",
+      "filename": "playthrough-fallen-city-exterior-v1.png",
+      "version": 1,
+      "label": "Fallen City Exterior",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "RUIN",
+      "contextKeys": [
+        "ruin",
+        "fallen",
+        "city",
+        "exterior"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "2fccc726289c9e9d926b850b12ab4e097e701b2826d7be25c4a90556196e80e1",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2600354,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "RUIN"
+      }
+    },
+    {
+      "backdropKey": "fen-siren-pool",
+      "filename": "playthrough-fen-siren-pool-v1.png",
+      "version": 1,
+      "label": "Fen Siren Pool",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "WETLAND"
+      ],
+      "siteFamily": "MONSTER_TERRITORY",
+      "contextKeys": [
+        "monster_territory",
+        "fen",
+        "siren",
+        "pool"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "wetland",
+      "precedenceWeight": 40,
+      "contentHash": "4da5b7350d524fdeb0b289136f1b975c256fa26658b28f55fa2a92ea7db72457",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2693672,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "MONSTER_TERRITORY"
+      }
+    },
+    {
+      "backdropKey": "fibre-grassland",
+      "filename": "playthrough-fibre-grassland-v1.png",
+      "version": 1,
+      "label": "Fibre Grassland",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "GRASSLAND"
+      ],
+      "siteFamily": "FLORA_SITE",
+      "contextKeys": [
+        "flora_site",
+        "fibre",
+        "grassland"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "plains",
+      "precedenceWeight": 10,
+      "contentHash": "fb9622781a6891626934922d91ef3fdb89084775571f73cf0a0b631ea3257de8",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2684242,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FLORA_SITE"
+      }
+    },
+    {
+      "backdropKey": "flint-chert-field",
+      "filename": "playthrough-flint-chert-field-v1.png",
+      "version": 1,
+      "label": "Flint Chert Field",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "GEOLOGICAL",
+      "contextKeys": [
+        "geological",
+        "flint",
+        "chert",
+        "field"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "ab51b8505284b81c41ebcbfc1a89b154a1b3693bb17b0b9a6b90100fd686b4ec",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2868511,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "GEOLOGICAL"
+      }
+    },
+    {
+      "backdropKey": "flooded-archive",
+      "filename": "playthrough-flooded-archive-v1.png",
+      "version": 1,
+      "label": "Flooded Archive",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "WETLAND"
+      ],
+      "siteFamily": "RUIN",
+      "contextKeys": [
+        "ruin",
+        "flooded",
+        "archive"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "wetland",
+      "precedenceWeight": 40,
+      "contentHash": "6c1257177c1d58817cc827df09de2be53665f02394eede8eef160964a8f4bdfd",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2168300,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "RUIN"
+      }
+    },
+    {
+      "backdropKey": "forest-ant-mound-colony",
+      "filename": "playthrough-forest-ant-mound-colony-v1.png",
+      "version": 1,
+      "label": "Forest Ant Mound Colony",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "forest",
+        "ant",
+        "mound",
+        "colony"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "afdb1b2594f96697705218cb8352a6587311019817280ef9860bd6ad4170fca5",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3064845,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "forest-grassland-ecotone",
+      "filename": "playthrough-forest-grassland-ecotone-v1.png",
+      "version": 1,
+      "label": "Forest Grassland Ecotone",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST",
+        "GRASSLAND"
+      ],
+      "siteFamily": "ECOTONE",
+      "contextKeys": [
+        "ecotone",
+        "forest",
+        "grassland"
+      ],
+      "proximity": "ECOTONE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 20,
+      "contentHash": "e7e69175a1169c689dfa5c0b4f8513bef259f9d4b86e7eade462556dbd53d3f0",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2976984,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "ECOTONE"
+      }
+    },
+    {
+      "backdropKey": "forest-highland-foothill",
+      "filename": "playthrough-forest-highland-foothill-v1.png",
+      "version": 1,
+      "label": "Forest Highland Foothill",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST",
+        "HIGHLAND"
+      ],
+      "siteFamily": "ECOTONE",
+      "contextKeys": [
+        "ecotone",
+        "forest",
+        "highland",
+        "foothill"
+      ],
+      "proximity": "ECOTONE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 20,
+      "contentHash": "e1d46d8ab0111df62f4ab40984778e23c31c4a79cd478df532edb61c497026aa",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3076656,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "ECOTONE"
+      }
+    },
+    {
+      "backdropKey": "forest-lakebank",
+      "filename": "playthrough-forest-lakebank-v1.png",
+      "version": 1,
+      "label": "Forest Lakebank",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FRESHWATER",
+      "contextKeys": [
+        "freshwater",
+        "forest",
+        "lakebank"
+      ],
+      "proximity": "ADJACENT_VISIBLE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 30,
+      "contentHash": "c5852a5f86e7f9de034db59818cd9220969671cb47f22ad7be0b6533aaf976e3",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2868598,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FRESHWATER"
+      }
+    },
+    {
+      "backdropKey": "forest-rat-groundbird-edge",
+      "filename": "playthrough-forest-rat-groundbird-edge-v1.png",
+      "version": 1,
+      "label": "Forest Rat Groundbird Edge",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "forest",
+        "rat",
+        "groundbird",
+        "edge"
+      ],
+      "proximity": "ADJACENT_VISIBLE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 30,
+      "contentHash": "62956afe7d718e977c9034fdb8f16c67123b16901831443137b072139d939162",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3377588,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "forest-spider-den",
+      "filename": "playthrough-forest-spider-den-v1.png",
+      "version": 1,
+      "label": "Forest Spider Den",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "forest",
+        "spider",
+        "den"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "43cd906b168a65b5ee99385cf971b40cd9f51115c8df7664103e85a11901e56a",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2786289,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "forest",
+      "filename": "playthrough-forest-v1.png",
+      "version": 1,
+      "label": "Forest",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "BASE_BIOME",
+      "contextKeys": [
+        "base_biome",
+        "forest"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": null,
+      "precedenceWeight": 10,
+      "contentHash": "20dbbe952ac7d57c50163f10171dcc9b9377a5663aa59c0df81e95681a0614eb",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3091280,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "BASE_BIOME"
+      }
+    },
+    {
+      "backdropKey": "forest-wetland-ecotone",
+      "filename": "playthrough-forest-wetland-ecotone-v1.png",
+      "version": 1,
+      "label": "Forest Wetland Ecotone",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST",
+        "WETLAND"
+      ],
+      "siteFamily": "ECOTONE",
+      "contextKeys": [
+        "ecotone",
+        "forest",
+        "wetland"
+      ],
+      "proximity": "ECOTONE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 20,
+      "contentHash": "6951221cb24d10d9145bcc9cdda533e9e2184610fe66f1b371ea78d42e9476cf",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3110264,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "ECOTONE"
+      }
+    },
+    {
+      "backdropKey": "fox-earth",
+      "filename": "playthrough-fox-earth-v1.png",
+      "version": 1,
+      "label": "Fox Earth",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "fox",
+        "earth"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 10,
+      "contentHash": "31b5ed31454c570bc3711b114ea7a1c52e7017b95622d834e950e295e0c495a6",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3061448,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "giant-hornet-queen-nest",
+      "filename": "playthrough-giant-hornet-queen-nest-v1.png",
+      "version": 1,
+      "label": "Giant Hornet Queen Nest",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "giant",
+        "hornet",
+        "queen",
+        "nest"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "df45c3cc3b03d9762c2e9fe2e34a4757e157f254e7c89b45761fb72254d105c1",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2587535,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "glasswing-roost",
+      "filename": "playthrough-glasswing-roost-v1.png",
+      "version": 1,
+      "label": "Glasswing Roost",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "MONSTER_TERRITORY",
+      "contextKeys": [
+        "monster_territory",
+        "glasswing",
+        "roost"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "d1d18f4fbd01eac94c0d6f258d61d34bb6c3e428d3bdc3c140b7e9f49fcac12f",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2576421,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "MONSTER_TERRITORY"
+      }
+    },
+    {
+      "backdropKey": "gloom-moth-colony",
+      "filename": "playthrough-gloom-moth-colony-v1.png",
+      "version": 1,
+      "label": "Gloom Moth Colony",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "MONSTER_TERRITORY",
+      "contextKeys": [
+        "monster_territory",
+        "gloom",
+        "moth",
+        "colony"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [
+        "NIGHT"
+      ],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "be6b717bdabb6d73b9786360fc546ac5e559052de05e1062a38b2df36b8432ec",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2245639,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "MONSTER_TERRITORY"
+      }
+    },
+    {
+      "backdropKey": "golden-jackal-scrub-territory",
+      "filename": "playthrough-golden-jackal-scrub-territory-v1.png",
+      "version": 1,
+      "label": "Golden Jackal Scrub Territory",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "GRASSLAND"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "golden",
+        "jackal",
+        "scrub",
+        "territory"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "plains",
+      "precedenceWeight": 10,
+      "contentHash": "9100bcedaea7034c4d881e506caade643af07e2609d9b76ac152ee15e63b8e56",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3010260,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "gopher-colony",
+      "filename": "playthrough-gopher-colony-v1.png",
+      "version": 1,
+      "label": "Gopher Colony",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "GRASSLAND"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "gopher",
+        "colony"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "plains",
+      "precedenceWeight": 40,
+      "contentHash": "80e6b46c8fd24c167394635bcc984b36e87010dcbf9db707d88a327e4b4811df",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2749143,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "grassland-coastal-dune",
+      "filename": "playthrough-grassland-coastal-dune-v1.png",
+      "version": 1,
+      "label": "Grassland Coastal Dune",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "GRASSLAND",
+        "OCEAN"
+      ],
+      "siteFamily": "ECOTONE",
+      "contextKeys": [
+        "ecotone",
+        "grassland",
+        "coastal",
+        "dune"
+      ],
+      "proximity": "ECOTONE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "plains",
+      "precedenceWeight": 20,
+      "contentHash": "89af6140595e33f8ff13e056eedc4cd737d51da6388a89e83d4f206ac4e26de6",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2768684,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "ECOTONE"
+      }
+    },
+    {
+      "backdropKey": "grassland-insect-colony",
+      "filename": "playthrough-grassland-insect-colony-v1.png",
+      "version": 1,
+      "label": "Grassland Insect Colony",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "GRASSLAND"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "grassland",
+        "insect",
+        "colony"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "plains",
+      "precedenceWeight": 40,
+      "contentHash": "342a7714be4dfb8a88740b7a3dbf4fd880e38e39522c05e7af73401fd0094152",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2617745,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "grassland-wetland-ecotone",
+      "filename": "playthrough-grassland-wetland-ecotone-v1.png",
+      "version": 1,
+      "label": "Grassland Wetland Ecotone",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "GRASSLAND",
+        "WETLAND"
+      ],
+      "siteFamily": "ECOTONE",
+      "contextKeys": [
+        "ecotone",
+        "grassland",
+        "wetland"
+      ],
+      "proximity": "ECOTONE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "plains",
+      "precedenceWeight": 20,
+      "contentHash": "c37a6cb5cc83fa87200e9bebe1b80dff130e905956bc7c7ed921cbc3deaff861",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2801061,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "ECOTONE"
+      }
+    },
+    {
+      "backdropKey": "harpy-cliff-territory",
+      "filename": "playthrough-harpy-cliff-territory-v1.png",
+      "version": 1,
+      "label": "Harpy Cliff Territory",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "HIGHLAND"
+      ],
+      "siteFamily": "MONSTER_TERRITORY",
+      "contextKeys": [
+        "monster_territory",
+        "harpy",
+        "cliff",
+        "territory"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "highland",
+      "precedenceWeight": 40,
+      "contentHash": "27e66ae8dbd0f8803e98e074f22b81233f015ed9d196fc14d7ec84cfe541a8d6",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2583330,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "MONSTER_TERRITORY"
+      }
+    },
+    {
+      "backdropKey": "herd-migration-corridor",
+      "filename": "playthrough-herd-migration-corridor-v1.png",
+      "version": 1,
+      "label": "Herd Migration Corridor",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "GRASSLAND"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "herd",
+        "migration",
+        "corridor"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "plains",
+      "precedenceWeight": 10,
+      "contentHash": "f7a65ebb00e2e0370a8b8b9a661511f9ec79656dd07236df7a594258ae0fc2d7",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2516453,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "highland-bilberry-juniper-heath",
+      "filename": "playthrough-highland-bilberry-juniper-heath-v1.png",
+      "version": 1,
+      "label": "Highland Bilberry Juniper Heath",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "HIGHLAND"
+      ],
+      "siteFamily": "FLORA_SITE",
+      "contextKeys": [
+        "flora_site",
+        "highland",
+        "bilberry",
+        "juniper",
+        "heath"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "highland",
+      "precedenceWeight": 10,
+      "contentHash": "04ac486ee95405952c96f3dfd6f058447c5cfb0e86edeee586fd7a6c8b010e78",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2700538,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FLORA_SITE"
+      }
+    },
+    {
+      "backdropKey": "highland-mountain-snowline",
+      "filename": "playthrough-highland-mountain-snowline-v1.png",
+      "version": 1,
+      "label": "Highland Mountain Snowline",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "HIGHLAND",
+        "MOUNTAIN"
+      ],
+      "siteFamily": "ECOTONE",
+      "contextKeys": [
+        "ecotone",
+        "highland",
+        "mountain",
+        "snowline"
+      ],
+      "proximity": "ECOTONE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "highland",
+      "precedenceWeight": 20,
+      "contentHash": "6a71bf62d00d163944d518c53f9a823d4ace355f25f0769fc9fd5f5b381a95a0",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2726043,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "ECOTONE"
+      }
+    },
+    {
+      "backdropKey": "highland-tarn",
+      "filename": "playthrough-highland-tarn-v1.png",
+      "version": 1,
+      "label": "Highland Tarn",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "HIGHLAND"
+      ],
+      "siteFamily": "FRESHWATER",
+      "contextKeys": [
+        "freshwater",
+        "highland",
+        "tarn"
+      ],
+      "proximity": "ADJACENT_VISIBLE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "highland",
+      "precedenceWeight": 30,
+      "contentHash": "06468ae5b9e623891ee4e5b84457ac0e3f1ea3189533627942be8cdd6d2c5574",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2897144,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FRESHWATER"
+      }
+    },
+    {
+      "backdropKey": "highland",
+      "filename": "playthrough-highland-v1.png",
+      "version": 1,
+      "label": "Highland",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "HIGHLAND"
+      ],
+      "siteFamily": "BASE_BIOME",
+      "contextKeys": [
+        "base_biome",
+        "highland"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 10,
+      "contentHash": "c09798e9caa6daa8e1c5e1b2c7bc12492fcd30c68a173e2bfe1c5fd75ad5a8b9",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3004347,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "BASE_BIOME"
+      }
+    },
+    {
+      "backdropKey": "iron-pyrite-exposure",
+      "filename": "playthrough-iron-pyrite-exposure-v1.png",
+      "version": 1,
+      "label": "Iron Pyrite Exposure",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "RESOURCE_SITE",
+      "contextKeys": [
+        "resource_site",
+        "iron",
+        "pyrite",
+        "exposure"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "7cd2ff3c9e3b060cf575d06657d24bd97943e2a22e2a516a41b244364e655c70",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3008645,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "RESOURCE_SITE"
+      }
+    },
+    {
+      "backdropKey": "iron-vein",
+      "filename": "playthrough-iron-vein-v1.png",
+      "version": 1,
+      "label": "Iron Vein",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "RESOURCE_SITE",
+      "contextKeys": [
+        "resource_site",
+        "iron",
+        "vein"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "074e8e4b059f9ac6a671e705062c2fa1eadde8f39dee2b96ad7044e84d6b20bf",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3030262,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "RESOURCE_SITE"
+      }
+    },
+    {
+      "backdropKey": "karst-cave-interior",
+      "filename": "playthrough-karst-cave-interior-v1.png",
+      "version": 1,
+      "label": "Karst Cave Interior",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "MOUNTAIN"
+      ],
+      "siteFamily": "KARST",
+      "contextKeys": [
+        "karst",
+        "cave",
+        "interior"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "mountain-crag",
+      "precedenceWeight": 40,
+      "contentHash": "7c27163a8ae599cd4c46726439a5096b1a26f996b2b2d5d3edfd291ba2254a50",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2570363,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "KARST"
+      }
+    },
+    {
+      "backdropKey": "karst-cave",
+      "filename": "playthrough-karst-cave-v1.png",
+      "version": 1,
+      "label": "Karst Cave",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "MOUNTAIN"
+      ],
+      "siteFamily": "KARST",
+      "contextKeys": [
+        "karst",
+        "cave"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "mountain-crag",
+      "precedenceWeight": 40,
+      "contentHash": "7478bdc34b20c2b9ca450d978338953d0bebf5f153763f0a69b600a195d4aa2f",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2922565,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "KARST"
+      }
+    },
+    {
+      "backdropKey": "limestone-lime-outcrop",
+      "filename": "playthrough-limestone-lime-outcrop-v1.png",
+      "version": 1,
+      "label": "Limestone Lime Outcrop",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "GEOLOGICAL",
+      "contextKeys": [
+        "geological",
+        "limestone",
+        "lime",
+        "outcrop"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "bd321f1fe5e7ac7ed0c524919a9a4f0206ca19c922ac165d56abb50c968ba9c8",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3170349,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "GEOLOGICAL"
+      }
+    },
+    {
+      "backdropKey": "locust-damaged-grassland",
+      "filename": "playthrough-locust-damaged-grassland-v1.png",
+      "version": 1,
+      "label": "Locust Damaged Grassland",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "GRASSLAND"
+      ],
+      "siteFamily": "BASE_BIOME",
+      "contextKeys": [
+        "base_biome",
+        "locust",
+        "damaged",
+        "grassland"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "plains",
+      "precedenceWeight": 10,
+      "contentHash": "ecf23fbbe52f683847dcc790b164075677ec5e618842822d4fea93ef04d6424a",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2637482,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "BASE_BIOME"
+      }
+    },
+    {
+      "backdropKey": "marsh-island",
+      "filename": "playthrough-marsh-island-v1.png",
+      "version": 1,
+      "label": "Marsh Island",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "WETLAND"
+      ],
+      "siteFamily": "FRESHWATER",
+      "contextKeys": [
+        "freshwater",
+        "marsh",
+        "island"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "wetland",
+      "precedenceWeight": 40,
+      "contentHash": "115e9d16875dcc5d354b544348f43d26a934e8527af537d5ac68357a86e2f5d9",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2495171,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FRESHWATER"
+      }
+    },
+    {
+      "backdropKey": "mire-hydra-nest",
+      "filename": "playthrough-mire-hydra-nest-v1.png",
+      "version": 1,
+      "label": "Mire Hydra Nest",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "WETLAND"
+      ],
+      "siteFamily": "MONSTER_TERRITORY",
+      "contextKeys": [
+        "monster_territory",
+        "mire",
+        "hydra",
+        "nest"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "wetland",
+      "precedenceWeight": 40,
+      "contentHash": "fdb8444605f0e27f223eb03724e5b5a6d706e2ec4b05c9d085a25e1665952f3a",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2486646,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "MONSTER_TERRITORY"
+      }
+    },
+    {
+      "backdropKey": "mountain-crag",
+      "filename": "playthrough-mountain-crag-v1.png",
+      "version": 1,
+      "label": "Mountain Crag",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "MOUNTAIN"
+      ],
+      "siteFamily": "BASE_BIOME",
+      "contextKeys": [
+        "base_biome",
+        "mountain",
+        "crag"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 10,
+      "contentHash": "952ebea018e9b5923fc51b8c54688177799dbfb9d3b99dc95996c8212b98ba8f",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2771559,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "BASE_BIOME"
+      }
+    },
+    {
+      "backdropKey": "mushroom-hollow",
+      "filename": "playthrough-mushroom-hollow-v1.png",
+      "version": 1,
+      "label": "Mushroom Hollow",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FLORA_SITE",
+      "contextKeys": [
+        "flora_site",
+        "mushroom",
+        "hollow"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "1fda8593bd414e9b51ab85c56e3a7dfbd1022ae1bc8ab397fbbfbfe7e0e93cb4",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2577875,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FLORA_SITE"
+      }
+    },
+    {
+      "backdropKey": "native-settlement-edge",
+      "filename": "playthrough-native-settlement-edge-v1.png",
+      "version": 1,
+      "label": "Native Settlement Edge",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "NATIVE_TERRITORY",
+      "contextKeys": [
+        "native_territory",
+        "native",
+        "settlement",
+        "edge"
+      ],
+      "proximity": "ADJACENT_VISIBLE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 30,
+      "contentHash": "c54c7d22164cd9424912ddfff4fdf06f021f1d48906b44b17470e6a7afba36de",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2893601,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "NATIVE_TERRITORY"
+      }
+    },
+    {
+      "backdropKey": "nocturnal-firefly-marsh",
+      "filename": "playthrough-nocturnal-firefly-marsh-v1.png",
+      "version": 1,
+      "label": "Nocturnal Firefly Marsh",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "WETLAND"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "nocturnal",
+        "firefly",
+        "marsh"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [
+        "NIGHT"
+      ],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "wetland",
+      "precedenceWeight": 40,
+      "contentHash": "c43c53fe84b37ee1061d790cb1609423229986351f6799484805b18caa2cdef2",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2199913,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "nocturnal-owl-woodland",
+      "filename": "playthrough-nocturnal-owl-woodland-v1.png",
+      "version": 1,
+      "label": "Nocturnal Owl Woodland",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "nocturnal",
+        "owl",
+        "woodland"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [
+        "NIGHT"
+      ],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 10,
+      "contentHash": "71986ec61e08eb38a0c17e9452df7431abb1dd62180ff1b5a4f81b793ab29bdd",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2272844,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "obsidian-field",
+      "filename": "playthrough-obsidian-field-v1.png",
+      "version": 1,
+      "label": "Obsidian Field",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "MOUNTAIN"
+      ],
+      "siteFamily": "GEOLOGICAL",
+      "contextKeys": [
+        "geological",
+        "obsidian",
+        "field"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "mountain-crag",
+      "precedenceWeight": 40,
+      "contentHash": "586f9f45aae2e63edda700f51d3fd15879eeb9be26bc0a621f3458e8780200af",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2763739,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "GEOLOGICAL"
+      }
+    },
+    {
+      "backdropKey": "ochre-pigment-earth-bank",
+      "filename": "playthrough-ochre-pigment-earth-bank-v1.png",
+      "version": 1,
+      "label": "Ochre Pigment Earth Bank",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "GRASSLAND"
+      ],
+      "siteFamily": "RESOURCE_SITE",
+      "contextKeys": [
+        "resource_site",
+        "ochre",
+        "pigment",
+        "earth",
+        "bank"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "plains",
+      "precedenceWeight": 40,
+      "contentHash": "20dc2aec1fa5c95b68d61d7094b726d7f5eab41d1efe9019781642278df90627",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3016047,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "RESOURCE_SITE"
+      }
+    },
+    {
+      "backdropKey": "old-growth-timber",
+      "filename": "playthrough-old-growth-timber-v1.png",
+      "version": 1,
+      "label": "Old Growth Timber",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FLORA_SITE",
+      "contextKeys": [
+        "flora_site",
+        "old",
+        "growth",
+        "timber"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 10,
+      "contentHash": "df2de2c4ba9ffb788193c23b8a2109fb732178d06dff2ab306c525d539fc7e38",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2931787,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FLORA_SITE"
+      }
+    },
+    {
+      "backdropKey": "open-lakeshore",
+      "filename": "playthrough-open-lakeshore-v1.png",
+      "version": 1,
+      "label": "Open Lakeshore",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "GRASSLAND"
+      ],
+      "siteFamily": "FRESHWATER",
+      "contextKeys": [
+        "freshwater",
+        "open",
+        "lakeshore"
+      ],
+      "proximity": "ADJACENT_VISIBLE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "plains",
+      "precedenceWeight": 30,
+      "contentHash": "32e9a3f33b567312045311d8c4de77645b26935aacc538374a4fd5e709e5de64",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2437767,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FRESHWATER"
+      }
+    },
+    {
+      "backdropKey": "open-ocean",
+      "filename": "playthrough-open-ocean-v1.png",
+      "version": 1,
+      "label": "Open Ocean",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "OCEAN"
+      ],
+      "siteFamily": "BASE_BIOME",
+      "contextKeys": [
+        "base_biome",
+        "open",
+        "ocean"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 10,
+      "contentHash": "39354ab4202018fbde0e7b1f349f7003f24a4196829701cb9e7ca75a863bd074",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2023856,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "BASE_BIOME"
+      }
+    },
+    {
+      "backdropKey": "ordinary-hornet-nest",
+      "filename": "playthrough-ordinary-hornet-nest-v1.png",
+      "version": 1,
+      "label": "Ordinary Hornet Nest",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "ordinary",
+        "hornet",
+        "nest"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "04ee4848922c97f735c20309c8f76c0c5709144e7e7d6b8a4b22d5d2a505105d",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2804926,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "otter-waterway",
+      "filename": "playthrough-otter-waterway-v1.png",
+      "version": 1,
+      "label": "Otter Waterway",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FRESHWATER",
+      "contextKeys": [
+        "freshwater",
+        "otter",
+        "waterway"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 10,
+      "contentHash": "c60f396a28970b648f26bdc88a7c01a08dccd7252a0da9699d768344874d0f98",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2915079,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FRESHWATER"
+      }
+    },
+    {
+      "backdropKey": "overgrown-watchtower",
+      "filename": "playthrough-overgrown-watchtower-v1.png",
+      "version": 1,
+      "label": "Overgrown Watchtower",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "RUIN",
+      "contextKeys": [
+        "ruin",
+        "overgrown",
+        "watchtower"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "8465212c56b9d3eea08e42f9db5c284a57f023a96a9113653524345ec2b74562",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2886698,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "RUIN"
+      }
+    },
+    {
+      "backdropKey": "placer-gold-gravel-bar",
+      "filename": "playthrough-placer-gold-gravel-bar-v1.png",
+      "version": 1,
+      "label": "Placer Gold Gravel Bar",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "RESOURCE_SITE",
+      "contextKeys": [
+        "resource_site",
+        "placer",
+        "gold",
+        "gravel",
+        "bar"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "d5ba913ba0e3569e63255f58c13d2562d268c5ea31cd6378a3944eaa24d8bedd",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2667407,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "RESOURCE_SITE"
+      }
+    },
+    {
+      "backdropKey": "plains-highland-foothill",
+      "filename": "playthrough-plains-highland-foothill-v1.png",
+      "version": 1,
+      "label": "Plains Highland Foothill",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "GRASSLAND",
+        "HIGHLAND"
+      ],
+      "siteFamily": "ECOTONE",
+      "contextKeys": [
+        "ecotone",
+        "plains",
+        "highland",
+        "foothill"
+      ],
+      "proximity": "ECOTONE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "plains",
+      "precedenceWeight": 20,
+      "contentHash": "aedca4d0daebfaaef7eaee0dc103430c4675d8f00d239156aa6541fc34d7c9d5",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2673734,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "ECOTONE"
+      }
+    },
+    {
+      "backdropKey": "plains",
+      "filename": "playthrough-plains-v1.png",
+      "version": 1,
+      "label": "Plains",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "GRASSLAND"
+      ],
+      "siteFamily": "BASE_BIOME",
+      "contextKeys": [
+        "base_biome",
+        "plains"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 10,
+      "contentHash": "6976b6b489d338faeb77b50b1687b2e1236c1c70c205dd28b42d9c9959f5dce9",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2574036,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "BASE_BIOME"
+      }
+    },
+    {
+      "backdropKey": "precision-tool-stone-exposure",
+      "filename": "playthrough-precision-tool-stone-exposure-v1.png",
+      "version": 1,
+      "label": "Precision Tool Stone Exposure",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "GEOLOGICAL",
+      "contextKeys": [
+        "geological",
+        "precision",
+        "tool",
+        "stone",
+        "exposure"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "26bffe0f311c4d3066e00b95f58d113d606d34550377a3a8e60baa099332dfa1",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2963517,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "GEOLOGICAL"
+      }
+    },
+    {
+      "backdropKey": "pumice-basalt-volcanic-scree",
+      "filename": "playthrough-pumice-basalt-volcanic-scree-v1.png",
+      "version": 1,
+      "label": "Pumice Basalt Volcanic Scree",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "MOUNTAIN"
+      ],
+      "siteFamily": "GEOLOGICAL",
+      "contextKeys": [
+        "geological",
+        "pumice",
+        "basalt",
+        "volcanic",
+        "scree"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "mountain-crag",
+      "precedenceWeight": 40,
+      "contentHash": "e0b45722677960c920fd71636193000ff4c81a342e260845eaa1bc621593197d",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3090526,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "GEOLOGICAL"
+      }
+    },
+    {
+      "backdropKey": "quarry",
+      "filename": "playthrough-quarry-v1.png",
+      "version": 1,
+      "label": "Quarry",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "MOUNTAIN"
+      ],
+      "siteFamily": "GEOLOGICAL",
+      "contextKeys": [
+        "geological",
+        "quarry"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "mountain-crag",
+      "precedenceWeight": 40,
+      "contentHash": "cde7361ea69a5965acc1eb37c46563a75bf5b64b420990649bc29ff2fb67c5d2",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3214891,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "GEOLOGICAL"
+      }
+    },
+    {
+      "backdropKey": "raptor-cliff-nesting-range",
+      "filename": "playthrough-raptor-cliff-nesting-range-v1.png",
+      "version": 1,
+      "label": "Raptor Cliff Nesting Range",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "HIGHLAND"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "raptor",
+        "cliff",
+        "nesting",
+        "range"
+      ],
+      "proximity": "ADJACENT_VISIBLE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "highland",
+      "precedenceWeight": 30,
+      "contentHash": "1aa43267bc5a29e4045e0b214b371a503982ff7c6ee86fec88435cd56ccc74aa",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2613941,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "raven-scavenging-range",
+      "filename": "playthrough-raven-scavenging-range-v1.png",
+      "version": 1,
+      "label": "Raven Scavenging Range",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "raven",
+        "scavenging",
+        "range"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 10,
+      "contentHash": "74edb7a4b3150c944b7fa5364ada17bc720cb6852024795ae1d123055da9bd02",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2374671,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "reed-root-marsh",
+      "filename": "playthrough-reed-root-marsh-v1.png",
+      "version": 1,
+      "label": "Reed Root Marsh",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "WETLAND"
+      ],
+      "siteFamily": "FLORA_SITE",
+      "contextKeys": [
+        "flora_site",
+        "reed",
+        "root",
+        "marsh"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "wetland",
+      "precedenceWeight": 10,
+      "contentHash": "e856c85539244e9d8d0437e00c1fc41aead8a3abfeed9ea3b5330ea778e8cd0e",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2683917,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FLORA_SITE"
+      }
+    },
+    {
+      "backdropKey": "reedkin-river-isle-settlement",
+      "filename": "playthrough-reedkin-river-isle-settlement-v1.png",
+      "version": 1,
+      "label": "Reedkin River Isle Settlement",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "WETLAND"
+      ],
+      "siteFamily": "NATIVE_TERRITORY",
+      "contextKeys": [
+        "native_territory",
+        "reedkin",
+        "river",
+        "isle",
+        "settlement"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "wetland",
+      "precedenceWeight": 40,
+      "contentHash": "1a60ff9220a35802f86ba5628bb2c8a03fc930b17c7c717653e73358792f2938",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2477348,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "NATIVE_TERRITORY"
+      }
+    },
+    {
+      "backdropKey": "refractory-clay-bed",
+      "filename": "playthrough-refractory-clay-bed-v1.png",
+      "version": 1,
+      "label": "Refractory Clay Bed",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "WETLAND"
+      ],
+      "siteFamily": "RESOURCE_SITE",
+      "contextKeys": [
+        "resource_site",
+        "refractory",
+        "clay",
+        "bed"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "wetland",
+      "precedenceWeight": 40,
+      "contentHash": "94d555880ec587dafe39abceceab80ad78009362d9a1c198ec812c9a16ba5339",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3218641,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "RESOURCE_SITE"
+      }
+    },
+    {
+      "backdropKey": "reindeer-highland-range",
+      "filename": "playthrough-reindeer-highland-range-v1.png",
+      "version": 1,
+      "label": "Reindeer Highland Range",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "HIGHLAND"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "reindeer",
+        "highland",
+        "range"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "highland",
+      "precedenceWeight": 10,
+      "contentHash": "05946f298f45c4bfeafa1a010bc9882616d6bdccaae423458c6b413ed0d10cce",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2666132,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "reptile-basking-heath",
+      "filename": "playthrough-reptile-basking-heath-v1.png",
+      "version": 1,
+      "label": "Reptile Basking Heath",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "HIGHLAND"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "reptile",
+        "basking",
+        "heath"
+      ],
+      "proximity": "ADJACENT_VISIBLE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "highland",
+      "precedenceWeight": 30,
+      "contentHash": "f40e04a59e3f993e6388459212eb299ded12cc4fada3f281f5e8398dd15378bf",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2476047,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "ridge-stalker-ambush-ground",
+      "filename": "playthrough-ridge-stalker-ambush-ground-v1.png",
+      "version": 1,
+      "label": "Ridge Stalker Ambush Ground",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "HIGHLAND"
+      ],
+      "siteFamily": "MONSTER_TERRITORY",
+      "contextKeys": [
+        "monster_territory",
+        "ridge",
+        "stalker",
+        "ambush",
+        "ground"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "highland",
+      "precedenceWeight": 40,
+      "contentHash": "a02bb6ab2f54d624af69ffa4ab73772776f8b504311dbe91885f3fb6732e83db",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2731365,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "MONSTER_TERRITORY"
+      }
+    },
+    {
+      "backdropKey": "river-floodplain",
+      "filename": "playthrough-river-floodplain-v1.png",
+      "version": 1,
+      "label": "River Floodplain",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "WETLAND"
+      ],
+      "siteFamily": "FRESHWATER",
+      "contextKeys": [
+        "freshwater",
+        "river",
+        "floodplain"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "wetland",
+      "precedenceWeight": 10,
+      "contentHash": "95ae9e0d1b734da78c214d884eff4f0e89b6230ded0994bed0ba513d0bca67ab",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2445117,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FRESHWATER"
+      }
+    },
+    {
+      "backdropKey": "river-ford",
+      "filename": "playthrough-river-ford-v1.png",
+      "version": 1,
+      "label": "River Ford",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FRESHWATER",
+      "contextKeys": [
+        "freshwater",
+        "river",
+        "ford"
+      ],
+      "proximity": "ADJACENT_VISIBLE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 30,
+      "contentHash": "18a0806582cd97c54298e750eac307816d78d918aaf0c87ca1af1f4b718c72dd",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2888309,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FRESHWATER"
+      }
+    },
+    {
+      "backdropKey": "river-turtle-basking-bank",
+      "filename": "playthrough-river-turtle-basking-bank-v1.png",
+      "version": 1,
+      "label": "River Turtle Basking Bank",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FRESHWATER",
+      "contextKeys": [
+        "freshwater",
+        "river",
+        "turtle",
+        "basking",
+        "bank"
+      ],
+      "proximity": "ADJACENT_VISIBLE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 30,
+      "contentHash": "0c0df3ba758daafdad02e228f311527d08578cbc502161402abbb6ec5ff26ff1",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3110589,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FRESHWATER"
+      }
+    },
+    {
+      "backdropKey": "roc-highland-eyrie",
+      "filename": "playthrough-roc-highland-eyrie-v1.png",
+      "version": 1,
+      "label": "Roc Highland Eyrie",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "MOUNTAIN"
+      ],
+      "siteFamily": "MONSTER_TERRITORY",
+      "contextKeys": [
+        "monster_territory",
+        "roc",
+        "highland",
+        "eyrie"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "mountain-crag",
+      "precedenceWeight": 40,
+      "contentHash": "8e5a94f6f6aa14dc4a14a23bde1cf5d877cc9e4a3f1f33f88b90aedb662f371f",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2554851,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "MONSTER_TERRITORY"
+      }
+    },
+    {
+      "backdropKey": "rock-salt-exposure",
+      "filename": "playthrough-rock-salt-exposure-v1.png",
+      "version": 1,
+      "label": "Rock Salt Exposure",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "MOUNTAIN"
+      ],
+      "siteFamily": "RESOURCE_SITE",
+      "contextKeys": [
+        "resource_site",
+        "rock",
+        "salt",
+        "exposure"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "mountain-crag",
+      "precedenceWeight": 40,
+      "contentHash": "9d6b0d58f843ba859cdfa4dc9651abe074b9fe2f281485f274bd744a93f8efcc",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3311221,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "RESOURCE_SITE"
+      }
+    },
+    {
+      "backdropKey": "rounded-hammerstone-cobble-bar",
+      "filename": "playthrough-rounded-hammerstone-cobble-bar-v1.png",
+      "version": 1,
+      "label": "Rounded Hammerstone Cobble Bar",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "GRASSLAND"
+      ],
+      "siteFamily": "GEOLOGICAL",
+      "contextKeys": [
+        "geological",
+        "rounded",
+        "hammerstone",
+        "cobble",
+        "bar"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "plains",
+      "precedenceWeight": 40,
+      "contentHash": "3b0b5f157f636be8e0d506658b488986beafd7fbc2e46ef25af21028e930d6e8",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2741183,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "GEOLOGICAL"
+      }
+    },
+    {
+      "backdropKey": "ruin-archive-interior",
+      "filename": "playthrough-ruin-archive-interior-v1.png",
+      "version": 1,
+      "label": "Ruin Archive Interior",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "RUIN",
+      "contextKeys": [
+        "ruin",
+        "archive",
+        "interior"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "b5515835d03890d1b4fa821fce26c8511a46428c1e0ec7b9806c966ce88bfd28",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2337622,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "RUIN"
+      }
+    },
+    {
+      "backdropKey": "salt-marsh",
+      "filename": "playthrough-salt-marsh-v1.png",
+      "version": 1,
+      "label": "Salt Marsh",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "WETLAND"
+      ],
+      "siteFamily": "BASE_BIOME",
+      "contextKeys": [
+        "base_biome",
+        "salt",
+        "marsh"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "wetland",
+      "precedenceWeight": 10,
+      "contentHash": "4d5f6d3460c620a94e37a9812ce6963cb993bb24c9ff2218bc9a9978521a6d32",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2938456,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "BASE_BIOME"
+      }
+    },
+    {
+      "backdropKey": "sandstone-abrasive-outcrop",
+      "filename": "playthrough-sandstone-abrasive-outcrop-v1.png",
+      "version": 1,
+      "label": "Sandstone Abrasive Outcrop",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "GEOLOGICAL",
+      "contextKeys": [
+        "geological",
+        "sandstone",
+        "abrasive",
+        "outcrop"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "bc425f371bf51afa79afa6a670d1d75f8f360c0a65a4b0b9b2387e0f87fe355b",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3129235,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "GEOLOGICAL"
+      }
+    },
+    {
+      "backdropKey": "seabird-island-colony",
+      "filename": "playthrough-seabird-island-colony-v1.png",
+      "version": 1,
+      "label": "Seabird Island Colony",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "OCEAN"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "seabird",
+        "island",
+        "colony"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "open-ocean",
+      "precedenceWeight": 40,
+      "contentHash": "03b9c8c571f39f2c978c511ccc6a902cb5fe4b6c00e31b1e5d93083abc192fcc",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2553273,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "shell-beach",
+      "filename": "playthrough-shell-beach-v1.png",
+      "version": 1,
+      "label": "Shell Beach",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "OCEAN"
+      ],
+      "siteFamily": "COAST",
+      "contextKeys": [
+        "coast",
+        "shell",
+        "beach"
+      ],
+      "proximity": "ADJACENT_VISIBLE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "open-ocean",
+      "precedenceWeight": 30,
+      "contentHash": "54d694586bc34a45e400658bc16d36778ec20e9cc170aa9718a95259a346215d",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2642711,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "COAST"
+      }
+    },
+    {
+      "backdropKey": "shelter-grove",
+      "filename": "playthrough-shelter-grove-v1.png",
+      "version": 1,
+      "label": "Shelter Grove",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FLORA_SITE",
+      "contextKeys": [
+        "flora_site",
+        "shelter",
+        "grove"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 10,
+      "contentHash": "e77ec9efbac4129fdf53b338d90f4c78a008279e59f810d53c18275b8272d439",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2916453,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FLORA_SITE"
+      }
+    },
+    {
+      "backdropKey": "sheltered-lake-reed-fishery",
+      "filename": "playthrough-sheltered-lake-reed-fishery-v1.png",
+      "version": 1,
+      "label": "Sheltered Lake Reed Fishery",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "WETLAND"
+      ],
+      "siteFamily": "FRESHWATER",
+      "contextKeys": [
+        "freshwater",
+        "sheltered",
+        "lake",
+        "reed",
+        "fishery"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "wetland",
+      "precedenceWeight": 10,
+      "contentHash": "92ca7c94f209cd630f363eacca9697e3e31b0a6413dbeeb7557e25accbf554f9",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2433609,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FRESHWATER"
+      }
+    },
+    {
+      "backdropKey": "silk-moth-woodland-colony",
+      "filename": "playthrough-silk-moth-woodland-colony-v1.png",
+      "version": 1,
+      "label": "Silk Moth Woodland Colony",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "silk",
+        "moth",
+        "woodland",
+        "colony"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "9c3a0faffb391817e77b77b8923e3fb6b9e8320d66a6326de36e3ff10641d711",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2888210,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "silver-lead-exposure",
+      "filename": "playthrough-silver-lead-exposure-v1.png",
+      "version": 1,
+      "label": "Silver Lead Exposure",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "RESOURCE_SITE",
+      "contextKeys": [
+        "resource_site",
+        "silver",
+        "lead",
+        "exposure"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "9371dc0f1751a34ff705be8d99da55ef1e91f431b32e678b6a78f3304240da01",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3028981,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "RESOURCE_SITE"
+      }
+    },
+    {
+      "backdropKey": "soapstone-outcrop",
+      "filename": "playthrough-soapstone-outcrop-v1.png",
+      "version": 1,
+      "label": "Soapstone Outcrop",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "GEOLOGICAL",
+      "contextKeys": [
+        "geological",
+        "soapstone",
+        "outcrop"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "863100c1504a625a038fa88855b6186c2abd33605db6fb76c37906d19db6e80c",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3098094,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "GEOLOGICAL"
+      }
+    },
+    {
+      "backdropKey": "squirrel-canopy-range",
+      "filename": "playthrough-squirrel-canopy-range-v1.png",
+      "version": 1,
+      "label": "Squirrel Canopy Range",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "squirrel",
+        "canopy",
+        "range"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 10,
+      "contentHash": "010a53c4287283391adef595772f3fe05507fd6e280d015cc7bd55c085580fa0",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3388010,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "stillwater-pike-weed-bed",
+      "filename": "playthrough-stillwater-pike-weed-bed-v1.png",
+      "version": 1,
+      "label": "Stillwater Pike Weed Bed",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FRESHWATER",
+      "contextKeys": [
+        "freshwater",
+        "stillwater",
+        "pike",
+        "weed",
+        "bed"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 10,
+      "contentHash": "cf0e556f4f9ca9e58464efc4d6c8f34e1aacc30c56076f986ac3ed35846fd503",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2582311,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FRESHWATER"
+      }
+    },
+    {
+      "backdropKey": "stream",
+      "filename": "playthrough-stream-v1.png",
+      "version": 1,
+      "label": "Stream",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FRESHWATER",
+      "contextKeys": [
+        "freshwater",
+        "stream"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 10,
+      "contentHash": "067020d3456a1fdcfb5fa5196d77ae77c1d080c498a8bfdeb677f42802177895",
+      "width": 1677,
+      "height": 938,
+      "aspectRatio": 1.788,
+      "bytes": 2893440,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FRESHWATER"
+      }
+    },
+    {
+      "backdropKey": "sulphur-deposit",
+      "filename": "playthrough-sulphur-deposit-v1.png",
+      "version": 1,
+      "label": "Sulphur Deposit",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "RESOURCE_SITE",
+      "contextKeys": [
+        "resource_site",
+        "sulphur",
+        "deposit"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "0a0137b5b90244de1ac9603ec9df2c467588f7488b268a529850cc9936e560ba",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2734531,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "RESOURCE_SITE"
+      }
+    },
+    {
+      "backdropKey": "sunken-shrine",
+      "filename": "playthrough-sunken-shrine-v1.png",
+      "version": 1,
+      "label": "Sunken Shrine",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "WETLAND"
+      ],
+      "siteFamily": "RUIN",
+      "contextKeys": [
+        "ruin",
+        "sunken",
+        "shrine"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "wetland",
+      "precedenceWeight": 40,
+      "contentHash": "afc2146b7c885c6cfbed1583e1c3aff74734f5d8b6c05deab6d664ba1a140087",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2380264,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "RUIN"
+      }
+    },
+    {
+      "backdropKey": "thornback-wallow",
+      "filename": "playthrough-thornback-wallow-v1.png",
+      "version": 1,
+      "label": "Thornback Wallow",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "MONSTER_TERRITORY",
+      "contextKeys": [
+        "monster_territory",
+        "thornback",
+        "wallow"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "a6d9c239b12d74dfc20b7f511f577e737d50afe4427667dafe9fdc39623f909f",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2803530,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "MONSTER_TERRITORY"
+      }
+    },
+    {
+      "backdropKey": "tidal-flat",
+      "filename": "playthrough-tidal-flat-v1.png",
+      "version": 1,
+      "label": "Tidal Flat",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "OCEAN"
+      ],
+      "siteFamily": "COAST",
+      "contextKeys": [
+        "coast",
+        "tidal",
+        "flat"
+      ],
+      "proximity": "ADJACENT_VISIBLE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "open-ocean",
+      "precedenceWeight": 30,
+      "contentHash": "efd205cabc42bf47723974c1af2fea3ae242a87412a2a1657a62d5ecce2f15ac",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2356242,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "COAST"
+      }
+    },
+    {
+      "backdropKey": "tin-exposure",
+      "filename": "playthrough-tin-exposure-v1.png",
+      "version": 1,
+      "label": "Tin Exposure",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "RESOURCE_SITE",
+      "contextKeys": [
+        "resource_site",
+        "tin",
+        "exposure"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "d5745bfdc7ce734a322d21a1e31fbe4f592d40ad161b1035ae0e7a865d55cf61",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2896301,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "RESOURCE_SITE"
+      }
+    },
+    {
+      "backdropKey": "trout-spawning-run",
+      "filename": "playthrough-trout-spawning-run-v1.png",
+      "version": 1,
+      "label": "Trout Spawning Run",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FRESHWATER",
+      "contextKeys": [
+        "freshwater",
+        "trout",
+        "spawning",
+        "run"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 10,
+      "contentHash": "3f0c8dcd1a14240a7e9bbdf38b87f46e6e00ea6b0472392a859957f7f45f2c8d",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2998597,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FRESHWATER"
+      }
+    },
+    {
+      "backdropKey": "undercut-riverbank-catfish-eel",
+      "filename": "playthrough-undercut-riverbank-catfish-eel-v1.png",
+      "version": 1,
+      "label": "Undercut Riverbank Catfish Eel",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "WETLAND"
+      ],
+      "siteFamily": "FRESHWATER",
+      "contextKeys": [
+        "freshwater",
+        "undercut",
+        "riverbank",
+        "catfish",
+        "eel"
+      ],
+      "proximity": "ADJACENT_VISIBLE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "wetland",
+      "precedenceWeight": 30,
+      "contentHash": "a712bb9416861c97223f18e7b72cabc44f2c33656d39485b6f765f8134dc98fa",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3344331,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FRESHWATER"
+      }
+    },
+    {
+      "backdropKey": "underground-karst-stream",
+      "filename": "playthrough-underground-karst-stream-v1.png",
+      "version": 1,
+      "label": "Underground Karst Stream",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "MOUNTAIN"
+      ],
+      "siteFamily": "KARST",
+      "contextKeys": [
+        "karst",
+        "underground",
+        "stream"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "mountain-crag",
+      "precedenceWeight": 40,
+      "contentHash": "9a3ecbca81e40297f4b8580397db2a2209d765b2a0229fb6b8a39c796a825ad4",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2548616,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "KARST"
+      }
+    },
+    {
+      "backdropKey": "warren-ground",
+      "filename": "playthrough-warren-ground-v1.png",
+      "version": 1,
+      "label": "Warren Ground",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "GRASSLAND"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "warren",
+        "ground"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "plains",
+      "precedenceWeight": 10,
+      "contentHash": "14c7e82f0a1696d018808cc34b9ffda13ae40accaf9b322defaec396ad63f5de",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2576006,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "water-lily-bulrush-pond",
+      "filename": "playthrough-water-lily-bulrush-pond-v1.png",
+      "version": 1,
+      "label": "Water Lily Bulrush Pond",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "WETLAND"
+      ],
+      "siteFamily": "FRESHWATER",
+      "contextKeys": [
+        "freshwater",
+        "water",
+        "lily",
+        "bulrush",
+        "pond"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "wetland",
+      "precedenceWeight": 10,
+      "contentHash": "7a211ef36fdfd278676f0a22f5fbcc4056e1ac7da19b219e41f1783ac24c7f5e",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2775432,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FRESHWATER"
+      }
+    },
+    {
+      "backdropKey": "waterfowl-nesting-ground",
+      "filename": "playthrough-waterfowl-nesting-ground-v1.png",
+      "version": 1,
+      "label": "Waterfowl Nesting Ground",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "WETLAND"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "waterfowl",
+        "nesting",
+        "ground"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "wetland",
+      "precedenceWeight": 10,
+      "contentHash": "b29c5333376488e451779144f86c87622165d47fd1046be8c7f460b6943614ed",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2937155,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "wetland",
+      "filename": "playthrough-wetland-v1.png",
+      "version": 1,
+      "label": "Wetland",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "WETLAND"
+      ],
+      "siteFamily": "BASE_BIOME",
+      "contextKeys": [
+        "base_biome",
+        "wetland"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 10,
+      "contentHash": "c0087d9c66dd669c98fe51f2ecd7f3370729845c4a8453cfa8f8d30ee5b117a3",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2611927,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "BASE_BIOME"
+      }
+    },
+    {
+      "backdropKey": "wetland-willow-carr",
+      "filename": "playthrough-wetland-willow-carr-v1.png",
+      "version": 1,
+      "label": "Wetland Willow Carr",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "WETLAND"
+      ],
+      "siteFamily": "FLORA_SITE",
+      "contextKeys": [
+        "flora_site",
+        "wetland",
+        "willow",
+        "carr"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "wetland",
+      "precedenceWeight": 10,
+      "contentHash": "93f24d8ff066dae84b3dac159600441d726d715ea31e414037e4797291e76b51",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2879117,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FLORA_SITE"
+      }
+    },
+    {
+      "backdropKey": "wild-fibre-meadow",
+      "filename": "playthrough-wild-fibre-meadow-v1.png",
+      "version": 1,
+      "label": "Wild Fibre Meadow",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "GRASSLAND"
+      ],
+      "siteFamily": "FLORA_SITE",
+      "contextKeys": [
+        "flora_site",
+        "wild",
+        "fibre",
+        "meadow"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "plains",
+      "precedenceWeight": 10,
+      "contentHash": "304afd9c17e31858173479b045fddbaec0c410f4001fbf213b7b800dc88b699c",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2709048,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FLORA_SITE"
+      }
+    },
+    {
+      "backdropKey": "wild-grain-seed-grass-stand",
+      "filename": "playthrough-wild-grain-seed-grass-stand-v1.png",
+      "version": 1,
+      "label": "Wild Grain Seed Grass Stand",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "GRASSLAND"
+      ],
+      "siteFamily": "FLORA_SITE",
+      "contextKeys": [
+        "flora_site",
+        "wild",
+        "grain",
+        "seed",
+        "grass",
+        "stand"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "plains",
+      "precedenceWeight": 10,
+      "contentHash": "03654ed8231432a7f41b578f735e5fe5bd1443f9152de5448252caa9eedf9ee5",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3174655,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FLORA_SITE"
+      }
+    },
+    {
+      "backdropKey": "wild-herb-grove",
+      "filename": "playthrough-wild-herb-grove-v1.png",
+      "version": 1,
+      "label": "Wild Herb Grove",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FLORA_SITE",
+      "contextKeys": [
+        "flora_site",
+        "wild",
+        "herb",
+        "grove"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 10,
+      "contentHash": "478a184dad9d00396cfa7da8b159540538f50b1b8d134e68c45f1eb2f25a528f",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3263562,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FLORA_SITE"
+      }
+    },
+    {
+      "backdropKey": "wild-honeybee-tree-hive",
+      "filename": "playthrough-wild-honeybee-tree-hive-v1.png",
+      "version": 1,
+      "label": "Wild Honeybee Tree Hive",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "wild",
+        "honeybee",
+        "tree",
+        "hive"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "5cadffbe3f1c23955aa41c28cf32b4fda046be37728dfc74fe1e8c474dfc4bbd",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2884551,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "wild-mast-nut-grove",
+      "filename": "playthrough-wild-mast-nut-grove-v1.png",
+      "version": 1,
+      "label": "Wild Mast Nut Grove",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FLORA_SITE",
+      "contextKeys": [
+        "flora_site",
+        "wild",
+        "mast",
+        "nut",
+        "grove"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 10,
+      "contentHash": "133abc1f1c256050d7ca33aa0438edf5039ba84059807b91761f90b108809af2",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3270466,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FLORA_SITE"
+      }
+    },
+    {
+      "backdropKey": "wild-water-buffalo-range",
+      "filename": "playthrough-wild-water-buffalo-range-v1.png",
+      "version": 1,
+      "label": "Wild Water Buffalo Range",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "GRASSLAND"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "wild",
+        "water",
+        "buffalo",
+        "range"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "plains",
+      "precedenceWeight": 10,
+      "contentHash": "105da1e4aab0b5a5f9395e247483b419b26316c626db6f5a81319f94f90118e3",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2500145,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "wolverine-talus-territory",
+      "filename": "playthrough-wolverine-talus-territory-v1.png",
+      "version": 1,
+      "label": "Wolverine Talus Territory",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "MOUNTAIN"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "wolverine",
+        "talus",
+        "territory"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "mountain-crag",
+      "precedenceWeight": 10,
+      "contentHash": "ddf133b33641d51e557710ccdec800d6b98160259f6e1267d0f0ddb549dbbfe9",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2882855,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "wooded-riverbank",
+      "filename": "playthrough-wooded-riverbank-v1.png",
+      "version": 1,
+      "label": "Wooded Riverbank",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FRESHWATER",
+      "contextKeys": [
+        "freshwater",
+        "wooded",
+        "riverbank"
+      ],
+      "proximity": "ADJACENT_VISIBLE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 30,
+      "contentHash": "85ec06a9ea3ea57f6fab576b8f167bd604f68c5fc1e63d95e39c5d5b4bd3a02a",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3165785,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FRESHWATER"
+      }
+    },
+    {
+      "backdropKey": "woodland-mesopredator-territory",
+      "filename": "playthrough-woodland-mesopredator-territory-v1.png",
+      "version": 1,
+      "label": "Woodland Mesopredator Territory",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FAUNA_RANGE",
+      "contextKeys": [
+        "fauna_range",
+        "woodland",
+        "mesopredator",
+        "territory"
+      ],
+      "proximity": "REGIONAL",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 10,
+      "contentHash": "2250e44afc620fc731b66a0f88c0ced8d0e51869984e887e6f3477881b95ba5d",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2473577,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FAUNA_RANGE"
+      }
+    },
+    {
+      "backdropKey": "woodland-spring",
+      "filename": "playthrough-woodland-spring-v1.png",
+      "version": 1,
+      "label": "Woodland Spring",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "TEMPERATE_FOREST"
+      ],
+      "siteFamily": "FRESHWATER",
+      "contextKeys": [
+        "freshwater",
+        "woodland",
+        "spring"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": true,
+      "creatureFree": true,
+      "fallbackKey": "forest",
+      "precedenceWeight": 40,
+      "contentHash": "c88cb5e73e281c966bf550e4f9743e7f7ad65f27390953b7227fef2ad770f6d0",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 3110823,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "FRESHWATER"
+      }
+    },
+    {
+      "backdropKey": "wyvern-roost",
+      "filename": "playthrough-wyvern-roost-v1.png",
+      "version": 1,
+      "label": "Wyvern Roost",
+      "lifecycle": "ACTIVE",
+      "biomes": [
+        "MOUNTAIN"
+      ],
+      "siteFamily": "MONSTER_TERRITORY",
+      "contextKeys": [
+        "monster_territory",
+        "wyvern",
+        "roost"
+      ],
+      "proximity": "EXACT_SITE",
+      "timeBands": [],
+      "seasons": [],
+      "weather": [],
+      "showBeforeDiscovery": false,
+      "creatureFree": true,
+      "fallbackKey": "mountain-crag",
+      "precedenceWeight": 40,
+      "contentHash": "47325b56cd14834db28c5abf9b18c7df44d6d0a64f7db7b4cd1213fecd124a8c",
+      "width": 1672,
+      "height": 941,
+      "aspectRatio": 1.777,
+      "bytes": 2580161,
+      "provenance": {
+        "generator": "playthrough-backdrop-gen",
+        "family": "MONSTER_TERRITORY"
+      }
+    }
+  ]
+}
