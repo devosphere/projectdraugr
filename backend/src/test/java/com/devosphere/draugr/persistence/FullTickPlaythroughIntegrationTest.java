@@ -190,16 +190,19 @@ class FullTickPlaythroughIntegrationTest {
         UUID chronicle = livingChronicle();
         Instant now = simNow();
         // Provide guaranteed materials directly, then run the real craft path so
-        // createCarriedItem + equip + CRAFTED-transition timestamp binds execute.
+        // createCarriedItem + CRAFTED-transition timestamp binds execute. Crafting yields a CARRIED
+        // item; equipping is a separate explicit action (there is no auto-equip-on-craft — the only
+        // equip() callers are the EQUIP intent and the REST endpoint), so the spear lands in the load.
         items.createCarriedItem(chronicle, "dry_branch", "Dry branch", now, "TEST_SEED");
         items.createCarriedItem(chronicle, "field_stone", "Field stone", now, "TEST_SEED");
         items.createCarriedItem(chronicle, "plant_fiber", "Plant fiber bundle", now, "TEST_SEED");
         PhysicalItemService.ItemView spear = assertDoesNotThrow(() -> items.craftPrimitiveSpear(now), "crafting a spear must not raise a persistence error");
         assertNotNull(spear, "a crafted spear must be returned");
-        Integer equipped = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id WHERE e.chronicle_id=? AND i.item_key='primitive_spear'",
+        Integer carried = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
+                "WHERE w.current_owner_id=? AND i.item_key='primitive_spear' AND w.lifecycle_state='ACTIVE'",
                 Integer.class, chronicle);
-        assertEquals(1, equipped, "the crafted spear must be equipped to the Chronicle");
+        assertEquals(1, carried, "the crafted spear must be carried by the Chronicle (equipping is a separate explicit action)");
     }
 
     @Test
