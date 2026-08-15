@@ -3,7 +3,10 @@ name: Verify Project Draugr
 on:
   pull_request:
   push:
-    branches: [main]
+    # development is the working branch (CLAUDE.md): run the full suite on every push here too, so
+    # integration tests that can only execute against CI's Docker (Testcontainers) are actually
+    # verified on the working branch, not just at PR/merge time.
+    branches: [main, development]
 
 permissions:
   contents: read
