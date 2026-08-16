@@ -1133,7 +1133,14 @@ public class PhysicalItemService {
 
     /** True if the Chronicle can reach any blade capable of carving wood. */
     @Transactional(readOnly = true)
-    public boolean hasCuttingTool(UUID chronicle) { return hasAtLeast(chronicle,"stone_knife",1) || hasAtLeast(chronicle,"stone_hatchet",1) || hasAtLeast(chronicle,"stone_flake",1); }
+    /** Any edged tool that can do cutting/scraping work. Beyond the knife/hatchet/flake, the adze, chisel,
+     *  burin, and stone/bone scrapers are all worked edges — each was craftable but satisfied no tool gate,
+     *  so making one did nothing; now it counts as the blade a CUTTING process or a knife-gated act needs. */
+    public boolean hasCuttingTool(UUID chronicle) {
+        return hasAtLeast(chronicle,"stone_knife",1) || hasAtLeast(chronicle,"stone_hatchet",1) || hasAtLeast(chronicle,"stone_flake",1)
+            || hasAtLeast(chronicle,"stone_adze",1) || hasAtLeast(chronicle,"stone_chisel",1) || hasAtLeast(chronicle,"flint_burin",1)
+            || hasAtLeast(chronicle,"flint_scraper",1) || hasAtLeast(chronicle,"bone_scraper",1);
+    }
 
     /**
      * Light and spend a portable light to work by in the dark (#75): a rushlight or tallow candle burns down to
