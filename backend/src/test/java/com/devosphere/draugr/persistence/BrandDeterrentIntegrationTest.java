@@ -68,12 +68,13 @@ class BrandDeterrentIntegrationTest {
     @Autowired JdbcTemplate jdbc;
 
     /** Count how many of a fixed set of encounters land, resetting the pack to HUNTING before each so every
-     *  roll faces the same threat (an ambush otherwise drops the pack to ALERT and skews the rest). */
-    private int ambushes(UUID chronicle, UUID chunk, UUID pack, Instant now) {
+     *  roll faces the same threat (an ambush otherwise drops the pack to ALERT and skews the rest). The same
+     *  id set is used for both cohorts, and passiveEncounter's roll takes the high bits of the id's hash
+     *  (action.hashCode() >>> 8), so the ids must vary in their high bits — seeded random longs do. */
+    private int ambushes(UUID chronicle, UUID chunk, UUID pack, Instant now, java.util.List<UUID> actionIds) {
         int hits = 0;
-        for (int i = 0; i < 80; i++) {
+        for (UUID action : actionIds) {
             jdbc.update("UPDATE wildlife_population SET behavior_state='HUNTING' WHERE id=?", pack);
-            UUID action = new UUID(0x5AFEC0DEL, i); // deterministic across runs
             if (wildlife.passiveEncounter(chronicle, chunk, action, now, "LOW") != null) hits++;
         }
         return hits;
@@ -102,13 +103,19 @@ class BrandDeterrentIntegrationTest {
         jdbc.update("INSERT INTO wildlife_population (id,site_id,species_key,ecological_role,activity_cycle,population_count,carrying_capacity,behavior_state,last_simulated_at) " +
                 "VALUES (?,?,'dire_wolf','CARNIVORE','DIURNAL',3,5,'HUNTING',?)", pack, site, ts);
 
-        // Unarmed of fire: a baseline of how often the hunt closes across the fixed encounters.
-        int withoutBrand = ambushes(chronicle, chunk, pack, now);
+        // A fixed, well-spread set of encounters (seeded, so it is the same every run and its rolls span
+        // the whole range), used identically for both cohorts.
+        java.util.Random rnd = new java.util.Random(42);
+        java.util.List<UUID> actionIds = new java.util.ArrayList<>();
+        for (int i = 0; i < 160; i++) actionIds.add(new UUID(rnd.nextLong(), rnd.nextLong()));
+
+        // Unarmed of fire: a baseline of how often the hunt closes across those encounters.
+        int withoutBrand = ambushes(chronicle, chunk, pack, now, actionIds);
         assertTrue(withoutBrand > 0, "a HUNTING predator must actually reach an unbranded Chronicle sometimes (else the test proves nothing)");
 
         // Brand in hand: the same encounters, now with a resin torch to raise against the pack.
         items.createCarriedItem(chronicle, "resin_torch", "Resin torch", now, "TEST_SEED");
-        int withBrand = ambushes(chronicle, chunk, pack, now);
+        int withBrand = ambushes(chronicle, chunk, pack, now, actionIds);
 
         assertTrue(withBrand < withoutBrand,
                 () -> "a carried fire-brand must deter ambushes the same threat would otherwise land (with=" + withBrand + ", without=" + withoutBrand + ") (#126)");
