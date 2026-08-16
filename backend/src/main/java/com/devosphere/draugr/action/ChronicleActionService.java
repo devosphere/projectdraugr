@@ -34,7 +34,9 @@ public class ChronicleActionService {
     // Captures the name a chronicle gives a place: "...as the Sleeping Area",
     // "name this Wolf Kingdom", "call this place the Drinking Area".
     private static final Pattern DESIGNATE_NAME = Pattern.compile("(?is)\\b(?:as|called|named|be)\\s+(?:the\\s+|a\\s+|my\\s+)?(.+)$");
-    private static final Pattern DESIGNATE_FALLBACK = Pattern.compile("(?is)\\b(?:designate|name|call|establish|found|christen|mark)\\s+(?:this|here|this\\s+place|this\\s+area|this\\s+spot)?\\s*(?:the\\s+|a\\s+|my\\s+)?(.+)$");
+    // Alternation is ordered, so the multi-word demonstratives must precede bare "this": otherwise
+    // "name this place Camp Site" matches only "this" and captures "place Camp Site" as the name.
+    private static final Pattern DESIGNATE_FALLBACK = Pattern.compile("(?is)\\b(?:designate|name|call|establish|found|christen|mark)\\s+(?:this\\s+place|this\\s+area|this\\s+spot|this|here|it)?\\s*(?:the\\s+|a\\s+|my\\s+)?(.+)$");
     private static final Pattern WRITE_CONTENT = Pattern.compile("(?is):\\s*(.+)$");
     // Signal groups for the fire-lighting specificity score. Each group is a set
     // of synonyms; naming the tool, the tinder, the ember, and the motion reads

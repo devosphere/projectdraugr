@@ -1352,9 +1352,13 @@ public class PhysicalItemService {
         UUID containerId = (UUID) container.get("id"); String containerName = ((String) container.get("name")).toLowerCase(java.util.Locale.ROOT);
         String access = jdbc.queryForObject("SELECT access_state FROM container_properties WHERE object_id=?", String.class, containerId);
         if (!"OPEN".equals(access)) return new String[]{"FAILED", "The " + containerName + " is " + access.toLowerCase(java.util.Locale.ROOT) + " — open it before you can put anything in it."};
+        // Prefer a loosely-carried item over one already nested in some container: an item that is
+        // already contained would collide on the item_containment primary key (one home per item), and
+        // "put the stone in the sack" plainly means the stone in hand, not one buried in another basket.
         java.util.List<java.util.Map<String,Object>> stock = jdbc.query(REACHABLE_CTE +
             "SELECT w.id, w.display_name, i.item_key FROM reachable r JOIN world_object w ON w.id=r.id JOIN item_instance i ON i.object_id=w.id " +
-            "WHERE w.id<>? AND w.id NOT IN (SELECT item_id FROM item_containment WHERE container_id=?) ORDER BY length(w.display_name) DESC",
+            "WHERE w.id<>? AND w.id NOT IN (SELECT item_id FROM item_containment WHERE container_id=?) " +
+            "ORDER BY (w.id IN (SELECT item_id FROM item_containment)) ASC, length(w.display_name) DESC",
             (rs,row) -> java.util.Map.of("id", rs.getObject(1,UUID.class), "name", rs.getString(2), "key", rs.getString(3)), chronicle, location, containerId, containerId);
         java.util.Map<String,Object> item = stock.stream()
             .filter(c -> lower.contains(((String)c.get("name")).toLowerCase(java.util.Locale.ROOT))).findFirst().orElse(null);
@@ -1370,7 +1374,10 @@ public class PhysicalItemService {
         Integer iv = jdbc.queryForObject("SELECT d.unit_volume_ml  FROM item_instance i JOIN item_definition d ON d.item_key=i.item_key WHERE i.object_id=?", Integer.class, itemId);
         if (im != null && iv != null && (im > free[0] || iv > free[1]))
             return new String[]{"FAILED", "The " + containerName + " has no room left for the " + itemName + "."};
+        // Clear any prior home (equipped slot or another container) before re-homing, so re-storing an
+        // already-placed item moves it rather than colliding on item_containment's per-item primary key.
         jdbc.update("DELETE FROM equipment_attachment WHERE item_id=?", itemId);
+        jdbc.update("DELETE FROM item_containment WHERE item_id=?", itemId);
         jdbc.update("INSERT INTO item_containment (item_id, container_id, placed_at) VALUES (?,?,?)", itemId, containerId, Timestamp.from(at));
         jdbc.update("UPDATE world_object SET current_owner_id=?, current_location_id=NULL WHERE id=?", containerId, itemId);
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'STORED',jsonb_build_object('containerId',?::text))", itemId, Timestamp.from(at), containerId.toString());
