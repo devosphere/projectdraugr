@@ -195,11 +195,11 @@ public class ChronicleActionService {
                 items.consumeOne(chronicle.id(), carried, resolvedAt); physiology.drink(chronicle.id());
                 if ("clean_water".equals(carried)) perception = "You drink your fill of the boiled water — clean, flat, and safe.";
                 else if ("filtered_water".equals(carried)) { physiology.applyWaterborneRisk(chronicle.id(), 2); perception = "You drink the filtered water; it runs clearer than it was, though not beyond all doubt."; }
-                else { physiology.applyWaterborneRisk(chronicle.id(), 5); perception = "You drink the raw water you carry. It answers your thirst, but sits uneasy in the gut."; }
+                else { physiology.applyWaterborneRisk(chronicle.id(), 5); perception = "You drink the raw water you carry. It eases the dryness, but sits uneasy in the gut."; }
             } else if (waterInReach(chronicle.location())) {
                 physiology.drink(chronicle.id());
                 if (safeWaterSource(chronicle.location())) perception = "You drink from the clean, moving water and let the cold settle in your throat.";
-                else { physiology.applyWaterborneRisk(chronicle.id(), 6); perception = "You drink from the standing water here. It answers your thirst, but it is not clean, and your gut will know it."; }
+                else { physiology.applyWaterborneRisk(chronicle.id(), 6); perception = "You drink from the standing water here. It eases the dryness, but it is not clean, and the gut will know it."; }
             } else { outcome = "FAILED"; perception = "You look about, but there is no water here fit to drink — no stream, no spring, only dry ground that gives nothing back."; }
         }
         else if (intent == Intent.COLLECT_WATER) {

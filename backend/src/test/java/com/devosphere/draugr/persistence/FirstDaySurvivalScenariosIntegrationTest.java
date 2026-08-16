@@ -177,6 +177,7 @@ class FirstDaySurvivalScenariosIntegrationTest {
         items.createCarriedItem(chronicle, "dry_branch", "Dry branch", now, "TEST_SEED");
         items.createCarriedItem(chronicle, "raw_water", "Raw water", now, "TEST_SEED");
         items.createCarriedItem(chronicle, "raw_water", "Raw water", now, "TEST_SEED");
+        items.createCarriedItem(chronicle, "clay_pot", "Clay pot", now, "TEST_SEED"); // a fireproof vessel to boil in
 
         runBattery(
                 "I look carefully around the marsh, reading the water and the reeds for danger.",
@@ -344,9 +345,9 @@ class FirstDaySurvivalScenariosIntegrationTest {
         UUID chronicle = chronicles.active().id();
         Instant now = ticks.current().simulatedAt();
 
-        for (int i = 0; i < 4; i++) items.createCarriedItem(chronicle, "field_stone", "Field stone", now, "TEST_SEED");
-        for (int i = 0; i < 6; i++) items.createCarriedItem(chronicle, "plant_fiber", "Plant fiber bundle", now, "TEST_SEED");
-        for (int i = 0; i < 3; i++) items.createCarriedItem(chronicle, "dry_branch", "Dry branch", now, "TEST_SEED");
+        for (int i = 0; i < 8; i++) items.createCarriedItem(chronicle, "field_stone", "Field stone", now, "TEST_SEED");
+        for (int i = 0; i < 10; i++) items.createCarriedItem(chronicle, "plant_fiber", "Plant fiber bundle", now, "TEST_SEED");
+        for (int i = 0; i < 4; i++) items.createCarriedItem(chronicle, "dry_branch", "Dry branch", now, "TEST_SEED");
         for (int i = 0; i < 3; i++) items.createCarriedItem(chronicle, "raw_water", "Raw water", now, "TEST_SEED");
 
         runBattery(
