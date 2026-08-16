@@ -61,8 +61,8 @@ public class ConstructionService {
      */
     @Transactional
     public String[] buildCampAlarm(UUID chronicle, UUID location, Instant at) {
-        String line = null; for (String l : ALARM_LINE) if (items.hasAtLeast(chronicle, l, 1)) { line = l; break; }
-        if (line == null) return new String[]{"FAILED", "You have no line to string a trip-line with — a length of cordage, withy rope, or plant fibre must come first."};
+        // Re-hanging an alarm that already stands here needs only fresh clatter — the line is already strung —
+        // so resolve that case before demanding a new length of line the refresh would never consume.
         String clatter = null, clabel = null; for (String[] c : ALARM_CLATTER) if (items.hasAtLeast(chronicle, c[0], 1)) { clatter = c[0]; clabel = c[1]; break; }
         if (clatter == null) return new String[]{"FAILED", "You have nothing to hang on the line that would sound a warning — bone, antler, or dry branches to knock together."};
         UUID existing = jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='CAMP_ALARM' AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' LIMIT 1 FOR UPDATE", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, location);
@@ -73,6 +73,8 @@ public class ConstructionService {
             jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'ALARM_RESTRUNG',jsonb_build_object('clatter',?))", existing, ts, clatter);
             return new String[]{"SUCCEEDED", "You re-string the trip-line and re-hang the " + clabel + ", and it stands taut across the approach again."};
         }
+        String line = null; for (String l : ALARM_LINE) if (items.hasAtLeast(chronicle, l, 1)) { line = l; break; }
+        if (line == null) return new String[]{"FAILED", "You have no line to string a trip-line with — a length of cordage, withy rope, or plant fibre must come first."};
         if (!items.consumeOne(chronicle, line, at)) throw new IllegalStateException("Reachable line changed during the action.");
         items.consumeOne(chronicle, clatter, at);
         UUID id = UUID.randomUUID();
