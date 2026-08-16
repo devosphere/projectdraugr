@@ -45,6 +45,43 @@ public class ConstructionService {
         return true;
     }
 
+    /** Line stock a trip-line can be strung from, best/strongest first (#126/#127 camp alarm). */
+    private static final String[] ALARM_LINE = {"withy_rope", "fiber_cordage", "plant_fiber"};
+    /** Anything that clatters a warning when the line is knocked — hung to sound off an approach. */
+    private static final String[][] ALARM_CLATTER = {{"animal_bone", "knocking bones"}, {"deer_antler", "antler"}, {"dry_branch", "hung branches"}};
+
+    /**
+     * String a perimeter trip-line alarm here (#126/#127): a length of line strung low across the approaches
+     * with anything that clatters — bone, antler, dry branches — hung from it, so nothing crosses into the camp
+     * unheard. It is a real, persistent CAMP_ALARM construction; while it stands, {@link
+     * com.devosphere.draugr.ecology.WildlifeEncounterService#passiveEncounter} robs a stalking predator of its
+     * surprise (the ambush chance drops), turning a fatal ambush into a warning the Chronicle can act on. It
+     * grants no protection of its own — it buys warning time, nothing more. Fails grounded with no line or no
+     * clatter to hand; re-strings an existing alarm here rather than stacking a second.
+     */
+    @Transactional
+    public String[] buildCampAlarm(UUID chronicle, UUID location, Instant at) {
+        String line = null; for (String l : ALARM_LINE) if (items.hasAtLeast(chronicle, l, 1)) { line = l; break; }
+        if (line == null) return new String[]{"FAILED", "You have no line to string a trip-line with — a length of cordage, withy rope, or plant fibre must come first."};
+        String clatter = null, clabel = null; for (String[] c : ALARM_CLATTER) if (items.hasAtLeast(chronicle, c[0], 1)) { clatter = c[0]; clabel = c[1]; break; }
+        if (clatter == null) return new String[]{"FAILED", "You have nothing to hang on the line that would sound a warning — bone, antler, or dry branches to knock together."};
+        UUID existing = jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='CAMP_ALARM' AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' LIMIT 1 FOR UPDATE", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, location);
+        Timestamp ts = Timestamp.from(at);
+        if (existing != null) {
+            if (!items.consumeOne(chronicle, clatter, at)) throw new IllegalStateException("Reachable alarm material changed during the action.");
+            jdbc.update("UPDATE construction_project SET integrity_percent=100,last_structural_update=? WHERE object_id=?", ts, existing);
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'ALARM_RESTRUNG',jsonb_build_object('clatter',?))", existing, ts, clatter);
+            return new String[]{"SUCCEEDED", "You re-string the trip-line and re-hang the " + clabel + ", and it stands taut across the approach again."};
+        }
+        if (!items.consumeOne(chronicle, line, at)) throw new IllegalStateException("Reachable line changed during the action.");
+        items.consumeOne(chronicle, clatter, at);
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CONSTRUCTION','Perimeter trip-line alarm',?)", id, location);
+        jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at) VALUES (?,'CAMP_ALARM','COMPLETED',100,?)", id, ts);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CONSTRUCTED',jsonb_build_object('projectKind','CAMP_ALARM','line',?,'clatter',?))", id, ts, line, clatter);
+        return new String[]{"SUCCEEDED", "You string a line low across the approaches and hang " + clabel + " from it, so nothing crosses into the camp without knocking a warning."};
+    }
+
     /** Bedding material a bed can be laid from, best first — all reachable first-era plant stock (#71 make_bed). */
     private static final String[][] BEDDING = {{"straw_bundle","straw"},{"reed_bundle","reed"},{"thatch_bundle","thatch"},{"plant_fiber","plant fibre"},{"reed_mat","reed matting"},{"cattail_stalk","cattail"},{"water_lily_pad","dry lily pads"},{"dry_grass_bundle","dry grass"},{"big_leaf","leaves"},{"moss_bundle","moss"}};
 
