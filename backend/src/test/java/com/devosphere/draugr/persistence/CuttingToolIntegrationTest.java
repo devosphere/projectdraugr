@@ -66,11 +66,13 @@ class CuttingToolIntegrationTest {
     @Autowired PersistentStateAuditor auditor;
     @Autowired JdbcTemplate jdbc;
 
-    /** Set down every loosely-carried item onto the ground here, so the next check starts with no cutting
-     *  tool to hand while the items stay ACTIVE and valid at a real location. */
+    /** Move every loosely-carried item to another chunk, out of reach, so the next check starts with no
+     *  cutting tool to hand while the items stay ACTIVE and valid (on-ground items at the Chronicle's OWN
+     *  chunk stay within reach, so grounding here would not do). */
     private void shedLooseItems(UUID chronicle, UUID chunk) {
+        UUID elsewhere = jdbc.queryForObject("SELECT id FROM world_chunk WHERE id<>? ORDER BY id LIMIT 1", UUID.class, chunk);
         jdbc.update("UPDATE world_object SET current_owner_id=NULL, current_location_id=? " +
-                "WHERE current_owner_id=? AND object_type='ITEM' AND id NOT IN (SELECT item_id FROM equipment_attachment)", chunk, chronicle);
+                "WHERE current_owner_id=? AND object_type='ITEM' AND id NOT IN (SELECT item_id FROM equipment_attachment)", elsewhere, chronicle);
     }
 
     @Test
