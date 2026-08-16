@@ -520,14 +520,17 @@ public class WildlifeEncounterService {
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, chunk);
         String v = actionText.toLowerCase(java.util.Locale.ROOT);
         String method; int chance;
-        // Explicit trap/spear/line intent is honoured first; otherwise the Chronicle reaches for the best net
-        // it carries. A cast/gill net (#36/#43) is a real fishing tool — the whole reason to weave one — so it
-        // works well; a landing net is a smaller scoop and works less surely. Without any of these, bare hands.
+        // Explicit trap/spear/line intent is honoured first; otherwise the Chronicle reaches for the best
+        // fishing gear it carries, most effective first. A woven fish trap or cast/gill net (#36/#43) is a real
+        // tool — the whole reason to make one — and a bone hook turns bare grabbing into angling. Each of these
+        // was craftable but read by nothing, so it caught no better than empty hands until now.
         if (v.contains("trap") || v.contains("basket") || v.contains("weir")) { method="TRAP"; chance=75; }
         else if (v.contains("spear") && items.hasAtLeast(chronicle,"primitive_spear",1)) { method="SPEAR"; chance=55; }
         else if (v.contains("line") || v.contains("hook")) { method="LINE"; chance=45; }
+        else if (items.hasAtLeast(chronicle,"fish_trap",1)) { method="TRAP"; chance=75; }
         else if (items.hasAtLeast(chronicle,"fishing_net",1)) { method="NET"; chance=72; }
         else if (items.hasAtLeast(chronicle,"landing_net",1)) { method="NET"; chance=50; }
+        else if (items.hasAtLeast(chronicle,"bone_fish_hook",1)) { method="LINE"; chance=45; }
         else { method="BARE_HAND"; chance=20; }
         // Bait (#75): a worm on the hook, in the trap, or in the hand draws fish that clear water would not —
         // it is spent whether or not the fish takes. Bare hands and a sweeping net are the methods a worm does
