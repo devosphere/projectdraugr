@@ -78,7 +78,18 @@ public class WildlifeEncounterService {
         int thrownStones = body.sling()>0 ? Math.min(24,body.stones()*5) : Math.min(10,body.stones()*2);
         // A bow with arrows is the strongest reach a first-era Chronicle has — it strikes hard from a distance,
         // but only ever with an arrow nocked (no arrows, no shot).
-        int capability = body.energy()/3 - body.injury()/2 - body.pain()/3 + body.handWeapon()*35 + (body.blunt()>0?22:0) + (body.javelin()>0?25:0) + (archery?40:0) + thrownStones + Math.min(20,body.poison()*20) + tacticBonus;
+        // Fire in the fight (#126): the same flame a predator will not ambush through tells in the close too.
+        // A lit fire at hand, or a brand raised from the carried stock, cows the animal — it presses less and
+        // breaks off sooner, so the Chronicle's effort counts for more. A creature that breathes fire is, of
+        // course, unmoved by it. Weaker than a real weapon; it never makes a bare-handed stand a sure thing.
+        int fireEdge = 0;
+        boolean fireBreather = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM monster_profile WHERE species_key=? AND special_mechanic='FIRE_BREATH')", Boolean.class, candidate.species()));
+        if (!fireBreather) {
+            boolean fireAtHand = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id JOIN fire_state fs ON fs.construction_id=cp.object_id WHERE w.current_location_id=? AND fs.active=true AND w.lifecycle_state='ACTIVE')", Boolean.class, chunk));
+            boolean brandInHand = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key='resin_torch')", Boolean.class, chronicle));
+            fireEdge = fireAtHand ? 15 : (brandInHand ? 10 : 0);
+        }
+        int capability = body.energy()/3 - body.injury()/2 - body.pain()/3 + body.handWeapon()*35 + (body.blunt()>0?22:0) + (body.javelin()>0?25:0) + (archery?40:0) + thrownStones + Math.min(20,body.poison()*20) + tacticBonus + fireEdge;
         // Registry resistance is authoritative when catalogued; the old role-based
         // bands remain the fallback. Registry values are species-scaled, so they are
         // lifted onto the same footing as the bands they replace.
