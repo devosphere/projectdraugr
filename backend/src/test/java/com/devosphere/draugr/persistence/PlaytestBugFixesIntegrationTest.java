@@ -9,6 +9,7 @@ import com.devosphere.draugr.world.genesis.WorldGenesisService;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
@@ -85,6 +86,17 @@ class PlaytestBugFixesIntegrationTest {
      * so a capacity-sensitive scenario starts with honest headroom; grounded items stay ACTIVE and
      * valid, and anything nested inside a kept container is untouched.
      */
+    /**
+     * The shared chronicle's carried load rides near capacity across the ordered scenarios, so shed it
+     * back to the chain essentials before each one: keep the reusable blade and the woven basket (which
+     * the store / drop / access-state scenarios reuse and whose nested contents stay put), and set the
+     * rest down. Skips before the awakening scenario, when no chronicle exists yet.
+     */
+    @BeforeEach
+    void shedAccumulatedLoadBeforeEachScenario() {
+        if (chronicles.active() != null) shedLooseCarriedExcept("stone_knife", "woven_basket");
+    }
+
     private void shedLooseCarriedExcept(String... keepKeys) {
         UUID chronicle = chronicle();
         UUID chunk = chronicles.active().locationId();
@@ -131,9 +143,6 @@ class PlaytestBugFixesIntegrationTest {
     /** #34/#31 — a basket weaves from vine + cordage (no plant fibre) and produces a real container. */
     @Test @Order(3)
     void basketWeavesFromVineAndCordage() {
-        // Clear accumulated load so the woven basket is carried (not grounded for want of capacity),
-        // since the store/drop and access-state scenarios below rely on carrying it.
-        shedLooseCarriedExcept("stone_knife");
         for (int i = 0; i < 3; i++) items.createCarriedItem(chronicle(), "vine", "Vine", now(), "TEST_SEED");
         for (int i = 0; i < 3; i++) items.createCarriedItem(chronicle(), "fiber_cordage", "Processed fiber cordage", now(), "TEST_SEED");
         ChronicleActionService.ActionResult r = actions.resolve("I weave a basket.");
@@ -272,7 +281,6 @@ class PlaytestBugFixesIntegrationTest {
     @Test @Order(10)
     void carryingAidRaisesCapacityWhileEquipped() {
         UUID chronicle = chronicle();
-        shedLooseCarriedExcept("stone_knife"); // start from honest headroom on the shared chronicle
         int baseline = items.sustainedMassCapacity(chronicle);
         for (int i = 0; i < 3; i++) items.createCarriedItem(chronicle, "dry_branch", "Dry branch", now(), "TEST_SEED");
         for (int i = 0; i < 2; i++) items.createCarriedItem(chronicle, "fiber_cordage", "Processed fiber cordage", now(), "TEST_SEED");
@@ -289,7 +297,6 @@ class PlaytestBugFixesIntegrationTest {
     @Test @Order(11)
     void waterBoilsCleanAndDrinkPrefersIt() {
         UUID chronicle = chronicle();
-        shedLooseCarriedExcept("stone_knife"); // start from honest headroom on the shared chronicle
         items.createCarriedItem(chronicle, "raw_water", "Raw water", now(), "TEST_SEED");
         items.createCarriedItem(chronicle, "raw_water", "Raw water", now(), "TEST_SEED");
         int boiled = items.convertWater(chronicle, "raw_water", "clean_water", "Boiled water", 3, now());
