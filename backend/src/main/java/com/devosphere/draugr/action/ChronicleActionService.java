@@ -387,7 +387,11 @@ public class ChronicleActionService {
         // and never after an encounter the chronicle already fought through.
         String attention = attentionLevel(text, intent);
         if (exposesToWildlife(intent) && minutes >= 10) {
-            String ambush = wildlife.passiveEncounter(chronicle.id(), chronicle.location(), actionId, resolvedAt, attention);
+            // A disengage this turn is an active break from contact; hiding/going to ground is a concealed one.
+            boolean breakingContact = intent == Intent.DISENGAGE;
+            String lower = text.toLowerCase(Locale.ROOT);
+            boolean concealed = breakingContact && (lower.contains("hide") || lower.contains("conceal") || lower.contains("go to ground"));
+            String ambush = wildlife.passiveEncounter(chronicle.id(), chronicle.location(), actionId, resolvedAt, attention, breakingContact, concealed);
             if (ambush != null) perception = perception + " " + ambush;
         }
         // Bucket D (#27) — the physical cost of the work itself, on top of the passive metabolic tick:

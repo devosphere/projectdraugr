@@ -171,6 +171,18 @@ public class WildlifeEncounterService {
      */
     @Transactional
     public String passiveEncounter(UUID chronicle, UUID chunk, UUID action, Instant at, String attention) {
+        return passiveEncounter(chronicle, chunk, action, at, attention, false, false);
+    }
+
+    /**
+     * As above, but told whether the Chronicle is actively breaking contact this turn (#126 escape). A
+     * deliberate disengage is the difference between usually getting clear and being run down: fleeing puts
+     * ground between them, and going to ground breaks the predator's line entirely. It is never certain — the
+     * roll still stands — so a bad break can still be caught, but escape is now a real, mechanical choice
+     * rather than narration over an unchanged ambush chance.
+     */
+    @Transactional
+    public String passiveEncounter(UUID chronicle, UUID chunk, UUID action, Instant at, String attention, boolean breakingContact, boolean concealed) {
         Threat threat = jdbc.query(
             "SELECT wp.id,wp.species_key,wp.behavior_state,ws.base_resistance,ws.ambush_hunter,ws.size_tier " +
             "FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id " +
@@ -188,6 +200,11 @@ public class WildlifeEncounterService {
         if (threat.ambushHunter()) chance += 10;
         if ("HIGH".equals(attention)) chance -= 12;
         else if ("MODERATE".equals(attention)) chance -= 5;
+        // Actively breaking contact this turn robs the hunt of its close: going to ground breaks the
+        // predator's line of sight outright, a run puts distance in the way. This is what makes flee/hide a
+        // real escape rather than words — but it is a reduction, not immunity; a bad break is still caught.
+        if (concealed) chance -= 30;
+        else if (breakingContact) chance -= 18;
         // A camp alarm (#126) — a trip-line strung with anything that clatters — robs an ambush of its surprise:
         // nothing crosses the perimeter unheard, so even a heads-down Chronicle is not caught wholly unaware.
         boolean alarmed = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='CAMP_ALARM' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')", Boolean.class, chunk));
