@@ -520,13 +520,19 @@ public class WildlifeEncounterService {
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, chunk);
         String v = actionText.toLowerCase(java.util.Locale.ROOT);
         String method; int chance;
+        // Explicit trap/spear/line intent is honoured first; otherwise the Chronicle reaches for the best net
+        // it carries. A cast/gill net (#36/#43) is a real fishing tool — the whole reason to weave one — so it
+        // works well; a landing net is a smaller scoop and works less surely. Without any of these, bare hands.
         if (v.contains("trap") || v.contains("basket") || v.contains("weir")) { method="TRAP"; chance=75; }
         else if (v.contains("spear") && items.hasAtLeast(chronicle,"primitive_spear",1)) { method="SPEAR"; chance=55; }
         else if (v.contains("line") || v.contains("hook")) { method="LINE"; chance=45; }
+        else if (items.hasAtLeast(chronicle,"fishing_net",1)) { method="NET"; chance=72; }
+        else if (items.hasAtLeast(chronicle,"landing_net",1)) { method="NET"; chance=50; }
         else { method="BARE_HAND"; chance=20; }
         // Bait (#75): a worm on the hook, in the trap, or in the hand draws fish that clear water would not —
-        // it is spent whether or not the fish takes. Bare-hand grabbing is the one method a worm does not help.
-        boolean baited = !method.equals("BARE_HAND") && items.hasAtLeast(chronicle,"earthworm",1) && items.consumeOne(chronicle,"earthworm",at);
+        // it is spent whether or not the fish takes. Bare hands and a sweeping net are the methods a worm does
+        // not help — one grabs, the other encircles.
+        boolean baited = !method.equals("BARE_HAND") && !method.equals("NET") && items.hasAtLeast(chronicle,"earthworm",1) && items.consumeOne(chronicle,"earthworm",at);
         if (baited) chance = Math.min(90, chance + 20);
         java.util.List<String> species = jdbc.queryForList("SELECT species_key FROM wildlife_species WHERE movement_class='AQUATIC' AND biome_affinity ILIKE ? ORDER BY species_key", String.class, "%"+biome+"%");
         if (species.isEmpty()) return new EncounterResult("FAILED","You watch the ground a while. There is no water here that holds anything worth taking.");
