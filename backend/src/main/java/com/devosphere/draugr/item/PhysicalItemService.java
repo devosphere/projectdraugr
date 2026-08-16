@@ -1444,7 +1444,9 @@ public class PhysicalItemService {
         // Sharpening (#75) is not mending: a dulled edge is drawn back against a whetstone or grit-stone, not
         // bound with cordage. The stone is reusable, so it is used but not consumed.
         if (lower.contains("sharpen") || lower.contains("whet") || lower.contains("hone") || (lower.contains("grind") && lower.contains("edge"))) {
-            if (!hasAtLeast(chronicle, "whetstone", 1) && !hasAtLeast(chronicle, "sandstone_piece", 1) && !hasAtLeast(chronicle, "pumice_piece", 1))
+            // A dressed stone_whetstone is a whetstone by any other name — it was craftable but read by
+            // nothing, so honing accepts it too (#257), alongside the found whetstone and the grit-stones.
+            if (!hasAtLeast(chronicle, "whetstone", 1) && !hasAtLeast(chronicle, "stone_whetstone", 1) && !hasAtLeast(chronicle, "sandstone_piece", 1) && !hasAtLeast(chronicle, "pumice_piece", 1))
                 return new String[]{"FAILED", "You go to put an edge on the " + name + ", but you have no whetstone or grit-stone to draw it against."};
             String honed = "BROKEN".equals(cond) ? "WORN" : "SOUND";
             jdbc.update("UPDATE item_instance SET condition_state=? WHERE object_id=?", honed, item.get("id"));
