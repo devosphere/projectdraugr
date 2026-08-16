@@ -12,6 +12,7 @@ import com.devosphere.draugr.world.genesis.WorldGenesisService;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
@@ -90,6 +91,27 @@ class FullTickPlaythroughIntegrationTest {
 
     private UUID livingChronicle() { return chronicles.active().id(); }
     private Instant simNow() { return ticks.current().simulatedAt(); }
+
+    /**
+     * These ordered scenarios share one chronicle and never feed or water it, so the simulated
+     * clock's steady march would otherwise dehydrate/starve it to death before the later persistence
+     * paths (@Order 6 wildlife kill, then the deliberate @Order 7 death) can run on a living body.
+     * Top the shared life back up at the start of each scenario so every write path is exercised on a
+     * living chronicle. This resets levels only, never the metabolic clock (the #16 regression at
+     * @Order 8 depends on that), it no-ops once the chronicle is dead so the death/rebirth flow stands,
+     * and @Order 7 forces its own lethal condition after this runs.
+     */
+    @BeforeEach
+    void sustainLivingChronicleAcrossOrderedScenarios() {
+        ChronicleService.ChronicleSummary active = chronicles.active();
+        if (active != null)
+            // Reset the metabolic clock to now alongside the levels: without it, the first physiology pass
+            // of a scenario reads the whole accumulated simulated gap as elapsed and starves the chronicle
+            // in a single step. Touches only the living chronicle, so the #16 rebirth check at @Order 8 stands.
+            jdbc.update("UPDATE chronicle_physiology SET hours_without_food=0, hours_without_water=0, energy_level=85, " +
+                "core_temperature_c=37.0, wetness_level=25, blood_loss_ml=0, injury_severity=0, illness_severity=0, pain_level=0, " +
+                "last_metabolic_update=? WHERE chronicle_id=?", Timestamp.from(simNow()), active.id());
+    }
 
     @Test
     @Order(0)
