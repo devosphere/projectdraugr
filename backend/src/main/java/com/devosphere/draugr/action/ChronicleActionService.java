@@ -801,7 +801,7 @@ public class ChronicleActionService {
         // naming a technique as asking for fire — "carve a fire bow" is preparation,
         // not an attempt to light something.
         if((value.contains("craft")||value.contains("make")||value.contains("carve")||value.contains("cut")||value.contains("build")||value.contains("prepare")||value.contains("shape")||value.contains("pack"))
-           &&(value.contains("fire bow")||value.contains("bearing block")||value.contains("socket")||value.contains("handhold")||value.contains("plough board")||value.contains("plow board")||value.contains("fire saw")||value.contains("char")||value.contains("ember bundle")
+           &&(value.contains("fire bow")||value.contains("bearing block")||value.contains("socket")||value.contains("handhold")||value.contains("plough board")||value.contains("plow board")||value.contains("fire saw")||value.contains("char tinder")||value.contains("charred")||value.contains("ember bundle")
               ||((value.contains("bow")||value.contains("plough")||value.contains("plow"))&&value.contains("fire")))) return Intent.CRAFT_FIRE_TOOL;
         // Prospecting before the ignition rules, so "search the rocks for pyrite" is
         // heard as looking for the mineral rather than as trying to strike a light
@@ -902,7 +902,7 @@ public class ChronicleActionService {
         // is a craft, so defer to the material process when the text names one rather than filtering here.
         if((value.contains("filter")||value.contains("strain")||value.contains("clarify")||value.contains("purify"))&&value.contains("water")&&!items.actionMatchesProcess(value)) return Intent.FILTER_WATER;
         if(value.contains("collect water")||value.contains("fetch water")||value.contains("draw water")||value.contains("gather water")||value.contains("fill container")||value.contains("scoop water")||((value.contains("fill")||value.contains("refill"))&&(value.contains("waterskin")||value.contains("water skin")||value.contains("bucket")||value.contains("vessel")||value.contains("jar")||value.contains("with water")||value.contains("flask")||value.contains("gourd")))) return Intent.COLLECT_WATER;
-        if(value.contains("charcoal")&&(value.contains("make")||value.contains("take")||value.contains("gather")||value.contains("get")||value.contains("collect"))) return Intent.MAKE_CHARCOAL;
+        if(value.contains("charcoal")&&(value.contains("make")||value.contains("take")||value.contains("gather")||value.contains("get")||value.contains("collect"))&&!items.actionMatchesProcess(value)) return Intent.MAKE_CHARCOAL;
         if(value.contains("bark")&&!value.contains("loose")&&(value.contains("strip")||value.contains("peel")||value.contains("gather")||value.contains("cut")||value.contains("collect")||value.contains("pull"))) return Intent.STRIP_BARK;
         // Ambient ground scavenge (#133): search the forest floor / under a log for small survival materials — the
         // bare-hand pickup of the #192 litter (twigs, leaf litter/tinder, loose bark, shed feather/fur, driftwood,
