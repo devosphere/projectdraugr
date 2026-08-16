@@ -105,9 +105,12 @@ class FullTickPlaythroughIntegrationTest {
     void sustainLivingChronicleAcrossOrderedScenarios() {
         ChronicleService.ChronicleSummary active = chronicles.active();
         if (active != null)
+            // Reset the metabolic clock to now alongside the levels: without it, the first physiology pass
+            // of a scenario reads the whole accumulated simulated gap as elapsed and starves the chronicle
+            // in a single step. Touches only the living chronicle, so the #16 rebirth check at @Order 8 stands.
             jdbc.update("UPDATE chronicle_physiology SET hours_without_food=0, hours_without_water=0, energy_level=85, " +
-                "core_temperature_c=37.0, wetness_level=25, blood_loss_ml=0, injury_severity=0, illness_severity=0, pain_level=0 " +
-                "WHERE chronicle_id=?", active.id());
+                "core_temperature_c=37.0, wetness_level=25, blood_loss_ml=0, injury_severity=0, illness_severity=0, pain_level=0, " +
+                "last_metabolic_update=? WHERE chronicle_id=?", Timestamp.from(simNow()), active.id());
     }
 
     @Test

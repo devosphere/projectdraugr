@@ -79,34 +79,19 @@ class PlaytestBugFixesIntegrationTest {
     }
 
     /**
-     * The twelve ordered scenarios share one awakened chronicle, so its carried load accumulates
-     * across methods. Left unchecked it exceeds carry capacity, which both makes a freshly crafted
-     * container ground itself instead of being carried and makes seeding more items throw. Set the
-     * loosely-carried items (except the named essentials, e.g. the reusable blade) down on the ground
-     * so a capacity-sensitive scenario starts with honest headroom; grounded items stay ACTIVE and
-     * valid, and anything nested inside a kept container is untouched.
-     */
-    /**
-     * The shared chronicle's carried load rides near capacity across the ordered scenarios, so shed it
-     * back to the chain essentials before each one: keep the reusable blade and the woven basket (which
-     * the store / drop / access-state scenarios reuse and whose nested contents stay put), and set the
-     * rest down. Skips before the awakening scenario, when no chronicle exists yet.
+     * The ten ordered scenarios share one awakened chronicle, so its carried load accumulates across
+     * methods — and the woven basket alone is 12 L of bulk against an 18 L default, so a later bulky step
+     * (a sewn hide sack, a lashed frame) would tip over capacity purely as a shared-state artifact. None
+     * of these scenarios tests a carry limit, so give the shared chronicle ample capacity before each.
+     * The one capacity assertion — that an equipped burden frame RAISES capacity (#57) — still holds,
+     * because the aid's bonus is added on top of whatever the base capacity is. Skips before the awakening
+     * scenario, when no chronicle exists yet.
      */
     @BeforeEach
-    void shedAccumulatedLoadBeforeEachScenario() {
-        if (chronicles.active() != null) shedLooseCarriedExcept("stone_knife", "woven_basket");
-    }
-
-    private void shedLooseCarriedExcept(String... keepKeys) {
-        UUID chronicle = chronicle();
-        UUID chunk = chronicles.active().locationId();
-        java.util.Set<String> keep = new java.util.HashSet<>(java.util.Arrays.asList(keepKeys));
-        for (java.util.Map<String,Object> row : jdbc.queryForList(
-                "SELECT w.id, i.item_key FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
-                "WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND w.id NOT IN (SELECT item_id FROM equipment_attachment)", chronicle)) {
-            if (!keep.contains((String) row.get("item_key")))
-                jdbc.update("UPDATE world_object SET current_owner_id=NULL, current_location_id=? WHERE id=?", chunk, row.get("id"));
-        }
+    void giveAmpleCarryCapacityBeforeEachScenario() {
+        if (chronicles.active() != null)
+            jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=500000, direct_bulk_ml=500000, " +
+                "maximum_single_lift_grams=500000 WHERE chronicle_id=?", chronicle());
     }
 
     @Test @Order(0)
