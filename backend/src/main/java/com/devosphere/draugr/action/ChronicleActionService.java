@@ -222,8 +222,12 @@ public class ChronicleActionService {
             }
         }
         else if (intent == Intent.FILTER_WATER) {
-            if (!items.hasAtLeast(chronicle.id(), "clay_water_filter", 1)) { outcome = "FAILED"; perception = "You have no water filter to pour through — a clay water filter must be made first."; }
-            else { int n = items.convertWater(chronicle.id(), "raw_water", "filtered_water", "Filtered water", 3, resolvedAt); outcome = n > 0 ? "SUCCEEDED" : "FAILED"; perception = n > 0 ? "You pour the raw water slowly through the clay filter; it comes out the other side notably clearer." : "You have no raw water to pour through the filter."; }
+            // A fired clay filter clears best; a bare-hand bark-and-charcoal cone (#141) is the first-hours
+            // stand-in — either will do to pour raw water through and clarify it.
+            boolean clay = items.hasAtLeast(chronicle.id(), "clay_water_filter", 1);
+            boolean bark = !clay && items.hasAtLeast(chronicle.id(), "bark_water_filter", 1);
+            if (!clay && !bark) { outcome = "FAILED"; perception = "You have no water filter to pour through — a bark-and-charcoal filter, or a fired clay one, must be made first."; }
+            else { int n = items.convertWater(chronicle.id(), "raw_water", "filtered_water", "Filtered water", 3, resolvedAt); outcome = n > 0 ? "SUCCEEDED" : "FAILED"; perception = n > 0 ? (clay ? "You pour the raw water slowly through the clay filter; it comes out the other side notably clearer." : "You pour the raw water slowly through the bark-and-charcoal cone; it drips out the bottom clearer and less foul than it went in.") : "You have no raw water to pour through the filter."; }
         }
         else if (intent == Intent.WASH) { if(waterInReach(chronicle.location())){boolean soap=items.hasAtLeast(chronicle.id(),"soap",1)&&items.consumeOne(chronicle.id(),"soap",resolvedAt);physiology.wash(chronicle.id(),soap);perception=soap?"You work the soap into a lather and scrub down; the water carries off far more than it would alone, and you come up clean.":"Cold water runs over your hands and skin, carrying away some of the dirt.";}else{outcome="FAILED";perception="You look for water to wash in, but there is none here — the ground is dry, and nothing runs or stands within reach.";} }
         else if (intent == Intent.WARM_BODY) { if(fireInReach(chronicle.location())){physiology.warmByFire(chronicle.id());perception="You crouch close to the fire and hold out your hands, letting its heat soak in until the chill loosens its grip.";}else{outcome="FAILED";perception="You cast about for warmth, but there is no fire burning within reach — only the cold air and colder ground.";} }
@@ -797,7 +801,7 @@ public class ChronicleActionService {
         // naming a technique as asking for fire — "carve a fire bow" is preparation,
         // not an attempt to light something.
         if((value.contains("craft")||value.contains("make")||value.contains("carve")||value.contains("cut")||value.contains("build")||value.contains("prepare")||value.contains("shape")||value.contains("pack"))
-           &&(value.contains("fire bow")||value.contains("bearing block")||value.contains("socket")||value.contains("handhold")||value.contains("plough board")||value.contains("plow board")||value.contains("fire saw")||value.contains("char")||value.contains("ember bundle")
+           &&(value.contains("fire bow")||value.contains("bearing block")||value.contains("socket")||value.contains("handhold")||value.contains("plough board")||value.contains("plow board")||value.contains("fire saw")||value.contains("char tinder")||value.contains("charred")||value.contains("ember bundle")
               ||((value.contains("bow")||value.contains("plough")||value.contains("plow"))&&value.contains("fire")))) return Intent.CRAFT_FIRE_TOOL;
         // Prospecting before the ignition rules, so "search the rocks for pyrite" is
         // heard as looking for the mineral rather than as trying to strike a light
@@ -894,9 +898,11 @@ public class ChronicleActionService {
         // Water handling (#71): collect / boil / filter — before the gather and drink rules so "collect water"
         // is filling a vessel, not gathering, and "boil water" reaches its handler rather than a process miss.
         if(value.contains("boil water")||value.contains("boil the water")||value.contains("boil some water")||value.contains("heat water to a boil")||value.contains("boil it to make it safe")) return Intent.BOIL_WATER;
-        if((value.contains("filter")||value.contains("strain")||value.contains("clarify")||value.contains("purify"))&&value.contains("water")) return Intent.FILTER_WATER;
+        // Pour water through a filter to clarify it — but MAKING a filter ("make a bark and charcoal filter")
+        // is a craft, so defer to the material process when the text names one rather than filtering here.
+        if((value.contains("filter")||value.contains("strain")||value.contains("clarify")||value.contains("purify"))&&value.contains("water")&&!items.actionMatchesProcess(value)) return Intent.FILTER_WATER;
         if(value.contains("collect water")||value.contains("fetch water")||value.contains("draw water")||value.contains("gather water")||value.contains("fill container")||value.contains("scoop water")||((value.contains("fill")||value.contains("refill"))&&(value.contains("waterskin")||value.contains("water skin")||value.contains("bucket")||value.contains("vessel")||value.contains("jar")||value.contains("with water")||value.contains("flask")||value.contains("gourd")))) return Intent.COLLECT_WATER;
-        if(value.contains("charcoal")&&(value.contains("make")||value.contains("take")||value.contains("gather")||value.contains("get")||value.contains("collect"))) return Intent.MAKE_CHARCOAL;
+        if(value.contains("charcoal")&&(value.contains("make")||value.contains("take")||value.contains("gather")||value.contains("get")||value.contains("collect"))&&!items.actionMatchesProcess(value)) return Intent.MAKE_CHARCOAL;
         if(value.contains("bark")&&!value.contains("loose")&&(value.contains("strip")||value.contains("peel")||value.contains("gather")||value.contains("cut")||value.contains("collect")||value.contains("pull"))) return Intent.STRIP_BARK;
         // Ambient ground scavenge (#133): search the forest floor / under a log for small survival materials — the
         // bare-hand pickup of the #192 litter (twigs, leaf litter/tinder, loose bark, shed feather/fur, driftwood,
