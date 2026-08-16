@@ -306,8 +306,17 @@ class FullTickPlaythroughIntegrationTest {
         // whenever a strike lands.
         for (int i = 0; i < 8; i++) {
             final int n = i;
+            // Clear any wound the previous strike drew before the next one: this loop verifies that the
+            // encounter WRITE paths persist cleanly across many outcomes, not that a bare-handed Chronicle
+            // survives eight charges. Without the per-strike reset the injury/blood-loss accumulates and an
+            // unlucky RNG run crosses the lethal threshold partway through, leaving no living Chronicle for
+            // the harvest and cook below (an intermittent 'No living Chronicle exists').
+            jdbc.update("UPDATE chronicle_physiology SET injury_severity=0, blood_loss_ml=0, illness_severity=0 WHERE chronicle_id=?", chronicle);
             assertDoesNotThrow(() -> actions.resolve("I attack the animal, strike " + n), "a wildlife encounter must resolve without a persistence error");
         }
+        // Enter the harvest/cook coverage below on a whole body — the wound the last strike drew is not the
+        // subject of this scenario, and must not carry the Chronicle over the lethal line mid-butchery.
+        jdbc.update("UPDATE chronicle_physiology SET injury_severity=0, blood_loss_ml=0, illness_severity=0 WHERE chronicle_id=?", chronicle);
 
         // Guarantee harvest + cook coverage regardless of combat RNG by seeding a
         // carcass and an active fire at the Chronicle's location.
