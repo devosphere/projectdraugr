@@ -3,13 +3,11 @@ name: Verify Project Draugr
 on:
   pull_request:
   push:
-    # #245 cleared the catalogue-integrity debt (Auditor invariants all 0; the `routing` job below
-    # proves it, and FullTick's auditor assertions now pass). But enabling the development push gate
-    # then revealed a SEPARATE batch of dev-only M1 feature tests that never ran green — containers,
-    # carrying aids, water, mark/name, and FullTick death-ordering (#246). A gate is only useful once
-    # green, so development stays off the push trigger until #246 lands; fix that debt on PR branches,
-    # where the pull_request trigger above already runs the full suite. Re-add `development` here then.
-    branches: [main]
+    # development is gated on push again: #245 cleared the catalogue-integrity debt and #246 cleared the
+    # dev-only M1 feature-test debt it uncovered (containers, carrying aids, water, mark/name, FullTick
+    # death-ordering), so the full Testcontainers suite is green. Keep both here; if a future batch lands
+    # red, fix it on a PR branch (the pull_request trigger runs the same suite) rather than dropping the gate.
+    branches: [main, development]
 
 permissions:
   contents: read
