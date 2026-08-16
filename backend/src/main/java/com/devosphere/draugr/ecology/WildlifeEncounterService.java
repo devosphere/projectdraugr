@@ -209,6 +209,11 @@ public class WildlifeEncounterService {
         // nothing crosses the perimeter unheard, so even a heads-down Chronicle is not caught wholly unaware.
         boolean alarmed = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='CAMP_ALARM' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')", Boolean.class, chunk));
         if (alarmed) chance -= 15;
+        // A fire-brand to hand (#126) — a resin torch the Chronicle can raise and wave — reads to a predator
+        // as the fire it fears: it presses a rush far less readily against someone carrying flame. Weaker than
+        // a whole camp's fire (which the ecology's fire-fear cascade already answers), but real, and carried.
+        boolean hasBrand = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key='resin_torch')", Boolean.class, chronicle));
+        if (hasBrand) chance -= 12;
         // A fresh kill carried on the body (#123/#127) is blood and scent on the wind — it draws a hungry predator
         // in where it might otherwise have passed. Cook, store, or cache the meat and the draw is gone; carry a raw
         // carcass through predator ground and you are the bait.
