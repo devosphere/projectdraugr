@@ -789,11 +789,14 @@ public class PhysicalItemService {
         // A right tool in hand biases a yield toward its high end, the same way a workstation eases a bench
         // craft (#257). It never gates the work — bare hands still manage — only improves it and only for the
         // processes it suits, so tools that were craftable-but-inert finally earn their keep: a mortar and
-        // pestle for grinding grain/salt/pigment, and a drop spindle for spinning fleece into yarn.
+        // pestle for grinding grain/salt/pigment, a drop spindle for spinning fleece into yarn, and a drying mat
+        // that spreads food so air passes above and below and it dries evenly — less spoils, so more is preserved.
         boolean toolAssist =
             ((key.equals("grind_flour") || key.equals("grind_salt") || key.equals("grind_pigment"))
                 && hasAtLeast(chronicle, "stone_mortar", 1) && hasAtLeast(chronicle, "stone_pestle", 1))
-            || (key.equals("spin_wool_yarn") && hasAtLeast(chronicle, "drop_spindle", 1));
+            || (key.equals("spin_wool_yarn") && hasAtLeast(chronicle, "drop_spindle", 1))
+            || ((key.equals("dry_fish") || key.equals("dry_meat") || key.equals("dry_mushrooms") || key.equals("dry_herbs"))
+                && hasAtLeast(chronicle, "drying_mat", 1));
         if ((atStation || toolAssist) && hi > lo) roll = Math.max(roll, Math.random());
         int made = Math.max(1, lo + (hi > lo ? (int)(roll*(hi-lo+1)) : 0));
         String outName = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, outKey);
