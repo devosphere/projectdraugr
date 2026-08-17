@@ -89,6 +89,8 @@ class AntlerFlakerKnappingIntegrationTest {
                 "SELECT id FROM world_chunk WHERE biome='TEMPERATE_FOREST' ORDER BY grid_y, grid_x LIMIT 1", UUID.class);
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", chunk, chronicle);
         Instant now = ticks.current().simulatedAt();
+        // Ample capacity so the 4–10 knapped points stay carried (owned), not grounded for want of carrying room.
+        jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
 
         // A hammerstone to strike with (knapping is STRIKING-gated), and FINE tool stone so the workmanship — not
         // the stock — is what caps the result.
