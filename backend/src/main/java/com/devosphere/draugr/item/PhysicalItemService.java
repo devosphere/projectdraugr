@@ -755,7 +755,11 @@ public class PhysicalItemService {
         // lifts the attempt by ONE step (a stable held surface aids precision at the margin) — but worst() still
         // caps it against the materials, so the assist is minor and never rescues poor stock or poor work.
         QualityGrade attempt = QualityGrade.attempt(actionText);
-        if (atStation) attempt = attempt.up();
+        // A sewing kit — a bone awl to pierce the holes, a bone needle to draw the thread through — lifts the
+        // stitching one step, the same minor, bounded assist a workstation gives, still capped against the
+        // leather's own grade by worst(). Both were craftable but read by nothing until now (#257).
+        boolean sewingKit = key.startsWith("sew_") && hasAtLeast(chronicle, "bone_needle", 1) && hasAtLeast(chronicle, "bone_awl", 1);
+        if (atStation || sewingKit) attempt = attempt.up();
         QualityGrade grade = QualityGrade.worst(worstGradeAmong(chronicle, inputKeys), attempt);
 
         for (java.util.Map<String,Object> in : fixed)
