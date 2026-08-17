@@ -111,7 +111,11 @@ public class PhysicalItemService {
         // Bone and antler are found singly and rarely; litter comes by the armful.
         boolean scarce = "deer_antler".equals(key) || "animal_bone".equals(key);
         int base = scarce ? 1 : 2 + ("TEMPERATE_FOREST".equals(biome) || "WETLAND".equals(biome) ? 1 : 0);
-        int desired = Math.min(base, capacityHeadroomUnits(chronicle, key));
+        // A rake or a hoe drags loose ground litter — leaves, grass, twigs, reeds — up by the armful (#257):
+        // both were craftable but read by nothing, so raking the ground gathered no more than bare hands. It is
+        // no help finding a bone or antler, which are scavenged singly however you comb the ground.
+        int rake = (!scarce && (hasAtLeast(chronicle, "wooden_rake", 1) || hasAtLeast(chronicle, "wooden_hoe", 1))) ? 2 : 0;
+        int desired = Math.min(base + rake, capacityHeadroomUnits(chronicle, key));
         if (desired <= 0) return new String[]{"FAILED", "Your hands and packs are full; there is no room to carry more."};
         for (int i = 0; i < desired; i++) createCarriedItem(chronicle, key, name, at, "FORAGED_FROM_GROUND");
         assertCarryCapacity(chronicle);
