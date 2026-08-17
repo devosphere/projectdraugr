@@ -92,9 +92,9 @@ class AntlerFlakerKnappingIntegrationTest {
         // Ample capacity so the 4–10 knapped points stay carried (owned), not grounded for want of carrying room.
         jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
 
-        // A hammerstone to strike with (knapping is STRIKING-gated), and FINE tool stone so the workmanship — not
+        // A cobble to strike with (knapping is STRIKING-gated), and FINE tool stone so the workmanship — not
         // the stock — is what caps the result.
-        items.createCarriedItem(chronicle, "hammerstone", "Hammerstone", now, "TEST_SEED");
+        items.createCarriedItem(chronicle, "granite_cobble", "Granite cobble", now, "TEST_SEED");
         items.createCarriedItem(chronicle, "precision_tool_stone", "Precision tool stone", now, "TEST_SEED", QualityGrade.FINE);
 
         // A plain-worded knap, no flaker: the workmanship is only SOUND, so the FINE stone is capped to SOUND points.
