@@ -86,9 +86,10 @@ class GroundRakingIntegrationTest {
         Instant now = ticks.current().simulatedAt();
         jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
 
-        // Combed by hand — the baseline armful.
+        // Combed by hand — the baseline armful. ("comb the" is the FORAGE_GROUND verb; "gather leaf" would be
+        // heard as GATHER_PLANT, which owns the word "leaf".)
         int before1 = litter(chronicle);
-        ChronicleActionService.ActionResult bare = actions.resolve("I gather leaf litter from the forest floor.");
+        ChronicleActionService.ActionResult bare = actions.resolve("I comb the forest floor for leaf litter and tinder.");
         assertEquals("SUCCEEDED", bare.outcome(), () -> "combing the forest floor for litter must succeed: " + bare.perception());
         int bareHaul = litter(chronicle) - before1;
         assertTrue(bareHaul > 0, "a forest floor must yield leaf litter to hand");
@@ -96,7 +97,7 @@ class GroundRakingIntegrationTest {
         // With a rake to drag it up — the same floor gives more.
         items.createCarriedItem(chronicle, "wooden_rake", "Wooden rake", now, "TEST_SEED");
         int before2 = litter(chronicle);
-        ChronicleActionService.ActionResult raked = actions.resolve("I gather leaf litter from the forest floor.");
+        ChronicleActionService.ActionResult raked = actions.resolve("I comb the forest floor for leaf litter and tinder.");
         assertEquals("SUCCEEDED", raked.outcome(), () -> "raking the forest floor for litter must succeed: " + raked.perception());
         int rakedHaul = litter(chronicle) - before2;
 
