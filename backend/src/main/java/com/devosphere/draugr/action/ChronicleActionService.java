@@ -987,14 +987,17 @@ public class ChronicleActionService {
         // A named non-meat food is eaten directly; meat always routes through the spoilage-tracked service below.
         if (named != null && !named.contains("meat")) return eatItem(chronicle, named, actionId, at);
         FoodPreservationService.Consumption cooked = food.consume(chronicle, "cooked_game_meat", at);
-        if (cooked.consumed()) { physiology.eatCookedMeal(chronicle); if (cooked.spoiled()) physiology.applyFoodborneIllness(chronicle, actionId, at); return new String[]{"SUCCEEDED", "The cooked meat is warm and dense, and the meal settles heavily but well."}; }
+        if (cooked.consumed()) { physiology.eatCookedMeal(chronicle, cooked.grade()); if (cooked.spoiled()) physiology.applyFoodborneIllness(chronicle, actionId, at); return new String[]{"SUCCEEDED", "The cooked meat is warm and dense, and the meal settles heavily but well."}; }
         FoodPreservationService.Consumption raw = food.consume(chronicle, "raw_game_meat", at);
-        if (raw.consumed()) { physiology.eat(chronicle); if (raw.spoiled()) physiology.applyFoodborneIllness(chronicle, actionId, at); return new String[]{"SUCCEEDED", "The raw meat is cold and difficult to swallow, but it settles the immediate emptiness."}; }
+        if (raw.consumed()) { physiology.eat(chronicle, raw.grade()); if (raw.spoiled()) physiology.applyFoodborneIllness(chronicle, actionId, at); return new String[]{"SUCCEEDED", "The raw meat is cold and difficult to swallow, but it settles the immediate emptiness."}; }
         String any = named != null ? named : items.anyFoodInReach(chronicle);
         if (any != null) return eatItem(chronicle, any, actionId, at);
         return new String[]{"FAILED", "You search through everything you can reach and come up with nothing to eat — no cooked meat, no raw, no forage. There is simply no food here to hand."};
     }
     private String[] eatItem(UUID chronicle, String itemKey, UUID actionId, Instant at) {
+        // Read the grade of the very item about to be eaten (a finer-cooked stew nourishes a little more, #271)
+        // before it is consumed and gone.
+        com.devosphere.draugr.quality.QualityGrade grade = items.gradeOfNextConsumed(chronicle, itemKey);
         items.consumeOne(chronicle, itemKey, at);
         // A forage marked poisonous (death cap, fly agaric) nourishes nothing — it sickens. The world
         // applies physics, not a warning: the player had to know which mushroom before they ate it.
@@ -1002,7 +1005,7 @@ public class ChronicleActionService {
             physiology.applyFoodborneIllness(chronicle, actionId, at);
             return new String[]{"SUCCEEDED", "You eat it. The taste turns sharp, then bitter, and a cold unease is spreading through your gut before you have finished."};
         }
-        physiology.eat(chronicle);
+        physiology.eat(chronicle, grade);
         return new String[]{"SUCCEEDED", eatProse(itemKey)};
     }
     /** Witness-stance prose for eating a foraged food, keyed loosely by what it is. Must name no Body-HUD state (NarrationPolicy / DR-0010). */

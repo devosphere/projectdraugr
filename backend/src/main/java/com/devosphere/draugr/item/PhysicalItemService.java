@@ -160,6 +160,18 @@ public class PhysicalItemService {
         return consumeFromReach(chronicle, chronicleLocation(chronicle), itemKey, occurredAt);
     }
 
+    /** The workmanship grade of the reachable item {@code consumeOne} would take next (same carried-first order),
+     *  or SOUND if none — so a caller can let a food's grade scale its effect before consuming it (#271). */
+    @Transactional(readOnly = true)
+    public QualityGrade gradeOfNextConsumed(UUID chronicle, String itemKey) {
+        UUID location = chronicleLocation(chronicle);
+        String g = jdbc.query(REACHABLE_CTE +
+            "SELECT i.quality_grade FROM reachable r JOIN item_instance i ON i.object_id=r.id JOIN world_object w ON w.id=r.id " +
+            "WHERE i.item_key=? ORDER BY CASE WHEN w.current_owner_id=? THEN 0 ELSE 1 END, r.id LIMIT 1",
+            rs -> rs.next() ? rs.getString(1) : null, chronicle, location, itemKey, chronicle);
+        return QualityGrade.of(g);
+    }
+
     /**
      * The item_key of a reachable, edible item (category FOOD) the action text names — by the
      * item's own key or its display name — or null. This is what lets "eat the oyster mushroom"

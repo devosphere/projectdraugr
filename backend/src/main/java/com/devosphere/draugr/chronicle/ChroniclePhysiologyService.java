@@ -171,14 +171,28 @@ public class ChroniclePhysiologyService {
         refreshBody(chronicleId);
     }
     @Transactional
-    public void eat(UUID chronicleId) {
-        jdbc.update("UPDATE chronicle_physiology SET hours_without_food=GREATEST(0,hours_without_food-8), energy_level=LEAST(100,energy_level+6) WHERE chronicle_id=?", chronicleId);
+    public void eat(UUID chronicleId) { eat(chronicleId, com.devosphere.draugr.quality.QualityGrade.SOUND); }
+    /** A food's workmanship grade scales how much it nourishes — bounded, so even a poor meal still staves off
+     *  hunger and a fine one is only modestly better (#271); grade is a benefit, never a gate. */
+    @Transactional
+    public void eat(UUID chronicleId, com.devosphere.draugr.quality.QualityGrade grade) {
+        double m = nourishmentFactor(grade);
+        int food = (int)Math.round(8*m), energy = (int)Math.round(6*m);
+        jdbc.update("UPDATE chronicle_physiology SET hours_without_food=GREATEST(0,hours_without_food-?), energy_level=LEAST(100,energy_level+?) WHERE chronicle_id=?", food, energy, chronicleId);
         refreshBody(chronicleId);
     }
+    public void eatCookedMeal(UUID chronicleId) { eatCookedMeal(chronicleId, com.devosphere.draugr.quality.QualityGrade.SOUND); }
     @Transactional
-    public void eatCookedMeal(UUID chronicleId) {
-        jdbc.update("UPDATE chronicle_physiology SET hours_without_food=GREATEST(0,hours_without_food-16), energy_level=LEAST(100,energy_level+14),stress_level=GREATEST(0,stress_level-2) WHERE chronicle_id=?", chronicleId);
+    public void eatCookedMeal(UUID chronicleId, com.devosphere.draugr.quality.QualityGrade grade) {
+        double m = nourishmentFactor(grade);
+        int food = (int)Math.round(16*m), energy = (int)Math.round(14*m);
+        jdbc.update("UPDATE chronicle_physiology SET hours_without_food=GREATEST(0,hours_without_food-?), energy_level=LEAST(100,energy_level+?),stress_level=GREATEST(0,stress_level-2) WHERE chronicle_id=?", food, energy, chronicleId);
         refreshBody(chronicleId);
+    }
+    /** SOUND is the baseline (×1.0); a defective meal nourishes a little less, a fine one a little more. */
+    private static double nourishmentFactor(com.devosphere.draugr.quality.QualityGrade grade) {
+        return switch (grade == null ? com.devosphere.draugr.quality.QualityGrade.SOUND : grade) {
+            case DEFECTIVE -> 0.75; case POOR -> 0.90; case SOUND -> 1.00; case FINE -> 1.20; };
     }
     @Transactional
     public void drink(UUID chronicleId) {
