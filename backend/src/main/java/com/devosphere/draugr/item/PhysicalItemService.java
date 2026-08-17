@@ -763,7 +763,12 @@ public class PhysicalItemService {
         // stitching one step, the same minor, bounded assist a workstation gives, still capped against the
         // leather's own grade by worst(). Both were craftable but read by nothing until now (#257).
         boolean sewingKit = key.startsWith("sew_") && hasAtLeast(chronicle, "bone_needle", 1) && hasAtLeast(chronicle, "bone_awl", 1);
-        if (atStation || sewingKit) attempt = attempt.up();
+        // An antler pressure flaker presses fine flakes off the edge with a control a hammerstone's percussion
+        // cannot match — it lifts the workmanship of a fine knap (arrowheads, a scraper, a burin) one step, the
+        // same minor, bounded assist, still capped against the stone's own grade. Craftable but inert until now (#257).
+        boolean flaker = (key.equals("knap_arrowheads") || key.equals("knap_scraper") || key.equals("knap_burin"))
+            && hasAtLeast(chronicle, "antler_flaker", 1);
+        if (atStation || sewingKit || flaker) attempt = attempt.up();
         QualityGrade grade = QualityGrade.worst(worstGradeAmong(chronicle, inputKeys), attempt);
 
         for (java.util.Map<String,Object> in : fixed)
