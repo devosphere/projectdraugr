@@ -143,13 +143,22 @@ public class FireService {
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'FIRE_BANKED','{}'::jsonb)",pit,Timestamp.from(now));
         return true;
     }
+    /** Cook the raw game meat the Chronicle carries over an active fire here. Returns how many pieces were
+     *  cooked (0 if there is no fire or no meat). A cooking tripod (skewers over the flames) or a stone
+     *  griddle (a hot surface) lets several pieces cook in one turn; over a bare fire, one at a time (#257). */
     @Transactional
-    public boolean cookGameMeat(UUID chronicle, UUID location, Instant now) {
+    public int cookGameMeat(UUID chronicle, UUID location, Instant now) {
         Integer active = jdbc.queryForObject("SELECT COUNT(*) FROM construction_project cp JOIN world_object w ON w.id=cp.object_id JOIN fire_state fs ON fs.construction_id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='STONE_FIRE_PIT' AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' AND fs.active=true", Integer.class, location);
-        if(active==null || active==0 || !items.consumeOne(chronicle,"raw_game_meat",now)) return false;
-        UUID cooked=items.createCarriedItem(chronicle,"cooked_game_meat","Cooked game meat",now,"COOKED_AT_FIRE");
-        food.registerCooked(cooked,now);
-        return true;
+        if(active==null || active==0) return 0;
+        int max = (items.hasAtLeast(chronicle,"stone_griddle",1) || items.hasAtLeast(chronicle,"cooking_tripod",1)) ? 3 : 1;
+        int cooked=0;
+        for(int i=0;i<max;i++){
+            if(!items.consumeOne(chronicle,"raw_game_meat",now)) break;
+            UUID c=items.createCarriedItem(chronicle,"cooked_game_meat","Cooked game meat",now,"COOKED_AT_FIRE");
+            food.registerCooked(c,now);
+            cooked++;
+        }
+        return cooked;
     }
     @Transactional
     public void advanceTo(Instant now) {
