@@ -769,13 +769,15 @@ public class PhysicalItemService {
         // the station's real payoff) — the max of two rolls rather than one. Never changes the min guarantee.
         int lo = ((Number) match.get("output_min")).intValue(), hi = ((Number) match.get("output_max")).intValue();
         double roll = Math.random();
-        // A mortar and pestle grinds finer and wastes less than pounding grain, salt, or pigment with a bare
-        // cobble (#257): carrying both biases a grinding yield toward its high end, the same way a workstation
-        // eases a bench craft. It never gates the work — bare hands still grind — only improves it, and only for
-        // the grinding processes, so the mortar and pestle finally earn their keep instead of sitting inert.
-        boolean grindingSet = (key.equals("grind_flour") || key.equals("grind_salt") || key.equals("grind_pigment"))
-            && hasAtLeast(chronicle, "stone_mortar", 1) && hasAtLeast(chronicle, "stone_pestle", 1);
-        if ((atStation || grindingSet) && hi > lo) roll = Math.max(roll, Math.random());
+        // A right tool in hand biases a yield toward its high end, the same way a workstation eases a bench
+        // craft (#257). It never gates the work — bare hands still manage — only improves it and only for the
+        // processes it suits, so tools that were craftable-but-inert finally earn their keep: a mortar and
+        // pestle for grinding grain/salt/pigment, and a drop spindle for spinning fleece into yarn.
+        boolean toolAssist =
+            ((key.equals("grind_flour") || key.equals("grind_salt") || key.equals("grind_pigment"))
+                && hasAtLeast(chronicle, "stone_mortar", 1) && hasAtLeast(chronicle, "stone_pestle", 1))
+            || (key.equals("spin_wool_yarn") && hasAtLeast(chronicle, "drop_spindle", 1));
+        if ((atStation || toolAssist) && hi > lo) roll = Math.max(roll, Math.random());
         int made = Math.max(1, lo + (hi > lo ? (int)(roll*(hi-lo+1)) : 0));
         String outName = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, outKey);
         String kind = preservationKind(outKey);
