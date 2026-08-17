@@ -768,7 +768,11 @@ public class PhysicalItemService {
         // same minor, bounded assist, still capped against the stone's own grade. Craftable but inert until now (#257).
         boolean flaker = (key.equals("knap_arrowheads") || key.equals("knap_scraper") || key.equals("knap_burin"))
             && hasAtLeast(chronicle, "antler_flaker", 1);
-        if (atStation || sewingKit || flaker) attempt = attempt.up();
+        // A bone comb cards and aligns the fibres before they are drawn out — combed wool spins to a finer, more
+        // even thread, so it lifts a spin one grade (distinct from a drop spindle, which only speeds the yield).
+        // Craftable but inert until now (#257); the finer yarn carries through to finer cloth by worst().
+        boolean woolComb = key.equals("spin_wool_yarn") && hasAtLeast(chronicle, "bone_comb", 1);
+        if (atStation || sewingKit || flaker || woolComb) attempt = attempt.up();
         QualityGrade grade = QualityGrade.worst(worstGradeAmong(chronicle, inputKeys), attempt);
 
         for (java.util.Map<String,Object> in : fixed)
