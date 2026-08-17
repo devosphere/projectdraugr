@@ -796,7 +796,12 @@ public class PhysicalItemService {
                 && hasAtLeast(chronicle, "stone_mortar", 1) && hasAtLeast(chronicle, "stone_pestle", 1))
             || (key.equals("spin_wool_yarn") && hasAtLeast(chronicle, "drop_spindle", 1))
             || ((key.equals("dry_fish") || key.equals("dry_meat") || key.equals("dry_mushrooms") || key.equals("dry_herbs"))
-                && hasAtLeast(chronicle, "drying_mat", 1));
+                && hasAtLeast(chronicle, "drying_mat", 1))
+            // A wooden mallet drives the froe or wedge through the grain with even, controlled blows, so a log
+            // rives cleaner and less is wasted to run-out — more usable stock off the same wood. The axe still
+            // does the work; the mallet only wastes less. Craftable but inert until now (#257).
+            || ((key.equals("split_planks") || key.equals("rive_shakes") || key.equals("rive_bow_stave") || key.equals("split_wedges"))
+                && hasAtLeast(chronicle, "wooden_mallet", 1));
         if ((atStation || toolAssist) && hi > lo) roll = Math.max(roll, Math.random());
         int made = Math.max(1, lo + (hi > lo ? (int)(roll*(hi-lo+1)) : 0));
         String outName = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, outKey);
