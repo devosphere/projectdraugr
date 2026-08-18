@@ -29,6 +29,28 @@ public class ConstructionService {
             jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED',destroyed_at=?,destroyed_location_id=current_location_id,destroyed_cause='CONSTRUCTION_COLLAPSED',current_location_id=NULL,updated_at=? WHERE id=?", occurredAt, occurredAt, objectId);
             jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CONSTRUCTION_COLLAPSED',jsonb_build_object('cause','storm_decay'))", objectId, occurredAt);
         }
+
+        // General weathering (#215/#220) — every decaying FIELD structure (fences, lookouts, fuel racks,
+        // latrines, alarms — not shelters, which have their own upkeep above, nor workstations) loses integrity
+        // slowly over time, faster in foul weather. Left unmended it eventually collapses; the build actions each
+        // mend one back to whole, so the decays flag and those repair paths finally read against something real.
+        // Whole days only, so frequent ticks do not reset the clock and lose the wear.
+        jdbc.update("UPDATE construction_project cp SET " +
+            "integrity_percent = GREATEST(0, cp.integrity_percent - FLOOR(EXTRACT(EPOCH FROM (?::timestamptz - cp.last_structural_update))/86400)::int * " +
+            "(CASE ww.weather_kind WHEN 'STORM' THEN 3 WHEN 'RAIN' THEN 2 WHEN 'SNOW' THEN 2 ELSE 1 END)), last_structural_update = ? " +
+            "FROM world_object w JOIN world_chunk c ON c.id=w.current_location_id JOIN world_weather ww ON ww.world_id=c.world_id " +
+            "JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
+            "WHERE cp.object_id=w.id AND cp.state='COMPLETED' AND ck.decays AND NOT ck.is_shelter AND NOT ck.is_workstation " +
+            "AND EXTRACT(EPOCH FROM (?::timestamptz - cp.last_structural_update)) >= 86400", occurredAt, occurredAt, occurredAt);
+        List<UUID> weathered = jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
+            "WHERE ck.decays AND NOT ck.is_shelter AND NOT ck.is_workstation AND cp.state='COMPLETED' AND cp.integrity_percent=0 AND w.lifecycle_state='ACTIVE' FOR UPDATE",
+            (rs, row) -> rs.getObject(1, UUID.class));
+        for (UUID objectId : weathered) {
+            jdbc.update("UPDATE construction_project SET state='DESTROYED' WHERE object_id=?", objectId);
+            jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED',destroyed_at=?,destroyed_location_id=current_location_id,destroyed_cause='CONSTRUCTION_COLLAPSED',current_location_id=NULL,updated_at=? WHERE id=?", occurredAt, occurredAt, objectId);
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CONSTRUCTION_COLLAPSED',jsonb_build_object('cause','weathering'))", objectId, occurredAt);
+        }
     }
 
     /** Returns false for an unsuccessful physical attempt without disclosing hidden prerequisites to narration. */
