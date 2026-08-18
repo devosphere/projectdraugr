@@ -21,12 +21,14 @@ public class WildlifeSimulationService {
     public void advanceTo(Instant now) {
         seedExistingSites(now);
         int hour = now.atZone(ZoneOffset.UTC).getHour();
-        jdbc.query("SELECT wp.id,wp.population_count,wp.carrying_capacity,wp.ecological_role,wp.activity_cycle,wp.last_simulated_at,ww.weather_kind FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id JOIN world_weather ww ON ww.world_id=es.world_id FOR UPDATE", rs -> {
+        jdbc.query("SELECT wp.id,wp.population_count,wp.carrying_capacity,wp.ecological_role,wp.activity_cycle,wp.last_simulated_at,ww.weather_kind,COALESCE((SELECT cd.disturbance_level FROM chunk_disturbance cd WHERE cd.chunk_id=es.chunk_id),0) FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id JOIN world_weather ww ON ww.world_id=es.world_id FOR UPDATE", rs -> {
             while (rs.next()) {
-                UUID id = rs.getObject(1, UUID.class); int population = rs.getInt(2); int capacity = rs.getInt(3); String role = rs.getString(4); String cycle = rs.getString(5); Instant last = rs.getTimestamp(6).toInstant(); String weather = rs.getString(7);
+                UUID id = rs.getObject(1, UUID.class); int population = rs.getInt(2); int capacity = rs.getInt(3); String role = rs.getString(4); String cycle = rs.getString(5); Instant last = rs.getTimestamp(6).toInstant(); String weather = rs.getString(7); int disturbance = rs.getInt(8);
                 long intervalHours = reproductionIntervalHours(role);
                 long intervals = Math.max(0, Duration.between(last, now).toHours() / intervalHours);
-                if (intervals > 0 && population < capacity) {
+                // Breed only from a living population (an extinct one does not spontaneously return — recolonisation
+                // is its own mechanic), and not on heavily disturbed ground (breeding sensitivity, #207/#209).
+                if (intervals > 0 && population > 0 && population < capacity && disturbance < 70) {
                     int next = Math.min(capacity, population + (int)Math.min(intervals, capacity - population));
                     jdbc.update("UPDATE wildlife_population SET population_count=?,last_simulated_at=? WHERE id=?", next, Timestamp.from(last.plus(Duration.ofHours(intervals * intervalHours))), id);
                 }
@@ -117,7 +119,7 @@ public class WildlifeSimulationService {
      */
     private void migrateFromDisturbance(Instant now) {
         List<java.util.Map<String,Object>> heavy = jdbc.queryForList(
-            "SELECT es.id AS site, c.id AS chunk, c.world_id AS world, c.grid_x AS gx, c.grid_y AS gy, c.biome AS biome " +
+            "SELECT wp.id AS pop, es.id AS site, c.id AS chunk, c.world_id AS world, c.grid_x AS gx, c.grid_y AS gy, c.biome AS biome " +
             "FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id JOIN world_chunk c ON c.id=es.chunk_id " +
             "JOIN chunk_disturbance cd ON cd.chunk_id=c.id " +
             "WHERE wp.population_count>0 AND cd.disturbance_level >= 70");
@@ -128,8 +130,18 @@ public class WildlifeSimulationService {
                 "ORDER BY COALESCE(ncd.disturbance_level,0) ASC, n.grid_y, n.grid_x LIMIT 1",
                 rs -> rs.next() ? rs.getObject(1, UUID.class) : null,
                 h.get("world"), h.get("biome"), h.get("gx"), h.get("gy"));
-            if (dest == null) continue; // no connected viable habitat — the population stays and keeps fleeing
             UUID site = (UUID) h.get("site");
+            if (dest == null) {
+                // Third tier (#207/#209): no connected viable habitat to leave for. Boxed in on ruined ground, the
+                // population declines physically over time from habitat loss — one at a time, only while the heavy
+                // disturbance persists, never breeding here (suppressed above). It is a real decline with history,
+                // not a silent despawn; the row and its identity remain even at nought, and it does not return on
+                // its own. Recolonisation from elsewhere is a later slice (#212).
+                jdbc.update("UPDATE wildlife_population SET population_count = GREATEST(0, population_count - 1) WHERE id=?", h.get("pop"));
+                jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'DECLINED',jsonb_build_object('chunk',?,'cause','HABITAT_LOSS'))",
+                    site, Timestamp.from(now), h.get("chunk"));
+                continue;
+            }
             jdbc.update("UPDATE ecology_site SET chunk_id=? WHERE id=?", dest, site);
             jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=? AND lifecycle_state='ACTIVE'", dest, site);
             jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'MIGRATED',jsonb_build_object('from',?,'to',?,'cause','DISTURBANCE'))",
