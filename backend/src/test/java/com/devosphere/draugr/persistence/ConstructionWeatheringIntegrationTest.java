@@ -56,6 +56,7 @@ class ConstructionWeatheringIntegrationTest {
 
     @Autowired WorldGenesisService worldGenesis;
     @Autowired ConstructionService construction;
+    @Autowired com.devosphere.draugr.simulation.WeatherSimulationService weather;
     @Autowired PersistentStateAuditor auditor;
     @Autowired JdbcTemplate jdbc;
 
@@ -74,8 +75,9 @@ class ConstructionWeatheringIntegrationTest {
         }
         UUID chunk = jdbc.queryForObject("SELECT id FROM world_chunk WHERE biome='TEMPERATE_FOREST' ORDER BY grid_y, grid_x LIMIT 1", UUID.class);
         UUID world = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, chunk);
-        jdbc.update("UPDATE world_weather SET weather_kind='CLEAR' WHERE world_id=?", world); // fair weather → 1 point/day
         Instant base = Instant.parse("2026-06-01T12:00:00Z");
+        weather.advanceTo(base); // ensure the world has a weather row (in play the weather tick runs before construction)
+        jdbc.update("UPDATE world_weather SET weather_kind='CLEAR' WHERE world_id=?", world); // fair weather → 1 point/day
         Timestamp baseTs = Timestamp.from(base);
 
         UUID standing = fabricateFence(chunk, 100, baseTs);  // a whole fence
