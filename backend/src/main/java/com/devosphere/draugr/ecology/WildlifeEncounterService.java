@@ -335,26 +335,24 @@ public class WildlifeEncounterService {
             int nx = gx + offs[i][0], ny = gy + offs[i][1];
             if (!chunkAt(world, nx, ny)) continue; // the edge of the world — no ground that way to read
             boolean nearClear;
-            java.util.Map<String,Object> pred = carnivoreAt(world, nx, ny);
+            java.util.Map<String,Object> pred = threatAt(world, nx, ny);
             if (pred == null) {
                 nearClear = true;
             } else {
                 nearClear = false;
-                String sign = switch (Math.floorMod(chunk.hashCode() + nx * 31 + ny, 3)) {
-                    case 0 -> "a rank animal smell rides the wind";
-                    case 1 -> "the boundary trees are scored deep, higher than a man reaches";
-                    default -> "the small birds have fallen silent";
-                };
+                boolean monster = Boolean.TRUE.equals(pred.get("monster"));
+                String sign = threatSign(chunk, nx, ny, monster);
                 danger.add(reads
-                    ? names[i] + ", " + sign + " — a " + display((String) pred.get("species")) + urgencyOf((String) pred.get("behavior"))
-                    : names[i] + ", " + sign + " — something large keeps that ground");
+                    ? names[i] + ", " + sign + " — " + (monster ? "the lair of a " : "a ") + display((String) pred.get("species")) + urgencyOf((String) pred.get("behavior"))
+                    : names[i] + ", " + sign + " — " + (monster ? "something keeps a lair that way" : "something large keeps that ground"));
             }
             // From a lookout the eye reaches a second chunk out along the same line — whether or not the near
             // ground carried danger, so a far threat is seen even when the way immediately ahead reads clear.
             boolean farThreat = false;
             if (hasLookout) {
-                java.util.Map<String,Object> beyond = carnivoreAt(world, gx + offs[i][0] * 2, gy + offs[i][1] * 2);
-                if (beyond != null) { farThreat = true; far.add("further " + names[i] + ", a " + display((String) beyond.get("species")) + urgencyOf((String) beyond.get("behavior"))); }
+                java.util.Map<String,Object> beyond = threatAt(world, gx + offs[i][0] * 2, gy + offs[i][1] * 2);
+                if (beyond != null) { farThreat = true; boolean m = Boolean.TRUE.equals(beyond.get("monster"));
+                    far.add("further " + names[i] + ", " + (m ? "the lair of a " : "a ") + display((String) beyond.get("species")) + urgencyOf((String) beyond.get("behavior"))); }
             }
             if (nearClear && !farThreat) clearWays.add(names[i]);
         }
@@ -379,16 +377,35 @@ public class WildlifeEncounterService {
             java.sql.ResultSet::next, world, x, y));
     }
 
-    /** The most pressing carnivore population at a chunk (species + behaviour), or null if the ground is clear. */
-    private java.util.Map<String,Object> carnivoreAt(UUID world, int x, int y) {
+    /** The most pressing threat at a chunk — a hunting carnivore or a monster's lair (a MONSTER-category site,
+     *  whatever its ecological role): species + behaviour + whether it is a lair. Null if the ground is clear.
+     *  Lairs are reported ahead of ordinary predators; #123 names goblin caves and monster lairs among the
+     *  dangers a Chronicle must be able to sense before forced contact. */
+    private java.util.Map<String,Object> threatAt(UUID world, int x, int y) {
         return jdbc.query(
-            "SELECT wp.species_key, wp.behavior_state FROM world_chunk c JOIN ecology_site es ON es.chunk_id=c.id " +
-            "JOIN wildlife_population wp ON wp.site_id=es.id " +
-            "WHERE c.world_id=? AND c.grid_x=? AND c.grid_y=? AND wp.ecological_role='CARNIVORE' AND wp.population_count>0 " +
-            "ORDER BY CASE wp.behavior_state WHEN 'HUNTING' THEN 0 WHEN 'PACK_HUNT' THEN 0 WHEN 'STALKING' THEN 1 " +
+            "SELECT wp.species_key, wp.behavior_state, (es.site_category='MONSTER') AS monster FROM world_chunk c " +
+            "JOIN ecology_site es ON es.chunk_id=c.id JOIN wildlife_population wp ON wp.site_id=es.id " +
+            "WHERE c.world_id=? AND c.grid_x=? AND c.grid_y=? AND (wp.ecological_role='CARNIVORE' OR es.site_category='MONSTER') AND wp.population_count>0 " +
+            "ORDER BY (es.site_category='MONSTER') DESC, CASE wp.behavior_state WHEN 'HUNTING' THEN 0 WHEN 'PACK_HUNT' THEN 0 WHEN 'STALKING' THEN 1 " +
             "WHEN 'AGGRESSIVE' THEN 1 WHEN 'ALERT' THEN 2 WHEN 'TERRITORIAL' THEN 2 ELSE 3 END LIMIT 1",
-            rs -> rs.next() ? java.util.Map.of("species", rs.getString(1), "behavior", rs.getString(2) == null ? "" : rs.getString(2)) : null,
+            rs -> rs.next() ? java.util.Map.of("species", rs.getString(1), "behavior", rs.getString(2) == null ? "" : rs.getString(2), "monster", rs.getBoolean(3)) : null,
             world, x, y);
+    }
+
+    /** A grounded sensory sign of a threat read from the boundary — fouler and stiller for a monster's lair. */
+    private static String threatSign(UUID chunk, int nx, int ny, boolean monster) {
+        int r = Math.floorMod(chunk.hashCode() + nx * 31 + ny, 3);
+        return monster
+            ? switch (r) {
+                case 0 -> "the ground is fouled and the air hangs wrong";
+                case 1 -> "bones lie cracked and scattered, more than any beast leaves";
+                default -> "nothing living moves or makes a sound";
+            }
+            : switch (r) {
+                case 0 -> "a rank animal smell rides the wind";
+                case 1 -> "the boundary trees are scored deep, higher than a man reaches";
+                default -> "the small birds have fallen silent";
+            };
     }
 
     /** How pressing a predator's presence reads, from its behaviour — appended to a scout's report. */
