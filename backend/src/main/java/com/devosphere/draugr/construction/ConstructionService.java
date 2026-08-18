@@ -84,6 +84,71 @@ public class ConstructionService {
         return new String[]{"SUCCEEDED", "You string a line low across the approaches and hang " + clabel + " from it, so nothing crosses into the camp without knocking a warning."};
     }
 
+    /** Withies for a woven wattle wall, strongest first — cut and woven between stakes with a blade (#127). */
+    private static final String[] WATTLE_WITHY = {"hazel_rod", "willow_branch"};
+    /** Lashing to bind a piled brush fence together (#127). */
+    private static final String[] BRUSH_BIND = {"withy_rope", "fiber_cordage", "plant_fiber"};
+
+    /**
+     * Raise (or mend) a perimeter fence here (#127, EPIC #123): a physical barrier between the camp and a
+     * predator's rush — the barrier layer the defence catalogue lacked alongside the alarm (warning) and the
+     * escape (flight). A woven WATTLE_FENCE — withies cut and woven between stakes, needing a blade — stands
+     * stronger than a piled BRUSH_FENCE of dead branches lashed together, and {@link
+     * com.devosphere.draugr.ecology.WildlifeEncounterService#passiveEncounter} reads the stronger wall as the
+     * greater deterrent. It is no fortress: it buys time and turns many a rush aside, nothing more. Fails
+     * grounded with no barrier stock to hand; mends an existing fence here rather than stacking a second.
+     */
+    @Transactional
+    public String[] buildFence(UUID chronicle, UUID location, String text, Instant at) {
+        String v = text.toLowerCase(java.util.Locale.ROOT);
+        boolean forceBrush = v.contains("brush");
+        boolean forceWattle = v.contains("wattle");
+        Timestamp ts = Timestamp.from(at);
+        // Mend a fence that already stands here before raising a second — a top-up of its own stock.
+        java.util.Map<String,Object> existing = jdbc.query(
+            "SELECT cp.object_id AS id, cp.project_kind AS kind FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "WHERE w.current_location_id=? AND cp.project_kind IN ('BRUSH_FENCE','WATTLE_FENCE') AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' LIMIT 1 FOR UPDATE",
+            rs -> rs.next() ? java.util.Map.of("id", rs.getObject("id", UUID.class), "kind", rs.getString("kind")) : null, location);
+        if (existing != null) {
+            String kind = (String) existing.get("kind");
+            if ("WATTLE_FENCE".equals(kind)) {
+                String w = null; for (String x : WATTLE_WITHY) if (items.hasAtLeast(chronicle, x, 2)) { w = x; break; }
+                if (w == null) return new String[]{"FAILED", "The wattle has gaps you cannot close — you have no withies to hand to mend it."};
+                items.consumeOne(chronicle, w, at); items.consumeOne(chronicle, w, at);
+            } else {
+                if (!items.hasAtLeast(chronicle, "dry_branch", 2)) return new String[]{"FAILED", "The brush wall has thinned, and you have no branches to hand to pack it out again."};
+                items.consumeOne(chronicle, "dry_branch", at); items.consumeOne(chronicle, "dry_branch", at);
+            }
+            jdbc.update("UPDATE construction_project SET integrity_percent=100,last_structural_update=? WHERE object_id=?", ts, existing.get("id"));
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'FENCE_MENDED',jsonb_build_object('projectKind',?))", existing.get("id"), ts, kind);
+            return new String[]{"SUCCEEDED", "You work along the line of the fence, packing out the gaps until it stands whole across the approach again."};
+        }
+        // Raise a new fence: a woven wattle if there are withies and a blade to cut them, else a piled brush wall.
+        String withy = null; for (String x : WATTLE_WITHY) if (items.hasAtLeast(chronicle, x, 4)) { withy = x; break; }
+        boolean canWattle = !forceBrush && withy != null && items.hasCuttingTool(chronicle);
+        if (canWattle) {
+            for (int i = 0; i < 4; i++) items.consumeOne(chronicle, withy, at);
+            UUID id = UUID.randomUUID();
+            jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CONSTRUCTION','Wattle perimeter fence',?)", id, location);
+            jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at) VALUES (?,'WATTLE_FENCE','COMPLETED',100,?)", id, ts);
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CONSTRUCTED',jsonb_build_object('projectKind','WATTLE_FENCE','withy',?))", id, ts, withy);
+            return new String[]{"SUCCEEDED", "You drive a line of stakes and weave the withies between them into a taut wattle wall — a barrier a rushing animal must break before it reaches you."};
+        }
+        if (forceWattle) return new String[]{"FAILED", "A wattle wall wants cut withies — hazel or willow rods — and a blade to work them, and you are short of one or the other."};
+        if (items.hasAtLeast(chronicle, "dry_branch", 4)) {
+            String bind = null; for (String b : BRUSH_BIND) if (items.hasAtLeast(chronicle, b, 1)) { bind = b; break; }
+            if (bind == null) return new String[]{"FAILED", "You have branches enough, but nothing to lash them with — a length of cordage or fibre must come first."};
+            for (int i = 0; i < 4; i++) items.consumeOne(chronicle, "dry_branch", at);
+            items.consumeOne(chronicle, bind, at);
+            UUID id = UUID.randomUUID();
+            jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CONSTRUCTION','Brush perimeter fence',?)", id, location);
+            jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at) VALUES (?,'BRUSH_FENCE','COMPLETED',100,?)", id, ts);
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CONSTRUCTED',jsonb_build_object('projectKind','BRUSH_FENCE','bind',?))", id, ts, bind);
+            return new String[]{"SUCCEEDED", "You pile dead branches into a low barrier and lash them fast — a rough brush fence a rushing animal must break through, not simply cross."};
+        }
+        return new String[]{"FAILED", "You have nothing to raise a fence from — piled brushwood to lash, or withies and a blade to weave a wattle wall."};
+    }
+
     /** Bedding material a bed can be laid from, best first — all reachable first-era plant stock (#71 make_bed). */
     private static final String[][] BEDDING = {{"straw_bundle","straw"},{"reed_bundle","reed"},{"thatch_bundle","thatch"},{"plant_fiber","plant fibre"},{"reed_mat","reed matting"},{"cattail_stalk","cattail"},{"water_lily_pad","dry lily pads"},{"dry_grass_bundle","dry grass"},{"big_leaf","leaves"},{"moss_bundle","moss"}};
 
