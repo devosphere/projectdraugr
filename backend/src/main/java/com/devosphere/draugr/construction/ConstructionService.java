@@ -39,8 +39,8 @@ public class ConstructionService {
             "integrity_percent = GREATEST(0, cp.integrity_percent - FLOOR(EXTRACT(EPOCH FROM (?::timestamptz - cp.last_structural_update))/86400)::int * " +
             "(CASE ww.weather_kind WHEN 'STORM' THEN 3 WHEN 'RAIN' THEN 2 WHEN 'SNOW' THEN 2 ELSE 1 END)), last_structural_update = ? " +
             "FROM world_object w JOIN world_chunk c ON c.id=w.current_location_id JOIN world_weather ww ON ww.world_id=c.world_id " +
-            "JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
-            "WHERE cp.object_id=w.id AND cp.state='COMPLETED' AND ck.decays AND NOT ck.is_shelter AND NOT ck.is_workstation " +
+            "WHERE cp.object_id=w.id AND cp.state='COMPLETED' " +
+            "AND EXISTS (SELECT 1 FROM construction_kind ck WHERE ck.project_kind=cp.project_kind AND ck.decays AND NOT ck.is_shelter AND NOT ck.is_workstation) " +
             "AND EXTRACT(EPOCH FROM (?::timestamptz - cp.last_structural_update)) >= 86400", occurredAt, occurredAt, occurredAt);
         List<UUID> weathered = jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
             "JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
