@@ -391,6 +391,17 @@ public class ChronicleActionService {
                 }
             }
         }
+        // Industrial disturbance sources (#207/#208) — breaking ground and smoky burns mark the land beyond a
+        // fight or a felled tree, so the wildlife that live here respond to the whole shape of a Chronicle's work.
+        // Only successful work leaves a mark; the amount scales with how disruptive the act is.
+        if ("SUCCEEDED".equals(outcome)) {
+            switch (intent) {
+                case GATHER_MINERAL -> wildlife.recordDisturbance(chronicle.location(), "EXCAVATION", 30, resolvedAt);
+                case GATHER_STONE, GATHER_STONE_SLAB, GATHER_CLAY -> wildlife.recordDisturbance(chronicle.location(), "EXCAVATION", 15, resolvedAt);
+                case MAKE_CHARCOAL -> wildlife.recordDisturbance(chronicle.location(), "SMOKE", 20, resolvedAt);
+                default -> { }
+            }
+        }
         // The world's turn (V44). While the chronicle was occupied, anything hunting
         // this ground had the chance to reach them. It is checked only for acts that
         // take real time and leave the body exposed — not for a moment's equipping,
