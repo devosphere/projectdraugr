@@ -63,6 +63,7 @@ class LookoutScoutIntegrationTest {
     @Autowired WorldEcologyGenesisService ecology;
     @Autowired ChronicleService chronicles;
     @Autowired ChronicleActionService actions;
+    @Autowired com.devosphere.draugr.ecology.WildlifeEncounterService wildlife;
     @Autowired com.devosphere.draugr.item.PhysicalItemService items;
     @Autowired SimulationTickService ticks;
     @Autowired PersistentStateAuditor auditor;
@@ -99,11 +100,11 @@ class LookoutScoutIntegrationTest {
         Instant now = ticks.current().simulatedAt();
         jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
 
-        // From flat ground the far danger is invisible — the near treeline hides it.
-        ChronicleActionService.ActionResult flat = actions.resolve("I carefully scout the boundary for danger.");
-        assertEquals("SUCCEEDED", flat.outcome(), () -> "scouting from flat ground must succeed: " + flat.perception());
-        assertFalse(flat.perception().toLowerCase(Locale.ROOT).contains("further to the east"),
-                () -> "without a lookout a scout must not see two chunks out: " + flat.perception());
+        // From flat ground the far danger is invisible — the near treeline hides it. Read the boundary directly
+        // (no tick), so the fabricated predator two chunks out is never disturbed by the wildlife simulation.
+        String flat = wildlife.scoutBoundary(chronicle, chronicleChunk, "HIGH", 0.0).narration();
+        assertFalse(flat.toLowerCase(Locale.ROOT).contains("further to the east"),
+                () -> "without a lookout a scout must not see two chunks out: " + flat);
 
         // Build a lookout from carried poles with a blade and a lashing — the full acquisition path.
         for (int i = 0; i < 4; i++) items.createCarriedItem(chronicle, "hazel_rod", "Hazel rod", now, "TEST_SEED");
@@ -116,11 +117,11 @@ class LookoutScoutIntegrationTest {
                 "WHERE w.current_location_id=? AND cp.project_kind='LOOKOUT' AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE'", Integer.class, chronicleChunk);
         assertEquals(1, lookouts, "the lookout must stand as a persistent construction at the chunk");
 
-        // From the lookout the same far danger is now in view.
-        ChronicleActionService.ActionResult raised = actions.resolve("I carefully scout the boundary for danger.");
-        assertEquals("SUCCEEDED", raised.outcome(), () -> "scouting from the lookout must succeed: " + raised.perception());
-        assertTrue(raised.perception().toLowerCase(Locale.ROOT).contains("further to the east"),
-                () -> "from the lookout a scout must see danger two chunks to the east (#127/#128): " + raised.perception());
+        // From the lookout the same far danger is now in view. Read directly again (no tick) — the predator has
+        // faced only the single build tick, which the sibling ScoutBoundary test proves leaves it in place.
+        String raised = wildlife.scoutBoundary(chronicle, chronicleChunk, "HIGH", 0.0).narration();
+        assertTrue(raised.toLowerCase(Locale.ROOT).contains("further to the east"),
+                () -> "from the lookout a scout must see danger two chunks to the east (#127/#128): " + raised);
 
         assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
