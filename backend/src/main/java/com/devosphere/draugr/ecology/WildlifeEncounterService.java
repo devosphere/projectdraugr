@@ -295,6 +295,68 @@ public class WildlifeEncounterService {
     }
 
     /**
+     * Scan the boundary of the current ground toward each cardinal direction for the sign of a predator in the
+     * next chunk — a scent riding the wind, boundary trees scored deep, prey gone silent — so a Chronicle can
+     * choose a route away from danger before walking into it (#128/#123: the world gives grounded evidence
+     * before forced contact, and at least one route leads away from hostile territory). It reads only what a
+     * careful scan of the immediate surroundings would give: one tile out, directional, never a map, never a
+     * count. A carnivore population next door is the danger; its behaviour sets how pressing the warning reads.
+     */
+    @Transactional(readOnly = true)
+    public EncounterResult scoutBoundary(UUID chronicle, UUID chunk, String attention, double familiarity) {
+        java.util.Map<String,Object> here = jdbc.queryForMap("SELECT world_id, grid_x, grid_y FROM world_chunk WHERE id=?", chunk);
+        UUID world = (UUID) here.get("world_id"); int gx = (int) here.get("grid_x"); int gy = (int) here.get("grid_y");
+        // North, east, south, west — the four ways a Chronicle could step off this ground.
+        int[][] offs = {{0,-1},{1,0},{0,1},{-1,0}};
+        String[] names = {"to the north","to the east","to the south","to the west"};
+        boolean reads = "HIGH".equals(attention) || familiarity > 0.15;
+        java.util.List<String> danger = new java.util.ArrayList<>();
+        java.util.List<String> clearWays = new java.util.ArrayList<>();
+        for (int i = 0; i < offs.length; i++) {
+            int nx = gx + offs[i][0], ny = gy + offs[i][1];
+            Boolean chunkExists = jdbc.query("SELECT 1 FROM world_chunk WHERE world_id=? AND grid_x=? AND grid_y=?",
+                java.sql.ResultSet::next, world, nx, ny);
+            if (!Boolean.TRUE.equals(chunkExists)) continue; // the edge of the world — no ground that way to read
+            java.util.Map<String,Object> pred = jdbc.query(
+                "SELECT wp.species_key, wp.behavior_state FROM world_chunk c JOIN ecology_site es ON es.chunk_id=c.id " +
+                "JOIN wildlife_population wp ON wp.site_id=es.id " +
+                "WHERE c.world_id=? AND c.grid_x=? AND c.grid_y=? AND wp.ecological_role='CARNIVORE' AND wp.population_count>0 " +
+                "ORDER BY CASE wp.behavior_state WHEN 'HUNTING' THEN 0 WHEN 'PACK_HUNT' THEN 0 WHEN 'STALKING' THEN 1 " +
+                "WHEN 'AGGRESSIVE' THEN 1 WHEN 'ALERT' THEN 2 WHEN 'TERRITORIAL' THEN 2 ELSE 3 END LIMIT 1",
+                rs -> rs.next() ? java.util.Map.of("species", rs.getString(1), "behavior", rs.getString(2) == null ? "" : rs.getString(2)) : null,
+                world, nx, ny);
+            if (pred == null) { clearWays.add(names[i]); continue; }
+            String sign = switch (Math.floorMod(chunk.hashCode() + nx * 31 + ny, 3)) {
+                case 0 -> "a rank animal smell rides the wind";
+                case 1 -> "the boundary trees are scored deep, higher than a man reaches";
+                default -> "the small birds have fallen silent";
+            };
+            if (reads) {
+                String behavior = (String) pred.get("behavior");
+                String urgency = switch (behavior) {
+                    case "HUNTING", "PACK_HUNT" -> ", and it is hunting";
+                    case "STALKING", "AGGRESSIVE" -> ", and it is roused";
+                    case "TERRITORIAL", "ALERT" -> ", and it is not far off";
+                    default -> ", at its ease for now";
+                };
+                danger.add(names[i] + ", " + sign + " — a " + display((String) pred.get("species")) + urgency);
+            } else {
+                danger.add(names[i] + ", " + sign + " — something large keeps that ground");
+            }
+        }
+        StringBuilder s = new StringBuilder();
+        if (danger.isEmpty()) {
+            s.append("You read the boundary on every side — no scent on the wind, no scoring on the trees, no silence where there should be birdsong. The ways off this ground look clear.");
+        } else {
+            s.append("You read the boundary. ");
+            for (String d : danger) s.append(Character.toUpperCase(d.charAt(0))).append(d.substring(1)).append(". ");
+            if (!clearWays.isEmpty()) s.append("The ground ").append(String.join(" and ", clearWays)).append(clearWays.size() > 1 ? " reads" : " reads").append(" clear.");
+            else s.append("No way off reads clear.");
+        }
+        return new EncounterResult("SUCCEEDED", s.toString());
+    }
+
+    /**
      * Approach an animal calmly and try to build trust. Trust is earned across many
      * returns, not won in one: each calm approach moves it a little, food moves it
      * more, and approaching with a weapon in hand moves it back. Species tamability
