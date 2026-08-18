@@ -105,7 +105,15 @@ public class WildlifeSimulationService {
         // over the base state and the flee-window recovery above.
         jdbc.update("UPDATE wildlife_population wp SET behavior_state='FLEEING' " +
             "FROM ecology_site site JOIN chunk_disturbance cd ON cd.chunk_id=site.chunk_id " +
-            "WHERE site.id=wp.site_id AND wp.population_count>0 AND cd.disturbance_level >= 40");
+            "WHERE site.id=wp.site_id AND wp.population_count>0 AND cd.disturbance_level >= 40 AND site.site_category <> 'MONSTER'");
+
+        // Monster retaliation (#207/#210) — a monster does NOT flee a disturbed lair the way ordinary wildlife
+        // quits a range: intruded upon, it is roused and turns on the intruder (HUNTING). It holds its ground —
+        // it is excluded from the migration/decline above — so the way to be rid of it is to leave it be until
+        // the disturbance decays, or to face it, not to drive it off. Applied last so it wins over the base state.
+        jdbc.update("UPDATE wildlife_population wp SET behavior_state='HUNTING' " +
+            "FROM ecology_site site JOIN chunk_disturbance cd ON cd.chunk_id=site.chunk_id " +
+            "WHERE site.id=wp.site_id AND wp.population_count>0 AND cd.disturbance_level >= 40 AND site.site_category = 'MONSTER'");
     }
 
     /**
@@ -122,7 +130,7 @@ public class WildlifeSimulationService {
             "SELECT wp.id AS pop, es.id AS site, c.id AS chunk, c.world_id AS world, c.grid_x AS gx, c.grid_y AS gy, c.biome AS biome " +
             "FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id JOIN world_chunk c ON c.id=es.chunk_id " +
             "JOIN chunk_disturbance cd ON cd.chunk_id=c.id " +
-            "WHERE wp.population_count>0 AND cd.disturbance_level >= 70");
+            "WHERE wp.population_count>0 AND cd.disturbance_level >= 70 AND es.site_category <> 'MONSTER'");
         for (java.util.Map<String,Object> h : heavy) {
             UUID dest = jdbc.query(
                 "SELECT n.id FROM world_chunk n LEFT JOIN chunk_disturbance ncd ON ncd.chunk_id=n.id " +
