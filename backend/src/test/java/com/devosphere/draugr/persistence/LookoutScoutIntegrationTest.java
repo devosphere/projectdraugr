@@ -64,6 +64,7 @@ class LookoutScoutIntegrationTest {
     @Autowired ChronicleService chronicles;
     @Autowired ChronicleActionService actions;
     @Autowired com.devosphere.draugr.ecology.WildlifeEncounterService wildlife;
+    @Autowired com.devosphere.draugr.construction.ConstructionService construction;
     @Autowired com.devosphere.draugr.item.PhysicalItemService items;
     @Autowired SimulationTickService ticks;
     @Autowired PersistentStateAuditor auditor;
@@ -100,28 +101,40 @@ class LookoutScoutIntegrationTest {
         Instant now = ticks.current().simulatedAt();
         jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
 
-        // From flat ground the far danger is invisible — the near treeline hides it. Read the boundary directly
-        // (no tick), so the fabricated predator two chunks out is never disturbed by the wildlife simulation.
+        // Read the boundary directly (no tick) throughout, and build the lookout directly too, so the fabricated
+        // far predator is never touched by the wildlife simulation (a single tick displaces a lone fabricated
+        // population). From flat ground the far danger is invisible — the near treeline hides it.
         String flat = wildlife.scoutBoundary(chronicle, chronicleChunk, "HIGH", 0.0).narration();
         assertFalse(flat.toLowerCase(Locale.ROOT).contains("further to the east"),
                 () -> "without a lookout a scout must not see two chunks out: " + flat);
 
-        // Build a lookout from carried poles with a blade and a lashing — the full acquisition path.
+        // Raise a lookout from carried poles with a blade and a lashing.
         for (int i = 0; i < 4; i++) items.createCarriedItem(chronicle, "hazel_rod", "Hazel rod", now, "TEST_SEED");
         items.createCarriedItem(chronicle, "stone_knife", "Stone knife", now, "TEST_SEED");
         items.createCarriedItem(chronicle, "fiber_cordage", "Fiber cordage", now, "TEST_SEED");
-        ChronicleActionService.ActionResult built = actions.resolve("I build a lookout.");
-        assertEquals("SUCCEEDED", built.outcome(), () -> "building a lookout must succeed: " + built.perception());
+        String[] built = construction.buildLookout(chronicle, chronicleChunk, now);
+        assertEquals("SUCCEEDED", built[0], () -> "building a lookout must succeed: " + built[1]);
         Integer lookouts = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
                 "WHERE w.current_location_id=? AND cp.project_kind='LOOKOUT' AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE'", Integer.class, chronicleChunk);
         assertEquals(1, lookouts, "the lookout must stand as a persistent construction at the chunk");
 
-        // From the lookout the same far danger is now in view. Read directly again (no tick) — the predator has
-        // faced only the single build tick, which the sibling ScoutBoundary test proves leaves it in place.
+        // The fabricated far carnivore must still stand (no tick has run to disturb it) for the lookout to see it.
+        Integer farPred = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id " +
+                "WHERE es.chunk_id=? AND wp.ecological_role='CARNIVORE' AND wp.population_count>0", Integer.class, farEastChunk);
+        assertTrue(farPred >= 1, "the fabricated far carnivore must still stand two chunks east");
+
+        // From the lookout the same far danger is now in view.
         String raised = wildlife.scoutBoundary(chronicle, chronicleChunk, "HIGH", 0.0).narration();
         assertTrue(raised.toLowerCase(Locale.ROOT).contains("further to the east"),
                 () -> "from the lookout a scout must see danger two chunks to the east (#127/#128): " + raised);
+
+        // The BUILD_LOOKOUT intent also routes and mends an existing lookout (a tick here is harmless — the reads
+        // are done), proving the acquisition path end to end.
+        items.createCarriedItem(chronicle, "hazel_rod", "Hazel rod", now, "TEST_SEED");
+        ChronicleActionService.ActionResult reBuilt = actions.resolve("I build a lookout.");
+        assertEquals("SUCCEEDED", reBuilt.outcome(), () -> "the BUILD_LOOKOUT intent must route and mend: " + reBuilt.perception());
 
         assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
