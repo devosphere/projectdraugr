@@ -83,6 +83,23 @@ public class WildlifeSimulationService {
         // who drove something off finds the ground genuinely quieter for a while.
         jdbc.update("UPDATE wildlife_population SET behavior_state='RESTING' WHERE behavior_state='FLEEING' AND last_simulated_at < ?",
             Timestamp.from(now.minus(Duration.ofHours(2))));
+
+        // Human disturbance decays (#207/#208) — a place worked hard grows quiet again when it is left alone.
+        // Only fold in whole hours of decay (4/hour), so frequent ticks do not reset the clock and lose the accrual.
+        Timestamp nowTs = Timestamp.from(now);
+        jdbc.update("UPDATE chunk_disturbance SET " +
+            "disturbance_level = GREATEST(0, disturbance_level - FLOOR(EXTRACT(EPOCH FROM (?::timestamptz - last_updated_at))/3600.0 * 4)::int), " +
+            "last_updated_at = ? " +
+            "WHERE disturbance_level > 0 AND EXTRACT(EPOCH FROM (?::timestamptz - last_updated_at)) >= 3600", nowTs, nowTs, nowTs);
+
+        // Disturbance avoidance (#207/#209, first response tier) — wildlife that live on ground still marked by a
+        // fight, a kill, or felling quit it and range off while it stays disturbed. It is a transient avoidance
+        // re-derived each tick, never a despawn or a teleport: once the disturbance decays below the threshold
+        // the cascade stops firing and the population returns to its baseline behaviour. Applied last so it wins
+        // over the base state and the flee-window recovery above.
+        jdbc.update("UPDATE wildlife_population wp SET behavior_state='FLEEING' " +
+            "FROM ecology_site site JOIN chunk_disturbance cd ON cd.chunk_id=site.chunk_id " +
+            "WHERE site.id=wp.site_id AND wp.population_count>0 AND cd.disturbance_level >= 40");
     }
 
     @Transactional
