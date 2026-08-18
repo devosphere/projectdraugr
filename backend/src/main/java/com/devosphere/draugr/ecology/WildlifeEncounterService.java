@@ -419,6 +419,24 @@ public class WildlifeEncounterService {
     }
 
     /**
+     * Record local habitat disturbance from a physical act (#207/#208): a fight or kill, a felled tree, work that
+     * marks the ground. It raises the chunk's disturbance level (capped) and logs an immutable event of what
+     * caused it. WildlifeSimulationService reads the level and the wildlife that live there grow wary and quit
+     * the ground while it stays disturbed; the level decays over time, so a place left alone grows quiet again.
+     * This is measurement + accrual only — the response and decay live in the ecology tick.
+     */
+    @Transactional
+    public void recordDisturbance(UUID chunk, String sourceKind, int amount, Instant at) {
+        if (chunk == null || amount <= 0) return;
+        Timestamp ts = Timestamp.from(at);
+        jdbc.update("INSERT INTO chunk_disturbance (chunk_id, disturbance_level, last_updated_at) VALUES (?, LEAST(100,?), ?) " +
+            "ON CONFLICT (chunk_id) DO UPDATE SET disturbance_level = LEAST(100, chunk_disturbance.disturbance_level + ?), last_updated_at = ?",
+            chunk, amount, ts, amount, ts);
+        jdbc.update("INSERT INTO chunk_disturbance_event (id, chunk_id, source_kind, amount, occurred_at) VALUES (?,?,?,?,?)",
+            UUID.randomUUID(), chunk, sourceKind, amount, ts);
+    }
+
+    /**
      * Approach an animal calmly and try to build trust. Trust is earned across many
      * returns, not won in one: each calm approach moves it a little, food moves it
      * more, and approaching with a weapon in hand moves it back. Species tamability
