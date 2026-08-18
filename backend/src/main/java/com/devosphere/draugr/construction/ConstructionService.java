@@ -328,6 +328,44 @@ public class ConstructionService {
         return new String[]{"SUCCEEDED", "You raise a stout little shed of frame, wattle, and roof — a dry place to keep your tools and made stock to hand, so no job begins with hunting for them."};
     }
 
+    /**
+     * Raise (or re-roof) a camp resource store here (#207 heritage STORAGE_AREA, "logistics"): a raised, covered
+     * stockpile pen where a Chronicle sets down what they bring in instead of carrying it on the body. {@link
+     * com.devosphere.draugr.ecology.WildlifeEncounterService} reads a completed store at the chunk and ends the
+     * fresh-kill predator draw while a Chronicle stands there — a home camp with a proper larder is somewhere a
+     * kill can be brought back to without turning the ground into an ambush. Wants a pole frame, a roof cover, and
+     * cordage, plus a blade to fit the frame; re-lays the roof on an existing store here rather than raising a
+     * second. Weathers and collapses unmended like the other field structures (#220).
+     */
+    @Transactional
+    public String[] buildStorageArea(UUID chronicle, UUID location, Instant at) {
+        Timestamp ts = Timestamp.from(at);
+        UUID existing = jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='STORAGE_AREA' AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' LIMIT 1 FOR UPDATE", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, location);
+        if (existing != null) {
+            String cover = null; for (String c : RACK_COVER) if (items.hasAtLeast(chronicle, c, 1)) { cover = c; break; }
+            if (cover == null) return new String[]{"FAILED", "The store's cover has weathered through, and you have nothing to re-lay it with — bark, thatch, or reed."};
+            items.consumeOne(chronicle, cover, at);
+            jdbc.update("UPDATE construction_project SET integrity_percent=100,last_structural_update=? WHERE object_id=?", ts, existing);
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'STORAGE_AREA_MENDED',jsonb_build_object('projectKind','STORAGE_AREA'))", existing, ts);
+            return new String[]{"SUCCEEDED", "You re-lay the cover over the store until what it holds is dry and sheltered again."};
+        }
+        String pole = null; for (String p : LOOKOUT_POLE) if (items.hasAtLeast(chronicle, p, 4)) { pole = p; break; }
+        if (pole == null) return new String[]{"FAILED", "A store wants stout poles to raise it off the wet ground — hazel or willow rods — and you have too few."};
+        if (!items.hasCuttingTool(chronicle)) return new String[]{"FAILED", "You have the poles, but no blade to cut and fit them into a frame that will stand."};
+        String cover = null; for (String c : RACK_COVER) if (items.hasAtLeast(chronicle, c, 2)) { cover = c; break; }
+        if (cover == null) return new String[]{"FAILED", "You have the frame, but nothing to roof it with to keep the weather off the store — bark sheets, thatch, or reed must come first."};
+        String bind = null; for (String b : BRUSH_BIND) if (items.hasAtLeast(chronicle, b, 2)) { bind = b; break; }
+        if (bind == null) return new String[]{"FAILED", "You have poles and a cover, but nothing to lash them fast with — cordage or fibre must come first."};
+        for (int i = 0; i < 4; i++) items.consumeOne(chronicle, pole, at);
+        for (int i = 0; i < 2; i++) items.consumeOne(chronicle, cover, at);
+        for (int i = 0; i < 2; i++) items.consumeOne(chronicle, bind, at);
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CONSTRUCTION','Resource store',?)", id, location);
+        jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at) VALUES (?,'STORAGE_AREA','COMPLETED',100,?)", id, ts);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CONSTRUCTED',jsonb_build_object('projectKind','STORAGE_AREA','pole',?,'cover',?))", id, ts, pole, cover);
+        return new String[]{"SUCCEEDED", "You raise a covered store off the wet ground — a place to set down what you bring in, so a fresh kill goes to the larder instead of riding on your back through the woods."};
+    }
+
     /** Bedding material a bed can be laid from, best first — all reachable first-era plant stock (#71 make_bed). */
     private static final String[][] BEDDING = {{"straw_bundle","straw"},{"reed_bundle","reed"},{"thatch_bundle","thatch"},{"plant_fiber","plant fibre"},{"reed_mat","reed matting"},{"cattail_stalk","cattail"},{"water_lily_pad","dry lily pads"},{"dry_grass_bundle","dry grass"},{"big_leaf","leaves"},{"moss_bundle","moss"}};
 
