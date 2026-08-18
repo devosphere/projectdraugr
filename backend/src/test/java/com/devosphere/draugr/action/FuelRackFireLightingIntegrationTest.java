@@ -92,7 +92,7 @@ class FuelRackFireLightingIntegrationTest {
         for (int i = 0; i < 2; i++) items.createCarriedItem(chronicle, "bark_sheet", "Bark sheet", now, "TEST_SEED");
         items.createCarriedItem(chronicle, "fiber_cordage", "Fiber cordage", now, "TEST_SEED");
         items.createCarriedItem(chronicle, "stone_knife", "Stone knife", now, "TEST_SEED");
-        ChronicleActionService.ActionResult built = actions.resolve("I build a fuel rack to keep the firewood dry.");
+        ChronicleActionService.ActionResult built = actions.resolve("I build a fuel rack.");
         assertEquals("SUCCEEDED", built.outcome(), () -> "building a fuel rack must succeed: " + built.perception());
         Integer racks = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +

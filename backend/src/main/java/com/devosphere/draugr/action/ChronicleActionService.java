@@ -821,7 +821,7 @@ public class ChronicleActionService {
         // the fire" is not read as making one.
         if(value.contains("extinguish")||value.contains("put out the fire")||value.contains("put the fire out")||value.contains("douse")||value.contains("smother the fire")||value.contains("stamp out the fire")||value.contains("quench the fire")||((value.contains("put out")||value.contains("kill"))&&value.contains("fire"))) return Intent.EXTINGUISH_FIRE;
         if((value.contains("bank")||value.contains("cover the coals")||value.contains("cover the embers")||value.contains("preserve the ember")||value.contains("rake the coals"))&&(value.contains("fire")||value.contains("coal")||value.contains("ember"))) return Intent.BANK_FIRE;
-        if((value.contains("tend")||value.contains("keep the fire")||value.contains("keep it going")||value.contains("maintain"))&&value.contains("fire")) return Intent.FEED_FIRE;
+        if((value.contains("tend")||value.contains("keep the fire")||value.contains("keep it going")||value.contains("maintain"))&&word(value,"fire")) return Intent.FEED_FIRE;
         // Naming a real ignition technique IS asking for fire (V49). A player who
         // writes "strike flint against pyrite" or "spin the bow drill" should not
         // have to also say the word "fire" to be understood.
