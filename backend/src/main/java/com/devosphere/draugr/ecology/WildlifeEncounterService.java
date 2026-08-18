@@ -222,6 +222,16 @@ public class WildlifeEncounterService {
         // nothing crosses the perimeter unheard, so even a heads-down Chronicle is not caught wholly unaware.
         boolean alarmed = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='CAMP_ALARM' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')", Boolean.class, chunk));
         if (alarmed) chance -= 15;
+        // A perimeter fence (#127) is a barrier, not a warning: a predator must breach it to reach the camp, and
+        // many turn aside rather than try. A woven wattle wall stands stronger than a piled brush one. This is
+        // the barrier layer of the defence catalogue, layered with the alarm (warning) and escape (flight), not
+        // folded into them.
+        Integer fence = jdbc.queryForObject(
+            "SELECT MAX(CASE cp.project_kind WHEN 'WATTLE_FENCE' THEN 22 WHEN 'BRUSH_FENCE' THEN 12 ELSE 0 END) " +
+            "FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "WHERE w.current_location_id=? AND cp.project_kind IN ('BRUSH_FENCE','WATTLE_FENCE') AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE'",
+            Integer.class, chunk);
+        if (fence != null) chance -= fence;
         // A fire-brand to hand (#126) — a resin torch the Chronicle can raise and wave — reads to a predator
         // as the fire it fears: it presses a rush far less readily against someone carrying flame. Weaker than
         // a whole camp's fire (which the ecology's fire-fear cascade already answers), but real, and carried.
