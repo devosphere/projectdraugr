@@ -226,6 +226,41 @@ public class ConstructionService {
         return new String[]{"SUCCEEDED", "You raise a low rack off the wet ground and roof it over — a dry store of kindling and fuel that will take a spark when the sodden ground will not."};
     }
 
+    /** Screen and cover material for a latrine, best first (#127). */
+    private static final String[] LATRINE_SCREEN = {"reed_bundle", "thatch_bundle", "dry_grass_bundle"};
+
+    /**
+     * Dig (or freshen) a camp latrine and refuse pit here (#127/#218): a pit dug well away from where a Chronicle
+     * eats and sleeps, screened for privacy, that keeps filth out of the living space. {@link
+     * com.devosphere.draugr.chronicle.ChroniclePhysiologyService} reads a completed latrine at the chunk and
+     * halves the passive hygiene loss while one stands there, which in turn eases the low-hygiene illness
+     * pressure — a clean camp is a healthier one. Wants a digging implement and a screen of reed, thatch, or
+     * grass; mends an existing latrine here rather than digging a second.
+     */
+    @Transactional
+    public String[] buildLatrine(UUID chronicle, UUID location, Instant at) {
+        Timestamp ts = Timestamp.from(at);
+        UUID existing = jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='LATRINE' AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' LIMIT 1 FOR UPDATE", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, location);
+        if (existing != null) {
+            String screen = null; for (String s : LATRINE_SCREEN) if (items.hasAtLeast(chronicle, s, 1)) { screen = s; break; }
+            if (screen == null) return new String[]{"FAILED", "The latrine screen has fallen in, and you have no reed, thatch, or grass to re-set it."};
+            items.consumeOne(chronicle, screen, at);
+            jdbc.update("UPDATE construction_project SET integrity_percent=100,last_structural_update=? WHERE object_id=?", ts, existing);
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'LATRINE_MENDED',jsonb_build_object('projectKind','LATRINE'))", existing, ts);
+            return new String[]{"SUCCEEDED", "You clear and re-screen the pit until it is decent and sound again."};
+        }
+        if (!items.hasAtLeast(chronicle, "digging_stick", 1) && !items.hasAtLeast(chronicle, "wooden_shovel", 1))
+            return new String[]{"FAILED", "A latrine wants a pit dug, and you have nothing to dig it with — a digging stick or a shovel must come first."};
+        String screen = null; for (String s : LATRINE_SCREEN) if (items.hasAtLeast(chronicle, s, 2)) { screen = s; break; }
+        if (screen == null) return new String[]{"FAILED", "You can dig the pit, but have nothing to screen it with — reed, thatch, or dry grass must come first."};
+        for (int i = 0; i < 2; i++) items.consumeOne(chronicle, screen, at);
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CONSTRUCTION','Camp latrine',?)", id, location);
+        jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at) VALUES (?,'LATRINE','COMPLETED',100,?)", id, ts);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CONSTRUCTED',jsonb_build_object('projectKind','LATRINE','screen',?))", id, ts, screen);
+        return new String[]{"SUCCEEDED", "You dig a deep pit well downwind of the camp and screen it round — a place to keep filth away from where you eat and sleep."};
+    }
+
     /** Bedding material a bed can be laid from, best first — all reachable first-era plant stock (#71 make_bed). */
     private static final String[][] BEDDING = {{"straw_bundle","straw"},{"reed_bundle","reed"},{"thatch_bundle","thatch"},{"plant_fiber","plant fibre"},{"reed_mat","reed matting"},{"cattail_stalk","cattail"},{"water_lily_pad","dry lily pads"},{"dry_grass_bundle","dry grass"},{"big_leaf","leaves"},{"moss_bundle","moss"}};
 

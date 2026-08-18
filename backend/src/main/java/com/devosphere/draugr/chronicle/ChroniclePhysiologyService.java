@@ -40,7 +40,15 @@ public class ChroniclePhysiologyService {
             int wetness = clamp((int) Math.round(rs.getInt(7) - hours * 4));
             int bladder = clamp((int) Math.round(rs.getInt(8) + hours * 8));
             int bowel = clamp((int) Math.round(rs.getInt(9) + hours * 1.5));
-            int hygiene = clamp((int) Math.round(rs.getInt(10) - hours * .25));
+            // A camp latrine and refuse pit (#127/#218) keep filth away from where a Chronicle lives, so
+            // grubbiness gathers more slowly — the passive hygiene loss is halved while one stands at the site.
+            // This feeds the existing low-hygiene illness pressure below, so a clean camp is a healthier one.
+            boolean latrine = Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object lt ON lt.id=cp.object_id " +
+                "JOIN world_object body ON body.current_location_id=lt.current_location_id " +
+                "WHERE body.id=? AND cp.project_kind='LATRINE' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND lt.lifecycle_state='ACTIVE')",
+                Boolean.class, id));
+            int hygiene = clamp((int) Math.round(rs.getInt(10) - hours * (latrine ? .125 : .25)));
             double sleepDebt = Math.min(72, rs.getBigDecimal(13).doubleValue() + hours);
             int pain = rs.getInt(14); int stress = rs.getInt(15); int injury = rs.getInt(16); int illness = rs.getInt(17); int bloodLoss = rs.getInt(18);
             Environment environment = jdbc.query("SELECT ww.weather_kind,ww.intensity,ww.ambient_temperature_c,ww.wind_speed_kph,COALESCE((SELECT fs.fuel_minutes FROM construction_project cp JOIN fire_state fs ON fs.construction_id=cp.object_id JOIN world_object pit ON pit.id=cp.object_id JOIN world_object body ON body.current_location_id=pit.current_location_id WHERE body.id=c.id AND fs.active=true ORDER BY fs.fuel_minutes DESC LIMIT 1),0),EXISTS(SELECT 1 FROM construction_project cp JOIN world_object shelter ON shelter.id=cp.object_id JOIN world_object body ON body.current_location_id=shelter.current_location_id WHERE body.id=c.id AND cp.project_kind='LEAN_TO' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND shelter.lifecycle_state='ACTIVE')" +
