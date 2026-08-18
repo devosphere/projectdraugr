@@ -122,6 +122,12 @@ public class WildlifeSimulationService {
         jdbc.update("UPDATE wildlife_population wp SET behavior_state='PACK_HUNT' " +
             "FROM ecology_site site JOIN chunk_disturbance cd ON cd.chunk_id=site.chunk_id " +
             "WHERE site.id=wp.site_id AND wp.population_count>0 AND cd.disturbance_level >= 70 AND site.site_category = 'MONSTER'");
+
+        // Recolonisation (#207/#212) — ground emptied by migration or decline, once quiet again, is repopulated
+        // by dispersal from a neighbouring healthy population of the same species. The complement to the response
+        // ladder: it closes the loop so a place recovers rather than staying dead, but only from a real source
+        // via a connected route — never spontaneous generation.
+        recolonise(now);
     }
 
     /**
@@ -162,6 +168,32 @@ public class WildlifeSimulationService {
             jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=? AND lifecycle_state='ACTIVE'", dest, site);
             jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'MIGRATED',jsonb_build_object('from',?,'to',?,'cause','DISTURBANCE'))",
                 site, Timestamp.from(now), h.get("chunk"), dest);
+        }
+    }
+
+    /**
+     * Recolonisation (#207/#212): empty WILDLIFE ground that has gone quiet again is repopulated by dispersal
+     * from a neighbouring healthy population of the SAME species — a real spread from a source along a connected,
+     * same-biome route, one founder at a time, never spontaneous generation. It seeds an extinct or vacated site
+     * back to one; ordinary breeding grows it from there (which needs a living population, so the seed must come
+     * first). Restricted to WILDLIFE sites — a monster's lair is not a spreading population. This is the
+     * complement to migration and decline, closing the loop so ground recovers rather than staying dead.
+     */
+    private void recolonise(Instant now) {
+        List<java.util.Map<String,Object>> empties = jdbc.queryForList(
+            "SELECT wp.id AS pop, es.id AS site, wp.species_key AS species, c.world_id AS world, c.grid_x AS gx, c.grid_y AS gy, c.biome AS biome " +
+            "FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id JOIN world_chunk c ON c.id=es.chunk_id " +
+            "LEFT JOIN chunk_disturbance cd ON cd.chunk_id=c.id " +
+            "WHERE wp.population_count = 0 AND es.site_category='WILDLIFE' AND COALESCE(cd.disturbance_level,0) < 40");
+        for (java.util.Map<String,Object> e : empties) {
+            Boolean hasSource = jdbc.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM wildlife_population s JOIN ecology_site ses ON ses.id=s.site_id JOIN world_chunk sc ON sc.id=ses.chunk_id " +
+                "WHERE ses.site_category='WILDLIFE' AND sc.world_id=? AND sc.biome=? AND abs(sc.grid_x-?)+abs(sc.grid_y-?)=1 AND s.species_key=? AND s.population_count>=3)",
+                Boolean.class, e.get("world"), e.get("biome"), e.get("gx"), e.get("gy"), e.get("species"));
+            if (!Boolean.TRUE.equals(hasSource)) continue; // no connected source of that species — no spontaneous return
+            jdbc.update("UPDATE wildlife_population SET population_count = population_count + 1 WHERE id=?", e.get("pop"));
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'RECOLONISED',jsonb_build_object('species',?,'cause','DISPERSAL'))",
+                e.get("site"), Timestamp.from(now), e.get("species"));
         }
     }
 
