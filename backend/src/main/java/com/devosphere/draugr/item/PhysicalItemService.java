@@ -784,7 +784,13 @@ public class PhysicalItemService {
         // even thread, so it lifts a spin one grade (distinct from a drop spindle, which only speeds the yield).
         // Craftable but inert until now (#257); the finer yarn carries through to finer cloth by worst().
         boolean woolComb = key.equals("spin_wool_yarn") && hasAtLeast(chronicle, "bone_comb", 1);
-        if (atStation || sewingKit || flaker || woolComb) attempt = attempt.up();
+        // A wooden spoon keeps a pot moving so it cooks evenly and nothing catches and scorches on the bottom —
+        // it lifts a pot-cook one grade (stew, porridge, wilted greens, cooked mushrooms), the same bounded
+        // assist, still capped against the ingredients by worst(). Terminal now that food grade scales
+        // nourishment: a finer-cooked meal nourishes a little more (#271), so the spoon finally earns its keep (#257).
+        boolean stirringSpoon = (key.equals("cook_root_stew") || key.equals("cook_porridge") || key.equals("cook_greens") || key.equals("cook_mushrooms"))
+            && hasAtLeast(chronicle, "wooden_spoon", 1);
+        if (atStation || sewingKit || flaker || woolComb || stirringSpoon) attempt = attempt.up();
         QualityGrade grade = QualityGrade.worst(worstGradeAmong(chronicle, inputKeys), attempt);
 
         for (java.util.Map<String,Object> in : fixed)
