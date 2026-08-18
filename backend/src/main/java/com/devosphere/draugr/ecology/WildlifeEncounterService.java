@@ -204,6 +204,21 @@ public class WildlifeEncounterService {
             "AND wp.behavior_state IN ('HUNTING','PACK_HUNT','STALKING','TERRITORIAL','ALERT') " +
             "ORDER BY CASE wp.behavior_state WHEN 'PACK_HUNT' THEN 0 WHEN 'HUNTING' THEN 1 WHEN 'STALKING' THEN 2 ELSE 3 END LIMIT 1",
             rs -> rs.next() ? new Threat(rs.getObject(1,UUID.class), rs.getString(2), rs.getString(3), (Integer)rs.getObject(4), rs.getBoolean(5), rs.getString(6)) : null, chunk);
+        boolean pursued = false;
+        if (threat == null) {
+            // Pursuit (#210) — a monster roused to its utmost (PACK_HUNT) at its lair follows the intruder onto the
+            // next ground rather than letting them walk away. A Chronicle who heavily provokes a lair and then
+            // steps to a neighbouring chunk is still hunted — from a chunk away, with a beat to react (a capped
+            // chance below), and every defensive lever still applies.
+            threat = jdbc.query(
+                "SELECT wp.id,wp.species_key,wp.behavior_state,ws.base_resistance,ws.ambush_hunter,ws.size_tier " +
+                "FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id JOIN world_chunk ec ON ec.id=es.chunk_id " +
+                "JOIN world_chunk here ON here.id=? LEFT JOIN wildlife_species ws ON ws.species_key=wp.species_key " +
+                "WHERE es.site_category='MONSTER' AND wp.behavior_state='PACK_HUNT' AND wp.population_count>0 " +
+                "AND ec.world_id=here.world_id AND abs(ec.grid_x-here.grid_x)+abs(ec.grid_y-here.grid_y)=1 LIMIT 1",
+                rs -> rs.next() ? new Threat(rs.getObject(1,UUID.class), rs.getString(2), rs.getString(3), (Integer)rs.getObject(4), rs.getBoolean(5), rs.getString(6)) : null, chunk);
+            pursued = (threat != null);
+        }
         if (threat == null) return null;
 
         // How likely it is to reach the chronicle. A pack that is coordinating is the
@@ -211,6 +226,7 @@ public class WildlifeEncounterService {
         // attention sees it coming and it does not close; one heads-down does not.
         int chance = switch (threat.behavior()) { case "PACK_HUNT" -> 35; case "HUNTING" -> 25; case "STALKING" -> 20; case "TERRITORIAL" -> 15; default -> 8; };
         if (threat.ambushHunter()) chance += 10;
+        if (pursued) chance -= 13; // it is closing from the next ground, not already upon you — a beat to react.
         if ("HIGH".equals(attention)) chance -= 12;
         else if ("MODERATE".equals(attention)) chance -= 5;
         // Actively breaking contact this turn robs the hunt of its close: going to ground breaks the
