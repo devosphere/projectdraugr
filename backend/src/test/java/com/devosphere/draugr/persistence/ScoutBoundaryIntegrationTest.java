@@ -62,6 +62,7 @@ class ScoutBoundaryIntegrationTest {
     @Autowired WorldEcologyGenesisService ecology;
     @Autowired ChronicleService chronicles;
     @Autowired ChronicleActionService actions;
+    @Autowired com.devosphere.draugr.simulation.SimulationTickService ticks;
     @Autowired PersistentStateAuditor auditor;
     @Autowired JdbcTemplate jdbc;
 
@@ -75,24 +76,22 @@ class ScoutBoundaryIntegrationTest {
         assertNotNull(summary, "awakening must produce a living Chronicle");
         UUID chronicle = summary.id();
 
-        // Find a wildlife population whose chunk has a west neighbour (so the Chronicle can stand due west of it,
-        // making the predator lie to the east). The seeded world always carries populations.
-        Map<String,Object> row = jdbc.query(
-                "SELECT wp.id AS pop, c.world_id AS world, c.grid_x AS gx, c.grid_y AS gy " +
-                "FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id JOIN world_chunk c ON c.id=es.chunk_id " +
-                "WHERE EXISTS (SELECT 1 FROM world_chunk w WHERE w.world_id=c.world_id AND w.grid_x=c.grid_x-1 AND w.grid_y=c.grid_y) " +
-                "LIMIT 1",
-                rs -> rs.next() ? Map.of("pop", rs.getObject("pop", UUID.class), "world", rs.getObject("world", UUID.class),
-                        "gx", rs.getInt("gx"), "gy", rs.getInt("gy")) : null);
-        Assumptions.assumeTrue(row != null, "seeded world must carry a population with a west neighbour");
-
-        UUID popId = (UUID) row.get("pop"); UUID world = (UUID) row.get("world");
-        int px = (int) row.get("gx"), py = (int) row.get("gy");
-        // Make that population an actively hunting carnivore — the danger the scout must sense.
-        jdbc.update("UPDATE wildlife_population SET ecological_role='CARNIVORE', behavior_state='HUNTING' WHERE id=?", popId);
-        // Stand the Chronicle due west of it, so the predator lies to the east.
-        UUID chronicleChunk = jdbc.queryForObject(
-                "SELECT id FROM world_chunk WHERE world_id=? AND grid_x=? AND grid_y=?", UUID.class, world, px - 1, py);
+        // Stand the Chronicle on a chunk that has an east neighbour, and fabricate a hunting carnivore there — so
+        // the scenario is controlled and never depends on the shared world's seeded populations (which other
+        // tests mutate). The 28x20 world always has an interior forest chunk with ground to its east.
+        Map<String,Object> row = jdbc.queryForMap(
+                "SELECT c.id AS here, c.world_id AS world, c.grid_x AS gx, c.grid_y AS gy FROM world_chunk c " +
+                "WHERE c.biome='TEMPERATE_FOREST' AND EXISTS (SELECT 1 FROM world_chunk e WHERE e.world_id=c.world_id AND e.grid_x=c.grid_x+1 AND e.grid_y=c.grid_y) " +
+                "ORDER BY c.grid_y, c.grid_x LIMIT 1");
+        UUID chronicleChunk = (UUID) row.get("here"); UUID world = (UUID) row.get("world");
+        int gx = (int) row.get("gx"), gy = (int) row.get("gy");
+        UUID eastChunk = jdbc.queryForObject("SELECT id FROM world_chunk WHERE world_id=? AND grid_x=? AND grid_y=?", UUID.class, world, gx + 1, gy);
+        java.sql.Timestamp ts = java.sql.Timestamp.from(ticks.current().simulatedAt());
+        UUID site = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE','Prowler territory',?)", site, eastChunk);
+        jdbc.update("INSERT INTO ecology_site (id,world_id,chunk_id,site_category,site_kind,baseline_abundance) VALUES (?,?,?,'WILDLIFE','Prowler territory',400)", site, world, eastChunk);
+        jdbc.update("INSERT INTO wildlife_population (id,site_id,species_key,ecological_role,activity_cycle,population_count,carrying_capacity,behavior_state,last_simulated_at) " +
+                "VALUES (?,?,'dire_wolf','CARNIVORE','DIURNAL',3,5,'HUNTING',?)", UUID.randomUUID(), site, ts);
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", chronicleChunk, chronicle);
 
         ChronicleActionService.ActionResult r = actions.resolve("I carefully scout the boundary for danger.");

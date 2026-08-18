@@ -78,26 +78,23 @@ class LookoutScoutIntegrationTest {
         assertNotNull(summary, "awakening must produce a living Chronicle");
         UUID chronicle = summary.id();
 
-        // A population whose chunk has ground two tiles to its west — so the Chronicle can stand two chunks due
-        // west of it, making the predator lie two chunks to the east.
-        Map<String,Object> row = jdbc.query(
-                "SELECT wp.id AS pop, c.world_id AS world, c.grid_x AS gx, c.grid_y AS gy " +
-                "FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id JOIN world_chunk c ON c.id=es.chunk_id " +
-                "WHERE EXISTS (SELECT 1 FROM world_chunk w WHERE w.world_id=c.world_id AND w.grid_x=c.grid_x-2 AND w.grid_y=c.grid_y) " +
-                "LIMIT 1",
-                rs -> rs.next() ? Map.of("pop", rs.getObject("pop", UUID.class), "world", rs.getObject("world", UUID.class),
-                        "gx", rs.getInt("gx"), "gy", rs.getInt("gy")) : null);
-        Assumptions.assumeTrue(row != null, "seeded world must carry a population with ground two tiles to its west");
-
-        UUID popId = (UUID) row.get("pop"); UUID world = (UUID) row.get("world");
-        int px = (int) row.get("gx"), py = (int) row.get("gy");
-        jdbc.update("UPDATE wildlife_population SET ecological_role='CARNIVORE', behavior_state='HUNTING' WHERE id=?", popId);
-        // Leave the near ground to the east (one chunk west of the predator) clear, so only the far ground carries danger.
-        jdbc.update("UPDATE wildlife_population SET ecological_role='HERBIVORE' WHERE site_id IN " +
-                "(SELECT es.id FROM ecology_site es JOIN world_chunk c ON c.id=es.chunk_id WHERE c.world_id=? AND c.grid_x=? AND c.grid_y=?)",
-                world, px - 1, py);
-        UUID chronicleChunk = jdbc.queryForObject(
-                "SELECT id FROM world_chunk WHERE world_id=? AND grid_x=? AND grid_y=?", UUID.class, world, px - 2, py);
+        // Stand the Chronicle on a chunk with ground two tiles to its east, and fabricate a hunting carnivore
+        // exactly two chunks east — a controlled scenario that never depends on the shared world's seeded
+        // populations. The distance-2 danger is only ever reported from a lookout (the near ring is dist-1), so
+        // the near ground east needs no clearing for the before/after distinction to hold.
+        Map<String,Object> row = jdbc.queryForMap(
+                "SELECT c.id AS here, c.world_id AS world, c.grid_x AS gx, c.grid_y AS gy FROM world_chunk c " +
+                "WHERE c.biome='TEMPERATE_FOREST' AND EXISTS (SELECT 1 FROM world_chunk e WHERE e.world_id=c.world_id AND e.grid_x=c.grid_x+2 AND e.grid_y=c.grid_y) " +
+                "ORDER BY c.grid_y, c.grid_x LIMIT 1");
+        UUID chronicleChunk = (UUID) row.get("here"); UUID world = (UUID) row.get("world");
+        int gx = (int) row.get("gx"), gy = (int) row.get("gy");
+        UUID farEastChunk = jdbc.queryForObject("SELECT id FROM world_chunk WHERE world_id=? AND grid_x=? AND grid_y=?", UUID.class, world, gx + 2, gy);
+        java.sql.Timestamp ts = java.sql.Timestamp.from(ticks.current().simulatedAt());
+        UUID site = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE','Far prowler territory',?)", site, farEastChunk);
+        jdbc.update("INSERT INTO ecology_site (id,world_id,chunk_id,site_category,site_kind,baseline_abundance) VALUES (?,?,?,'WILDLIFE','Far prowler territory',400)", site, world, farEastChunk);
+        jdbc.update("INSERT INTO wildlife_population (id,site_id,species_key,ecological_role,activity_cycle,population_count,carrying_capacity,behavior_state,last_simulated_at) " +
+                "VALUES (?,?,'dire_wolf','CARNIVORE','DIURNAL',3,5,'HUNTING',?)", UUID.randomUUID(), site, ts);
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", chronicleChunk, chronicle);
         Instant now = ticks.current().simulatedAt();
         jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
