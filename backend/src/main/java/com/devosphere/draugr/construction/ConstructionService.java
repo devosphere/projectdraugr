@@ -149,6 +149,43 @@ public class ConstructionService {
         return new String[]{"FAILED", "You have nothing to raise a fence from — piled brushwood to lash, or withies and a blade to weave a wattle wall."};
     }
 
+    /** Tall straight poles a lookout stand is raised on, best first (#127). */
+    private static final String[] LOOKOUT_POLE = {"hazel_rod", "willow_branch"};
+
+    /**
+     * Raise (or mend) a lookout here (#127, EPIC #123): a lashed stand of poles a Chronicle climbs to lift the
+     * eye above the near treeline. It is not defence and not shelter — it changes what can be SEEN: {@link
+     * com.devosphere.draugr.ecology.WildlifeEncounterService#scoutBoundary} reads a completed lookout at the
+     * chunk and, from its height, reports danger a full second chunk out along each way (and always in full
+     * detail), so a predator two tiles off is seen while there is still room to plan around it. Wants straight
+     * poles, a blade to trim them, and a lashing; mends an existing lookout here rather than raising a second.
+     */
+    @Transactional
+    public String[] buildLookout(UUID chronicle, UUID location, Instant at) {
+        Timestamp ts = Timestamp.from(at);
+        UUID existing = jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='LOOKOUT' AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' LIMIT 1 FOR UPDATE", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, location);
+        if (existing != null) {
+            String pole = null; for (String p : LOOKOUT_POLE) if (items.hasAtLeast(chronicle, p, 1)) { pole = p; break; }
+            if (pole == null) return new String[]{"FAILED", "The lookout has weathered loose, and you have no poles to hand to make it fast again."};
+            items.consumeOne(chronicle, pole, at);
+            jdbc.update("UPDATE construction_project SET integrity_percent=100,last_structural_update=? WHERE object_id=?", ts, existing);
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'LOOKOUT_MENDED',jsonb_build_object('projectKind','LOOKOUT'))", existing, ts);
+            return new String[]{"SUCCEEDED", "You re-lash the loosened poles until the lookout stands firm enough to climb again."};
+        }
+        String pole = null; for (String p : LOOKOUT_POLE) if (items.hasAtLeast(chronicle, p, 4)) { pole = p; break; }
+        if (pole == null) return new String[]{"FAILED", "A lookout wants tall, straight poles to raise a stand on — hazel or willow rods — and you have too few."};
+        if (!items.hasCuttingTool(chronicle)) return new String[]{"FAILED", "You have the poles, but no blade to cut and trim them to a stand that will bear your weight."};
+        String bind = null; for (String b : BRUSH_BIND) if (items.hasAtLeast(chronicle, b, 1)) { bind = b; break; }
+        if (bind == null) return new String[]{"FAILED", "You have poles enough, but nothing to lash them fast with — a length of cordage or fibre must come first."};
+        for (int i = 0; i < 4; i++) items.consumeOne(chronicle, pole, at);
+        items.consumeOne(chronicle, bind, at);
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CONSTRUCTION','Raised lookout',?)", id, location);
+        jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at) VALUES (?,'LOOKOUT','COMPLETED',100,?)", id, ts);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CONSTRUCTED',jsonb_build_object('projectKind','LOOKOUT','pole',?))", id, ts, pole);
+        return new String[]{"SUCCEEDED", "You raise and lash a stand of poles into a lookout you can climb — from its height the near treeline no longer hides what moves beyond it."};
+    }
+
     /** Bedding material a bed can be laid from, best first — all reachable first-era plant stock (#71 make_bed). */
     private static final String[][] BEDDING = {{"straw_bundle","straw"},{"reed_bundle","reed"},{"thatch_bundle","thatch"},{"plant_fiber","plant fibre"},{"reed_mat","reed matting"},{"cattail_stalk","cattail"},{"water_lily_pad","dry lily pads"},{"dry_grass_bundle","dry grass"},{"big_leaf","leaves"},{"moss_bundle","moss"}};
 
