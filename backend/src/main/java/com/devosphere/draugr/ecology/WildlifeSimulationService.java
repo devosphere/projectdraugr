@@ -92,6 +92,10 @@ public class WildlifeSimulationService {
             "last_updated_at = ? " +
             "WHERE disturbance_level > 0 AND EXTRACT(EPOCH FROM (?::timestamptz - last_updated_at)) >= 3600", nowTs, nowTs, nowTs);
 
+        // Disturbance migration (#207/#209, second response tier) — where disturbance stays heavy (a place worked
+        // hard again and again), avoidance is not enough and a population shifts its range to quieter ground.
+        migrateFromDisturbance(now);
+
         // Disturbance avoidance (#207/#209, first response tier) — wildlife that live on ground still marked by a
         // fight, a kill, or felling quit it and range off while it stays disturbed. It is a transient avoidance
         // re-derived each tick, never a despawn or a teleport: once the disturbance decays below the threshold
@@ -100,6 +104,37 @@ public class WildlifeSimulationService {
         jdbc.update("UPDATE wildlife_population wp SET behavior_state='FLEEING' " +
             "FROM ecology_site site JOIN chunk_disturbance cd ON cd.chunk_id=site.chunk_id " +
             "WHERE site.id=wp.site_id AND wp.population_count>0 AND cd.disturbance_level >= 40");
+    }
+
+    /**
+     * Second-tier disturbance response (#207/#209): where a chunk's disturbance stays heavy (>=70), a population
+     * shifts its whole range to quieter ground rather than merely fleeing. It moves to a cardinally-connected
+     * neighbour of the SAME biome whose own disturbance is low — a real, viable, in-habitat route, never a jump
+     * into unrelated country. The move is physical and kept in history: the population's site (a world_object) is
+     * relocated and a MIGRATED transition is logged; the population's identity, count, and bond are untouched, so
+     * nothing is despawned or duplicated. Where no viable neighbour exists the population stays and the first-tier
+     * avoidance holds; physical decline from habitat loss is a later slice.
+     */
+    private void migrateFromDisturbance(Instant now) {
+        List<java.util.Map<String,Object>> heavy = jdbc.queryForList(
+            "SELECT es.id AS site, c.id AS chunk, c.world_id AS world, c.grid_x AS gx, c.grid_y AS gy, c.biome AS biome " +
+            "FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id JOIN world_chunk c ON c.id=es.chunk_id " +
+            "JOIN chunk_disturbance cd ON cd.chunk_id=c.id " +
+            "WHERE wp.population_count>0 AND cd.disturbance_level >= 70");
+        for (java.util.Map<String,Object> h : heavy) {
+            UUID dest = jdbc.query(
+                "SELECT n.id FROM world_chunk n LEFT JOIN chunk_disturbance ncd ON ncd.chunk_id=n.id " +
+                "WHERE n.world_id=? AND n.biome=? AND (abs(n.grid_x-?) + abs(n.grid_y-?))=1 AND COALESCE(ncd.disturbance_level,0) < 40 " +
+                "ORDER BY COALESCE(ncd.disturbance_level,0) ASC, n.grid_y, n.grid_x LIMIT 1",
+                rs -> rs.next() ? rs.getObject(1, UUID.class) : null,
+                h.get("world"), h.get("biome"), h.get("gx"), h.get("gy"));
+            if (dest == null) continue; // no connected viable habitat — the population stays and keeps fleeing
+            UUID site = (UUID) h.get("site");
+            jdbc.update("UPDATE ecology_site SET chunk_id=? WHERE id=?", dest, site);
+            jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=? AND lifecycle_state='ACTIVE'", dest, site);
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'MIGRATED',jsonb_build_object('from',?,'to',?,'cause','DISTURBANCE'))",
+                site, Timestamp.from(now), h.get("chunk"), dest);
+        }
     }
 
     @Transactional
