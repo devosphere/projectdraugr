@@ -283,6 +283,51 @@ public class ConstructionService {
         return new String[]{"SUCCEEDED", "You dig a deep pit well downwind of the camp and screen it round — a place to keep filth away from where you eat and sleep."};
     }
 
+    /** Wall infill for a tool shed, best first — the same withies a wattle fence is woven from. */
+    private static final String[] SHED_WALL = {"hazel_rod", "willow_branch"};
+
+    /**
+     * Raise (or re-roof) a camp tool shed here (#207 heritage TOOL_SHED, "reduces preparation time and loss"): a
+     * standing frame walled in wattle and roofed over, where tools and made stock are kept to hand and out of the
+     * weather instead of being fetched and hunted for at the start of every job. {@link
+     * com.devosphere.draugr.action.ChronicleActionService} reads a completed tool shed at the chunk and shortens
+     * the setting-up of fabrication and repair while one stands — the terminal payoff for the build. A substantial
+     * structure: a pole frame, wattle walls, a roof cover, and cordage to lash it, plus a blade to fit the frame;
+     * re-lays the roof on an existing shed here rather than raising a second. It weathers and, unmended, collapses
+     * like the other field structures (#220).
+     */
+    @Transactional
+    public String[] buildToolShed(UUID chronicle, UUID location, Instant at) {
+        Timestamp ts = Timestamp.from(at);
+        UUID existing = jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='TOOL_SHED' AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' LIMIT 1 FOR UPDATE", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, location);
+        if (existing != null) {
+            String cover = null; for (String c : RACK_COVER) if (items.hasAtLeast(chronicle, c, 1)) { cover = c; break; }
+            if (cover == null) return new String[]{"FAILED", "The shed's roof has weathered through, and you have nothing to re-lay it with — bark, thatch, or reed."};
+            items.consumeOne(chronicle, cover, at);
+            jdbc.update("UPDATE construction_project SET integrity_percent=100,last_structural_update=? WHERE object_id=?", ts, existing);
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'TOOL_SHED_MENDED',jsonb_build_object('projectKind','TOOL_SHED'))", existing, ts);
+            return new String[]{"SUCCEEDED", "You re-lay the roof and firm the walls until the tool shed is dry and sound again."};
+        }
+        String pole = null; for (String p : LOOKOUT_POLE) if (items.hasAtLeast(chronicle, p, 4)) { pole = p; break; }
+        if (pole == null) return new String[]{"FAILED", "A tool shed wants stout poles for its frame — hazel or willow rods — and you have too few."};
+        if (!items.hasCuttingTool(chronicle)) return new String[]{"FAILED", "You have the poles, but no blade to cut and fit them into a frame that will stand."};
+        String wall = null; for (String w : SHED_WALL) if (items.hasAtLeast(chronicle, w, 4)) { wall = w; break; }
+        if (wall == null) return new String[]{"FAILED", "You have the frame, but nothing to wall it in with — withies of hazel or willow must come first."};
+        String cover = null; for (String c : RACK_COVER) if (items.hasAtLeast(chronicle, c, 2)) { cover = c; break; }
+        if (cover == null) return new String[]{"FAILED", "You have the frame and walls, but nothing to roof it with to keep the weather off — bark sheets, thatch, or reed must come first."};
+        String bind = null; for (String b : BRUSH_BIND) if (items.hasAtLeast(chronicle, b, 2)) { bind = b; break; }
+        if (bind == null) return new String[]{"FAILED", "You have frame, walls, and roof, but nothing to lash it all fast with — cordage or fibre must come first."};
+        for (int i = 0; i < 4; i++) items.consumeOne(chronicle, pole, at);
+        for (int i = 0; i < 4; i++) items.consumeOne(chronicle, wall, at);
+        for (int i = 0; i < 2; i++) items.consumeOne(chronicle, cover, at);
+        for (int i = 0; i < 2; i++) items.consumeOne(chronicle, bind, at);
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CONSTRUCTION','Tool shed',?)", id, location);
+        jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at) VALUES (?,'TOOL_SHED','COMPLETED',100,?)", id, ts);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CONSTRUCTED',jsonb_build_object('projectKind','TOOL_SHED','pole',?,'wall',?,'cover',?))", id, ts, pole, wall, cover);
+        return new String[]{"SUCCEEDED", "You raise a stout little shed of frame, wattle, and roof — a dry place to keep your tools and made stock to hand, so no job begins with hunting for them."};
+    }
+
     /** Bedding material a bed can be laid from, best first — all reachable first-era plant stock (#71 make_bed). */
     private static final String[][] BEDDING = {{"straw_bundle","straw"},{"reed_bundle","reed"},{"thatch_bundle","thatch"},{"plant_fiber","plant fibre"},{"reed_mat","reed matting"},{"cattail_stalk","cattail"},{"water_lily_pad","dry lily pads"},{"dry_grass_bundle","dry grass"},{"big_leaf","leaves"},{"moss_bundle","moss"}};
 
