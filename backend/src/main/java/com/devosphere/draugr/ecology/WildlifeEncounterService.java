@@ -437,6 +437,27 @@ public class WildlifeEncounterService {
     }
 
     /**
+     * Restore disturbed ground (#207/#213): the Chronicle's counter-play to the disturbance they cause. Clearing
+     * the churned earth, scattering seed, setting things back toward order lowers the chunk's disturbance level
+     * now, so the land grows quiet — and the wildlife return to it — sooner than time and decay alone would
+     * bring. It is honest work with a real, logged effect; it does not conjure back what has already gone, only
+     * speeds the recovery of the ground. Fails grounded on ground that is already quiet.
+     */
+    @Transactional
+    public String[] restoreHabitat(UUID chunk, int amount, Instant at) {
+        Integer level = jdbc.query("SELECT disturbance_level FROM chunk_disturbance WHERE chunk_id=?",
+            rs -> rs.next() ? rs.getInt(1) : null, chunk);
+        if (level == null || level <= 0)
+            return new String[]{"FAILED", "The ground here is already quiet — churned by nothing, there is nothing to mend."};
+        Timestamp ts = Timestamp.from(at);
+        jdbc.update("UPDATE chunk_disturbance SET disturbance_level = GREATEST(0, disturbance_level - ?), last_updated_at = ? WHERE chunk_id=?",
+            Math.max(1, amount), ts, chunk);
+        jdbc.update("INSERT INTO chunk_disturbance_event (id, chunk_id, source_kind, amount, occurred_at) VALUES (?,?,?,?,?)",
+            UUID.randomUUID(), chunk, "RESTORATION", Math.max(1, amount), ts);
+        return new String[]{"SUCCEEDED", "You clear the worst of the churned ground, scatter seed, and set what was disturbed back toward order. Given a little quiet now, the wild will find its way back the sooner."};
+    }
+
+    /**
      * Approach an animal calmly and try to build trust. Trust is earned across many
      * returns, not won in one: each calm approach moves it a little, food moves it
      * more, and approaching with a weapon in hand moves it back. Species tamability
