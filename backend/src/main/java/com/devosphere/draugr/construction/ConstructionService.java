@@ -186,6 +186,46 @@ public class ConstructionService {
         return new String[]{"SUCCEEDED", "You raise and lash a stand of poles into a lookout you can climb — from its height the near treeline no longer hides what moves beyond it."};
     }
 
+    /** Roofing to keep the rain off a fuel rack, best first (#127). */
+    private static final String[] RACK_COVER = {"bark_sheet", "thatch_bundle", "reed_bundle"};
+
+    /**
+     * Raise (or mend) a covered fuel rack here (#127, EPIC #123): a low stand that lifts kindling and firewood
+     * off the wet ground and roofs it over, so there is dry fuel to start a fire from even when the sky is
+     * against you. {@link com.devosphere.draugr.action.ChronicleActionService} reads a completed rack at the
+     * chunk and eases the heavy rain/storm penalty on an ignition attempt (dry kindling still takes a spark).
+     * It changes nothing in fair weather. Wants poles, a blade, a roof of bark or thatch, and a lashing; mends
+     * an existing rack here rather than raising a second.
+     */
+    @Transactional
+    public String[] buildFuelRack(UUID chronicle, UUID location, Instant at) {
+        Timestamp ts = Timestamp.from(at);
+        UUID existing = jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='FUEL_RACK' AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' LIMIT 1 FOR UPDATE", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, location);
+        if (existing != null) {
+            String cover = null; for (String c : RACK_COVER) if (items.hasAtLeast(chronicle, c, 1)) { cover = c; break; }
+            if (cover == null) return new String[]{"FAILED", "The rack's roof has blown loose, and you have nothing to re-lay it with — bark, thatch, or reed."};
+            items.consumeOne(chronicle, cover, at);
+            jdbc.update("UPDATE construction_project SET integrity_percent=100,last_structural_update=? WHERE object_id=?", ts, existing);
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'FUEL_RACK_MENDED',jsonb_build_object('projectKind','FUEL_RACK'))", existing, ts);
+            return new String[]{"SUCCEEDED", "You re-lay the cover over the fuel rack until the store beneath it is dry and sheltered again."};
+        }
+        String pole = null; for (String p : LOOKOUT_POLE) if (items.hasAtLeast(chronicle, p, 3)) { pole = p; break; }
+        if (pole == null) return new String[]{"FAILED", "A fuel rack wants poles to stand it on off the wet ground — hazel or willow rods — and you have too few."};
+        if (!items.hasCuttingTool(chronicle)) return new String[]{"FAILED", "You have the poles, but no blade to cut and fit them into a frame that will stand."};
+        String cover = null; for (String c : RACK_COVER) if (items.hasAtLeast(chronicle, c, 2)) { cover = c; break; }
+        if (cover == null) return new String[]{"FAILED", "You have the frame, but nothing to roof it with to keep the rain off — bark sheets, thatch, or reed must come first."};
+        String bind = null; for (String b : BRUSH_BIND) if (items.hasAtLeast(chronicle, b, 1)) { bind = b; break; }
+        if (bind == null) return new String[]{"FAILED", "You have poles and a cover, but nothing to lash them fast with — a length of cordage or fibre must come first."};
+        for (int i = 0; i < 3; i++) items.consumeOne(chronicle, pole, at);
+        for (int i = 0; i < 2; i++) items.consumeOne(chronicle, cover, at);
+        items.consumeOne(chronicle, bind, at);
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CONSTRUCTION','Covered fuel rack',?)", id, location);
+        jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at) VALUES (?,'FUEL_RACK','COMPLETED',100,?)", id, ts);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CONSTRUCTED',jsonb_build_object('projectKind','FUEL_RACK','pole',?,'cover',?))", id, ts, pole, cover);
+        return new String[]{"SUCCEEDED", "You raise a low rack off the wet ground and roof it over — a dry store of kindling and fuel that will take a spark when the sodden ground will not."};
+    }
+
     /** Bedding material a bed can be laid from, best first — all reachable first-era plant stock (#71 make_bed). */
     private static final String[][] BEDDING = {{"straw_bundle","straw"},{"reed_bundle","reed"},{"thatch_bundle","thatch"},{"plant_fiber","plant fibre"},{"reed_mat","reed matting"},{"cattail_stalk","cattail"},{"water_lily_pad","dry lily pads"},{"dry_grass_bundle","dry grass"},{"big_leaf","leaves"},{"moss_bundle","moss"}};
 
