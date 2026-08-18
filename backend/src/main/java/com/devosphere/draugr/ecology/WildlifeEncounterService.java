@@ -255,9 +255,11 @@ public class WildlifeEncounterService {
         if (hasBrand) chance -= 12;
         // A fresh kill carried on the body (#123/#127) is blood and scent on the wind — it draws a hungry predator
         // in where it might otherwise have passed. Cook, store, or cache the meat and the draw is gone; carry a raw
-        // carcass through predator ground and you are the bait.
+        // carcass through predator ground and you are the bait. A built camp store on this ground (#207 heritage
+        // STORAGE_AREA) is a larder to set the kill down in — home ground with a store is somewhere a carcass can
+        // be brought back to without turning it into an ambush, so the draw does not follow you there.
         boolean freshKill = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key IN ('raw_game_meat','raw_fish'))", Boolean.class, chronicle));
-        if (freshKill) chance += 10;
+        if (freshKill && !hasStorageArea(chunk)) chance += 10;
         if (Math.floorMod(action.hashCode() >>> 8, 100) >= Math.max(0, chance)) return null;
 
         int resistance = threat.baseResistance() != null ? threat.baseResistance() : 50;
@@ -268,6 +270,14 @@ public class WildlifeEncounterService {
         return threat.ambushHunter()
             ? "It is on you before there is anything to see — weight and teeth out of the cover, and the ground coming up to meet you."
             : "The " + display(threat.species()) + " does not wait to be found. It closes while your hands are busy, and the work you were doing is over.";
+    }
+
+    /** Whether a completed, standing resource store keeps this ground — the larder that ends the fresh-kill draw. */
+    private boolean hasStorageArea(UUID chunk) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "WHERE w.current_location_id=? AND cp.project_kind='STORAGE_AREA' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')",
+            Boolean.class, chunk));
     }
 
     /**
