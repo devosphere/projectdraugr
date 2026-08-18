@@ -334,21 +334,29 @@ public class WildlifeEncounterService {
         for (int i = 0; i < offs.length; i++) {
             int nx = gx + offs[i][0], ny = gy + offs[i][1];
             if (!chunkAt(world, nx, ny)) continue; // the edge of the world — no ground that way to read
+            boolean nearClear;
             java.util.Map<String,Object> pred = carnivoreAt(world, nx, ny);
-            if (pred == null) { clearWays.add(names[i]); continue; }
-            String sign = switch (Math.floorMod(chunk.hashCode() + nx * 31 + ny, 3)) {
-                case 0 -> "a rank animal smell rides the wind";
-                case 1 -> "the boundary trees are scored deep, higher than a man reaches";
-                default -> "the small birds have fallen silent";
-            };
-            danger.add(reads
-                ? names[i] + ", " + sign + " — a " + display((String) pred.get("species")) + urgencyOf((String) pred.get("behavior"))
-                : names[i] + ", " + sign + " — something large keeps that ground");
-            // From a lookout the eye reaches a second chunk out along the same line.
+            if (pred == null) {
+                nearClear = true;
+            } else {
+                nearClear = false;
+                String sign = switch (Math.floorMod(chunk.hashCode() + nx * 31 + ny, 3)) {
+                    case 0 -> "a rank animal smell rides the wind";
+                    case 1 -> "the boundary trees are scored deep, higher than a man reaches";
+                    default -> "the small birds have fallen silent";
+                };
+                danger.add(reads
+                    ? names[i] + ", " + sign + " — a " + display((String) pred.get("species")) + urgencyOf((String) pred.get("behavior"))
+                    : names[i] + ", " + sign + " — something large keeps that ground");
+            }
+            // From a lookout the eye reaches a second chunk out along the same line — whether or not the near
+            // ground carried danger, so a far threat is seen even when the way immediately ahead reads clear.
+            boolean farThreat = false;
             if (hasLookout) {
                 java.util.Map<String,Object> beyond = carnivoreAt(world, gx + offs[i][0] * 2, gy + offs[i][1] * 2);
-                if (beyond != null) far.add("further " + names[i] + ", a " + display((String) beyond.get("species")) + urgencyOf((String) beyond.get("behavior")));
+                if (beyond != null) { farThreat = true; far.add("further " + names[i] + ", a " + display((String) beyond.get("species")) + urgencyOf((String) beyond.get("behavior"))); }
             }
+            if (nearClear && !farThreat) clearWays.add(names[i]);
         }
         StringBuilder s = new StringBuilder();
         if (danger.isEmpty() && far.isEmpty()) {
