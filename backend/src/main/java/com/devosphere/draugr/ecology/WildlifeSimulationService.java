@@ -114,6 +114,14 @@ public class WildlifeSimulationService {
         jdbc.update("UPDATE wildlife_population wp SET behavior_state='HUNTING' " +
             "FROM ecology_site site JOIN chunk_disturbance cd ON cd.chunk_id=site.chunk_id " +
             "WHERE site.id=wp.site_id AND wp.population_count>0 AND cd.disturbance_level >= 40 AND site.site_category = 'MONSTER'");
+
+        // Monster escalation (#207/#210) — where the disturbance is heavy and sustained, a roused monster stops
+        // merely holding its lair and presses the hunt to its utmost (PACK_HUNT — the state the ambush model reads
+        // as the hardest press, above a plain HUNTING), coming for whoever keeps intruding rather than waiting to
+        // be found. Applied after the rouse above so heavy ground overrides the lighter response.
+        jdbc.update("UPDATE wildlife_population wp SET behavior_state='PACK_HUNT' " +
+            "FROM ecology_site site JOIN chunk_disturbance cd ON cd.chunk_id=site.chunk_id " +
+            "WHERE site.id=wp.site_id AND wp.population_count>0 AND cd.disturbance_level >= 70 AND site.site_category = 'MONSTER'");
     }
 
     /**
