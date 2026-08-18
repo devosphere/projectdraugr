@@ -311,59 +311,86 @@ public class WildlifeEncounterService {
      * before forced contact, and at least one route leads away from hostile territory). It reads only what a
      * careful scan of the immediate surroundings would give: one tile out, directional, never a map, never a
      * count. A carnivore population next door is the danger; its behaviour sets how pressing the warning reads.
+     *
+     * <p>A raised lookout (#127) at this ground lifts the eye above the near treeline: from it the read is always
+     * clear (no glance-versus-practised gap) and reaches a second chunk out along each way, so danger two tiles
+     * off is seen while there is still room to plan around it.
      */
     @Transactional(readOnly = true)
     public EncounterResult scoutBoundary(UUID chronicle, UUID chunk, String attention, double familiarity) {
         java.util.Map<String,Object> here = jdbc.queryForMap("SELECT world_id, grid_x, grid_y FROM world_chunk WHERE id=?", chunk);
         UUID world = (UUID) here.get("world_id"); int gx = (int) here.get("grid_x"); int gy = (int) here.get("grid_y");
+        boolean hasLookout = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "WHERE w.current_location_id=? AND cp.project_kind='LOOKOUT' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')",
+            Boolean.class, chunk));
         // North, east, south, west — the four ways a Chronicle could step off this ground.
         int[][] offs = {{0,-1},{1,0},{0,1},{-1,0}};
         String[] names = {"to the north","to the east","to the south","to the west"};
-        boolean reads = "HIGH".equals(attention) || familiarity > 0.15;
+        boolean reads = hasLookout || "HIGH".equals(attention) || familiarity > 0.15;
         java.util.List<String> danger = new java.util.ArrayList<>();
+        java.util.List<String> far = new java.util.ArrayList<>();
         java.util.List<String> clearWays = new java.util.ArrayList<>();
         for (int i = 0; i < offs.length; i++) {
             int nx = gx + offs[i][0], ny = gy + offs[i][1];
-            Boolean chunkExists = jdbc.query("SELECT 1 FROM world_chunk WHERE world_id=? AND grid_x=? AND grid_y=?",
-                java.sql.ResultSet::next, world, nx, ny);
-            if (!Boolean.TRUE.equals(chunkExists)) continue; // the edge of the world — no ground that way to read
-            java.util.Map<String,Object> pred = jdbc.query(
-                "SELECT wp.species_key, wp.behavior_state FROM world_chunk c JOIN ecology_site es ON es.chunk_id=c.id " +
-                "JOIN wildlife_population wp ON wp.site_id=es.id " +
-                "WHERE c.world_id=? AND c.grid_x=? AND c.grid_y=? AND wp.ecological_role='CARNIVORE' AND wp.population_count>0 " +
-                "ORDER BY CASE wp.behavior_state WHEN 'HUNTING' THEN 0 WHEN 'PACK_HUNT' THEN 0 WHEN 'STALKING' THEN 1 " +
-                "WHEN 'AGGRESSIVE' THEN 1 WHEN 'ALERT' THEN 2 WHEN 'TERRITORIAL' THEN 2 ELSE 3 END LIMIT 1",
-                rs -> rs.next() ? java.util.Map.of("species", rs.getString(1), "behavior", rs.getString(2) == null ? "" : rs.getString(2)) : null,
-                world, nx, ny);
+            if (!chunkAt(world, nx, ny)) continue; // the edge of the world — no ground that way to read
+            java.util.Map<String,Object> pred = carnivoreAt(world, nx, ny);
             if (pred == null) { clearWays.add(names[i]); continue; }
             String sign = switch (Math.floorMod(chunk.hashCode() + nx * 31 + ny, 3)) {
                 case 0 -> "a rank animal smell rides the wind";
                 case 1 -> "the boundary trees are scored deep, higher than a man reaches";
                 default -> "the small birds have fallen silent";
             };
-            if (reads) {
-                String behavior = (String) pred.get("behavior");
-                String urgency = switch (behavior) {
-                    case "HUNTING", "PACK_HUNT" -> ", and it is hunting";
-                    case "STALKING", "AGGRESSIVE" -> ", and it is roused";
-                    case "TERRITORIAL", "ALERT" -> ", and it is not far off";
-                    default -> ", at its ease for now";
-                };
-                danger.add(names[i] + ", " + sign + " — a " + display((String) pred.get("species")) + urgency);
-            } else {
-                danger.add(names[i] + ", " + sign + " — something large keeps that ground");
+            danger.add(reads
+                ? names[i] + ", " + sign + " — a " + display((String) pred.get("species")) + urgencyOf((String) pred.get("behavior"))
+                : names[i] + ", " + sign + " — something large keeps that ground");
+            // From a lookout the eye reaches a second chunk out along the same line.
+            if (hasLookout) {
+                java.util.Map<String,Object> beyond = carnivoreAt(world, gx + offs[i][0] * 2, gy + offs[i][1] * 2);
+                if (beyond != null) far.add("further " + names[i] + ", a " + display((String) beyond.get("species")) + urgencyOf((String) beyond.get("behavior")));
             }
         }
         StringBuilder s = new StringBuilder();
-        if (danger.isEmpty()) {
-            s.append("You read the boundary on every side — no scent on the wind, no scoring on the trees, no silence where there should be birdsong. The ways off this ground look clear.");
+        if (danger.isEmpty() && far.isEmpty()) {
+            s.append(hasLookout
+                ? "From the lookout you read the ground on every side, near and far — no scent on the wind, no scoring on the trees, no silence where there should be birdsong. The ways off look clear."
+                : "You read the boundary on every side — no scent on the wind, no scoring on the trees, no silence where there should be birdsong. The ways off this ground look clear.");
         } else {
-            s.append("You read the boundary. ");
+            s.append(hasLookout ? "From the lookout you read the ground far and near. " : "You read the boundary. ");
             for (String d : danger) s.append(Character.toUpperCase(d.charAt(0))).append(d.substring(1)).append(". ");
-            if (!clearWays.isEmpty()) s.append("The ground ").append(String.join(" and ", clearWays)).append(clearWays.size() > 1 ? " reads" : " reads").append(" clear.");
+            for (String d : far) s.append(Character.toUpperCase(d.charAt(0))).append(d.substring(1)).append(". ");
+            if (!clearWays.isEmpty()) s.append("The ground ").append(String.join(" and ", clearWays)).append(" reads clear.");
             else s.append("No way off reads clear.");
         }
         return new EncounterResult("SUCCEEDED", s.toString());
+    }
+
+    /** True when a chunk exists at these grid coordinates in the world. */
+    private boolean chunkAt(UUID world, int x, int y) {
+        return Boolean.TRUE.equals(jdbc.query("SELECT 1 FROM world_chunk WHERE world_id=? AND grid_x=? AND grid_y=?",
+            java.sql.ResultSet::next, world, x, y));
+    }
+
+    /** The most pressing carnivore population at a chunk (species + behaviour), or null if the ground is clear. */
+    private java.util.Map<String,Object> carnivoreAt(UUID world, int x, int y) {
+        return jdbc.query(
+            "SELECT wp.species_key, wp.behavior_state FROM world_chunk c JOIN ecology_site es ON es.chunk_id=c.id " +
+            "JOIN wildlife_population wp ON wp.site_id=es.id " +
+            "WHERE c.world_id=? AND c.grid_x=? AND c.grid_y=? AND wp.ecological_role='CARNIVORE' AND wp.population_count>0 " +
+            "ORDER BY CASE wp.behavior_state WHEN 'HUNTING' THEN 0 WHEN 'PACK_HUNT' THEN 0 WHEN 'STALKING' THEN 1 " +
+            "WHEN 'AGGRESSIVE' THEN 1 WHEN 'ALERT' THEN 2 WHEN 'TERRITORIAL' THEN 2 ELSE 3 END LIMIT 1",
+            rs -> rs.next() ? java.util.Map.of("species", rs.getString(1), "behavior", rs.getString(2) == null ? "" : rs.getString(2)) : null,
+            world, x, y);
+    }
+
+    /** How pressing a predator's presence reads, from its behaviour — appended to a scout's report. */
+    private static String urgencyOf(String behavior) {
+        return switch (behavior == null ? "" : behavior) {
+            case "HUNTING", "PACK_HUNT" -> ", and it is hunting";
+            case "STALKING", "AGGRESSIVE" -> ", and it is roused";
+            case "TERRITORIAL", "ALERT" -> ", and it is not far off";
+            default -> ", at its ease for now";
+        };
     }
 
     /**
