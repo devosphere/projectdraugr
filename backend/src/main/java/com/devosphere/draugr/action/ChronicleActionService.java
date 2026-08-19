@@ -134,6 +134,13 @@ public class ChronicleActionService {
         if (localZone == null && intent != Intent.TRAVEL && speededByToolShed(intent) && hasToolShed(chronicle.location())) {
             minutes = Math.max(5, (int) Math.round(minutes * 0.85));
         }
+        // A steady desk standing on this ground — the wooden_desk a Chronicle can build, "a broad, steady work
+        // surface" — is the documentation workstation the world's heritage names (KNOWLEDGE_STATION): putting marks
+        // to a page goes quicker with a proper surface to work at than balancing the page on your knee. It also
+        // gives the built desk something to do — it read against nothing before. Fair no-op when none stands here.
+        if (localZone == null && easedByDesk(intent) && hasWritingSurface(chronicle.location())) {
+            minutes = Math.max(5, (int) Math.round(minutes * 0.85));
+        }
         // F2 — capture the body and the sky as they stood before the tick runs, so
         // the frame can report what the passage of time changed, not just the state
         // it left behind. A chronicle who lies down hungry and wakes starving must
@@ -1477,6 +1484,20 @@ public class ChronicleActionService {
         return Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
             "WHERE w.current_location_id=? AND cp.project_kind='TOOL_SHED' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')",
+            Boolean.class, location));
+    }
+    /**
+     * The documentation work a standing desk shortens (#207 heritage KNOWLEDGE_STATION): putting marks to a page —
+     * writing a record, revising one, sketching a map. Package-private so the regression can assert the set.
+     */
+    boolean easedByDesk(Intent intent) {
+        return switch (intent) { case WRITE, EDIT_DOCUMENT, SKETCH_MAP -> true; default -> false; };
+    }
+    /** Whether a steady work surface (a built wooden desk) stands on this ground — the read behind the writing ease. */
+    boolean hasWritingSurface(UUID location) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
+            "WHERE w.current_location_id=? AND i.item_key='wooden_desk' AND w.lifecycle_state='ACTIVE')",
             Boolean.class, location));
     }
     private boolean exposesToWildlife(Intent intent) {
