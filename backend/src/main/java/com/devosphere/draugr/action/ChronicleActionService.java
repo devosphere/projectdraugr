@@ -437,7 +437,17 @@ public class ChronicleActionService {
         // physiology. Applied before the body snapshot is read, so the drain shows in the frame delta.
         Labor labor = laborOf(intent);
         boolean failed = "FAILED".equals(outcome);
+        // #217 — overexertion. Driving heavy labour when the body is already spent strains it: swing an axe or
+        // break ground on an empty tank and something pulls or wrenches — a real injury with a recovery need, not
+        // just more tiredness, and never a silent reset. Judged on the energy the Chronicle ENTERED the act with
+        // (read before the labour drain below); heavy labour is uniquely Labor(12,·); combat is its own injury
+        // vector, and a failed half-effort attempt does not overexert. The read runs only for heavy labour.
+        boolean heavyLabour = !failed && labor.energy() >= 12 && intent != Intent.CONFRONT_WILDLIFE;
+        Integer energyEntering = heavyLabour ? jdbc.queryForObject("SELECT energy_level FROM chronicle_physiology WHERE chronicle_id=?", Integer.class, chronicle.id()) : null;
         physiology.applyLabor(chronicle.id(), failed ? (labor.energy() + 1) / 2 : labor.energy(), failed ? labor.hygiene() / 2 : labor.hygiene());
+        if (energyEntering != null && energyEntering < 20) {
+            physiology.applyStrain(chronicle.id(), 6, actionId, resolvedAt);
+        }
         // Bucket B — the narration contract: wrap the deterministic core in a clause of setting, so the
         // world is present in the prose and not just the act. Success and failure alike are grounded;
         // the punctuation rule (weather when felt/changing, the land on deliberate looking) lives in the
