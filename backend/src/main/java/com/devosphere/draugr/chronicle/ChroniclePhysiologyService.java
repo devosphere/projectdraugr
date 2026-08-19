@@ -282,12 +282,24 @@ public class ChroniclePhysiologyService {
         // the sleeper off the cold, wet ground, so it counts here for rest and drying.
         return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object bed ON bed.id=cp.object_id JOIN world_object body ON body.current_location_id=bed.current_location_id WHERE body.id=? AND cp.project_kind IN ('GROUND_BED','RAISED_SLEEPING_PLATFORM','GROUNDSHEET') AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND bed.lifecycle_state='ACTIVE')", Boolean.class, chronicleId));
     }
+    /**
+     * Whether a built seat — the wooden chair a Chronicle can craft (CRAFT_CHAIR) — stands on this ground. A seat
+     * eases a sit-down rest more than the bare earth does, the humblest of camp comforts; it gives the built chair
+     * something to do, where it read against nothing before. Sited at a location like other furniture, reachable
+     * there.
+     */
+    private boolean seatedAt(UUID chronicleId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM world_object chair JOIN item_instance i ON i.object_id=chair.id JOIN world_object body ON body.current_location_id=chair.current_location_id WHERE body.id=? AND i.item_key='wooden_chair' AND chair.lifecycle_state='ACTIVE')", Boolean.class, chronicleId));
+    }
     @Transactional
     public void rest(UUID chronicleId, int minutes) {
         double hours = minutes / 60.0;
         Boolean sheltered = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object shelter ON shelter.id=cp.object_id JOIN world_object body ON body.current_location_id=shelter.current_location_id WHERE body.id=? AND cp.project_kind IN ('LEAN_TO','WATTLE_AND_DAUB_HUT','EARTH_SHELTERED_HUT','LOG_CABIN') AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND shelter.lifecycle_state='ACTIVE')", Boolean.class, chronicleId);
         boolean bed = beddedAt(chronicleId);
-        double recovery = Boolean.TRUE.equals(sheltered) ? 1.25 : (bed ? 1.12 : 1.0);
+        // A rest recovers best under a shelter, next in a bed off the cold ground, next on a proper seat, and least
+        // on the bare earth. A chair is a modest comfort — better than the ground, less than lying down — and only
+        // matters when nothing better is to hand (you would not sit up in a chair when a bed or shelter is there).
+        double recovery = Boolean.TRUE.equals(sheltered) ? 1.25 : (bed ? 1.12 : (seatedAt(chronicleId) ? 1.06 : 1.0));
         int drying = Boolean.TRUE.equals(sheltered) ? Math.max(1, (int)Math.round(hours * 8)) : (bed ? Math.max(1, (int)Math.round(hours * 3)) : 0);
         jdbc.update("UPDATE chronicle_physiology SET sleep_debt_hours=GREATEST(0,sleep_debt_hours-?),energy_level=LEAST(100,energy_level+?),pain_level=GREATEST(0,pain_level-?),stress_level=GREATEST(0,stress_level-?),wetness_level=GREATEST(0,wetness_level-?) WHERE chronicle_id=?", hours * .85 * recovery, Math.max(1, (int)Math.round(hours * 9 * recovery)), Math.max(0, (int)Math.round(hours * recovery)), Math.max(0, (int)Math.round(hours * 2 * recovery)), drying, chronicleId);
         refreshBody(chronicleId);
