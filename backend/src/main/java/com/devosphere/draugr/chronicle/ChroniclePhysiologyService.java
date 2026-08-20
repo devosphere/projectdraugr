@@ -174,13 +174,16 @@ public class ChroniclePhysiologyService {
     @Transactional
     public void applyLabor(UUID chronicleId, int energyCost, int hygieneCost) {
         if (energyCost <= 0 && hygieneCost <= 0) return;
-        // #217 — heavy exertion sweats the body. Hard work (the Labor(12,·) heavy tier; a failed half-effort passes
-        // a smaller cost and does not) leaves the body damp, and that damp then chills through the SAME
-        // wetness→cold→illness path as rain does, unless it is dried off at a fire or under shelter. A new exposure
-        // vector: the passive metabolism only ever dampened the body from rain, never from the labour itself.
+        // #217 — heavy exertion taxes the body beyond the energy it spends. Hard work (the Labor(12,·) heavy tier;
+        // a failed half-effort passes a smaller cost and does neither) sweats the body — it leaves it damp, and that
+        // damp then chills through the SAME wetness→cold→illness path as rain does unless dried at a fire or shelter
+        // — and it dries the body from within, so a labouring Chronicle thirsts sooner than a resting one and must
+        // drink more to keep up. New exposure/hydration vectors: the passive metabolism only ever dampened the body
+        // from rain and only ever thirsted it with the passage of time, never from the labour itself.
         int sweat = energyCost >= 12 ? 3 : 0;
-        jdbc.update("UPDATE chronicle_physiology SET energy_level=GREATEST(0,energy_level-?), hygiene_level=GREATEST(0,hygiene_level-?), wetness_level=LEAST(100,wetness_level+?) WHERE chronicle_id=?",
-            Math.max(0, energyCost), Math.max(0, hygieneCost), sweat, chronicleId);
+        double exertionThirst = energyCost >= 12 ? 0.5 : 0.0;
+        jdbc.update("UPDATE chronicle_physiology SET energy_level=GREATEST(0,energy_level-?), hygiene_level=GREATEST(0,hygiene_level-?), wetness_level=LEAST(100,wetness_level+?), hours_without_water=hours_without_water+? WHERE chronicle_id=?",
+            Math.max(0, energyCost), Math.max(0, hygieneCost), sweat, exertionThirst, chronicleId);
         refreshBody(chronicleId);
     }
     @Transactional
