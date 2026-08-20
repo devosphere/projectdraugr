@@ -732,14 +732,17 @@ public class PhysicalItemService {
         String stationKind = (String) match.get("station_kind");
         boolean atStation = stationKind != null && hasAtLeast(chronicle, stationKind, 1);
 
+        // The tool this work turns on (#220): pick the soundest one in reach. A broken tool no longer counts — it
+        // must be mended first — and the chosen tool wears a little with the work (applied on success, below).
+        // Tool classes without a keyed toolset gate on nothing, exactly as before.
         String toolClass = (String) match.get("tool_class");
-        if (toolClass != null) {
-            boolean ok = switch (toolClass) {
-                case "CUTTING"  -> hasCuttingTool(chronicle);
-                case "STRIKING" -> hasAtLeast(chronicle,"stone_hammer",1) || hasAtLeast(chronicle,"primitive_pickaxe",1) || hasAtLeast(chronicle,"field_stone",1) || hasAtLeast(chronicle,"granite_cobble",1) || hasAtLeast(chronicle,"basalt_cobble",1);
-                case "AXE"      -> hasAtLeast(chronicle,"stone_axe",1) || hasAtLeast(chronicle,"stone_hatchet",1);
-                default -> true; };
-            if (!ok) return new String[]{"FAILED", "This work turns on a tool you have not got in reach — an edge, a hammer, an axe, whatever it needs. Bare hands only bruise the material."};
+        java.util.Map<String,Object> toolUsed = null;
+        if (toolClass != null && (toolClass.equals("CUTTING") || toolClass.equals("STRIKING") || toolClass.equals("AXE"))) {
+            toolUsed = soundestToolOfClass(chronicle, location, toolClass);
+            if (toolUsed == null)
+                return new String[]{"FAILED", "This work turns on a tool you have not got in reach — an edge, a hammer, an axe, whatever it needs. Bare hands only bruise the material."};
+            if ("BROKEN".equals(toolUsed.get("cond")) || "DESTROYED".equals(toolUsed.get("cond")))
+                return new String[]{"FAILED", "The tool this work turns on is past biting — its edge gone or its head loose. Mend it against a whetstone or with cordage before it will serve."};
         }
         if (Boolean.TRUE.equals(match.get("requires_fire"))) {
             Boolean fire = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM fire_state fs JOIN world_object w ON w.id=fs.construction_id WHERE w.current_location_id=? AND fs.active=true)", Boolean.class, location);
@@ -859,7 +862,39 @@ public class PhysicalItemService {
             String okind = preservationKind(ok);
             for (int i = 0; i < n; i++) { UUID mid = UUID.randomUUID(); createCraftedItem(chronicle, location, mid, ok, on, at, "PROCESSED", grade); if (okind != null) registerPreserved(mid, okind, at); }
         }
+        // The tool wears with the work (#220), the same way the axe wears with felling: a use accrues and at
+        // thresholds the edge/head steps down (SOUND->WORN at 8, ->BROKEN at 16), kept in history. A worn tool
+        // still serves; a broken one is refused above until it is mended (which resets the wear).
+        if (toolUsed != null) {
+            UUID tid = (UUID) toolUsed.get("id");
+            String tc = (String) toolUsed.get("cond");
+            int tu = (int) toolUsed.get("uses") + 1;
+            String nc = tu >= 16 ? "BROKEN" : tu >= 8 ? "WORN" : tc;
+            jdbc.update("UPDATE item_instance SET use_count=?, condition_state=? WHERE object_id=?", tu, nc, tid);
+            if (!nc.equals(tc))
+                jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'TOOL_WORN',jsonb_build_object('from',?,'to',?))", tid, Timestamp.from(at), tc, nc);
+        }
         return new String[]{"SUCCEEDED", (String) match.get("narration")};
+    }
+
+    /** The soundest reachable tool of a process tool-class (owned or on-site), sound before worn before broken, so
+     *  a spare good tool is used before a failing one — or null when none is in reach. Shares the tool key sets
+     *  with the executeProcess gate and {@code hasCuttingTool}. Used to gate (a broken tool is refused) and to wear. */
+    private java.util.Map<String,Object> soundestToolOfClass(UUID chronicle, UUID location, String toolClass) {
+        java.util.List<String> keys = switch (toolClass) {
+            case "CUTTING"  -> java.util.List.of("stone_knife","stone_hatchet","stone_flake","stone_adze","stone_chisel","flint_burin","flint_scraper","bone_scraper");
+            case "STRIKING" -> java.util.List.of("stone_hammer","primitive_pickaxe","field_stone","granite_cobble","basalt_cobble");
+            case "AXE"      -> java.util.List.of("stone_axe","stone_hatchet");
+            default -> null;
+        };
+        if (keys == null) return null;
+        String inList = keys.stream().map(k -> "'" + k + "'").collect(java.util.stream.Collectors.joining(","));
+        return jdbc.query(REACHABLE_CTE +
+            "SELECT i.object_id, i.condition_state, i.use_count FROM reachable r JOIN item_instance i ON i.object_id=r.id " +
+            "WHERE i.item_key IN (" + inList + ") " +
+            "ORDER BY CASE i.condition_state WHEN 'SOUND' THEN 0 WHEN 'WORN' THEN 1 WHEN 'BROKEN' THEN 2 ELSE 3 END, i.use_count LIMIT 1",
+            rs -> rs.next() ? java.util.Map.of("id", rs.getObject(1, UUID.class), "cond", rs.getString(2), "uses", rs.getInt(3)) : null,
+            chronicle, location);
     }
 
     /** The preservation kind a made food keeps as, or null if it is not a preserved food (V60/M4). */
