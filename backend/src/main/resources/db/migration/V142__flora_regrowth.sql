@@ -1,0 +1,12 @@
+-- V142: woodland / flora regrowth (EPIC #200 forestry — living stands → harvest → use → regrowth).
+--
+-- Felling and gathering deplete chunk_flora.quantity, but NOTHING ever regrew it — a wood cut once stayed bare
+-- forever, and flora_definition.regrowth_days (declared per species: oak 365, birch 300, willow 200, …) was a
+-- dead-read no mechanic touched. Now a stand recovers toward its natural abundance over its species' regrowth
+-- period, so a lightly-worked wood comes back while an over-cut one stays thin — the harvest→regrowth half of the
+-- forestry loop, and the counterpart to the finite mineral regeneration already modelled in ResourceEcologyService.
+--
+-- capacity is the stand's natural abundance to regrow back toward. It auto-tracks the peak quantity seen
+-- (GREATEST(capacity, quantity) in the ecology tick), so a genesis-seeded stand recovers to its OWN richness
+-- without genesis needing to declare it; the DEFAULT only covers the (empty, on a fresh DB) pre-existing rows.
+ALTER TABLE chunk_flora ADD COLUMN capacity SMALLINT NOT NULL DEFAULT 1;

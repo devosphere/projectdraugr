@@ -106,6 +106,22 @@ public class WildlifeSimulationService {
             "last_updated_at = ? " +
             "WHERE cr.refuse_level > 0 AND EXTRACT(EPOCH FROM (?::timestamptz - cr.last_updated_at)) >= 3600", nowTs, nowTs, nowTs);
 
+        // Woodland / flora regrowth (#200 forestry — harvest → regrowth). A stand cut or gathered recovers toward
+        // its natural abundance over its species' regrowth period (flora_definition.regrowth_days, a dead-read
+        // until now): so a lightly-worked wood comes back while an over-cut one stays thin. capacity auto-tracks
+        // the stand's peak abundance (so a genesis-seeded stand recovers to its OWN richness), then quantity
+        // regrows toward it by whole regrowth periods since it was last cut, advancing last_harvested_at by the
+        // periods consumed (keeping the remainder), the same whole-period model as the decay clocks. UPDATE...FROM
+        // joins flora_definition in the WHERE, never a FROM-clause JOIN ON of the target column.
+        jdbc.update("UPDATE chunk_flora SET capacity = GREATEST(capacity, quantity) WHERE capacity < quantity");
+        jdbc.update("UPDATE chunk_flora cf SET " +
+            "quantity = LEAST(cf.capacity, cf.quantity + FLOOR(EXTRACT(EPOCH FROM (?::timestamptz - cf.last_harvested_at)) / (fd.regrowth_days * 86400.0))::int), " +
+            "last_harvested_at = cf.last_harvested_at + make_interval(days => FLOOR(EXTRACT(EPOCH FROM (?::timestamptz - cf.last_harvested_at)) / (fd.regrowth_days * 86400.0))::int * fd.regrowth_days) " +
+            "FROM flora_definition fd " +
+            "WHERE fd.flora_key = cf.flora_key AND cf.last_harvested_at IS NOT NULL AND cf.quantity < cf.capacity " +
+            "AND fd.regrowth_days IS NOT NULL AND fd.regrowth_days > 0 " +
+            "AND EXTRACT(EPOCH FROM (?::timestamptz - cf.last_harvested_at)) >= fd.regrowth_days * 86400.0", nowTs, nowTs, nowTs);
+
         // Disturbance migration (#207/#209, second response tier) — where disturbance stays heavy (a place worked
         // hard again and again), avoidance is not enough and a population shifts its range to quieter ground.
         migrateFromDisturbance(now);
