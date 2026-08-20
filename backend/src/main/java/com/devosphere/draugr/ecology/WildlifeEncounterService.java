@@ -463,6 +463,22 @@ public class WildlifeEncounterService {
     }
 
     /**
+     * Record refuse left on this ground (#218): the waste of work done at a camp — butchery offal now, more sources
+     * later — that piles up and, left unclean, breeds illness ({@link com.devosphere.draugr.chronicle.ChroniclePhysiologyService}
+     * reads it) and later draws pests. A built latrine/refuse pit disposes of it, and it breaks down slowly on its
+     * own (both in {@link WildlifeSimulationService}'s tick). Mirrors {@link #recordDisturbance}; a no-op with no
+     * chunk or no amount, so a camp only grows foul when it is actually fouled.
+     */
+    @Transactional
+    public void recordRefuse(UUID chunk, int amount, Instant at) {
+        if (chunk == null || amount <= 0) return;
+        Timestamp ts = Timestamp.from(at);
+        jdbc.update("INSERT INTO chunk_refuse (chunk_id, refuse_level, last_updated_at) VALUES (?, LEAST(100,?), ?) " +
+            "ON CONFLICT (chunk_id) DO UPDATE SET refuse_level = LEAST(100, chunk_refuse.refuse_level + ?), last_updated_at = ?",
+            chunk, amount, ts, amount, ts);
+    }
+
+    /**
      * Restore disturbed ground (#207/#213): the Chronicle's counter-play to the disturbance they cause. Clearing
      * the churned earth, scattering seed, setting things back toward order lowers the chunk's disturbance level
      * now, so the land grows quiet — and the wildlife return to it — sooner than time and decay alone would

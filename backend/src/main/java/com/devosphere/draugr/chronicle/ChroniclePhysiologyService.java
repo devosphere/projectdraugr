@@ -113,7 +113,15 @@ public class ChroniclePhysiologyService {
             // only cuts what is breathed, so it eases but does not end the exposure — the real fix is the vent.
             boolean smoke = environment.enclosed() && environment.fuelMinutes() > 0 && !environment.vented();
             int smokePressure = smoke ? (environment.smokeWrap() ? (int) Math.ceil(hours * .15) : (int) Math.ceil(hours * .4)) : 0;
-            int illnessPressure = (hygiene <= 10 ? (int) Math.ceil(hours * .4) : 0) + (wetness >= 70 && core < 36.0 ? (int) Math.ceil(hours * .6) : 0) + (injury >= 60 ? (int) Math.ceil(hours * .15) : 0) + smokePressure;
+            // A camp choked with refuse (#218) breeds disease: filth left to pile up where a Chronicle lives is a
+            // non-lethal pressure toward illness, like a foul body or a smoky shelter. A built latrine/refuse pit
+            // keeps the ground clean (it disposes of refuse in the world tick), so this only bites a neglected camp.
+            // Zero when the ground is clean or has no refuse row at all.
+            int refuse = jdbc.queryForObject(
+                "SELECT COALESCE((SELECT cr.refuse_level FROM chunk_refuse cr JOIN world_object body ON body.current_location_id=cr.chunk_id WHERE body.id=?),0)",
+                Integer.class, id);
+            int refusePressure = refuse >= 60 ? (int) Math.ceil(hours * .5) : 0;
+            int illnessPressure = (hygiene <= 10 ? (int) Math.ceil(hours * .4) : 0) + (wetness >= 70 && core < 36.0 ? (int) Math.ceil(hours * .6) : 0) + (injury >= 60 ? (int) Math.ceil(hours * .15) : 0) + smokePressure + refusePressure;
             illness = clamp(illness + illnessPressure);
             // Every physiological death vector terminates here. Trauma (injury_severity
             // at its ceiling) is the path a grievous mauling or an accumulation of

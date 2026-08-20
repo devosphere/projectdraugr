@@ -94,6 +94,18 @@ public class WildlifeSimulationService {
             "last_updated_at = ? " +
             "WHERE disturbance_level > 0 AND EXTRACT(EPOCH FROM (?::timestamptz - last_updated_at)) >= 3600", nowTs, nowTs, nowTs);
 
+        // Camp refuse breaks down over time (#218). Left to itself it rots away slowly (1/hour); a built latrine /
+        // refuse pit at the chunk disposes of it far faster (4/hour) — the LATRINE's second function, keeping a
+        // worked camp clean. Whole hours only, like disturbance. The EXISTS references the target column in its
+        // WHERE (allowed), never in a FROM-clause join.
+        jdbc.update("UPDATE chunk_refuse cr SET " +
+            "refuse_level = GREATEST(0, refuse_level - FLOOR(EXTRACT(EPOCH FROM (?::timestamptz - cr.last_updated_at))/3600.0 * " +
+            "  (CASE WHEN EXISTS (SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "     WHERE w.current_location_id=cr.chunk_id AND cp.project_kind='LATRINE' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE') " +
+            "   THEN 4 ELSE 1 END))::int), " +
+            "last_updated_at = ? " +
+            "WHERE cr.refuse_level > 0 AND EXTRACT(EPOCH FROM (?::timestamptz - cr.last_updated_at)) >= 3600", nowTs, nowTs, nowTs);
+
         // Disturbance migration (#207/#209, second response tier) — where disturbance stays heavy (a place worked
         // hard again and again), avoidance is not enough and a population shifts its range to quieter ground.
         migrateFromDisturbance(now);
