@@ -521,17 +521,23 @@ public class PhysicalItemService {
      */
     @Transactional
     public String[] fellTree(UUID chronicle, UUID location, Instant occurredAt) {
-        // Axe-class tool check: stone_axe, stone_hatchet, or any future axe item
-        boolean hasAxe = Boolean.TRUE.equals(jdbc.queryForObject(
+        // Axe-class tool: stone_axe, stone_hatchet, or any future axe item. Pick the soundest one in reach, so a
+        // spare good axe is used before a worn one; a tool wears with the work (V139), and a broken axe will not
+        // bite until it is mended.
+        java.util.Map<String,Object> axe = jdbc.query(
             "WITH RECURSIVE reachable(id) AS (" +
             "  SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE'" +
             "  UNION ALL SELECT ic.item_id FROM item_containment ic" +
             "  JOIN reachable r ON r.id=ic.container_id" +
             "  JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE')" +
-            "SELECT EXISTS(SELECT 1 FROM reachable r JOIN item_instance i ON i.object_id=r.id " +
-            "WHERE i.item_key IN ('stone_axe','stone_hatchet','iron_axe','hand_axe'))",
-            Boolean.class, chronicle));
-        if (!hasAxe) return new String[]{"FAILED", "You set your hands against the trunk. Without an axe, you cannot fell a tree."};
+            "SELECT i.object_id, i.condition_state, i.use_count FROM reachable r JOIN item_instance i ON i.object_id=r.id " +
+            "WHERE i.item_key IN ('stone_axe','stone_hatchet','iron_axe','hand_axe') " +
+            "ORDER BY CASE i.condition_state WHEN 'SOUND' THEN 0 WHEN 'WORN' THEN 1 WHEN 'BROKEN' THEN 2 ELSE 3 END, i.use_count LIMIT 1",
+            rs -> rs.next() ? java.util.Map.of("id", rs.getObject(1, UUID.class), "cond", rs.getString(2), "uses", rs.getInt(3)) : null,
+            chronicle);
+        if (axe == null) return new String[]{"FAILED", "You set your hands against the trunk. Without an axe, you cannot fell a tree."};
+        if ("BROKEN".equals(axe.get("cond")) || "DESTROYED".equals(axe.get("cond")))
+            return new String[]{"FAILED", "Your axe is past biting — the head loose, the edge gone. Mend it against a whetstone before you can fell with it."};
 
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
         // Check that there is a tree here via chunk_flora
@@ -578,6 +584,16 @@ public class PhysicalItemService {
             jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'FELLED',jsonb_build_object('floraKey',?,'biome',?,'placedAt',?::text))", id, Timestamp.from(occurredAt), floraKey, biome, location.toString());
         }
         jdbc.update("UPDATE chunk_flora SET quantity=GREATEST(0,quantity-1), last_harvested_at=? WHERE chunk_id=? AND flora_key=?", Timestamp.from(occurredAt), location, floraKey);
+        // The axe wears with the felling (V139, #220). Each fell adds a use; at thresholds the edge and head give
+        // way a step (SOUND -> WORN -> BROKEN). A worn axe still fells; a broken one will not, until it is mended
+        // (which resets the wear). Kept in history when the condition steps down.
+        UUID axeId = (UUID) axe.get("id");
+        String axeCond = (String) axe.get("cond");
+        int uses = (int) axe.get("uses") + 1;
+        String wornCond = uses >= 16 ? "BROKEN" : uses >= 8 ? "WORN" : axeCond;
+        jdbc.update("UPDATE item_instance SET use_count=?, condition_state=? WHERE object_id=?", uses, wornCond, axeId);
+        if (!wornCond.equals(axeCond))
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'TOOL_WORN',jsonb_build_object('from',?,'to',?))", axeId, Timestamp.from(occurredAt), axeCond, wornCond);
         String treeName = floraKey.replace("_", " ");
         String logLower = logName.toLowerCase();
         return new String[]{"SUCCEEDED", "The " + treeName + " comes down with a crack that carries across the ground. " +
@@ -1494,7 +1510,7 @@ public class PhysicalItemService {
             if (!hasAtLeast(chronicle, "whetstone", 1) && !hasAtLeast(chronicle, "stone_whetstone", 1) && !hasAtLeast(chronicle, "sandstone_piece", 1) && !hasAtLeast(chronicle, "pumice_piece", 1))
                 return new String[]{"FAILED", "You go to put an edge on the " + name + ", but you have no whetstone or grit-stone to draw it against."};
             String honed = "BROKEN".equals(cond) ? "WORN" : "SOUND";
-            jdbc.update("UPDATE item_instance SET condition_state=? WHERE object_id=?", honed, item.get("id"));
+            jdbc.update("UPDATE item_instance SET condition_state=?, use_count=0 WHERE object_id=?", honed, item.get("id"));
             jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'SHARPENED',jsonb_build_object('from',?,'to',?))", item.get("id"), Timestamp.from(at), cond, honed);
             return new String[]{"SUCCEEDED", "You draw the " + name + " against the stone in long, even strokes until a keen edge comes back to it."};
         }
@@ -1504,7 +1520,7 @@ public class PhysicalItemService {
         if (binder == null) return new String[]{"FAILED", "You turn the " + name + " over, but you have no cordage or fibre in reach to bind and reinforce it with."};
         consumeOne(chronicle, binder, at);
         String newCond = "BROKEN".equals(cond) ? "WORN" : "SOUND";
-        jdbc.update("UPDATE item_instance SET condition_state=? WHERE object_id=?", newCond, item.get("id"));
+        jdbc.update("UPDATE item_instance SET condition_state=?, use_count=0 WHERE object_id=?", newCond, item.get("id"));
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'REPAIRED',jsonb_build_object('from',?,'to',?))", item.get("id"), Timestamp.from(at), cond, newCond);
         String state = "SOUND".equals(newCond) ? "whole and sound again" : "holding together better, though still worn";
         return new String[]{"SUCCEEDED", "You bind and reinforce the " + name + " with " + binder.replace('_', ' ') + ". It is " + state + "."};
