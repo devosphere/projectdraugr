@@ -910,8 +910,8 @@ public class PhysicalItemService {
     /** Preserved food keeps far longer than raw: salted longest, then dried, then smoked. */
     private void registerPreserved(UUID item, String kind, Instant at) {
         long hours = switch (kind) { case "SALTED" -> 1440; case "SMOKED" -> 720; default -> 1080; };
-        jdbc.update("INSERT INTO food_preservation_state (object_id,preparation_kind,safe_until) VALUES (?,?,?) ON CONFLICT (object_id) DO NOTHING",
-            item, kind, Timestamp.from(at.plus(java.time.Duration.ofHours(hours))));
+        jdbc.update("INSERT INTO food_preservation_state (object_id,preparation_kind,safe_until,pest_checked_at) VALUES (?,?,?,?) ON CONFLICT (object_id) DO NOTHING",
+            item, kind, Timestamp.from(at.plus(java.time.Duration.ofHours(hours))), Timestamp.from(at));
     }
 
     /**

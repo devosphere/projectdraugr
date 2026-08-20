@@ -1,0 +1,12 @@
+-- V141: pest spoilage of food stores (EPIC #215 story #218 — sanitation ↔ food security).
+--
+-- Refuse breeds illness and draws predators (V140/#302/#303); it also draws PESTS that gnaw at a Chronicle's food.
+-- Food held where a camp is choked with refuse keeps less well — its shelf life is docked while the keeper stands
+-- on fouled ground (FoodPreservationService.advanceTo), so a filthy camp costs food stores, and a clean camp keeps
+-- them their full span. This needs a per-food "last pest-checked" instant to dock shelf life by whole hours of
+-- actual exposure (the same whole-hours rate model as chunk_disturbance decay), independent of tick frequency.
+--
+-- Set to the food's SIMULATED creation time by the two register sites (FoodPreservationService.register and
+-- PhysicalItemService.registerPreserved) — never wall-clock now(), which would diverge from the simulated tick
+-- clock. The DEFAULT only covers the (empty, on a fresh DB) pre-existing rows.
+ALTER TABLE food_preservation_state ADD COLUMN pest_checked_at TIMESTAMPTZ NOT NULL DEFAULT now();
