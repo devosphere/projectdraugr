@@ -87,6 +87,16 @@ This makes literature the most powerful mechanic: a new chronicle stumbling onto
 
 Work on `development`; it tracks `origin/development`. If a local branch ever ends up ahead of `origin/main` by a large count, that is the symptom of having committed to `main` by mistake.
 
+## GitHub issue workflow — the ticket is the source of truth (STANDARD, do not skip)
+
+Because PRs merge to `development` (a promotion branch) and **not** the default branch `main`, GitHub **never auto-closes** an issue from our merges — `Fixes #N` only fires on the default branch. So the backlog only reflects reality if we keep it current by hand. Make this part of finishing every slice, not a batched afterthought:
+
+1. **On merge of a slice** (PR → `development`, CI-green): post a progress comment on the parent issue — `gh issue comment <n>` as **devosphere** — stating **what was delivered** (the PR # and the mechanic), **what scope the story now covers**, and, most important, **what remains**. Reference the PR.
+2. **When a ticket's scope is genuinely, fully delivered:** `gh issue close <n>` with an evidence comment (the fix PRs/commits and which acceptance criteria are met). Self-contained bugs close outright; broad multi-sector EPIC *stories* usually stay **open** with a progress comment because they span sectors not yet built — say so explicitly ("survival sector delivered; cross-sector extends as those sectors land").
+3. **Starting a story:** read the ticket's latest progress comment first to learn what is left, then continue. The ticket comment — not a fresh read of the code — is the resume point for a story's remaining scope.
+
+This is why a later cycle can tell what is done vs. left on a ticket without guessing. Keep it truthful.
+
 ## Key Files
 
 | File | Purpose |
