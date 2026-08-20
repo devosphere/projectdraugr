@@ -601,6 +601,31 @@ public class PhysicalItemService {
             " fell — far too heavy to shoulder whole. You will need to buck and split the wood into pieces you can carry."};
     }
 
+    /**
+     * Plant a tree seed to establish or restore a woodland stand here (#200/#204 — the counter-play to felling and
+     * clear-cutting). A carried acorn grows an oak, a pine nut a pine — pressed into ground that suits the species
+     * (its biome_affinity). It seeds a young stand (or adds a sapling to a thin one) with room to grow to a small
+     * wood, and starts its regrowth clock, so a clear-cut a Chronicle replants comes back over the years where it
+     * would otherwise have stayed bare. The seed comes from foraging (acorns under oaks, nuts from cones, #257).
+     */
+    @Transactional
+    public String[] plantTree(UUID chronicle, UUID location, Instant occurredAt) {
+        String seed = null, species = null;
+        if (hasAtLeast(chronicle, "acorn", 1)) { seed = "acorn"; species = "oak"; }
+        else if (hasAtLeast(chronicle, "pine_nut", 1)) { seed = "pine_nut"; species = "pine"; }
+        if (seed == null) return new String[]{"FAILED", "You have no seed to plant — gather acorns under an oak, or pine nuts from the cones, and come back."};
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
+        String affinity = jdbc.queryForObject("SELECT biome_affinity FROM flora_definition WHERE flora_key=?", String.class, species);
+        if (biome == null || affinity == null || !java.util.Arrays.asList(affinity.split(",")).contains(biome))
+            return new String[]{"FAILED", "This ground will not take a " + species + " — it does not grow in country like this."};
+        if (!consumeOne(chronicle, seed, occurredAt)) return new String[]{"FAILED", "The " + seed + " is no longer in reach to plant."};
+        Timestamp ts = Timestamp.from(occurredAt);
+        int updated = jdbc.update("UPDATE chunk_flora SET quantity = LEAST(GREATEST(capacity, 3), quantity + 1), capacity = GREATEST(capacity, 3), last_harvested_at = ? WHERE chunk_id=? AND flora_key=?", ts, location, species);
+        if (updated == 0)
+            jdbc.update("INSERT INTO chunk_flora (chunk_id, flora_key, quantity, last_harvested_at, capacity) VALUES (?,?,1,?,3)", location, species, ts);
+        return new String[]{"SUCCEEDED", "You press the " + seed + " into the turned earth and firm the soil over it — a sapling that, given years and left to stand, will grow into a " + species + " where none was."};
+    }
+
     @Transactional(readOnly = true)
     public boolean hasAtLeast(UUID chronicle, String itemKey, int required) {
         return reachCount(chronicle, chronicleLocation(chronicle), itemKey) >= required;
