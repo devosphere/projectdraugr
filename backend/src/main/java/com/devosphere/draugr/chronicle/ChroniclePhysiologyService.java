@@ -326,6 +326,19 @@ public class ChroniclePhysiologyService {
         jdbc.update("INSERT INTO chronicle_condition_event (chronicle_id,occurred_at,condition_kind,severity,source_action_id,payload) VALUES (?,?,?,?,?,jsonb_build_object('source',?))",chronicleId,Timestamp.from(occurredAt),"INJURY",bounded,actionId,source);
         refreshBody(chronicleId);
     }
+    /**
+     * A strain of overexertion (#217) — a pulled muscle, a wrenched back from driving the body past what it had
+     * left. It hurts (pain is the main signal) and leaves a minor tissue injury that eases with rest and care, but
+     * unlike a cut or a bite it does not bleed: no blood loss. A real recovery need, kept in history like any
+     * condition, so there is no silent fatigue reset.
+     */
+    @Transactional
+    public void applyStrain(UUID chronicleId, int severity, UUID actionId, Instant occurredAt) {
+        int bounded = clamp(severity);
+        jdbc.update("UPDATE chronicle_physiology SET injury_severity=LEAST(100,injury_severity+?),pain_level=LEAST(100,pain_level+?),stress_level=LEAST(100,stress_level+?) WHERE chronicle_id=?", Math.max(1, bounded / 2), bounded, Math.max(1, bounded / 3), chronicleId);
+        jdbc.update("INSERT INTO chronicle_condition_event (chronicle_id,occurred_at,condition_kind,severity,source_action_id,payload) VALUES (?,?,?,?,?,jsonb_build_object('source','overexertion'))", chronicleId, Timestamp.from(occurredAt), "STRAIN", bounded, actionId);
+        refreshBody(chronicleId);
+    }
     @Transactional
     public void applyFoodborneIllness(UUID chronicleId, UUID actionId, Instant occurredAt) {
         jdbc.update("UPDATE chronicle_physiology SET illness_severity=LEAST(100,illness_severity+12),stress_level=LEAST(100,stress_level+5) WHERE chronicle_id=?",chronicleId);
