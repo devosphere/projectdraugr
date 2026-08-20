@@ -174,8 +174,13 @@ public class ChroniclePhysiologyService {
     @Transactional
     public void applyLabor(UUID chronicleId, int energyCost, int hygieneCost) {
         if (energyCost <= 0 && hygieneCost <= 0) return;
-        jdbc.update("UPDATE chronicle_physiology SET energy_level=GREATEST(0,energy_level-?), hygiene_level=GREATEST(0,hygiene_level-?) WHERE chronicle_id=?",
-            Math.max(0, energyCost), Math.max(0, hygieneCost), chronicleId);
+        // #217 — heavy exertion sweats the body. Hard work (the Labor(12,·) heavy tier; a failed half-effort passes
+        // a smaller cost and does not) leaves the body damp, and that damp then chills through the SAME
+        // wetness→cold→illness path as rain does, unless it is dried off at a fire or under shelter. A new exposure
+        // vector: the passive metabolism only ever dampened the body from rain, never from the labour itself.
+        int sweat = energyCost >= 12 ? 3 : 0;
+        jdbc.update("UPDATE chronicle_physiology SET energy_level=GREATEST(0,energy_level-?), hygiene_level=GREATEST(0,hygiene_level-?), wetness_level=LEAST(100,wetness_level+?) WHERE chronicle_id=?",
+            Math.max(0, energyCost), Math.max(0, hygieneCost), sweat, chronicleId);
         refreshBody(chronicleId);
     }
     @Transactional
