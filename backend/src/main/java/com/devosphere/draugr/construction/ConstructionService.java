@@ -485,8 +485,17 @@ public class ConstructionService {
     @Transactional
     public String[] maintainCamp(UUID chronicle, UUID location, Instant at) {
         List<UUID> here = jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' AND cp.state='COMPLETED' FOR UPDATE", (rs, r) -> rs.getObject(1, UUID.class), location);
-        if (here.isEmpty()) return new String[]{"FAILED", "You look around to set a camp in order, but there is nothing built here to tend."};
         Timestamp ts = Timestamp.from(at);
+        // Tidying a camp carries off the filth of living there (#218): clearing refuse is part of the work — the
+        // active counter-play beside a latrine's passive disposal — and a good tidy is worth doing even at a bare
+        // site that has grown foul. Cleared by hand here; drained slowly (and faster with a latrine) in the tick.
+        int refuseBefore = jdbc.queryForObject("SELECT COALESCE((SELECT refuse_level FROM chunk_refuse WHERE chunk_id=?),0)", Integer.class, location);
+        int cleared = 0;
+        if (refuseBefore > 0) {
+            jdbc.update("UPDATE chunk_refuse SET refuse_level=GREATEST(0,refuse_level-25),last_updated_at=? WHERE chunk_id=?", ts, location);
+            cleared = Math.min(25, refuseBefore);
+        }
+        if (here.isEmpty() && cleared == 0) return new String[]{"FAILED", "You look around to set a camp in order, but there is nothing built here to tend and nothing to clear away."};
         int tended = 0;
         for (UUID id : here) {
             Integer integ = jdbc.queryForObject("SELECT integrity_percent FROM construction_project WHERE object_id=?", Integer.class, id);
@@ -496,10 +505,13 @@ public class ConstructionService {
                 tended++;
             }
         }
-        String tail = tended == 0
-            ? "Everything here already stands sound; you set what little is astray back in its place."
-            : "You go over what stands here, working " + tended + " thing" + (tended == 1 ? "" : "s") + " back toward true and ordering the camp around them.";
-        return new String[]{"SUCCEEDED", "You tidy the camp — stowing what is loose, righting what has shifted. " + tail};
+        String tail = here.isEmpty()
+            ? "There is nothing built here to tend, but the ground is the better for the clearing."
+            : (tended == 0
+                ? "Everything here already stands sound; you set what little is astray back in its place."
+                : "You go over what stands here, working " + tended + " thing" + (tended == 1 ? "" : "s") + " back toward true and ordering the camp around them.");
+        String filth = cleared > 0 ? " You carry off the refuse that had gathered, and the living space is cleaner for it." : "";
+        return new String[]{"SUCCEEDED", "You tidy the camp — stowing what is loose, righting what has shifted. " + tail + filth};
     }
 
     /**
