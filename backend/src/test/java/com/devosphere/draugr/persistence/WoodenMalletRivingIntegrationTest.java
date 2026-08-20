@@ -76,6 +76,12 @@ class WoodenMalletRivingIntegrationTest {
         int before = plankCount(chronicle);
         for (int i = 0; i < runs; i++) {
             items.createCarriedItem(chronicle, "oak_log", "Oak log", now, "TEST_SEED");
+            // Keep the axe keen across the run. Tool wear (#220) would break a stone axe well before 120 splits,
+            // but this test measures YIELD (waste), not durability — wear is proven separately (ToolWear*Test), and
+            // here it would only confound the mallet-vs-hand comparison. So the edge is reset before each split.
+            jdbc.update("UPDATE item_instance SET condition_state='SOUND', use_count=0 WHERE object_id IN " +
+                    "(SELECT i.object_id FROM item_instance i JOIN world_object w ON w.id=i.object_id " +
+                    "WHERE w.current_owner_id=? AND i.item_key='stone_axe')", chronicle);
             items.executeProcess(chronicle, chunk, "split_planks", "split planks from the log", now);
         }
         return plankCount(chronicle) - before;
