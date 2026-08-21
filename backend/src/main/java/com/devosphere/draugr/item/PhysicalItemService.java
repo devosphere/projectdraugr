@@ -843,7 +843,14 @@ public class PhysicalItemService {
                 || key.equals("lap_joint_planks") || key.equals("scarf_joint") || key.equals("edge_join_boards")
                 || key.equals("assemble_frame") || key.equals("turn_dowels") || key.equals("shape_components"))
             && (hasAtLeast(chronicle, "seasoned_plank", 1) || hasAtLeast(chronicle, "seasoned_timber", 1));
-        if (atStation || sewingKit || flaker || woolComb || stirringSpoon || seasonedStock) attempt = attempt.up();
+        // A copper chisel takes finer, more controlled parings than any stone or bone edge, and holds that edge
+        // through the work — so a carve worked with one to hand comes out truer, lifting the workmanship one grade,
+        // the same bounded assist (shared, capped by the stock's own grade). This is the first metal's terminal
+        // payoff (#180/#184): the whole ore -> smelt -> forge chain finally earns better work than stone.
+        boolean copperChisel = (key.equals("carve_wooden_bowl") || key.equals("carve_soapstone_bowl")
+                || key.equals("carve_wooden_spoon") || key.equals("carve_water_ladle") || key.equals("carve_pegs"))
+            && hasAtLeast(chronicle, "copper_chisel", 1);
+        if (atStation || sewingKit || flaker || woolComb || stirringSpoon || seasonedStock || copperChisel) attempt = attempt.up();
         QualityGrade grade = QualityGrade.worst(worstGradeAmong(chronicle, inputKeys), attempt);
 
         for (java.util.Map<String,Object> in : fixed)

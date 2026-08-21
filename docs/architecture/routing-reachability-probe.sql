@@ -94,7 +94,9 @@ INSERT INTO probes VALUES
   -- Originals: must not regress
   ('split the log into planks with an axe','split_planks'),('tan the deer hide with oak bark','tan_hide'),
   ('weave a large basket from plant fiber','weave_large_basket'),('gather ash from the hearth','gather_ash'),
-  ('form a vessel from the clay','form_vessel');
+  ('form a vessel from the clay','form_vessel'),
+  -- V144 copper metallurgy
+  ('smelt the copper ore','smelt_copper'),('forge a copper chisel','forge_copper_chisel');
 
 \echo === MISSES (expect none) ===
 SELECT want AS expected, COALESCE(resolve(txt),'<null>') AS got, txt
