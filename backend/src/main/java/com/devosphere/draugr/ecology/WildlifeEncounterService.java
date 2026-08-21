@@ -47,16 +47,17 @@ public class WildlifeEncounterService {
         // held stock (stones, sling, javelin, bow, arrows) counts from what the chronicle owns and carries.
         Combatant body=jdbc.query(
             "SELECT p.energy_level,p.injury_severity,p.pain_level,eq.hand_weapon,own.stones,eq.armour,eq.poison," +
-            "eq.light_shield,eq.rawhide_shield,eq.blunt,own.sling,own.javelin,own.bow,own.arrows,eq.soft_armour " +
+            "eq.light_shield,eq.rawhide_shield,eq.blunt,own.sling,own.javelin,own.bow,own.arrows,eq.soft_armour,eq.hardened " +
             "FROM chronicle_physiology p " +
             "LEFT JOIN LATERAL (SELECT " +
-            "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key IN ('stone_axe','primitive_spear','poisoned_spear') THEN 1 ELSE 0 END),0) hand_weapon," +
+            "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key IN ('stone_axe','primitive_spear','poisoned_spear','fire_hardened_spear') THEN 1 ELSE 0 END),0) hand_weapon," +
             "  COALESCE(SUM(CASE WHEN i.item_key IN ('scale_armour','chitin_helm','war_shield') THEN 1 ELSE 0 END),0) armour," +
             "  COALESCE(SUM(CASE WHEN i.item_key='poisoned_spear' THEN 1 ELSE 0 END),0) poison," +
             "  COALESCE(SUM(CASE WHEN i.item_key IN ('bark_shield','woven_reed_shield') THEN 1 ELSE 0 END),0) light_shield," +
             "  COALESCE(SUM(CASE WHEN i.item_key='rawhide_shield' THEN 1 ELSE 0 END),0) rawhide_shield," +
             "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key IN ('wooden_club','stone_club','stone_maul','stone_hammer') THEN 1 ELSE 0 END),0) blunt," +
-            "  COALESCE(SUM(CASE WHEN i.item_key IN ('leather_armor','leather_helm_cap','leather_bracer') THEN 1 ELSE 0 END),0) soft_armour" +
+            "  COALESCE(SUM(CASE WHEN i.item_key IN ('leather_armor','leather_helm_cap','leather_bracer') THEN 1 ELSE 0 END),0) soft_armour," +
+            "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key='fire_hardened_spear' THEN 1 ELSE 0 END),0) hardened" +
             "  FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id WHERE e.chronicle_id=p.chronicle_id) eq ON true " +
             "LEFT JOIN LATERAL (SELECT " +
             "  COALESCE(SUM(CASE WHEN i.item_key='field_stone' THEN 1 ELSE 0 END),0) stones," +
@@ -66,7 +67,7 @@ public class WildlifeEncounterService {
             "  COALESCE(SUM(CASE WHEN i.item_key='hunting_arrow' THEN 1 ELSE 0 END),0) arrows" +
             "  FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=p.chronicle_id AND w.lifecycle_state='ACTIVE') own ON true " +
             "WHERE p.chronicle_id=?",
-            rs->rs.next()?new Combatant(rs.getInt(1),rs.getInt(2),rs.getInt(3),rs.getInt(4),rs.getInt(5),rs.getInt(6),rs.getInt(7),rs.getInt(8),rs.getInt(9),rs.getInt(10),rs.getInt(11),rs.getInt(12),rs.getInt(13),rs.getInt(14),rs.getInt(15)):new Combatant(0,100,100,0,0,0,0,0,0,0,0,0,0,0,0),chronicle);
+            rs->rs.next()?new Combatant(rs.getInt(1),rs.getInt(2),rs.getInt(3),rs.getInt(4),rs.getInt(5),rs.getInt(6),rs.getInt(7),rs.getInt(8),rs.getInt(9),rs.getInt(10),rs.getInt(11),rs.getInt(12),rs.getInt(13),rs.getInt(14),rs.getInt(15),rs.getInt(16)):new Combatant(0,100,100,0,0,0,0,0,0,0,0,0,0,0,0,0),chronicle);
         // A creature on the wing cannot be reached by a hand weapon. Throwing stones
         // is the only contact a chronicle has with it. The narrator witnesses the
         // futility without naming what would be needed.
@@ -90,7 +91,11 @@ public class WildlifeEncounterService {
             boolean brandInHand = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key='resin_torch')", Boolean.class, chronicle));
             fireEdge = fireAtHand ? 15 : (brandInHand ? 10 : 0);
         }
-        int capability = body.energy()/3 - body.injury()/2 - body.pain()/3 + body.handWeapon()*35 + (body.blunt()>0?22:0) + (body.javelin()>0?25:0) + (archery?40:0) + thrownStones + Math.min(20,body.poison()*20) + tacticBonus + fireEdge;
+        // A fire-hardened spear point holds an edge a green shaft cannot (#75/#77): worth the extra work over a
+        // plain primitive spear — it counts as a hand weapon (+35, like any spear) and bites a little deeper on top,
+        // so the ordering runs primitive < fire-hardened < poisoned. Closes the fire_hardened_spear dead-read, which
+        // had made hardening a spear DISARM the Chronicle (the harder point read as no weapon at all).
+        int capability = body.energy()/3 - body.injury()/2 - body.pain()/3 + body.handWeapon()*35 + (body.hardened()>0?10:0) + (body.blunt()>0?22:0) + (body.javelin()>0?25:0) + (archery?40:0) + thrownStones + Math.min(20,body.poison()*20) + tacticBonus + fireEdge;
         // Registry resistance is authoritative when catalogued; the old role-based
         // bands remain the fallback. Registry values are species-scaled, so they are
         // lifted onto the same footing as the bands they replace.
@@ -795,7 +800,7 @@ public class WildlifeEncounterService {
     private int meatFor(String species) { return species.contains("bear") || species.contains("elk") ? 4 : species.contains("deer") || species.contains("boar") ? 3 : 1; }
     private String display(String species) { return species.replace('_',' '); }
     private record Encounter(UUID populationId,String species,String role,String behavior,int population,String movementClass,Integer baseResistance,boolean ambushHunter){}
-    private record Combatant(int energy,int injury,int pain,int handWeapon,int stones,int armour,int poison,int lightShield,int rawhideShield,int blunt,int sling,int javelin,int bow,int arrows,int softArmour){}
+    private record Combatant(int energy,int injury,int pain,int handWeapon,int stones,int armour,int poison,int lightShield,int rawhideShield,int blunt,int sling,int javelin,int bow,int arrows,int softArmour,int hardened){}
     private record Carcass(UUID id,String species,int meat,boolean hide){}
     public record EncounterResult(String outcome,String narration){}
     public record HarvestResult(String outcome,String narration){}
