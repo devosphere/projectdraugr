@@ -141,6 +141,14 @@ public class ChronicleActionService {
         if (localZone == null && easedByDesk(intent) && hasWritingSurface(chronicle.location())) {
             minutes = Math.max(5, (int) Math.round(minutes * 0.85));
         }
+        // A utility belt worn at the waist keeps the tools a Chronicle reaches for most in a row of loops at hand,
+        // so each craft or repair opens without hunting the pack for them — the worn, portable cousin of the tool
+        // shed's setting-up cut (#57/#207). Closes the utility_belt dead-read: its making has always claimed
+        // "consistent placement cuts preparation time", but nothing read it. Stacks modestly with a shed; a fair
+        // no-op when none is worn.
+        if (localZone == null && intent != Intent.TRAVEL && speededByToolShed(intent) && wearsUtilityBelt(chronicle.id())) {
+            minutes = Math.max(5, (int) Math.round(minutes * 0.92));
+        }
         // F2 — capture the body and the sky as they stood before the tick runs, so
         // the frame can report what the passage of time changed, not just the state
         // it left behind. A chronicle who lies down hungry and wakes starving must
@@ -1511,6 +1519,13 @@ public class ChronicleActionService {
             "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
             "WHERE w.current_location_id=? AND cp.project_kind='TOOL_SHED' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')",
             Boolean.class, location));
+    }
+    /** Whether a utility belt is worn — tools kept in its loops are to hand, the read behind the belt's prep cut (#57). */
+    boolean wearsUtilityBelt(UUID chronicle) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id " +
+            "JOIN world_object w ON w.id=e.item_id WHERE e.chronicle_id=? AND i.item_key='utility_belt' AND w.lifecycle_state='ACTIVE')",
+            Boolean.class, chronicle));
     }
     /**
      * The documentation work a standing desk shortens (#207 heritage KNOWLEDGE_STATION): putting marks to a page —
