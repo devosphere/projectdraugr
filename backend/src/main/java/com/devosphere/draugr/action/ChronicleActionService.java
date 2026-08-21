@@ -220,7 +220,14 @@ public class ChronicleActionService {
             if (carried != null) {
                 items.consumeOne(chronicle.id(), carried, resolvedAt); physiology.drink(chronicle.id());
                 if ("clean_water".equals(carried)) perception = "You drink your fill of the boiled water — clean, flat, and safe.";
-                else if ("filtered_water".equals(carried)) { physiology.applyWaterborneRisk(chronicle.id(), 2); perception = "You drink the filtered water; it runs clearer than it was, though not beyond all doubt."; }
+                else if ("filtered_water".equals(carried)) {
+                    // A fired clay filter (charcoal and sand packed in a hard-fired vessel, #59/#78) clarifies better
+                    // than the improvised bark-and-charcoal cone (#141), so water run through it is cleaner to drink —
+                    // the terminal edge that makes the costly fired filter worth firing over the free stand-in.
+                    boolean firedFilter = items.hasAtLeast(chronicle.id(), "clay_water_filter", 1);
+                    physiology.applyWaterborneRisk(chronicle.id(), firedFilter ? 1 : 2);
+                    perception = firedFilter ? "You drink the filtered water; run through the fired clay filter it comes clearer still — cleaner than a bark cone could leave it, though short of a boil." : "You drink the filtered water; it runs clearer than it was, though not beyond all doubt.";
+                }
                 else { physiology.applyWaterborneRisk(chronicle.id(), ladle ? 3 : 5); perception = ladle ? "You draw the raw water with the ladle, skimming the clearer water off the top; it eases the dryness and sits a little easier for the care." : "You drink the raw water you carry. It eases the dryness, but sits uneasy in the gut."; }
             } else if (waterInReach(chronicle.location())) {
                 physiology.drink(chronicle.id());
