@@ -14,7 +14,7 @@ INSERT INTO item_definition (item_key, display_name, category, unit_mass_grams, 
 ('tin_ore',      'Tin ore',      'MATERIAL', 1100, 480, TRUE,  FALSE, 0),
 ('tin_ingot',    'Tin ingot',    'MATERIAL', 850,  180, TRUE,  FALSE, 0),
 ('bronze_ingot', 'Bronze ingot', 'MATERIAL', 900,  200, TRUE,  FALSE, 0),
-('bronze_spear', 'Bronze spear', 'WEAPON',   1400, 2500, FALSE, TRUE, 0)
+('bronze_spear', 'Bronze spear', 'WEAPON',   1150, 2500, FALSE, TRUE, 0)
 ON CONFLICT (item_key) DO NOTHING;
 
 INSERT INTO item_source (item_key, source_kind, detail) VALUES
@@ -47,13 +47,13 @@ INSERT INTO material_process (process_key, display_name, output_item_key, output
  'You melt the copper down and stir in about a tenth part of tin, and the pour comes out harder and brighter than either metal alone — bronze.', 'VERIFIED', now()),
 ('forge_bronze_spear', 'Forge a bronze spear', 'bronze_spear', 1,1, 'STRIKING', TRUE, FALSE, 70, 'tools', 'CRAFT',
  'forge a bronze spear,forge bronze spear,cast a bronze spear,hammer out a bronze spearhead,work the bronze into a spear,bronze spear',
- 'You cast a bronze spearhead, hammer and grind it to a long keen point, and rivet it to a shaft — an edge that bites deeper and lasts far longer than copper or stone.', 'VERIFIED', now())
+ 'You cast a bronze spearhead, hammer and grind it to a long keen point, and rivet it to a trimmed wooden shaft — an edge that bites deeper and lasts far longer than copper or stone.', 'VERIFIED', now())
 ON CONFLICT (process_key) DO NOTHING;
 
 INSERT INTO material_process_input (process_key, item_key, quantity) VALUES
 ('smelt_tin', 'tin_ore', 2), ('smelt_tin', 'charcoal', 1),
 ('alloy_bronze', 'copper_ingot', 2), ('alloy_bronze', 'tin_ingot', 1), ('alloy_bronze', 'charcoal', 1),
-('forge_bronze_spear', 'bronze_ingot', 1)
+('forge_bronze_spear', 'bronze_ingot', 1), ('forge_bronze_spear', 'dry_branch', 1)
 ON CONFLICT (process_key, item_key) DO NOTHING;
 
 INSERT INTO process_subject (process_key, subject_term) VALUES

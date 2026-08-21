@@ -122,7 +122,8 @@ class BronzeMetallurgyIntegrationTest {
         assertEquals("SUCCEEDED", alloy[0], () -> "alloying bronze must succeed: " + alloy[1]);
         assertTrue(items.hasAtLeast(chronicle, "bronze_ingot", 1), "alloying must yield bronze ingots");
 
-        // Forge a bronze spear.
+        // Forge a bronze spear — a cast head riveted to a trimmed wooden shaft.
+        items.createCarriedItem(chronicle, "dry_branch", "Dry branch", now, "TEST_SEED");
         String[] forge = items.runProcess(chronicle, chunk, "forge a bronze spear", now);
         assertEquals("SUCCEEDED", forge[0], () -> "forging a bronze spear must succeed: " + forge[1]);
         assertTrue(items.hasAtLeast(chronicle, "bronze_spear", 1), "forging must yield a bronze spear");
