@@ -50,14 +50,14 @@ public class WildlifeEncounterService {
             "eq.light_shield,eq.rawhide_shield,eq.blunt,own.sling,own.javelin,own.bow,own.arrows,eq.soft_armour,eq.hardened " +
             "FROM chronicle_physiology p " +
             "LEFT JOIN LATERAL (SELECT " +
-            "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key IN ('stone_axe','primitive_spear','poisoned_spear','fire_hardened_spear') THEN 1 ELSE 0 END),0) hand_weapon," +
+            "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key IN ('stone_axe','primitive_spear','poisoned_spear','fire_hardened_spear','copper_axe') THEN 1 ELSE 0 END),0) hand_weapon," +
             "  COALESCE(SUM(CASE WHEN i.item_key IN ('scale_armour','chitin_helm','war_shield') THEN 1 ELSE 0 END),0) armour," +
             "  COALESCE(SUM(CASE WHEN i.item_key='poisoned_spear' THEN 1 ELSE 0 END),0) poison," +
             "  COALESCE(SUM(CASE WHEN i.item_key IN ('bark_shield','woven_reed_shield') THEN 1 ELSE 0 END),0) light_shield," +
             "  COALESCE(SUM(CASE WHEN i.item_key='rawhide_shield' THEN 1 ELSE 0 END),0) rawhide_shield," +
             "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key IN ('wooden_club','stone_club','stone_maul','stone_hammer') THEN 1 ELSE 0 END),0) blunt," +
             "  COALESCE(SUM(CASE WHEN i.item_key IN ('leather_armor','leather_helm_cap','leather_bracer') THEN 1 ELSE 0 END),0) soft_armour," +
-            "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key='fire_hardened_spear' THEN 1 ELSE 0 END),0) hardened" +
+            "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key IN ('fire_hardened_spear','copper_axe') THEN 1 ELSE 0 END),0) hardened" +
             "  FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id WHERE e.chronicle_id=p.chronicle_id) eq ON true " +
             "LEFT JOIN LATERAL (SELECT " +
             "  COALESCE(SUM(CASE WHEN i.item_key='field_stone' THEN 1 ELSE 0 END),0) stones," +
@@ -91,10 +91,11 @@ public class WildlifeEncounterService {
             boolean brandInHand = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key='resin_torch')", Boolean.class, chronicle));
             fireEdge = fireAtHand ? 15 : (brandInHand ? 10 : 0);
         }
-        // A fire-hardened spear point holds an edge a green shaft cannot (#75/#77): worth the extra work over a
-        // plain primitive spear — it counts as a hand weapon (+35, like any spear) and bites a little deeper on top,
-        // so the ordering runs primitive < fire-hardened < poisoned. Closes the fire_hardened_spear dead-read, which
-        // had made hardening a spear DISARM the Chronicle (the harder point read as no weapon at all).
+        // A keen, edge-holding weapon bites deeper than a plain or knapped one (#75/#77/#180): a fire-hardened
+        // spear point, or a forged copper axe. Each counts as a hand weapon (+35) and bites a little deeper on top
+        // (+10), so a copper axe out-fights a stone one and a hardened spear a green one — the ordering runs
+        // primitive < fire-hardened, and stone axe < copper axe < poisoned. Closes the fire_hardened_spear dead-read
+        // (hardening once DISARMED the Chronicle) and gives the smelted copper axe its terminal edge in a fight.
         int capability = body.energy()/3 - body.injury()/2 - body.pain()/3 + body.handWeapon()*35 + (body.hardened()>0?10:0) + (body.blunt()>0?22:0) + (body.javelin()>0?25:0) + (archery?40:0) + thrownStones + Math.min(20,body.poison()*20) + tacticBonus + fireEdge;
         // Registry resistance is authoritative when catalogued; the old role-based
         // bands remain the fallback. Registry values are species-scaled, so they are
