@@ -212,16 +212,20 @@ public class ChronicleActionService {
         else if (intent == Intent.DRINK) {
             // The safest water you carry first (boiled > filtered > raw), else raw from a source in reach. Raw and
             // standing water carry a gut-illness risk that accumulates; boiled water and a clean moving source do not (#71).
+            // A water ladle (#78) draws the clearer water off the top instead of dipping the whole vessel into the
+            // silt, so it takes the edge off drinking untreated water — never as safe as boiling or filtering, but
+            // a real, cheap improvement on a careless gulp. Closes the water_ladle dead-craft (#257).
+            boolean ladle = items.hasAtLeast(chronicle.id(), "water_ladle", 1);
             String carried = items.bestWaterCarried(chronicle.id());
             if (carried != null) {
                 items.consumeOne(chronicle.id(), carried, resolvedAt); physiology.drink(chronicle.id());
                 if ("clean_water".equals(carried)) perception = "You drink your fill of the boiled water — clean, flat, and safe.";
                 else if ("filtered_water".equals(carried)) { physiology.applyWaterborneRisk(chronicle.id(), 2); perception = "You drink the filtered water; it runs clearer than it was, though not beyond all doubt."; }
-                else { physiology.applyWaterborneRisk(chronicle.id(), 5); perception = "You drink the raw water you carry. It eases the dryness, but sits uneasy in the gut."; }
+                else { physiology.applyWaterborneRisk(chronicle.id(), ladle ? 3 : 5); perception = ladle ? "You draw the raw water with the ladle, skimming the clearer water off the top; it eases the dryness and sits a little easier for the care." : "You drink the raw water you carry. It eases the dryness, but sits uneasy in the gut."; }
             } else if (waterInReach(chronicle.location())) {
                 physiology.drink(chronicle.id());
                 if (safeWaterSource(chronicle.location())) perception = "You drink from the clean, moving water and let the cold settle in your throat.";
-                else { physiology.applyWaterborneRisk(chronicle.id(), 6); perception = "You drink from the standing water here. It eases the dryness, but it is not clean, and the gut will know it."; }
+                else { physiology.applyWaterborneRisk(chronicle.id(), ladle ? 4 : 6); perception = ladle ? "You dip the ladle and draw the standing water from above the silt; it is still not clean, but the gut will fare better than from a careless gulp." : "You drink from the standing water here. It eases the dryness, but it is not clean, and the gut will know it."; }
             } else { outcome = "FAILED"; perception = "You look about, but there is no water here fit to drink — no stream, no spring, only dry ground that gives nothing back."; }
         }
         else if (intent == Intent.COLLECT_WATER) {
