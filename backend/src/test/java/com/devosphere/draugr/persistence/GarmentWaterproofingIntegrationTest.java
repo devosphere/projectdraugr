@@ -63,6 +63,7 @@ class GarmentWaterproofingIntegrationTest {
     @Autowired WorldEcologyGenesisService ecology;
     @Autowired ChronicleService chronicles;
     @Autowired ChroniclePhysiologyService physiology;
+    @Autowired com.devosphere.draugr.simulation.WeatherSimulationService weather;
     @Autowired PhysicalItemService items;
     @Autowired SimulationTickService ticks;
     @Autowired PersistentStateAuditor auditor;
@@ -88,10 +89,12 @@ class GarmentWaterproofingIntegrationTest {
         UUID chunk = jdbc.queryForObject("SELECT id FROM world_chunk WHERE biome='TEMPERATE_FOREST' ORDER BY grid_y, grid_x LIMIT 1", UUID.class);
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", chunk, chronicle);
 
-        // Force a steady rain over the whole world (no fire, no shelter at the chunk, so the body is out in it).
+        Instant base = ticks.current().simulatedAt();
+        // Ensure the world has a weather row (in play the weather tick creates it), then force a steady rain over the
+        // whole world (no fire, no shelter at the chunk, so the body is out in it).
+        weather.advanceTo(base);
         jdbc.update("UPDATE world_weather SET weather_kind='RAIN', intensity=60, ambient_temperature_c=15 " +
                 "WHERE world_id=(SELECT world_id FROM chronicle WHERE id=?)", chronicle);
-        Instant base = ticks.current().simulatedAt();
 
         // Bare-skinned: the rain soaks in at the open-air rate.
         int bare = wetnessAfterRain(chronicle, base, 6);
