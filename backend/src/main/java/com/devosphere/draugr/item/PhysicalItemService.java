@@ -834,7 +834,16 @@ public class PhysicalItemService {
         // nourishment: a finer-cooked meal nourishes a little more (#271), so the spoon finally earns its keep (#257).
         boolean stirringSpoon = (key.equals("cook_root_stew") || key.equals("cook_porridge") || key.equals("cook_greens") || key.equals("cook_mushrooms"))
             && hasAtLeast(chronicle, "wooden_spoon", 1);
-        if (atStation || sewingKit || flaker || woolComb || stirringSpoon) attempt = attempt.up();
+        // Seasoned wood holds true where green stock warps and checks as it dries, so joinery worked from seasoned
+        // planks or timber comes out truer — it lifts the workmanship of a fit-and-assemble one grade, the same
+        // minor, bounded assist, still capped against the stock's own grade by worst(). Closes the seasoned-wood
+        // dead-read (#200/#203): the season processes made it, but nothing read it — a wood a Chronicle seasons
+        // now earns better work from it. (Shares the single one-step lift, so it does not stack past the cap.)
+        boolean seasonedStock = (key.equals("cut_mortise") || key.equals("cut_tenon") || key.equals("dovetail_corner")
+                || key.equals("lap_joint_planks") || key.equals("scarf_joint") || key.equals("edge_join_boards")
+                || key.equals("assemble_frame") || key.equals("turn_dowels") || key.equals("shape_components"))
+            && (hasAtLeast(chronicle, "seasoned_plank", 1) || hasAtLeast(chronicle, "seasoned_timber", 1));
+        if (atStation || sewingKit || flaker || woolComb || stirringSpoon || seasonedStock) attempt = attempt.up();
         QualityGrade grade = QualityGrade.worst(worstGradeAmong(chronicle, inputKeys), attempt);
 
         for (java.util.Map<String,Object> in : fixed)
