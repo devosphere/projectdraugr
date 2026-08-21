@@ -72,6 +72,18 @@ public class ChroniclePhysiologyService {
                 "JOIN world_object w ON w.id=e.item_id AND w.lifecycle_state='ACTIVE' " +
                 "WHERE e.chronicle_id=?", Integer.class, id);
             double retained = 1.0 - Math.min(0.80, (worn == null ? 0 : worn) / 100.0);
+            // Worn garments that SHED rain — hide, fur, leather, bark, a reed hat — keep the body far drier in the
+            // wet than woven cloth, which soaks (#177 waterproofing). Summed water resistance across what is worn,
+            // capped, so no outfit stays bone-dry in a storm — it slows the soaking, it does not repeal the rain.
+            // Closes the water_resistance dead-read: garments could be waterproofed/oiled/hardened, but nothing read
+            // it, so a waxed hide cloak soaked as fast as bare skin.
+            Integer shed = jdbc.queryForObject(
+                "SELECT COALESCE(SUM(d.water_resistance),0) FROM equipment_attachment e " +
+                "JOIN item_instance i ON i.object_id=e.item_id " +
+                "JOIN item_definition d ON d.item_key=i.item_key " +
+                "JOIN world_object w ON w.id=e.item_id AND w.lifecycle_state='ACTIVE' " +
+                "WHERE e.chronicle_id=?", Integer.class, id);
+            double rainShed = 1.0 - Math.min(0.60, (shed == null ? 0 : shed) / 40.0);
             // Wet clothing insulates far worse than dry — the classic way people die of
             // cold in weather that is not, in itself, lethal.
             if (wetness >= 60) retained = Math.min(1.0, retained * 1.6);
@@ -106,7 +118,7 @@ public class ChroniclePhysiologyService {
             core = Math.max(20, Math.min(45, core));
             // Rain wets the body less under a roof; a leant rain cover (#195) sheds some of it, but far less than
             // true shelter — it has no walls and turns only the worst of a shower.
-            if ("RAIN".equals(environment.kind()) || "STORM".equals(environment.kind())) wetness = clamp((int)Math.round(wetness + hours * (environment.intensity() / (environment.shelter() ? 28.0 : (environment.rainCover() ? 15.0 : 7.0)))));
+            if ("RAIN".equals(environment.kind()) || "STORM".equals(environment.kind())) wetness = clamp((int)Math.round(wetness + hours * (environment.intensity() / (environment.shelter() ? 28.0 : (environment.rainCover() ? 15.0 : 7.0))) * rainShed));
             if (environment.fuelMinutes() > 0) wetness = clamp((int)Math.round(wetness - hours * 14));
             // Woodsmoke in an enclosed shelter with an unvented fire fouls the air (#198): a small, non-lethal
             // pressure toward illness. A smoke hood at the hearth vents it away entirely; a worn smoke face wrap
