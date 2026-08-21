@@ -850,7 +850,13 @@ public class PhysicalItemService {
         boolean copperChisel = (key.equals("carve_wooden_bowl") || key.equals("carve_soapstone_bowl")
                 || key.equals("carve_wooden_spoon") || key.equals("carve_water_ladle") || key.equals("carve_pegs"))
             && hasAtLeast(chronicle, "copper_chisel", 1);
-        if (atStation || sewingKit || flaker || woolComb || stirringSpoon || seasonedStock || copperChisel) attempt = attempt.up();
+        // A bronze knife holds a fine, edge-keeping blade that parts hide and fish far cleaner than a knapped flake
+        // or a bone edge, so the close cutting work comes out truer — the same bounded, capped one-grade lift. The
+        // era's everyday blade earning its keep beside the spear and axe (#180/#185).
+        boolean bronzeKnife = (key.equals("skin_fish") || key.equals("fillet_fish") || key.equals("gut_fish")
+                || key.equals("cut_lamellae") || key.equals("cut_boot_soles"))
+            && hasAtLeast(chronicle, "bronze_knife", 1);
+        if (atStation || sewingKit || flaker || woolComb || stirringSpoon || seasonedStock || copperChisel || bronzeKnife) attempt = attempt.up();
         QualityGrade grade = QualityGrade.worst(worstGradeAmong(chronicle, inputKeys), attempt);
 
         for (java.util.Map<String,Object> in : fixed)
@@ -923,7 +929,7 @@ public class PhysicalItemService {
      *  with the executeProcess gate and {@code hasCuttingTool}. Used to gate (a broken tool is refused) and to wear. */
     private java.util.Map<String,Object> soundestToolOfClass(UUID chronicle, UUID location, String toolClass) {
         java.util.List<String> keys = switch (toolClass) {
-            case "CUTTING"  -> java.util.List.of("stone_knife","stone_hatchet","stone_flake","stone_adze","stone_chisel","flint_burin","flint_scraper","bone_scraper");
+            case "CUTTING"  -> java.util.List.of("stone_knife","stone_hatchet","stone_flake","stone_adze","stone_chisel","flint_burin","flint_scraper","bone_scraper","bronze_knife");
             case "STRIKING" -> java.util.List.of("stone_hammer","primitive_pickaxe","field_stone","granite_cobble","basalt_cobble");
             case "AXE"      -> java.util.List.of("stone_axe","stone_hatchet","copper_axe","bronze_axe");
             default -> null;
