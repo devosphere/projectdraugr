@@ -36,7 +36,14 @@ public class ResourceEcologyService {
         return switch (resourceKey) {
             case "plant_fiber" -> new Profile(("WETLAND".equals(biome) ? 48 : 32) + bonus, 8);
             case "wild_berries" -> new Profile(("WETLAND".equals(biome) ? 30 : 18) + bonus, 18);
-            case "dry_branch" -> new Profile(("MOUNTAIN".equals(biome) ? 12 : 24) + bonus, 12);
+            // Deadfall (#200/#201): standing woodland sheds branches, so a well-treed chunk is a far richer source
+            // of firewood than bare ground — and clearing the wood removes that bonus, taking the deadfall back down
+            // toward the bare-ground base (never below it, so gathering firewood anywhere still works as before).
+            case "dry_branch" -> {
+                Integer trees = jdbc.queryForObject("SELECT COALESCE(SUM(cf.quantity),0) FROM chunk_flora cf JOIN flora_definition fd ON fd.flora_key=cf.flora_key WHERE cf.chunk_id=? AND fd.organism_type='TREE'", Integer.class, chunkId);
+                int woodland = Math.min(24, (trees == null ? 0 : trees) * 4);
+                yield new Profile(("MOUNTAIN".equals(biome) ? 12 : 24) + bonus + woodland, 12);
+            }
             case "field_stone" -> new Profile(("MOUNTAIN".equals(biome) || "HIGHLAND".equals(biome) ? 42 : 20) + bonus, 36);
             default -> throw new IllegalArgumentException("Unknown ecological resource: " + resourceKey);
         };
