@@ -271,6 +271,15 @@ public class ChroniclePhysiologyService {
         jdbc.update("UPDATE chronicle_physiology SET core_temperature_c=LEAST(37.5, core_temperature_c+?), wetness_level=GREATEST(0,wetness_level-?), stress_level=GREATEST(0,stress_level-3) WHERE chronicle_id=?", tempGain, wetLoss, chronicleId);
         refreshBody(chronicleId);
     }
+    /** Drink a hot herbal infusion (#54 cooking): the warmth spreads from within, the steeped herb (chamomile,
+     *  mint, elder) settles the mind, and the cupful quenches a little. A small warming, calming, and partial
+     *  hydration that eating it as plain food never gave — milder than a fire, for a cup is not a hearth. */
+    @Transactional
+    public void drinkWarmInfusion(UUID chronicleId) {
+        jdbc.update("UPDATE chronicle_physiology SET core_temperature_c=LEAST(37.3, core_temperature_c+0.4), " +
+                "hours_without_water=GREATEST(0, hours_without_water-4), stress_level=GREATEST(0,stress_level-6) WHERE chronicle_id=?", chronicleId);
+        refreshBody(chronicleId);
+    }
     /** Dry off by a fire or under cover (#66): wetness falls markedly. */
     @Transactional
     public void dryOff(UUID chronicleId) {
