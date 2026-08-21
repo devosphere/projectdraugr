@@ -1106,6 +1106,14 @@ public class ChronicleActionService {
             physiology.applyFoodborneIllness(chronicle, actionId, at);
             return new String[]{"SUCCEEDED", "You eat it. The taste turns sharp, then bitter, and a cold unease is spreading through your gut before you have finished."};
         }
+        // A hot herbal infusion is barely a meal — its worth is the warmth it carries, the calm the steeped herb
+        // brings, and the water in the cup. Eating it gave only the trace nourishment of any food; now it also warms,
+        // settles, and quenches a little, the effect its "warming infusion" has always described but nothing read.
+        if (itemKey.equals("herbal_infusion")) {
+            physiology.eat(chronicle, grade);
+            physiology.drinkWarmInfusion(chronicle);
+            return new String[]{"SUCCEEDED", "You drink the hot infusion slowly; the warmth spreads through you and the herb's scent settles the edges of your mind."};
+        }
         physiology.eat(chronicle, grade);
         return new String[]{"SUCCEEDED", eatProse(itemKey)};
     }
