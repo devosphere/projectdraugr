@@ -531,7 +531,7 @@ public class PhysicalItemService {
             "  JOIN reachable r ON r.id=ic.container_id" +
             "  JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE')" +
             "SELECT i.object_id, i.condition_state, i.use_count FROM reachable r JOIN item_instance i ON i.object_id=r.id " +
-            "WHERE i.item_key IN ('stone_axe','stone_hatchet','copper_axe','iron_axe','hand_axe') " +
+            "WHERE i.item_key IN ('stone_axe','stone_hatchet','copper_axe','bronze_axe','iron_axe','hand_axe') " +
             "ORDER BY CASE i.condition_state WHEN 'SOUND' THEN 0 WHEN 'WORN' THEN 1 WHEN 'BROKEN' THEN 2 ELSE 3 END, i.use_count LIMIT 1",
             rs -> rs.next() ? java.util.Map.of("id", rs.getObject(1, UUID.class), "cond", rs.getString(2), "uses", rs.getInt(3)) : null,
             chronicle);
@@ -925,7 +925,7 @@ public class PhysicalItemService {
         java.util.List<String> keys = switch (toolClass) {
             case "CUTTING"  -> java.util.List.of("stone_knife","stone_hatchet","stone_flake","stone_adze","stone_chisel","flint_burin","flint_scraper","bone_scraper");
             case "STRIKING" -> java.util.List.of("stone_hammer","primitive_pickaxe","field_stone","granite_cobble","basalt_cobble");
-            case "AXE"      -> java.util.List.of("stone_axe","stone_hatchet","copper_axe");
+            case "AXE"      -> java.util.List.of("stone_axe","stone_hatchet","copper_axe","bronze_axe");
             default -> null;
         };
         if (keys == null) return null;

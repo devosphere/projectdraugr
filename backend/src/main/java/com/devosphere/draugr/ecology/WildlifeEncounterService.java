@@ -50,7 +50,7 @@ public class WildlifeEncounterService {
             "eq.light_shield,eq.rawhide_shield,eq.blunt,own.sling,own.javelin,own.bow,own.arrows,eq.soft_armour,eq.hardened,eq.bronze " +
             "FROM chronicle_physiology p " +
             "LEFT JOIN LATERAL (SELECT " +
-            "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key IN ('stone_axe','primitive_spear','poisoned_spear','fire_hardened_spear','copper_axe','bronze_spear') THEN 1 ELSE 0 END),0) hand_weapon," +
+            "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key IN ('stone_axe','primitive_spear','poisoned_spear','fire_hardened_spear','copper_axe','bronze_spear','bronze_axe') THEN 1 ELSE 0 END),0) hand_weapon," +
             "  COALESCE(SUM(CASE WHEN i.item_key IN ('scale_armour','chitin_helm','war_shield') THEN 1 ELSE 0 END),0) armour," +
             "  COALESCE(SUM(CASE WHEN i.item_key='poisoned_spear' THEN 1 ELSE 0 END),0) poison," +
             "  COALESCE(SUM(CASE WHEN i.item_key IN ('bark_shield','woven_reed_shield') THEN 1 ELSE 0 END),0) light_shield," +
@@ -58,7 +58,7 @@ public class WildlifeEncounterService {
             "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key IN ('wooden_club','stone_club','stone_maul','stone_hammer') THEN 1 ELSE 0 END),0) blunt," +
             "  COALESCE(SUM(CASE WHEN i.item_key IN ('leather_armor','leather_helm_cap','leather_bracer') THEN 1 ELSE 0 END),0) soft_armour," +
             "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key IN ('fire_hardened_spear','copper_axe') THEN 1 ELSE 0 END),0) hardened," +
-            "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key='bronze_spear' THEN 1 ELSE 0 END),0) bronze" +
+            "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key IN ('bronze_spear','bronze_axe') THEN 1 ELSE 0 END),0) bronze" +
             "  FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id WHERE e.chronicle_id=p.chronicle_id) eq ON true " +
             "LEFT JOIN LATERAL (SELECT " +
             "  COALESCE(SUM(CASE WHEN i.item_key='field_stone' THEN 1 ELSE 0 END),0) stones," +
