@@ -111,7 +111,9 @@ INSERT INTO probes VALUES
   -- V150 iron
   ('smelt the iron ore','smelt_iron'),('forge an iron axe','forge_iron_axe'),
   -- V151 steel
-  ('carburise the iron axe','carburise_iron_axe');
+  ('carburise the iron axe','carburise_iron_axe'),
+  -- V152 bloomery furnace
+  ('make a bloomery furnace','make_bloomery_furnace');
 
 \echo === MISSES (expect none) ===
 SELECT want AS expected, COALESCE(resolve(txt),'<null>') AS got, txt
