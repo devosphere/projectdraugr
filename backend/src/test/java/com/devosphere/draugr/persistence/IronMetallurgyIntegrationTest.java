@@ -124,9 +124,13 @@ class IronMetallurgyIntegrationTest {
         // It fells a tree.
         assertEquals("SUCCEEDED", items.fellTree(chronicle, chunk, now)[0], "an iron axe must fell a tree");
 
-        // Its terminal edge: over a fixed battery it out-kills a bronze axe. The quarry is a tough predator (high
-        // resistance) so that even a bronze axe does not kill on every roll — iron's extra edge tips the balance on
-        // the rolls where bronze falls just short.
+        // The fire was only needed for the smelt and the forge; let it die before the fight, so a fire-brand edge
+        // does not inflate both weapons past the kill threshold and mask the difference between them.
+        jdbc.update("UPDATE fire_state SET active=false WHERE construction_id=?", pit);
+
+        // Its terminal edge: over a fixed battery it out-kills a bronze axe. The quarry is a tough predator (a dire
+        // wolf, resistance 57 → kill threshold 97) so that a bronze axe (+53, capability 83) does not kill on every
+        // roll — iron's extra edge (+60, capability 90) tips the rolls where bronze falls just short.
         jdbc.update("UPDATE wildlife_population SET population_count=0 WHERE site_id IN (SELECT id FROM ecology_site WHERE chunk_id=?)", chunk);
         UUID site = UUID.randomUUID();
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE','Wolf ground',?)", site, chunk);
