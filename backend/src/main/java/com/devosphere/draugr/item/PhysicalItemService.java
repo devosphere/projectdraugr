@@ -931,7 +931,7 @@ public class PhysicalItemService {
         java.util.List<String> keys = switch (toolClass) {
             case "CUTTING"  -> java.util.List.of("stone_knife","stone_hatchet","stone_flake","stone_adze","stone_chisel","flint_burin","flint_scraper","bone_scraper","bronze_knife");
             case "STRIKING" -> java.util.List.of("stone_hammer","primitive_pickaxe","field_stone","granite_cobble","basalt_cobble");
-            case "AXE"      -> java.util.List.of("stone_axe","stone_hatchet","copper_axe","bronze_axe");
+            case "AXE"      -> java.util.List.of("stone_axe","stone_hatchet","copper_axe","bronze_axe","iron_axe");
             default -> null;
         };
         if (keys == null) return null;
