@@ -124,14 +124,16 @@ class IronMetallurgyIntegrationTest {
         // It fells a tree.
         assertEquals("SUCCEEDED", items.fellTree(chronicle, chunk, now)[0], "an iron axe must fell a tree");
 
-        // Its terminal edge: over a fixed battery it out-kills a bronze axe.
+        // Its terminal edge: over a fixed battery it out-kills a bronze axe. The quarry is a tough predator (high
+        // resistance) so that even a bronze axe does not kill on every roll — iron's extra edge tips the balance on
+        // the rolls where bronze falls just short.
         jdbc.update("UPDATE wildlife_population SET population_count=0 WHERE site_id IN (SELECT id FROM ecology_site WHERE chunk_id=?)", chunk);
         UUID site = UUID.randomUUID();
-        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE','Deer range',?)", site, chunk);
-        jdbc.update("INSERT INTO ecology_site (id,world_id,chunk_id,site_category,site_kind,baseline_abundance) VALUES (?,?,?,'WILDLIFE','Deer range',400)", site, worldId, chunk);
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE','Wolf ground',?)", site, chunk);
+        jdbc.update("INSERT INTO ecology_site (id,world_id,chunk_id,site_category,site_kind,baseline_abundance) VALUES (?,?,?,'WILDLIFE','Wolf ground',400)", site, worldId, chunk);
         UUID quarry = UUID.randomUUID();
         jdbc.update("INSERT INTO wildlife_population (id,site_id,species_key,ecological_role,activity_cycle,population_count,carrying_capacity,behavior_state,last_simulated_at) " +
-                "VALUES (?,?,'red_deer','HERBIVORE','DIURNAL',1000,2000,'FORAGING',?)", quarry, site, ts);
+                "VALUES (?,?,'dire_wolf','CARNIVORE','DIURNAL',1000,2000,'FORAGING',?)", quarry, site, ts);
 
         java.util.Random rnd = new java.util.Random(3301);
         List<UUID> actionIds = new ArrayList<>();
