@@ -757,6 +757,10 @@ public class WildlifeEncounterService {
         else if (items.hasAtLeast(chronicle,"landing_net",1)) { method="NET"; chance=50; }
         else if (items.hasAtLeast(chronicle,"bone_fish_hook",1)) { method="LINE"; chance=45; }
         else { method="BARE_HAND"; chance=20; }
+        // A lead sinker weights a hand-line so the baited hook carries down to the deeper fish and holds against
+        // the current, where a bare line only drifts on the top — a real lift to angling that the soft, dense
+        // smelted metal is uniquely good for (#188). Line methods only; a trap or net is not weighted this way.
+        if (method.equals("LINE") && items.hasAtLeast(chronicle,"lead_sinker",1)) chance = Math.min(90, chance + 15);
         // Bait (#75): a worm on the hook, in the trap, or in the hand draws fish that clear water would not —
         // it is spent whether or not the fish takes. Bare hands and a sweeping net are the methods a worm does
         // not help — one grabs, the other encircles.
