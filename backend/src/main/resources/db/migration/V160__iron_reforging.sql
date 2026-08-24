@@ -10,6 +10,12 @@
 -- Modelled like melt_down_bronze: a PROCESS over a hot fire (requires_fire), an either/or input group so any worn
 -- iron object feeds it, output a single iron_bloom (the same stock smelt_iron yields).
 
+-- 'reforge' is decisive PROCESS work (heating and hammering scrap back into stock), so a reforge sentence classifies
+-- to PROCESS on its own — like V151's 'carburise'. Every process must own a keyword that classifies to its category.
+INSERT INTO category_term (category_key, term, weight) VALUES
+('PROCESS','reforge',3)
+ON CONFLICT (category_key, term) DO NOTHING;
+
 INSERT INTO material_process (process_key, display_name, output_item_key, output_min, output_max, tool_class, requires_fire, requires_water, duration_minutes, domain_key, category_key, keywords, narration, review_state, reviewed_at) VALUES
 ('reforge_iron_scrap', 'Reforge iron scrap', 'iron_bloom', 1,1, NULL, TRUE, FALSE, 90, 'items', 'PROCESS',
  'reforge the iron scrap,reforge iron scrap,reforge the scrap iron,reforge the worn iron,work the old iron down,recover the iron,reforge the iron',
