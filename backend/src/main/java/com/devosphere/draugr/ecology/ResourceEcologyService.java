@@ -29,6 +29,12 @@ public class ResourceEcologyService {
         return taken;
     }
 
+    /** A full natural tree stand for a wooded chunk not yet recorded (matches PhysicalItemService.NATURAL_STAND). */
+    private static final int NATURAL_STAND = 16;
+    /** Biomes that carry trees by nature (the ones fellTree yields a fallback species for). */
+    private static final java.util.Set<String> WOODED_BIOMES =
+        java.util.Set.of("FOREST", "TEMPERATE_FOREST", "MOUNTAIN", "HIGHLAND", "WETLAND", "RIVERBANK");
+
     private Profile profile(UUID chunkId, String resourceKey) {
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, chunkId);
         boolean concentrated = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM ecology_site WHERE chunk_id=? AND site_category='RESOURCE')", Boolean.class, chunkId));
@@ -40,8 +46,16 @@ public class ResourceEcologyService {
             // of firewood than bare ground — and clearing the wood removes that bonus, taking the deadfall back down
             // toward the bare-ground base (never below it, so gathering firewood anywhere still works as before).
             case "dry_branch" -> {
-                Integer trees = jdbc.queryForObject("SELECT COALESCE(SUM(cf.quantity),0) FROM chunk_flora cf JOIN flora_definition fd ON fd.flora_key=cf.flora_key WHERE cf.chunk_id=? AND fd.organism_type='TREE'", Integer.class, chunkId);
-                int woodland = Math.min(24, (trees == null ? 0 : trees) * 4);
+                java.util.Map<String,Object> t = jdbc.queryForMap(
+                    "SELECT COUNT(*) AS n, COALESCE(SUM(cf.quantity),0) AS q FROM chunk_flora cf " +
+                    "JOIN flora_definition fd ON fd.flora_key=cf.flora_key WHERE cf.chunk_id=? AND fd.organism_type='TREE'", chunkId);
+                int rows = ((Number) t.get("n")).intValue();
+                int stand = ((Number) t.get("q")).intValue();
+                // Un-recorded wooded ground carries a full natural stand (matching fellTree's lazy seeding, #200), so a
+                // standing wood sheds deadfall before an axe ever touches it. A recorded stand cut to nothing (a row at
+                // zero) stays bare — clearing the wood really does take the deadfall bonus away.
+                if (rows == 0 && WOODED_BIOMES.contains(biome)) stand = NATURAL_STAND;
+                int woodland = Math.min(24, stand * 4);
                 yield new Profile(("MOUNTAIN".equals(biome) ? 12 : 24) + bonus + woodland, 12);
             }
             case "field_stone" -> new Profile(("MOUNTAIN".equals(biome) || "HIGHLAND".equals(biome) ? 42 : 20) + bonus, 36);
