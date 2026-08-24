@@ -133,7 +133,9 @@ INSERT INTO probes VALUES
   -- V161 steel cuirass
   ('carburise the iron cuirass','carburise_iron_cuirass'),
   -- V162 steel striker
-  ('carburise a steel striker','carburise_steel_striker'),('case-harden a fire striker','carburise_steel_striker');
+  ('carburise a steel striker','carburise_steel_striker'),('case-harden a fire striker','carburise_steel_striker'),
+  -- V163 charcoal clamp
+  ('char the wood into charcoal','char_charcoal_clamp'),('burn a charcoal clamp','char_charcoal_clamp');
 
 \echo === MISSES (expect none) ===
 SELECT want AS expected, COALESCE(resolve(txt),'<null>') AS got, txt
