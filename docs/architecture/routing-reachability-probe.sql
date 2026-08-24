@@ -125,7 +125,9 @@ INSERT INTO probes VALUES
   -- V157 bronze fish hook
   ('forge a bronze fish hook','forge_bronze_fish_hook'),
   -- V158 bronze cuirass
-  ('forge a bronze cuirass','forge_bronze_cuirass');
+  ('forge a bronze cuirass','forge_bronze_cuirass'),
+  -- V159 iron cuirass
+  ('forge an iron cuirass','forge_iron_cuirass');
 
 \echo === MISSES (expect none) ===
 SELECT want AS expected, COALESCE(resolve(txt),'<null>') AS got, txt

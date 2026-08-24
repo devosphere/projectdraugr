@@ -61,7 +61,7 @@ public class WildlifeEncounterService {
             "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key IN ('bronze_spear','bronze_axe') THEN 1 ELSE 0 END),0) bronze," +
             "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key='iron_axe' THEN 1 ELSE 0 END),0) iron," +
             "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key='steel_axe' THEN 1 ELSE 0 END),0) steel," +
-            "  COALESCE(SUM(CASE WHEN i.item_key IN ('bronze_cuirass','iron_cuirass') THEN 1 ELSE 0 END),0) plate" +
+            "  COALESCE(SUM(CASE WHEN i.item_key='bronze_cuirass' THEN 12 WHEN i.item_key='iron_cuirass' THEN 20 ELSE 0 END),0) plate" +
             "  FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id WHERE e.chronicle_id=p.chronicle_id) eq ON true " +
             "LEFT JOIN LATERAL (SELECT " +
             "  COALESCE(SUM(CASE WHEN i.item_key='field_stone' THEN 1 ELSE 0 END),0) stones," +
@@ -162,8 +162,10 @@ public class WildlifeEncounterService {
         // worst a mauling can do is only blunted, never erased.
         // Metal plate — a forged bronze or iron cuirass — turns a blow far better than knapped scale or boiled
         // leather: it is the defensive counterpart to the metal edge, so the metals a Chronicle smelts protect as
-        // well as they kill (#180). Bronze/iron cuirass +12 blunting, above scale/shell/war-shield (+7).
-        int blunted = body.plate()*12 + body.armour()*7 + body.rawhideShield()*6 + body.lightShield()*4 + body.softArmour()*4;
+        // well as they kill (#180). The plate tier mirrors the edge ladder: a bronze cuirass turns +12 and a harder
+        // iron one +20, both above knapped scale/shell/war-shield (+7) and soft leather (+4). The `plate` column
+        // already carries these blunting points (bronze 12 / iron 20), so it adds in directly, not as a count.
+        int blunted = body.plate() + body.armour()*7 + body.rawhideShield()*6 + body.lightShield()*4 + body.softArmour()*4;
         if (blunted > 0) severity = Math.max(1, severity - blunted);
         physiology.applyInjury(chronicle,severity,action,at,"WILDLIFE_CONTACT");
         jdbc.update("UPDATE wildlife_population SET behavior_state='FLEEING' WHERE id=?",candidate.populationId());
