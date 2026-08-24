@@ -135,7 +135,10 @@ INSERT INTO probes VALUES
   -- V162 steel striker
   ('carburise a steel striker','carburise_steel_striker'),('case-harden a fire striker','carburise_steel_striker'),
   -- V163 charcoal clamp
-  ('char the wood into charcoal','char_charcoal_clamp'),('burn a charcoal clamp','char_charcoal_clamp');
+  ('char the wood into charcoal','char_charcoal_clamp'),('burn a charcoal clamp','char_charcoal_clamp'),
+  -- V164 lime chain (and the ash mortar it stands beside must not regress)
+  ('calcine the limestone','calcine_quicklime'),('mix lime mortar','slake_lime_mortar'),
+  ('mix the mortar','mix_mortar');
 
 \echo === MISSES (expect none) ===
 SELECT want AS expected, COALESCE(resolve(txt),'<null>') AS got, txt
