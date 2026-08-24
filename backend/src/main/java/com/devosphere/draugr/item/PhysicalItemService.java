@@ -530,10 +530,10 @@ public class PhysicalItemService {
             "  UNION ALL SELECT ic.item_id FROM item_containment ic" +
             "  JOIN reachable r ON r.id=ic.container_id" +
             "  JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE')" +
-            "SELECT i.object_id, i.condition_state, i.use_count FROM reachable r JOIN item_instance i ON i.object_id=r.id " +
+            "SELECT i.object_id, i.condition_state, i.use_count, i.item_key FROM reachable r JOIN item_instance i ON i.object_id=r.id " +
             "WHERE i.item_key IN ('stone_axe','stone_hatchet','copper_axe','bronze_axe','iron_axe','steel_axe','hand_axe') " +
             "ORDER BY CASE i.condition_state WHEN 'SOUND' THEN 0 WHEN 'WORN' THEN 1 WHEN 'BROKEN' THEN 2 ELSE 3 END, i.use_count LIMIT 1",
-            rs -> rs.next() ? java.util.Map.of("id", rs.getObject(1, UUID.class), "cond", rs.getString(2), "uses", rs.getInt(3)) : null,
+            rs -> rs.next() ? java.util.Map.of("id", rs.getObject(1, UUID.class), "cond", rs.getString(2), "uses", rs.getInt(3), "key", rs.getString(4)) : null,
             chronicle);
         if (axe == null) return new String[]{"FAILED", "You set your hands against the trunk. Without an axe, you cannot fell a tree."};
         if ("BROKEN".equals(axe.get("cond")) || "DESTROYED".equals(axe.get("cond")))
@@ -590,7 +590,11 @@ public class PhysicalItemService {
         UUID axeId = (UUID) axe.get("id");
         String axeCond = (String) axe.get("cond");
         int uses = (int) axe.get("uses") + 1;
-        String wornCond = uses >= 16 ? "BROKEN" : uses >= 8 ? "WORN" : axeCond;
+        // Harder metal holds its edge through far more work: a bronze axe outlasts a knapped stone one, iron
+        // outlasts bronze, steel outlasts iron. The wear thresholds scale with the metal, so the durability of the
+        // metal is a real, felt payoff of the whole extraction chain (#180), beside its keener edge and finer work.
+        int[] wear = toolWearThresholds((String) axe.get("key"));
+        String wornCond = uses >= wear[1] ? "BROKEN" : uses >= wear[0] ? "WORN" : axeCond;
         jdbc.update("UPDATE item_instance SET use_count=?, condition_state=? WHERE object_id=?", uses, wornCond, axeId);
         if (!wornCond.equals(axeCond))
             jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'TOOL_WORN',jsonb_build_object('from',?,'to',?))", axeId, Timestamp.from(occurredAt), axeCond, wornCond);
@@ -916,7 +920,8 @@ public class PhysicalItemService {
             UUID tid = (UUID) toolUsed.get("id");
             String tc = (String) toolUsed.get("cond");
             int tu = (int) toolUsed.get("uses") + 1;
-            String nc = tu >= 16 ? "BROKEN" : tu >= 8 ? "WORN" : tc;
+            int[] tw = toolWearThresholds((String) toolUsed.get("key"));
+            String nc = tu >= tw[1] ? "BROKEN" : tu >= tw[0] ? "WORN" : tc;
             jdbc.update("UPDATE item_instance SET use_count=?, condition_state=? WHERE object_id=?", tu, nc, tid);
             if (!nc.equals(tc))
                 jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'TOOL_WORN',jsonb_build_object('from',?,'to',?))", tid, Timestamp.from(at), tc, nc);
@@ -924,6 +929,17 @@ public class PhysicalItemService {
         return new String[]{"SUCCEEDED", (String) match.get("narration")};
     }
 
+    /** Use-based wear thresholds {WORN-at, BROKEN-at} for a tool, scaled by its metal: harder metal holds its edge
+     *  through far more work, so stone(8/16) &lt; copper(12/24) &lt; bronze(16/32) &lt; iron(24/48) &lt; steel(32/64).
+     *  Keyed on the metal prefix so it covers every metal axe, knife, or other worn tool at once (#180 durability). */
+    private static int[] toolWearThresholds(String key) {
+        String k = key == null ? "" : key;
+        if (k.startsWith("steel_"))  return new int[]{32, 64};
+        if (k.startsWith("iron_"))   return new int[]{24, 48};
+        if (k.startsWith("bronze_")) return new int[]{16, 32};
+        if (k.startsWith("copper_")) return new int[]{12, 24};
+        return new int[]{8, 16}; // knapped stone, bone, flint, and the bare-hand tools
+    }
     /** The soundest reachable tool of a process tool-class (owned or on-site), sound before worn before broken, so
      *  a spare good tool is used before a failing one — or null when none is in reach. Shares the tool key sets
      *  with the executeProcess gate and {@code hasCuttingTool}. Used to gate (a broken tool is refused) and to wear. */
@@ -937,10 +953,10 @@ public class PhysicalItemService {
         if (keys == null) return null;
         String inList = keys.stream().map(k -> "'" + k + "'").collect(java.util.stream.Collectors.joining(","));
         return jdbc.query(REACHABLE_CTE +
-            "SELECT i.object_id, i.condition_state, i.use_count FROM reachable r JOIN item_instance i ON i.object_id=r.id " +
+            "SELECT i.object_id, i.condition_state, i.use_count, i.item_key FROM reachable r JOIN item_instance i ON i.object_id=r.id " +
             "WHERE i.item_key IN (" + inList + ") " +
             "ORDER BY CASE i.condition_state WHEN 'SOUND' THEN 0 WHEN 'WORN' THEN 1 WHEN 'BROKEN' THEN 2 ELSE 3 END, i.use_count LIMIT 1",
-            rs -> rs.next() ? java.util.Map.of("id", rs.getObject(1, UUID.class), "cond", rs.getString(2), "uses", rs.getInt(3)) : null,
+            rs -> rs.next() ? java.util.Map.of("id", rs.getObject(1, UUID.class), "cond", rs.getString(2), "uses", rs.getInt(3), "key", rs.getString(4)) : null,
             chronicle, location);
     }
 
