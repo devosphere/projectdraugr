@@ -47,7 +47,7 @@ public class WildlifeEncounterService {
         // held stock (stones, sling, javelin, bow, arrows) counts from what the chronicle owns and carries.
         Combatant body=jdbc.query(
             "SELECT p.energy_level,p.injury_severity,p.pain_level,eq.hand_weapon,own.stones,eq.armour,eq.poison," +
-            "eq.light_shield,eq.rawhide_shield,eq.blunt,own.sling,own.javelin,own.bow,own.arrows,eq.soft_armour,eq.hardened,eq.bronze,eq.iron,eq.steel " +
+            "eq.light_shield,eq.rawhide_shield,eq.blunt,own.sling,own.javelin,own.bow,own.arrows,eq.soft_armour,eq.hardened,eq.bronze,eq.iron,eq.steel,eq.plate " +
             "FROM chronicle_physiology p " +
             "LEFT JOIN LATERAL (SELECT " +
             "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key IN ('stone_axe','primitive_spear','poisoned_spear','fire_hardened_spear','copper_axe','bronze_spear','bronze_axe','iron_axe','steel_axe') THEN 1 ELSE 0 END),0) hand_weapon," +
@@ -60,7 +60,8 @@ public class WildlifeEncounterService {
             "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key IN ('fire_hardened_spear','copper_axe') THEN 1 ELSE 0 END),0) hardened," +
             "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key IN ('bronze_spear','bronze_axe') THEN 1 ELSE 0 END),0) bronze," +
             "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key='iron_axe' THEN 1 ELSE 0 END),0) iron," +
-            "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key='steel_axe' THEN 1 ELSE 0 END),0) steel" +
+            "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND i.item_key='steel_axe' THEN 1 ELSE 0 END),0) steel," +
+            "  COALESCE(SUM(CASE WHEN i.item_key IN ('bronze_cuirass','iron_cuirass') THEN 1 ELSE 0 END),0) plate" +
             "  FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id WHERE e.chronicle_id=p.chronicle_id) eq ON true " +
             "LEFT JOIN LATERAL (SELECT " +
             "  COALESCE(SUM(CASE WHEN i.item_key='field_stone' THEN 1 ELSE 0 END),0) stones," +
@@ -70,7 +71,7 @@ public class WildlifeEncounterService {
             "  COALESCE(SUM(CASE WHEN i.item_key='hunting_arrow' THEN 1 ELSE 0 END),0) arrows" +
             "  FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=p.chronicle_id AND w.lifecycle_state='ACTIVE') own ON true " +
             "WHERE p.chronicle_id=?",
-            rs->rs.next()?new Combatant(rs.getInt(1),rs.getInt(2),rs.getInt(3),rs.getInt(4),rs.getInt(5),rs.getInt(6),rs.getInt(7),rs.getInt(8),rs.getInt(9),rs.getInt(10),rs.getInt(11),rs.getInt(12),rs.getInt(13),rs.getInt(14),rs.getInt(15),rs.getInt(16),rs.getInt(17),rs.getInt(18),rs.getInt(19)):new Combatant(0,100,100,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),chronicle);
+            rs->rs.next()?new Combatant(rs.getInt(1),rs.getInt(2),rs.getInt(3),rs.getInt(4),rs.getInt(5),rs.getInt(6),rs.getInt(7),rs.getInt(8),rs.getInt(9),rs.getInt(10),rs.getInt(11),rs.getInt(12),rs.getInt(13),rs.getInt(14),rs.getInt(15),rs.getInt(16),rs.getInt(17),rs.getInt(18),rs.getInt(19),rs.getInt(20)):new Combatant(0,100,100,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),chronicle);
         // A creature on the wing cannot be reached by a hand weapon. Throwing stones
         // is the only contact a chronicle has with it. The narrator witnesses the
         // futility without naming what would be needed.
@@ -159,7 +160,10 @@ public class WildlifeEncounterService {
         // cap) and a bark or woven-reed shield least of all — leather was craftable but turned no blow at all
         // until now. An improvised guard is better than a bare arm, but no cover makes a body untouchable, so the
         // worst a mauling can do is only blunted, never erased.
-        int blunted = body.armour()*7 + body.rawhideShield()*6 + body.lightShield()*4 + body.softArmour()*4;
+        // Metal plate — a forged bronze or iron cuirass — turns a blow far better than knapped scale or boiled
+        // leather: it is the defensive counterpart to the metal edge, so the metals a Chronicle smelts protect as
+        // well as they kill (#180). Bronze/iron cuirass +12 blunting, above scale/shell/war-shield (+7).
+        int blunted = body.plate()*12 + body.armour()*7 + body.rawhideShield()*6 + body.lightShield()*4 + body.softArmour()*4;
         if (blunted > 0) severity = Math.max(1, severity - blunted);
         physiology.applyInjury(chronicle,severity,action,at,"WILDLIFE_CONTACT");
         jdbc.update("UPDATE wildlife_population SET behavior_state='FLEEING' WHERE id=?",candidate.populationId());
@@ -814,7 +818,7 @@ public class WildlifeEncounterService {
     private int meatFor(String species) { return species.contains("bear") || species.contains("elk") ? 4 : species.contains("deer") || species.contains("boar") ? 3 : 1; }
     private String display(String species) { return species.replace('_',' '); }
     private record Encounter(UUID populationId,String species,String role,String behavior,int population,String movementClass,Integer baseResistance,boolean ambushHunter){}
-    private record Combatant(int energy,int injury,int pain,int handWeapon,int stones,int armour,int poison,int lightShield,int rawhideShield,int blunt,int sling,int javelin,int bow,int arrows,int softArmour,int hardened,int bronze,int iron,int steel){}
+    private record Combatant(int energy,int injury,int pain,int handWeapon,int stones,int armour,int poison,int lightShield,int rawhideShield,int blunt,int sling,int javelin,int bow,int arrows,int softArmour,int hardened,int bronze,int iron,int steel,int plate){}
     private record Carcass(UUID id,String species,int meat,boolean hide){}
     public record EncounterResult(String outcome,String narration){}
     public record HarvestResult(String outcome,String narration){}

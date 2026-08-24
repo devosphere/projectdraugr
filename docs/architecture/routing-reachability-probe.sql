@@ -123,7 +123,9 @@ INSERT INTO probes VALUES
   -- V156 recycle more metal
   ('melt down the copper axe','melt_down_copper'),('melt down the bronze spear','melt_down_bronze'),
   -- V157 bronze fish hook
-  ('forge a bronze fish hook','forge_bronze_fish_hook');
+  ('forge a bronze fish hook','forge_bronze_fish_hook'),
+  -- V158 bronze cuirass
+  ('forge a bronze cuirass','forge_bronze_cuirass');
 
 \echo === MISSES (expect none) ===
 SELECT want AS expected, COALESCE(resolve(txt),'<null>') AS got, txt
