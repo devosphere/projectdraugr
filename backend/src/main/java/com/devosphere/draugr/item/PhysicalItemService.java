@@ -1323,6 +1323,10 @@ public class PhysicalItemService {
         if (hasAtLeast(chronicle,"rush_light",1))    return consumeOne(chronicle,"rush_light",at);
         if (hasAtLeast(chronicle,"tallow_candle",1)) return consumeOne(chronicle,"tallow_candle",at);
         if (hasAtLeast(chronicle,"oil_lamp",1) && hasAtLeast(chronicle,"fish_oil",1)) return consumeOne(chronicle,"fish_oil",at);
+        // The same lamp burns rendered tallow as readily as fish oil — a fat lamp, the commonest light there was, so
+        // working after dark does not hang on having fished. Fish oil is spent first when both are to hand (#182 gives
+        // rendered_tallow a use beyond candles).
+        if (hasAtLeast(chronicle,"oil_lamp",1) && hasAtLeast(chronicle,"rendered_tallow",1)) return consumeOne(chronicle,"rendered_tallow",at);
         return false;
     }
     /** Northern-hemisphere season derived from the simulated instant's month, until a dedicated world-clock season exists. */
