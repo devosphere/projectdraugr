@@ -224,6 +224,10 @@ public class ChronicleActionService {
             // silt, so it takes the edge off drinking untreated water — never as safe as boiling or filtering, but
             // a real, cheap improvement on a careless gulp. Closes the water_ladle dead-craft (#257).
             boolean ladle = items.hasAtLeast(chronicle.id(), "water_ladle", 1);
+            // A silver cup (#188) keeps untreated water sweet — the bright metal holds off the rot, so raw or
+            // standing water drunk from it sits far easier in the gut than from a skin: the safest way to drink
+            // untreated water short of boiling. Best of the untreated-water eases; ripple-safe when none is carried.
+            boolean silver = items.hasAtLeast(chronicle.id(), "silver_cup", 1);
             String carried = items.bestWaterCarried(chronicle.id());
             if (carried != null) {
                 items.consumeOne(chronicle.id(), carried, resolvedAt); physiology.drink(chronicle.id());
@@ -236,11 +240,11 @@ public class ChronicleActionService {
                     physiology.applyWaterborneRisk(chronicle.id(), firedFilter ? 1 : 2);
                     perception = firedFilter ? "You drink the filtered water; run through the fired clay filter it comes clearer still — cleaner than a bark cone could leave it, though short of a boil." : "You drink the filtered water; it runs clearer than it was, though not beyond all doubt.";
                 }
-                else { physiology.applyWaterborneRisk(chronicle.id(), ladle ? 3 : 5); perception = ladle ? "You draw the raw water with the ladle, skimming the clearer water off the top; it eases the dryness and sits a little easier for the care." : "You drink the raw water you carry. It eases the dryness, but sits uneasy in the gut."; }
+                else { physiology.applyWaterborneRisk(chronicle.id(), silver ? 2 : ladle ? 3 : 5); perception = silver ? "You drink the raw water from the silver cup; something in the bright metal keeps it sweeter than it has any right to be, and it sits easy." : ladle ? "You draw the raw water with the ladle, skimming the clearer water off the top; it eases the dryness and sits a little easier for the care." : "You drink the raw water you carry. It eases the dryness, but sits uneasy in the gut."; }
             } else if (waterInReach(chronicle.location())) {
                 physiology.drink(chronicle.id());
                 if (safeWaterSource(chronicle.location())) perception = "You drink from the clean, moving water and let the cold settle in your throat.";
-                else { physiology.applyWaterborneRisk(chronicle.id(), ladle ? 4 : 6); perception = ladle ? "You dip the ladle and draw the standing water from above the silt; it is still not clean, but the gut will fare better than from a careless gulp." : "You drink from the standing water here. It eases the dryness, but it is not clean, and the gut will know it."; }
+                else { physiology.applyWaterborneRisk(chronicle.id(), silver ? 3 : ladle ? 4 : 6); perception = silver ? "You dip the silver cup and drink; the bright metal keeps the standing water from turning the gut as it otherwise would." : ladle ? "You dip the ladle and draw the standing water from above the silt; it is still not clean, but the gut will fare better than from a careless gulp." : "You drink from the standing water here. It eases the dryness, but it is not clean, and the gut will know it."; }
             } else { outcome = "FAILED"; perception = "You look about, but there is no water here fit to drink — no stream, no spring, only dry ground that gives nothing back."; }
         }
         else if (intent == Intent.COLLECT_WATER) {
