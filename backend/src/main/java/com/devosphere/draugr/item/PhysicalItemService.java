@@ -515,6 +515,10 @@ public class PhysicalItemService {
         return new String[]{"SUCCEEDED", "You gather " + (count == 1 ? "a" : count + "") + " " + displayName.toLowerCase() + " from the " + plantName + " growing here."};
     }
 
+    /** How many mature trees a natural, uncut wooded chunk holds before it is recorded and drawn down (#200/#201).
+     *  Generous, so ordinary felling never notices the ceiling; sustained clear-cutting does. */
+    private static final int NATURAL_STAND = 16;
+
     /**
      * Fell a tree in the current chunk — requires an axe-class tool equipped or
      * carried. Yields logs and any secondary drops from flora_drop. Returns [outcome, narration].
@@ -558,6 +562,17 @@ public class PhysicalItemService {
                 default -> null;
             };
             if (treeKey == null) return new String[]{"FAILED", "There are no trees here to fell."};
+            // #200/#201: bring natural woodland into the finite-stand system. A wooded chunk with no recorded stand
+            // is entered lazily at a full natural stand the first time it is cut — so felling draws it down, the
+            // regrowth clock runs (WildlifeSimulationService), and a clear-cut recolonises or must be replanted,
+            // instead of the old bottomless fallback. A stand already worked to nothing gives no more here.
+            Integer standQty = jdbc.query("SELECT quantity FROM chunk_flora WHERE chunk_id=? AND flora_key=?",
+                rs -> rs.next() ? rs.getInt(1) : null, location, treeKey);
+            if (standQty != null && standQty <= 0)
+                return new String[]{"FAILED", "The stand here is cut out — only stumps and low brush remain. It will take years to come back on its own, unless you plant and let it grow."};
+            if (standQty == null)
+                jdbc.update("INSERT INTO chunk_flora (chunk_id, flora_key, quantity, capacity, last_harvested_at) VALUES (?,?,?,?,NULL)",
+                    location, treeKey, NATURAL_STAND, NATURAL_STAND);
             tree = java.util.Map.of("flora_key", treeKey, "organism_type", "TREE");
         }
 
