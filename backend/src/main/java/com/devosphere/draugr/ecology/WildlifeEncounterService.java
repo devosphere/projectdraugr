@@ -755,8 +755,11 @@ public class WildlifeEncounterService {
         else if (items.hasAtLeast(chronicle,"fish_trap",1)) { method="TRAP"; chance=75; }
         else if (items.hasAtLeast(chronicle,"fishing_net",1)) { method="NET"; chance=72; }
         else if (items.hasAtLeast(chronicle,"landing_net",1)) { method="NET"; chance=50; }
-        else if (items.hasAtLeast(chronicle,"bone_fish_hook",1)) { method="LINE"; chance=45; }
+        else if (items.hasAtLeast(chronicle,"bone_fish_hook",1) || items.hasAtLeast(chronicle,"bronze_fish_hook",1) || items.hasAtLeast(chronicle,"iron_fish_hook",1)) { method="LINE"; chance=45; }
         else { method="BARE_HAND"; chance=20; }
+        // A forged metal fish hook holds a fish that a soft bone hook would straighten and lose, so a line fishes
+        // better with one (#184) — it stacks with a lead sinker (a hook that catches, a weight that carries it deep).
+        if (method.equals("LINE") && (items.hasAtLeast(chronicle,"bronze_fish_hook",1) || items.hasAtLeast(chronicle,"iron_fish_hook",1))) chance = Math.min(90, chance + 10);
         // A lead sinker weights a hand-line so the baited hook carries down to the deeper fish and holds against
         // the current, where a bare line only drifts on the top — a real lift to angling that the soft, dense
         // smelted metal is uniquely good for (#188). Line methods only; a trap or net is not weighted this way.
