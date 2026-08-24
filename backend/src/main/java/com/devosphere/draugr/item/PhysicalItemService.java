@@ -986,6 +986,10 @@ public class PhysicalItemService {
      *
      * @return [outcome, narration]
      */
+    /** How much of a mineral a fresh seam holds before it is worked out (#181). Generous, so only sustained
+     *  industrial extraction exhausts a deposit; ordinary play never notices the ceiling. */
+    private static final int MINERAL_DEPOSIT_SEED = 60;
+
     @Transactional
     public String[] gatherMineral(UUID chronicle, UUID location, String actionText, Instant occurredAt) {
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
@@ -1023,6 +1027,13 @@ public class PhysicalItemService {
         if (tool != null && !hasCuttingTool(chronicle) && !hasAtLeast(chronicle,"stone_hammer",1) && !hasAtLeast(chronicle,"primitive_pickaxe",1) && !hasAtLeast(chronicle,"bronze_pickaxe",1) && !hasAtLeast(chronicle,"iron_pickaxe",1) && !hasAtLeast(chronicle,"granite_cobble",1) && !hasAtLeast(chronicle,"basalt_cobble",1))
             return new String[]{"FAILED", "The " + name.toLowerCase() + " is locked in the rock, and you have nothing to break it free with."};
 
+        // #181 finite deposits: a seam holds only so much. If this ground has already been worked out for this
+        // mineral, it gives nothing more here — fresh ground must be found. A seam not yet recorded is lazily full.
+        Integer remainingHere = jdbc.query("SELECT remaining_units FROM mineral_deposit WHERE chunk_id=? AND mineral_key=?",
+            rs -> rs.next() ? rs.getInt(1) : null, location, key);
+        if (remainingHere != null && remainingHere <= 0)
+            return new String[]{"FAILED", "The " + name.toLowerCase() + " here is worked out — the seam is spent, and you will have to find fresh ground for more."};
+
         // Searching for one specific mineral is harder than taking what is plainly there.
         double chance = ((Number) target.get("rarity")).doubleValue() * (named ? 0.75 : 1.0);
         if (Math.random() > chance)
@@ -1034,6 +1045,8 @@ public class PhysicalItemService {
         int want = lo + (hi > lo ? (int)(Math.random()*(hi-lo+1)) : 0);
         int room = capacityHeadroomUnits(chronicle, key);
         int take = Math.min(want, room);
+        // A seam cannot give more than it still holds — the last working of it takes only what is left.
+        if (remainingHere != null) take = Math.min(take, remainingHere);
         if (take <= 0) return new String[]{"FAILED", "You find what you were after and cannot carry another thing."};
         // Minerals are the quality materials — tool stone, flint — that seed the craft chains, so a
         // careful, deliberate search selects a FINE nodule while a careless one turns up poor stock.
@@ -1051,6 +1064,11 @@ public class PhysicalItemService {
             jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'GATHERED',jsonb_build_object('mineral',?,'biome',?,'grade',?))", id, Timestamp.from(occurredAt), key, biome, grade.name());
         }
         assertCarryCapacity(chronicle);
+        // #181: draw the seam down by what was taken. The first working of this ground records the deposit at full;
+        // thereafter it is decremented, and floored at zero so it reads as worked out next time.
+        jdbc.update("INSERT INTO mineral_deposit (chunk_id, mineral_key, remaining_units) VALUES (?,?,?) " +
+            "ON CONFLICT (chunk_id, mineral_key) DO UPDATE SET remaining_units = GREATEST(0, mineral_deposit.remaining_units - ?)",
+            location, key, Math.max(0, MINERAL_DEPOSIT_SEED - take), take);
         return new String[]{"SUCCEEDED", "You work it loose and turn it over in your hand: " + name.toLowerCase() + (take > 1 ? ", and more of it nearby." : ".")};
     }
 
