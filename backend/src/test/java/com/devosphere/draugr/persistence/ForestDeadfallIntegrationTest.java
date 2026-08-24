@@ -74,10 +74,13 @@ class ForestDeadfallIntegrationTest {
         UUID cleared = forestChunks.get(1);
         Instant now = ticks.current().simulatedAt();
 
-        // A standing oak wood on the first; the second stripped bare of its trees.
+        // A standing oak wood on the first; the second cut out to nothing. A cut-out stand is a recorded stand at
+        // zero (not an absent one) — an absent record is instead read as pristine natural woodland (#200), so "bare"
+        // here must be the worked-out state, a row at quantity zero.
         jdbc.update("DELETE FROM chunk_flora WHERE chunk_id=? AND flora_key IN (SELECT flora_key FROM flora_definition WHERE organism_type='TREE')", treed);
         jdbc.update("INSERT INTO chunk_flora (chunk_id, flora_key, quantity, capacity) VALUES (?,?,?,?)", treed, "oak", 5, 5);
         jdbc.update("DELETE FROM chunk_flora WHERE chunk_id=? AND flora_key IN (SELECT flora_key FROM flora_definition WHERE organism_type='TREE')", cleared);
+        jdbc.update("INSERT INTO chunk_flora (chunk_id, flora_key, quantity, capacity) VALUES (?,?,?,?)", cleared, "oak", 0, 16);
 
         // Take all the standing deadfall from each (the first take fixes the chunk's capacity from its woodland).
         int fromWood = resources.take(treed, "dry_branch", 100, now);
