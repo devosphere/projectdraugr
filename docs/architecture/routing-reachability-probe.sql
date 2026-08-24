@@ -131,7 +131,9 @@ INSERT INTO probes VALUES
   -- V160 iron reforging
   ('reforge the iron scrap','reforge_iron_scrap'),('work the old iron down','reforge_iron_scrap'),
   -- V161 steel cuirass
-  ('carburise the iron cuirass','carburise_iron_cuirass');
+  ('carburise the iron cuirass','carburise_iron_cuirass'),
+  -- V162 steel striker
+  ('carburise a steel striker','carburise_steel_striker'),('case-harden a fire striker','carburise_steel_striker');
 
 \echo === MISSES (expect none) ===
 SELECT want AS expected, COALESCE(resolve(txt),'<null>') AS got, txt
