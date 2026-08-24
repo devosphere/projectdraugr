@@ -619,7 +619,52 @@ public class ChronicleActionService {
         // scaled by the eye that looks — a deliberate survey is high-attention, sharpened by perception mastery.
         String life = examination.presentLife(loc, Math.min(1.0, 0.7 + capability.familiarity(chronicle.id(), "ATTENTION")));
         if (!life.isEmpty()) s.append(life).append(" ");
+        // What the ground itself holds (#181): the minerals this chunk can yield, and how worked any seam already is,
+        // so a Chronicle can read likely ground before committing labour to it.
+        String geology = groundGeology(loc);
+        if (!geology.isEmpty()) s.append(geology);
         return s.toString().trim();
+    }
+    /** What the ground here can yield (#181): the minerals whose affinity matches this chunk, and — for any seam
+     *  already opened — whether it still holds, runs thin, or is worked out. Read-only; it names no action to take. */
+    private String groundGeology(UUID loc) {
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, loc);
+        java.util.List<String> affinity = new java.util.ArrayList<>();
+        if (biome != null) affinity.add("%" + biome + "%");
+        for (String deposit : jdbc.queryForList(
+                "SELECT DISTINCT CASE WHEN lower(site_kind) LIKE '%salt%' THEN 'SALT_DEPOSIT' " +
+                "WHEN lower(site_kind) LIKE '%clay%' THEN 'CLAY_DEPOSIT' END FROM ecology_site " +
+                "WHERE chunk_id=? AND site_category='RESOURCE' AND (lower(site_kind) LIKE '%salt%' OR lower(site_kind) LIKE '%clay%')",
+                String.class, loc)) {
+            if (deposit != null) affinity.add("%" + deposit + "%");
+        }
+        if (affinity.isEmpty()) return "";
+        String affinityOr = affinity.stream().map(a -> "d.biome_affinity ILIKE ?").collect(java.util.stream.Collectors.joining(" OR "));
+        java.util.List<Object> args = new java.util.ArrayList<>();
+        args.add(loc);
+        args.addAll(affinity);
+        java.util.List<java.util.Map<String,Object>> minerals = jdbc.queryForList(
+            "SELECT d.display_name, md.remaining_units FROM mineral_definition d " +
+            "LEFT JOIN mineral_deposit md ON md.mineral_key=d.mineral_key AND md.chunk_id=? " +
+            "WHERE " + affinityOr + " ORDER BY d.rarity DESC LIMIT 4", args.toArray());
+        if (minerals.isEmpty()) return "";
+        java.util.List<String> likely = new java.util.ArrayList<>();
+        java.util.List<String> worked = new java.util.ArrayList<>();
+        for (java.util.Map<String,Object> m : minerals) {
+            String nm = ((String) m.get("display_name")).toLowerCase(Locale.ROOT);
+            Object rem = m.get("remaining_units");
+            if (rem == null) likely.add(nm);
+            else {
+                int r = ((Number) rem).intValue();
+                worked.add(r <= 0 ? "the " + nm + " here is worked out"
+                        : r <= 15 ? "the " + nm + " seam is running thin"
+                        : "the " + nm + " seam still holds");
+            }
+        }
+        StringBuilder g = new StringBuilder();
+        if (!likely.isEmpty()) g.append("The ground here carries the look of ").append(joinAnd(likely)).append(". ");
+        if (!worked.isEmpty()) g.append("You can tell ").append(joinAnd(worked)).append(". ");
+        return g.toString();
     }
     private String biomeDescription(String biome) {
         return switch (biome == null ? "" : biome) {
