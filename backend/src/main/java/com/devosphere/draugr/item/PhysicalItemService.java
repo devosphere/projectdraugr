@@ -1004,7 +1004,7 @@ public class PhysicalItemService {
         String key = (String) target.get("mineral_key");
         String name = (String) target.get("display_name");
         String tool = (String) target.get("tool_required");
-        if (tool != null && !hasCuttingTool(chronicle) && !hasAtLeast(chronicle,"stone_hammer",1) && !hasAtLeast(chronicle,"primitive_pickaxe",1) && !hasAtLeast(chronicle,"granite_cobble",1) && !hasAtLeast(chronicle,"basalt_cobble",1))
+        if (tool != null && !hasCuttingTool(chronicle) && !hasAtLeast(chronicle,"stone_hammer",1) && !hasAtLeast(chronicle,"primitive_pickaxe",1) && !hasAtLeast(chronicle,"bronze_pickaxe",1) && !hasAtLeast(chronicle,"iron_pickaxe",1) && !hasAtLeast(chronicle,"granite_cobble",1) && !hasAtLeast(chronicle,"basalt_cobble",1))
             return new String[]{"FAILED", "The " + name.toLowerCase() + " is locked in the rock, and you have nothing to break it free with."};
 
         // Searching for one specific mineral is harder than taking what is plainly there.
@@ -1024,6 +1024,10 @@ public class PhysicalItemService {
         // This is the reachable source of FINE-grade inputs: careful gathering here, then careful work
         // downstream, is what lets a chain finish FINE rather than being capped at SOUND.
         QualityGrade grade = QualityGrade.attempt(actionText);
+        // A metal pickaxe (bronze/iron) breaks the nodule out whole where a cobble or a stone hammer crushes it, so
+        // a worker with one wins a finer stone — the same bounded one-grade lift a workstation gives, capped at FINE.
+        // The smelted metal earning better ore, closing the extraction loop (#180): finer ore -> finer metal -> finer tools.
+        if (hasAtLeast(chronicle,"bronze_pickaxe",1) || hasAtLeast(chronicle,"iron_pickaxe",1)) grade = grade.up();
         for (int i = 0; i < take; i++) {
             UUID id = UUID.randomUUID();
             jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM',?,?)", id, name, chronicle);
