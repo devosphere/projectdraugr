@@ -623,7 +623,41 @@ public class ChronicleActionService {
         // so a Chronicle can read likely ground before committing labour to it.
         String geology = groundGeology(loc);
         if (!geology.isEmpty()) s.append(geology);
+        // How wooded this ground is (#200/#201): standing timber the Chronicle can fell, and whether a stand has
+        // been thinned or cut out — so a wood can be read before an axe is set to it, like a seam before a pick.
+        String woodland = groundWoodland(loc);
+        if (!woodland.isEmpty()) s.append(woodland);
         return s.toString().trim();
+    }
+    /** How wooded this ground is (#200/#201): the tree stand that grows here — from a recorded stand where one
+     *  exists, or the full natural stand a wooded biome carries until it is first cut — and whether it stands thick,
+     *  is thinned, or has been cut out. Read-only; it names no action to take. */
+    private String groundWoodland(UUID loc) {
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, loc);
+        java.util.Map<String,Object> stand = jdbc.query(
+            "SELECT cf.flora_key, cf.quantity FROM chunk_flora cf JOIN flora_definition fd ON fd.flora_key=cf.flora_key " +
+            "WHERE cf.chunk_id=? AND fd.organism_type='TREE' ORDER BY cf.quantity DESC LIMIT 1",
+            rs -> rs.next() ? java.util.Map.of("key", rs.getString(1), "qty", rs.getInt(2)) : null, loc);
+        String species; int qty;
+        if (stand != null) { species = (String) stand.get("key"); qty = (int) stand.get("qty"); }
+        else {
+            // No recorded stand yet — a wooded biome carries a full natural stand (PhysicalItemService.NATURAL_STAND)
+            // until it is first cut. The species is the one a fell here would take.
+            species = switch (biome != null ? biome : "") {
+                case "FOREST", "TEMPERATE_FOREST" -> "oak";
+                case "MOUNTAIN" -> "spruce";
+                case "HIGHLAND" -> "pine";
+                case "WETLAND", "RIVERBANK" -> "willow";
+                default -> null;
+            };
+            if (species == null) return "";
+            qty = 16;
+        }
+        String tree = species.replace('_', ' ');
+        return (qty <= 0 ? "The " + tree + " stand here is cut out, only stumps and low brush remaining."
+              : qty <= 4 ? "The " + tree + " here is thinned — only a few trees still stand."
+              : qty <= 11 ? "A stand of " + tree + " grows here, enough to work if it is not stripped bare."
+              : "The " + tree + " grows thick here, a full stand of timber.") + " ";
     }
     /** What the ground here can yield (#181): the minerals whose affinity matches this chunk, and — for any seam
      *  already opened — whether it still holds, runs thin, or is worked out. Read-only; it names no action to take. */
