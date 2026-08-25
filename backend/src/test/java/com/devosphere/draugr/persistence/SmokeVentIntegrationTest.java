@@ -67,6 +67,7 @@ class SmokeVentIntegrationTest {
     @Autowired ChroniclePhysiologyService physiology;
     @Autowired ConstructionService construction;
     @Autowired PhysicalItemService items;
+    @Autowired com.devosphere.draugr.simulation.WeatherSimulationService weather;
     @Autowired SimulationTickService ticks;
     @Autowired PersistentStateAuditor auditor;
     @Autowired JdbcTemplate jdbc;
@@ -102,6 +103,13 @@ class SmokeVentIntegrationTest {
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", chunk, chronicle);
         jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
         Instant base = ticks.current().simulatedAt();
+        UUID world = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, chunk);
+
+        // The physiology Environment (which carries enclosed/fire/vented) is read only when a world_weather row
+        // exists — genesis seeds none, only the weather tick does. Seed it, then pin it to mild, dry, still air so
+        // the ONLY illness pressure that can move is the enclosed-hearth smoke (no cold, wet, or wind confound).
+        weather.advanceTo(base);
+        jdbc.update("UPDATE world_weather SET weather_kind='CLEAR', intensity=0, ambient_temperature_c=15, wind_speed_kph=0, observed_at=? WHERE world_id=?", Timestamp.from(base), world);
 
         // This forest chunk and the single living Chronicle are shared across the whole suite (many tests seed a fire
         // pit here). Clear the chunk so the smoke condition is controlled — Auditor-safe, no destroyed objects: put out
