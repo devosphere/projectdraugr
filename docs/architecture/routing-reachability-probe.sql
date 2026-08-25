@@ -141,7 +141,9 @@ INSERT INTO probes VALUES
   ('mix the mortar','mix_mortar'),
   -- V169 ashlar masonry (and the mortared course it stands beside must not regress)
   ('dress an ashlar block','dress_ashlar'),('lay an ashlar course','lay_ashlar_course'),
-  ('lay a mortared course of stone','lay_mortared_course');
+  ('lay a mortared course of stone','lay_mortared_course'),
+  -- V170 lime kiln (and calcining must still route after gaining the kiln station)
+  ('make a lime kiln','make_lime_kiln'),('calcine the limestone','calcine_quicklime');
 
 \echo === MISSES (expect none) ===
 SELECT want AS expected, COALESCE(resolve(txt),'<null>') AS got, txt
