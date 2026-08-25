@@ -152,11 +152,13 @@ Simulation Agent needs no separate UI — its output is the narration in the pla
 
 - **Provider:** Anthropic, via the official `com.anthropic:anthropic-java` SDK (the documented
   default for a Java project). Package `com.devosphere.draugr.ai`.
-- **Model:** defaults to `claude-opus-5` (Anthropic's standing recommendation; we do **not**
-  silently downgrade). Configurable via `DRAUGR_AI_MODEL`. **Note for operators:** narration
-  refinement is high-frequency and low-stakes (one atmospheric sentence). For latency and cost
-  you may prefer `claude-haiku-4-5` here — set `DRAUGR_AI_MODEL=claude-haiku-4-5`. This is a
-  deliberate operator decision, surfaced rather than made for you.
+- **Models — one per agent, not one global id.** Each engine is served by the tier that fits its
+  job, and every id is pinned to a **current, valid** Anthropic model (a stale id fails silently the
+  instant the pipeline is enabled — #244): the **narrator** on `claude-haiku-4-5-20251001` (high
+  frequency, low stakes — one atmospheric sentence), the **interpreter** and **auditor** on
+  `claude-sonnet-5` (mid-tier read-only reasoning), and the **architect** and **QA critic** on
+  `claude-opus-4-8` (the deliberate, consequential authoring work). Each is overridable via its own
+  `draugr.ai.*-model` key (below). We do **not** silently downgrade; keep these ids current.
 - **Credentials:** the API key comes only from configuration/environment
   (`ANTHROPIC_API_KEY` / `DRAUGR_AI_API_KEY`). **Never committed, never logged.** The repo ships
   with the feature off; nothing about the key lives in git.
@@ -169,16 +171,48 @@ Simulation Agent needs no separate UI — its output is the narration in the pla
 
 | Key | Env | Default | Meaning |
 |---|---|---|---|
-| `enabled` | `DRAUGR_AI_ENABLED` | `false` | Master switch. Off ⇒ pure deterministic prose. |
-| `api-key` | `DRAUGR_AI_API_KEY` / `ANTHROPIC_API_KEY` | *(empty)* | Anthropic key. Never committed. |
-| `model` | `DRAUGR_AI_MODEL` | `claude-opus-5` | Model id. |
+| `enabled` | `DRAUGR_AI_ENABLED` | `false` | Master switch. Off ⇒ pure deterministic prose; the whole pipeline is inert. |
+| `api-key` | `DRAUGR_AI_API_KEY` / `ANTHROPIC_API_KEY` | *(empty)* | Anthropic key. Never committed, never logged. |
+| `authoring-enabled` | `DRAUGR_AI_AUTHORING_ENABLED` | `true` | The Architect's switch: create NEW scoped mechanics at runtime. On by default, but gated behind the master + key. |
+| `narration-model` | `DRAUGR_AI_NARRATION_MODEL` | `claude-haiku-4-5-20251001` | Narrator model. |
+| `interpreter-model` | `DRAUGR_AI_INTERPRETER_MODEL` | `claude-sonnet-5` | Procedure Interpreter model. |
+| `auditor-model` | `DRAUGR_AI_AUDITOR_MODEL` | `claude-sonnet-5` | Auditor model. |
+| `architect-model` | `DRAUGR_AI_ARCHITECT_MODEL` | `claude-opus-4-8` | Architect (authoring) model. |
+| `qa-model` | `DRAUGR_AI_QA_MODEL` | `claude-opus-4-8` | QA critic model (deliberately distinct from the Architect). |
 | `max-tokens` | `DRAUGR_AI_MAX_TOKENS` | `1024` | Output cap (generous so a short reply is never truncated). |
 | `timeout` | `DRAUGR_AI_TIMEOUT` | `20s` | Per-call wall-clock bound. |
 
-**To go live:** set `DRAUGR_AI_ENABLED=true` and export `ANTHROPIC_API_KEY`; restart the backend.
-Turn it off by unsetting `DRAUGR_AI_ENABLED` — no code change, no data change. The key is stored
-encrypted at rest ([SECURITY.md](../../SECURITY.md)). To give **internal testers** the AI-enabled
-experience without exposing your key, see
+*(There are also per-agent `*-enabled` switches — `narration-enabled`, `interpreter-enabled`,
+`auditor-enabled`, `qa-enabled` — all default **on**, so flipping the one master lights the whole
+pipeline. Set an individual one false to run the rest without that agent. Every agent is additionally
+gated by the master + key: an agent runs iff `isUsable()` **and** its own switch.)*
+
+### Enabling the full generative pipeline, and verifying it (#244)
+
+The pipeline is **built and wired but off by default**. Three things must be set — nothing in git
+changes; the key is yours, supplied by env only:
+
+1. `DRAUGR_AI_ENABLED=true` — master (lights narration + the Sonnet interpreter / multi-step decomposition).
+2. `export DRAUGR_AI_API_KEY=…` (or `ANTHROPIC_API_KEY`) — your Anthropic key.
+3. `DRAUGR_AI_AUTHORING_ENABLED` is already `true` — leave it, so the Architect may create new mechanics.
+
+Restart the backend. Turn it all off again by unsetting `DRAUGR_AI_ENABLED` — no code or data change.
+
+**Verify both stages actually fire** (not just that the flag is on):
+
+- **Stage 1 — interpret / multi-step (Sonnet).** Submit a detailed multi-step action whose steps are
+  all *existing* processes phrased naturally (e.g. a 2000-character sequence of fell → buck → split →
+  season). It should be decomposed into an ordered plan and each step resolved in turn, visible in the
+  outcome/narration — not collapsed to a single intent or a "nothing happened" miss.
+- **Stage 2 — author (Opus).** Submit an action naming a real-world process the catalogue does *not*
+  hold. The Architect should compose a new scoped mechanic, pass the physics gate + QA critic, write it
+  scoped to the chronicle, and execute it — again, not "nothing happened".
+- **If it still says "nothing happened" after enabling**, check the backend log for
+  `AI call to model '<id>' failed …` — a stale/invalid model id fails exactly here and is otherwise
+  indistinguishable from a legitimate miss. All configured ids must be current (see the table above).
+
+The key is stored encrypted at rest ([SECURITY.md](../../SECURITY.md)). To give **internal testers** the
+AI-enabled experience without exposing your key, see
 [sharing-the-ai-with-testers.md](sharing-the-ai-with-testers.md).
 
 ---
