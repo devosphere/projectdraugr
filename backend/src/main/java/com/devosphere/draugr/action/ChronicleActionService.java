@@ -641,10 +641,14 @@ public class ChronicleActionService {
             "SELECT COUNT(*) FROM wildlife_species WHERE movement_class='AQUATIC' AND biome_affinity ILIKE ?",
             Integer.class, "%" + biome + "%");
         if (aquatic == null || aquatic == 0) return "";
+        // Read the stock as a share of what this particular stretch holds when full, so a naturally thin water does
+        // not read as depleted, nor a teeming one as merely workable (#181/#36 richness).
+        int full = com.devosphere.draugr.ecology.WildlifeEncounterService.fishStockSeedFor(loc);
         int fish = wildlife.fishRemaining(loc, at);
+        double frac = full > 0 ? (double) fish / full : 0.0;
         return (fish <= 0 ? "The water here is fished out, empty of anything worth taking."
-              : fish < 100 ? "The water here is fished thin — the take would be poor."
-              : fish < 300 ? "The water here holds fish enough to work."
+              : frac < 0.25 ? "The water here is fished thin — the take would be poor."
+              : frac < 0.70 ? "The water here holds fish enough to work."
               : "The water here is thick with fish.") + " ";
     }
     /** How wooded this ground is (#200/#201): the tree stand that grows here — from a recorded stand where one
