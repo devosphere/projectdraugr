@@ -627,7 +627,25 @@ public class ChronicleActionService {
         // been thinned or cut out — so a wood can be read before an axe is set to it, like a seam before a pick.
         String woodland = groundWoodland(loc);
         if (!woodland.isEmpty()) s.append(woodland);
+        // How well the water here still fishes (#181/#36): thick, workable, fished thin, or fished out — so a stretch
+        // can be read before a line is cast, like a seam before a pick or a wood before an axe.
+        String water = groundWater(loc, at);
+        if (!water.isEmpty()) s.append(water);
         return s.toString().trim();
+    }
+    /** How well the water here still fishes (#181/#36): only for a chunk whose biome actually holds fish, read from
+     *  the recorded stock (restocked over time) or the full stretch a water not yet worked carries. Read-only. */
+    private String groundWater(UUID loc, Instant at) {
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, loc);
+        Integer aquatic = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM wildlife_species WHERE movement_class='AQUATIC' AND biome_affinity ILIKE ?",
+            Integer.class, "%" + biome + "%");
+        if (aquatic == null || aquatic == 0) return "";
+        int fish = wildlife.fishRemaining(loc, at);
+        return (fish <= 0 ? "The water here is fished out, empty of anything worth taking."
+              : fish < 100 ? "The water here is fished thin — the take would be poor."
+              : fish < 300 ? "The water here holds fish enough to work."
+              : "The water here is thick with fish.") + " ";
     }
     /** How wooded this ground is (#200/#201): the tree stand that grows here — from a recorded stand where one
      *  exists, or the full natural stand a wooded biome carries until it is first cut — and whether it stands thick,
