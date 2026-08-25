@@ -121,4 +121,27 @@ class CoppicingIntegrationTest {
 
         assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
+
+    @Test
+    void aConiferStandCannotBeCoppiced() {
+        if (worldGenesis.current() == null) {
+            worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
+            ecology.seed();
+        }
+        ChronicleService.ChronicleSummary summary = chronicles.awaken();
+        assertNotNull(summary, "awakening must produce a living Chronicle");
+        UUID chronicle = summary.id();
+        UUID chunk = jdbc.queryForObject("SELECT id FROM world_chunk WHERE biome='TEMPERATE_FOREST' ORDER BY grid_y, grid_x LIMIT 1", UUID.class);
+        jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", chunk, chronicle);
+        Instant now = ticks.current().simulatedAt();
+        items.createCarriedItem(chronicle, "stone_axe", "Stone axe", now, "TEST_SEED");
+
+        // A spruce stand — a conifer, which will not throw up new growth from a cut stump.
+        jdbc.update("DELETE FROM chunk_flora WHERE chunk_id=? AND flora_key IN (SELECT flora_key FROM flora_definition WHERE organism_type='TREE')", chunk);
+        jdbc.update("INSERT INTO chunk_flora (chunk_id, flora_key, quantity, capacity) VALUES (?, 'spruce', 6, 16)", chunk);
+
+        String[] r = items.coppice(chronicle, chunk, now);
+        assertFalse("SUCCEEDED".equals(r[0]), "a conifer stand must not be coppiceable: " + r[1]);
+        assertTrue(r[1].toLowerCase().contains("conifer"), () -> "the refusal must explain conifers do not coppice: " + r[1]);
+    }
 }
