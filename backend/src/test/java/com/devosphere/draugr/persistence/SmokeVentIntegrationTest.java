@@ -103,9 +103,23 @@ class SmokeVentIntegrationTest {
         jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
         Instant base = ticks.current().simulatedAt();
 
+        // This forest chunk and the single living Chronicle are shared across the whole suite (many tests seed a fire
+        // pit here). Clear the chunk so the smoke condition is controlled — Auditor-safe, no destroyed objects: put out
+        // any fires, collapse any standing constructions (integrity 0), and take any ground-set smoke_hood into the
+        // pack (a carried hood does not vent — only one placed at the hearth does), so nothing here auto-vents.
+        jdbc.update("UPDATE fire_state SET active=false WHERE construction_id IN (SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=?)", chunk);
+        jdbc.update("UPDATE construction_project SET integrity_percent=0 WHERE object_id IN (SELECT id FROM world_object WHERE current_location_id=? AND object_type='CONSTRUCTION' AND lifecycle_state='ACTIVE')", chunk);
+        jdbc.update("UPDATE world_object SET current_owner_id=?, current_location_id=NULL WHERE current_location_id=? AND lifecycle_state='ACTIVE' AND id IN (SELECT object_id FROM item_instance WHERE item_key='smoke_hood')", chronicle, chunk);
+
         // An enclosed hut with an unvented hearth burning inside it.
         placeConstruction(chunk, "WATTLE_AND_DAUB_HUT", "Wattle-and-daub hut", base);
         placeConstruction(chunk, "STONE_FIRE_PIT", "Stone fire pit", base);
+
+        // Setup guards — the smoke pressure depends on exactly these three; assert them so a setup fault reads clearly.
+        Boolean enclosed = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object en ON en.id=cp.object_id JOIN world_object body ON body.current_location_id=en.current_location_id WHERE body.id=? AND cp.project_kind IN ('LEAN_TO','WATTLE_AND_DAUB_HUT','EARTH_SHELTERED_HUT','LOG_CABIN') AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND en.lifecycle_state='ACTIVE')", Boolean.class, chronicle);
+        Integer fuel = jdbc.queryForObject("SELECT COALESCE((SELECT fs.fuel_minutes FROM construction_project cp JOIN fire_state fs ON fs.construction_id=cp.object_id JOIN world_object pit ON pit.id=cp.object_id JOIN world_object body ON body.current_location_id=pit.current_location_id WHERE body.id=? AND fs.active=true ORDER BY fs.fuel_minutes DESC LIMIT 1),0)", Integer.class, chronicle);
+        assertEquals(Boolean.TRUE, enclosed, "SETUP: the Chronicle must be inside an enclosing shelter");
+        assertTrue(fuel != null && fuel > 0, () -> "SETUP: an active hearth must burn at the chunk, got fuel=" + fuel);
 
         // Part 1 — the smoke fouls the air: illness rises from a benign baseline.
         int smoky = illnessAfter(chronicle, base, 24);
@@ -120,8 +134,10 @@ class SmokeVentIntegrationTest {
         int vented = illnessAfter(chronicle, base, 24);
         assertEquals(0, vented, () -> "a built smoke-vent must clear the smoke so the same span breeds no illness (smoky=" + smoky + ", vented=" + vented + ")");
 
-        // And a smoke-vent cut where nothing stands to hold it is refused.
+        // And a smoke-vent cut where nothing stands to hold it is refused. Clear the bare chunk of any stray
+        // shelter another test may have left, so "no roof" is really no roof.
         UUID bare = jdbc.queryForObject("SELECT id FROM world_chunk WHERE id<>? ORDER BY grid_y, grid_x LIMIT 1", UUID.class, chunk);
+        jdbc.update("UPDATE construction_project SET integrity_percent=0 WHERE object_id IN (SELECT id FROM world_object WHERE current_location_id=? AND object_type='CONSTRUCTION' AND lifecycle_state='ACTIVE')", bare);
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", bare, chronicle);
         items.createCarriedItem(chronicle, "clay_lump", "Clay lump", base, "TEST_SETUP");
         String[] noShelter = construction.buildSmokeVent(chronicle, bare, base);
