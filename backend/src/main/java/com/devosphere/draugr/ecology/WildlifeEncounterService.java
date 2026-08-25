@@ -183,7 +183,14 @@ public class WildlifeEncounterService {
     public HarvestResult harvest(UUID chronicle, UUID chunk, UUID action, Instant at) {
         Carcass carcass=jdbc.query("SELECT wc.object_id,wc.species_key,wc.remaining_meat_units,wc.hide_available FROM wildlife_carcass wc JOIN world_object w ON w.id=wc.object_id WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' ORDER BY wc.died_at LIMIT 1 FOR UPDATE",rs->rs.next()?new Carcass(rs.getObject(1,UUID.class),rs.getString(2),rs.getInt(3),rs.getBoolean(4)):null,chunk);
         if(carcass==null)return new HarvestResult("FAILED","You search the ground carefully, then leave it as you found it.");
-        if(carcass.meat()>0) { UUID meat=items.createCarriedItem(chronicle,"raw_game_meat","Raw game meat",at,"HARVESTED_FROM_CARCASS"); food.registerRaw(meat,at); jdbc.update("UPDATE wildlife_carcass SET remaining_meat_units=remaining_meat_units-1 WHERE object_id=?",carcass.id()); }
+        boolean toxicFlesh=false;
+        if(carcass.meat()>0) {
+            // A toxic species (fire salamander, toad, newt — #V173) is stripped but its flesh is left: it is poison,
+            // no food for anyone. The carcass still depletes — the meat is worked off, just discarded, not carried.
+            if(isToxicSpecies(carcass.species())) { toxicFlesh=true; }
+            else { UUID meat=items.createCarriedItem(chronicle,"raw_game_meat","Raw game meat",at,"HARVESTED_FROM_CARCASS"); food.registerRaw(meat,at); }
+            jdbc.update("UPDATE wildlife_carcass SET remaining_meat_units=remaining_meat_units-1 WHERE object_id=?",carcass.id());
+        }
         // The meat is off; what remains is the species' own yield — a wolf's pelt and
         // fangs, a deer's antler and sinew — drawn from wildlife_drop (V42). The legacy
         // generic hide stands in for species not yet catalogued.
@@ -191,7 +198,14 @@ public class WildlifeEncounterService {
         else return new HarvestResult("FAILED","The remains offer nothing more that you can carry away.");
         Integer remaining=jdbc.queryForObject("SELECT remaining_meat_units FROM wildlife_carcass WHERE object_id=?",Integer.class,carcass.id()); Boolean hide=jdbc.queryForObject("SELECT hide_available FROM wildlife_carcass WHERE object_id=?",Boolean.class,carcass.id());
         if((remaining==null||remaining==0) && Boolean.FALSE.equals(hide)) { Timestamp ts=Timestamp.from(at); jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED',destroyed_at=?,destroyed_location_id=current_location_id,destroyed_cause='CARCASS_EXHAUSTED',current_location_id=NULL WHERE id=?",ts,carcass.id()); jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CARCASS_EXHAUSTED','{}'::jsonb)",carcass.id(),ts); }
-        return new HarvestResult("SUCCEEDED","You work carefully over the remains and take what you can carry.");
+        return new HarvestResult("SUCCEEDED", toxicFlesh
+            ? "You work over the " + display(carcass.species()) + ", but you know its flesh for what it is — toxic, no food for anyone — and leave it. You carry nothing edible away."
+            : "You work carefully over the remains and take what you can carry.");
+    }
+    /** Whether a species' flesh is toxic to eat (#V173) — the fauna counterpart of a poisonous plant. */
+    private boolean isToxicSpecies(String speciesKey) {
+        return Boolean.TRUE.equals(jdbc.query("SELECT toxic FROM wildlife_species WHERE species_key=?",
+            rs -> rs.next() ? rs.getBoolean(1) : Boolean.FALSE, speciesKey));
     }
     /**
      * The world's turn. A chronicle busy with a task in ground where something is
@@ -850,6 +864,9 @@ public class WildlifeEncounterService {
             return new EncounterResult("PARTIAL","You set the snare across a run and leave it standing. Whether anything comes to it is not yours to decide.");
         String caught = prey.get(Math.floorMod(action.hashCode(), prey.size()));
         int got = takeSpeciesDrops(chronicle, caught, at);
+        // A toxic catch (#V173) is left in the cord — its flesh is poison, not food.
+        if (isToxicSpecies(caught))
+            return new EncounterResult("SUCCEEDED","The snare has held — a "+display(caught)+" hangs in the cord, but you know it for toxic and leave the flesh where it is. No food from this one.");
         UUID meat = items.createCarriedItem(chronicle,"raw_game_meat","Raw game meat",at,"TAKEN_FROM_SNARE"); food.registerRaw(meat,at);
         return new EncounterResult("SUCCEEDED","The snare has held. A "+display(caught)+" hangs in the cord, long still by the time you reach it."+(got>0?"":""));
     }
