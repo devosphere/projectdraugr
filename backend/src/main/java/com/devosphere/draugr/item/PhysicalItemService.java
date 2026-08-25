@@ -635,6 +635,60 @@ public class PhysicalItemService {
             (young ? " The trees here are young growth — thin poles, not the timber a grown wood gives; there is little to take from a stand not left to mature." : "")};
     }
 
+    /** How long a coppiced stand must rest before its stools have thrown up rods worth cutting again (#204). */
+    private static final int COPPICE_REGROWTH_DAYS = 90;
+
+    /**
+     * Coppice a wood in the current chunk (#200/#204): cut the rods and poles from living stools and leave the stools
+     * to throw up fresh growth, so the stand yields a crop without ever being felled. Needs a cutting edge; a stand
+     * cut out to nothing has no living stools; and the stools must have rested since the last cutting. The tree count
+     * is never reduced — this is the renewable counterpart to felling. Returns [outcome, narration].
+     */
+    @Transactional
+    public String[] coppice(UUID chronicle, UUID location, Instant occurredAt) {
+        if (!hasCuttingTool(chronicle) && !hasAtLeast(chronicle,"stone_axe",1) && !hasAtLeast(chronicle,"stone_hatchet",1)
+            && !hasAtLeast(chronicle,"copper_axe",1) && !hasAtLeast(chronicle,"bronze_axe",1) && !hasAtLeast(chronicle,"iron_axe",1) && !hasAtLeast(chronicle,"steel_axe",1))
+            return new String[]{"FAILED", "You take hold of the rods, but without a blade to cut them there is no coppicing this stand."};
+
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
+        String treeKey = jdbc.query(
+            "SELECT cf.flora_key FROM chunk_flora cf JOIN flora_definition fd ON fd.flora_key=cf.flora_key " +
+            "WHERE cf.chunk_id=? AND fd.organism_type='TREE' AND cf.quantity>0 LIMIT 1",
+            rs -> rs.next() ? rs.getString(1) : null, location);
+        if (treeKey == null) {
+            treeKey = switch (biome != null ? biome : "") {
+                case "FOREST", "TEMPERATE_FOREST" -> "oak";
+                case "MOUNTAIN" -> "spruce";
+                case "HIGHLAND" -> "pine";
+                case "WETLAND", "RIVERBANK" -> "willow";
+                default -> null;
+            };
+            if (treeKey == null) return new String[]{"FAILED", "There is no wood here to coppice."};
+            Integer standQty = jdbc.query("SELECT quantity FROM chunk_flora WHERE chunk_id=? AND flora_key=?",
+                rs -> rs.next() ? rs.getInt(1) : null, location, treeKey);
+            if (standQty != null && standQty <= 0)
+                return new String[]{"FAILED", "The stand here is cut out — only dead stumps remain, and a dead stump throws up nothing to cut."};
+            if (standQty == null)
+                jdbc.update("INSERT INTO chunk_flora (chunk_id, flora_key, quantity, capacity, last_harvested_at) VALUES (?,?,?,?,NULL)",
+                    location, treeKey, natStandFor(location), natStandFor(location));
+        }
+        Boolean rested = jdbc.query(
+            "SELECT last_coppiced_at IS NULL OR last_coppiced_at <= ?::timestamptz - make_interval(days => ?) " +
+            "FROM chunk_flora WHERE chunk_id=? AND flora_key=?",
+            rs -> rs.next() ? (Boolean) rs.getObject(1) : Boolean.TRUE, Timestamp.from(occurredAt), COPPICE_REGROWTH_DAYS, location, treeKey);
+        if (Boolean.FALSE.equals(rested))
+            return new String[]{"FAILED", "The stools you cut before have not yet thrown up new rods worth taking — coppice needs a rest between cuttings."};
+
+        int rods = 2 + (int) (Math.random() * 3); // 2..4 rods a cutting
+        int room = capacityHeadroomUnits(chronicle, "hazel_rod");
+        int take = Math.min(rods, room);
+        if (take <= 0) return new String[]{"FAILED", "You have cut all the rods you can carry."};
+        for (int i = 0; i < take; i++) createCarriedItem(chronicle, "hazel_rod", "Hazel Rod", occurredAt, "COPPICED");
+        // The stools are cut but the tree lives on — the stand is NOT reduced. Only the coppice clock is set.
+        jdbc.update("UPDATE chunk_flora SET last_coppiced_at=? WHERE chunk_id=? AND flora_key=?", Timestamp.from(occurredAt), location, treeKey);
+        return new String[]{"SUCCEEDED", "You work along the stand cutting the low rods and poles from the living stools and bundling them, and leave the stools standing to throw up fresh growth again — a crop of rods taken without losing the wood."};
+    }
+
     /**
      * Plant a tree seed to establish or restore a woodland stand here (#200/#204 — the counter-play to felling and
      * clear-cutting). A carried acorn grows an oak, a pine nut a pine — pressed into ground that suits the species
