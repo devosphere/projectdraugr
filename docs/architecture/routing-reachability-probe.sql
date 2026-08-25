@@ -138,7 +138,10 @@ INSERT INTO probes VALUES
   ('char the wood into charcoal','char_charcoal_clamp'),('burn a charcoal clamp','char_charcoal_clamp'),
   -- V164 lime chain (and the ash mortar it stands beside must not regress)
   ('calcine the limestone','calcine_quicklime'),('mix lime mortar','slake_lime_mortar'),
-  ('mix the mortar','mix_mortar');
+  ('mix the mortar','mix_mortar'),
+  -- V169 ashlar masonry (and the mortared course it stands beside must not regress)
+  ('dress an ashlar block','dress_ashlar'),('lay an ashlar course','lay_ashlar_course'),
+  ('lay a mortared course of stone','lay_mortared_course');
 
 \echo === MISSES (expect none) ===
 SELECT want AS expected, COALESCE(resolve(txt),'<null>') AS got, txt
