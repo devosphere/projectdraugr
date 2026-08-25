@@ -71,6 +71,9 @@ class LeadSinkerIntegrationTest {
 
     /** Cast a line over a fixed battery and count the takes (fish success is deterministic in the action id). */
     private int catches(UUID chronicle, UUID chunk, Instant now, List<UUID> actionIds) {
+        // Reset the finite fish stock (#181/#36) so this battery reflects the tackle's catch chance, not how much
+        // prior fishing (here or in another test sharing the database) has drawn the water down.
+        jdbc.update("DELETE FROM fish_stock WHERE chunk_id=?", chunk);
         int taken = 0;
         for (UUID action : actionIds) {
             if ("SUCCEEDED".equals(wildlife.fish(chronicle, chunk, action, now, "fish with a line and hook").outcome())) taken++;
