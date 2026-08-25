@@ -778,6 +778,10 @@ public class WildlifeEncounterService {
         if (baited) chance = Math.min(90, chance + 20);
         java.util.List<String> species = jdbc.queryForList("SELECT species_key FROM wildlife_species WHERE movement_class='AQUATIC' AND biome_affinity ILIKE ? ORDER BY species_key", String.class, "%"+biome+"%");
         if (species.isEmpty()) return new EncounterResult("FAILED","You watch the ground a while. There is no water here that holds anything worth taking.");
+        // #181/#36 finite water: a stretch fished relentlessly thins until it is fished out here, and needs rest to
+        // come back. A stretch not yet worked is lazily full, so ordinary angling never meets the ceiling.
+        if (fishRemaining(chunk, at) <= 0)
+            return new EncounterResult("FAILED","The water here is fished out — it needs time to come back before it will give up anything more. Try fresh water.");
         if (Math.floorMod(action.hashCode(),100) >= chance)
             return new EncounterResult("FAILED", method.equals("BARE_HAND")
                 ? "You stand in the cold water with your hands open, and whatever moves past is gone before you close them."
@@ -793,7 +797,32 @@ public class WildlifeEncounterService {
             for (int i=0;i<want;i++) { UUID id=items.createCarriedItem(chronicle,itemKey,name,at,"CAUGHT_FROM_WATER"); if("raw_fish".equals(itemKey)){ food.registerRaw(id,at); jdbc.update("INSERT INTO aquatic_catch (object_id,species_key,method_used,caught_at) VALUES (?,?,?,?)",id,caught,method,Timestamp.from(at)); } got++; }
         }
         if (got==0) return new EncounterResult("FAILED","Something takes and slips free again, and the water closes over it.");
+        drawFishStock(chunk, got, at); // the catch draws the stretch down (#181/#36)
         return new EncounterResult("SUCCEEDED","The "+display(caught)+" comes up out of the water, cold and heavy and still fighting.");
+    }
+
+    /** How many fish a stretch of water holds before it is fished out (#181/#36). Generous, so only sustained
+     *  over-fishing of one spot exhausts it. Fish restock over time, one per FISH_REGEN_HOURS since last worked. */
+    private static final int FISH_STOCK_SEED = 400;
+    private static final int FISH_REGEN_HOURS = 2;
+    /** Current fish remaining at a chunk, after natural restocking since it was last fished; a stretch never worked
+     *  is lazily full (not yet recorded). */
+    private int fishRemaining(UUID chunk, Instant at) {
+        java.util.Map<String,Object> row = jdbc.query(
+            "SELECT remaining_units, last_fished_at FROM fish_stock WHERE chunk_id=?",
+            rs -> rs.next() ? java.util.Map.of("r", rs.getInt(1), "t", rs.getTimestamp(2).toInstant()) : null, chunk);
+        if (row == null) return FISH_STOCK_SEED;
+        int remaining = (int) row.get("r");
+        long hours = java.time.Duration.between((Instant) row.get("t"), at).toHours();
+        int regen = hours > 0 ? (int) (hours / FISH_REGEN_HOURS) : 0;
+        return Math.min(FISH_STOCK_SEED, remaining + regen);
+    }
+    /** Draw a stretch down by the catch, restocking first, and reset its clock so recovery accrues from now. */
+    private void drawFishStock(UUID chunk, int got, Instant at) {
+        int now = Math.max(0, fishRemaining(chunk, at) - got);
+        Timestamp ts = Timestamp.from(at);
+        jdbc.update("INSERT INTO fish_stock (chunk_id, remaining_units, last_fished_at) VALUES (?,?,?) " +
+            "ON CONFLICT (chunk_id) DO UPDATE SET remaining_units=?, last_fished_at=?", chunk, now, ts, now, ts);
     }
 
     /**
