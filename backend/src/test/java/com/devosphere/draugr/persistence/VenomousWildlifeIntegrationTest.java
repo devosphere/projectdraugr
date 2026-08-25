@@ -107,6 +107,19 @@ class VenomousWildlifeIntegrationTest {
         throw new IllegalStateException("could not find a losing action roll");
     }
 
+    /**
+     * An action whose ambush roll (floorMod(hashCode>>>8,100)) is well below a hunting animal's reach chance (25+),
+     * so the passive strike lands rather than being dodged.
+     */
+    private UUID ambushAction() {
+        for (int i = 0; i < 100000; i++) {
+            UUID a = UUID.randomUUID();
+            int roll = Math.floorMod(a.hashCode() >>> 8, 100);
+            if (roll <= 12) return a;
+        }
+        throw new IllegalStateException("could not find a landing ambush roll");
+    }
+
     @Test
     void aVenomousBiteEnvenomsButAHarmlessSnakeOnlyWounds() {
         if (worldGenesis.current() == null) {
@@ -142,6 +155,38 @@ class VenomousWildlifeIntegrationTest {
         assertEquals("PARTIAL", scratched.outcome(), () -> "the grass snake loss must also be a mauling: " + scratched.narration());
         assertTrue(injury(chronicle) > 0, "the grass snake must still wound");
         assertEquals(0, illness(chronicle), () -> "a non-venomous snake must never envenom — illness must stay clean: " + scratched.narration());
+
+        assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
+
+    @Test
+    void anAmbushStrikeFromAVenomousAnimalAlsoEnvenoms() {
+        if (worldGenesis.current() == null) {
+            worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
+            ecology.seed();
+        }
+        ChronicleService.ChronicleSummary summary = chronicles.awaken();
+        assertNotNull(summary, "awakening must produce a living Chronicle");
+        UUID chronicle = summary.id();
+        UUID chunk = jdbc.queryForObject("SELECT id FROM world_chunk WHERE biome='TEMPERATE_FOREST' ORDER BY grid_y, grid_x LIMIT 1", UUID.class);
+        UUID worldId = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, chunk);
+        jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", chunk, chronicle);
+        Instant now = ticks.current().simulatedAt();
+
+        // A venomous adder actively hunting this ground reaches the heads-down Chronicle: the strike lands, and the
+        // venom is in it exactly as it is on a losing confront — the bite is a property of the animal, not the path.
+        onlyPredator(chunk, worldId, "common_adder", now);
+        jdbc.update("UPDATE wildlife_population SET behavior_state='HUNTING' WHERE site_id IN (SELECT id FROM ecology_site WHERE chunk_id=?)", chunk);
+        makeDefenceless(chronicle);
+        assertEquals(0, illness(chronicle), "illness must start clean");
+        String witness = wildlife.passiveEncounter(chronicle, chunk, ambushAction(), now, "LOW");
+        assertNotNull(witness, "a hunting adder with a low ambush roll must reach the Chronicle");
+        assertTrue(injury(chronicle) > 0, "an ambush strike must wound");
+        assertTrue(illness(chronicle) > 0, () -> "a venomous ambush must envenom — illness must rise: " + witness);
+        Integer venomEvents = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM chronicle_condition_event WHERE chronicle_id=? AND condition_kind='ILLNESS' AND payload->>'source'='VENOMOUS_BITE'",
+                Integer.class, chronicle);
+        assertEquals(1, venomEvents, "the ambush envenomation must be recorded as a VENOMOUS_BITE condition event");
 
         assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
