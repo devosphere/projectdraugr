@@ -75,7 +75,7 @@ class LimeKilnIntegrationTest {
         UUID chronicle = summary.id();
         UUID chunk = jdbc.queryForObject("SELECT id FROM world_chunk ORDER BY grid_y, grid_x LIMIT 1", UUID.class);
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", chunk, chronicle);
-        jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000000, direct_bulk_ml=100000000000, maximum_single_lift_grams=100000000000 WHERE chronicle_id=?", chronicle);
+        jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
         Instant now = ticks.current().simulatedAt();
         Timestamp ts = Timestamp.from(now);
 
