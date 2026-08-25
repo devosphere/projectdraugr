@@ -49,8 +49,10 @@ public class AnthropicLanguageModel implements LanguageModel {
                     .trim();
             return text.isBlank() ? Optional.empty() : Optional.of(text);
         } catch (Exception failure) {
-            // Never surface a model problem into the game loop — fall back to deterministic prose.
-            log.warn("AI narration call failed; using deterministic prose instead: {}", failure.toString());
+            // Never surface a model problem into the game loop — fall back to deterministic prose. Name the model in
+            // the log, though (#244): an unknown/stale model id fails here and otherwise looks identical to a plain
+            // "nothing happened", so the model that failed must be visible to whoever is enabling the pipeline.
+            log.warn("AI call to model '{}' failed; using deterministic prose instead: {}", model, failure.toString());
             return Optional.empty();
         }
     }
