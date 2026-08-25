@@ -42,11 +42,14 @@ public class AiProperties {
      * Haiku); the Architect proposes schema/data at authoring time and wants deep reasoning (Opus);
      * the Auditor summarizes consistency findings (Sonnet).
      */
-    private String narrationModel = "claude-haiku-4-5";
+    // Model ids are pinned to current, valid Anthropic model identifiers (#244): stale ids do not error at build
+    // time and, with AI off by default, do not error in CI either — but the moment the pipeline is enabled with a key
+    // they make every call fail silently (an unknown model looks identical to "nothing happened"). Keep these current.
+    private String narrationModel = "claude-haiku-4-5-20251001";
     private String architectModel = "claude-opus-4-8";
-    private String auditorModel = "claude-sonnet-4-6";
+    private String auditorModel = "claude-sonnet-5";
     /** The Procedure Interpreter (DR-0021): maps a miss to a sequence of existing processes. Mid-tier, read-only reasoning. */
-    private String interpreterModel = "claude-sonnet-4-6";
+    private String interpreterModel = "claude-sonnet-5";
     /** Independent QA critic for runtime-authored mechanics — deliberately a different model from the Architect. */
     private String qaModel = "claude-opus-4-8";
     /** The Architect's per-agent switch — runtime authoring of NEW scoped mechanics. Default on; set false to allow interpretation of existing processes without letting the Architect create new ones. */
