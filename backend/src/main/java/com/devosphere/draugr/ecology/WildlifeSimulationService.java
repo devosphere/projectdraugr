@@ -128,11 +128,11 @@ public class WildlifeSimulationService {
         // adjacent chunk to seed it back. Then it recolonises to a single sapling and its regrowth clock restarts.
         // Mirrors the wildlife dispersal recolonisation (#207/#212). Correlated subquery references the target row
         // in its WHERE, never a FROM-clause JOIN ON.
-        jdbc.update("UPDATE chunk_flora cf SET quantity = 1, last_harvested_at = ? " +
+        jdbc.update("UPDATE chunk_flora cf SET quantity = 1, last_harvested_at = ?, established_at = ? " +
             "WHERE cf.quantity = 0 AND cf.capacity >= 1 AND EXISTS (" +
             "  SELECT 1 FROM chunk_flora nb, world_chunk c, world_chunk nc " +
             "  WHERE c.id = cf.chunk_id AND nc.id = nb.chunk_id AND nb.flora_key = cf.flora_key AND nb.quantity >= 3 " +
-            "    AND nc.world_id = c.world_id AND abs(nc.grid_x - c.grid_x) + abs(nc.grid_y - c.grid_y) = 1)", nowTs);
+            "    AND nc.world_id = c.world_id AND abs(nc.grid_x - c.grid_x) + abs(nc.grid_y - c.grid_y) = 1)", nowTs, nowTs);
 
         // Disturbance migration (#207/#209, second response tier) — where disturbance stays heavy (a place worked
         // hard again and again), avoidance is not enough and a population shifts its range to quieter ground.
