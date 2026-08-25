@@ -283,6 +283,41 @@ public class ConstructionService {
         return new String[]{"SUCCEEDED", "You dig a deep pit well downwind of the camp and screen it round — a place to keep filth away from where you eat and sleep."};
     }
 
+    /**
+     * Cut (or re-daub) a roof smoke-vent in an enclosing shelter here (#219 hazard-emission mitigation; extends the
+     * #198 enclosed-fire smoke model). Woodsmoke from an unvented fire in an enclosed shelter fouls the air and
+     * pushes a Chronicle toward illness; a hole cut through the roof lets it rise and leave. {@link
+     * com.devosphere.draugr.chronicle.ChroniclePhysiologyService} reads a completed SMOKE_VENT at the chunk as
+     * venting the smoke — the terminal payoff for the build. A smoke-hole only means anything cut into a roof, so it
+     * requires an enclosing shelter already standing; a blade to cut the opening; and clay to daub the rim so sparks
+     * do not catch the thatch. It weathers and, unmended, fails like the other field structures (#220).
+     */
+    @Transactional
+    public String[] buildSmokeVent(UUID chronicle, UUID location, Instant at) {
+        Timestamp ts = Timestamp.from(at);
+        boolean enclosed = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "WHERE w.current_location_id=? AND cp.project_kind IN ('LEAN_TO','WATTLE_AND_DAUB_HUT','EARTH_SHELTERED_HUT','LOG_CABIN') " +
+            "AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')", Boolean.class, location));
+        if (!enclosed) return new String[]{"FAILED", "A smoke-vent is a hole cut through a roof, and there is no shelter standing here to cut one in — raise an enclosing shelter first."};
+        UUID existing = jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='SMOKE_VENT' AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' LIMIT 1 FOR UPDATE", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, location);
+        if (existing != null) {
+            if (!items.hasAtLeast(chronicle, "clay_lump", 1)) return new String[]{"FAILED", "The vent's daubed rim has crumbled and needs re-lining, but you have no clay to daub it with."};
+            items.consumeOne(chronicle, "clay_lump", at);
+            jdbc.update("UPDATE construction_project SET integrity_percent=100,last_structural_update=? WHERE object_id=?", ts, existing);
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'SMOKE_VENT_MENDED',jsonb_build_object('projectKind','SMOKE_VENT'))", existing, ts);
+            return new String[]{"SUCCEEDED", "You re-daub the vent's rim with fresh clay until it draws clean and sound again."};
+        }
+        if (!items.hasCuttingTool(chronicle)) return new String[]{"FAILED", "Cutting a smoke-hole through the roof wants a blade, and you have none to open one with."};
+        if (!items.hasAtLeast(chronicle, "clay_lump", 1)) return new String[]{"FAILED", "You can cut the hole, but have no clay to daub its rim so the sparks will not catch the thatch — clay must come first."};
+        items.consumeOne(chronicle, "clay_lump", at);
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CONSTRUCTION','Roof smoke-vent',?)", id, location);
+        jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at) VALUES (?,'SMOKE_VENT','COMPLETED',100,?)", id, ts);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CONSTRUCTED',jsonb_build_object('projectKind','SMOKE_VENT'))", id, ts);
+        return new String[]{"SUCCEEDED", "You cut a hole through the roof over the hearth and daub its rim with clay. The smoke finds it and rises out, and the air beneath clears."};
+    }
+
     /** Wall infill for a tool shed, best first — the same withies a wattle fence is woven from. */
     private static final String[] SHED_WALL = {"hazel_rod", "willow_branch"};
 
