@@ -122,8 +122,13 @@ class SmokeVentIntegrationTest {
         assertTrue(fuel != null && fuel > 0, () -> "SETUP: an active hearth must burn at the chunk, got fuel=" + fuel);
 
         // Part 1 — the smoke fouls the air: illness rises from a benign baseline.
+        boolean ventedNow = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT (EXISTS(SELECT 1 FROM item_instance ii JOIN world_object hw ON hw.id=ii.object_id JOIN world_object body ON body.current_location_id=hw.current_location_id WHERE body.id=? AND ii.item_key='smoke_hood' AND hw.lifecycle_state='ACTIVE')" +
+            " OR EXISTS(SELECT 1 FROM construction_project cp JOIN world_object sv ON sv.id=cp.object_id JOIN world_object body ON body.current_location_id=sv.current_location_id WHERE body.id=? AND cp.project_kind='SMOKE_VENT' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND sv.lifecycle_state='ACTIVE'))",
+            Boolean.class, chronicle, chronicle));
+        int living = jdbc.queryForObject("SELECT COUNT(*) FROM chronicle WHERE life_state='LIVING'", Integer.class);
         int smoky = illnessAfter(chronicle, base, 24);
-        assertTrue(smoky > 0, () -> "an unvented fire in an enclosed shelter must foul the air toward illness (#198/#219), got " + smoky);
+        assertTrue(smoky > 0, () -> "an unvented fire in an enclosed shelter must foul the air toward illness (#198/#219): illness=" + smoky + ", vented=" + ventedNow + ", livingChronicles=" + living);
 
         // Part 2 — cut a smoke-vent by the real build path (needs a blade + clay), and the air clears.
         items.createCarriedItem(chronicle, "stone_knife", "Stone knife", base, "TEST_SETUP");
