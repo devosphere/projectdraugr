@@ -95,7 +95,8 @@ class WoodlandStandDepletionIntegrationTest {
         assertEquals("SUCCEEDED", first[0], () -> "felling fresh woodland must succeed: " + first[1]);
         Integer afterFirst = standQty(chunk);
         assertNotNull(afterFirst, "the first felling must record a finite stand");
-        assertEquals(15, afterFirst.intValue(), "a full natural stand (16) drawn down by one felling stands at 15");
+        int expected = com.devosphere.draugr.item.PhysicalItemService.natStandFor(chunk) - 1;
+        assertEquals(expected, afterFirst.intValue(), "a full natural stand drawn down by one felling stands one lower");
 
         // Work the stand to nothing: felling must then read as cut out, not yield endless timber.
         jdbc.update("UPDATE chunk_flora SET quantity=0 WHERE chunk_id=? AND flora_key='oak'", chunk);

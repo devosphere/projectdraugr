@@ -515,9 +515,14 @@ public class PhysicalItemService {
         return new String[]{"SUCCEEDED", "You gather " + (count == 1 ? "a" : count + "") + " " + displayName.toLowerCase() + " from the " + plantName + " growing here."};
     }
 
-    /** How many mature trees a natural, uncut wooded chunk holds before it is recorded and drawn down (#200/#201).
-     *  Generous, so ordinary felling never notices the ceiling; sustained clear-cutting does. */
-    private static final int NATURAL_STAND = 16;
+    /** How many mature trees a natural, uncut wooded chunk holds (#200/#201) — not a flat figure but a stand with its
+     *  own density: a deep, well-watered wood stands thicker than a sparse one. Deterministic per ground, so the same
+     *  chunk always reads the same but neighbouring ground differs. Generous overall (floor 10), so ordinary felling
+     *  never notices the ceiling; sustained clear-cutting does. */
+    public static int natStandFor(UUID chunk) {
+        int h = Math.floorMod((chunk.toString() + ":stand").hashCode(), 100); // 0..99, fixed for this ground
+        return 10 + (int) Math.round((h / 100.0) * 12);                       // 10 (sparse) .. 22 (deep wood)
+    }
 
     /**
      * Fell a tree in the current chunk — requires an axe-class tool equipped or
@@ -572,7 +577,7 @@ public class PhysicalItemService {
                 return new String[]{"FAILED", "The stand here is cut out — only stumps and low brush remain. It will take years to come back on its own, unless you plant and let it grow."};
             if (standQty == null)
                 jdbc.update("INSERT INTO chunk_flora (chunk_id, flora_key, quantity, capacity, last_harvested_at) VALUES (?,?,?,?,NULL)",
-                    location, treeKey, NATURAL_STAND, NATURAL_STAND);
+                    location, treeKey, natStandFor(location), natStandFor(location));
             tree = java.util.Map.of("flora_key", treeKey, "organism_type", "TREE");
         }
 
