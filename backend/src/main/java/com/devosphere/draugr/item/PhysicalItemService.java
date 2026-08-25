@@ -672,6 +672,11 @@ public class PhysicalItemService {
                 jdbc.update("INSERT INTO chunk_flora (chunk_id, flora_key, quantity, capacity, last_harvested_at) VALUES (?,?,?,?,NULL)",
                     location, treeKey, natStandFor(location), natStandFor(location));
         }
+        // Conifers do not coppice — a pine or a spruce will not throw up new shoots from a cut stump the way a
+        // broadleaf will. Coppicing is a craft of the broadleaf woods (oak, ash, willow, hazel, and the like).
+        if (treeKey.equals("pine") || treeKey.equals("spruce"))
+            return new String[]{"FAILED", "These are conifers — a " + treeKey + " will not throw up new growth from a cut stump, so there is nothing to coppice here. Coppicing is for the broadleaf woods."};
+
         Boolean rested = jdbc.query(
             "SELECT last_coppiced_at IS NULL OR last_coppiced_at <= ?::timestamptz - make_interval(days => ?) " +
             "FROM chunk_flora WHERE chunk_id=? AND flora_key=?",
