@@ -806,8 +806,8 @@ public class WildlifeEncounterService {
     private static final int FISH_STOCK_SEED = 400;
     private static final int FISH_REGEN_HOURS = 2;
     /** Current fish remaining at a chunk, after natural restocking since it was last fished; a stretch never worked
-     *  is lazily full (not yet recorded). */
-    private int fishRemaining(UUID chunk, Instant at) {
+     *  is lazily full (not yet recorded). Public so a survey can read how well-stocked the water is (#181/#36). */
+    public int fishRemaining(UUID chunk, Instant at) {
         java.util.Map<String,Object> row = jdbc.query(
             "SELECT remaining_units, last_fished_at FROM fish_stock WHERE chunk_id=?",
             rs -> rs.next() ? java.util.Map.of("r", rs.getInt(1), "t", rs.getTimestamp(2).toInstant()) : null, chunk);
