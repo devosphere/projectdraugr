@@ -801,21 +801,28 @@ public class WildlifeEncounterService {
         return new EncounterResult("SUCCEEDED","The "+display(caught)+" comes up out of the water, cold and heavy and still fighting.");
     }
 
-    /** How many fish a stretch of water holds before it is fished out (#181/#36). Generous, so only sustained
-     *  over-fishing of one spot exhausts it. Fish restock over time, one per FISH_REGEN_HOURS since last worked. */
-    private static final int FISH_STOCK_SEED = 400;
     private static final int FISH_REGEN_HOURS = 2;
+    /** How many fish a stretch of water holds when full (#181/#36) — not a flat figure but a stretch with its own
+     *  richness: a broad, slow reach teems where a thin one holds little. Deterministic per ground, so the same water
+     *  always reads the same but neighbouring water differs. Generous overall, so only sustained over-fishing exhausts
+     *  one; a floor keeps even a poor stretch worth working. */
+    public static int fishStockSeedFor(UUID chunk) {
+        int h = Math.floorMod((chunk.toString() + ":fish").hashCode(), 100); // 0..99, fixed for this water
+        double richness = 0.6 + (h / 100.0) * 0.8;                            // 0.6 (thin) .. ~1.4 (teeming)
+        return Math.max(180, (int) Math.round(350 * richness));               // ~210 .. 490
+    }
     /** Current fish remaining at a chunk, after natural restocking since it was last fished; a stretch never worked
      *  is lazily full (not yet recorded). Public so a survey can read how well-stocked the water is (#181/#36). */
     public int fishRemaining(UUID chunk, Instant at) {
+        int full = fishStockSeedFor(chunk);
         java.util.Map<String,Object> row = jdbc.query(
             "SELECT remaining_units, last_fished_at FROM fish_stock WHERE chunk_id=?",
             rs -> rs.next() ? java.util.Map.of("r", rs.getInt(1), "t", rs.getTimestamp(2).toInstant()) : null, chunk);
-        if (row == null) return FISH_STOCK_SEED;
+        if (row == null) return full;
         int remaining = (int) row.get("r");
         long hours = java.time.Duration.between((Instant) row.get("t"), at).toHours();
         int regen = hours > 0 ? (int) (hours / FISH_REGEN_HOURS) : 0;
-        return Math.min(FISH_STOCK_SEED, remaining + regen);
+        return Math.min(full, remaining + regen);
     }
     /** Draw a stretch down by the catch, restocking first, and reset its clock so recovery accrues from now. */
     private void drawFishStock(UUID chunk, int got, Instant at) {

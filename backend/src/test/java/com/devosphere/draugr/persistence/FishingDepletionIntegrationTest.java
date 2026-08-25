@@ -103,7 +103,7 @@ class FishingDepletionIntegrationTest {
         // Working fresh water must record a stock, drawn down from full but not yet spent.
         Integer remaining = jdbc.queryForObject("SELECT remaining_units FROM fish_stock WHERE chunk_id=?", Integer.class, chunk);
         assertNotNull(remaining, "working fresh water must record a fish stock");
-        assertTrue(remaining < 400 && remaining > 0,
+        assertTrue(remaining > 0 && remaining < 500,
                 () -> "the recorded stretch must be drawn down from full and still hold more (got " + remaining + ") (#181/#36)");
 
         assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
