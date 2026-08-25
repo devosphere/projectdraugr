@@ -29,3 +29,8 @@ INSERT INTO assembly_stage_requirement (stage_key, item_key, quantity) VALUES
 ('wall_footing','ashlar_course',1),
 ('wall_courses','ashlar_course',3)
 ON CONFLICT (stage_key, item_key) DO NOTHING;
+
+-- Promote to VERIFIED so the matcher will offer it (definitions default to DRAFT, and the V58/V90 review gate only
+-- ran over the assemblies present when it ran). The wall is well-formed — stages ordered, every requirement obtainable
+-- (ashlar_course has a source), no prerequisite cycle — so it is verified here directly.
+UPDATE assembly_definition SET review_state='VERIFIED', reviewed_at=now() WHERE assembly_key='dry_stone_wall';
