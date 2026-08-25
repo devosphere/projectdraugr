@@ -657,14 +657,14 @@ public class ChronicleActionService {
     private String groundWoodland(UUID loc) {
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, loc);
         java.util.Map<String,Object> stand = jdbc.query(
-            "SELECT cf.flora_key, cf.quantity FROM chunk_flora cf JOIN flora_definition fd ON fd.flora_key=cf.flora_key " +
+            "SELECT cf.flora_key, cf.quantity, cf.capacity FROM chunk_flora cf JOIN flora_definition fd ON fd.flora_key=cf.flora_key " +
             "WHERE cf.chunk_id=? AND fd.organism_type='TREE' ORDER BY cf.quantity DESC LIMIT 1",
-            rs -> rs.next() ? java.util.Map.of("key", rs.getString(1), "qty", rs.getInt(2)) : null, loc);
-        String species; int qty;
-        if (stand != null) { species = (String) stand.get("key"); qty = (int) stand.get("qty"); }
+            rs -> rs.next() ? java.util.Map.of("key", rs.getString(1), "qty", rs.getInt(2), "cap", rs.getInt(3)) : null, loc);
+        String species; int qty; int full;
+        if (stand != null) { species = (String) stand.get("key"); qty = (int) stand.get("qty"); full = Math.max(1, (int) stand.get("cap")); }
         else {
-            // No recorded stand yet — a wooded biome carries a full natural stand (PhysicalItemService.NATURAL_STAND)
-            // until it is first cut. The species is the one a fell here would take.
+            // No recorded stand yet — a wooded biome carries a full natural stand until it is first cut, and the stand
+            // has its own density (PhysicalItemService.natStandFor). The species is the one a fell here would take.
             species = switch (biome != null ? biome : "") {
                 case "FOREST", "TEMPERATE_FOREST" -> "oak";
                 case "MOUNTAIN" -> "spruce";
@@ -673,12 +673,16 @@ public class ChronicleActionService {
                 default -> null;
             };
             if (species == null) return "";
-            qty = 16;
+            full = com.devosphere.draugr.item.PhysicalItemService.natStandFor(loc);
+            qty = full; // an uncut wood stands at its full natural density
         }
         String tree = species.replace('_', ' ');
+        // Read the stand as a share of what this ground carries when full, so a naturally sparse wood is not read as
+        // thinned nor a deep one as merely workable (#200/#201 stand density).
+        double frac = full > 0 ? (double) qty / full : 0.0;
         return (qty <= 0 ? "The " + tree + " stand here is cut out, only stumps and low brush remaining."
-              : qty <= 4 ? "The " + tree + " here is thinned — only a few trees still stand."
-              : qty <= 11 ? "A stand of " + tree + " grows here, enough to work if it is not stripped bare."
+              : frac < 0.25 ? "The " + tree + " here is thinned — only a few trees still stand."
+              : frac < 0.70 ? "A stand of " + tree + " grows here, enough to work if it is not stripped bare."
               : "The " + tree + " grows thick here, a full stand of timber.") + " ";
     }
     /** What the ground here can yield (#181): the minerals whose affinity matches this chunk, and — for any seam
