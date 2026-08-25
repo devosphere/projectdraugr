@@ -143,7 +143,9 @@ INSERT INTO probes VALUES
   ('dress an ashlar block','dress_ashlar'),('lay an ashlar course','lay_ashlar_course'),
   ('lay a mortared course of stone','lay_mortared_course'),
   -- V170 lime kiln (and calcining must still route after gaining the kiln station)
-  ('make a lime kiln','make_lime_kiln'),('calcine the limestone','calcine_quicklime');
+  ('make a lime kiln','make_lime_kiln'),('calcine the limestone','calcine_quicklime'),
+  -- V171 quern-stone (and grinding must still route after gaining the quern station)
+  ('dress a quern stone','dress_quern'),('grind the grain','grind_flour');
 
 \echo === MISSES (expect none) ===
 SELECT want AS expected, COALESCE(resolve(txt),'<null>') AS got, txt
