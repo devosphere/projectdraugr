@@ -320,9 +320,18 @@ public class WildlifeEncounterService {
         physiology.applyInjury(chronicle, severity, action, at, "PASSIVE_WILDLIFE_ATTACK");
         record(chronicle, threat.populationId(), chunk, "PASSIVE_ATTACK", at, action);
         jdbc.update("UPDATE wildlife_population SET behavior_state='ALERT' WHERE id=?", threat.populationId());
-        return threat.ambushHunter()
+        String witness = threat.ambushHunter()
             ? "It is on you before there is anything to see — weight and teeth out of the cover, and the ground coming up to meet you."
             : "The " + display(threat.species()) + " does not wait to be found. It closes while your hands are busy, and the work you were doing is over.";
+        // A venomous animal (#V174) envenoms however the bite lands — the ambush strike is no exception. This is the
+        // passive-attack counterpart of the venom applied on a losing confront: an adder that reaches a heads-down
+        // Chronicle leaves the same climbing sickness, not a plain scratch. Kept in step with confront so the venom
+        // is a property of the animal, not of which code path met it.
+        if (isVenomousSpecies(threat.species())) {
+            physiology.applyIllness(chronicle, 10, action, at, "VENOMOUS_BITE");
+            witness += " And the wound it leaves is small and wrong — a cold heat is already spreading out from it, climbing where no strike reached.";
+        }
+        return witness;
     }
 
     /** Whether a completed, standing resource store keeps this ground — the larder that ends the fresh-kill draw. */
