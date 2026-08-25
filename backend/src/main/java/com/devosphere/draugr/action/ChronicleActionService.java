@@ -696,7 +696,7 @@ public class ChronicleActionService {
         args.add(loc);
         args.addAll(affinity);
         java.util.List<java.util.Map<String,Object>> minerals = jdbc.queryForList(
-            "SELECT d.display_name, md.remaining_units FROM mineral_definition d " +
+            "SELECT d.display_name, d.mineral_key, d.rarity, md.remaining_units FROM mineral_definition d " +
             "LEFT JOIN mineral_deposit md ON md.mineral_key=d.mineral_key AND md.chunk_id=? " +
             "WHERE " + affinityOr + " ORDER BY d.rarity DESC LIMIT 4", args.toArray());
         if (minerals.isEmpty()) return "";
@@ -705,8 +705,13 @@ public class ChronicleActionService {
         for (java.util.Map<String,Object> m : minerals) {
             String nm = ((String) m.get("display_name")).toLowerCase(Locale.ROOT);
             Object rem = m.get("remaining_units");
-            if (rem == null) likely.add(nm);
-            else {
+            if (rem == null) {
+                // Untouched ground: read how rich this particular seam looks, from the deterministic seam size a fell
+                // here would open (#181). Rich ground reads richer; poor ground, poorer.
+                int seed = com.devosphere.draugr.item.PhysicalItemService.mineralSeedFor(
+                    loc, (String) m.get("mineral_key"), ((Number) m.get("rarity")).doubleValue());
+                likely.add(seed >= 55 ? "a rich vein of " + nm : seed >= 30 ? nm : "a thin showing of " + nm);
+            } else {
                 int r = ((Number) rem).intValue();
                 worked.add(r <= 0 ? "the " + nm + " here is worked out"
                         : r <= 15 ? "the " + nm + " seam is running thin"

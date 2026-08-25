@@ -1005,7 +1005,7 @@ public class PhysicalItemService {
      *  seam with its own richness. It scales with the mineral's commonness (common ores form broad seams, rare ones
      *  small pockets) and varies from one patch of ground to the next, deterministically, so some ground is genuinely
      *  richer than other ground for the same mineral. Generous overall, so only sustained extraction exhausts a seam. */
-    private static int mineralSeedFor(UUID chunk, String mineralKey, double rarity) {
+    public static int mineralSeedFor(UUID chunk, String mineralKey, double rarity) {
         int base = 20 + (int) Math.round(rarity * 50);               // rarity 0.15 -> 28, 0.40 -> 40, 0.55 -> 48
         int h = Math.floorMod((chunk.toString() + ":" + mineralKey).hashCode(), 100); // 0..99, fixed for this ground
         double richness = 0.6 + (h / 100.0) * 0.9;                    // 0.6 (poor) .. ~1.5 (rich)
