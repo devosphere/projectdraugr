@@ -169,6 +169,15 @@ public class WildlifeEncounterService {
         int blunted = body.plate() + body.armour()*7 + body.rawhideShield()*6 + body.lightShield()*4 + body.softArmour()*4;
         if (blunted > 0) severity = Math.max(1, severity - blunted);
         physiology.applyInjury(chronicle,severity,action,at,"WILDLIFE_CONTACT");
+        // A venomous ordinary animal — the common adder among wildlife (#V174) — does more than wound: its bite
+        // carries venom that works inward after the snake is gone. This is the ordinary-wildlife counterpart of a
+        // monster's VENOM_WOUND, so a real viper envenoms the way the giant hornet's sting does — a sick, spreading
+        // illness on top of the bite. Armour blunts the wound but not the venom, which reaches through any scratch it
+        // opens. Only an actual strike reaches here (a fled or killed animal never does), so only a real bite envenoms.
+        if (isVenomousSpecies(candidate.species())) {
+            physiology.applyIllness(chronicle, 10, action, at, "VENOMOUS_BITE");
+            if (monsterMark == null) monsterMark = "The bite itself is almost nothing — two small marks, quickly made. Then it is not nothing: a cold heat spreads out from them, climbing where no blow ever reached.";
+        }
         jdbc.update("UPDATE wildlife_population SET behavior_state='FLEEING' WHERE id=?",candidate.populationId());
         String mark = monsterMark != null ? monsterMark
             : severity >= 70
@@ -205,6 +214,11 @@ public class WildlifeEncounterService {
     /** Whether a species' flesh is toxic to eat (#V173) — the fauna counterpart of a poisonous plant. */
     private boolean isToxicSpecies(String speciesKey) {
         return Boolean.TRUE.equals(jdbc.query("SELECT toxic FROM wildlife_species WHERE species_key=?",
+            rs -> rs.next() ? rs.getBoolean(1) : Boolean.FALSE, speciesKey));
+    }
+    /** Whether a species' bite or sting is venomous (#V174) — envenoms the loser of a confront, distinct from toxic flesh. */
+    private boolean isVenomousSpecies(String speciesKey) {
+        return Boolean.TRUE.equals(jdbc.query("SELECT venomous FROM wildlife_species WHERE species_key=?",
             rs -> rs.next() ? rs.getBoolean(1) : Boolean.FALSE, speciesKey));
     }
     /**
