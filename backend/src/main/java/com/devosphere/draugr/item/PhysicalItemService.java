@@ -591,6 +591,15 @@ public class PhysicalItemService {
         int yieldMin = ((Number)drops.get(0).get("yield_min")).intValue();
         int yieldMax = ((Number)drops.get(0).get("yield_max")).intValue();
         int count = Math.max(1, yieldMin + (yieldMax > yieldMin ? (int)(Math.random() * (yieldMax - yieldMin + 1)) : 0));
+        // #201 stewardship: a young cohort — planted, or recolonised after a clear-cut — is thin poles, not timber,
+        // until it has stood for its species' regrowth span. Felling it yields a single thin log, the standing cost of
+        // stripping a wood bare rather than harvesting it selectively and letting it grow. An old natural stand
+        // (established_at NULL) is mature and gives its full timber.
+        boolean young = Boolean.TRUE.equals(jdbc.query(
+            "SELECT cf.established_at IS NOT NULL AND cf.established_at > ?::timestamptz - make_interval(days => fd.regrowth_days) " +
+            "FROM chunk_flora cf JOIN flora_definition fd ON fd.flora_key=cf.flora_key WHERE cf.chunk_id=? AND cf.flora_key=?",
+            rs -> rs.next() ? rs.getBoolean(1) : Boolean.FALSE, Timestamp.from(occurredAt), location, floraKey));
+        if (young) count = 1;
         String logName = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, logKey);
 
         // A felled trunk is not shouldered whole — it lies where it fell, on the ground at
@@ -622,7 +631,8 @@ public class PhysicalItemService {
         String logLower = logName.toLowerCase();
         return new String[]{"SUCCEEDED", "The " + treeName + " comes down with a crack that carries across the ground. " +
             count + " " + logLower + (count > 1 ? "s lie" : " lies") + " where " + (count > 1 ? "they" : "it") +
-            " fell — far too heavy to shoulder whole. You will need to buck and split the wood into pieces you can carry."};
+            " fell — far too heavy to shoulder whole. You will need to buck and split the wood into pieces you can carry." +
+            (young ? " The trees here are young growth — thin poles, not the timber a grown wood gives; there is little to take from a stand not left to mature." : "")};
     }
 
     /**
@@ -644,9 +654,9 @@ public class PhysicalItemService {
             return new String[]{"FAILED", "This ground will not take a " + species + " — it does not grow in country like this."};
         if (!consumeOne(chronicle, seed, occurredAt)) return new String[]{"FAILED", "The " + seed + " is no longer in reach to plant."};
         Timestamp ts = Timestamp.from(occurredAt);
-        int updated = jdbc.update("UPDATE chunk_flora SET quantity = LEAST(GREATEST(capacity, 3), quantity + 1), capacity = GREATEST(capacity, 3), last_harvested_at = ? WHERE chunk_id=? AND flora_key=?", ts, location, species);
+        int updated = jdbc.update("UPDATE chunk_flora SET quantity = LEAST(GREATEST(capacity, 3), quantity + 1), capacity = GREATEST(capacity, 3), last_harvested_at = ?, established_at = ? WHERE chunk_id=? AND flora_key=?", ts, ts, location, species);
         if (updated == 0)
-            jdbc.update("INSERT INTO chunk_flora (chunk_id, flora_key, quantity, last_harvested_at, capacity) VALUES (?,?,1,?,3)", location, species, ts);
+            jdbc.update("INSERT INTO chunk_flora (chunk_id, flora_key, quantity, last_harvested_at, capacity, established_at) VALUES (?,?,1,?,3,?)", location, species, ts, ts);
         return new String[]{"SUCCEEDED", "You press the " + seed + " into the turned earth and firm the soil over it — a sapling that, given years and left to stand, will grow into a " + species + " where none was."};
     }
 
