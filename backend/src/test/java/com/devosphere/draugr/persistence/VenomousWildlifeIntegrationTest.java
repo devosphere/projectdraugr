@@ -77,6 +77,14 @@ class VenomousWildlifeIntegrationTest {
         return n == null ? 0 : n;
     }
 
+    /** Count of recorded VENOMOUS_BITE events — cumulative across the run, so tests assert the delta, not the total. */
+    private int venomBites(UUID chronicle) {
+        Integer n = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM chronicle_condition_event WHERE chronicle_id=? AND condition_kind='ILLNESS' AND payload->>'source'='VENOMOUS_BITE'",
+                Integer.class, chronicle);
+        return n == null ? 0 : n;
+    }
+
     /** Reset the Chronicle to a bare, unarmed, unhurt state so a confront reliably resolves to a losing strike. */
     private void makeDefenceless(UUID chronicle) {
         jdbc.update("DELETE FROM equipment_attachment WHERE chronicle_id=?", chronicle);
@@ -138,14 +146,12 @@ class VenomousWildlifeIntegrationTest {
         onlyPredator(chunk, worldId, "common_adder", now);
         makeDefenceless(chronicle);
         assertEquals(0, illness(chronicle), "illness must start clean");
+        int bitesBefore = venomBites(chronicle);
         WildlifeEncounterService.EncounterResult bitten = wildlife.confront(chronicle, chunk, losingAction(), now);
         assertEquals("PARTIAL", bitten.outcome(), () -> "an unarmed loss must be a mauling, not a kill or a clean escape: " + bitten.narration());
         assertTrue(injury(chronicle) > 0, "a losing confront must still wound");
         assertTrue(illness(chronicle) > 0, () -> "a venomous adder's bite must envenom — illness must rise: " + bitten.narration());
-        Integer venomEvents = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM chronicle_condition_event WHERE chronicle_id=? AND condition_kind='ILLNESS' AND payload->>'source'='VENOMOUS_BITE'",
-                Integer.class, chronicle);
-        assertEquals(1, venomEvents, "the envenomation must be recorded as a VENOMOUS_BITE condition event");
+        assertEquals(bitesBefore + 1, venomBites(chronicle), "the envenomation must be recorded as one new VENOMOUS_BITE condition event");
 
         // A harmless grass snake, met the same way: it wounds, but there is no venom in it — illness never stirs.
         onlyPredator(chunk, worldId, "grass_snake", now);
@@ -179,14 +185,12 @@ class VenomousWildlifeIntegrationTest {
         jdbc.update("UPDATE wildlife_population SET behavior_state='HUNTING' WHERE site_id IN (SELECT id FROM ecology_site WHERE chunk_id=?)", chunk);
         makeDefenceless(chronicle);
         assertEquals(0, illness(chronicle), "illness must start clean");
+        int bitesBefore = venomBites(chronicle);
         String witness = wildlife.passiveEncounter(chronicle, chunk, ambushAction(), now, "LOW");
         assertNotNull(witness, "a hunting adder with a low ambush roll must reach the Chronicle");
         assertTrue(injury(chronicle) > 0, "an ambush strike must wound");
         assertTrue(illness(chronicle) > 0, () -> "a venomous ambush must envenom — illness must rise: " + witness);
-        Integer venomEvents = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM chronicle_condition_event WHERE chronicle_id=? AND condition_kind='ILLNESS' AND payload->>'source'='VENOMOUS_BITE'",
-                Integer.class, chronicle);
-        assertEquals(1, venomEvents, "the ambush envenomation must be recorded as a VENOMOUS_BITE condition event");
+        assertEquals(bitesBefore + 1, venomBites(chronicle), "the ambush envenomation must be recorded as one new VENOMOUS_BITE condition event");
 
         assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
