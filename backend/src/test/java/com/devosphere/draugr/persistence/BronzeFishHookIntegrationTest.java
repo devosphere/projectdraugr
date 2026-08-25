@@ -69,6 +69,9 @@ class BronzeFishHookIntegrationTest {
     @Autowired JdbcTemplate jdbc;
 
     private int catches(UUID chronicle, UUID chunk, Instant now, List<UUID> actionIds) {
+        // Reset the finite fish stock (#181/#36) so this battery reflects the tackle's catch chance, not how much
+        // prior fishing (here or in another test sharing the database) has drawn the water down.
+        jdbc.update("DELETE FROM fish_stock WHERE chunk_id=?", chunk);
         int taken = 0;
         for (UUID action : actionIds) {
             if ("SUCCEEDED".equals(wildlife.fish(chronicle, chunk, action, now, "fish the water here").outcome())) taken++;

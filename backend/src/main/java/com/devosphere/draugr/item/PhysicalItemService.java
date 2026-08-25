@@ -1001,9 +1001,16 @@ public class PhysicalItemService {
      *
      * @return [outcome, narration]
      */
-    /** How much of a mineral a fresh seam holds before it is worked out (#181). Generous, so only sustained
-     *  industrial extraction exhausts a deposit; ordinary play never notices the ceiling. */
-    private static final int MINERAL_DEPOSIT_SEED = 60;
+    /** How much of a given mineral a fresh seam holds here before it is worked out (#181) — not a flat figure but a
+     *  seam with its own richness. It scales with the mineral's commonness (common ores form broad seams, rare ones
+     *  small pockets) and varies from one patch of ground to the next, deterministically, so some ground is genuinely
+     *  richer than other ground for the same mineral. Generous overall, so only sustained extraction exhausts a seam. */
+    private static int mineralSeedFor(UUID chunk, String mineralKey, double rarity) {
+        int base = 20 + (int) Math.round(rarity * 50);               // rarity 0.15 -> 28, 0.40 -> 40, 0.55 -> 48
+        int h = Math.floorMod((chunk.toString() + ":" + mineralKey).hashCode(), 100); // 0..99, fixed for this ground
+        double richness = 0.6 + (h / 100.0) * 0.9;                    // 0.6 (poor) .. ~1.5 (rich)
+        return Math.max(12, (int) Math.round(base * richness));
+    }
 
     @Transactional
     public String[] gatherMineral(UUID chronicle, UUID location, String actionText, Instant occurredAt) {
@@ -1081,9 +1088,10 @@ public class PhysicalItemService {
         assertCarryCapacity(chronicle);
         // #181: draw the seam down by what was taken. The first working of this ground records the deposit at full;
         // thereafter it is decremented, and floored at zero so it reads as worked out next time.
+        int seam = mineralSeedFor(location, key, ((Number) target.get("rarity")).doubleValue());
         jdbc.update("INSERT INTO mineral_deposit (chunk_id, mineral_key, remaining_units) VALUES (?,?,?) " +
             "ON CONFLICT (chunk_id, mineral_key) DO UPDATE SET remaining_units = GREATEST(0, mineral_deposit.remaining_units - ?)",
-            location, key, Math.max(0, MINERAL_DEPOSIT_SEED - take), take);
+            location, key, Math.max(0, seam - take), take);
         return new String[]{"SUCCEEDED", "You work it loose and turn it over in your hand: " + name.toLowerCase() + (take > 1 ? ", and more of it nearby." : ".")};
     }
 

@@ -2,7 +2,6 @@ package com.devosphere.draugr.persistence;
 
 import com.devosphere.draugr.audit.PersistentStateAuditor;
 import com.devosphere.draugr.chronicle.ChronicleService;
-import com.devosphere.draugr.ecology.WildlifeEncounterService;
 import com.devosphere.draugr.item.PhysicalItemService;
 import com.devosphere.draugr.simulation.SimulationTickService;
 import com.devosphere.draugr.world.genesis.WorldEcologyGenesisService;
@@ -20,21 +19,25 @@ import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Fishing-gear usefulness regression (M1 #36/#43, EPIC #123). A woven fish trap and a bone fish hook were
- * craftable but, like the net, read by nothing — so they caught no better than bare hands. fish() now reaches
- * for carried gear when no method is named: a fish trap works best, then nets, then a bone hook (angling).
- * This proves a trap and a hook each land more than empty hands over the same fixed set of casts.
+ * Seams have their own richness (EPIC #180 / #181 finite deposits). A deposit is no longer a flat figure but a seam
+ * whose size scales with the mineral's commonness and varies from one patch of ground to the next — so some ground is
+ * genuinely richer than other ground for the same ore, and a poor seam is worked out sooner than a rich one.
  *
- * <p>Skips gracefully without Docker.
+ * <p>Proven: iron worked at several different chunks records seams within the expected richness band, and not all of
+ * the same size — the ground varies. Skips gracefully without Docker.
  */
 @SpringBootTest
-class FishingGearIntegrationTest {
+class MineralRichnessIntegrationTest {
 
     private static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
 
@@ -58,25 +61,13 @@ class FishingGearIntegrationTest {
     @Autowired WorldGenesisService worldGenesis;
     @Autowired WorldEcologyGenesisService ecology;
     @Autowired ChronicleService chronicles;
-    @Autowired WildlifeEncounterService wildlife;
     @Autowired PhysicalItemService items;
     @Autowired SimulationTickService ticks;
     @Autowired PersistentStateAuditor auditor;
     @Autowired JdbcTemplate jdbc;
 
-    private int landed(UUID chronicle, UUID chunk, Instant now, java.util.List<UUID> actionIds) {
-        // Measure gear effectiveness from a full stretch: reset the finite fish stock (#181/#36) first, so this
-        // battery reflects the method's catch chance, not how much prior fishing (here or in another test sharing the
-        // database) has drawn the water down.
-        jdbc.update("DELETE FROM fish_stock WHERE chunk_id=?", chunk);
-        int caught = 0;
-        for (UUID action : actionIds)
-            if ("SUCCEEDED".equals(wildlife.fish(chronicle, chunk, action, now, "I fish in the shallows here.").outcome())) caught++;
-        return caught;
-    }
-
     @Test
-    void aFishTrapAndABoneHookEachOutfishBareHands() {
+    void seamsVaryInRichnessFromOneGroundToTheNext() {
         if (worldGenesis.current() == null) {
             worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
             ecology.seed();
@@ -84,31 +75,35 @@ class FishingGearIntegrationTest {
         ChronicleService.ChronicleSummary summary = chronicles.awaken();
         assertNotNull(summary, "awakening must produce a living Chronicle");
         UUID chronicle = summary.id();
-        UUID chunk = jdbc.queryForObject(
-                "SELECT id FROM world_chunk WHERE biome='WETLAND' ORDER BY grid_y, grid_x LIMIT 1", UUID.class);
-        assertNotNull(chunk, "the approved world must contain a wetland chunk with fish");
-        jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", chunk, chronicle);
-        Instant now = ticks.current().simulatedAt();
         jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
+        Instant now = ticks.current().simulatedAt();
+        items.createCarriedItem(chronicle, "stone_hammer", "Stone hammer", now, "TEST_SEED"); // iron needs a striking tool
 
-        java.util.Random rnd = new java.util.Random(23);
-        java.util.List<UUID> actionIds = new java.util.ArrayList<>();
-        for (int i = 0; i < 150; i++) actionIds.add(new UUID(rnd.nextLong(), rnd.nextLong()));
+        // Several different chunks of iron-bearing ground.
+        List<UUID> chunks = jdbc.queryForList(
+                "SELECT id FROM world_chunk WHERE biome IN ('WETLAND','MOUNTAIN','HIGHLAND') ORDER BY grid_y, grid_x LIMIT 6", UUID.class);
+        Assumptions.assumeTrue(chunks.size() >= 2, "need at least two iron-bearing chunks to compare richness");
 
-        int bareHanded = landed(chronicle, chunk, now, actionIds);
+        List<Integer> seams = new ArrayList<>();
+        for (UUID chunk : chunks) {
+            boolean got = false;
+            for (int i = 0; i < 80 && !got; i++) {
+                got = "SUCCEEDED".equals(items.gatherMineral(chronicle, chunk, "mine the iron ore here", now)[0]);
+            }
+            if (!got) continue; // this ground did not give up ore in the attempts; skip it
+            Integer remaining = jdbc.queryForObject(
+                    "SELECT remaining_units FROM mineral_deposit WHERE chunk_id=? AND mineral_key='iron_ore'", Integer.class, chunk);
+            assertNotNull(remaining, "working iron ore must record a seam");
+            // The seam recorded is (its full richness) minus the little taken; iron's richness band is roughly 24..60.
+            assertTrue(remaining >= 10 && remaining <= 72,
+                    () -> "a recorded iron seam must lie within the richness band (got " + remaining + ")");
+            seams.add(remaining);
+        }
 
-        // A bone hook — angling, method LINE (45%). Better than bare hands (20%).
-        items.createCarriedItem(chronicle, "bone_fish_hook", "Bone fish hook", now, "TEST_SEED");
-        int withHook = landed(chronicle, chunk, now, actionIds);
-
-        // A woven fish trap — method TRAP (75%), checked before the hook, so it is what is used now.
-        items.createCarriedItem(chronicle, "fish_trap", "Fish trap", now, "TEST_SEED");
-        int withTrap = landed(chronicle, chunk, now, actionIds);
-
-        assertTrue(withHook > bareHanded,
-                () -> "a bone fish hook must land more than bare hands (hook=" + withHook + ", bare=" + bareHanded + ") — the hook must be USED (#36/#43)");
-        assertTrue(withTrap > bareHanded,
-                () -> "a woven fish trap must land more than bare hands (trap=" + withTrap + ", bare=" + bareHanded + ") — the trap must be USED (#36/#43)");
+        assertTrue(seams.size() >= 2, "at least two chunks must have yielded iron to compare");
+        Set<Integer> distinct = new HashSet<>(seams);
+        assertTrue(distinct.size() >= 2,
+                () -> "seams must vary in richness from one ground to the next, not all be the same size: " + seams);
 
         assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
     }

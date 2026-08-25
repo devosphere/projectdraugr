@@ -67,6 +67,9 @@ class FishingNetIntegrationTest {
     @Autowired JdbcTemplate jdbc;
 
     private int landed(UUID chronicle, UUID chunk, Instant now, java.util.List<UUID> actionIds) {
+        // Reset the finite fish stock (#181/#36) so this battery reflects the method's catch chance, not how much
+        // prior fishing (here or in another test sharing the database) has drawn the water down.
+        jdbc.update("DELETE FROM fish_stock WHERE chunk_id=?", chunk);
         int caught = 0;
         for (UUID action : actionIds)
             if ("SUCCEEDED".equals(wildlife.fish(chronicle, chunk, action, now, "I fish in the shallows here.").outcome())) caught++;
