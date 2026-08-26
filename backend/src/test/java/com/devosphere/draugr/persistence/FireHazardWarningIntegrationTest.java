@@ -119,11 +119,13 @@ class FireHazardWarningIntegrationTest {
         String banked = survey(chronicle, chunk);
         assertFalse(banked.contains("burns high"), () -> "a banked, low fire is no hazard and must not warn: " + banked);
 
-        // Roaring again, but under rain — the embers will not catch, so no warning.
+        // Roaring again, but with nothing left to catch (the lean-to fallen, no loose fuel) — no warning.
+        // (The dry-weather gate is a simple code-level filter; it cannot be exercised through resolve, whose sim
+        // tick re-rolls the weather each action, so the two gates the test controls are the fire and the target.)
         setFire(pit, 960);
-        setWeather(world, "RAIN");
-        String wet = survey(chronicle, chunk);
-        assertFalse(wet.contains("burns high"), () -> "a roaring fire in the rain is no hazard and must not warn: " + wet);
+        jdbc.update("UPDATE construction_project SET integrity_percent=0 WHERE object_id=?", leanTo);
+        String noTarget = survey(chronicle, chunk);
+        assertFalse(noTarget.contains("burns high"), () -> "a roaring fire with nothing flammable beside it is no hazard and must not warn: " + noTarget);
 
         assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
