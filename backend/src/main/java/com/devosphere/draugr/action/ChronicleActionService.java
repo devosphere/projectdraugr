@@ -446,7 +446,7 @@ public class ChronicleActionService {
             switch (intent) {
                 case GATHER_MINERAL -> wildlife.recordDisturbance(chronicle.location(), "EXCAVATION", 30, resolvedAt);
                 case GATHER_STONE, GATHER_STONE_SLAB, GATHER_CLAY -> wildlife.recordDisturbance(chronicle.location(), "EXCAVATION", 15, resolvedAt);
-                case MAKE_CHARCOAL -> wildlife.recordDisturbance(chronicle.location(), "SMOKE", 20, resolvedAt);
+                case MAKE_CHARCOAL -> wildlife.recordEmissionDrift(chronicle.location(), "SMOKE", 20, resolvedAt);
                 default -> { }
             }
         }
