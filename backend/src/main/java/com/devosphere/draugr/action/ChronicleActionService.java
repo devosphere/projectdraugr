@@ -447,6 +447,10 @@ public class ChronicleActionService {
                 case GATHER_MINERAL -> wildlife.recordDisturbance(chronicle.location(), "EXCAVATION", 30, resolvedAt);
                 case GATHER_STONE, GATHER_STONE_SLAB, GATHER_CLAY -> wildlife.recordDisturbance(chronicle.location(), "EXCAVATION", 15, resolvedAt);
                 case MAKE_CHARCOAL -> wildlife.recordEmissionDrift(chronicle.location(), "SMOKE", 20, resolvedAt);
+                // A fire-using material process — a smelt, a kiln firing, a forge, a charcoal char — is a smoky
+                // working; its plume marks the ground and drifts onto the neighbours (#219), the same footprint the
+                // charcoal code-intent lays. Only fire processes qualify; cold bench work leaves no smoke.
+                case PROCESS_MATERIAL -> { if (items.actionIsFireProcess(text)) wildlife.recordEmissionDrift(chronicle.location(), "SMOKE", 15, resolvedAt); }
                 default -> { }
             }
         }

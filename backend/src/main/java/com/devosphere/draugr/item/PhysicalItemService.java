@@ -742,6 +742,20 @@ public class PhysicalItemService {
     }
 
     /**
+     * Whether the material process this action resolves to burns a fire — a smoky working (a smelt, a kiln firing, a
+     * forge, a charcoal char). Used to lay a smoke footprint (#219) when such a process succeeds. Non-recording match,
+     * so asking does not touch the play-path matcher's miss log.
+     */
+    @Transactional(readOnly = true)
+    public boolean actionIsFireProcess(String actionText) {
+        String key = matcher.match(actionText);
+        if (key == null) return false;
+        return Boolean.TRUE.equals(jdbc.query(
+            "SELECT requires_fire FROM material_process WHERE process_key=? AND review_state='VERIFIED'",
+            rs -> rs.next() ? rs.getBoolean(1) : Boolean.FALSE, key));
+    }
+
+    /**
      * Whether the text reads as physical work on materials or the world (#68) — its verb classifies to a
      * material category — even when no process matches it yet. Lets an unresolved gather/prep/craft verb fail
      * with a grounded "you work the material but find no way" rather than the generic gibberish line.
