@@ -205,5 +205,19 @@ public class FireService {
             jdbc.update("UPDATE construction_project SET integrity_percent=GREATEST(0, integrity_percent-?), last_structural_update=? WHERE object_id=?", scorch, ts, s);
             jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'FIRE_SCORCHED',jsonb_build_object('scorch',?))", s, ts, scorch);
         }
+        // Loose flammable fuel piled on the ground beside a roaring fire catches and burns up — a stock of branches,
+        // tinder, or shavings left too close is eaten early by the very fire it was meant to feed later. Only unowned
+        // ground stock at the fire's chunk: fuel carried on the body moves with the Chronicle and is not at risk. A
+        // piece an hour of roaring exposure, so a small pile set by the hearth goes quickly, a large one over a night.
+        int consumable = (int) hours;
+        if (consumable > 0) {
+            for (UUID item : jdbc.queryForList(
+                "SELECT w.id FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
+                "WHERE w.current_location_id=? AND w.current_owner_id IS NULL AND w.lifecycle_state='ACTIVE' " +
+                "AND i.item_key IN ('dry_branch','tinder_nest','wood_shaving') ORDER BY w.id LIMIT ?", UUID.class, chunk, consumable)) {
+                jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED', destroyed_at=?, destroyed_location_id=current_location_id, destroyed_cause='FIRE_SPREAD', current_location_id=NULL WHERE id=?", ts, item);
+                jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'BURNED_IN_FIRE_SPREAD','{}'::jsonb)", item, ts);
+            }
+        }
     }
 }
