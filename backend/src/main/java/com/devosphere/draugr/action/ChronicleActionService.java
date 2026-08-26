@@ -637,7 +637,24 @@ public class ChronicleActionService {
         // can be read before a line is cast, like a seam before a pick or a wood before an axe.
         String water = groundWater(loc, at);
         if (!water.isEmpty()) s.append(water);
+        // Smoke in the air (#219): a fire burning on this ground, or a plume drifted in from the next ground over —
+        // the grounded sensory evidence of a hazard nearby, read before it is anything but a smell on the wind.
+        String air = groundAir(loc, at);
+        if (!air.isEmpty()) s.append(air);
         return s.toString().trim();
+    }
+    /** Woodsmoke in the air here (#219): a recent burn on this ground (SMOKE) or a plume drifted from a neighbouring
+     *  working (SMOKE_DRIFT), read from the disturbance provenance while it is still fresh enough to hang in the air.
+     *  Read-only; it names no action, only what the Chronicle smells and sees on the wind. */
+    private String groundAir(UUID loc, Instant at) {
+        String kind = jdbc.query(
+            "SELECT source_kind FROM chunk_disturbance_event WHERE chunk_id=? AND source_kind IN ('SMOKE','SMOKE_DRIFT') " +
+            "AND occurred_at >= ? ORDER BY occurred_at DESC LIMIT 1",
+            rs -> rs.next() ? rs.getString(1) : null, loc, java.sql.Timestamp.from(at.minus(java.time.Duration.ofHours(4))));
+        if (kind == null) return "";
+        return "SMOKE_DRIFT".equals(kind)
+            ? "A haze of woodsmoke drifts across the ground here, carried in from a fire burning somewhere close by. "
+            : "Woodsmoke hangs over this ground — a fire has been burning here. ";
     }
     /** How well the water here still fishes (#181/#36): only for a chunk whose biome actually holds fish, read from
      *  the recorded stock (restocked over time) or the full stretch a water not yet worked carries. Read-only. */
