@@ -162,6 +162,48 @@ public class FireService {
     }
     @Transactional
     public void advanceTo(Instant now) {
-        jdbc.query("SELECT construction_id,last_updated_at,fuel_minutes FROM fire_state WHERE active=true FOR UPDATE",rs->{while(rs.next()){UUID id=rs.getObject(1,UUID.class);Instant last=rs.getTimestamp(2).toInstant();int remaining=Math.max(0,rs.getInt(3)-(int)Duration.between(last,now).toMinutes());jdbc.update("UPDATE fire_state SET fuel_minutes=?,active=?,last_updated_at=? WHERE construction_id=?",remaining,remaining>0,Timestamp.from(now),id);}return null;});
+        // Collect the active fires under lock, then burn each down — and let a roaring one scorch what stands beside
+        // it. Collecting first (rather than updating inside the open cursor) keeps the per-fire hazard queries clear
+        // of the cursor's own connection.
+        java.util.List<Object[]> fires = jdbc.query(
+            "SELECT construction_id,last_updated_at,fuel_minutes FROM fire_state WHERE active=true FOR UPDATE",
+            (rs, i) -> new Object[]{rs.getObject(1, UUID.class), rs.getTimestamp(2).toInstant(), rs.getInt(3)});
+        for (Object[] f : fires) {
+            UUID id = (UUID) f[0]; Instant last = (Instant) f[1]; int fuelBefore = (int) f[2];
+            int remaining = Math.max(0, fuelBefore - (int) Duration.between(last, now).toMinutes());
+            jdbc.update("UPDATE fire_state SET fuel_minutes=?,active=?,last_updated_at=? WHERE construction_id=?", remaining, remaining > 0, Timestamp.from(now), id);
+            scorchNearbyFlammables(id, last, now, fuelBefore);
+        }
+    }
+
+    /**
+     * An unattended, well-fed fire is a hazard to what stands beside it (#219 fire containment). The stone pit
+     * contains the flame itself, but a roaring hearth throws heat and embers, and in dry weather a thatch lean-to or
+     * a rack of drying firewood set too close catches and chars. Only the flammable field structures at the fire's
+     * own ground take the harm; its integrity falls with the hours it was exposed to a roaring fire, and one left to
+     * roar long enough scorches to ruin (the #220 weathering system then reads the wreck). Rain or snow keeps the
+     * embers from catching, and an unknown sky (no weather recorded yet) is left alone. Exposure is capped at the
+     * fuel actually on hand — a fire cannot roar longer than it can burn — so a hearth tended and banked in good
+     * order never bites; only a big fire left alone does.
+     */
+    private void scorchNearbyFlammables(UUID pit, Instant last, Instant now, int fuelBefore) {
+        if (fuelBefore < 120) return; // only a well-fed, roaring fire throws enough heat and embers to catch nearby thatch
+        long hours = Math.min(Duration.between(last, now).toHours(), fuelBefore / 60L);
+        if (hours <= 0) return;
+        UUID chunk = jdbc.query("SELECT current_location_id FROM world_object WHERE id=?", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, pit);
+        if (chunk == null) return;
+        String weather = jdbc.query(
+            "SELECT ww.weather_kind FROM world_weather ww JOIN world_chunk wc ON wc.world_id=ww.world_id WHERE wc.id=?",
+            rs -> rs.next() ? rs.getString(1) : null, chunk);
+        if (!("CLEAR".equals(weather) || "OVERCAST".equals(weather))) return; // wet or unknown sky: the embers do not catch
+        int scorch = (int) Math.min(100, hours * 4);
+        Timestamp ts = Timestamp.from(now);
+        for (UUID s : jdbc.queryForList(
+            "SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
+            "AND cp.project_kind IN ('LEAN_TO','FUEL_RACK','BRUSH_FENCE')", UUID.class, chunk)) {
+            jdbc.update("UPDATE construction_project SET integrity_percent=GREATEST(0, integrity_percent-?), last_structural_update=? WHERE object_id=?", scorch, ts, s);
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'FIRE_SCORCHED',jsonb_build_object('scorch',?))", s, ts, scorch);
+        }
     }
 }
