@@ -525,6 +525,27 @@ public class WildlifeEncounterService {
     }
 
     /**
+     * An airborne emission — smoke, fumes — does not stop at the ground that made it: it drifts on the air onto the
+     * neighbouring country (#219 hazard footprints; the propagation the point-source {@link #recordDisturbance} lacks).
+     * This records the full disturbance at the source AND a lesser one — the plume thins with distance — at each
+     * orthogonally-adjacent chunk of the same world, so the wildlife of the ring around a smoky working grow wary too,
+     * not only those standing over it. Bounded to the immediate neighbours (a hazard reaches only the connected
+     * reachable places, #219) and logged as its own {@code <kind>_DRIFT} provenance at each, distinct from the source.
+     */
+    @Transactional
+    public void recordEmissionDrift(UUID chunk, String sourceKind, int amount, Instant at) {
+        if (chunk == null || amount <= 0) return;
+        recordDisturbance(chunk, sourceKind, amount, at);
+        int drift = amount / 2;
+        if (drift <= 0) return;
+        for (UUID neighbour : jdbc.queryForList(
+            "SELECT n.id FROM world_chunk here JOIN world_chunk n ON n.world_id=here.world_id " +
+            "AND abs(n.grid_x-here.grid_x)+abs(n.grid_y-here.grid_y)=1 WHERE here.id=?", UUID.class, chunk)) {
+            recordDisturbance(neighbour, sourceKind + "_DRIFT", drift, at);
+        }
+    }
+
+    /**
      * Record refuse left on this ground (#218): the waste of work done at a camp — butchery offal now, more sources
      * later — that piles up and, left unclean, breeds illness ({@link com.devosphere.draugr.chronicle.ChroniclePhysiologyService}
      * reads it) and later draws pests. A built latrine/refuse pit disposes of it, and it breaks down slowly on its
