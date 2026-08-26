@@ -641,7 +641,39 @@ public class ChronicleActionService {
         // the grounded sensory evidence of a hazard nearby, read before it is anything but a smell on the wind.
         String air = groundAir(loc, at);
         if (!air.isEmpty()) s.append(air);
+        // Fire burning dangerously close to what will catch (#219): the warning read BEFORE it takes hold, so a
+        // Chronicle can bank or move the fire rather than meet the consequence unwarned.
+        String fireRisk = groundFireHazard(loc, at);
+        if (!fireRisk.isEmpty()) s.append(fireRisk);
         return s.toString().trim();
+    }
+    /** A fire burning dangerously (#219 fire containment): a roaring, unbanked hearth in dry weather with thatch or a
+     *  loose fuel stock close by — the grounded warning that, left untended, it could catch, read before it ever does.
+     *  Mirrors the gate the fire tick scorches on (FireService.scorchNearbyFlammables). Read-only; names no action. */
+    private String groundFireHazard(UUID loc, Instant at) {
+        boolean roaring = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM fire_state fs JOIN construction_project cp ON cp.object_id=fs.construction_id JOIN world_object w ON w.id=cp.object_id " +
+            "WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' AND fs.active=true AND fs.fuel_minutes>=120)", Boolean.class, loc));
+        if (!roaring) return "";
+        String weather = jdbc.query("SELECT ww.weather_kind FROM world_weather ww JOIN world_chunk wc ON wc.world_id=ww.world_id WHERE wc.id=?",
+            rs -> rs.next() ? rs.getString(1) : null, loc);
+        if (!("CLEAR".equals(weather) || "OVERCAST".equals(weather))) return "";
+        String structure = jdbc.query(
+            "SELECT cp.project_kind FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
+            "AND cp.project_kind IN ('LEAN_TO','FUEL_RACK','BRUSH_FENCE') LIMIT 1", rs -> rs.next() ? rs.getString(1) : null, loc);
+        boolean fuel = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_location_id=? " +
+            "AND w.current_owner_id IS NULL AND w.lifecycle_state='ACTIVE' AND i.item_key IN ('dry_branch','tinder_nest','wood_shaving'))", Boolean.class, loc));
+        if (structure == null && !fuel) return "";
+        String risk = structure != null
+            ? switch (structure) {
+                case "LEAN_TO" -> "the thatch of the lean-to";
+                case "FUEL_RACK" -> "the drying wood on the fuel rack";
+                case "BRUSH_FENCE" -> "the piled brush of the fence";
+                default -> "the flammable structure"; }
+            : "the loose fuel piled beside it";
+        return "The fire here burns high and unbanked, and " + risk + " stands close enough to catch — left roaring and untended, it could take hold. ";
     }
     /** Woodsmoke in the air here (#219): a recent burn on this ground (SMOKE) or a plume drifted from a neighbouring
      *  working (SMOKE_DRIFT), read from the disturbance provenance while it is still fresh enough to hang in the air.
