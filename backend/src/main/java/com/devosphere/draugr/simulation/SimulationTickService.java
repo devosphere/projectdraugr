@@ -23,8 +23,9 @@ public class SimulationTickService {
     private final com.devosphere.draugr.construction.FireService fires;
     private final FoodPreservationService food;
     private final com.devosphere.draugr.construction.ConstructionService construction;
+    private final com.devosphere.draugr.item.PhysicalItemService items;
     private final Clock clock = Clock.systemUTC();
-    public SimulationTickService(SimulationClockRepository clocks, WorldEventRepository events, SimulationAgent simulation, ChroniclePhysiologyService physiology, WildlifeSimulationService wildlife, WeatherSimulationService weather, com.devosphere.draugr.construction.FireService fires, FoodPreservationService food, com.devosphere.draugr.construction.ConstructionService construction) { this.clocks = clocks; this.events = events; this.simulation = simulation; this.physiology = physiology; this.wildlife = wildlife; this.weather=weather; this.fires=fires; this.food=food; this.construction=construction; }
+    public SimulationTickService(SimulationClockRepository clocks, WorldEventRepository events, SimulationAgent simulation, ChroniclePhysiologyService physiology, WildlifeSimulationService wildlife, WeatherSimulationService weather, com.devosphere.draugr.construction.FireService fires, FoodPreservationService food, com.devosphere.draugr.construction.ConstructionService construction, com.devosphere.draugr.item.PhysicalItemService items) { this.clocks = clocks; this.events = events; this.simulation = simulation; this.physiology = physiology; this.wildlife = wildlife; this.weather=weather; this.fires=fires; this.food=food; this.construction=construction; this.items=items; }
     @Transactional
     public SimulationTick advance() {
         SimulationClock simulationClock = clocks.findById((short) 1).orElseThrow();
@@ -35,7 +36,7 @@ public class SimulationTickService {
         if (now.isBefore(simulationClock.getSimulatedAt())) now = simulationClock.getSimulatedAt();
         SimulationAgent.SimulationAssessment assessment = simulation.assess(simulationClock.getTick() + 1, now);
         weather.advanceTo(now); fires.advanceTo(now); food.advanceTo(now); construction.advanceTo(now); physiology.advanceTo(now);
-        wildlife.advanceTo(now);
+        wildlife.advanceTo(now); items.weatherExposedMetal(now);
         simulationClock.advanceTo(now);
         events.save(new WorldEvent(now, assessment.eventType(), null, null, Map.of()));
         return new SimulationTick(simulationClock.getTick(), simulationClock.getSimulatedAt());
@@ -47,7 +48,7 @@ public class SimulationTickService {
         Instant now = simulationClock.getSimulatedAt();
         SimulationAgent.SimulationAssessment assessment = simulation.assess(simulationClock.getTick(), now);
         weather.advanceTo(now); fires.advanceTo(now); food.advanceTo(now); construction.advanceTo(now); physiology.advanceTo(now);
-        wildlife.advanceTo(now);
+        wildlife.advanceTo(now); items.weatherExposedMetal(now);
         events.save(new WorldEvent(now, assessment.eventType(), null, null, Map.of("durationMinutes", duration.toMinutes())));
         return new SimulationTick(simulationClock.getTick(), now);
     }
