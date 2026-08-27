@@ -1119,6 +1119,8 @@ public class PhysicalItemService {
     private static final int CROP_MATURITY_DAYS = 30;
     /** One sown seed comes up as a stand worth several heads — the multiplication that makes cultivation worth the labour. */
     private static final int CROP_YIELD_HEADS = 4;
+    /** How long a ripe stand yields in full before the heads begin to shatter and a late harvest saves less. */
+    private static final int CROP_FULL_YIELD_DAYS = 14;
 
     /**
      * Sow seed grain into open ground (#162 agriculture — seed → soil → crop). The grain a Chronicle carries can be
@@ -1157,9 +1159,17 @@ public class PhysicalItemService {
         Instant ripe = ((Instant) crop.get("sown")).plus(java.time.Duration.ofDays((int) crop.get("days")));
         if (at.isBefore(ripe))
             return new String[]{"FAILED", "The crop stands green and unripe; cut now, it would be wasted. It needs the rest of the season."};
-        for (int i = 0; i < CROP_YIELD_HEADS; i++) createCarriedItem(chronicle, "wild_grain_head", "Wild grain head", at, "HARVESTED_CROP");
+        // Reaped promptly, the full stand comes in; left standing past the clean window, the ripe heads begin to
+        // shatter and the birds work at them, so a late harvest saves less. (Left past the spoil window it is lost
+        // outright — advanceCrops takes it before it ever reaches here.)
+        long daysLate = java.time.Duration.between(ripe, at).toDays();
+        boolean shattering = daysLate > CROP_FULL_YIELD_DAYS;
+        int heads = shattering ? Math.max(2, CROP_YIELD_HEADS / 2) : CROP_YIELD_HEADS;
+        for (int i = 0; i < heads; i++) createCarriedItem(chronicle, "wild_grain_head", "Wild grain head", at, "HARVESTED_CROP");
         jdbc.update("UPDATE crop_stand SET harvested=true, harvested_at=?, outcome='REAPED' WHERE id=?", java.sql.Timestamp.from(at), crop.get("id"));
-        return new String[]{"SUCCEEDED", "You cut the ripe stand and gather the heavy heads — far more grain than the handful you sowed, the season's increase come in."};
+        return new String[]{"SUCCEEDED", shattering
+            ? "You reap the stand, but you left it late — much of the grain has already shattered from the heads and the birds have been at it. You gather what is left."
+            : "You cut the ripe stand and gather the heavy heads — far more grain than the handful you sowed, the season's increase come in."};
     }
 
     /** How long a ripe stand holds before it goes over — three weeks past its season, then the heads shatter and the birds have it. */
