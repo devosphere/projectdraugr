@@ -92,6 +92,8 @@ class CropCultivationIntegrationTest {
         // Open, workable ground for a crop. Force a tile to grassland so the test does not depend on genesis biomes.
         UUID field = jdbc.queryForObject("SELECT id FROM world_chunk ORDER BY grid_y, grid_x LIMIT 1", UUID.class);
         jdbc.update("UPDATE world_chunk SET biome='GRASSLAND' WHERE id=?", field);
+        // Keep grazers off this test's field so the yield is the sowing's alone, not depredation's (#166 is its own test).
+        jdbc.update("DELETE FROM wildlife_population WHERE site_id IN (SELECT id FROM ecology_site WHERE chunk_id=?)", field);
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", field, chronicle);
         jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
 
