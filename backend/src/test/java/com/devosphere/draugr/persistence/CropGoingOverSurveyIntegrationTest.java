@@ -93,11 +93,11 @@ class CropGoingOverSurveyIntegrationTest {
         sow(freshlyRipe, now.minus(Duration.ofDays(35)));  // grown 35 → 5 days past ripe
 
         String over = survey(chronicle, goingOver);
-        assertTrue(over.contains("going over"), () -> "a crop past its clean window must read as going over, a warning to reap: " + over);
+        assertTrue(over.contains("go over"), () -> "a crop past its clean window must read as going over, a warning to reap: " + over);
 
         String ripe = survey(chronicle, freshlyRipe);
         assertTrue(ripe.contains("ready to reap"), () -> "a freshly ripe crop must read as ready to reap: " + ripe);
-        assertFalse(ripe.contains("going over"), () -> "a freshly ripe crop must not read as going over: " + ripe);
+        assertFalse(ripe.contains("go over"), () -> "a freshly ripe crop must not read as going over: " + ripe);
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
