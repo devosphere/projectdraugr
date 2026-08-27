@@ -662,9 +662,13 @@ public class ChronicleActionService {
         if (crop == null) return "";
         long grown = java.time.Duration.between((Instant) crop.get("sown"), at).toDays();
         int maturity = (int) crop.get("days");
+        long daysPastRipe = grown - maturity;
+        // Beyond the clean window (14 days ripe) the heads begin to shatter — the warning to reap it before it is
+        // lost, read the same way a fire's danger is read before it takes hold.
+        if (daysPastRipe > 14) return "A stand of sown grain stands ripe and beginning to go over — the first heads are shattering, and unless it is reaped soon the birds and weather will have it. ";
+        if (daysPastRipe >= 0) return "A stand of sown grain stands ripe on this ground, the heads heavy and ready to reap. ";
         double frac = maturity > 0 ? (double) grown / maturity : 1.0;
-        return frac >= 1.0 ? "A stand of sown grain stands ripe on this ground, the heads heavy and ready to reap. "
-             : frac >= 0.6 ? "A stand of sown grain grows on this ground, ripening toward harvest. "
+        return frac >= 0.6 ? "A stand of sown grain grows on this ground, ripening toward harvest. "
              : "A stand of sown grain grows on this ground, still green. ";
     }
     /** A fire burning dangerously (#219 fire containment): a roaring, unbanked hearth in dry weather with thatch or a
