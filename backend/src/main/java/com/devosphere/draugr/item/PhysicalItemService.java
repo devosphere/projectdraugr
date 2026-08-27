@@ -1082,6 +1082,38 @@ public class PhysicalItemService {
                 jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'RUSTED',jsonb_build_object('condition',?))", id, ts, cond);
         }
     }
+
+    /** A raw hide, pelt, or length of sinew left in the wet putrefies in a few days — the reason a fresh hide must be fleshed, dried, or salted before it is lost. */
+    private static final int ROT_HOURS_TO_DESTROY = 96;
+
+    /**
+     * Rot the raw animal tissue left on wet ground (#220 rot). A fresh hide, pelt, or sinew is meat still: dropped in a
+     * bog or left out in the wet, it putrefies and is lost. Only <b>unowned ground stock at a wet biome</b> rots —
+     * carried stock is kept and worked, and a hide once salted (or tanned into leather goods) is preserved. Unlike
+     * metal, which weakens by degrees, raw tissue rots away entirely: after {@link #ROT_HOURS_TO_DESTROY} hours of
+     * exposure the item is destroyed (ROTTED), since a rotted material must actually be gone to matter — its condition
+     * alone is not read. Shares the {@code weathered_at} exposure clock with corrosion. Run in the world tick.
+     */
+    @Transactional
+    public void rotExposedOrganics(Instant now) {
+        java.sql.Timestamp ts = java.sql.Timestamp.from(now);
+        java.util.List<java.util.Map<String,Object>> exposed = jdbc.queryForList(
+            "SELECT i.object_id, i.weathered_at FROM item_instance i JOIN world_object w ON w.id=i.object_id JOIN world_chunk wc ON wc.id=w.current_location_id " +
+            "WHERE w.lifecycle_state='ACTIVE' AND w.current_owner_id IS NULL AND wc.biome IN ('WETLAND','RIVERBANK') " +
+            "AND ((i.item_key LIKE '%hide' AND i.item_key <> 'salted_hide') OR i.item_key LIKE '%pelt' OR i.item_key = 'animal_sinew')");
+        for (java.util.Map<java.lang.String,java.lang.Object> r : exposed) {
+            java.util.UUID id = (java.util.UUID) r.get("object_id");
+            java.sql.Timestamp weatheredAt = (java.sql.Timestamp) r.get("weathered_at");
+            if (weatheredAt == null) { // first exposure: start the clock, rot from here on
+                jdbc.update("UPDATE item_instance SET weathered_at=? WHERE object_id=?", ts, id);
+                continue;
+            }
+            if (java.time.Duration.between(weatheredAt.toInstant(), now).toHours() >= ROT_HOURS_TO_DESTROY) {
+                jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED', destroyed_at=?, destroyed_location_id=current_location_id, destroyed_cause='ROTTED', current_location_id=NULL WHERE id=?", ts, id);
+                jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'ROTTED','{}'::jsonb)", id, ts);
+            }
+        }
+    }
     /** The soundest reachable tool of a process tool-class (owned or on-site), sound before worn before broken, so
      *  a spare good tool is used before a failing one — or null when none is in reach. Shares the tool key sets
      *  with the executeProcess gate and {@code hasCuttingTool}. Used to gate (a broken tool is refused) and to wear. */
