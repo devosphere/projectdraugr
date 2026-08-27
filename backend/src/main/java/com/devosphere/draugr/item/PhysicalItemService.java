@@ -1270,19 +1270,24 @@ public class PhysicalItemService {
             chronicle, location);
     }
 
-    /** The preservation kind a made food keeps as, or null if it is not a preserved food (V60/M4). */
+    /** The preservation kind a made food keeps as, or null if it is not a made food that keeps by a tier (V60/M4).
+     *  Beyond the explicitly-preserved fish/meat, the cooked dishes (V92) keep by their nature: a dense, dry baked
+     *  bread or cake keeps for weeks like other dried food, while a boiled or stewed wet dish keeps only days —
+     *  before this they fell through to null and so never spoiled at all, an immortal pot of stew. */
     private static String preservationKind(String itemKey) {
         return switch (itemKey) {
             case "salted_fish", "salted_meat" -> "SALTED";
             case "smoked_fish", "smoked_meat", "smoked_fowl" -> "SMOKED";
-            case "dried_fish", "dried_meat", "dried_mushroom", "pemmican", "preserved_berries" -> "DRIED";
+            case "dried_fish", "dried_meat", "dried_mushroom", "pemmican", "preserved_berries",
+                 "acorn_flatbread", "grain_flatbread", "trail_cake" -> "DRIED"; // dense, dry keeping breads and cakes
+            case "root_vegetable_stew", "grain_porridge", "herbal_infusion", "cooked_mushrooms", "berry_compote" -> "COOKED";
             default -> null;
         };
     }
 
-    /** Preserved food keeps far longer than raw: salted longest, then dried, then smoked. */
+    /** Preserved food keeps far longer than raw: salted longest, then dried, then smoked, then a plain cooked dish. */
     private void registerPreserved(UUID item, String kind, Instant at) {
-        long hours = switch (kind) { case "SALTED" -> 1440; case "SMOKED" -> 720; default -> 1080; };
+        long hours = switch (kind) { case "SALTED" -> 1440; case "SMOKED" -> 720; case "COOKED" -> 72; default -> 1080; };
         jdbc.update("INSERT INTO food_preservation_state (object_id,preparation_kind,safe_until,pest_checked_at) VALUES (?,?,?,?) ON CONFLICT (object_id) DO NOTHING",
             item, kind, Timestamp.from(at.plus(java.time.Duration.ofHours(hours))), Timestamp.from(at));
     }
