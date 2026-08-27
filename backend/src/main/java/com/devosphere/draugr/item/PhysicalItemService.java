@@ -1209,8 +1209,8 @@ public class PhysicalItemService {
     @Transactional
     public String[] harvestCrop(UUID chronicle, UUID location, Instant at) {
         java.util.Map<String,Object> crop = jdbc.query(
-            "SELECT id, sown_at, maturity_days, tilled, grazed FROM crop_stand WHERE chunk_id=? AND harvested=false ORDER BY sown_at LIMIT 1 FOR UPDATE",
-            rs -> rs.next() ? java.util.Map.of("id", rs.getObject(1, UUID.class), "sown", rs.getTimestamp(2).toInstant(), "days", rs.getInt(3), "tilled", rs.getBoolean(4), "grazed", rs.getBoolean(5)) : null, location);
+            "SELECT id, sown_at, maturity_days, tilled, grazed, (weeded_at IS NOT NULL) AS weeded FROM crop_stand WHERE chunk_id=? AND harvested=false ORDER BY sown_at LIMIT 1 FOR UPDATE",
+            rs -> rs.next() ? java.util.Map.of("id", rs.getObject(1, UUID.class), "sown", rs.getTimestamp(2).toInstant(), "days", rs.getInt(3), "tilled", rs.getBoolean(4), "grazed", rs.getBoolean(5), "weeded", rs.getBoolean(6)) : null, location);
         if (crop == null) return new String[]{"FAILED", "There is no crop growing here to reap."};
         Instant ripe = ((Instant) crop.get("sown")).plus(java.time.Duration.ofDays((int) crop.get("days")));
         if (at.isBefore(ripe))
@@ -1224,6 +1224,11 @@ public class PhysicalItemService {
         // A stand the animals got into is grazed down before it is reaped (#166) — a fence would have kept it whole.
         boolean grazed = (boolean) crop.get("grazed");
         if (grazed) base = Math.max(2, base - 2);
+        // A stand worked clean through its season (#165 tending) fills out fuller: weeding at least once frees the
+        // grain from the weeds that would compete with it for soil, light, and water, so a tended stand carries an
+        // extra head over one left to itself. The reward for returning to the field to work it across the season.
+        boolean weeded = (boolean) crop.get("weeded");
+        if (weeded) base += 1;
         long daysLate = java.time.Duration.between(ripe, at).toDays();
         boolean shattering = daysLate > CROP_FULL_YIELD_DAYS;
         int heads = shattering ? Math.max(2, base / 2) : base;
@@ -1236,6 +1241,24 @@ public class PhysicalItemService {
             : grazed
             ? "You reap what the animals left: the stand has been cropped and trampled where they grazed through it, and a fence would have kept it whole. You gather the rest."
             : "You cut the ripe stand and gather the heavy heads — far more grain than the handful you sowed, the season's increase come in."};
+    }
+
+    /**
+     * Tend a growing crop — weed the stand (#165 tending). A sown crop is a living thing that must be worked across
+     * its season, not a set-and-forget button: a stand left to the weeds gives a thinner harvest, for they compete
+     * with the grain for the soil, the light, and the water. Working it clean at least once through the season keeps
+     * the yield full. Wants a stand still growing here; a ripe or reaped stand has nothing left to tend.
+     */
+    @Transactional
+    public String[] tendCrop(UUID chronicle, UUID location, Instant at) {
+        java.util.Map<String,Object> crop = jdbc.query(
+            "SELECT id, (weeded_at IS NOT NULL) AS weeded FROM crop_stand WHERE chunk_id=? AND harvested=false ORDER BY sown_at LIMIT 1 FOR UPDATE",
+            rs -> rs.next() ? java.util.Map.of("id", rs.getObject(1, UUID.class), "weeded", rs.getBoolean(2)) : null, location);
+        if (crop == null) return new String[]{"FAILED", "There is no crop growing here to tend."};
+        jdbc.update("UPDATE crop_stand SET weeded_at=? WHERE id=?", java.sql.Timestamp.from(at), crop.get("id"));
+        return new String[]{"SUCCEEDED", ((boolean) crop.get("weeded"))
+            ? "You work down the rows again, pulling the weeds that have crept back in. The stand stands clean, the grain with room to fill."
+            : "You work down the rows, pulling the weeds crowding the young grain and loosening the soil around the stems. The stand stands clean, given the room to fill out its heads."};
     }
 
     /** How long a ripe stand holds before it goes over — three weeks past its season, then the heads shatter and the birds have it. */
