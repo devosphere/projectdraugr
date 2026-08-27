@@ -647,7 +647,24 @@ public class ChronicleActionService {
         // Chronicle can bank or move the fire rather than meet the consequence unwarned.
         String fireRisk = groundFireHazard(loc, at);
         if (!fireRisk.isEmpty()) s.append(fireRisk);
+        // A sown crop growing here (#162): its stage read so a Chronicle knows a green stand from one ripe to reap.
+        String crop = groundCrop(loc, at);
+        if (!crop.isEmpty()) s.append(crop);
         return s.toString().trim();
+    }
+    /** How a sown crop stands here (#162 agriculture): green, ripening, or ripe and ready to reap — read from its
+     *  elapsed growing-time against its maturity, so a Chronicle can tell when to bring in the harvest. Read-only. */
+    private String groundCrop(UUID loc, Instant at) {
+        java.util.Map<String,Object> crop = jdbc.query(
+            "SELECT sown_at, maturity_days FROM crop_stand WHERE chunk_id=? AND harvested=false ORDER BY sown_at LIMIT 1",
+            rs -> rs.next() ? java.util.Map.of("sown", rs.getTimestamp(1).toInstant(), "days", rs.getInt(2)) : null, loc);
+        if (crop == null) return "";
+        long grown = java.time.Duration.between((Instant) crop.get("sown"), at).toDays();
+        int maturity = (int) crop.get("days");
+        double frac = maturity > 0 ? (double) grown / maturity : 1.0;
+        return frac >= 1.0 ? "A stand of sown grain stands ripe on this ground, the heads heavy and ready to reap. "
+             : frac >= 0.6 ? "A stand of sown grain grows on this ground, ripening toward harvest. "
+             : "A stand of sown grain grows on this ground, still green. ";
     }
     /** A fire burning dangerously (#219 fire containment): a roaring, unbanked hearth in dry weather with thatch or a
      *  loose fuel stock close by — the grounded warning that, left untended, it could catch, read before it ever does.
