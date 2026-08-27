@@ -1308,25 +1308,42 @@ public class ChronicleActionService {
         return new String[]{"FAILED", "You search through everything you can reach and come up with nothing to eat — no cooked meat, no raw, no forage. There is simply no food here to hand."};
     }
     private String[] eatItem(UUID chronicle, String itemKey, UUID actionId, Instant at) {
-        // Read the grade of the very item about to be eaten (a finer-cooked stew nourishes a little more, #271)
-        // before it is consumed and gone.
-        com.devosphere.draugr.quality.QualityGrade grade = items.gradeOfNextConsumed(chronicle, itemKey);
-        items.consumeOne(chronicle, itemKey, at);
         // A forage marked poisonous (death cap, fly agaric) nourishes nothing — it sickens. The world
         // applies physics, not a warning: the player had to know which mushroom before they ate it.
         if (items.isPoisonousForage(itemKey)) {
+            items.consumeOne(chronicle, itemKey, at);
             physiology.applyFoodborneIllness(chronicle, actionId, at);
             return new String[]{"SUCCEEDED", "You eat it. The taste turns sharp, then bitter, and a cold unease is spreading through your gut before you have finished."};
         }
-        // A hot herbal infusion is barely a meal — its worth is the warmth it carries, the calm the steeped herb
-        // brings, and the water in the cup. Eating it gave only the trace nourishment of any food; now it also warms,
-        // settles, and quenches a little, the effect its "warming infusion" has always described but nothing read.
-        if (itemKey.equals("herbal_infusion")) {
-            physiology.eat(chronicle, grade);
-            physiology.drinkWarmInfusion(chronicle);
-            return new String[]{"SUCCEEDED", "You drink the hot infusion slowly; the warmth spreads through you and the herb's scent settles the edges of your mind."};
+        // Consume the food: a food that carries a spoilage state — a made dish, a preserved or dried food — goes
+        // through the tracked consume so a spoiled one is caught (the same rule meat already follows); stateless
+        // forage (berries, mushrooms, honey) is eaten directly, its grade read for nourishment (#271). Eating rotten
+        // food is a real way to fall ill — before, only spoiled meat was caught, and a spoiled stew or dried fish ate
+        // as clean as fresh.
+        com.devosphere.draugr.quality.QualityGrade grade;
+        boolean spoiled;
+        FoodPreservationService.Consumption tracked = food.consume(chronicle, itemKey, at);
+        if (tracked.consumed()) {
+            grade = tracked.grade();
+            spoiled = tracked.spoiled();
+        } else {
+            grade = items.gradeOfNextConsumed(chronicle, itemKey);
+            items.consumeOne(chronicle, itemKey, at);
+            spoiled = false;
         }
         physiology.eat(chronicle, grade);
+        // A hot herbal infusion is barely a meal — its worth is the warmth it carries and the calm the steeped herb
+        // brings; this applies however it was made, tracked or not.
+        boolean infusion = itemKey.equals("herbal_infusion");
+        if (infusion) physiology.drinkWarmInfusion(chronicle);
+        if (spoiled) {
+            physiology.applyFoodborneIllness(chronicle, actionId, at);
+            return new String[]{"SUCCEEDED", infusion
+                ? "You drink the infusion, but it has turned — sour and off, and it sits ill in you before the warmth ever comes."
+                : "You eat it, but it has gone off — a sour, spoiled taste, and a cold unease follows it down."};
+        }
+        if (infusion)
+            return new String[]{"SUCCEEDED", "You drink the hot infusion slowly; the warmth spreads through you and the herb's scent settles the edges of your mind."};
         return new String[]{"SUCCEEDED", eatProse(itemKey)};
     }
     /** Witness-stance prose for eating a foraged food, keyed loosely by what it is. Must name no Body-HUD state (NarrationPolicy / DR-0010). */
