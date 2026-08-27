@@ -1315,32 +1315,35 @@ public class ChronicleActionService {
             physiology.applyFoodborneIllness(chronicle, actionId, at);
             return new String[]{"SUCCEEDED", "You eat it. The taste turns sharp, then bitter, and a cold unease is spreading through your gut before you have finished."};
         }
-        // A food that carries a spoilage state — a made dish, a preserved or dried food — goes through the tracked
-        // consume, so that a spoiled one sickens rather than nourishes, the same rule meat already follows. Eating
-        // rotten food is a real way to fall ill; before, only spoiled meat was caught, and a spoiled stew or dried
-        // fish ate as clean as fresh.
+        // Consume the food: a food that carries a spoilage state — a made dish, a preserved or dried food — goes
+        // through the tracked consume so a spoiled one is caught (the same rule meat already follows); stateless
+        // forage (berries, mushrooms, honey) is eaten directly, its grade read for nourishment (#271). Eating rotten
+        // food is a real way to fall ill — before, only spoiled meat was caught, and a spoiled stew or dried fish ate
+        // as clean as fresh.
+        com.devosphere.draugr.quality.QualityGrade grade;
+        boolean spoiled;
         FoodPreservationService.Consumption tracked = food.consume(chronicle, itemKey, at);
         if (tracked.consumed()) {
-            // A hot herbal infusion is barely a meal — its worth is the warmth and the calm the steeped herb brings.
-            if (itemKey.equals("herbal_infusion")) {
-                physiology.eat(chronicle, tracked.grade());
-                physiology.drinkWarmInfusion(chronicle);
-                return new String[]{"SUCCEEDED", tracked.spoiled()
-                    ? "You drink the infusion, but it has turned — sour and off, and it sits ill in you before the warmth ever comes."
-                    : "You drink the hot infusion slowly; the warmth spreads through you and the herb's scent settles the edges of your mind."};
-            }
-            physiology.eat(chronicle, tracked.grade());
-            if (tracked.spoiled()) {
-                physiology.applyFoodborneIllness(chronicle, actionId, at);
-                return new String[]{"SUCCEEDED", "You eat it, but it has gone off — a sour, spoiled taste, and a cold unease follows it down."};
-            }
-            return new String[]{"SUCCEEDED", eatProse(itemKey)};
+            grade = tracked.grade();
+            spoiled = tracked.spoiled();
+        } else {
+            grade = items.gradeOfNextConsumed(chronicle, itemKey);
+            items.consumeOne(chronicle, itemKey, at);
+            spoiled = false;
         }
-        // Untracked forage (no spoilage state — berries, mushrooms, honey): eaten directly, its grade read for
-        // nourishment (a finer forage nourishes a little more, #271).
-        com.devosphere.draugr.quality.QualityGrade grade = items.gradeOfNextConsumed(chronicle, itemKey);
-        items.consumeOne(chronicle, itemKey, at);
         physiology.eat(chronicle, grade);
+        // A hot herbal infusion is barely a meal — its worth is the warmth it carries and the calm the steeped herb
+        // brings; this applies however it was made, tracked or not.
+        boolean infusion = itemKey.equals("herbal_infusion");
+        if (infusion) physiology.drinkWarmInfusion(chronicle);
+        if (spoiled) {
+            physiology.applyFoodborneIllness(chronicle, actionId, at);
+            return new String[]{"SUCCEEDED", infusion
+                ? "You drink the infusion, but it has turned — sour and off, and it sits ill in you before the warmth ever comes."
+                : "You eat it, but it has gone off — a sour, spoiled taste, and a cold unease follows it down."};
+        }
+        if (infusion)
+            return new String[]{"SUCCEEDED", "You drink the hot infusion slowly; the warmth spreads through you and the herb's scent settles the edges of your mind."};
         return new String[]{"SUCCEEDED", eatProse(itemKey)};
     }
     /** Witness-stance prose for eating a foraged food, keyed loosely by what it is. Must name no Body-HUD state (NarrationPolicy / DR-0010). */
