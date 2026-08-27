@@ -1121,6 +1121,31 @@ public class PhysicalItemService {
     private static final int CROP_YIELD_HEADS = 4;
     /** A tilled seedbed yields a fuller stand — the reward for breaking the ground before sowing. */
     private static final int CROP_YIELD_HEADS_TILLED = 6;
+    /** Below this the soil is worn and gives a thinner stand (#164). */
+    private static final int FERTILITY_LOW_THRESHOLD = 60;
+    /** What one harvest takes from a field's fertility. */
+    private static final int FERTILITY_COST_PER_HARVEST = 30;
+    /** How much fertility a field wins back for each day left fallow. */
+    private static final int FERTILITY_RECOVER_PER_DAY = 2;
+
+    /** A field's current fertility (#164), pristine ground reading full — the stored level plus what fallow time since
+     *  it was last worked has restored (not persisted until the next harvest writes it). */
+    private int fieldFertility(UUID chunk, Instant at) {
+        java.util.Map<String,Object> soil = jdbc.query(
+            "SELECT fertility, last_updated_at FROM field_soil WHERE chunk_id=?",
+            rs -> rs.next() ? java.util.Map.of("f", rs.getInt(1), "t", rs.getTimestamp(2).toInstant()) : null, chunk);
+        if (soil == null) return 100; // never cropped — pristine
+        long fallowDays = Math.max(0, java.time.Duration.between((Instant) soil.get("t"), at).toDays());
+        return Math.min(100, (int) soil.get("f") + (int) (fallowDays * FERTILITY_RECOVER_PER_DAY));
+    }
+
+    /** Draw a field's fertility down by a harvest (#164), from its fallow-recovered current level, and stamp the time. */
+    private void depleteFertility(UUID chunk, Instant at) {
+        int next = Math.max(0, fieldFertility(chunk, at) - FERTILITY_COST_PER_HARVEST);
+        java.sql.Timestamp ts = java.sql.Timestamp.from(at);
+        jdbc.update("INSERT INTO field_soil (chunk_id, fertility, last_updated_at) VALUES (?,?,?) " +
+            "ON CONFLICT (chunk_id) DO UPDATE SET fertility=EXCLUDED.fertility, last_updated_at=EXCLUDED.last_updated_at", chunk, next, ts);
+    }
     /** How long a tilled seedbed stays workable before the sod closes over again. */
     private static final int TILL_WINDOW_DAYS = 7;
 
@@ -1194,9 +1219,13 @@ public class PhysicalItemService {
         // past the clean window, the ripe heads begin to shatter and the birds work at them, so a late harvest saves
         // less. (Left past the spoil window it is lost outright — advanceCrops takes it before it ever reaches here.)
         int base = ((boolean) crop.get("tilled")) ? CROP_YIELD_HEADS_TILLED : CROP_YIELD_HEADS;
+        // Worn soil gives a thinner stand (#164): a field cropped without rest until its fertility is low yields less.
+        if (fieldFertility(location, at) < FERTILITY_LOW_THRESHOLD) base = Math.max(2, base - 2);
         long daysLate = java.time.Duration.between(ripe, at).toDays();
         boolean shattering = daysLate > CROP_FULL_YIELD_DAYS;
         int heads = shattering ? Math.max(2, base / 2) : base;
+        // The harvest takes from the soil — the field's fertility falls, to be won back only by fallow rest.
+        depleteFertility(location, at);
         for (int i = 0; i < heads; i++) createCarriedItem(chronicle, "wild_grain_head", "Wild grain head", at, "HARVESTED_CROP");
         jdbc.update("UPDATE crop_stand SET harvested=true, harvested_at=?, outcome='REAPED' WHERE id=?", java.sql.Timestamp.from(at), crop.get("id"));
         return new String[]{"SUCCEEDED", shattering
