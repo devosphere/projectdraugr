@@ -1043,6 +1043,45 @@ public class PhysicalItemService {
         if (k.startsWith("copper_")) return new int[]{12, 24};
         return new int[]{8, 16}; // knapped stone, bone, flint, and the bare-hand tools
     }
+
+    /** A day of lying in standing water accrues a use of corrosion — a metal tool rusts noticeably over a wet fortnight. */
+    private static final int RUST_HOURS_PER_USE = 12;
+
+    /**
+     * Corrode the iron and steel left on wet ground (#220 rust). Unlike use-wear (V139), this bites unmaintained metal
+     * by exposure alone: an iron axe or a steel striker dropped in a bog or left out in the wet rusts as it lies there.
+     * Only <b>unowned ground stock at a wet biome</b> corrodes — metal carried on the body is kept dry and maintained,
+     * and bronze/copper/stone/bone do not rust. Elapsed hours since it was last accounted accrue use-count wear (a use
+     * per {@link #RUST_HOURS_PER_USE} hours), and at the metal's thresholds the condition steps down the same
+     * SOUND→WORN→BROKEN ladder work climbs; the step is kept as RUSTED evidence. Run in the world tick.
+     */
+    @Transactional
+    public void weatherExposedMetal(Instant now) {
+        java.sql.Timestamp ts = java.sql.Timestamp.from(now);
+        java.util.List<java.util.Map<String,Object>> exposed = jdbc.queryForList(
+            "SELECT i.object_id, i.item_key, i.use_count, i.condition_state, i.weathered_at " +
+            "FROM item_instance i JOIN world_object w ON w.id=i.object_id JOIN world_chunk wc ON wc.id=w.current_location_id " +
+            "WHERE w.lifecycle_state='ACTIVE' AND w.current_owner_id IS NULL AND wc.biome IN ('WETLAND','RIVERBANK') " +
+            "AND i.condition_state <> 'BROKEN' AND i.item_key <> 'iron_pyrite' " +
+            "AND (i.item_key LIKE 'iron\\_%' OR i.item_key LIKE 'steel\\_%')");
+        for (java.util.Map<String,Object> r : exposed) {
+            java.util.UUID id = (java.util.UUID) r.get("object_id");
+            java.sql.Timestamp weatheredAt = (java.sql.Timestamp) r.get("weathered_at");
+            if (weatheredAt == null) { // first exposure: start the clock, corrode from here on
+                jdbc.update("UPDATE item_instance SET weathered_at=? WHERE object_id=?", ts, id);
+                continue;
+            }
+            long hours = java.time.Duration.between(weatheredAt.toInstant(), now).toHours();
+            int add = (int) (hours / RUST_HOURS_PER_USE);
+            if (add <= 0) continue;
+            int newUses = ((Number) r.get("use_count")).intValue() + add;
+            int[] wear = toolWearThresholds((String) r.get("item_key"));
+            String cond = newUses >= wear[1] ? "BROKEN" : newUses >= wear[0] ? "WORN" : "SOUND";
+            jdbc.update("UPDATE item_instance SET use_count=?, condition_state=?, weathered_at=? WHERE object_id=?", newUses, cond, ts, id);
+            if (!cond.equals(r.get("condition_state")))
+                jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'RUSTED',jsonb_build_object('condition',?))", id, ts, cond);
+        }
+    }
     /** The soundest reachable tool of a process tool-class (owned or on-site), sound before worn before broken, so
      *  a spare good tool is used before a failing one — or null when none is in reach. Shares the tool key sets
      *  with the executeProcess gate and {@code hasCuttingTool}. Used to gate (a broken tool is refused) and to wear. */
