@@ -525,12 +525,13 @@ public class WildlifeEncounterService {
     }
 
     /**
-     * An airborne emission — smoke, fumes — does not stop at the ground that made it: it drifts on the air onto the
-     * neighbouring country (#219 hazard footprints; the propagation the point-source {@link #recordDisturbance} lacks).
-     * This records the full disturbance at the source AND a lesser one — the plume thins with distance — at each
-     * orthogonally-adjacent chunk of the same world, so the wildlife of the ring around a smoky working grow wary too,
-     * not only those standing over it. Bounded to the immediate neighbours (a hazard reaches only the connected
-     * reachable places, #219) and logged as its own {@code <kind>_DRIFT} provenance at each, distinct from the source.
+     * A disturbance that emanates and carries — a plume of woodsmoke, but also the crash of a felled tree or the
+     * commotion of a fight — does not stop at the ground that made it: it reaches the neighbouring country too
+     * (#208 noise / #219 hazard footprints; the propagation the point-source {@link #recordDisturbance} lacks). This
+     * records the full disturbance at the source AND a lesser one — it thins with distance — at each orthogonally-
+     * adjacent chunk of the same world, so the wildlife of the ring around a loud or smoky working grow wary too, not
+     * only those standing over it. Bounded to the immediate neighbours (it reaches only the connected reachable
+     * places) and logged as its own {@code <kind>_DRIFT} provenance at each, distinct from the source.
      */
     @Transactional
     public void recordEmissionDrift(UUID chunk, String sourceKind, int amount, Instant at) {
