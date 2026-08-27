@@ -1146,6 +1146,41 @@ public class PhysicalItemService {
         jdbc.update("INSERT INTO field_soil (chunk_id, fertility, last_updated_at) VALUES (?,?,?) " +
             "ON CONFLICT (chunk_id) DO UPDATE SET fertility=EXCLUDED.fertility, last_updated_at=EXCLUDED.last_updated_at", chunk, next, ts);
     }
+    /** Ground a crop will take (#164/#165): open grassland by nature, or forest ground a Chronicle has cleared. Rock,
+     *  ocean, mountain, and standing forest are not arable until the trees are taken off them. */
+    private boolean isArable(UUID location) {
+        String biome = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : null, location);
+        if ("GRASSLAND".equals(biome)) return true;
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM cleared_ground WHERE chunk_id=?)", Boolean.class, location));
+    }
+
+    /**
+     * Clear wooded ground into arable land (#165 land-clearing). Cultivation began only on open grassland; a Chronicle
+     * standing in forest could not make a field. With an axe, the trees are felled, the brush cut back, and the roots
+     * grubbed out until an open patch of arable earth lies where the forest stood — ground that tilling and sowing will
+     * then take. Clearing is permanent: the field, once won, stays open. Wants wooded ground and an axe to take it off.
+     */
+    @Transactional
+    public String[] clearLand(UUID chronicle, UUID location, Instant at) {
+        String biome = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : null, location);
+        if (!"TEMPERATE_FOREST".equals(biome) && !"FOREST".equals(biome))
+            return new String[]{"FAILED", "This ground bears no timber or brush to clear for a field — clearing is for turning wooded ground into arable land, and this is not woodland."};
+        if (Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM cleared_ground WHERE chunk_id=?)", Boolean.class, location)))
+            return new String[]{"FAILED", "This ground is already cleared — the trees are off it and it lies open, arable. There is nothing left to clear."};
+        boolean axe = Boolean.TRUE.equals(jdbc.queryForObject(
+            "WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE'" +
+            " UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id" +
+            " JOIN world_object n ON n.id=ic.item_id WHERE n.lifecycle_state='ACTIVE')" +
+            " SELECT EXISTS(SELECT 1 FROM reachable r JOIN item_instance i ON i.object_id=r.id" +
+            " WHERE i.item_key IN ('stone_axe','stone_hatchet','copper_axe','bronze_axe','iron_axe','steel_axe','hand_axe')" +
+            " AND i.condition_state <> 'BROKEN')", Boolean.class, chronicle));
+        if (!axe)
+            return new String[]{"FAILED", "Clearing wooded ground wants an axe to fell the trees and cut back the brush, and you have none sound to hand."};
+        jdbc.update("INSERT INTO cleared_ground (chunk_id, cleared_at) VALUES (?,?) ON CONFLICT (chunk_id) DO NOTHING",
+            location, java.sql.Timestamp.from(at));
+        return new String[]{"SUCCEEDED", "You work the wooded ground clear — trees felled, brush cut and hauled off, the roots grubbed out — until an open patch of arable earth lies where the forest stood, ready to be broken for a seedbed."};
+    }
+
     /** How long a tilled seedbed stays workable before the sod closes over again. */
     private static final int TILL_WINDOW_DAYS = 7;
 
@@ -1156,9 +1191,8 @@ public class PhysicalItemService {
      */
     @Transactional
     public String[] tillGround(UUID chronicle, UUID location, Instant at) {
-        String biome = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : null, location);
-        if (!"GRASSLAND".equals(biome))
-            return new String[]{"FAILED", "Tillage wants open, workable ground — a grassland clearing — and this ground is not it."};
+        if (!isArable(location))
+            return new String[]{"FAILED", "Tillage wants open, workable ground — a grassland clearing, or wooded ground you have first cleared — and this ground is not it."};
         if (!hasAtLeast(chronicle, "digging_stick", 1) && !hasAtLeast(chronicle, "wooden_shovel", 1))
             return new String[]{"FAILED", "Breaking ground wants a tool — a digging stick or a shovel — and you have none to hand."};
         Integer growing = jdbc.queryForObject("SELECT COUNT(*) FROM crop_stand WHERE chunk_id=? AND harvested=false", Integer.class, location);
@@ -1180,9 +1214,8 @@ public class PhysicalItemService {
      */
     @Transactional
     public String[] sowCrop(UUID chronicle, UUID location, Instant at) {
-        String biome = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : null, location);
-        if (!"GRASSLAND".equals(biome))
-            return new String[]{"FAILED", "Grain wants open, workable ground — a grassland clearing — and this ground is not it."};
+        if (!isArable(location))
+            return new String[]{"FAILED", "Grain wants open, workable ground — a grassland clearing, or wooded ground you have first cleared — and this ground is not it."};
         Integer growing = jdbc.queryForObject("SELECT COUNT(*) FROM crop_stand WHERE chunk_id=? AND harvested=false", Integer.class, location);
         if (growing != null && growing > 0)
             return new String[]{"FAILED", "A crop is already coming up on this ground; there is no room to sow another until it is reaped."};
