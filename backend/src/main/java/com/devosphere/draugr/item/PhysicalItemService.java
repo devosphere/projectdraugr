@@ -1119,6 +1119,30 @@ public class PhysicalItemService {
     private static final int CROP_MATURITY_DAYS = 30;
     /** One sown seed comes up as a stand worth several heads — the multiplication that makes cultivation worth the labour. */
     private static final int CROP_YIELD_HEADS = 4;
+    /** A tilled seedbed yields a fuller stand — the reward for breaking the ground before sowing. */
+    private static final int CROP_YIELD_HEADS_TILLED = 6;
+    /** How long a tilled seedbed stays workable before the sod closes over again. */
+    private static final int TILL_WINDOW_DAYS = 7;
+
+    /**
+     * Break and turn open ground into a seedbed (#165 land preparation). With a digging tool, a Chronicle loosens a
+     * grassland patch so a sowing takes better root — tilled ground a later sowing draws on for a fuller stand. It
+     * wants open, workable ground and a tool to break it; it holds for a few days before the sod closes over.
+     */
+    @Transactional
+    public String[] tillGround(UUID chronicle, UUID location, Instant at) {
+        String biome = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : null, location);
+        if (!"GRASSLAND".equals(biome))
+            return new String[]{"FAILED", "Tillage wants open, workable ground — a grassland clearing — and this ground is not it."};
+        if (!hasAtLeast(chronicle, "digging_stick", 1) && !hasAtLeast(chronicle, "wooden_shovel", 1))
+            return new String[]{"FAILED", "Breaking ground wants a tool — a digging stick or a shovel — and you have none to hand."};
+        Integer growing = jdbc.queryForObject("SELECT COUNT(*) FROM crop_stand WHERE chunk_id=? AND harvested=false", Integer.class, location);
+        if (growing != null && growing > 0)
+            return new String[]{"FAILED", "A crop already stands on this ground; there is nothing to till until it is reaped."};
+        jdbc.update("INSERT INTO tilled_ground (chunk_id, tilled_at) VALUES (?,?) ON CONFLICT (chunk_id) DO UPDATE SET tilled_at=EXCLUDED.tilled_at",
+            location, java.sql.Timestamp.from(at));
+        return new String[]{"SUCCEEDED", "You break and turn the open ground, loosening the sod into a seedbed ready to take the seed."};
+    }
     /** How long a ripe stand yields in full before the heads begin to shatter and a late harvest saves less. */
     private static final int CROP_FULL_YIELD_DAYS = 14;
 
@@ -1139,10 +1163,17 @@ public class PhysicalItemService {
             return new String[]{"FAILED", "A crop is already coming up on this ground; there is no room to sow another until it is reaped."};
         if (!hasAtLeast(chronicle, "wild_grain", 1))
             return new String[]{"FAILED", "You have no seed grain to sow — a handful of grain must come to hand first."};
+        // A seedbed tilled within the last few days gives a fuller stand; sowing consumes that prepared ground.
+        boolean tilled = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM tilled_ground WHERE chunk_id=? AND tilled_at >= ?)",
+            Boolean.class, location, java.sql.Timestamp.from(at.minus(java.time.Duration.ofDays(TILL_WINDOW_DAYS)))));
         consumeOne(chronicle, "wild_grain", at);
-        jdbc.update("INSERT INTO crop_stand (id, chunk_id, crop_key, sown_at, maturity_days, harvested) VALUES (?,?,?,?,?,false)",
-            UUID.randomUUID(), location, "wild_grain", java.sql.Timestamp.from(at), CROP_MATURITY_DAYS);
-        return new String[]{"SUCCEEDED", "You work the seed grain into the open ground and cover it over. If the ground is kind, it will come up as a stand of grain by the season's turn."};
+        jdbc.update("INSERT INTO crop_stand (id, chunk_id, crop_key, sown_at, maturity_days, harvested, tilled) VALUES (?,?,?,?,?,false,?)",
+            UUID.randomUUID(), location, "wild_grain", java.sql.Timestamp.from(at), CROP_MATURITY_DAYS, tilled);
+        jdbc.update("DELETE FROM tilled_ground WHERE chunk_id=?", location);
+        return new String[]{"SUCCEEDED", tilled
+            ? "You work the seed grain into the tilled seedbed and cover it over — the broken ground will give it a fuller root, and a fuller stand come the season's turn."
+            : "You work the seed grain into the unbroken ground and cover it over. It will come up, though thinner than from a tilled seedbed, by the season's turn."};
     }
 
     /**
@@ -1153,18 +1184,19 @@ public class PhysicalItemService {
     @Transactional
     public String[] harvestCrop(UUID chronicle, UUID location, Instant at) {
         java.util.Map<String,Object> crop = jdbc.query(
-            "SELECT id, sown_at, maturity_days FROM crop_stand WHERE chunk_id=? AND harvested=false ORDER BY sown_at LIMIT 1 FOR UPDATE",
-            rs -> rs.next() ? java.util.Map.of("id", rs.getObject(1, UUID.class), "sown", rs.getTimestamp(2).toInstant(), "days", rs.getInt(3)) : null, location);
+            "SELECT id, sown_at, maturity_days, tilled FROM crop_stand WHERE chunk_id=? AND harvested=false ORDER BY sown_at LIMIT 1 FOR UPDATE",
+            rs -> rs.next() ? java.util.Map.of("id", rs.getObject(1, UUID.class), "sown", rs.getTimestamp(2).toInstant(), "days", rs.getInt(3), "tilled", rs.getBoolean(4)) : null, location);
         if (crop == null) return new String[]{"FAILED", "There is no crop growing here to reap."};
         Instant ripe = ((Instant) crop.get("sown")).plus(java.time.Duration.ofDays((int) crop.get("days")));
         if (at.isBefore(ripe))
             return new String[]{"FAILED", "The crop stands green and unripe; cut now, it would be wasted. It needs the rest of the season."};
-        // Reaped promptly, the full stand comes in; left standing past the clean window, the ripe heads begin to
-        // shatter and the birds work at them, so a late harvest saves less. (Left past the spoil window it is lost
-        // outright — advanceCrops takes it before it ever reaches here.)
+        // A tilled seedbed gives a fuller base stand (#165). Reaped promptly, the full stand comes in; left standing
+        // past the clean window, the ripe heads begin to shatter and the birds work at them, so a late harvest saves
+        // less. (Left past the spoil window it is lost outright — advanceCrops takes it before it ever reaches here.)
+        int base = ((boolean) crop.get("tilled")) ? CROP_YIELD_HEADS_TILLED : CROP_YIELD_HEADS;
         long daysLate = java.time.Duration.between(ripe, at).toDays();
         boolean shattering = daysLate > CROP_FULL_YIELD_DAYS;
-        int heads = shattering ? Math.max(2, CROP_YIELD_HEADS / 2) : CROP_YIELD_HEADS;
+        int heads = shattering ? Math.max(2, base / 2) : base;
         for (int i = 0; i < heads; i++) createCarriedItem(chronicle, "wild_grain_head", "Wild grain head", at, "HARVESTED_CROP");
         jdbc.update("UPDATE crop_stand SET harvested=true, harvested_at=?, outcome='REAPED' WHERE id=?", java.sql.Timestamp.from(at), crop.get("id"));
         return new String[]{"SUCCEEDED", shattering
