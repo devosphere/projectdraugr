@@ -1209,8 +1209,8 @@ public class PhysicalItemService {
     @Transactional
     public String[] harvestCrop(UUID chronicle, UUID location, Instant at) {
         java.util.Map<String,Object> crop = jdbc.query(
-            "SELECT id, sown_at, maturity_days, tilled FROM crop_stand WHERE chunk_id=? AND harvested=false ORDER BY sown_at LIMIT 1 FOR UPDATE",
-            rs -> rs.next() ? java.util.Map.of("id", rs.getObject(1, UUID.class), "sown", rs.getTimestamp(2).toInstant(), "days", rs.getInt(3), "tilled", rs.getBoolean(4)) : null, location);
+            "SELECT id, sown_at, maturity_days, tilled, grazed FROM crop_stand WHERE chunk_id=? AND harvested=false ORDER BY sown_at LIMIT 1 FOR UPDATE",
+            rs -> rs.next() ? java.util.Map.of("id", rs.getObject(1, UUID.class), "sown", rs.getTimestamp(2).toInstant(), "days", rs.getInt(3), "tilled", rs.getBoolean(4), "grazed", rs.getBoolean(5)) : null, location);
         if (crop == null) return new String[]{"FAILED", "There is no crop growing here to reap."};
         Instant ripe = ((Instant) crop.get("sown")).plus(java.time.Duration.ofDays((int) crop.get("days")));
         if (at.isBefore(ripe))
@@ -1221,6 +1221,9 @@ public class PhysicalItemService {
         int base = ((boolean) crop.get("tilled")) ? CROP_YIELD_HEADS_TILLED : CROP_YIELD_HEADS;
         // Worn soil gives a thinner stand (#164): a field cropped without rest until its fertility is low yields less.
         if (fieldFertility(location, at) < FERTILITY_LOW_THRESHOLD) base = Math.max(2, base - 2);
+        // A stand the animals got into is grazed down before it is reaped (#166) — a fence would have kept it whole.
+        boolean grazed = (boolean) crop.get("grazed");
+        if (grazed) base = Math.max(2, base - 2);
         long daysLate = java.time.Duration.between(ripe, at).toDays();
         boolean shattering = daysLate > CROP_FULL_YIELD_DAYS;
         int heads = shattering ? Math.max(2, base / 2) : base;
@@ -1230,6 +1233,8 @@ public class PhysicalItemService {
         jdbc.update("UPDATE crop_stand SET harvested=true, harvested_at=?, outcome='REAPED' WHERE id=?", java.sql.Timestamp.from(at), crop.get("id"));
         return new String[]{"SUCCEEDED", shattering
             ? "You reap the stand, but you left it late — much of the grain has already shattered from the heads and the birds have been at it. You gather what is left."
+            : grazed
+            ? "You reap what the animals left: the stand has been cropped and trampled where they grazed through it, and a fence would have kept it whole. You gather the rest."
             : "You cut the ripe stand and gather the heavy heads — far more grain than the handful you sowed, the season's increase come in."};
     }
 
@@ -1245,6 +1250,19 @@ public class PhysicalItemService {
     @Transactional
     public void advanceCrops(Instant now) {
         java.sql.Timestamp ts = java.sql.Timestamp.from(now);
+        // A ripe stand on ground a grazing animal reaches, with no fence to keep it out, is eaten and trampled (#166):
+        // the reward for fencing the field, or reaping before the animals find it, is a fuller harvest. Marked as the
+        // stand ripens; a wattle/brush fence, or simply no grazers near, keeps it whole.
+        jdbc.update(
+            "UPDATE crop_stand cs SET grazed=true WHERE cs.harvested=false AND cs.grazed=false " +
+            "AND ? >= cs.sown_at + make_interval(days => cs.maturity_days) " +
+            "AND EXISTS (SELECT 1 FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id " +
+            "  WHERE es.chunk_id=cs.chunk_id AND wp.ecological_role='HERBIVORE' AND wp.population_count>0) " +
+            "AND NOT EXISTS (SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "  WHERE w.current_location_id=cs.chunk_id AND cp.project_kind IN ('WATTLE_FENCE','BRUSH_FENCE') " +
+            "  AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')",
+            ts);
+        // A stand left un-reaped past its whole season goes over and is lost outright.
         jdbc.update(
             "UPDATE crop_stand SET harvested=true, harvested_at=?, outcome='LOST' " +
             "WHERE harvested=false AND sown_at + make_interval(days => maturity_days + ?) <= ?",
