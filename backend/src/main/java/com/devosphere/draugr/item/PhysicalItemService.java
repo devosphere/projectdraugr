@@ -1158,8 +1158,26 @@ public class PhysicalItemService {
         if (at.isBefore(ripe))
             return new String[]{"FAILED", "The crop stands green and unripe; cut now, it would be wasted. It needs the rest of the season."};
         for (int i = 0; i < CROP_YIELD_HEADS; i++) createCarriedItem(chronicle, "wild_grain_head", "Wild grain head", at, "HARVESTED_CROP");
-        jdbc.update("UPDATE crop_stand SET harvested=true, harvested_at=? WHERE id=?", java.sql.Timestamp.from(at), crop.get("id"));
+        jdbc.update("UPDATE crop_stand SET harvested=true, harvested_at=?, outcome='REAPED' WHERE id=?", java.sql.Timestamp.from(at), crop.get("id"));
         return new String[]{"SUCCEEDED", "You cut the ripe stand and gather the heavy heads — far more grain than the handful you sowed, the season's increase come in."};
+    }
+
+    /** How long a ripe stand holds before it goes over — three weeks past its season, then the heads shatter and the birds have it. */
+    private static final int CROP_SPOIL_WINDOW_DAYS = 21;
+
+    /**
+     * Run the harvest deadline in the world tick (#162): a crop stand left un-reaped past its season goes over and is
+     * lost — the heads shatter, the birds and weather take it — so the harvest is a decision under time, not a stand
+     * that waits forever. A stand still within its ripe window, or already reaped, is untouched. Set-based: it loses
+     * every over-ripe stand at once, marking the loss LOST (distinct from a REAPED harvest) so the ground reads spent.
+     */
+    @Transactional
+    public void advanceCrops(Instant now) {
+        java.sql.Timestamp ts = java.sql.Timestamp.from(now);
+        jdbc.update(
+            "UPDATE crop_stand SET harvested=true, harvested_at=?, outcome='LOST' " +
+            "WHERE harvested=false AND sown_at + make_interval(days => maturity_days + ?) <= ?",
+            ts, CROP_SPOIL_WINDOW_DAYS, ts);
     }
     /** The soundest reachable tool of a process tool-class (owned or on-site), sound before worn before broken, so
      *  a spare good tool is used before a failing one — or null when none is in reach. Shares the tool key sets
