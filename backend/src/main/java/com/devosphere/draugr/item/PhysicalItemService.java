@@ -1114,6 +1114,53 @@ public class PhysicalItemService {
             }
         }
     }
+
+    /** How long sown grain takes to come up as a ripe stand — a season in the open ground. */
+    private static final int CROP_MATURITY_DAYS = 30;
+    /** One sown seed comes up as a stand worth several heads — the multiplication that makes cultivation worth the labour. */
+    private static final int CROP_YIELD_HEADS = 4;
+
+    /**
+     * Sow seed grain into open ground (#162 agriculture — seed → soil → crop). The grain a Chronicle carries can be
+     * worked into a grassland clearing as a crop, rather than eaten or ground: it comes up, over a season, as a stand
+     * that yields far more than the seed put in. One stand per ground at a time; grain wants open workable ground, not
+     * forest, mountain, or bog. This is the first step of farming — the wild-forage grain finally has somewhere to go
+     * but the quern.
+     */
+    @Transactional
+    public String[] sowCrop(UUID chronicle, UUID location, Instant at) {
+        String biome = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : null, location);
+        if (!"GRASSLAND".equals(biome))
+            return new String[]{"FAILED", "Grain wants open, workable ground — a grassland clearing — and this ground is not it."};
+        Integer growing = jdbc.queryForObject("SELECT COUNT(*) FROM crop_stand WHERE chunk_id=? AND harvested=false", Integer.class, location);
+        if (growing != null && growing > 0)
+            return new String[]{"FAILED", "A crop is already coming up on this ground; there is no room to sow another until it is reaped."};
+        if (!hasAtLeast(chronicle, "wild_grain", 1))
+            return new String[]{"FAILED", "You have no seed grain to sow — a handful of grain must come to hand first."};
+        consumeOne(chronicle, "wild_grain", at);
+        jdbc.update("INSERT INTO crop_stand (id, chunk_id, crop_key, sown_at, maturity_days, harvested) VALUES (?,?,?,?,?,false)",
+            UUID.randomUUID(), location, "wild_grain", java.sql.Timestamp.from(at), CROP_MATURITY_DAYS);
+        return new String[]{"SUCCEEDED", "You work the seed grain into the open ground and cover it over. If the ground is kind, it will come up as a stand of grain by the season's turn."};
+    }
+
+    /**
+     * Reap a ripe crop stand (#162 — harvest). A stand grown to maturity is cut and gathered as wild grain heads —
+     * several for the one seed sown — which thresh to grain and grind to flour by the chain that already exists, so the
+     * cultivated grain is functional end-to-end. A green stand is refused: reaping it early only wastes the crop.
+     */
+    @Transactional
+    public String[] harvestCrop(UUID chronicle, UUID location, Instant at) {
+        java.util.Map<String,Object> crop = jdbc.query(
+            "SELECT id, sown_at, maturity_days FROM crop_stand WHERE chunk_id=? AND harvested=false ORDER BY sown_at LIMIT 1 FOR UPDATE",
+            rs -> rs.next() ? java.util.Map.of("id", rs.getObject(1, UUID.class), "sown", rs.getTimestamp(2).toInstant(), "days", rs.getInt(3)) : null, location);
+        if (crop == null) return new String[]{"FAILED", "There is no crop growing here to reap."};
+        Instant ripe = ((Instant) crop.get("sown")).plus(java.time.Duration.ofDays((int) crop.get("days")));
+        if (at.isBefore(ripe))
+            return new String[]{"FAILED", "The crop stands green and unripe; cut now, it would be wasted. It needs the rest of the season."};
+        for (int i = 0; i < CROP_YIELD_HEADS; i++) createCarriedItem(chronicle, "wild_grain_head", "Wild grain head", at, "HARVESTED_CROP");
+        jdbc.update("UPDATE crop_stand SET harvested=true, harvested_at=? WHERE id=?", java.sql.Timestamp.from(at), crop.get("id"));
+        return new String[]{"SUCCEEDED", "You cut the ripe stand and gather the heavy heads — far more grain than the handful you sowed, the season's increase come in."};
+    }
     /** The soundest reachable tool of a process tool-class (owned or on-site), sound before worn before broken, so
      *  a spare good tool is used before a failing one — or null when none is in reach. Shares the tool key sets
      *  with the executeProcess gate and {@code hasCuttingTool}. Used to gate (a broken tool is refused) and to wear. */
