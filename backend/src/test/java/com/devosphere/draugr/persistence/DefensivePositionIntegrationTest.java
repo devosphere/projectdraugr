@@ -88,11 +88,10 @@ class DefensivePositionIntegrationTest {
         UUID world = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, chunk);
         Instant now = ticks.current().simulatedAt();
 
-        // The Chronicle fights unarmed and bare — clear whatever the arrival kit gave, so capability is energy alone
-        // and the fence's edge is what tells. Worn weapons/armour and thrown/held stock (stones, sling, bow, javelin).
+        // The Chronicle fights unarmed and bare — strip EVERYTHING the arrival kit gave (all equipped gear and all
+        // owned items), so capability is energy alone and the fence's edge is the only variable that tells.
         jdbc.update("DELETE FROM equipment_attachment WHERE chronicle_id=?", chronicle);
-        jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED' WHERE current_owner_id=? AND id IN " +
-            "(SELECT object_id FROM item_instance WHERE item_key IN ('field_stone','sling','javelin','hunting_bow','hunting_arrow','resin_torch'))", chronicle);
+        jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED' WHERE current_owner_id=? AND object_type='ITEM'", chronicle);
         // Only this predator stands here, so the confront faces it. A carnivore's role-based resistance (85, no
         // registry entry) is high enough that a bare-handed win is never a foregone conclusion whatever the exact
         // capability — so the fence's +18 edge is what shifts how many of the fixed rolls are won.
