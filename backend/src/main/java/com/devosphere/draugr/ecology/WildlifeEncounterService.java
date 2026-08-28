@@ -95,6 +95,14 @@ public class WildlifeEncounterService {
             boolean brandInHand = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key='resin_torch')", Boolean.class, chronicle));
             fireEdge = fireAtHand ? 15 : (brandInHand ? 10 : 0);
         }
+        // A defensive position (#132/#126): a completed perimeter fence or a raised lookout at hand gives the advantage
+        // of prepared ground — the fence between the Chronicle and the beast for it to break through, or the height and
+        // early warning of the lookout — so the same effort counts for more. Read the same way the fire edge is; it
+        // never makes a bare stand a sure thing, but it turns a near-run fight the Chronicle's way.
+        int positionEdge = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "WHERE w.current_location_id=? AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE' " +
+            "AND cp.project_kind IN ('WATTLE_FENCE','BRUSH_FENCE','LOOKOUT'))", Boolean.class, chunk)) ? 18 : 0;
         // A keen, edge-holding weapon bites deeper than a plain or knapped one (#75/#77/#180): a fire-hardened
         // spear point, or a forged copper axe. Each counts as a hand weapon (+35) and bites a little deeper on top
         // (+10), so a copper axe out-fights a stone one and a hardened spear a green one — the ordering runs
@@ -103,7 +111,7 @@ public class WildlifeEncounterService {
         // The metal ladder in the fight (#180/#184-187): each harder metal keeps a keener edge and bites deeper on
         // top of the hand-weapon count — bronze +18 over copper, iron +25, steel +35. So the ordering runs
         // stone(+35) < copper(+45) < bronze(+53) < iron(+60) < steel(+70), the terminal payoff of the extraction chain.
-        int capability = body.energy()/3 - body.injury()/2 - body.pain()/3 + body.handWeapon()*35 + (body.hardened()>0?10:0) + (body.bronze()>0?18:0) + (body.iron()>0?25:0) + (body.steel()>0?35:0) + (body.blunt()>0?22:0) + (body.javelin()>0?25:0) + (archery?40:0) + thrownStones + Math.min(20,body.poison()*20) + tacticBonus + fireEdge;
+        int capability = body.energy()/3 - body.injury()/2 - body.pain()/3 + body.handWeapon()*35 + (body.hardened()>0?10:0) + (body.bronze()>0?18:0) + (body.iron()>0?25:0) + (body.steel()>0?35:0) + (body.blunt()>0?22:0) + (body.javelin()>0?25:0) + (archery?40:0) + thrownStones + Math.min(20,body.poison()*20) + tacticBonus + fireEdge + positionEdge;
         // Registry resistance is authoritative when catalogued; the old role-based
         // bands remain the fallback. Registry values are species-scaled, so they are
         // lifted onto the same footing as the bands they replace.
