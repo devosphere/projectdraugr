@@ -13,7 +13,7 @@
 -- under draft, terrain/route effects, and the heavier vehicles (sledge, cart) that a yoke and a wheel bring.
 
 INSERT INTO item_definition (item_key, display_name, category, unit_mass_grams, unit_volume_ml, stackable, equippable, insulation_value) VALUES
-('travois', 'Travois', 'TOOL', 2800, 30000, FALSE, FALSE, 0)
+('travois', 'Travois', 'TOOL', 2800, 9000, FALSE, FALSE, 0)
 ON CONFLICT (item_key) DO NOTHING;
 
 INSERT INTO item_source (item_key, source_kind, detail) VALUES
