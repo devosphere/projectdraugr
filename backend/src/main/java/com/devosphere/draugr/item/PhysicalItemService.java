@@ -2083,11 +2083,18 @@ public class PhysicalItemService {
     private LoadState loadState(UUID chronicle) {
         // A carrying aid (pole/yoke/harness/pack frame) worn or held adds its bonus to sustained mass / bulk
         // capacity while equipped (#57 carry_aid_bonus). The single-object lift limit is unchanged — an aid
-        // spreads a load, it does not make one object lighter to heave.
+        // spreads a load, it does not make one object lighter to heave. A tamed draft animal hitched to a travois
+        // (#100) adds its species' haul to sustained mass/bulk — the beast drags the frame, so the handler moves
+        // far beyond their own back; it needs BOTH a travois to hand and a TAMED draft-capable beast, and adds 0
+        // otherwise. The single-object lift limit is again unchanged — a travois hauls a heap, not one heavier thing.
         Capacity cap=jdbc.query("SELECT c.sustained_mass_grams, c.direct_bulk_ml, c.maximum_single_lift_grams, COALESCE(a.load_conditioning,0), COALESCE(a.recovery_readiness,.5), " +
             "COALESCE((SELECT SUM(b.mass_bonus_grams) FROM equipment_attachment e JOIN item_instance ii ON ii.object_id=e.item_id JOIN carry_aid_bonus b ON b.item_key=ii.item_key WHERE e.chronicle_id=c.chronicle_id),0), " +
-            "COALESCE((SELECT SUM(b.bulk_bonus_ml)    FROM equipment_attachment e JOIN item_instance ii ON ii.object_id=e.item_id JOIN carry_aid_bonus b ON b.item_key=ii.item_key WHERE e.chronicle_id=c.chronicle_id),0) " +
-            "FROM chronicle_carry_capacity c LEFT JOIN chronicle_capability_adaptation a ON a.chronicle_id=c.chronicle_id WHERE c.chronicle_id=?",rs->rs.next()?new Capacity((int)(rs.getInt(1)*(1+rs.getDouble(4)*.12*rs.getDouble(5)))+rs.getInt(6),rs.getInt(2)+rs.getInt(7),(int)(rs.getInt(3)*(1+rs.getDouble(4)*.08*rs.getDouble(5)))):new Capacity(0,0,0),chronicle);
+            "COALESCE((SELECT SUM(b.bulk_bonus_ml)    FROM equipment_attachment e JOIN item_instance ii ON ii.object_id=e.item_id JOIN carry_aid_bonus b ON b.item_key=ii.item_key WHERE e.chronicle_id=c.chronicle_id),0), " +
+            "CASE WHEN EXISTS(SELECT 1 FROM item_instance ti JOIN world_object tw ON tw.id=ti.object_id WHERE ti.item_key='travois' AND tw.current_owner_id=c.chronicle_id AND tw.lifecycle_state='ACTIVE') " +
+            " THEN COALESCE((SELECT SUM(ds.haul_bonus_grams) FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id=wb.population_id JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wb.chronicle_id=c.chronicle_id AND wb.bond_stage='TAMED'),0) ELSE 0 END, " +
+            "CASE WHEN EXISTS(SELECT 1 FROM item_instance ti JOIN world_object tw ON tw.id=ti.object_id WHERE ti.item_key='travois' AND tw.current_owner_id=c.chronicle_id AND tw.lifecycle_state='ACTIVE') " +
+            " THEN COALESCE((SELECT SUM(ds.bulk_bonus_ml)    FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id=wb.population_id JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wb.chronicle_id=c.chronicle_id AND wb.bond_stage='TAMED'),0) ELSE 0 END " +
+            "FROM chronicle_carry_capacity c LEFT JOIN chronicle_capability_adaptation a ON a.chronicle_id=c.chronicle_id WHERE c.chronicle_id=?",rs->rs.next()?new Capacity((int)(rs.getInt(1)*(1+rs.getDouble(4)*.12*rs.getDouble(5)))+rs.getInt(6)+rs.getInt(8),rs.getInt(2)+rs.getInt(7)+rs.getInt(9),(int)(rs.getInt(3)*(1+rs.getDouble(4)*.08*rs.getDouble(5)))):new Capacity(0,0,0),chronicle);
         Load load=jdbc.query("WITH RECURSIVE carried(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN carried c ON ic.container_id=c.id) SELECT COALESCE(SUM(d.unit_mass_grams),0),COALESCE(SUM(d.unit_volume_ml),0),COALESCE(MAX(d.unit_mass_grams),0) FROM carried JOIN item_instance i ON i.object_id=carried.id JOIN item_definition d ON d.item_key=i.item_key",rs->rs.next()?new Load(rs.getInt(1),rs.getInt(2),rs.getInt(3)):new Load(0,0,0),chronicle);
         return new LoadState(load.mass(),load.volume(),load.largest(),cap.mass(),cap.volume(),cap.singleLift());
     }
