@@ -251,22 +251,35 @@ public class PhysicalItemService {
     private static final int DRAFT_FATIGUE_HARNESSED = 12; // proper harness/yoke spreads the load — the beast tires slower
     private static final int DRAFT_REST_RECOVERY = 40;
 
+    /** Terrain the draft team crosses easily — open ground a vehicle rolls or drags over without a fight. Everything
+     *  else (forest, mountain, highland, wetland, bog) is rough going that strains a hauling beast half again as hard,
+     *  so a keeper routes a loaded team over open country to spare it (#103 terrain/route). */
+    private boolean isEasyDraftGround(String biome) {
+        return "GRASSLAND".equals(biome) || "PLAINS".equals(biome) || "COAST".equals(biome);
+    }
+
     /** Work the Chronicle's hitched draft beasts (#101): moving or travelling with a draft vehicle to hand tires every
      *  tamed draft-capable beast bonded to them, up to spent. A beast with no vehicle to pull is not worked. Proper
-     *  draft gear — a harness or a yoke (#102) — spreads the load, so a harnessed beast tires slower for the same work. */
+     *  draft gear — a harness or a yoke (#102) — spreads the load, so a harnessed beast tires slower for the same work.
+     *  Rough ground (#103) tires it half again as hard — the reason a loaded team is routed over open country. */
     @Transactional
     public void workDraftBeasts(UUID chronicle) {
         boolean harnessed = Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM item_instance ti JOIN world_object tw ON tw.id=ti.object_id " +
             "WHERE ti.item_key IN ('draft_harness','draft_yoke') AND tw.current_owner_id=? AND tw.lifecycle_state='ACTIVE')",
             Boolean.class, chronicle));
+        String biome = jdbc.query("SELECT ch.biome FROM world_object cw JOIN world_chunk ch ON ch.id=cw.current_location_id WHERE cw.id=?",
+            rs -> rs.next() ? rs.getString(1) : null, chronicle);
+        int perWork = harnessed ? DRAFT_FATIGUE_HARNESSED : DRAFT_FATIGUE_PER_WORK;
+        if (!isEasyDraftGround(biome)) perWork = perWork * 3 / 2; // rough going strains the team half again as hard
+        final int fatiguePerWork = perWork;
         jdbc.update(
             "UPDATE wildlife_bond wb SET draft_fatigue = LEAST(100, draft_fatigue + ?), draft_conditioning = LEAST(100, draft_conditioning + 3) " +
             "WHERE wb.chronicle_id=? AND wb.bond_stage='TAMED' " +
             "AND EXISTS (SELECT 1 FROM wildlife_population wp JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wp.id=wb.population_id) " +
             "AND EXISTS (SELECT 1 FROM item_instance ti JOIN world_object tw ON tw.id=ti.object_id " +
             "  WHERE ti.item_key IN (SELECT item_key FROM draft_vehicle) AND tw.current_owner_id=? AND tw.lifecycle_state='ACTIVE')",
-            harnessed ? DRAFT_FATIGUE_HARNESSED : DRAFT_FATIGUE_PER_WORK, chronicle, chronicle);
+            fatiguePerWork, chronicle, chronicle);
     }
 
     /** Rest the Chronicle's draft beasts (#101): a spell of rest or sleep lets every bonded beast recover some fatigue,
