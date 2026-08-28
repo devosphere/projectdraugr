@@ -36,7 +36,7 @@ public class SimulationTickService {
         if (now.isBefore(simulationClock.getSimulatedAt())) now = simulationClock.getSimulatedAt();
         SimulationAgent.SimulationAssessment assessment = simulation.assess(simulationClock.getTick() + 1, now);
         weather.advanceTo(now); fires.advanceTo(now); food.advanceTo(now); construction.advanceTo(now); physiology.advanceTo(now);
-        wildlife.advanceTo(now); items.weatherExposedMetal(now); items.rotExposedOrganics(now); items.advanceCrops(now); items.restPennedDraftBeasts(now);
+        wildlife.advanceTo(now); items.weatherExposedMetal(now); items.rotExposedOrganics(now); items.advanceCrops(now); items.restPennedDraftBeasts(now); items.advanceDraftHunger(now);
         simulationClock.advanceTo(now);
         events.save(new WorldEvent(now, assessment.eventType(), null, null, Map.of()));
         return new SimulationTick(simulationClock.getTick(), simulationClock.getSimulatedAt());
@@ -48,7 +48,7 @@ public class SimulationTickService {
         Instant now = simulationClock.getSimulatedAt();
         SimulationAgent.SimulationAssessment assessment = simulation.assess(simulationClock.getTick(), now);
         weather.advanceTo(now); fires.advanceTo(now); food.advanceTo(now); construction.advanceTo(now); physiology.advanceTo(now);
-        wildlife.advanceTo(now); items.weatherExposedMetal(now); items.rotExposedOrganics(now); items.advanceCrops(now); items.restPennedDraftBeasts(now);
+        wildlife.advanceTo(now); items.weatherExposedMetal(now); items.rotExposedOrganics(now); items.advanceCrops(now); items.restPennedDraftBeasts(now); items.advanceDraftHunger(now);
         events.save(new WorldEvent(now, assessment.eventType(), null, null, Map.of("durationMinutes", duration.toMinutes())));
         return new SimulationTick(simulationClock.getTick(), now);
     }
