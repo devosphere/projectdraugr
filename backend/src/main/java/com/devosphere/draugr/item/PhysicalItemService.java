@@ -248,19 +248,25 @@ public class PhysicalItemService {
     /** How much a draft beast tires from one bout of work (moving/travelling with a vehicle hitched), and how much a
      *  spell of rest gives back. Fatigue scales its haul in loadState (#100/#101). */
     private static final int DRAFT_FATIGUE_PER_WORK = 20;
+    private static final int DRAFT_FATIGUE_HARNESSED = 12; // proper harness/yoke spreads the load — the beast tires slower
     private static final int DRAFT_REST_RECOVERY = 40;
 
     /** Work the Chronicle's hitched draft beasts (#101): moving or travelling with a draft vehicle to hand tires every
-     *  tamed draft-capable beast bonded to them, up to spent. A beast with no vehicle to pull is not worked. */
+     *  tamed draft-capable beast bonded to them, up to spent. A beast with no vehicle to pull is not worked. Proper
+     *  draft gear — a harness or a yoke (#102) — spreads the load, so a harnessed beast tires slower for the same work. */
     @Transactional
     public void workDraftBeasts(UUID chronicle) {
+        boolean harnessed = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM item_instance ti JOIN world_object tw ON tw.id=ti.object_id " +
+            "WHERE ti.item_key IN ('draft_harness','draft_yoke') AND tw.current_owner_id=? AND tw.lifecycle_state='ACTIVE')",
+            Boolean.class, chronicle));
         jdbc.update(
             "UPDATE wildlife_bond wb SET draft_fatigue = LEAST(100, draft_fatigue + ?), draft_conditioning = LEAST(100, draft_conditioning + 3) " +
             "WHERE wb.chronicle_id=? AND wb.bond_stage='TAMED' " +
             "AND EXISTS (SELECT 1 FROM wildlife_population wp JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wp.id=wb.population_id) " +
             "AND EXISTS (SELECT 1 FROM item_instance ti JOIN world_object tw ON tw.id=ti.object_id " +
             "  WHERE ti.item_key IN (SELECT item_key FROM draft_vehicle) AND tw.current_owner_id=? AND tw.lifecycle_state='ACTIVE')",
-            DRAFT_FATIGUE_PER_WORK, chronicle, chronicle);
+            harnessed ? DRAFT_FATIGUE_HARNESSED : DRAFT_FATIGUE_PER_WORK, chronicle, chronicle);
     }
 
     /** Rest the Chronicle's draft beasts (#101): a spell of rest or sleep lets every bonded beast recover some fatigue,
