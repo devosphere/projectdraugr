@@ -86,6 +86,7 @@ class DraftFatigueIntegrationTest {
         assertNotNull(summary, "awakening must produce a living Chronicle");
         UUID chronicle = summary.id();
         jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=500000, direct_bulk_ml=500000, maximum_single_lift_grams=500000 WHERE chronicle_id=?", chronicle);
+        jdbc.update("UPDATE world_chunk SET biome='GRASSLAND' WHERE id=(SELECT current_location_id FROM world_object WHERE id=?)", chronicle); // easy draft ground: isolate fatigue from terrain (#103)
         Instant now = ticks.current().simulatedAt();
         int base = 500000;
 

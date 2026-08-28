@@ -1,6 +1,5 @@
 package com.devosphere.draugr.persistence;
 
-import com.devosphere.draugr.action.ChronicleActionService;
 import com.devosphere.draugr.audit.PersistentStateAuditor;
 import com.devosphere.draugr.chronicle.ChronicleService;
 import com.devosphere.draugr.item.PhysicalItemService;
@@ -28,12 +27,13 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Draft harness / yoke (EPIC #100 / #102). Proper draft gear spreads the load, so a harnessed beast tires slower for
- * the same work. Proven on the haul: worked the same number of times, a beast with a made yoke to hand keeps more of
- * its haul than one pulling in a rough rig. Skips without Docker.
+ * Draft terrain (EPIC #100 / #103). Hauling a loaded team over rough ground strains it half again as hard as over
+ * open country — the reason a keeper routes a loaded team over pasture and plain. Proven on the haul: the same work
+ * done crossing forest tires the beast more, and it hauls less afterward, than the same work over grassland. Skips
+ * without Docker.
  */
 @SpringBootTest
-class DraftHarnessIntegrationTest {
+class DraftTerrainIntegrationTest {
 
     private static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
 
@@ -57,7 +57,6 @@ class DraftHarnessIntegrationTest {
     @Autowired WorldGenesisService worldGenesis;
     @Autowired WorldEcologyGenesisService ecology;
     @Autowired ChronicleService chronicles;
-    @Autowired ChronicleActionService actions;
     @Autowired PhysicalItemService items;
     @Autowired SimulationTickService ticks;
     @Autowired PersistentStateAuditor auditor;
@@ -76,20 +75,16 @@ class DraftHarnessIntegrationTest {
                 "VALUES (?,?,'TAMED',100,10,?)", chronicle, pop, Timestamp.from(now));
     }
 
-    private void resetDraft(UUID chronicle) {
+    private int haulAfterWorkOn(UUID chronicle, String biome, int bouts) {
+        jdbc.update("UPDATE world_chunk SET biome=? WHERE id=(SELECT current_location_id FROM world_object WHERE id=?)", biome, chronicle);
         jdbc.update("UPDATE wildlife_bond SET draft_fatigue=0, draft_conditioning=0, draft_hunger=0 WHERE chronicle_id=?", chronicle);
-    }
-
-    /** Capacity after N bouts of work, reading the fatigue scaling alone (conditioning zeroed). */
-    private int haulAfterWork(UUID chronicle, int bouts) {
-        resetDraft(chronicle);
         for (int i = 0; i < bouts; i++) items.workDraftBeasts(chronicle);
         jdbc.update("UPDATE wildlife_bond SET draft_conditioning=0 WHERE chronicle_id=?", chronicle);
         return items.sustainedMassCapacity(chronicle);
     }
 
     @Test
-    void aHarnessedBeastTiresSlowerForTheSameWork() {
+    void haulingOverRoughGroundTiresATeamMoreThanOverOpenCountry() {
         if (worldGenesis.current() == null) {
             worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
             ecology.seed();
@@ -98,23 +93,19 @@ class DraftHarnessIntegrationTest {
         assertNotNull(summary, "awakening must produce a living Chronicle");
         UUID chronicle = summary.id();
         jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=500000, direct_bulk_ml=500000, maximum_single_lift_grams=500000 WHERE chronicle_id=?", chronicle);
-        jdbc.update("UPDATE world_chunk SET biome='GRASSLAND' WHERE id=(SELECT current_location_id FROM world_object WHERE id=?)", chronicle); // easy draft ground: isolate fatigue from terrain (#103)
         Instant now = ticks.current().simulatedAt();
 
         items.createCarriedItem(chronicle, "travois", "Travois", now, "TEST");
         tameAnAurochs(chronicle, now);
 
-        // In a rough rig (no gear), three bouts tire it 60 (20 each) — it hauls 40% of 250 kg.
-        int rough = haulAfterWork(chronicle, 3);
-        assertEquals(500000 + 100000, rough, "an ungeared beast tires 20 per bout");
+        // Two bouts over open grassland tire it 40 (20 each) — it hauls 60% of 250 kg.
+        int easy = haulAfterWorkOn(chronicle, "GRASSLAND", 2);
+        assertEquals(500000 + 150000, easy, "over open ground a bout tires the team 20");
 
-        // Make a yoke; the same three bouts tire it only 36 (12 each) — it keeps more haul.
-        for (int i = 0; i < 2; i++) items.createCarriedItem(chronicle, "wooden_component", "Wooden component", now, "TEST");
-        items.createCarriedItem(chronicle, "fiber_cordage", "Fiber cordage", now, "TEST");
-        assertEquals("SUCCEEDED", actions.resolve("make an ox-yoke").outcome(), "making a yoke must succeed");
-        int geared = haulAfterWork(chronicle, 3);
-        assertEquals(500000 + 160000, geared, "a yoked beast tires only 12 per bout");
-        assertTrue(geared > rough, "proper draft gear lets a beast keep more of its haul under the same work");
+        // The same two bouts crossing forest tire it 60 (30 each, half again as hard) — it hauls less.
+        int rough = haulAfterWorkOn(chronicle, "TEMPERATE_FOREST", 2);
+        assertEquals(500000 + 100000, rough, "over rough ground a bout tires the team 30");
+        assertTrue(rough < easy, "rough terrain tires a hauling team more than open country");
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
