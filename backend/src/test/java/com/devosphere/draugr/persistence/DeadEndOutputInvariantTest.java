@@ -74,9 +74,9 @@ class DeadEndOutputInvariantTest {
             "bark_water_filter", "boiling_stone_set", "bone_awl", "bone_comb", "bone_fish_hook", "bone_needle",
             "bone_scraper", "bronze_fish_hook", "fish_trap", "hunting_arrow", "lead_sinker", "quern_stone",
             "steel_striker", "wooden_spoon",
-            // Draft haulage — a travois hitched to a tamed draft beast adds its haul to carry capacity (#100,
-            // PhysicalItemService.loadState reads a held travois + a TAMED draft_species bond).
-            "travois");
+            // Draft haulage — a draft vehicle (travois/sledge) hitched to a tamed draft beast adds its haul to carry
+            // capacity (#100, PhysicalItemService.loadState reads a held draft_vehicle + a TAMED draft_species bond).
+            "travois", "sledge");
 
     @Test
     void everyProducedItemIsTerminallyUsefulOrAKnownCodeReadItem() {
