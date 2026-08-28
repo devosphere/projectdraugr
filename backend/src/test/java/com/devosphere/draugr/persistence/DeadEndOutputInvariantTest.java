@@ -76,7 +76,9 @@ class DeadEndOutputInvariantTest {
             "steel_striker", "wooden_spoon",
             // Draft haulage — a draft vehicle (travois/sledge/cart/pack-saddle) hitched to a tamed draft beast adds its
             // haul to carry capacity (#100, PhysicalItemService.loadState reads a held draft_vehicle + a TAMED draft_species bond).
-            "travois", "sledge", "cart", "pack_saddle");
+            "travois", "sledge", "cart", "pack_saddle",
+            // Draft gear — a harness/yoke eases how fast a worked beast tires (PhysicalItemService.workDraftBeasts reads them).
+            "draft_harness", "draft_yoke");
 
     @Test
     void everyProducedItemIsTerminallyUsefulOrAKnownCodeReadItem() {
