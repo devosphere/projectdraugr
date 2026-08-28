@@ -106,7 +106,9 @@ class LandClearingIntegrationTest {
         assertEquals("SUCCEEDED", clear.outcome(), () -> "clearing wooded ground with an axe must succeed: " + clear.perception());
         assertTrue(cleared(plot), "the ground now reads as cleared, arable");
 
-        // Cleared ground tills and sows as open ground does.
+        // Cleared ground tills and sows as open ground does. Tillage wants a digging tool — give one explicitly so the
+        // test does not depend on whatever the arrival kit happens to hold under the shared test world.
+        items.createCarriedItem(chronicle, "digging_stick", "Digging stick", now, "TEST_TOOL");
         assertEquals("SUCCEEDED", actions.resolve("till the seedbed").outcome(), "cleared ground must be tillable");
         ChronicleActionService.ActionResult sow = actions.resolve("sow the seed grain in the field");
         assertEquals("SUCCEEDED", sow.outcome(), () -> "cleared, tilled ground must be sowable: " + sow.perception());
