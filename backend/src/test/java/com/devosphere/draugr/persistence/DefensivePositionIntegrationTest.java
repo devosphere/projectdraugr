@@ -65,7 +65,7 @@ class DefensivePositionIntegrationTest {
      *  every roll starts from the same footing. */
     private int winsOverSweep(UUID chronicle, UUID chunk, UUID pop, Instant now) {
         int wins = 0;
-        for (int i = 0; i < 30; i++) {
+        for (int i = 0; i < 50; i++) {
             jdbc.update("UPDATE chronicle_physiology SET energy_level=45, injury_severity=0, pain_level=0 WHERE chronicle_id=?", chronicle);
             jdbc.update("UPDATE wildlife_population SET population_count=50, behavior_state='FORAGING' WHERE id=?", pop);
             UUID action = UUID.nameUUIDFromBytes(("draugr-confront-" + i).getBytes());
@@ -93,14 +93,16 @@ class DefensivePositionIntegrationTest {
         jdbc.update("DELETE FROM equipment_attachment WHERE chronicle_id=?", chronicle);
         jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED' WHERE current_owner_id=? AND id IN " +
             "(SELECT object_id FROM item_instance WHERE item_key IN ('field_stone','sling','javelin','hunting_bow','hunting_arrow','resin_torch'))", chronicle);
-        // Only this herbivore stands here, so the confront faces it (no registry entry -> role-based resistance 42).
+        // Only this predator stands here, so the confront faces it. A carnivore's role-based resistance (85, no
+        // registry entry) is high enough that a bare-handed win is never a foregone conclusion whatever the exact
+        // capability — so the fence's +18 edge is what shifts how many of the fixed rolls are won.
         jdbc.update("DELETE FROM wildlife_population WHERE site_id IN (SELECT id FROM ecology_site WHERE chunk_id=?)", chunk);
         UUID site = UUID.randomUUID();
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE','Range',?)", site, chunk);
         jdbc.update("INSERT INTO ecology_site (id,world_id,chunk_id,site_category,site_kind,baseline_abundance) VALUES (?,?,?,'WILDLIFE','Range',60)", site, world, chunk);
         UUID pop = UUID.randomUUID();
         jdbc.update("INSERT INTO wildlife_population (id,site_id,species_key,ecological_role,activity_cycle,population_count,carrying_capacity,behavior_state,last_simulated_at) " +
-                "VALUES (?,?,'plains_grazer','HERBIVORE','DIURNAL',50,80,'FORAGING',?)", pop, site, Timestamp.from(now));
+                "VALUES (?,?,'lone_predator','CARNIVORE','DIURNAL',50,80,'FORAGING',?)", pop, site, Timestamp.from(now));
 
         // On open ground.
         int openWins = winsOverSweep(chronicle, chunk, pop, now);
