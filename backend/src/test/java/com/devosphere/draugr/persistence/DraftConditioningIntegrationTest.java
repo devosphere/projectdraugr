@@ -3,7 +3,6 @@ package com.devosphere.draugr.persistence;
 import com.devosphere.draugr.audit.PersistentStateAuditor;
 import com.devosphere.draugr.chronicle.ChronicleService;
 import com.devosphere.draugr.item.PhysicalItemService;
-import com.devosphere.draugr.action.ChronicleActionService;
 import com.devosphere.draugr.simulation.SimulationTickService;
 import com.devosphere.draugr.world.genesis.WorldEcologyGenesisService;
 import com.devosphere.draugr.world.genesis.WorldGenesisService;
@@ -28,12 +27,13 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Draft welfare (EPIC #100 / #101). A working beast tires: its haul falls as it is worked, and comes back only with
- * rest. Proven on the haul-capacity: a fresh aurochs adds its full haul; working it drops the haul in step with its
- * fatigue, to nothing when spent; a spell of rest restores it. Skips without Docker.
+ * Draft training (EPIC #100 / #101 working-animal progression). A seasoned beast hardens to the draught: it feels less
+ * of the fatigue a green beast does, so it keeps pulling where a green one would flag. Proven on the haul: at the same
+ * high fatigue, a fully-conditioned beast still hauls where an unconditioned one hauls nothing; and working a beast
+ * builds its conditioning. Skips without Docker.
  */
 @SpringBootTest
-class DraftFatigueIntegrationTest {
+class DraftConditioningIntegrationTest {
 
     private static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
 
@@ -57,7 +57,6 @@ class DraftFatigueIntegrationTest {
     @Autowired WorldGenesisService worldGenesis;
     @Autowired WorldEcologyGenesisService ecology;
     @Autowired ChronicleService chronicles;
-    @Autowired ChronicleActionService actions;
     @Autowired PhysicalItemService items;
     @Autowired SimulationTickService ticks;
     @Autowired PersistentStateAuditor auditor;
@@ -76,8 +75,12 @@ class DraftFatigueIntegrationTest {
                 "VALUES (?,?,'TAMED',100,10,?)", chronicle, pop, Timestamp.from(now));
     }
 
+    private void setDraft(UUID chronicle, int fatigue, int conditioning) {
+        jdbc.update("UPDATE wildlife_bond SET draft_fatigue=?, draft_conditioning=? WHERE chronicle_id=?", fatigue, conditioning, chronicle);
+    }
+
     @Test
-    void aWorkedBeastHaulsLessUntilItIsRested() {
+    void aSeasonedBeastEnduresFatigueAndWorkingBuildsConditioning() {
         if (worldGenesis.current() == null) {
             worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
             ecology.seed();
@@ -91,26 +94,24 @@ class DraftFatigueIntegrationTest {
 
         items.createCarriedItem(chronicle, "travois", "Travois", now, "TEST");
         tameAnAurochs(chronicle, now);
-        assertEquals(base + 250000, items.sustainedMassCapacity(chronicle), "a fresh aurochs adds its full haul");
 
-        // Work it twice (fatigue 40): the haul falls in step — 60% of 250 kg. (Working also builds conditioning, which
-        // eases fatigue's bite — a separate lever tested in DraftConditioningIntegrationTest — so zero it here to read
-        // the fatigue scaling alone.)
-        items.workDraftBeasts(chronicle);
-        items.workDraftBeasts(chronicle);
-        jdbc.update("UPDATE wildlife_bond SET draft_conditioning=0 WHERE chronicle_id=?", chronicle);
-        assertEquals(base + 150000, items.sustainedMassCapacity(chronicle), "a part-worked beast hauls less");
+        // A green beast worked to spent (fatigue 100, conditioning 0) hauls nothing.
+        setDraft(chronicle, 100, 0);
+        assertEquals(base, items.sustainedMassCapacity(chronicle), "a green, spent beast hauls nothing");
 
-        // Work it to spent (fatigue 100): it adds nothing.
-        items.workDraftBeasts(chronicle);
-        items.workDraftBeasts(chronicle);
-        items.workDraftBeasts(chronicle);
-        jdbc.update("UPDATE wildlife_bond SET draft_conditioning=0 WHERE chronicle_id=?", chronicle);
-        assertEquals(base, items.sustainedMassCapacity(chronicle), "a spent beast hauls nothing until it is rested");
+        // A fully-seasoned beast at the same fatigue feels only half of it, and still hauls half its worth.
+        setDraft(chronicle, 100, 100);
+        assertEquals(base + 125000, items.sustainedMassCapacity(chronicle), "a seasoned beast endures fatigue and still hauls");
 
-        // A spell of rest through the public action pipeline recovers it (fatigue 100 -> 60): 40% of 250 kg back.
-        assertEquals("SUCCEEDED", actions.resolve("rest a while").outcome(), "resting succeeds");
-        assertEquals(base + 100000, items.sustainedMassCapacity(chronicle), "rest brings the beast's haul back");
+        // Conditioning never lifts a fresh beast above its base haul — it is endurance, not strength.
+        setDraft(chronicle, 0, 100);
+        assertEquals(base + 250000, items.sustainedMassCapacity(chronicle), "a fresh beast hauls its base whatever its conditioning");
+
+        // Working the beast builds its conditioning (the earned progression) as it accrues fatigue.
+        setDraft(chronicle, 0, 0);
+        items.workDraftBeasts(chronicle);
+        Integer conditioning = jdbc.queryForObject("SELECT draft_conditioning FROM wildlife_bond WHERE chronicle_id=?", Integer.class, chronicle);
+        assertTrue(conditioning != null && conditioning > 0, () -> "working a beast builds its draft conditioning, got " + conditioning);
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }

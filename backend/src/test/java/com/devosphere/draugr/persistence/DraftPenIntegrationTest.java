@@ -100,8 +100,10 @@ class DraftPenIntegrationTest {
 
         items.createCarriedItem(chronicle, "travois", "Travois", now, "TEST");
         tameAnAurochs(chronicle, now);
-        // Work the beast to spent — it hauls nothing.
+        // Work the beast to spent — it hauls nothing. (Working also builds conditioning, which eases fatigue — a
+        // separate lever tested in DraftConditioningIntegrationTest — so zero it here to read the fatigue alone.)
         for (int i = 0; i < 5; i++) items.workDraftBeasts(chronicle);
+        jdbc.update("UPDATE wildlife_bond SET draft_conditioning=0 WHERE chronicle_id=?", chronicle);
         assertEquals(base, items.sustainedMassCapacity(chronicle), "a spent beast hauls nothing");
 
         // Build a pen through the public pipeline.
