@@ -170,10 +170,10 @@ public class ChronicleActionService {
             perception = "It is too dark to see the fine of it. With no fire and no light to work by, this is not something your hands can do by feel alone.";
         }
         else if (intent == Intent.OBSERVE) perception = survey(chronicle, resolvedAt);
-        else if (intent == Intent.MOVE) perception = move(chronicle, text, actionId, resolvedAt);
+        else if (intent == Intent.MOVE) { perception = move(chronicle, text, actionId, resolvedAt); items.workDraftBeasts(chronicle.id()); }
         else if (intent == Intent.TRAVEL) {
             if (localZone != null) { jdbc.update("UPDATE chronicle SET current_zone=? WHERE id=?", localZone, chronicle.id()); perception = "You cross the settlement to " + localZone + ", a short walk over ground you know by heart."; }
-            else { String[] r = travelTo(chronicle, travel, resolvedAt); outcome = r[0]; perception = r[1]; }
+            else { String[] r = travelTo(chronicle, travel, resolvedAt); outcome = r[0]; perception = r[1]; items.workDraftBeasts(chronicle.id()); }
         }
         else if (intent == Intent.MARK) { String[] r = markLandmark(chronicle, text, actionId, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.URINATE || intent == Intent.DEFECATE) {
@@ -182,8 +182,8 @@ public class ChronicleActionService {
             UUID waste = UUID.randomUUID();
             jdbc.update("INSERT INTO world_object (id, object_type, display_name, current_location_id) VALUES (?, 'WASTE', ?, ?)", waste, bowel ? "Human waste" : "Urine-soaked ground", chronicle.location());
             perception = "You take a brief moment away from the immediate ground around you.";
-        } else if (intent == Intent.REST) { physiology.rest(chronicle.id(), minutes); perception = "You remain still while the forest continues around you."; }
-        else if (intent == Intent.SLEEP) { boolean safe = physiology.sleep(chronicle.id(), minutes); perception = safe ? "You lie down under cover and let sleep take you. You wake to a changed sky, the deep tiredness lifted from your limbs." : "You settle onto the bare ground and drift into a broken, shallow sleep, waking stiff and only half-rested as the light shifts."; }
+        } else if (intent == Intent.REST) { physiology.rest(chronicle.id(), minutes); items.restDraftBeasts(chronicle.id()); perception = "You remain still while the forest continues around you."; }
+        else if (intent == Intent.SLEEP) { boolean safe = physiology.sleep(chronicle.id(), minutes); items.restDraftBeasts(chronicle.id()); perception = safe ? "You lie down under cover and let sleep take you. You wake to a changed sky, the deep tiredness lifted from your limbs." : "You settle onto the bare ground and drift into a broken, shallow sleep, waking stiff and only half-rested as the light shifts."; }
         else if (intent == Intent.GATHER_FIBER) { int bundles=items.gatherPlantFiber(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())); outcome=bundles>0?"SUCCEEDED":"FAILED"; perception=bundles>0?"You patiently separate usable plant fiber from the living growth around you.":"You search through the growth, but leave it as it is."; gatherEffectType="PLANT_FIBER_GATHERED"; gatherPayloadKey="bundles"; gatherCount=bundles; }
         else if (intent == Intent.GATHER_STONE) {
             // A pick breaks stone out of the ground far faster than bare hands prising at it — a proper metal pick
