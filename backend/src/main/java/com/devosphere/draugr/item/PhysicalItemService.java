@@ -287,6 +287,41 @@ public class PhysicalItemService {
             "  WHERE cw.id=wb.chronicle_id)", PEN_REST_RECOVERY);
     }
 
+    private static final int DRAFT_HUNGER_PER_TURN = 3;   // a beast grows hungry as the world turns
+    private static final int DRAFT_GRAZE_RELIEF   = 10;   // pasture feeds it faster than it hungers
+    private static final int DRAFT_FEED_RELIEF     = 60;   // a bundle of fodder is a good feed
+
+    /** Turn of the world for draft hunger (#104): every tamed draft beast grows a little hungrier, UNLESS its keeper is
+     *  on grassland — there it grazes the pasture and stays fed. A beast on bare or wooded ground must be brought fodder.
+     *  Set-based; runs in the tick. */
+    @Transactional
+    public void advanceDraftHunger(Instant now) {
+        jdbc.update(
+            "UPDATE wildlife_bond wb SET draft_hunger = CASE " +
+            "  WHEN EXISTS (SELECT 1 FROM world_object cw JOIN world_chunk ch ON ch.id=cw.current_location_id " +
+            "               WHERE cw.id=wb.chronicle_id AND ch.biome='GRASSLAND') " +
+            "  THEN GREATEST(0, draft_hunger - ?) ELSE LEAST(100, draft_hunger + ?) END " +
+            "WHERE wb.bond_stage='TAMED' AND EXISTS (SELECT 1 FROM wildlife_population wp JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wp.id=wb.population_id)",
+            DRAFT_GRAZE_RELIEF, DRAFT_HUNGER_PER_TURN);
+    }
+
+    /** Feed the keeper's draft beasts a bundle of cut fodder (#104): consumes one dry grass bundle to ease the hunger of
+     *  every tamed draft beast bonded to them. Wants a bundle to hand and a hungry beast to feed. */
+    @Transactional
+    public String[] feedDraftBeasts(UUID chronicle, Instant at) {
+        Integer hungry = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM wildlife_bond wb WHERE wb.chronicle_id=? AND wb.bond_stage='TAMED' AND wb.draft_hunger>0 " +
+            "AND EXISTS (SELECT 1 FROM wildlife_population wp JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wp.id=wb.population_id)",
+            Integer.class, chronicle);
+        if (hungry == null || hungry == 0) return new String[]{"FAILED", "None of your draft beasts is hungry — there is nothing to feed, or nothing tamed that pulls."};
+        if (!hasAtLeast(chronicle, "dry_grass_bundle", 1))
+            return new String[]{"FAILED", "You have no fodder to hand — a bundle of cut grass must come first before you can feed the beasts."};
+        consumeOne(chronicle, "dry_grass_bundle", at);
+        jdbc.update("UPDATE wildlife_bond SET draft_hunger = GREATEST(0, draft_hunger - ?) WHERE chronicle_id=? AND bond_stage='TAMED'",
+            DRAFT_FEED_RELIEF, chronicle);
+        return new String[]{"SUCCEEDED", "You shake out the bundle of dry grass and let the beasts feed, muzzles working through the fodder until the sharp edge of their hunger is off."};
+    }
+
     // ---- water handling (#71) ----------------------------------------------------------------------------
     private static final String[] WATER_VESSELS = {"waterskin","wooden_bucket","clay_pot","clay_jar","fired_bowl","fired_cup","clay_water_filter","wooden_bowl","wooden_trough"};
     /** Whether the Chronicle carries anything that can hold water to fill or boil in (#71). */
@@ -2133,9 +2168,9 @@ public class PhysicalItemService {
             "COALESCE((SELECT SUM(b.mass_bonus_grams) FROM equipment_attachment e JOIN item_instance ii ON ii.object_id=e.item_id JOIN carry_aid_bonus b ON b.item_key=ii.item_key WHERE e.chronicle_id=c.chronicle_id),0), " +
             "COALESCE((SELECT SUM(b.bulk_bonus_ml)    FROM equipment_attachment e JOIN item_instance ii ON ii.object_id=e.item_id JOIN carry_aid_bonus b ON b.item_key=ii.item_key WHERE e.chronicle_id=c.chronicle_id),0), " +
             "CASE WHEN EXISTS(SELECT 1 FROM item_instance ti JOIN world_object tw ON tw.id=ti.object_id WHERE ti.item_key IN (SELECT item_key FROM draft_vehicle) AND tw.current_owner_id=c.chronicle_id AND tw.lifecycle_state='ACTIVE') " +
-            " THEN COALESCE((SELECT SUM(ds.haul_bonus_grams * (100 - wb.draft_fatigue * (200 - wb.draft_conditioning) / 200) / 100) FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id=wb.population_id JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wb.chronicle_id=c.chronicle_id AND wb.bond_stage='TAMED'),0) ELSE 0 END, " +
+            " THEN COALESCE((SELECT SUM(ds.haul_bonus_grams * (100 - GREATEST(wb.draft_fatigue, wb.draft_hunger) * (200 - wb.draft_conditioning) / 200) / 100) FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id=wb.population_id JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wb.chronicle_id=c.chronicle_id AND wb.bond_stage='TAMED'),0) ELSE 0 END, " +
             "CASE WHEN EXISTS(SELECT 1 FROM item_instance ti JOIN world_object tw ON tw.id=ti.object_id WHERE ti.item_key IN (SELECT item_key FROM draft_vehicle) AND tw.current_owner_id=c.chronicle_id AND tw.lifecycle_state='ACTIVE') " +
-            " THEN COALESCE((SELECT SUM(ds.bulk_bonus_ml * (100 - wb.draft_fatigue * (200 - wb.draft_conditioning) / 200) / 100)    FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id=wb.population_id JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wb.chronicle_id=c.chronicle_id AND wb.bond_stage='TAMED'),0) ELSE 0 END " +
+            " THEN COALESCE((SELECT SUM(ds.bulk_bonus_ml * (100 - GREATEST(wb.draft_fatigue, wb.draft_hunger) * (200 - wb.draft_conditioning) / 200) / 100)    FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id=wb.population_id JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wb.chronicle_id=c.chronicle_id AND wb.bond_stage='TAMED'),0) ELSE 0 END " +
             "FROM chronicle_carry_capacity c LEFT JOIN chronicle_capability_adaptation a ON a.chronicle_id=c.chronicle_id WHERE c.chronicle_id=?",rs->rs.next()?new Capacity((int)(rs.getInt(1)*(1+rs.getDouble(4)*.12*rs.getDouble(5)))+rs.getInt(6)+rs.getInt(8),rs.getInt(2)+rs.getInt(7)+rs.getInt(9),(int)(rs.getInt(3)*(1+rs.getDouble(4)*.08*rs.getDouble(5)))):new Capacity(0,0,0),chronicle);
         Load load=jdbc.query("WITH RECURSIVE carried(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN carried c ON ic.container_id=c.id) SELECT COALESCE(SUM(d.unit_mass_grams),0),COALESCE(SUM(d.unit_volume_ml),0),COALESCE(MAX(d.unit_mass_grams),0) FROM carried JOIN item_instance i ON i.object_id=carried.id JOIN item_definition d ON d.item_key=i.item_key",rs->rs.next()?new Load(rs.getInt(1),rs.getInt(2),rs.getInt(3)):new Load(0,0,0),chronicle);
         return new LoadState(load.mass(),load.volume(),load.largest(),cap.mass(),cap.volume(),cap.singleLift());
