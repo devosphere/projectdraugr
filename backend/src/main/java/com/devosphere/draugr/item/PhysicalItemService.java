@@ -271,6 +271,22 @@ public class PhysicalItemService {
             DRAFT_REST_RECOVERY, chronicle);
     }
 
+    /** How much a penned beast recovers each turn of the world (#100/#108). */
+    private static final int PEN_REST_RECOVERY = 25;
+
+    /** Rest the draft beasts of any keeper who has a completed animal pen at hand (#108): each turn of the world, a
+     *  beast whose keeper stands where a pen stands recovers draft-fatigue even as the keeper works — so a pen keeps
+     *  the draft team fresh. Set-based over the whole world; runs in the tick. */
+    @Transactional
+    public void restPennedDraftBeasts(Instant now) {
+        jdbc.update(
+            "UPDATE wildlife_bond wb SET draft_fatigue = GREATEST(0, draft_fatigue - ?) " +
+            "WHERE wb.draft_fatigue > 0 AND EXISTS (" +
+            "  SELECT 1 FROM world_object cw JOIN construction_project cp ON cp.project_kind='ANIMAL_PEN' AND cp.state='COMPLETED' " +
+            "  JOIN world_object pw ON pw.id=cp.object_id AND pw.lifecycle_state='ACTIVE' AND pw.current_location_id=cw.current_location_id " +
+            "  WHERE cw.id=wb.chronicle_id)", PEN_REST_RECOVERY);
+    }
+
     // ---- water handling (#71) ----------------------------------------------------------------------------
     private static final String[] WATER_VESSELS = {"waterskin","wooden_bucket","clay_pot","clay_jar","fired_bowl","fired_cup","clay_water_filter","wooden_bowl","wooden_trough"};
     /** Whether the Chronicle carries anything that can hold water to fill or boil in (#71). */

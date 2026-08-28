@@ -171,6 +171,32 @@ public class ConstructionService {
         return new String[]{"FAILED", "You have nothing to raise a fence from — piled brushwood to lash, or withies and a blade to weave a wattle wall."};
     }
 
+    /**
+     * Raise an animal pen (#100/#108): a ring of posts and lashed rails to keep tamed stock. A field structure like a
+     * fence — one to a place. While it stands, a beast whose keeper is here recovers its draft-fatigue each turn even
+     * as the keeper works (PhysicalItemService.restPennedDraftBeasts), so the pen keeps the draft team fresh.
+     */
+    @Transactional
+    public String[] buildPen(UUID chronicle, UUID location, String text, Instant at) {
+        Timestamp ts = Timestamp.from(at);
+        Integer existing = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "WHERE w.current_location_id=? AND cp.project_kind='ANIMAL_PEN' AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE'",
+            Integer.class, location);
+        if (existing != null && existing > 0) return new String[]{"FAILED", "A pen already stands here; there is no room to ring another around this ground."};
+        if (!items.hasAtLeast(chronicle, "dry_branch", 8))
+            return new String[]{"FAILED", "A pen wants a ring of stout posts — eight sound branches at least — and you have not the wood to hand."};
+        String bind = null; for (String b : BRUSH_BIND) if (items.hasAtLeast(chronicle, b, 2)) { bind = b; break; }
+        if (bind == null) return new String[]{"FAILED", "You have the posts, but nothing to lash the rails with — two lengths of cordage or fibre must come first."};
+        for (int i = 0; i < 8; i++) items.consumeOne(chronicle, "dry_branch", at);
+        items.consumeOne(chronicle, bind, at); items.consumeOne(chronicle, bind, at);
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CONSTRUCTION','Animal pen',?)", id, location);
+        jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at,integrity_percent) VALUES (?,'ANIMAL_PEN','COMPLETED',100,?,100)", id, ts);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CONSTRUCTED',jsonb_build_object('projectKind','ANIMAL_PEN','bind',?))", id, ts, bind);
+        return new String[]{"SUCCEEDED", "You set a ring of posts and lash rails between them into a stout pen — ground your tamed beasts can be kept in, resting easy behind the rails while you are about other work."};
+    }
+
     /** Tall straight poles a lookout stand is raised on, best first (#127). */
     private static final String[] LOOKOUT_POLE = {"hazel_rod", "willow_branch"};
 
