@@ -88,7 +88,13 @@ class DefensivePositionIntegrationTest {
         UUID world = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, chunk);
         Instant now = ticks.current().simulatedAt();
 
-        // A plain herbivore to face (no registry entry -> role-based resistance), unarmed, no fire.
+        // The Chronicle fights unarmed and bare — clear whatever the arrival kit gave, so capability is energy alone
+        // and the fence's edge is what tells. Worn weapons/armour and thrown/held stock (stones, sling, bow, javelin).
+        jdbc.update("DELETE FROM equipment_attachment WHERE chronicle_id=?", chronicle);
+        jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED' WHERE current_owner_id=? AND id IN " +
+            "(SELECT object_id FROM item_instance WHERE item_key IN ('field_stone','sling','javelin','hunting_bow','hunting_arrow','resin_torch'))", chronicle);
+        // Only this herbivore stands here, so the confront faces it (no registry entry -> role-based resistance 42).
+        jdbc.update("DELETE FROM wildlife_population WHERE site_id IN (SELECT id FROM ecology_site WHERE chunk_id=?)", chunk);
         UUID site = UUID.randomUUID();
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE','Range',?)", site, chunk);
         jdbc.update("INSERT INTO ecology_site (id,world_id,chunk_id,site_category,site_kind,baseline_abundance) VALUES (?,?,?,'WILDLIFE','Range',60)", site, world, chunk);
