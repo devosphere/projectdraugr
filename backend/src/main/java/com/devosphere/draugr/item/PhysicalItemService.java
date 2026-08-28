@@ -245,6 +245,32 @@ public class PhysicalItemService {
     @Transactional(readOnly = true)
     public int sustainedMassCapacity(UUID chronicle) { return loadState(chronicle).sustainedMassCapacityGrams(); }
 
+    /** How much a draft beast tires from one bout of work (moving/travelling with a vehicle hitched), and how much a
+     *  spell of rest gives back. Fatigue scales its haul in loadState (#100/#101). */
+    private static final int DRAFT_FATIGUE_PER_WORK = 20;
+    private static final int DRAFT_REST_RECOVERY = 40;
+
+    /** Work the Chronicle's hitched draft beasts (#101): moving or travelling with a draft vehicle to hand tires every
+     *  tamed draft-capable beast bonded to them, up to spent. A beast with no vehicle to pull is not worked. */
+    @Transactional
+    public void workDraftBeasts(UUID chronicle) {
+        jdbc.update(
+            "UPDATE wildlife_bond wb SET draft_fatigue = LEAST(100, draft_fatigue + ?) " +
+            "WHERE wb.chronicle_id=? AND wb.bond_stage='TAMED' " +
+            "AND EXISTS (SELECT 1 FROM wildlife_population wp JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wp.id=wb.population_id) " +
+            "AND EXISTS (SELECT 1 FROM item_instance ti JOIN world_object tw ON tw.id=ti.object_id " +
+            "  WHERE ti.item_key IN (SELECT item_key FROM draft_vehicle) AND tw.current_owner_id=? AND tw.lifecycle_state='ACTIVE')",
+            DRAFT_FATIGUE_PER_WORK, chronicle, chronicle);
+    }
+
+    /** Rest the Chronicle's draft beasts (#101): a spell of rest or sleep lets every bonded beast recover some fatigue,
+     *  down to fresh. The beast rests where its handler rests. */
+    @Transactional
+    public void restDraftBeasts(UUID chronicle) {
+        jdbc.update("UPDATE wildlife_bond SET draft_fatigue = GREATEST(0, draft_fatigue - ?) WHERE chronicle_id=? AND draft_fatigue > 0",
+            DRAFT_REST_RECOVERY, chronicle);
+    }
+
     // ---- water handling (#71) ----------------------------------------------------------------------------
     private static final String[] WATER_VESSELS = {"waterskin","wooden_bucket","clay_pot","clay_jar","fired_bowl","fired_cup","clay_water_filter","wooden_bowl","wooden_trough"};
     /** Whether the Chronicle carries anything that can hold water to fill or boil in (#71). */
@@ -2091,9 +2117,9 @@ public class PhysicalItemService {
             "COALESCE((SELECT SUM(b.mass_bonus_grams) FROM equipment_attachment e JOIN item_instance ii ON ii.object_id=e.item_id JOIN carry_aid_bonus b ON b.item_key=ii.item_key WHERE e.chronicle_id=c.chronicle_id),0), " +
             "COALESCE((SELECT SUM(b.bulk_bonus_ml)    FROM equipment_attachment e JOIN item_instance ii ON ii.object_id=e.item_id JOIN carry_aid_bonus b ON b.item_key=ii.item_key WHERE e.chronicle_id=c.chronicle_id),0), " +
             "CASE WHEN EXISTS(SELECT 1 FROM item_instance ti JOIN world_object tw ON tw.id=ti.object_id WHERE ti.item_key IN (SELECT item_key FROM draft_vehicle) AND tw.current_owner_id=c.chronicle_id AND tw.lifecycle_state='ACTIVE') " +
-            " THEN COALESCE((SELECT SUM(ds.haul_bonus_grams) FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id=wb.population_id JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wb.chronicle_id=c.chronicle_id AND wb.bond_stage='TAMED'),0) ELSE 0 END, " +
+            " THEN COALESCE((SELECT SUM(ds.haul_bonus_grams * (100 - wb.draft_fatigue) / 100) FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id=wb.population_id JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wb.chronicle_id=c.chronicle_id AND wb.bond_stage='TAMED'),0) ELSE 0 END, " +
             "CASE WHEN EXISTS(SELECT 1 FROM item_instance ti JOIN world_object tw ON tw.id=ti.object_id WHERE ti.item_key IN (SELECT item_key FROM draft_vehicle) AND tw.current_owner_id=c.chronicle_id AND tw.lifecycle_state='ACTIVE') " +
-            " THEN COALESCE((SELECT SUM(ds.bulk_bonus_ml)    FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id=wb.population_id JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wb.chronicle_id=c.chronicle_id AND wb.bond_stage='TAMED'),0) ELSE 0 END " +
+            " THEN COALESCE((SELECT SUM(ds.bulk_bonus_ml * (100 - wb.draft_fatigue) / 100)    FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id=wb.population_id JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wb.chronicle_id=c.chronicle_id AND wb.bond_stage='TAMED'),0) ELSE 0 END " +
             "FROM chronicle_carry_capacity c LEFT JOIN chronicle_capability_adaptation a ON a.chronicle_id=c.chronicle_id WHERE c.chronicle_id=?",rs->rs.next()?new Capacity((int)(rs.getInt(1)*(1+rs.getDouble(4)*.12*rs.getDouble(5)))+rs.getInt(6)+rs.getInt(8),rs.getInt(2)+rs.getInt(7)+rs.getInt(9),(int)(rs.getInt(3)*(1+rs.getDouble(4)*.08*rs.getDouble(5)))):new Capacity(0,0,0),chronicle);
         Load load=jdbc.query("WITH RECURSIVE carried(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN carried c ON ic.container_id=c.id) SELECT COALESCE(SUM(d.unit_mass_grams),0),COALESCE(SUM(d.unit_volume_ml),0),COALESCE(MAX(d.unit_mass_grams),0) FROM carried JOIN item_instance i ON i.object_id=carried.id JOIN item_definition d ON d.item_key=i.item_key",rs->rs.next()?new Load(rs.getInt(1),rs.getInt(2),rs.getInt(3)):new Load(0,0,0),chronicle);
         return new LoadState(load.mass(),load.volume(),load.largest(),cap.mass(),cap.volume(),cap.singleLift());
