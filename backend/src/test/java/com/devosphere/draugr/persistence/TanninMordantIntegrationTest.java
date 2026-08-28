@@ -92,7 +92,8 @@ class TanninMordantIntegrationTest {
         items.createCarriedItem(chronicle, "pigment", "Ground pigment", now, "TEST");
         items.createCarriedItem(chronicle, "linen_cloth", "Linen cloth", now, "TEST");
         int mordantBefore = owned(chronicle, "tannin_mordant");
-        ChronicleActionService.ActionResult dye = actions.resolve("dye the cloth fast with the mordant");
+        // "mordant the cloth" is unambiguous — only mordant_dye_cloth carries that keyword (plain dye_cloth does not).
+        ChronicleActionService.ActionResult dye = actions.resolve("mordant the cloth with the pigment");
         assertEquals("SUCCEEDED", dye.outcome(), () -> "mordant-dyeing must succeed: " + dye.perception());
         assertTrue(owned(chronicle, "dyed_cloth") >= 1, () -> "mordant-dyeing yields dyed cloth, got " + owned(chronicle, "dyed_cloth"));
         assertEquals(mordantBefore - 1, owned(chronicle, "tannin_mordant"), "the mordant is consumed — proving the mordant path ran, not the plain dyeing");
