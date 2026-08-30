@@ -82,8 +82,8 @@ class WildFoodsBatch1IntegrationTest {
         jdbc.update("UPDATE world_chunk SET biome='GRASSLAND' WHERE id=?", chunk); // wild carrot grows in grassland
         jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
 
-        // Gather it in the world.
-        ChronicleActionService.ActionResult dig = actions.resolve("dig wild carrot root in the grass");
+        // Gather it in the world ("gather" is the forage verb; "dig" alone is not a gather intent).
+        ChronicleActionService.ActionResult dig = actions.resolve("gather the wild carrot root here");
         assertEquals("SUCCEEDED", dig.outcome(), () -> "gathering a wild carrot must succeed: " + dig.perception());
         assertTrue(owned(chronicle, "wild_carrot_root") >= 1, () -> "digging yields a wild carrot root, got " + owned(chronicle, "wild_carrot_root"));
 
