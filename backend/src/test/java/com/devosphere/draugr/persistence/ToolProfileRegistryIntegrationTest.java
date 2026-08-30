@@ -56,9 +56,11 @@ class ToolProfileRegistryIntegrationTest {
 
     @Test
     void theRegistryReproducesTheOldToolClassSwitch() {
-        assertEquals(9, classCount("CUTTING"));
-        assertEquals(5, classCount("STRIKING"));
-        assertEquals(6, classCount("AXE"));
+        // At least the seed counts: the registry reproduces the old switch, and later migrations legitimately add
+        // more tools of each class (that is the whole point of making it data-driven — e.g. the #93 knives add CUTTING).
+        assertTrue(classCount("CUTTING") >= 9, () -> "CUTTING must include at least the seeded 9, got " + classCount("CUTTING"));
+        assertTrue(classCount("STRIKING") >= 5, () -> "STRIKING must include at least the seeded 5, got " + classCount("STRIKING"));
+        assertTrue(classCount("AXE") >= 6, () -> "AXE must include at least the seeded 6, got " + classCount("AXE"));
         // a stone hatchet is both a cutting edge and an axe — the composite key allows an item in two classes
         assertTrue(serves("stone_hatchet", "CUTTING"));
         assertTrue(serves("stone_hatchet", "AXE"));
