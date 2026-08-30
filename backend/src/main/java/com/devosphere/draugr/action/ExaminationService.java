@@ -89,24 +89,47 @@ public class ExaminationService {
         if (!flora.isEmpty())
             b.append(capitalize(joinAnd(flora))).append(flora.size() == 1 ? " grows within reach. " : " grow within reach. ");
 
+        String biome = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : null, chunk);
+
         // Wildlife — the conspicuous graze in the open; the shy leave only sign; a keener eye reads more.
         List<Map<String, Object>> animals = orEmpty(jdbc.queryForList(
             "SELECT wp.species_key, wp.ecological_role, COALESCE(ws.size_tier,'SMALL') AS size_tier, wp.activity_cycle " +
             "FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id " +
             "LEFT JOIN wildlife_species ws ON ws.species_key=wp.species_key " +
             "WHERE es.chunk_id=? AND wp.population_count>0 ORDER BY wp.population_count DESC", chunk));
+        java.util.Set<String> namedKeys = new java.util.HashSet<>();
         int named = 0, cap = acuity >= 0.6 ? 3 : acuity >= 0.3 ? 2 : 1;
         for (Map<String, Object> a : animals) {
             if (named >= cap) break;
+            String key = (String) a.get("species_key");
             double vis = visibility((String) a.get("size_tier"), (String) a.get("ecological_role"), (String) a.get("activity_cycle"));
-            String name = humanize((String) a.get("species_key"));
-            if (vis >= 1.0 - acuity) { b.append(seenLine(name, (String) a.get("ecological_role"))); named++; }
-            else if (acuity >= 0.5) { b.append("You find the sign of ").append(name).append(" — tracks pressed into the ground. "); named++; }
+            String name = humanize(key);
+            if (vis >= 1.0 - acuity) { b.append(seenLine(name, (String) a.get("ecological_role"))); named++; namedKeys.add(key); }
+            else if (acuity >= 0.5) { b.append("You find the sign of ").append(name).append(" — tracks pressed into the ground. "); named++; namedKeys.add(key); }
+        }
+
+        // Ambient fauna (#74) — the ordinary small and medium creatures a biome carries even with no seeded herd here.
+        // Drawn straight from the species registry by biome affinity (as the fish line does), so every registered
+        // land creature is a real, perceivable inhabitant of the ground it belongs to — not a catalogue token. A
+        // per-chunk deterministic order gives each place its own cast; the same visibility model gates what's seen.
+        if (named < cap && biome != null) {
+            List<Map<String, Object>> ambient = orEmpty(jdbc.queryForList(
+                "SELECT species_key, ecological_role, size_tier, activity_cycle FROM wildlife_species " +
+                "WHERE movement_class <> 'AQUATIC' AND biome_affinity ILIKE ? " +
+                "ORDER BY md5(species_key || ?::text)", "%" + biome + "%", chunk.toString()));
+            for (Map<String, Object> a : ambient) {
+                if (named >= cap) break;
+                String key = (String) a.get("species_key");
+                if (namedKeys.contains(key)) continue;
+                double vis = visibility((String) a.get("size_tier"), (String) a.get("ecological_role"), (String) a.get("activity_cycle"));
+                String name = humanize(key);
+                if (vis >= 1.0 - acuity) { b.append(seenLine(name, (String) a.get("ecological_role"))); named++; namedKeys.add(key); }
+                else if (acuity >= 0.6) { b.append("You find the sign of ").append(name).append(" — small tracks and disturbed leaf litter. "); named++; namedKeys.add(key); }
+            }
         }
 
         // Fish — visible in the water to a moderate eye, where the biome holds them.
         if (acuity >= 0.4) {
-            String biome = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : null, chunk);
             List<String> fish = orEmpty(jdbc.query(
                 "SELECT species_key FROM wildlife_species WHERE movement_class='AQUATIC' AND biome_affinity ILIKE ? ORDER BY species_key LIMIT 1",
                 (rs, i) -> humanize(rs.getString(1)), "%" + biome + "%"));
