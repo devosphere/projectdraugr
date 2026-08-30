@@ -13,6 +13,7 @@ import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Story #93 enabler — the weapon profile registry. confront now reads a Chronicle's combat capability from
@@ -51,7 +52,9 @@ class WeaponProfileRegistryIntegrationTest {
     @Test
     void theRegistryReproducesTheOldHardcodedWeaponLists() {
         // the nine hand weapons the old confront list held
-        assertEquals(9, (int) jdbc.queryForObject("SELECT COUNT(*) FROM weapon_profile WHERE combat_role='HAND'", Integer.class));
+        // At least the nine seeded hand weapons; later #93 batches legitimately add more (that is the point of the registry).
+        assertTrue(jdbc.queryForObject("SELECT COUNT(*) FROM weapon_profile WHERE combat_role='HAND'", Integer.class) >= 9,
+            "HAND weapons must include at least the seeded nine");
         // edge tiers drive the extra bite, in the same order confront used
         assertEquals("BRONZE", jdbc.queryForObject("SELECT edge_tier FROM weapon_profile WHERE item_key='bronze_axe'", String.class));
         assertEquals("IRON", jdbc.queryForObject("SELECT edge_tier FROM weapon_profile WHERE item_key='iron_axe'", String.class));
