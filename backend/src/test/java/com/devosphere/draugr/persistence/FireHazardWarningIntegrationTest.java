@@ -20,6 +20,7 @@ import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.UUID;
@@ -97,6 +98,15 @@ class FireHazardWarningIntegrationTest {
         UUID chronicle = summary.id();
         UUID chunk = jdbc.queryForObject("SELECT id FROM world_chunk WHERE biome='TEMPERATE_FOREST' ORDER BY grid_y, grid_x LIMIT 1", UUID.class);
         UUID world = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, chunk);
+        // The daily weather is deterministic (seed+day), and the survey's own sim-tick re-rolls to it — so setWeather
+        // is washed out on a rain day and the dry-weather fire warning would flakily vanish. Advance to a dry day
+        // (CLEAR/OVERCAST — what groundFireHazard counts as dry) so the survey's re-roll keeps the condition the test needs.
+        for (int d = 0; d < 40; d++) {
+            weather.advanceTo(ticks.current().simulatedAt());
+            String wk = jdbc.queryForObject("SELECT weather_kind FROM world_weather WHERE world_id=?", String.class, world);
+            if ("CLEAR".equals(wk) || "OVERCAST".equals(wk)) break;
+            ticks.advanceBy(Duration.ofDays(1));
+        }
         Instant base = ticks.current().simulatedAt();
 
         UUID pit = UUID.randomUUID();
