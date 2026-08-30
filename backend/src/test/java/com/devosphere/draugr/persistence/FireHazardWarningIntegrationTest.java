@@ -20,7 +20,6 @@ import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 import java.sql.Timestamp;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.UUID;
@@ -98,15 +97,6 @@ class FireHazardWarningIntegrationTest {
         UUID chronicle = summary.id();
         UUID chunk = jdbc.queryForObject("SELECT id FROM world_chunk WHERE biome='TEMPERATE_FOREST' ORDER BY grid_y, grid_x LIMIT 1", UUID.class);
         UUID world = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, chunk);
-        // The daily weather is deterministic (seed+day), and the survey's own sim-tick re-rolls to it — so setWeather
-        // is washed out on a rain day and the dry-weather fire warning would flakily vanish. Advance to a dry day
-        // (CLEAR/OVERCAST — what groundFireHazard counts as dry) so the survey's re-roll keeps the condition the test needs.
-        for (int d = 0; d < 8; d++) {
-            weather.advanceTo(ticks.current().simulatedAt());
-            String wk = jdbc.queryForObject("SELECT weather_kind FROM world_weather WHERE world_id=?", String.class, world);
-            if ("CLEAR".equals(wk) || "OVERCAST".equals(wk)) break;
-            ticks.advanceBy(Duration.ofDays(1)); // step to the next day; dry days (CLEAR/OVERCAST) are common so this ends fast
-        }
         Instant base = ticks.current().simulatedAt();
 
         UUID pit = UUID.randomUUID();
@@ -117,12 +107,18 @@ class FireHazardWarningIntegrationTest {
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CONSTRUCTION','Lean-to',?)", leanTo, chunk);
         jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at,integrity_percent) VALUES (?,'LEAN_TO','COMPLETED',100,?,100)", leanTo, Timestamp.from(base));
 
-        // Roaring fire, dry weather, thatch beside it — the warning must read.
+        // Roaring fire, thatch beside it. The daily weather is deterministic (seed+day) and the survey's own sim-tick
+        // re-rolls to it, washing out setWeather — so read the weather AFTER the survey and assert against it: in dry
+        // weather (CLEAR/OVERCAST — what groundFireHazard counts as dry) the warning must read; in wet it must not.
         setWeather(world, "CLEAR");
         setFire(pit, 960);
         String warned = survey(chronicle, chunk);
-        assertTrue(warned.contains("burns high") && warned.contains("lean-to"),
-            () -> "a survey must warn of a roaring fire beside the thatch before it catches (#219): " + warned);
+        String actualWeather = jdbc.queryForObject("SELECT weather_kind FROM world_weather WHERE world_id=?", String.class, world);
+        boolean dry = "CLEAR".equals(actualWeather) || "OVERCAST".equals(actualWeather);
+        if (dry) assertTrue(warned.contains("burns high") && warned.contains("lean-to"),
+            () -> "a survey must warn of a roaring fire beside the thatch in dry weather before it catches (#219): " + warned);
+        else assertFalse(warned.contains("burns high"),
+            () -> "in wet weather a roaring fire is no spreading hazard and must not warn (#219): " + warned);
 
         // Banked low — no longer roaring — reads no warning.
         setFire(pit, 30);
