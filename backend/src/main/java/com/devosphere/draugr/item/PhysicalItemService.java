@@ -1424,17 +1424,13 @@ public class PhysicalItemService {
      *  a spare good tool is used before a failing one — or null when none is in reach. Shares the tool key sets
      *  with the executeProcess gate and {@code hasCuttingTool}. Used to gate (a broken tool is refused) and to wear. */
     private java.util.Map<String,Object> soundestToolOfClass(UUID chronicle, UUID location, String toolClass) {
-        java.util.List<String> keys = switch (toolClass) {
-            case "CUTTING"  -> java.util.List.of("stone_knife","stone_hatchet","stone_flake","stone_adze","stone_chisel","flint_burin","flint_scraper","bone_scraper","bronze_knife");
-            case "STRIKING" -> java.util.List.of("stone_hammer","primitive_pickaxe","field_stone","granite_cobble","basalt_cobble");
-            case "AXE"      -> java.util.List.of("stone_axe","stone_hatchet","copper_axe","bronze_axe","iron_axe","steel_axe");
-            default -> null;
-        };
-        if (keys == null) return null;
-        String inList = keys.stream().map(k -> "'" + k + "'").collect(java.util.stream.Collectors.joining(","));
+        // Which items serve as this tool class is data-driven (#93): tool_profile is the single source of truth, so a
+        // newly crafted knife/hammer/axe works the moment its row exists, no Java change. Guard the class name so an
+        // unknown class still returns null (the old switch's default).
+        if (!("CUTTING".equals(toolClass) || "STRIKING".equals(toolClass) || "AXE".equals(toolClass))) return null;
         return jdbc.query(REACHABLE_CTE +
             "SELECT i.object_id, i.condition_state, i.use_count, i.item_key FROM reachable r JOIN item_instance i ON i.object_id=r.id " +
-            "WHERE i.item_key IN (" + inList + ") " +
+            "WHERE i.item_key IN (SELECT item_key FROM tool_profile WHERE tool_class='" + toolClass + "') " +
             "ORDER BY CASE i.condition_state WHEN 'SOUND' THEN 0 WHEN 'WORN' THEN 1 WHEN 'BROKEN' THEN 2 ELSE 3 END, i.use_count LIMIT 1",
             rs -> rs.next() ? java.util.Map.of("id", rs.getObject(1, UUID.class), "cond", rs.getString(2), "uses", rs.getInt(3), "key", rs.getString(4)) : null,
             chronicle, location);
