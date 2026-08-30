@@ -1289,7 +1289,8 @@ public class PhysicalItemService {
     public String[] tillGround(UUID chronicle, UUID location, Instant at) {
         if (!isArable(location))
             return new String[]{"FAILED", "Tillage wants open, workable ground — a grassland clearing, or wooded ground you have first cleared — and this ground is not it."};
-        if (!hasAtLeast(chronicle, "digging_stick", 1) && !hasAtLeast(chronicle, "wooden_shovel", 1))
+        if (!hasAtLeast(chronicle, "digging_stick", 1) && !hasAtLeast(chronicle, "wooden_shovel", 1)
+                && !hasAtLeast(chronicle, "fire_hardened_digging_stick", 1))
             return new String[]{"FAILED", "Breaking ground wants a tool — a digging stick or a shovel — and you have none to hand."};
         Integer growing = jdbc.queryForObject("SELECT COUNT(*) FROM crop_stand WHERE chunk_id=? AND harvested=false", Integer.class, location);
         if (growing != null && growing > 0)
