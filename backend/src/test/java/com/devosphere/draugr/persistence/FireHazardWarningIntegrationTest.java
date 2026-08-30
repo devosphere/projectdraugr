@@ -101,11 +101,11 @@ class FireHazardWarningIntegrationTest {
         // The daily weather is deterministic (seed+day), and the survey's own sim-tick re-rolls to it — so setWeather
         // is washed out on a rain day and the dry-weather fire warning would flakily vanish. Advance to a dry day
         // (CLEAR/OVERCAST — what groundFireHazard counts as dry) so the survey's re-roll keeps the condition the test needs.
-        for (int d = 0; d < 40; d++) {
+        for (int d = 0; d < 8; d++) {
             weather.advanceTo(ticks.current().simulatedAt());
             String wk = jdbc.queryForObject("SELECT weather_kind FROM world_weather WHERE world_id=?", String.class, world);
             if ("CLEAR".equals(wk) || "OVERCAST".equals(wk)) break;
-            ticks.advanceBy(Duration.ofDays(1));
+            ticks.advanceBy(Duration.ofDays(1)); // step to the next day; dry days (CLEAR/OVERCAST) are common so this ends fast
         }
         Instant base = ticks.current().simulatedAt();
 
