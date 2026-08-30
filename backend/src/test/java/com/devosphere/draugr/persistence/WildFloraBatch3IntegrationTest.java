@@ -112,12 +112,13 @@ class WildFloraBatch3IntegrationTest {
             () -> "gathering yields self-heal leaves, got " + owned(chronicle, "self_heal_leaf"));
 
         int poulticesBefore = owned(chronicle, "herbal_poultice");
+        int leavesBefore = owned(chronicle, "self_heal_leaf");
         var pound = actions.resolve("pound a self heal poultice");
         assertEquals("SUCCEEDED", pound.outcome(), () -> "pounding a self-heal poultice must succeed: " + pound.perception());
         assertEquals(poulticesBefore + 1, owned(chronicle, "herbal_poultice"),
             "pounding self-heal produces an herbal poultice — a fresh herb becomes real wound care");
-        assertTrue(owned(chronicle, "self_heal_leaf") <= 0 || owned(chronicle, "self_heal_leaf") < 2,
-            "the poultice consumes the gathered leaves");
+        assertEquals(leavesBefore - 2, owned(chronicle, "self_heal_leaf"),
+            "the poultice consumes exactly the two leaves it pounds");
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
