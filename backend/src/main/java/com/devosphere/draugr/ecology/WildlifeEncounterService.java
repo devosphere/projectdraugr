@@ -713,8 +713,13 @@ public class WildlifeEncounterService {
                     : v.contains("cage") || v.contains("box") ? "CAGE" : "SNARE";
         // Every trap costs real material to build.
         boolean built = switch (kind) {
-            case "DEADFALL" -> items.hasAtLeast(chronicle,"field_stone",1) && items.hasAtLeast(chronicle,"dry_branch",1)
-                && items.consumeOne(chronicle,"field_stone",at) && items.consumeOne(chronicle,"dry_branch",at);
+            // Raw stone + branch, OR a pre-made weight stone paired with a carved trigger (#93 deadfall components).
+            case "DEADFALL" -> (items.hasAtLeast(chronicle,"field_stone",1) && items.hasAtLeast(chronicle,"dry_branch",1)
+                    && items.consumeOne(chronicle,"field_stone",at) && items.consumeOne(chronicle,"dry_branch",at))
+                || (items.hasAtLeast(chronicle,"deadfall_weight_stone",1) && items.hasAtLeast(chronicle,"deadfall_trigger",1)
+                    && items.consumeOne(chronicle,"deadfall_weight_stone",at) && items.consumeOne(chronicle,"deadfall_trigger",at))
+                || (items.hasAtLeast(chronicle,"deadfall_weight_stone",1) && items.hasAtLeast(chronicle,"figure_four_trigger",1)
+                    && items.consumeOne(chronicle,"deadfall_weight_stone",at) && items.consumeOne(chronicle,"figure_four_trigger",at));
             case "FISH_TRAP", "CAGE" -> items.hasAtLeast(chronicle,"hazel_rod",2)
                 && items.consumeOne(chronicle,"hazel_rod",at) && items.consumeOne(chronicle,"hazel_rod",at);
             case "PIT" -> items.hasAtLeast(chronicle,"dry_branch",2)

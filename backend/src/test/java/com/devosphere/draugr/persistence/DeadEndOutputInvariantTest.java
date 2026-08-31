@@ -78,7 +78,9 @@ class DeadEndOutputInvariantTest {
             // haul to carry capacity (#100, PhysicalItemService.loadState reads a held draft_vehicle + a TAMED draft_species bond).
             "travois", "sledge", "cart", "pack_saddle",
             // Draft gear — a harness/yoke eases how fast a worked beast tires (PhysicalItemService.workDraftBeasts reads them).
-            "draft_harness", "draft_yoke");
+            "draft_harness", "draft_yoke",
+            // Deadfall components — a weight stone + a trigger build a deadfall (#93, WildlifeEncounterService.setTrap reads them).
+            "deadfall_weight_stone", "deadfall_trigger", "figure_four_trigger");
 
     @Test
     void everyProducedItemIsTerminallyUsefulOrAKnownCodeReadItem() {
