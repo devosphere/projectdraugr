@@ -1288,7 +1288,11 @@ public class ChronicleActionService {
         // marker verbs are already claimed above, so a bare place/lay/set-down here is a plain drop.
         if(value.contains("drop")||value.contains("leave behind")||value.contains("set down")||value.contains("put down")||value.contains("discard")||value.contains("lay down")||value.contains("lay it down")||value.contains("lay them down")||((value.contains("place")||value.contains("set")||value.contains("put")||value.contains("lay")||value.contains("leave"))&&(value.contains("on the ground")||value.contains("down here")||value.contains(" aside")))) return Intent.DROP;
         if(value.contains("unequip")||value.contains("take off")||value.contains("remove my")||value.contains("remove the")||value.contains("doff")) return Intent.UNEQUIP;
-        if((value.contains("equip")||value.contains("wear")||value.contains("put on")||value.contains("wield")||value.contains("hold my")||value.contains("hold the")||value.contains("carry on my back")||value.contains("sling"))) return Intent.EQUIP;
+        if((value.contains("equip")||value.contains("wear")||value.contains("put on")||value.contains("wield")||value.contains("hold my")||value.contains("hold the")||value.contains("carry on my back"))) return Intent.EQUIP;
+        // "sling" also means equip (sling it over a shoulder) — but not when 'sling' is part of a thing being made,
+        // i.e. a sling stone or a sling pouch ("shape a sling stone", "sew a sling stone pouch"). Those route to their
+        // craft recipes; every other use of 'sling' is the equip verb.
+        if(value.contains("sling") && !value.contains("sling stone") && !value.contains("sling pouch")) return Intent.EQUIP;
         if(!action.contains(":")&&(value.contains("map")||value.contains("chart")||value.contains("cartograph"))&&(value.contains("sketch")||value.contains("draw")||value.contains("make")||value.contains("chart")||value.contains("create")||value.contains("update")||value.contains("plot")||value.contains("survey")||value.contains("map out"))) return Intent.SKETCH_MAP;
         if(action.contains(":")&&(value.contains("write")||value.contains("draw")||value.contains("sketch")||value.contains("record")||value.contains("inscribe")||value.contains("mark ")||value.contains("note"))) return Intent.WRITE;
         return classifyLegacy(action);
