@@ -283,6 +283,11 @@ public class WildlifeEncounterService {
         // real escape rather than words — but it is a reduction, not immunity; a bad break is still caught.
         if (concealed) chance -= 30;
         else if (breakingContact) chance -= 18;
+        // Concealment gear (#93): a camouflage cloak or a set hide screen breaks the outline; a scent-mask bundle
+        // hides the smell that a nose-led predator follows. Each lowers the odds of being caught in an ambush,
+        // stacking with actively going to ground — carried/worn, so they help even when not deliberately hiding.
+        if (items.hasAtLeast(chronicle,"camouflage_cloak",1) || items.hasAtLeast(chronicle,"hide_screen",1)) chance -= 12;
+        if (items.hasAtLeast(chronicle,"scent_mask_bundle",1)) chance -= 8;
         // A camp alarm (#126) — a trip-line strung with anything that clatters — robs an ambush of its surprise:
         // nothing crosses the perimeter unheard, so even a heads-down Chronicle is not caught wholly unaware.
         boolean alarmed = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='CAMP_ALARM' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')", Boolean.class, chunk));
