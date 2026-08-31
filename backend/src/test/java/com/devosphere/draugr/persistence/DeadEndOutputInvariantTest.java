@@ -80,7 +80,9 @@ class DeadEndOutputInvariantTest {
             // Draft gear — a harness/yoke eases how fast a worked beast tires (PhysicalItemService.workDraftBeasts reads them).
             "draft_harness", "draft_yoke",
             // Deadfall components — a weight stone + a trigger build a deadfall (#93, WildlifeEncounterService.setTrap reads them).
-            "deadfall_weight_stone", "deadfall_trigger", "figure_four_trigger");
+            "deadfall_weight_stone", "deadfall_trigger", "figure_four_trigger",
+            // Cage frame + hand-line tackle — setTrap builds a CAGE from the frame; fish() reads the lines and weight (#93).
+            "cage_trap_frame", "fishing_line_sinew", "fishing_line_bast", "stone_fishing_weight");
 
     @Test
     void everyProducedItemIsTerminallyUsefulOrAKnownCodeReadItem() {
