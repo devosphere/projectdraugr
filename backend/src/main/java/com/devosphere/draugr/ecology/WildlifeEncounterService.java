@@ -720,8 +720,10 @@ public class WildlifeEncounterService {
                     && items.consumeOne(chronicle,"deadfall_weight_stone",at) && items.consumeOne(chronicle,"deadfall_trigger",at))
                 || (items.hasAtLeast(chronicle,"deadfall_weight_stone",1) && items.hasAtLeast(chronicle,"figure_four_trigger",1)
                     && items.consumeOne(chronicle,"deadfall_weight_stone",at) && items.consumeOne(chronicle,"figure_four_trigger",at));
-            case "FISH_TRAP", "CAGE" -> items.hasAtLeast(chronicle,"hazel_rod",2)
-                && items.consumeOne(chronicle,"hazel_rod",at) && items.consumeOne(chronicle,"hazel_rod",at);
+            // Two hazel rods woven on the spot, OR a pre-made cage frame carried in (#93 cage component).
+            case "FISH_TRAP", "CAGE" -> (items.hasAtLeast(chronicle,"hazel_rod",2)
+                    && items.consumeOne(chronicle,"hazel_rod",at) && items.consumeOne(chronicle,"hazel_rod",at))
+                || (items.hasAtLeast(chronicle,"cage_trap_frame",1) && items.consumeOne(chronicle,"cage_trap_frame",at));
             case "PIT" -> items.hasAtLeast(chronicle,"dry_branch",2)
                 && items.consumeOne(chronicle,"dry_branch",at) && items.consumeOne(chronicle,"dry_branch",at);
             default -> items.hasAtLeast(chronicle,"plant_fiber",2)
@@ -828,7 +830,8 @@ public class WildlifeEncounterService {
         else if (items.hasAtLeast(chronicle,"fish_trap",1)) { method="TRAP"; chance=75; }
         else if (items.hasAtLeast(chronicle,"fishing_net",1)) { method="NET"; chance=72; }
         else if (items.hasAtLeast(chronicle,"landing_net",1)) { method="NET"; chance=50; }
-        else if (items.hasAtLeast(chronicle,"bone_fish_hook",1) || items.hasAtLeast(chronicle,"bronze_fish_hook",1) || items.hasAtLeast(chronicle,"iron_fish_hook",1) || items.hasAtLeast(chronicle,"thorn_fish_hook",1)) { method="LINE"; chance=45; }
+        else if (items.hasAtLeast(chronicle,"bone_fish_hook",1) || items.hasAtLeast(chronicle,"bronze_fish_hook",1) || items.hasAtLeast(chronicle,"iron_fish_hook",1) || items.hasAtLeast(chronicle,"thorn_fish_hook",1)
+                 || items.hasAtLeast(chronicle,"fishing_line_sinew",1) || items.hasAtLeast(chronicle,"fishing_line_bast",1)) { method="LINE"; chance=45; }
         else { method="BARE_HAND"; chance=20; }
         // A forged metal fish hook holds a fish that a soft bone hook would straighten and lose, so a line fishes
         // better with one (#184) — it stacks with a lead sinker (a hook that catches, a weight that carries it deep).
@@ -836,7 +839,7 @@ public class WildlifeEncounterService {
         // A lead sinker weights a hand-line so the baited hook carries down to the deeper fish and holds against
         // the current, where a bare line only drifts on the top — a real lift to angling that the soft, dense
         // smelted metal is uniquely good for (#188). Line methods only; a trap or net is not weighted this way.
-        if (method.equals("LINE") && items.hasAtLeast(chronicle,"lead_sinker",1)) chance = Math.min(90, chance + 15);
+        if (method.equals("LINE") && (items.hasAtLeast(chronicle,"lead_sinker",1) || items.hasAtLeast(chronicle,"stone_fishing_weight",1))) chance = Math.min(90, chance + 15);
         // Bait (#75): a worm on the hook, in the trap, or in the hand draws fish that clear water would not —
         // it is spent whether or not the fish takes. Bare hands and a sweeping net are the methods a worm does
         // not help — one grabs, the other encircles.
