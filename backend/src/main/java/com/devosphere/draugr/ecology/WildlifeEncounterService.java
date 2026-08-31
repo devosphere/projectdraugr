@@ -818,12 +818,12 @@ public class WildlifeEncounterService {
         // tool — the whole reason to make one — and a bone hook turns bare grabbing into angling. Each of these
         // was craftable but read by nothing, so it caught no better than empty hands until now.
         if (v.contains("trap") || v.contains("basket") || v.contains("weir")) { method="TRAP"; chance=75; }
-        else if (v.contains("spear") && items.hasAtLeast(chronicle,"primitive_spear",1)) { method="SPEAR"; chance=55; }
+        else if (v.contains("spear") && (items.hasAtLeast(chronicle,"primitive_spear",1) || items.hasAtLeast(chronicle,"fish_spear",1) || items.hasAtLeast(chronicle,"eel_spear",1))) { method="SPEAR"; chance=55; }
         else if (v.contains("line") || v.contains("hook")) { method="LINE"; chance=45; }
         else if (items.hasAtLeast(chronicle,"fish_trap",1)) { method="TRAP"; chance=75; }
         else if (items.hasAtLeast(chronicle,"fishing_net",1)) { method="NET"; chance=72; }
         else if (items.hasAtLeast(chronicle,"landing_net",1)) { method="NET"; chance=50; }
-        else if (items.hasAtLeast(chronicle,"bone_fish_hook",1) || items.hasAtLeast(chronicle,"bronze_fish_hook",1) || items.hasAtLeast(chronicle,"iron_fish_hook",1)) { method="LINE"; chance=45; }
+        else if (items.hasAtLeast(chronicle,"bone_fish_hook",1) || items.hasAtLeast(chronicle,"bronze_fish_hook",1) || items.hasAtLeast(chronicle,"iron_fish_hook",1) || items.hasAtLeast(chronicle,"thorn_fish_hook",1)) { method="LINE"; chance=45; }
         else { method="BARE_HAND"; chance=20; }
         // A forged metal fish hook holds a fish that a soft bone hook would straighten and lose, so a line fishes
         // better with one (#184) — it stacks with a lead sinker (a hook that catches, a weight that carries it deep).
