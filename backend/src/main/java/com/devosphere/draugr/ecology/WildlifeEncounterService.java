@@ -726,8 +726,12 @@ public class WildlifeEncounterService {
                 || (items.hasAtLeast(chronicle,"cage_trap_frame",1) && items.consumeOne(chronicle,"cage_trap_frame",at));
             case "PIT" -> items.hasAtLeast(chronicle,"dry_branch",2)
                 && items.consumeOne(chronicle,"dry_branch",at) && items.consumeOne(chronicle,"dry_branch",at);
-            default -> items.hasAtLeast(chronicle,"plant_fiber",2)
-                && items.consumeOne(chronicle,"plant_fiber",at) && items.consumeOne(chronicle,"plant_fiber",at);
+            // Two lengths of fibre, OR a pre-made running loop, OR a wire cord paired with a trigger (#93 snare components).
+            default -> (items.hasAtLeast(chronicle,"plant_fiber",2)
+                    && items.consumeOne(chronicle,"plant_fiber",at) && items.consumeOne(chronicle,"plant_fiber",at))
+                || (items.hasAtLeast(chronicle,"snare_loop",1) && items.consumeOne(chronicle,"snare_loop",at))
+                || (items.hasAtLeast(chronicle,"snare_wire_fibre",1) && items.hasAtLeast(chronicle,"snare_trigger_stick",1)
+                    && items.consumeOne(chronicle,"snare_wire_fibre",at) && items.consumeOne(chronicle,"snare_trigger_stick",at));
         };
         if (!built) return new EncounterResult("FAILED","You work at it for a while, but you do not have what a trap of that kind needs.");
 
