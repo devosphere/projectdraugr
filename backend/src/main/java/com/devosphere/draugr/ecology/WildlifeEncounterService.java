@@ -837,7 +837,7 @@ public class WildlifeEncounterService {
         else if (v.contains("spear") && (items.hasAtLeast(chronicle,"primitive_spear",1) || items.hasAtLeast(chronicle,"fish_spear",1) || items.hasAtLeast(chronicle,"eel_spear",1))) { method="SPEAR"; chance=55; }
         else if (v.contains("line") || v.contains("hook")) { method="LINE"; chance=45; }
         else if (items.hasAtLeast(chronicle,"fish_trap",1) || items.hasAtLeast(chronicle,"basket_fish_trap",1) || items.hasAtLeast(chronicle,"crayfish_trap",1)) { method="TRAP"; chance=75; }
-        else if (items.hasAtLeast(chronicle,"fishing_net",1)) { method="NET"; chance=72; }
+        else if (items.hasAtLeast(chronicle,"fishing_net",1) || items.hasAtLeast(chronicle,"weir_net_panel",1)) { method="NET"; chance=72; }
         else if (items.hasAtLeast(chronicle,"landing_net",1)) { method="NET"; chance=50; }
         else if (items.hasAtLeast(chronicle,"bone_fish_hook",1) || items.hasAtLeast(chronicle,"bronze_fish_hook",1) || items.hasAtLeast(chronicle,"iron_fish_hook",1) || items.hasAtLeast(chronicle,"thorn_fish_hook",1)
                  || items.hasAtLeast(chronicle,"fishing_line_sinew",1) || items.hasAtLeast(chronicle,"fishing_line_bast",1)) { method="LINE"; chance=45; }
