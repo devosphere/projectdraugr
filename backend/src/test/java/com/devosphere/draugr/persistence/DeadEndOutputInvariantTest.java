@@ -86,7 +86,9 @@ class DeadEndOutputInvariantTest {
             // Woven fish traps — carried, they make fish() choose the TRAP method (#93, WildlifeEncounterService.fish reads them).
             "crayfish_trap", "basket_fish_trap",
             // Snare components — a running loop, or a wire cord + trigger, build a snare (#93, WildlifeEncounterService.setTrap reads them).
-            "snare_loop", "snare_trigger_stick", "snare_wire_fibre");
+            "snare_loop", "snare_trigger_stick", "snare_wire_fibre",
+            // A woven weir — carried, fish() fishes the stretch by the NET method (#93, WildlifeEncounterService.fish reads it).
+            "weir_net_panel");
 
     @Test
     void everyProducedItemIsTerminallyUsefulOrAKnownCodeReadItem() {
