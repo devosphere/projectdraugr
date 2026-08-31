@@ -115,7 +115,7 @@ public class ExaminationService {
         if (named < cap && biome != null) {
             List<Map<String, Object>> ambient = orEmpty(jdbc.queryForList(
                 "SELECT species_key, ecological_role, size_tier, activity_cycle FROM wildlife_species " +
-                "WHERE movement_class <> 'AQUATIC' AND biome_affinity ILIKE ? " +
+                "WHERE movement_class <> 'AQUATIC' AND kingdom_class <> 'MONSTRUM' AND biome_affinity ILIKE ? " +
                 "ORDER BY md5(species_key || ?::text)", "%" + biome + "%", chunk.toString()));
             for (Map<String, Object> a : ambient) {
                 if (named >= cap) break;
@@ -126,6 +126,21 @@ public class ExaminationService {
                 if (vis >= 1.0 - acuity) { b.append(seenLine(name, (String) a.get("ecological_role"))); named++; namedKeys.add(key); }
                 else if (acuity >= 0.6) { b.append("You find the sign of ").append(name).append(" — small tracks and disturbed leaf litter. "); named++; namedKeys.add(key); }
             }
+        }
+
+        // Monsters (#86) are NOT ordinary fauna — scarce, territorial, uncanny. They are never casually named in the
+        // ambient cast; a keen eye only catches their SIGN, and only rarely (most ground in a monster's biome shows
+        // nothing of it). Deterministic per chunk: a monster leaves a readable sign here only when its hash falls in
+        // a narrow window, so a given place carries at most a hint of one, most places none.
+        if (acuity >= 0.5 && biome != null) {
+            List<String> lurking = orEmpty(jdbc.query(
+                "SELECT mp.species_key FROM monster_profile mp WHERE mp.biome_affinity ILIKE ? " +
+                "AND ('x' || substr(md5(mp.species_key || ?::text), 1, 1))::bit(4)::int < 2 " +
+                "ORDER BY md5(mp.species_key || ?::text) LIMIT 1",
+                (rs, i) -> humanize(rs.getString(1)), "%" + biome + "%", chunk.toString(), chunk.toString()));
+            if (!lurking.isEmpty())
+                b.append("Something uncanny keeps this ground — the sign of ").append(lurking.get(0))
+                 .append(", and the quiet around it says to give it a wide berth. ");
         }
 
         // Fish — visible in the water to a moderate eye, where the biome holds them.
