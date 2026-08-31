@@ -82,7 +82,9 @@ class DeadEndOutputInvariantTest {
             // Deadfall components — a weight stone + a trigger build a deadfall (#93, WildlifeEncounterService.setTrap reads them).
             "deadfall_weight_stone", "deadfall_trigger", "figure_four_trigger",
             // Cage frame + hand-line tackle — setTrap builds a CAGE from the frame; fish() reads the lines and weight (#93).
-            "cage_trap_frame", "fishing_line_sinew", "fishing_line_bast", "stone_fishing_weight");
+            "cage_trap_frame", "fishing_line_sinew", "fishing_line_bast", "stone_fishing_weight",
+            // Woven fish traps — carried, they make fish() choose the TRAP method (#93, WildlifeEncounterService.fish reads them).
+            "crayfish_trap", "basket_fish_trap");
 
     @Test
     void everyProducedItemIsTerminallyUsefulOrAKnownCodeReadItem() {
