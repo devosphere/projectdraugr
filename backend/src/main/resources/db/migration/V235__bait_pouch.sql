@@ -4,8 +4,10 @@
 -- tracking marker is the MARK action (a driven stake / carved blaze / stone cairn, sited as a persistent object).
 -- The one missing named entry is a distinct *bait pouch*: a prepared, mixed bait a trapper makes and deploys, more
 -- potent and longer-lasting than raw food. Pure data: a FOOD bait item (dead-end-exempt like the other food baits)
--- + a make process + a bait_profile row + source. 'make a bait pouch' beats sew_leather_pouch's bare 'pouch' keyword
--- on longest-match; the mix uses no 'in/into' + store verb so it never reads as STORE.
+-- + a make process + a bait_profile row + source. The make process is category HUNT, NOT CRAFT: the word 'bait' is
+-- a strong HUNT category term (weight 3), so "make a bait pouch" classifies HUNT (bait 3 > make 1) and the matcher
+-- only considers HUNT processes — a CRAFT process would be filtered out by the category axis. The keywords
+-- self-classify to HUNT too, so category HUNT is consistent; mix_bait_pouch is the sole HUNT match on the phrase.
 INSERT INTO item_definition (item_key, display_name, category, unit_mass_grams, unit_volume_ml, stackable, equippable) VALUES
 ('bait_pouch', 'Bait pouch', 'FOOD', 150, 300, TRUE, FALSE)
 ON CONFLICT (item_key) DO NOTHING;
@@ -15,7 +17,7 @@ INSERT INTO item_source (item_key, source_kind, detail) VALUES
 ON CONFLICT (item_key, source_kind) DO NOTHING;
 
 INSERT INTO material_process (process_key, display_name, output_item_key, output_min, output_max, tool_class, requires_fire, requires_water, duration_minutes, domain_key, category_key, keywords, narration, review_state, reviewed_at) VALUES
-('mix_bait_pouch','Mix a bait pouch','bait_pouch',1,1,NULL,FALSE,FALSE,15,'items','CRAFT','bait pouch,make a bait pouch,mix a bait pouch,prepare a bait pouch,scent bait', 'You crush worms and berries together into a rank, scented handful and work it into a small pouch of bait — enough to draw a wary animal in.', 'VERIFIED', now())
+('mix_bait_pouch','Mix a bait pouch','bait_pouch',1,1,NULL,FALSE,FALSE,15,'items','HUNT','bait pouch,make a bait pouch,mix a bait pouch,prepare a bait pouch,scent bait', 'You crush worms and berries together into a rank, scented handful and work it into a small pouch of bait — enough to draw a wary animal in.', 'VERIFIED', now())
 ON CONFLICT (process_key) DO NOTHING;
 
 INSERT INTO material_process_input (process_key, item_key, quantity) VALUES
