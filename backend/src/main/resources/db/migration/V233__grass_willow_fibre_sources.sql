@@ -35,7 +35,7 @@ ON CONFLICT (process_key, item_key) DO NOTHING;
 
 INSERT INTO process_subject (process_key, subject_term) VALUES
 ('strip_grass_fibre','grass fibre'),('strip_grass_fibre','long grass'),
-('twist_grass_cordage','grass cordage'),
+('twist_grass_cordage','grass cordage'),('twist_grass_cordage','grass'),
 ('ret_willow_bark','willow bark'),('ret_willow_bark','willow bast'),
 ('twist_willow_cordage','willow cordage'),('twist_willow_cordage','willow bast')
 ON CONFLICT DO NOTHING;
