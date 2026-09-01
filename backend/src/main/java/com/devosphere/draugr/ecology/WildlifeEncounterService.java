@@ -376,6 +376,9 @@ public class WildlifeEncounterService {
             case "CARCASS_SCRAPS" -> "scraps and bone fragments pulled away from something larger";
             case "DEN_MARKS" -> "a worn track running to a gap under the roots";
             case "TERRITORIAL_SCRATCH" -> "deep scoring in the bark, higher than your shoulder";
+            case "FEEDING_SIGN" -> "cones stripped to the core and husks gnawed open, where something small had been feeding";
+            case "GRASS_RUNWAY" -> "a runway of bent, broken grass worn low through the sward";
+            case "BURROW" -> "a fresh burrow mouth, loose spoil fanned out below it";
             default -> "sign";
         };
         StringBuilder s = new StringBuilder("You find ").append(what).append(". ");
