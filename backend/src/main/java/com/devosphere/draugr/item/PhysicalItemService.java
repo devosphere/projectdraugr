@@ -2118,7 +2118,7 @@ public class PhysicalItemService {
         if ("DESTROYED".equals(cond)) return new String[]{"FAILED", "The " + name + " is past mending — there is nothing left to work with."};
         // Sharpening (#75) is not mending: a dulled edge is drawn back against a whetstone or grit-stone, not
         // bound with cordage. The stone is reusable, so it is used but not consumed.
-        if (lower.contains("sharpen") || lower.contains("whet") || lower.contains("hone") || (lower.contains("grind") && lower.contains("edge"))) {
+        if (lower.contains("sharpen") || lower.contains("whet") || lower.contains("hone") || lower.contains("abrade") || (lower.contains("grind") && lower.contains("edge"))) {
             // A dressed stone_whetstone is a whetstone by any other name — it was craftable but read by
             // nothing, so honing accepts it too (#257), alongside the found whetstone and the grit-stones.
             if (!hasAtLeast(chronicle, "whetstone", 1) && !hasAtLeast(chronicle, "stone_whetstone", 1) && !hasAtLeast(chronicle, "sandstone_piece", 1) && !hasAtLeast(chronicle, "pumice_piece", 1)
