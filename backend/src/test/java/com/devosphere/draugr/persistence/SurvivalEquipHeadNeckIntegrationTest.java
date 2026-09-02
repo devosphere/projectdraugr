@@ -71,19 +71,18 @@ class SurvivalEquipHeadNeckIntegrationTest {
         jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
 
         Instant now = Instant.now();
-        for (int i = 0; i < 4; i++) items.createCarriedItem(chronicle, "big_leaf", "Broad leaf", now, "TEST_FIXTURE");
-        items.createCarriedItem(chronicle, "plant_fiber", "Plant fibre", now, "TEST_FIXTURE");
+        items.createCarriedItem(chronicle, "reed_bundle", "Reed bundle", now, "TEST_FIXTURE");
 
-        var made = actions.resolve("make a leaf sunshade");
-        assertEquals("SUCCEEDED", made.outcome(), () -> "making a leaf sunshade must succeed: " + made.perception());
-        assertTrue(items.hasAtLeast(chronicle, "leaf_sunshade", 1), "a leaf sunshade must now be in hand");
+        var made = actions.resolve("make a reed headband");
+        assertEquals("SUCCEEDED", made.outcome(), () -> "making a reed headband must succeed: " + made.perception());
+        assertTrue(items.hasAtLeast(chronicle, "reed_headband", 1), "a reed headband must now be in hand");
 
-        // All six new coverings are equippable CLOTHING with a real anatomy slot.
+        // All five new coverings are equippable CLOTHING with a real anatomy slot.
         Integer wired = jdbc.queryForObject(
             "SELECT COUNT(*) FROM item_definition d JOIN item_equipment_compatibility e ON e.item_key=d.item_key " +
             "WHERE d.equippable AND d.category='CLOTHING' AND d.item_key IN " +
-            "('leaf_sunshade','reed_headband','bark_headband','grass_cap','fibre_neck_wrap','fibre_face_wrap')", Integer.class);
-        assertEquals(6, (int) wired, "all six coverings must be equippable with an anatomy slot");
+            "('reed_headband','bark_headband','grass_cap','fibre_neck_wrap','fibre_face_wrap')", Integer.class);
+        assertEquals(5, (int) wired, "all five coverings must be equippable with an anatomy slot");
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
