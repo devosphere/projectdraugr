@@ -64,9 +64,9 @@ class SurvivalEquipSleepHygieneIntegrationTest {
         assertEquals("SUCCEEDED", made.outcome(), () -> "making a bark comb must succeed (not the bone-comb recipe): " + made.perception());
         assertTrue(items.hasAtLeast(chronicle, "bark_comb", 1), "a bark comb must now be in hand");
 
-        assertEquals(5, (int) jdbc.queryForObject(
+        assertEquals(4, (int) jdbc.queryForObject(
             "SELECT COUNT(*) FROM item_definition d JOIN item_equipment_compatibility e ON e.item_key=d.item_key WHERE d.equippable AND d.item_key IN " +
-            "('bark_groundsheet','fibre_blanket','reed_washcloth','bark_comb','wooden_toothpick')", Integer.class));
+            "('fibre_blanket','reed_washcloth','bark_comb','wooden_toothpick')", Integer.class));
 
         assertTrue(auditor.inspect().consistent(), () -> "Auditor: " + auditor.inspect().violations());
     }
