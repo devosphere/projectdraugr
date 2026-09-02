@@ -71,7 +71,7 @@ class SurvivalEquipHandsFeetIntegrationTest {
         assertEquals(2, (int) jdbc.queryForObject(
             "SELECT COUNT(*) FROM item_equipment_compatibility WHERE item_key='reed_sandal_pair' AND body_position IN ('FOOT_LEFT','FOOT_RIGHT')", Integer.class));
         assertEquals(7, (int) jdbc.queryForObject(
-            "SELECT COUNT(*) FROM item_definition d JOIN item_equipment_compatibility e ON e.item_key=d.item_key WHERE d.equippable AND d.item_key IN " +
+            "SELECT COUNT(DISTINCT d.item_key) FROM item_definition d JOIN item_equipment_compatibility e ON e.item_key=d.item_key WHERE d.equippable AND d.item_key IN " +
             "('fibre_hand_wrap_left','fibre_hand_wrap_right','grass_ankle_wrap_left','grass_ankle_wrap_right','bark_sandal_left','bark_sandal_right','reed_sandal_pair')", Integer.class));
 
         assertTrue(auditor.inspect().consistent(), () -> "Auditor: " + auditor.inspect().violations());
