@@ -42,7 +42,7 @@ INSERT INTO material_process (process_key, display_name, output_item_key, output
 ('make_grass_carry_bundle','Tie a grass carry bundle','grass_carry_bundle',1,1,NULL,FALSE,FALSE,18,'items','CRAFT','grass carry bundle,make a grass carry bundle', 'You bind dry grass and fibre into a carry-bundle for the back.', 'VERIFIED', now()),
 ('make_reed_tool_loop','Plait a reed tool loop','reed_tool_loop',1,1,NULL,FALSE,FALSE,10,'items','CRAFT','reed tool loop,make a reed tool loop', 'You plait a reed loop to hang a tool from your waist.', 'VERIFIED', now()),
 ('make_cordage_tool_belt','Tie a cordage tool strap','cordage_tool_belt',1,1,NULL,FALSE,FALSE,14,'items','CRAFT','cordage tool strap,make a cordage tool strap,tool strap', 'You tie a cordage strap of loops to carry tools at the waist.', 'VERIFIED', now()),
-('make_knife_sheath','Fold a simple knife sheath','simple_knife_sheath',1,1,NULL,FALSE,FALSE,15,'items','CRAFT','knife sheath,make a knife sheath,make a simple knife sheath,fold a knife sheath', 'You fold and bind a sheath to carry a blade safely at the waist.', 'VERIFIED', now()),
+('make_knife_sheath','Fold a simple knife sheath','simple_knife_sheath',1,1,NULL,FALSE,FALSE,15,'items','CRAFT','blade sheath,make a blade sheath,make a simple sheath,fold a blade sheath', 'You fold and bind a sheath to carry a blade safely at the waist.', 'VERIFIED', now()),
 ('make_stone_tool_wrap','Wind a stone tool wrap','stone_tool_wrap',1,1,NULL,FALSE,FALSE,10,'items','CRAFT','stone tool wrap,make a stone tool wrap', 'You wind a fibre wrap to carry sharp stone tools without cutting your hand.', 'VERIFIED', now())
 ON CONFLICT (process_key) DO NOTHING;
 
@@ -64,6 +64,6 @@ INSERT INTO process_subject (process_key, subject_term) VALUES
 ('make_grass_carry_bundle','carry bundle'),
 ('make_reed_tool_loop','tool loop'),
 ('make_cordage_tool_belt','tool strap'),
-('make_knife_sheath','knife sheath'),('make_knife_sheath','sheath'),
+('make_knife_sheath','blade sheath'),('make_knife_sheath','sheath'),
 ('make_stone_tool_wrap','tool wrap')
 ON CONFLICT DO NOTHING;
