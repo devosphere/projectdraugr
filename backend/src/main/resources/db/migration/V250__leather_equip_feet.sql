@@ -59,8 +59,8 @@ INSERT INTO material_process (process_key, display_name, output_item_key, output
 ('make_hide_sock_right','Sew a right hide sock','hide_sock_right',1,1,'CUTTING',FALSE,FALSE,20,'items','CRAFT','make a right hide sock,right hide sock', 'You sew a soft hide sock for the right foot.', 'VERIFIED', now()),
 ('make_fur_sock_left','Sew a left fur sock','fur_sock_left',1,1,'CUTTING',FALSE,FALSE,20,'items','CRAFT','make a left fur sock,left fur sock', 'You sew a fur sock for the left foot.', 'VERIFIED', now()),
 ('make_fur_sock_right','Sew a right fur sock','fur_sock_right',1,1,'CUTTING',FALSE,FALSE,20,'items','CRAFT','make a right fur sock,right fur sock', 'You sew a fur sock for the right foot.', 'VERIFIED', now()),
-('make_snowshoe_left','Lace a left snowshoe','snowshoe_left',1,1,'CUTTING',FALSE,FALSE,40,'items','CRAFT','lace a left snowshoe,left snowshoe', 'You bend a frame and web it with leather into a snowshoe for the left foot.', 'VERIFIED', now()),
-('make_snowshoe_right','Lace a right snowshoe','snowshoe_right',1,1,'CUTTING',FALSE,FALSE,40,'items','CRAFT','lace a right snowshoe,right snowshoe', 'You bend a frame and web it with leather into a snowshoe for the right foot.', 'VERIFIED', now())
+('make_snowshoe_left','Lace a left snowshoe','snowshoe_left',1,1,'CUTTING',FALSE,FALSE,40,'items','CRAFT','lash a left snowshoe,lace a left snowshoe,left snowshoe', 'You bend a frame and web it with leather into a snowshoe for the left foot.', 'VERIFIED', now()),
+('make_snowshoe_right','Lace a right snowshoe','snowshoe_right',1,1,'CUTTING',FALSE,FALSE,40,'items','CRAFT','lash a right snowshoe,lace a right snowshoe,right snowshoe', 'You bend a frame and web it with leather into a snowshoe for the right foot.', 'VERIFIED', now())
 ON CONFLICT (process_key) DO NOTHING;
 
 INSERT INTO material_process_input (process_key, item_key, quantity) VALUES

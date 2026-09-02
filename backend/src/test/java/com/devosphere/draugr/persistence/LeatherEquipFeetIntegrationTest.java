@@ -66,7 +66,7 @@ class LeatherEquipFeetIntegrationTest {
         assertEquals("SUCCEEDED", left.outcome(), () -> "left leather boot (moccasin) must succeed: " + left.perception());
         assertTrue(items.hasAtLeast(chronicle, "leather_boot_left", 1), "left leather boot in hand");
         // A snowshoe made via 'lace' ('make'+'shoe' would hit CRAFT_GARMENT).
-        var snow = actions.resolve("lace a right snowshoe");
+        var snow = actions.resolve("lash a right snowshoe");
         assertEquals("SUCCEEDED", snow.outcome(), () -> "right snowshoe must succeed: " + snow.perception());
         assertTrue(items.hasAtLeast(chronicle, "snowshoe_right", 1), "right snowshoe in hand");
 
