@@ -59,10 +59,10 @@ class SurvivalEquipCarryWorkIntegrationTest {
         jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
 
         Instant now = Instant.now();
-        for (int i = 0; i < 2; i++) items.createCarriedItem(chronicle, "plant_fiber", "Plant fibre", now, "TEST_FIXTURE");
-        var made = actions.resolve("make a fibre carry strap");
-        assertEquals("SUCCEEDED", made.outcome(), () -> "making a fibre carry sling must succeed (not routed to EQUIP): " + made.perception());
-        assertTrue(items.hasAtLeast(chronicle, "fibre_sling", 1), "a fibre carry sling must now be in hand");
+        items.createCarriedItem(chronicle, "reed_bundle", "Reed bundle", now, "TEST_FIXTURE");
+        var made = actions.resolve("make a reed tool loop");
+        assertEquals("SUCCEEDED", made.outcome(), () -> "making a reed tool loop must succeed: " + made.perception());
+        assertTrue(items.hasAtLeast(chronicle, "reed_tool_loop", 1), "a reed tool loop must now be in hand");
 
         assertEquals(8, (int) jdbc.queryForObject(
             "SELECT COUNT(*) FROM item_definition d JOIN item_equipment_compatibility e ON e.item_key=d.item_key WHERE d.equippable AND d.item_key IN " +
