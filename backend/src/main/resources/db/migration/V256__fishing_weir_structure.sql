@@ -2,16 +2,18 @@
 -- fixed fence of stakes and woven panels set across a stream that funnels and holds fish, so once one stands the water
 -- fishes far better with no gear in hand — the weir does the work. Wired in Java (WildlifeEncounterService.fish): a
 -- completed weir at the water raises the catch chance to a high floor. Pure-data one-stage STRUCTURE assembly
--- (construction_kind, decaying field structure). The keyword is 'weir' (never 'fish weir'): any 'fish' word is stolen
--- by the FISH intent before the assembly matcher runs, so the build phrase must avoid it.
+-- (construction_kind, decaying field structure). Build keywords are multi-word phrases only (never bare 'weir', never
+-- any 'fish' word): a 'fish' word is stolen by the FISH intent before the assembly matcher runs, and a bare 'weir'
+-- keyword would hijack the existing #93 craft "carve a fish weir" (weir_net_panel) at the assembly stage — so each
+-- keyword ("build a weir", "raise a weir", …) is a phrase that craft cannot contain.
 INSERT INTO construction_kind (project_kind, display_name, domain_key, is_shelter, is_workstation, decays, proven_in) VALUES
 ('FISHING_WEIR', 'Fishing weir', 'construction', FALSE, FALSE, TRUE, 'V256')
 ON CONFLICT (project_kind) DO NOTHING;
 
 INSERT INTO assembly_definition (assembly_key, subject_kind, display_name, portable, produces_item_key, construction_kind, domain_key, keywords, subjects, narration, review_state, reviewed_at) VALUES
 ('fishing_weir','STRUCTURE','Fishing weir',FALSE,NULL,'FISHING_WEIR','construction',
- 'build a weir,stake out a weir,set out a weir,raise a weir,river weir,weir',
- 'weir,river weir',
+ 'build a weir,stake out a weir,set out a weir,raise a weir,river weir',
+ 'river weir',
  'A fence of driven stakes and woven panels set across the shallows, angled to guide the run of fish into a narrowing trap they will not turn back out of — a fixed weir that keeps taking long after it is built, the water worked for you while you tend other things.','VERIFIED',now())
 ON CONFLICT (assembly_key) DO NOTHING;
 

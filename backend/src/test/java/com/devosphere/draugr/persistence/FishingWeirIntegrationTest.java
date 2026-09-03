@@ -70,20 +70,33 @@ class FishingWeirIntegrationTest {
         assertNotNull(summary);
         UUID chronicle = summary.id();
 
-        // Stand at wetland water that holds fish; make every drop certain so a successful roll always lands a catch.
+        // Stand at wetland water. fish() selects a species by species_key order and rolls the catch on the action's
+        // hashCode, so we pick a species that actually drops raw_fish, make that drop certain, and choose an action
+        // that selects it — leaving only the chance to vary between the two attempts.
         UUID chunk = jdbc.queryForObject("SELECT id FROM world_chunk WHERE biome='WETLAND' ORDER BY grid_y, grid_x LIMIT 1", UUID.class);
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", chunk, chronicle);
-        String biome = "WETLAND";
-        Integer aquatic = jdbc.queryForObject("SELECT COUNT(*) FROM wildlife_species WHERE movement_class='AQUATIC' AND biome_affinity ILIKE ?", Integer.class, "%"+biome+"%");
-        assertTrue(aquatic != null && aquatic > 0, "the wetland must hold aquatic species to fish");
-        jdbc.update("UPDATE wildlife_drop SET rarity=1.0 WHERE species_key IN (SELECT species_key FROM wildlife_species WHERE movement_class='AQUATIC' AND biome_affinity ILIKE ?)", "%"+biome+"%");
+        String affinity = "%WETLAND%";
+        java.util.List<String> all = jdbc.queryForList("SELECT species_key FROM wildlife_species WHERE movement_class='AQUATIC' AND biome_affinity ILIKE ? ORDER BY species_key", String.class, affinity);
+        assertTrue(!all.isEmpty(), "the wetland must hold aquatic species to fish");
+        java.util.List<String> withFish = jdbc.queryForList("SELECT species_key FROM wildlife_species WHERE movement_class='AQUATIC' AND biome_affinity ILIKE ? AND species_key IN (SELECT species_key FROM wildlife_drop WHERE item_key='raw_fish') ORDER BY species_key", String.class, affinity);
+        assertTrue(!withFish.isEmpty(), "the wetland must hold an aquatic species that drops raw fish");
+        String target = withFish.get(0);
+        int idx = all.indexOf(target);
+        int size = all.size();
+        jdbc.update("UPDATE wildlife_drop SET rarity=1.0, yield_min=1, yield_max=1 WHERE species_key=? AND item_key='raw_fish'", target);
 
         Instant now = Instant.now();
 
-        // A fixed action whose roll (hashCode mod 100) is 50: fails at the bare-hand chance of 20, passes at the
-        // weir's floor of 85. Same action UUID for both attempts, so only the weir differs between them.
+        // An action whose roll (hashCode mod 100) lands in [20,84]: at or above the bare-hand chance of 20 (so it
+        // fails bare-handed) but below the weir's floor of 85 (so the weir lands it), and which selects the target
+        // species. A range, not a fixed value, so a solution always exists whatever the species count is.
         UUID cast;
-        do { cast = UUID.randomUUID(); } while (Math.floorMod(cast.hashCode(), 100) != 50);
+        while (true) {
+            cast = UUID.randomUUID();
+            int h = cast.hashCode();
+            int roll = Math.floorMod(h, 100);
+            if (roll >= 20 && roll < 85 && Math.floorMod(h, size) == idx) break;
+        }
 
         var bare = wildlife.fish(chronicle, chunk, cast, now, "fish here");
         assertEquals("FAILED", bare.outcome(), () -> "bare-handed with a middling roll, the cast must fail: " + bare.narration());
