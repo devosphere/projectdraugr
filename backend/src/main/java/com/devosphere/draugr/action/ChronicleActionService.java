@@ -1662,7 +1662,15 @@ public class ChronicleActionService {
         Integer sites = jdbc.queryForObject(
             "SELECT COUNT(*) FROM ecology_site WHERE chunk_id=? AND (site_kind ILIKE '%spring%' OR site_kind ILIKE '%stream%' OR site_kind ILIKE '%river%' OR site_kind ILIKE '%freshwater%')",
             Integer.class, location);
-        return sites != null && sites > 0;
+        if (sites != null && sites > 0) return true;
+        // A completed rainwater catchment (#77) is itself a source to fill from — the rain it has caught — so a camp
+        // on dry ground with no stream can still draw water once one stands. It is not a safeWaterSource: caught
+        // rainwater is raw and better boiled, exactly what COLLECT_WATER yields.
+        return catchmentInReach(location);
+    }
+    /** A completed rainwater catchment standing here, holding caught rain to fill a vessel from (#77). */
+    private boolean catchmentInReach(UUID location) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='RAINWATER_CATCHMENT' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')", Boolean.class, location));
     }
     /** Whether raw water here is safe to drink untreated (#71): moving water — a river bank, spring, or stream —
      *  is clean; standing water (a wetland) is not, and drinking it raw carries a gut-illness risk. */
