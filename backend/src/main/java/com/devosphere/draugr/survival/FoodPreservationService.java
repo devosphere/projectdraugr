@@ -26,15 +26,29 @@ public class FoodPreservationService {
         // food so only real elapsed time counts, but shelf life is docked only while the keeper stands on fouled
         // ground — so passing through does not permanently ruin a well-kept larder. Whole hours only, like the
         // chunk_disturbance decay; the EXISTS references the target column in its WHERE (allowed), not a FROM join.
+        // A signed adjustment to shelf life for each whole elapsed hour: fouled ground docks it (pests, #218), and —
+        // its counterpart (#77 cold store) — ground holding a COMPLETED root cellar / cool food pit CREDITS it, the
+        // cool, stable air holding a larder near-suspended. Fouled ground takes precedence over a cellar (pests get in
+        // even there). The credit equals the hour that passed, so stored food holds its remaining freshness steady
+        // while it stays by the store, and resumes its clock once carried away — it never gains freshness beyond what
+        // it had, and cannot un-spoil (guarded by spoiled_at IS NULL), so no matter is created.
         jdbc.update("UPDATE food_preservation_state f SET " +
-            "safe_until = safe_until - make_interval(hours => (CASE WHEN EXISTS (" +
-            "  SELECT 1 FROM world_object food JOIN world_object body ON body.id=food.current_owner_id " +
-            "  JOIN chunk_refuse cr ON cr.chunk_id=body.current_location_id " +
-            "  WHERE food.id=f.object_id AND cr.refuse_level >= 50) " +
-            " THEN FLOOR(EXTRACT(EPOCH FROM (?::timestamptz - f.pest_checked_at))/3600.0 * 2)::int ELSE 0 END)), " +
+            "safe_until = safe_until + make_interval(hours => (CASE " +
+            "  WHEN EXISTS (SELECT 1 FROM world_object food JOIN world_object body ON body.id=food.current_owner_id " +
+            "    JOIN chunk_refuse cr ON cr.chunk_id=body.current_location_id " +
+            "    WHERE food.id=f.object_id AND cr.refuse_level >= 50) " +
+            "  THEN -FLOOR(EXTRACT(EPOCH FROM (?::timestamptz - f.pest_checked_at))/3600.0 * 2)::int " +
+            "  WHEN EXISTS (SELECT 1 FROM world_object food JOIN world_object body ON body.id=food.current_owner_id " +
+            "    JOIN construction_project cp ON cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
+            "      AND cp.project_kind IN ('ROOT_CELLAR','COOL_FOOD_PIT') " +
+            "    JOIN world_object cw ON cw.id=cp.object_id AND cw.lifecycle_state='ACTIVE' " +
+            "      AND cw.current_location_id=body.current_location_id " +
+            "    WHERE food.id=f.object_id) " +
+            "  THEN FLOOR(EXTRACT(EPOCH FROM (?::timestamptz - f.pest_checked_at))/3600.0)::int " +
+            "  ELSE 0 END)), " +
             "pest_checked_at = ? " +
             "WHERE f.spoiled_at IS NULL AND EXTRACT(EPOCH FROM (?::timestamptz - f.pest_checked_at)) >= 3600",
-            occurredAt, occurredAt, occurredAt);
+            occurredAt, occurredAt, occurredAt, occurredAt);
         jdbc.update("UPDATE food_preservation_state SET spoiled_at=? WHERE spoiled_at IS NULL AND safe_until<=?", occurredAt, occurredAt);
         jdbc.update("UPDATE world_object w SET display_name='Spoiled ' || lower(w.display_name),updated_at=? FROM food_preservation_state f WHERE f.object_id=w.id AND f.spoiled_at=? AND w.lifecycle_state='ACTIVE' AND w.display_name NOT LIKE 'Spoiled %'", occurredAt, occurredAt);
     }
