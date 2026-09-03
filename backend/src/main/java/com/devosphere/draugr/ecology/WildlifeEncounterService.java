@@ -857,6 +857,14 @@ public class WildlifeEncounterService {
         // not help — one grabs, the other encircles.
         boolean baited = !method.equals("BARE_HAND") && !method.equals("NET") && items.hasAtLeast(chronicle,"earthworm",1) && items.consumeOne(chronicle,"earthworm",at);
         if (baited) chance = Math.min(90, chance + 20);
+        // A completed fishing weir (#77) does the work: a fixed fence set across the shallows funnels and holds the
+        // run of fish, so the water fishes well even bare-handed. It raises the chance to a high floor — never lowers
+        // it, so better gear or bait still counts — and marks the method as the weir's own.
+        boolean weir = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "WHERE w.current_location_id=? AND cp.project_kind='FISHING_WEIR' AND cp.state='COMPLETED' " +
+            "AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')", Boolean.class, chunk));
+        if (weir) { chance = Math.max(chance, 85); method = "TRAP"; } // a weir is a fixed trap (aquatic_catch method set)
         java.util.List<String> species = jdbc.queryForList("SELECT species_key FROM wildlife_species WHERE movement_class='AQUATIC' AND biome_affinity ILIKE ? ORDER BY species_key", String.class, "%"+biome+"%");
         if (species.isEmpty()) return new EncounterResult("FAILED","You watch the ground a while. There is no water here that holds anything worth taking.");
         // #181/#36 finite water: a stretch fished relentlessly thins until it is fished out here, and needs rest to
