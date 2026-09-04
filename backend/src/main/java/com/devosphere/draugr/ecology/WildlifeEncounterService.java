@@ -593,6 +593,76 @@ public class WildlifeEncounterService {
         return new String[]{"SUCCEEDED", "You clear the worst of the churned ground, scatter seed, and set what was disturbed back toward order. Given a little quiet now, the wild will find its way back the sooner."};
     }
 
+    /** Milk and eggs come daily; a fleece does not — shearing is a once-a-season job, not a chore. */
+    private static final int YIELD_REST_HOURS = 20;
+    private static final int FLEECE_REST_HOURS = 720;
+
+    /**
+     * Take the produce a tamed animal gives (#52/#79/#106). fowl_egg, goat_milk and wool_tuft each declared an
+     * item_source of TAMED_YIELD, but nothing in the codebase produced them and TAMED_YIELD was handled nowhere — so
+     * keeping animals yielded nothing renewable, and taming a goat or a flock of fowl was worth strictly less than
+     * hunting them. This is what husbandry is for.
+     *
+     * <p>The animal must be genuinely TAMED and of a species that gives what is being asked for, and it must have
+     * rested since it last gave. Milk and eggs are perishable and are registered as such, so a full pail is not a
+     * permanent larder.
+     */
+    @Transactional
+    public EncounterResult takeTamedYield(UUID chronicle, Instant at, String actionText) {
+        String v = actionText == null ? "" : actionText.toLowerCase(java.util.Locale.ROOT);
+        final String itemKey, displayName, wanted;
+        final int restHours;
+        if (v.contains("milk"))                                   { itemKey="goat_milk"; displayName="Goat milk"; wanted="MILK";   restHours=YIELD_REST_HOURS; }
+        else if (v.contains("shear")||v.contains("fleece")||v.contains("wool")) { itemKey="wool_tuft"; displayName="Wool tuft"; wanted="WOOL"; restHours=FLEECE_REST_HOURS; }
+        else                                                      { itemKey="fowl_egg"; displayName="Fowl egg";  wanted="EGG";    restHours=YIELD_REST_HOURS; }
+
+        // Which tamed animals can give this. Eggs come from any tamed bird; milk and wool from the species that
+        // actually carry them, rather than from anything a rope has been put on.
+        String speciesClause = switch (wanted) {
+            case "MILK" -> "ws.species_key IN ('mountain_goat','aurochs','ox')";
+            case "WOOL" -> "ws.species_key IN ('bighorn_sheep','mountain_goat')";
+            default     -> "ws.kingdom_class = 'AVES'";
+        };
+
+        java.util.Map<String,Object> bond = jdbc.query(
+            "SELECT wb.id, wb.last_yield_at, wp.species_key FROM wildlife_bond wb " +
+            "JOIN wildlife_population wp ON wp.id = wb.population_id " +
+            "JOIN wildlife_species ws ON ws.species_key = wp.species_key " +
+            "WHERE wb.chronicle_id=? AND wb.bond_stage='TAMED' AND " + speciesClause + " " +
+            "ORDER BY wb.last_yield_at NULLS FIRST LIMIT 1 FOR UPDATE OF wb",
+            rs -> rs.next() ? java.util.Map.of("id", rs.getObject(1, UUID.class),
+                    "last", rs.getTimestamp(2) == null ? "" : rs.getTimestamp(2).toInstant().toString(),
+                    "species", rs.getString(3)) : null, chronicle);
+
+        if (bond == null) return new EncounterResult("FAILED", switch (wanted) {
+            case "MILK" -> "You have nothing tamed here that gives milk — a goat or a cow must be won over first, and won over properly.";
+            case "WOOL" -> "There is no tamed fleece-bearer here to shear.";
+            default     -> "You have no tamed fowl here to gather eggs from.";
+        });
+
+        String last = (String) bond.get("last");
+        if (!last.isEmpty()) {
+            long hours = java.time.Duration.between(Instant.parse(last), at).toHours();
+            if (hours < restHours) return new EncounterResult("FAILED", "MILK".equals(wanted)
+                ? "The animal has been milked out already and has given what it has; it will come back to the pail in its own time."
+                : "WOOL".equals(wanted)
+                ? "The fleece is short yet — there is nothing worth taking off it until it has grown back."
+                : "The nests are empty. What was laid has been gathered already, and there will be no more until they have had time.");
+        }
+
+        UUID id = items.createCarriedItem(chronicle, itemKey, displayName, at, "TAKEN_FROM_TAMED_ANIMAL");
+        // Milk and eggs are perishable from the moment they are taken. A fleece is not food and is left untracked.
+        if (!"WOOL".equals(wanted)) food.registerFresh(id, at);
+        jdbc.update("UPDATE wildlife_bond SET last_yield_at=? WHERE id=?", Timestamp.from(at), bond.get("id"));
+
+        String beast = display((String) bond.get("species"));
+        return new EncounterResult("SUCCEEDED", switch (wanted) {
+            case "MILK" -> "You settle beside the " + beast + ", work it patiently, and carry away what it gives.";
+            case "WOOL" -> "You work the fleece off the " + beast + " in careful handfuls, leaving the animal lighter and unhurt.";
+            default     -> "You go through the nests and gather what the fowl have laid, still warm.";
+        });
+    }
+
     /**
      * Approach an animal calmly and try to build trust. Trust is earned across many
      * returns, not won in one: each calm approach moves it a little, food moves it

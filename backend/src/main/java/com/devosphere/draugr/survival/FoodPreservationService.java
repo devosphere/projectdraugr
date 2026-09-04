@@ -18,6 +18,8 @@ public class FoodPreservationService {
     public FoodPreservationService(JdbcTemplate jdbc, PhysicalItemService items) { this.jdbc = jdbc; this.items = items; }
     @Transactional public void registerRaw(UUID item, Instant at) { register(item,"RAW",at,at.plus(Duration.ofHours(18))); }
     @Transactional public void registerCooked(UUID item, Instant at) { register(item,"COOKED",at,at.plus(Duration.ofHours(72))); }
+    /** Produce — milk, eggs, picked greens — keeps for days, not the 18 hours of raw meat (V264/V266). */
+    @Transactional public void registerFresh(UUID item, Instant at) { register(item,"FRESH",at,at.plus(Duration.ofHours(96))); }
     @Transactional public void advanceTo(Instant now) {
         Timestamp occurredAt = Timestamp.from(now);
         // #218 — pests at a fouled camp gnaw at a Chronicle's food stores. Food held by a Chronicle whose ground is
