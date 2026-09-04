@@ -702,7 +702,7 @@ public class PhysicalItemService {
                 case "FOREST", "TEMPERATE_FOREST" -> "oak";
                 case "MOUNTAIN" -> "spruce";
                 case "HIGHLAND" -> "pine";
-                case "WETLAND", "RIVERBANK" -> "willow";
+                case "WETLAND", "RIVER_BANK" -> "willow";
                 default -> null;
             };
             if (treeKey == null) return new String[]{"FAILED", "There are no trees here to fell."};
@@ -799,7 +799,7 @@ public class PhysicalItemService {
                 case "FOREST", "TEMPERATE_FOREST" -> "oak";
                 case "MOUNTAIN" -> "spruce";
                 case "HIGHLAND" -> "pine";
-                case "WETLAND", "RIVERBANK" -> "willow";
+                case "WETLAND", "RIVER_BANK" -> "willow";
                 default -> null;
             };
             if (treeKey == null) return new String[]{"FAILED", "There is no wood here to coppice."};
@@ -1200,7 +1200,7 @@ public class PhysicalItemService {
         java.util.List<java.util.Map<String,Object>> exposed = jdbc.queryForList(
             "SELECT i.object_id, i.item_key, i.use_count, i.condition_state, i.weathered_at " +
             "FROM item_instance i JOIN world_object w ON w.id=i.object_id JOIN world_chunk wc ON wc.id=w.current_location_id " +
-            "WHERE w.lifecycle_state='ACTIVE' AND w.current_owner_id IS NULL AND wc.biome IN ('WETLAND','RIVERBANK') " +
+            "WHERE w.lifecycle_state='ACTIVE' AND w.current_owner_id IS NULL AND wc.biome IN ('WETLAND','RIVER_BANK') " +
             "AND i.condition_state <> 'BROKEN' AND i.item_key <> 'iron_pyrite' " +
             "AND (i.item_key LIKE 'iron\\_%' OR i.item_key LIKE 'steel\\_%')");
         for (java.util.Map<String,Object> r : exposed) {
@@ -1248,7 +1248,7 @@ public class PhysicalItemService {
         java.sql.Timestamp ts = java.sql.Timestamp.from(now);
         java.util.List<java.util.Map<String,Object>> exposed = jdbc.queryForList(
             "SELECT i.object_id, i.weathered_at FROM item_instance i JOIN world_object w ON w.id=i.object_id JOIN world_chunk wc ON wc.id=w.current_location_id " +
-            "WHERE w.lifecycle_state='ACTIVE' AND w.current_owner_id IS NULL AND wc.biome IN ('WETLAND','RIVERBANK') " +
+            "WHERE w.lifecycle_state='ACTIVE' AND w.current_owner_id IS NULL AND wc.biome IN ('WETLAND','RIVER_BANK') " +
             "AND i.item_key IN ('unfired_bowl','unfired_cup')");
         for (java.util.Map<String,Object> r : exposed) {
             java.util.UUID id = (java.util.UUID) r.get("object_id");
@@ -1269,7 +1269,7 @@ public class PhysicalItemService {
         java.sql.Timestamp ts = java.sql.Timestamp.from(now);
         java.util.List<java.util.Map<String,Object>> exposed = jdbc.queryForList(
             "SELECT i.object_id, i.weathered_at FROM item_instance i JOIN world_object w ON w.id=i.object_id JOIN world_chunk wc ON wc.id=w.current_location_id " +
-            "WHERE w.lifecycle_state='ACTIVE' AND w.current_owner_id IS NULL AND wc.biome IN ('WETLAND','RIVERBANK') " +
+            "WHERE w.lifecycle_state='ACTIVE' AND w.current_owner_id IS NULL AND wc.biome IN ('WETLAND','RIVER_BANK') " +
             "AND ((i.item_key LIKE '%hide' AND i.item_key <> 'salted_hide') OR i.item_key LIKE '%pelt' OR i.item_key = 'animal_sinew')");
         for (java.util.Map<java.lang.String,java.lang.Object> r : exposed) {
             java.util.UUID id = (java.util.UUID) r.get("object_id");

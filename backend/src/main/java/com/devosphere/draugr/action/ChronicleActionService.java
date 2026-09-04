@@ -764,7 +764,7 @@ public class ChronicleActionService {
                 case "FOREST", "TEMPERATE_FOREST" -> "oak";
                 case "MOUNTAIN" -> "spruce";
                 case "HIGHLAND" -> "pine";
-                case "WETLAND", "RIVERBANK" -> "willow";
+                case "WETLAND", "RIVER_BANK" -> "willow";
                 default -> null;
             };
             if (species == null) return "";
