@@ -92,6 +92,12 @@ class TamedAnimalYieldIntegrationTest {
         assertEquals("FAILED", nothing.outcome(), () -> "with no tamed milk animal, milking must fail: " + nothing.perception());
 
         tame(chronicle, chunk, worldId, "mountain_goat", ts);
+
+        // A tamed goat is not enough on its own — milk has to go into something.
+        var noPail = actions.resolve("milk the goat");
+        assertEquals("FAILED", noPail.outcome(), () -> "with nothing to milk into, milking must fail: " + noPail.perception());
+        items.createCarriedItem(chronicle, "wooden_bowl", "Wooden bowl", Instant.now(), "TEST_FIXTURE");
+
         var milked = actions.resolve("milk the goat");
         assertEquals("SUCCEEDED", milked.outcome(), () -> "a tamed goat must give milk: " + milked.perception());
         assertTrue(items.hasAtLeast(chronicle, "goat_milk", 1), "the milk must be in hand");

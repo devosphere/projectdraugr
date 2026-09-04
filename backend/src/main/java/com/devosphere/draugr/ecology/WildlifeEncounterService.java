@@ -634,6 +634,11 @@ public class WildlifeEncounterService {
                     "last", rs.getTimestamp(2) == null ? "" : rs.getTimestamp(2).toInstant().toString(),
                     "species", rs.getString(3)) : null, chronicle);
 
+        // Milk has to go into something (#52 milking_pail). Eggs travel in cupped hands and a fleece under the arm,
+        // but milk drawn with nothing to catch it is milk on the ground.
+        if ("MILK".equals(wanted) && !items.hasWaterVessel(chronicle))
+            return new EncounterResult("FAILED", "You have nothing to milk into. A pail, a pot, or any vessel that will hold liquid has to come first, or it goes straight onto the ground.");
+
         if (bond == null) return new EncounterResult("FAILED", switch (wanted) {
             case "MILK" -> "You have nothing tamed here that gives milk — a goat or a cow must be won over first, and won over properly.";
             case "WOOL" -> "There is no tamed fleece-bearer here to shear.";
