@@ -1190,6 +1190,37 @@ public class PhysicalItemService {
      * exposure the item is destroyed (ROTTED), since a rotted material must actually be gone to matter — its condition
      * alone is not read. Shares the {@code weathered_at} exposure clock with corrosion. Run in the world tick.
      */
+    /** Unfired clay is soft earth: hours of wet destroy it outright, faster than raw tissue rots. */
+    private static final int SLAKE_HOURS_TO_DESTROY = 12;
+
+    /**
+     * Slake unfired greenware left out on wet ground (#59). A formed-but-unfired bowl or cup is still soft earth —
+     * left in the wet it takes up water, slumps, and is lost; only the fire makes it permanent. Like
+     * {@link #rotExposedOrganics}, only <b>unowned ground stock at a wet biome</b> slakes: greenware carried or set
+     * under cover is kept dry, and a vessel once fired is stone and immune. Shares the {@code weathered_at} exposure
+     * clock. Run in the world tick.
+     */
+    @Transactional
+    public void slakeExposedGreenware(Instant now) {
+        java.sql.Timestamp ts = java.sql.Timestamp.from(now);
+        java.util.List<java.util.Map<String,Object>> exposed = jdbc.queryForList(
+            "SELECT i.object_id, i.weathered_at FROM item_instance i JOIN world_object w ON w.id=i.object_id JOIN world_chunk wc ON wc.id=w.current_location_id " +
+            "WHERE w.lifecycle_state='ACTIVE' AND w.current_owner_id IS NULL AND wc.biome IN ('WETLAND','RIVERBANK') " +
+            "AND i.item_key IN ('unfired_bowl','unfired_cup')");
+        for (java.util.Map<String,Object> r : exposed) {
+            java.util.UUID id = (java.util.UUID) r.get("object_id");
+            java.sql.Timestamp weatheredAt = (java.sql.Timestamp) r.get("weathered_at");
+            if (weatheredAt == null) { // first exposure: start the clock, slake from here on
+                jdbc.update("UPDATE item_instance SET weathered_at=? WHERE object_id=?", ts, id);
+                continue;
+            }
+            if (java.time.Duration.between(weatheredAt.toInstant(), now).toHours() >= SLAKE_HOURS_TO_DESTROY) {
+                jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED', destroyed_at=?, destroyed_location_id=current_location_id, destroyed_cause='SLAKED', current_location_id=NULL WHERE id=?", ts, id);
+                jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'SLAKED','{}'::jsonb)", id, ts);
+            }
+        }
+    }
+
     @Transactional
     public void rotExposedOrganics(Instant now) {
         java.sql.Timestamp ts = java.sql.Timestamp.from(now);
