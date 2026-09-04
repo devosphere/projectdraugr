@@ -301,7 +301,9 @@ public class PhysicalItemService {
         jdbc.update(
             "UPDATE wildlife_bond wb SET draft_fatigue = GREATEST(0, draft_fatigue - ?) " +
             "WHERE wb.draft_fatigue > 0 AND EXISTS (" +
-            "  SELECT 1 FROM world_object cw JOIN construction_project cp ON cp.project_kind='ANIMAL_PEN' AND cp.state='COMPLETED' " +
+            // A full pen is not the only way to hold stock (#106): a hitching post or a picketed tether line keeps a
+            // beast standing at the camp just as well, and it rests there the same.
+            "  SELECT 1 FROM world_object cw JOIN construction_project cp ON cp.project_kind IN ('ANIMAL_PEN','HITCHING_POST','TETHER_LINE') AND cp.state='COMPLETED' " +
             "  JOIN world_object pw ON pw.id=cp.object_id AND pw.lifecycle_state='ACTIVE' AND pw.current_location_id=cw.current_location_id " +
             "  WHERE cw.id=wb.chronicle_id)", PEN_REST_RECOVERY);
     }
