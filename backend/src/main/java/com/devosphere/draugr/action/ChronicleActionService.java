@@ -606,13 +606,23 @@ public class ChronicleActionService {
         String weather = jdbc.query("SELECT weather_kind,intensity FROM world_weather WHERE world_id=?", rs -> rs.next() ? weatherPhrase(rs.getString(1), rs.getInt(2)) : null, world);
         if (weather != null) s.append(weather).append(" ");
         // What stands on this ground.
-        Integer sites = jdbc.queryForObject("SELECT COUNT(*) FROM ecology_site WHERE chunk_id=?", Integer.class, loc);
+        Integer sites = jdbc.queryForObject("SELECT COUNT(*) FROM ecology_site WHERE chunk_id=? AND site_category='WILDLIFE'", Integer.class, loc);
         Integer builds = jdbc.queryForObject("SELECT COUNT(*) FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE'", Integer.class, loc);
         Integer markers = jdbc.queryForObject("SELECT COUNT(*) FROM location_marker WHERE chunk_id=?", Integer.class, loc);
         Integer carcasses = jdbc.queryForObject("SELECT COUNT(*) FROM world_object WHERE current_location_id=? AND object_type='CARCASS' AND lifecycle_state='ACTIVE'", Integer.class, loc);
         if (builds != null && builds > 0) s.append("Structures you raised stand here. ");
         if (markers != null && markers > 0) s.append("A marker you left catches your eye, quietly confirming this is a place you have been. ");
         if (sites != null && sites > 0) s.append("The ground shows signs of living things that pass through or feed here. ");
+        // Name what this ground plainly shows (#37). A spring, a clay bed, a flint field, a standing ruin are all
+        // visible to anyone standing on them, but perception only ever said "signs of living things" — the Chronicle
+        // could not tell what water or ground they were actually on. Only RESOURCE and RUIN sites are named: wildlife
+        // sites stay unnamed here because presentLife already names the creatures actually present, and monster lairs
+        // are never named outright — that would be a hint handed to the player rather than a thing witnessed, and
+        // presentLife already gives their sign for a keen enough eye.
+        java.util.List<String> plainSites = jdbc.query(
+            "SELECT DISTINCT site_kind FROM ecology_site WHERE chunk_id=? AND site_category IN ('RESOURCE','RUIN') ORDER BY site_kind LIMIT 4",
+            (rs, row) -> rs.getString(1).toLowerCase(Locale.ROOT), loc);
+        if (!plainSites.isEmpty()) s.append("This ground holds ").append(joinAnd(plainSites)).append(". ");
         if (carcasses != null && carcasses > 0) s.append("A fallen animal lies nearby, not yet returned to the earth. ");
         // Loose objects left on this ground — anything dropped or set down here, so a dropped thing stays
         // visible and can be taken up again rather than seeming to vanish (#29/#41).
