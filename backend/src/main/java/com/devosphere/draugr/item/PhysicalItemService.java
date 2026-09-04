@@ -640,12 +640,18 @@ public class PhysicalItemService {
 
         // Look up display name from item_definition
         String displayName = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, itemKey);
+        // Gathered food is perishable from the moment it is picked (V264). Before this, foraged plant food was
+        // created with no preservation state at all and so never spoiled — only hunted and caught animal food was
+        // ever registered. Produce keeps for days on the FRESH tier; nuts, mast and grain keep for weeks on DRIED.
+        String category = jdbc.queryForObject("SELECT category FROM item_definition WHERE item_key=?", String.class, itemKey);
+        String keepKind = "FOOD".equals(category) ? foragedKeepKind(itemKey) : null;
 
         for (int i = 0; i < count; i++) {
             UUID id = UUID.randomUUID();
             jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM',?,?)", id, displayName, chronicle);
             jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,?,'SOUND')", id, itemKey);
             jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'GATHERED',jsonb_build_object('floraKey',?,'biome',?))", id, Timestamp.from(occurredAt), floraKey, biome);
+            if (keepKind != null) registerPreserved(id, keepKind, occurredAt);
         }
         // Deplete chunk_flora if present
         jdbc.update("UPDATE chunk_flora SET quantity=GREATEST(0,quantity-?), last_harvested_at=? WHERE chunk_id=? AND flora_key=?", count, Timestamp.from(occurredAt), location, floraKey);
@@ -1515,6 +1521,22 @@ public class PhysicalItemService {
      *  Beyond the explicitly-preserved fish/meat, the cooked dishes (V92) keep by their nature: a dense, dry baked
      *  bread or cake keeps for weeks like other dried food, while a boiled or stewed wet dish keeps only days —
      *  before this they fell through to null and so never spoiled at all, an immortal pot of stew. */
+    /** How long gathered produce keeps before it turns — days, not the 18 hours of raw meat (V264). */
+    private static final int FRESH_PRODUCE_HOURS = 96;
+
+    /**
+     * How a foraged food keeps. Gathered plant food was created with no preservation state at all, so berries,
+     * mushrooms, greens and roots never spoiled — only animal food was ever registered. Dry keepers (nuts, mast,
+     * grain) genuinely do keep for weeks, so they take the DRIED tier; everything else is perishable produce and
+     * takes FRESH. Returns null for anything that is not food, which is left untracked as before.
+     */
+    private static String foragedKeepKind(String itemKey) {
+        String k = itemKey.toLowerCase(java.util.Locale.ROOT);
+        boolean dryKeeper = k.contains("nut") || k.contains("mast") || k.contains("grain") || k.contains("rice")
+                         || k.contains("acorn") || k.contains("chestnut") || k.contains("seed");
+        return dryKeeper ? "DRIED" : "FRESH";
+    }
+
     private static String preservationKind(String itemKey) {
         return switch (itemKey) {
             // Lacto-fermented vegetables are preserved in their own brine (the recipe takes ground salt), so they
@@ -1539,8 +1561,8 @@ public class PhysicalItemService {
     /** Preserved food keeps far longer than raw: salted longest, then dried, then smoked, then a plain cooked dish. */
     private void registerPreserved(UUID item, String kind, Instant at) {
         // RAW must match FoodPreservationService.registerRaw (18h) — without its own case it would fall to the
-        // dried default of 1080h and a gutted fish would keep for 45 days.
-        long hours = switch (kind) { case "SALTED" -> 1440; case "SMOKED" -> 720; case "COOKED" -> 72; case "RAW" -> 18; default -> 1080; };
+        // dried default of 1080h and a gutted fish would keep for 45 days. FRESH is the produce span (V264).
+        long hours = switch (kind) { case "SALTED" -> 1440; case "SMOKED" -> 720; case "COOKED" -> 72; case "RAW" -> 18; case "FRESH" -> FRESH_PRODUCE_HOURS; default -> 1080; };
         jdbc.update("INSERT INTO food_preservation_state (object_id,preparation_kind,safe_until,pest_checked_at) VALUES (?,?,?,?) ON CONFLICT (object_id) DO NOTHING",
             item, kind, Timestamp.from(at.plus(java.time.Duration.ofHours(hours))), Timestamp.from(at));
     }
