@@ -308,6 +308,31 @@ public class PhysicalItemService {
             "  WHERE cw.id=wb.chronicle_id)", PEN_REST_RECOVERY);
     }
 
+    private static final int DRAFT_THIRST_PER_TURN = 4;   // a beast dries out faster than it grows hungry
+    private static final int DRAFT_WATER_RELIEF    = 40;  // reaching water settles it quickly
+
+    /**
+     * Turn of the world for draft thirst (V267). wildlife_bond tracked fatigue, conditioning and hunger but nothing
+     * for water, so an animal never needed a drink and every watering structure was inert by construction. Thirst
+     * mirrors hunger: it rises as the world turns, and falls where the keeper's ground actually holds water — wet
+     * ground, a freshwater site, or a built trough or catchment. Stock kept on dry ground must have water brought to
+     * them, and a thirsty beast hauls less (the haul formula weighs thirst alongside fatigue and hunger).
+     */
+    @Transactional
+    public void advanceDraftThirst(Instant now) {
+        jdbc.update(
+            "UPDATE wildlife_bond wb SET draft_thirst = CASE WHEN EXISTS (" +
+            "  SELECT 1 FROM world_object cw JOIN world_chunk ch ON ch.id=cw.current_location_id WHERE cw.id=wb.chronicle_id AND (" +
+            "     ch.biome IN ('WETLAND','RIVER_BANK') " +
+            "     OR EXISTS(SELECT 1 FROM ecology_site es WHERE es.chunk_id=ch.id AND (es.site_kind ILIKE '%spring%' OR es.site_kind ILIKE '%stream%' OR es.site_kind ILIKE '%river%' OR es.site_kind ILIKE '%freshwater%')) " +
+            "     OR EXISTS(SELECT 1 FROM construction_project cp JOIN world_object tw ON tw.id=cp.object_id " +
+            "               WHERE cp.project_kind IN ('WATERING_STATION','RAINWATER_CATCHMENT') AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
+            "                 AND tw.lifecycle_state='ACTIVE' AND tw.current_location_id=ch.id))) " +
+            "  THEN GREATEST(0, draft_thirst - ?) ELSE LEAST(100, draft_thirst + ?) END " +
+            "WHERE wb.bond_stage='TAMED' AND EXISTS (SELECT 1 FROM wildlife_population wp JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wp.id=wb.population_id)",
+            DRAFT_WATER_RELIEF, DRAFT_THIRST_PER_TURN);
+    }
+
     private static final int LIVESTOCK_FOULING_PER_TURN = 4; // kept stock foul the ground they stand on
 
     /**
@@ -2318,9 +2343,9 @@ public class PhysicalItemService {
             "COALESCE((SELECT SUM(b.mass_bonus_grams) FROM equipment_attachment e JOIN item_instance ii ON ii.object_id=e.item_id JOIN carry_aid_bonus b ON b.item_key=ii.item_key WHERE e.chronicle_id=c.chronicle_id),0), " +
             "COALESCE((SELECT SUM(b.bulk_bonus_ml)    FROM equipment_attachment e JOIN item_instance ii ON ii.object_id=e.item_id JOIN carry_aid_bonus b ON b.item_key=ii.item_key WHERE e.chronicle_id=c.chronicle_id),0), " +
             "CASE WHEN EXISTS(SELECT 1 FROM item_instance ti JOIN world_object tw ON tw.id=ti.object_id WHERE ti.item_key IN (SELECT item_key FROM draft_vehicle) AND tw.current_owner_id=c.chronicle_id AND tw.lifecycle_state='ACTIVE') " +
-            " THEN COALESCE((SELECT SUM(ds.haul_bonus_grams * (100 - GREATEST(wb.draft_fatigue, wb.draft_hunger) * (200 - wb.draft_conditioning) / 200) / 100) FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id=wb.population_id JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wb.chronicle_id=c.chronicle_id AND wb.bond_stage='TAMED'),0) ELSE 0 END, " +
+            " THEN COALESCE((SELECT SUM(ds.haul_bonus_grams * (100 - GREATEST(wb.draft_fatigue, wb.draft_hunger, wb.draft_thirst) * (200 - wb.draft_conditioning) / 200) / 100) FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id=wb.population_id JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wb.chronicle_id=c.chronicle_id AND wb.bond_stage='TAMED'),0) ELSE 0 END, " +
             "CASE WHEN EXISTS(SELECT 1 FROM item_instance ti JOIN world_object tw ON tw.id=ti.object_id WHERE ti.item_key IN (SELECT item_key FROM draft_vehicle) AND tw.current_owner_id=c.chronicle_id AND tw.lifecycle_state='ACTIVE') " +
-            " THEN COALESCE((SELECT SUM(ds.bulk_bonus_ml * (100 - GREATEST(wb.draft_fatigue, wb.draft_hunger) * (200 - wb.draft_conditioning) / 200) / 100)    FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id=wb.population_id JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wb.chronicle_id=c.chronicle_id AND wb.bond_stage='TAMED'),0) ELSE 0 END " +
+            " THEN COALESCE((SELECT SUM(ds.bulk_bonus_ml * (100 - GREATEST(wb.draft_fatigue, wb.draft_hunger, wb.draft_thirst) * (200 - wb.draft_conditioning) / 200) / 100)    FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id=wb.population_id JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wb.chronicle_id=c.chronicle_id AND wb.bond_stage='TAMED'),0) ELSE 0 END " +
             "FROM chronicle_carry_capacity c LEFT JOIN chronicle_capability_adaptation a ON a.chronicle_id=c.chronicle_id WHERE c.chronicle_id=?",rs->rs.next()?new Capacity((int)(rs.getInt(1)*(1+rs.getDouble(4)*.12*rs.getDouble(5)))+rs.getInt(6)+rs.getInt(8),rs.getInt(2)+rs.getInt(7)+rs.getInt(9),(int)(rs.getInt(3)*(1+rs.getDouble(4)*.08*rs.getDouble(5)))):new Capacity(0,0,0),chronicle);
         Load load=jdbc.query("WITH RECURSIVE carried(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN carried c ON ic.container_id=c.id) SELECT COALESCE(SUM(d.unit_mass_grams),0),COALESCE(SUM(d.unit_volume_ml),0),COALESCE(MAX(d.unit_mass_grams),0) FROM carried JOIN item_instance i ON i.object_id=carried.id JOIN item_definition d ON d.item_key=i.item_key",rs->rs.next()?new Load(rs.getInt(1),rs.getInt(2),rs.getInt(3)):new Load(0,0,0),chronicle);
         return new LoadState(load.mass(),load.volume(),load.largest(),cap.mass(),cap.volume(),cap.singleLift());
