@@ -1152,9 +1152,16 @@ public class ChronicleActionService {
         // Till a seedbed (#165) — break/turn open ground before sowing. "till" whole-word (not "still"/"until"/"tiller").
         // Produce a tamed animal gives (#52/#79/#106): milking, gathering eggs, taking a fleece. Checked before the
         // gather intents so "collect the eggs" is husbandry rather than foraging the ground for them.
-        if(value.contains("milk")||value.contains("shear")||value.contains("fleece")
+        // 'milk' must be whole-word: milkweed is a fibre plant that belongs to GATHER_PLANT, and a substring match
+        // stole it. Wool is deliberately NOT a trigger noun either — "weave wool cloth" is weaving, not shearing —
+        // so a fleece is asked for by the act (shear) or the thing taken (fleece).
+        // 'milk' must be whole-word: milkweed is a fibre plant belonging to GATHER_PLANT, and a substring match stole
+        // it. Wool is not a trigger noun — "weave wool cloth" is weaving — and a bare 'fleece' is not either, since
+        // rinsing a fleece is washing it, not taking it off an animal. So a fleece needs a taking verb.
+        if(word(value,"milk")||value.contains("shear")
+           ||(value.contains("fleece")&&(value.contains("take")||value.contains("clip")||value.contains("cut")||value.contains("pull")))
            ||((value.contains("collect")||value.contains("gather")||value.contains("take")||value.contains("check"))
-              &&(value.contains("egg")||value.contains("eggs")))) return Intent.TAKE_ANIMAL_YIELD;
+              &&(word(value,"egg")||word(value,"eggs")))) return Intent.TAKE_ANIMAL_YIELD;
         if((value.contains("feed")||value.contains("forage")||value.contains("graze")||value.contains("water the"))&&(value.contains("animal")||value.contains("beast")||value.contains("ox")||value.contains("oxen")||value.contains("aurochs")||value.contains("deer")||value.contains("elk")||value.contains("reindeer")||value.contains("draft")||value.contains("cattle")||value.contains("livestock")||value.contains("the herd")||value.contains("the stock"))) return Intent.FEED_ANIMAL;
         if(value.contains("clear")&&(value.contains("land")||value.contains("forest")||value.contains("brush")||value.contains("woods")||value.contains("woodland")||value.contains("trees")||value.contains("arable")||value.contains("for a field")||value.contains("for planting")||value.contains("ground for"))) return Intent.CLEAR_LAND;
         if((word(value,"weed")||value.contains("tend")||value.contains("hoe the row")||value.contains("hoe the crop"))&&(value.contains("crop")||value.contains("field")||value.contains("stand")||value.contains("grain")||value.contains("seedbed")||value.contains("row")||value.contains("plot"))) return Intent.WEED_CROP;
