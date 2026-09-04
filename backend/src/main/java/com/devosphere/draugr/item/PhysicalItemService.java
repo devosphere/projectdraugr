@@ -1443,11 +1443,17 @@ public class PhysicalItemService {
      *  before this they fell through to null and so never spoiled at all, an immortal pot of stew. */
     private static String preservationKind(String itemKey) {
         return switch (itemKey) {
-            case "salted_fish", "salted_meat" -> "SALTED";
+            // Lacto-fermented vegetables are preserved in their own brine (the recipe takes ground salt), so they
+            // keep on the salted tier — long, but not forever. Before this they fell through to null and never
+            // spoiled at all, an immortal crock of sauerkraut (#60).
+            case "salted_fish", "salted_meat", "fermented_vegetables" -> "SALTED";
             case "smoked_fish", "smoked_meat", "smoked_fowl" -> "SMOKED";
             case "dried_fish", "dried_meat", "dried_mushroom", "pemmican", "preserved_berries",
                  "acorn_flatbread", "grain_flatbread", "trail_cake" -> "DRIED"; // dense, dry keeping breads and cakes
-            case "root_vegetable_stew", "grain_porridge", "herbal_infusion", "cooked_mushrooms", "berry_compote" -> "COOKED";
+            // A wet pot of greens keeps no better than the other wet dishes — it was the one cooked dish still
+            // missing from this map, and so never spoiled (#60).
+            case "root_vegetable_stew", "grain_porridge", "herbal_infusion", "cooked_mushrooms", "berry_compote",
+                 "cooked_greens" -> "COOKED";
             default -> null;
         };
     }
