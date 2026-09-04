@@ -84,7 +84,9 @@ class RiverSandGravelIntegrationTest {
     }
 
     private boolean gatherUntil(String phrase, String itemKey, UUID chronicle) {
-        for (int i = 0; i < 20 && !items.hasAtLeast(chronicle, itemKey, 1); i++) {
+        // Named search succeeds at rarity*0.75 (~0.26 here), so allow plenty of attempts: the chance of never
+        // turning any up across this many is negligible (~1 in 7000).
+        for (int i = 0; i < 30 && !items.hasAtLeast(chronicle, itemKey, 1); i++) {
             actions.resolve(phrase);
         }
         return items.hasAtLeast(chronicle, itemKey, 1);
