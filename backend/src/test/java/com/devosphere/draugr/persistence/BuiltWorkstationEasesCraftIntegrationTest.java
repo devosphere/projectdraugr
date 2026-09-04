@@ -62,10 +62,13 @@ class BuiltWorkstationEasesCraftIntegrationTest {
     @Autowired PersistentStateAuditor auditor;
     @Autowired JdbcTemplate jdbc;
 
-    private String gradeOf(UUID chronicle, String itemKey) {
-        return jdbc.query("SELECT i.quality_grade FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
-                "WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key=? ORDER BY w.created_at DESC LIMIT 1",
-            rs -> rs.next() ? rs.getString(1) : null, chronicle, itemKey);
+    /** How many of this item the Chronicle holds at a given workmanship. Counting by grade rather than reading "the
+     *  newest" keeps the assertion independent of row ordering, since both runs can land on the same timestamp. */
+    private int countAtGrade(UUID chronicle, String itemKey, String grade) {
+        Integer n = jdbc.queryForObject("SELECT COUNT(*) FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
+                "WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key=? AND i.quality_grade=?",
+            Integer.class, chronicle, itemKey, grade);
+        return n == null ? 0 : n;
     }
 
     @Test
@@ -86,8 +89,10 @@ class BuiltWorkstationEasesCraftIntegrationTest {
         // Woven on the ground, with no loom of any sort. The phrase is fixed, so the base workmanship is fixed too.
         var plain = items.executeProcess(chronicle, chunk, "weave_textile", "weave textile", now);
         assertEquals("SUCCEEDED", plain[0], () -> "weaving must succeed with cordage to hand: " + plain[1]);
-        String plainGrade = gradeOf(chronicle, "textile_material");
-        assertNotNull(plainGrade, "the woven textile must exist");
+        assertTrue(countAtGrade(chronicle, "textile_material", "SOUND") >= 1,
+            "woven on the ground, the same plain effort gives sound work");
+        assertEquals(0, countAtGrade(chronicle, "textile_material", "FINE"),
+            "nothing finer than sound should come off bare ground with no loom of any kind");
 
         // Raise a weaving table on this ground — the catalogue's own workstation for a loom.
         assertEquals(Boolean.TRUE, jdbc.queryForObject(
@@ -99,10 +104,9 @@ class BuiltWorkstationEasesCraftIntegrationTest {
 
         var atTable = items.executeProcess(chronicle, chunk, "weave_textile", "weave textile", now);
         assertEquals("SUCCEEDED", atTable[0], () -> "weaving at the table must succeed: " + atTable[1]);
-        String tableGrade = gradeOf(chronicle, "textile_material");
 
-        assertEquals("SOUND", plainGrade, "woven on the ground, the same plain effort gives sound work");
-        assertEquals("FINE", tableGrade, "woven at a built loom table, the same effort must come out finer");
+        assertTrue(countAtGrade(chronicle, "textile_material", "FINE") >= 1,
+            "woven at a built loom table, the same phrase and the same materials must come out finer");
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
