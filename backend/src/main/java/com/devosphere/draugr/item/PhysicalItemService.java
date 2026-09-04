@@ -1454,13 +1454,19 @@ public class PhysicalItemService {
             // missing from this map, and so never spoiled (#60).
             case "root_vegetable_stew", "grain_porridge", "herbal_infusion", "cooked_mushrooms", "berry_compote",
                  "cooked_greens" -> "COOKED";
+            // Dressing a fish does not preserve it. A caught raw_fish is spoilage-tracked from the moment it comes
+            // out of the water, but gutting/filleting/splitting it produced UNTRACKED objects — so cleaning a fish
+            // laundered perishable food into food that never spoiled at all. These stay raw, and keep raw's span.
+            case "gutted_fish", "fish_fillet", "fish_side" -> "RAW";
             default -> null;
         };
     }
 
     /** Preserved food keeps far longer than raw: salted longest, then dried, then smoked, then a plain cooked dish. */
     private void registerPreserved(UUID item, String kind, Instant at) {
-        long hours = switch (kind) { case "SALTED" -> 1440; case "SMOKED" -> 720; case "COOKED" -> 72; default -> 1080; };
+        // RAW must match FoodPreservationService.registerRaw (18h) — without its own case it would fall to the
+        // dried default of 1080h and a gutted fish would keep for 45 days.
+        long hours = switch (kind) { case "SALTED" -> 1440; case "SMOKED" -> 720; case "COOKED" -> 72; case "RAW" -> 18; default -> 1080; };
         jdbc.update("INSERT INTO food_preservation_state (object_id,preparation_kind,safe_until,pest_checked_at) VALUES (?,?,?,?) ON CONFLICT (object_id) DO NOTHING",
             item, kind, Timestamp.from(at.plus(java.time.Duration.ofHours(hours))), Timestamp.from(at));
     }
