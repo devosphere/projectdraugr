@@ -33,7 +33,7 @@ public class ResourceEcologyService {
     private static final int NATURAL_STAND = 16;
     /** Biomes that carry trees by nature (the ones fellTree yields a fallback species for). */
     private static final java.util.Set<String> WOODED_BIOMES =
-        java.util.Set.of("FOREST", "TEMPERATE_FOREST", "MOUNTAIN", "HIGHLAND", "WETLAND", "RIVERBANK");
+        java.util.Set.of("FOREST", "TEMPERATE_FOREST", "MOUNTAIN", "HIGHLAND", "WETLAND", "RIVER_BANK");
 
     private Profile profile(UUID chunkId, String resourceKey) {
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, chunkId);
