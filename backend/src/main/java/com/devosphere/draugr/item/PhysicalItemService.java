@@ -1007,7 +1007,12 @@ public class PhysicalItemService {
         // waste) plus a minor, bounded quality assist. Detected through the unified reachability model (Layer 1),
         // so a bench standing in an on-site workshop counts.
         String stationKind = (String) match.get("station_kind");
-        boolean atStation = stationKind != null && hasAtLeast(chronicle, stationKind, 1);
+        // A workstation you BUILT counts as the bench it is. The catalogue carries buildable WEAVING_TABLE,
+        // WOODWORKING_TABLE and STONEWORKING_TABLE structures, but a process asks for the station ITEM, so raising
+        // one eased nothing — is_workstation is read in only one place, negatively, to decide what decays. Same
+        // shape as the is_shelter gap: a flag that named a capability without any code granting it.
+        boolean atStation = stationKind != null
+            && (hasAtLeast(chronicle, stationKind, 1) || builtStationAt(location, stationKind));
 
         // The tool this work turns on (#220): pick the soundest one in reach. A broken tool no longer counts — it
         // must be mended first — and the chosen tool wears a little with the work (applied on success, below).
@@ -1521,6 +1526,26 @@ public class PhysicalItemService {
      *  Beyond the explicitly-preserved fish/meat, the cooked dishes (V92) keep by their nature: a dense, dry baked
      *  bread or cake keeps for weeks like other dried food, while a boiled or stewed wet dish keeps only days —
      *  before this they fell through to null and so never spoiled at all, an immortal pot of stew. */
+    /** The built workstation that stands in for a bench a process asks for by item key. */
+    private static String stationStructureFor(String stationKind) {
+        return switch (stationKind) {
+            case "woodworking_bench"  -> "WOODWORKING_TABLE";
+            case "stoneworking_bench" -> "STONEWORKING_TABLE";
+            case "loom"               -> "WEAVING_TABLE";
+            default -> null;   // furnaces, kilns, querns and jigs remain objects you make, not builds you raise
+        };
+    }
+
+    /** Whether a completed workstation of the right kind stands on this ground, standing in for the bench itself. */
+    private boolean builtStationAt(UUID location, String stationKind) {
+        String kind = stationStructureFor(stationKind);
+        if (kind == null || location == null) return false;
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "WHERE w.current_location_id=? AND cp.project_kind=? AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
+            "AND w.lifecycle_state='ACTIVE')", Boolean.class, location, kind));
+    }
+
     /** How long gathered produce keeps before it turns — days, not the 18 hours of raw meat (V264). */
     private static final int FRESH_PRODUCE_HOURS = 96;
 
