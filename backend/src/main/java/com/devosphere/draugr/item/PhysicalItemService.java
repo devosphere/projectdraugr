@@ -308,6 +308,36 @@ public class PhysicalItemService {
             "  WHERE cw.id=wb.chronicle_id)", PEN_REST_RECOVERY);
     }
 
+    private static final int LIVESTOCK_FOULING_PER_TURN = 4; // kept stock foul the ground they stand on
+
+    /**
+     * Foul the ground where tamed draft stock are kept (#106). Beasts stood at a camp produced nothing at all before
+     * this: the ground never grew foul however long stock were kept on it, which is the one certainty of keeping
+     * animals. A completed <b>manure pit</b> or <b>compost bay</b> at that ground CONTAINS the muck, so it is gathered
+     * rather than trodden through camp, and the ground stays clean.
+     *
+     * <p>Refuse is already wired to real consequences — it draws wildlife, costs the body condition, and lets pests
+     * dock the shelf life of stored food — so keeping stock without mucking out now carries those costs. MAINTAIN_CAMP
+     * still clears refuse, so a fouled camp is always recoverable. Grouped by chunk so a keeper with several beasts
+     * fouls the ground once per turn, not once per animal. Run in the world tick.
+     */
+    @Transactional
+    public void foulGroundWithLivestock(Instant now) {
+        java.sql.Timestamp ts = java.sql.Timestamp.from(now);
+        jdbc.update(
+            "INSERT INTO chunk_refuse (chunk_id, refuse_level, last_updated_at) " +
+            "SELECT cw.current_location_id, LEAST(100, ?), ? FROM wildlife_bond wb " +
+            "JOIN world_object cw ON cw.id = wb.chronicle_id " +
+            "WHERE wb.bond_stage='TAMED' AND cw.current_location_id IS NOT NULL " +
+            "AND EXISTS (SELECT 1 FROM wildlife_population wp JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wp.id=wb.population_id) " +
+            "AND NOT EXISTS (SELECT 1 FROM construction_project cp JOIN world_object mw ON mw.id=cp.object_id " +
+            "                WHERE cp.project_kind IN ('MANURE_PIT','COMPOST_BAY') AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
+            "                  AND mw.lifecycle_state='ACTIVE' AND mw.current_location_id=cw.current_location_id) " +
+            "GROUP BY cw.current_location_id " +
+            "ON CONFLICT (chunk_id) DO UPDATE SET refuse_level = LEAST(100, chunk_refuse.refuse_level + ?), last_updated_at = ?",
+            LIVESTOCK_FOULING_PER_TURN, ts, LIVESTOCK_FOULING_PER_TURN, ts);
+    }
+
     private static final int DRAFT_HUNGER_PER_TURN = 3;   // a beast grows hungry as the world turns
     private static final int DRAFT_GRAZE_RELIEF   = 10;   // pasture feeds it faster than it hungers
     private static final int DRAFT_FEED_RELIEF     = 60;   // a bundle of fodder is a good feed
