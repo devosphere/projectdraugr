@@ -311,6 +311,7 @@ public class PhysicalItemService {
     private static final int DRAFT_HUNGER_PER_TURN = 3;   // a beast grows hungry as the world turns
     private static final int DRAFT_GRAZE_RELIEF   = 10;   // pasture feeds it faster than it hungers
     private static final int DRAFT_FEED_RELIEF     = 60;   // a bundle of fodder is a good feed
+    private static final int DRAFT_FEED_RELIEF_RACKED = 90; // fed from a rack or dry store, far less is trampled and wasted
 
     /** Turn of the world for draft hunger (#104): every tamed draft beast grows a little hungrier, UNLESS its keeper is
      *  on grassland — there it grazes the pasture and stays fed. A beast on bare or wooded ground must be brought fodder.
@@ -338,9 +339,19 @@ public class PhysicalItemService {
         if (!hasAtLeast(chronicle, "dry_grass_bundle", 1))
             return new String[]{"FAILED", "You have no fodder to hand — a bundle of cut grass must come first before you can feed the beasts."};
         consumeOne(chronicle, "dry_grass_bundle", at);
+        // A hay rack or a dry fodder store makes the same bundle go much further (#106): fodder shaken out on bare
+        // ground is trampled and soiled, while a rack holds it at muzzle height and a store keeps it sweet. The
+        // structure never feeds the beasts by itself — the bundle is still cut, carried, and consumed here.
+        boolean racked = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM world_object cw JOIN construction_project cp ON cp.project_kind IN ('HAY_RACK','FODDER_STORE') " +
+            "AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
+            "JOIN world_object rw ON rw.id=cp.object_id AND rw.lifecycle_state='ACTIVE' AND rw.current_location_id=cw.current_location_id " +
+            "WHERE cw.id=?)", Boolean.class, chronicle));
         jdbc.update("UPDATE wildlife_bond SET draft_hunger = GREATEST(0, draft_hunger - ?) WHERE chronicle_id=? AND bond_stage='TAMED'",
-            DRAFT_FEED_RELIEF, chronicle);
-        return new String[]{"SUCCEEDED", "You shake out the bundle of dry grass and let the beasts feed, muzzles working through the fodder until the sharp edge of their hunger is off."};
+            racked ? DRAFT_FEED_RELIEF_RACKED : DRAFT_FEED_RELIEF, chronicle);
+        return new String[]{"SUCCEEDED", racked
+            ? "You fill the rack and let the beasts work through it at their own height, and almost none of the fodder is trodden into the ground and lost."
+            : "You shake out the bundle of dry grass and let the beasts feed, muzzles working through the fodder until the sharp edge of their hunger is off."};
     }
 
     // ---- water handling (#71) ----------------------------------------------------------------------------
