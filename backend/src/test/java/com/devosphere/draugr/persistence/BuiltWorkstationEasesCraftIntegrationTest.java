@@ -84,7 +84,11 @@ class BuiltWorkstationEasesCraftIntegrationTest {
         jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
 
         Instant now = Instant.now();
-        for (int i = 0; i < 8; i++) items.createCarriedItem(chronicle, "fiber_cordage", "Fibre cordage", now, "TEST_FIXTURE");
+        // The finished grade is the WORST of the workmanship and the materials — you cannot weave fine cloth from
+        // ordinary cordage, and rightly so. The cordage is therefore FINE, so that the station's lift is the only
+        // thing that can decide the outcome rather than being masked by the material cap.
+        for (int i = 0; i < 8; i++)
+            items.createCarriedItem(chronicle, "fiber_cordage", "Fibre cordage", now, "TEST_FIXTURE", com.devosphere.draugr.quality.QualityGrade.FINE);
 
         // Woven on the ground, with no loom of any sort. The phrase is fixed, so the base workmanship is fixed too.
         var plain = items.executeProcess(chronicle, chunk, "weave_textile", "weave textile", now);
