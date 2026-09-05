@@ -1966,15 +1966,30 @@ public class PhysicalItemService {
         return new ItemView(belt, "Primitive utility belt", "utility_belt", chronicle, null);
     }
 
-    /** True if the Chronicle can reach any blade capable of carving wood. */
+    /**
+     * Whether the Chronicle can reach a sound tool of this class, read from the tool registry rather than a
+     * hand-written list. tool_profile is what the material processes already consult, but the assembly stages and
+     * this cutting check each carried their own hardcoded lists, and the lists had fallen behind the registry: ten
+     * registered CUTTING tools were invisible to them (bronze, obsidian, chert and flint knives among them), four
+     * STRIKING ones, and every metal AXE — so a Chronicle could smelt an iron axe and still be unable to notch a log
+     * that a stone axe could. Reading the registry keeps one answer to "can I cut this" everywhere.
+     */
     @Transactional(readOnly = true)
-    /** Any edged tool that can do cutting/scraping work. Beyond the knife/hatchet/flake, the adze, chisel,
-     *  burin, and stone/bone scrapers are all worked edges — each was craftable but satisfied no tool gate,
-     *  so making one did nothing; now it counts as the blade a CUTTING process or a knife-gated act needs. */
+    public boolean hasToolOfClass(UUID chronicle, String toolClass) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' " +
+            "  UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id " +
+            "  JOIN world_object n ON n.id=ic.item_id WHERE n.lifecycle_state='ACTIVE') " +
+            "SELECT EXISTS(SELECT 1 FROM reachable x JOIN item_instance i ON i.object_id=x.id " +
+            "  JOIN tool_profile t ON t.item_key=i.item_key " +
+            "  WHERE t.tool_class=? AND i.condition_state NOT IN ('BROKEN','DESTROYED'))",
+            Boolean.class, chronicle, toolClass));
+    }
+
+    /** True if the Chronicle can reach any blade capable of cutting or carving — every registered CUTTING tool. */
+    @Transactional(readOnly = true)
     public boolean hasCuttingTool(UUID chronicle) {
-        return hasAtLeast(chronicle,"stone_knife",1) || hasAtLeast(chronicle,"stone_hatchet",1) || hasAtLeast(chronicle,"stone_flake",1)
-            || hasAtLeast(chronicle,"stone_adze",1) || hasAtLeast(chronicle,"stone_chisel",1) || hasAtLeast(chronicle,"flint_burin",1)
-            || hasAtLeast(chronicle,"flint_scraper",1) || hasAtLeast(chronicle,"bone_scraper",1);
+        return hasToolOfClass(chronicle, "CUTTING");
     }
 
     /**
