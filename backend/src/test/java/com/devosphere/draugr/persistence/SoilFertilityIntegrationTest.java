@@ -75,6 +75,14 @@ class SoilFertilityIntegrationTest {
     }
 
     private void ripeCrop(UUID chunk, Instant reapAt) {
+        // Control for pollination (V276): a hive or worm patch working this ground fills the stand out, and this
+        // test measures an absolute baseline for something else. Break the pollinators here so it measures the
+        // one variable it names.
+        for (String kind : jdbc.queryForList("SELECT colony_kind FROM insect_colony_kind WHERE pollination_bonus > 0", String.class)) {
+            UUID spent = UUID.randomUUID();
+            jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE',?,?)", spent, "Spent " + kind.replace('_',' '), chunk);
+            jdbc.update("INSERT INTO insect_colony (object_id,colony_kind,chunk_id,health,last_disturbed_at) VALUES (?,?,?,0,now()) ON CONFLICT DO NOTHING", spent, kind, chunk);
+        }
         jdbc.update("INSERT INTO crop_stand (id, chunk_id, crop_key, sown_at, maturity_days, harvested, tilled) VALUES (?,?,?,?,?,false,false)",
             UUID.randomUUID(), chunk, "wild_grain", Timestamp.from(reapAt.minus(Duration.ofDays(35))), 30);
     }
