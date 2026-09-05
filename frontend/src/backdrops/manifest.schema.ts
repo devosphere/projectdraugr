@@ -13,9 +13,9 @@
 
 export const SCHEMA_VERSION = 1 as const;
 
-/** The six canonical base biomes of the world seed (backend `BiomeClimate`). */
+/** The canonical base biomes of the world seed (backend `BiomeClimate`). */
 export const BASE_BIOMES = [
-  'TEMPERATE_FOREST', 'WETLAND', 'GRASSLAND', 'HIGHLAND', 'MOUNTAIN', 'OCEAN',
+  'TEMPERATE_FOREST', 'WETLAND', 'GRASSLAND', 'HIGHLAND', 'MOUNTAIN', 'OCEAN', 'RIVER_BANK',
 ] as const;
 export type BaseBiome = (typeof BASE_BIOMES)[number];
 
