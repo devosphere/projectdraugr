@@ -103,7 +103,7 @@ class RiversideForagingIntegrationTest {
 
         // Shellfish are food, and food that goes over fast: a mussel that has sat is how people poison themselves.
         Integer tracked = jdbc.queryForObject(
-            "SELECT COUNT(*) FROM food_preservation_state fps JOIN item_instance i ON i.object_id=fps.item_id " +
+            "SELECT COUNT(*) FROM food_preservation_state fps JOIN item_instance i ON i.object_id=fps.object_id " +
             "WHERE i.item_key='freshwater_mussel' AND fps.preparation_kind='RAW'", Integer.class);
         assertNotNull(tracked);
         assertTrue(tracked > 0, "a mussel must be spoilage-tracked as raw, or it would keep for six weeks");
