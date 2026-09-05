@@ -91,6 +91,73 @@ public class ChronicleActionService {
     @Transactional
     public ActionResult resolve(String text) { return resolve(text, null); }
 
+    /**
+     * Work through a written procedure step by step (#38).
+     *
+     * <p>The action composer takes 2,500 characters and the resolver matched exactly one process to the whole of
+     * it. A Chronicle who wrote "build a hearth board, then carve a spindle, then form a tinder nest, then spin
+     * the bow drill until it catches" had one of those four steps happen and the other three silently discarded.
+     * The player typed a lot for nothing, which is the failure #38 names.
+     *
+     * <p>Each declared step is now resolved in order, in this one transaction, and the world is told about every
+     * one of them. The rules that keep this safe:
+     * <ul>
+     *   <li><b>Order is the player's.</b> Steps run as written; nothing is reordered and nothing is invented.</li>
+     *   <li><b>A step that fails stops the plan.</b> The work already done stands — it really happened — and the
+     *       report says plainly where it stopped and what was not attempted. Later steps are never quietly
+     *       skipped, and never completed on the strength of a step that failed.</li>
+     *   <li><b>Each step is a real action</b> with its own time, labour and history row, because that is what it
+     *       costs. A plan is a way of writing four actions at once, not a way of getting them cheaply.</li>
+     *   <li><b>A single-step text is untouched</b> — it goes straight down the old path.</li>
+     * </ul>
+     *
+     * <p>Replay is safe: each step derives its own idempotency key from the plan's, so resubmitting a whole
+     * procedure replays step for step instead of doing the work twice.
+     */
+    @Transactional
+    public ActionResult resolvePlan(String text, UUID idempotencyKey) {
+        List<String> steps = ActionPlan.steps(text);
+        if (steps.size() <= 1) return resolve(text, idempotencyKey);
+
+        List<String> attempted = steps.size() > ActionPlan.MAX_STEPS ? steps.subList(0, ActionPlan.MAX_STEPS) : steps;
+        StringBuilder told = new StringBuilder();
+        ActionResult last = null;
+        int done = 0;
+        String outcome = "SUCCEEDED";
+        for (int i = 0; i < attempted.size(); i++) {
+            UUID stepKey = idempotencyKey == null ? null
+                : UUID.nameUUIDFromBytes((idempotencyKey + ":step:" + i).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            ActionResult step = resolve(attempted.get(i), stepKey);
+            last = step;
+            if (told.length() > 0) told.append(" ");
+            told.append(step.perception());
+            if ("SUCCEEDED".equals(step.outcome()) || "NO_EFFECT".equals(step.outcome())) {
+                done++;
+                // A step can end the life that was going to carry out the rest. There is no going on from here,
+                // and the next resolve would find no living Chronicle at all.
+                if (step.died()) { if (done < attempted.size()) outcome = "PARTIAL"; break; }
+                continue;
+            }
+            // Stopped. Say so, and say what was left — never let the report imply the rest happened.
+            outcome = done > 0 ? "PARTIAL" : "FAILED";
+            int remaining = steps.size() - (i + 1);
+            told.append(" You get no further than that. ");
+            told.append(done == 0
+                ? "The rest of what you set out to do is still ahead of you"
+                : "What you did before this stands, but the " + remaining + " step" + (remaining == 1 ? "" : "s")
+                  + " after it went undone");
+            told.append(", and until this part comes right there is no going on to them.");
+            break;
+        }
+        if ("SUCCEEDED".equals(outcome) && steps.size() > ActionPlan.MAX_STEPS) {
+            outcome = "PARTIAL";
+            told.append(" You have worked as far through that as one stretch of effort will carry, and set the rest aside for now.");
+        }
+        // The plan reports as the last step that actually ran: its identity, its clock, and the body as it stands.
+        return new ActionResult(last.actionId(), last.intent(), outcome, last.durationMinutes(), last.resolvedAt(),
+                told.toString(), last.body(), last.frame(), last.died());
+    }
+
     @Transactional
     public ActionResult resolve(String text, UUID idempotencyKey) {
         if (text == null || text.trim().isEmpty() || text.length() > 2500) throw new IllegalArgumentException("An action must contain 1 to 2500 characters.");
