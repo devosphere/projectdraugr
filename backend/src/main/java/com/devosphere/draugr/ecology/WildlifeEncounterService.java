@@ -356,17 +356,41 @@ public class WildlifeEncounterService {
      */
     @Transactional
     public EncounterResult track(UUID chronicle, UUID chunk, UUID action, Instant at, String attention, double familiarity) {
-        java.util.List<java.util.Map<String,Object>> sign = jdbc.queryForList(
+        java.util.List<java.util.Map<String,Object>> sign = new java.util.ArrayList<>(jdbc.queryForList(
             "SELECT wp.id AS population_id, wp.species_key, wp.behavior_state, g.sign_kind, g.readable_hours " +
             "FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id " +
             "JOIN wildlife_sign g ON g.species_key=wp.species_key " +
-            "WHERE es.chunk_id=? AND wp.population_count>0 ORDER BY g.readable_hours DESC", chunk);
+            "WHERE es.chunk_id=? AND wp.population_count>0 ORDER BY g.readable_hours DESC", chunk));
+        boolean residentHere = !sign.isEmpty();
+        // Ambient sign (#37/#74). The query above reads only the seeded herds at wildlife markers — a dozen or so
+        // populations across the whole map — so every other creature in the registry was untrackable everywhere,
+        // however plainly it lives on this ground. That is the complaint in #37 exactly: "wildlife are not even
+        // traceable on the actions we currently have. We have hunt action but that won't work if we can't
+        // monitor, track, analyze, and survey." Looking was fixed by the ambient cast; reading the ground was not.
+        //
+        // A creature the registry says belongs to this biome leaves sign on it. A resident population still wins
+        // outright: where a herd is actually seeded, that herd is what the ground says, and reading it must not
+        // turn up a passing squirrel instead — a real herd marks ground far more than anything drifting through.
+        // Ambient sign is therefore only consulted where nothing is seeded, which is nearly the whole map.
+        // Monsters are left out on purpose: their sign is handled where the hint rule is enforced, and tracking is
+        // not a way around it. Ambient sign records no wildlife event, because there is no population it belongs
+        // to; the action's own history row carries what was read.
+        String biome = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : null, chunk);
+        if (!residentHere && biome != null) {
+            sign.addAll(jdbc.queryForList(
+                "SELECT NULL::uuid AS population_id, ws.species_key, NULL AS behavior_state, g.sign_kind, g.readable_hours " +
+                "FROM wildlife_species ws JOIN wildlife_sign g ON g.species_key=ws.species_key " +
+                "WHERE ws.kingdom_class <> 'MONSTRUM' AND ws.movement_class <> 'AQUATIC' AND ws.biome_affinity ILIKE ? " +
+                "  AND NOT EXISTS (SELECT 1 FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id " +
+                "                  WHERE es.chunk_id=? AND wp.species_key=ws.species_key AND wp.population_count>0) " +
+                "ORDER BY md5(ws.species_key || ?::text) LIMIT 6", "%" + biome + "%", chunk, chunk.toString()));
+        }
         if (sign.isEmpty()) return new EncounterResult("FAILED","You go over the ground carefully, but it holds nothing that anything has left behind.");
         java.util.Map<String,Object> found = sign.get(Math.floorMod(action.hashCode(), sign.size()));
         String species = (String) found.get("species_key");
         String kind = (String) found.get("sign_kind");
         UUID population = (UUID) found.get("population_id");
-        record(chronicle, population, chunk, "TRACKED", at, action);
+        if (population != null) record(chronicle, population, chunk, "TRACKED", at, action);
 
         String what = switch (kind) {
             case "PRINTS" -> "a line of prints pressed into the softer ground";
