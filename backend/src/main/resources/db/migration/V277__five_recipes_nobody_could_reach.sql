@@ -47,3 +47,29 @@ UPDATE material_process SET category_key = 'CONSTRUCT' WHERE process_key IN ('ma
 UPDATE material_process
 SET keywords = 'stone mortar,shape a mortar,hollow a mortar,peck a mortar,grinding mortar'
 WHERE process_key = 'shape_stone_mortar';
+
+-- Four more keywords in the same shape, found by asking a different question of the same data: not "can this
+-- recipe be reached at all" but "does its OWN advertised phrase reach it". These four ARE reachable by their
+-- primary phrase, so the reachability invariant above does not flag them — but each advertises a second phrase
+-- that lands on a different recipe, which is worse than not advertising it.
+--
+--   "tiller a long self bow"    classifies PROCESS (tiller, scrape) -> TILLER_BOW_STAVE, not the assembly
+--   "tiller a recurve wood bow"                  likewise
+--   "tiller a short self bow"                    likewise
+--   "grind a bone knife"        classifies PROCESS (grind)          -> GRIND_BONE_AWL. Ask for a knife, get an awl.
+--
+-- In each case the classifier is RIGHT and the keyword is wrong: tillering genuinely IS the stave process, and
+-- grinding genuinely IS the awl's verb. Dropping the misleading phrase leaves every recipe reachable by what it
+-- actually is — "assemble a long self bow", "carve a bone knife" — and stops the catalogue promising a form of
+-- words that does something else.
+UPDATE material_process SET keywords = 'assemble a long self bow,long self bow,long bow'
+WHERE process_key = 'assemble_long_self_bow';
+
+UPDATE material_process SET keywords = 'assemble a recurve wood bow,recurve wood bow,recurve bow'
+WHERE process_key = 'assemble_recurve_wood_bow';
+
+UPDATE material_process SET keywords = 'assemble a short self bow,short self bow,short bow'
+WHERE process_key = 'assemble_short_self_bow';
+
+UPDATE material_process SET keywords = 'carve a bone knife,bone knife,bone blade'
+WHERE process_key = 'carve_bone_knife';
