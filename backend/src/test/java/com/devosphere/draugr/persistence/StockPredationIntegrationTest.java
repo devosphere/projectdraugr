@@ -89,9 +89,13 @@ class StockPredationIntegrationTest {
                 "VALUES (?,?,'mountain_goat','HERBIVORE','DIURNAL',4,6,'FORAGING',?)", flock, site, ts);
         jdbc.update("INSERT INTO wildlife_bond (id,chronicle_id,population_id,bond_stage,trust_level,interaction_count,last_interaction_at) " +
                 "VALUES (?,?,?,'TAMED',95,10,?)", UUID.randomUUID(), chronicle, flock, ts);
+        // The wolves need ground of their own: wildlife_population.site_id is UNIQUE, one population per site.
+        UUID wolfRange = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE','Wolf ground',?)", wolfRange, chunk);
+        jdbc.update("INSERT INTO ecology_site (id,world_id,chunk_id,site_category,site_kind,baseline_abundance) VALUES (?,?,?,'WILDLIFE','Wolf ground',30)", wolfRange, worldId, chunk);
         UUID wolves = UUID.randomUUID();
         jdbc.update("INSERT INTO wildlife_population (id,site_id,species_key,ecological_role,activity_cycle,population_count,carrying_capacity,behavior_state,last_simulated_at) " +
-                "VALUES (?,?,'gray_wolf','CARNIVORE','NOCTURNAL',3,5,'HUNTING',?)", wolves, site, ts);
+                "VALUES (?,?,'gray_wolf','CARNIVORE','NOCTURNAL',3,5,'HUNTING',?)", wolves, wolfRange, ts);
 
         // By day, nothing is taken — this is a night risk.
         assertNull(wildlife.raidUnprotectedStock(chronicle, now, false), "stock are not taken in daylight");
