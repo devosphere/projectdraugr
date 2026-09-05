@@ -11,6 +11,16 @@ spring:
       ddl-auto: validate
   flyway:
     locations: classpath:db/migration
+    # Parallel branches produce migrations out of numeric order. A PR opened first can merge last, so a database
+    # that ran in between is already past that version -- and Flyway REFUSES a lower version arriving after a
+    # higher one has been applied, which is a hard boot failure rather than a warning. CI never sees it, because
+    # Testcontainers starts fresh and applies 1..N in order every run; only a long-lived database is hit, which
+    # is precisely the local playthrough database.
+    #
+    # Every migration in this project is additive and independent -- new tables, columns, catalogue rows -- so
+    # none of them depends on a later one having run. Allowing the gap to be filled when it arrives is therefore
+    # safe, and it removes the whole class of failure instead of renumbering by hand each time.
+    out-of-order: true
 
 server:
   error:
