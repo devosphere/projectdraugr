@@ -442,6 +442,10 @@ public class ChronicleActionService {
             String v = text.toLowerCase(Locale.ROOT); boolean ok; String made;
             if (v.contains("loom")) { ok = items.craftFurniture(chronicle.id(), chronicle.location(), "loom", "Upright loom", 4, 0, false, 0, 0, resolvedAt); made = "loom"; }
             else if (v.contains("stone")) { ok = items.craftFurniture(chronicle.id(), chronicle.location(), "stoneworking_bench", "Stoneworking bench", 3, 2, false, 0, 0, resolvedAt); made = "stoneworking bench"; }
+            // A sewing table (V272). It was defined, given an item_source, and then left out of this list, so there
+            // has never been a way to have one -- while fifty-three sewing and leatherwork recipes asked for no
+            // station at all. Lighter than the other benches: it holds cloth and hide flat, not timber and stone.
+            else if (v.contains("sewing") || v.contains("leatherwork")) { ok = items.craftFurniture(chronicle.id(), chronicle.location(), "sewing_table", "Sewing work table", 3, 0, false, 0, 0, resolvedAt); made = "sewing table"; }
             else { ok = items.craftFurniture(chronicle.id(), chronicle.location(), "woodworking_bench", "Woodworking bench", 5, 0, false, 0, 0, resolvedAt); made = "woodworking bench"; }
             outcome = ok ? "SUCCEEDED" : "FAILED";
             perception = ok ? "You frame and lash together a sturdy " + made + " and set it in place — a steady, waist-high surface to hold the work while your hands are busy." : "Without a blade, sound branches, and fiber to bind them, no workstation holds together.";
@@ -1138,7 +1142,7 @@ public class ChronicleActionService {
         // Workstations (V69) before the generic desk/table rule, which also matches "bench"/"table": a
         // woodworking/stoneworking bench, a workbench, or a loom is a workstation (it eases the crafts it
         // serves); a plain "bench" or "table" is still a desk.
-        if((value.contains("craft")||value.contains("make")||value.contains("build")||value.contains("construct")||value.contains("assemble")||value.contains("set up"))&&(value.contains("loom")||value.contains("workbench")||value.contains("work bench")||((value.contains("woodworking")||value.contains("stoneworking")||value.contains("weaving"))&&(value.contains("bench")||value.contains("table")||value.contains("station"))))) return Intent.CRAFT_WORKSTATION;
+        if((value.contains("craft")||value.contains("make")||value.contains("build")||value.contains("construct")||value.contains("assemble")||value.contains("set up"))&&(value.contains("loom")||value.contains("workbench")||value.contains("work bench")||((value.contains("woodworking")||value.contains("stoneworking")||value.contains("weaving")||value.contains("sewing")||value.contains("leatherwork"))&&(value.contains("bench")||value.contains("table")||value.contains("station"))))) return Intent.CRAFT_WORKSTATION;
         if((value.contains("craft")||value.contains("make")||value.contains("build")||value.contains("construct")||value.contains("assemble"))&&(value.contains("shelf")||value.contains("shelves")||value.contains("rack")||value.contains("archive"))&&!value.contains("drying")&&!value.contains("fuel rack")&&!value.contains("wood rack")&&!value.contains("firewood rack")&&!value.contains("log rack")&&!value.contains("kindling rack")&&!value.contains("hay rack")&&!value.contains("fodder rack")) return Intent.CRAFT_SHELF;
         if((value.contains("craft")||value.contains("make")||value.contains("build")||value.contains("construct")||value.contains("assemble"))&&(value.contains("desk")||value.contains("table")||value.contains("workbench")||value.contains("bench"))) return Intent.CRAFT_DESK;
         if((value.contains("craft")||value.contains("make")||value.contains("build")||value.contains("construct")||value.contains("assemble"))&&(value.contains("chair")||value.contains("stool")||value.contains("seat"))) return Intent.CRAFT_CHAIR;
