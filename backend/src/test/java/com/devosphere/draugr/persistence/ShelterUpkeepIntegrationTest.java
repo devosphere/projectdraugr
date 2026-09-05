@@ -85,8 +85,18 @@ class ShelterUpkeepIntegrationTest {
         return id;
     }
 
+    /**
+     * Set the sky. The decay pass joins through {@code world_weather}, and that row is written by the WEATHER
+     * simulation on a tick — a test that never ticks has no row at all, so a bare UPDATE here silently matches
+     * nothing and every structure reads as standing in fair weather forever. Upsert it.
+     */
     private void weather(String kind) {
-        jdbc.update("UPDATE world_weather SET weather_kind=?", kind);
+        UUID world = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, chunk);
+        jdbc.update("INSERT INTO world_weather (world_id, weather_kind, intensity, ambient_temperature_c, wind_speed_kph, observed_at) " +
+            "VALUES (?,?,60,8.0,10,now()) ON CONFLICT (world_id) DO UPDATE SET weather_kind=EXCLUDED.weather_kind, observed_at=now()",
+            world, kind);
+        assertEquals(kind, jdbc.queryForObject("SELECT weather_kind FROM world_weather WHERE world_id=?", String.class, world),
+            "the sky must actually be set, or this test proves nothing");
     }
 
     private Integer integrityOf(UUID id) {
