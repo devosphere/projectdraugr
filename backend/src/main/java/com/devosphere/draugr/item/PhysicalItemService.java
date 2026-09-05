@@ -1497,6 +1497,11 @@ public class PhysicalItemService {
         // extra head over one left to itself. The reward for returning to the field to work it across the season.
         boolean weeded = (boolean) crop.get("weeded");
         if (weeded) base += 1;
+        // The small life working this ground fills the stand out (#162/#74). Bees carry the pollen a flowering crop
+        // needs to set; worms open and enrich the soil it stands in. Declared on every colony kind and read by
+        // nothing, so keeping bees beside a plot did exactly as much for the harvest as keeping none.
+        int pollination = pollinationBonusAt(location, at);
+        if (pollination >= 20) base += 2; else if (pollination >= 10) base += 1;
         long daysLate = java.time.Duration.between(ripe, at).toDays();
         boolean shattering = daysLate > CROP_FULL_YIELD_DAYS;
         int heads = shattering ? Math.max(2, base / 2) : base;
@@ -1508,6 +1513,8 @@ public class PhysicalItemService {
             ? "You reap the stand, but you left it late — much of the grain has already shattered from the heads and the birds have been at it. You gather what is left."
             : grazed
             ? "You reap what the animals left: the stand has been cropped and trampled where they grazed through it, and a fence would have kept it whole. You gather the rest."
+            : pollination >= 20
+            ? "You cut the ripe stand and gather the heavy heads. The bees have been over this ground all season and the ears show it — filled out to the tip, hardly a blank among them."
             : "You cut the ripe stand and gather the heavy heads — far more grain than the handful you sowed, the season's increase come in."};
     }
 
@@ -1830,6 +1837,35 @@ public class PhysicalItemService {
         return harvestColony(chronicle, location, actionText, occurredAt, "COLLECT_INSECTS");
     }
 
+    /** Has this colony been worked recently enough that there is nothing yet to take? */
+    private static boolean workedOut(java.util.Map<String,Object> kind, Instant at) {
+        Object ready = kind.get("ready_at");
+        return ready instanceof Timestamp t && at.isBefore(t.toInstant());
+    }
+
+    private static String capitalise(String s) { return s == null || s.isEmpty() ? s : Character.toUpperCase(s.charAt(0)) + s.substring(1); }
+
+    /**
+     * How much the small life working this ground lifts what a field gives (#162/#74). {@code pollination_bonus}
+     * was declared on every colony kind — 30 for a honeybee hive, 10 for a worm patch — and read by nothing at all,
+     * so keeping bees beside a plot did exactly as much for the harvest as keeping none.
+     *
+     * <p>Reads the ground's standing colonies rather than any record of working them, because a hive pollinates a
+     * field whether or not anyone has ever robbed it. A colony broken down to nothing stops giving: rob it flat and
+     * the field feels it too.
+     */
+    private int pollinationBonusAt(UUID location, Instant at) {
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
+        if (biome == null) return 0;
+        Integer best = jdbc.queryForObject(
+            "SELECT COALESCE(MAX(ck.pollination_bonus),0) FROM insect_colony_kind ck " +
+            "WHERE ck.pollination_bonus > 0 AND ck.biome_affinity ILIKE ? " +
+            "  AND (ck.season_active='ALL' OR ck.season_active ILIKE ?) " +
+            "  AND NOT EXISTS (SELECT 1 FROM insect_colony ic WHERE ic.chunk_id=? AND ic.colony_kind=ck.colony_kind AND ic.health <= 0)",
+            Integer.class, "%" + biome + "%", "%" + seasonOf(at) + "%", location);
+        return best == null ? 0 : best;
+    }
+
     /** Can these hands work this colony at all — does it want a tool, and is one within reach (V270)? */
     private boolean canWorkColony(java.util.Map<String,Object> kind, UUID chronicle) {
         String needed = (String) kind.get("requires_tool_class");
@@ -1853,25 +1889,38 @@ public class PhysicalItemService {
 
         // Candidate colony kinds for this intent, present in this biome and season.
         java.util.List<java.util.Map<String,Object>> kinds = jdbc.queryForList(
-            "SELECT ck.colony_kind, ck.hazard_kind, ck.hazard_min, ck.hazard_max, ck.smoke_suppresses, ck.requires_tool_class " +
+            "SELECT ck.colony_kind, ck.hazard_kind, ck.hazard_min, ck.hazard_max, ck.smoke_suppresses, ck.requires_tool_class, ck.regrowth_days, " +
+            "  (SELECT ic.product_ready_at FROM insect_colony ic WHERE ic.chunk_id=? AND ic.colony_kind=ck.colony_kind) AS ready_at " +
             "FROM insect_colony_kind ck " +
             "WHERE ck.harvest_intent=? AND ck.biome_affinity ILIKE ? " +
             "AND (ck.season_active='ALL' OR ck.season_active ILIKE ?) " +
-            "ORDER BY ck.colony_kind", intent, "%" + biome + "%", "%" + season + "%");
+            "ORDER BY ck.colony_kind", location, intent, "%" + biome + "%", "%" + season + "%");
         if (kinds.isEmpty()) {
             return new InsectHarvest("FAILED", intent.equals("RAID_HIVE")
                 ? "You search for a hive or nest to raid, but find none here to work."
                 : "You turn over the ground and growth for insects, but find nothing worth taking here.", 0, null);
         }
+        // A colony worked here recently is a colony worked out. insect_colony carried health, product_ready_at and
+        // last_disturbed_at, and insect_colony_kind carried regrowth_days, for a depletion model that never ran:
+        // nothing anywhere created an insect_colony row, so the UPDATE recording disturbance matched nothing and a
+        // single patch of ground yielded grubs, honey and silk forever. Colonies are a standing resource now — a
+        // stretch of ground worked out has to be left alone to come back.
+        java.util.List<java.util.Map<String,Object>> ready = kinds.stream().filter(k -> !workedOut(k, occurredAt)).toList();
+        if (ready.isEmpty()) {
+            return new InsectHarvest("FAILED", intent.equals("RAID_HIVE")
+                ? "You find where you broke into it before. The comb is still bare and the colony is nowhere near ready to be robbed again."
+                : "You go over the same ground you worked before. It has not come back yet — turn it again and there would be nothing left to come back at all.", 0, null);
+        }
+        final java.util.List<java.util.Map<String,Object>> workable = ready;
 
         // Prefer a colony the action text names; otherwise the first one this pair of hands can actually work.
         // Some colonies need a tool: a mussel prised off its stone without a blade is a mussel lost with the shell
         // (V270). A named colony is attempted whatever the player carries — they asked for that one, and being
         // told plainly why it will not open is more use than quietly working something else.
-        java.util.Map<String,Object> kind = kinds.stream()
+        java.util.Map<String,Object> kind = workable.stream()
             .filter(k -> lower.contains(((String)k.get("colony_kind")).replace("_"," ").replace(" colony","").replace(" swarm","").replace(" patch","").replace(" den","").replace(" nest","").replace(" bed","").replace(" shallows","").replace(" hive","")))
             .findFirst()
-            .orElseGet(() -> kinds.stream().filter(k -> canWorkColony(k, chronicle)).findFirst().orElse(kinds.get(0)));
+            .orElseGet(() -> workable.stream().filter(k -> canWorkColony(k, chronicle)).findFirst().orElse(workable.get(0)));
         if (!canWorkColony(kind, chronicle)) {
             String needed = (String) kind.get("requires_tool_class");
             return new InsectHarvest("FAILED", "You find the " + ((String) kind.get("colony_kind")).replace("_", " ")
@@ -1927,8 +1976,24 @@ public class PhysicalItemService {
             }
             totalTaken += take;
         }
-        // Record disturbance on any placed instance of this colony in the chunk.
-        jdbc.update("UPDATE insect_colony SET last_disturbed_at=?, health=GREATEST(0,health-15) WHERE chunk_id=? AND colony_kind=?", Timestamp.from(occurredAt), location, colonyKind);
+        // Record the working. The colony is materialised here the first time it is touched — the same lazy pattern
+        // fish stock and mineral seams use — so untouched ground carries no rows, and worked ground remembers.
+        if (totalTaken > 0) {
+            int regrowth = ((Number) kind.get("regrowth_days")).intValue();
+            Timestamp readyAgain = Timestamp.from(occurredAt.plus(java.time.Duration.ofDays(Math.max(1, regrowth))));
+            UUID colonyId = jdbc.query("SELECT object_id FROM insect_colony WHERE chunk_id=? AND colony_kind=?",
+                rs -> rs.next() ? rs.getObject(1, UUID.class) : null, location, colonyKind);
+            if (colonyId == null) {
+                colonyId = UUID.randomUUID();
+                jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE',?,?)",
+                    colonyId, capitalise(colonyKind.replace('_', ' ')), location);
+                jdbc.update("INSERT INTO insect_colony (object_id,colony_kind,chunk_id,health,product_ready_at,last_disturbed_at) VALUES (?,?,?,?,?,?)",
+                    colonyId, colonyKind, location, 85, readyAgain, Timestamp.from(occurredAt));
+            } else {
+                jdbc.update("UPDATE insect_colony SET last_disturbed_at=?, product_ready_at=?, health=GREATEST(0,health-15) WHERE object_id=?",
+                    Timestamp.from(occurredAt), readyAgain, colonyId);
+            }
+        }
         if (totalTaken > 0) assertCarryCapacity(chronicle);
 
         String name = colonyKind.replace("_", " ");
