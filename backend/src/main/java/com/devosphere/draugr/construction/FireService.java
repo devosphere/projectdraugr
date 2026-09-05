@@ -205,8 +205,13 @@ public class FireService {
         Timestamp ts = Timestamp.from(now);
         for (UUID s : jdbc.queryForList(
             "SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
-            "WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
-            "AND cp.project_kind IN ('LEAN_TO','FUEL_RACK','BRUSH_FENCE')", UUID.class, chunk)) {
+            // What can catch is a property of the KIND, not a list in this file (V274). It was three hardcoded
+            // names — LEAN_TO, FUEL_RACK, BRUSH_FENCE — while the catalogue grew to 45 kinds, twenty-odd of them
+            // built out of thatch, reed, brush, bark, hide and untrimmed timber. A reed hut or a hay rack stood
+            // beside a roaring hearth in dry weather completely fireproof, because its name was not on the list.
+            "JOIN construction_kind ck ON ck.project_kind=cp.project_kind AND ck.flammable " +
+            "WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' AND cp.state='COMPLETED' AND cp.integrity_percent>0",
+            UUID.class, chunk)) {
             jdbc.update("UPDATE construction_project SET integrity_percent=GREATEST(0, integrity_percent-?), last_structural_update=? WHERE object_id=?", scorch, ts, s);
             jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'FIRE_SCORCHED',jsonb_build_object('scorch',?))", s, ts, scorch);
         }

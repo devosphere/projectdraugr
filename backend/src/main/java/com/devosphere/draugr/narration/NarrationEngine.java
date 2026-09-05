@@ -137,6 +137,7 @@ public class NarrationEngine {
         "GRASSLAND", "The grass runs out flat to every horizon, bending in slow waves",
         "WETLAND", "The ground gives underfoot, and water stands dark and still in the low places",
         "RIVER_BANK", "The river runs past below you, working steadily at a bank of smoothed stone and packed earth",
+        "COAST", "Open water runs out to the edge of sight, and the ground gives way to shingle and wrack at the tide line",
         "OCEAN", "Water reaches grey to the edge of sight, restless and without end");
 
     private static final Map<String, String> TIME_COLOR = Map.of(
@@ -162,6 +163,7 @@ public class NarrationEngine {
         "GRASSLAND", "Insects work unseen in the grass, and the whole plain smells of dry seed.",
         "WETLAND", "The air hangs thick with the green smell of standing water and slow rot.",
         "RIVER_BANK", "The water keeps up its noise over the stones, and the air off it is cold and clean.",
+        "COAST", "Salt is on everything, and the water works at the shore without ever stopping.",
         "OCEAN", "Salt hangs in the air, and the water works without pause at the shore.");
 
     private static final String[] GENERIC_SUCCESS = {

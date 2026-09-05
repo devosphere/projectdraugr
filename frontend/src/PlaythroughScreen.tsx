@@ -31,6 +31,7 @@ const backdropByBiome: Record<string, { art: string; label: string }> = {
   TEMPERATE_FOREST: { art: forestArt, label: 'Uncharted forest' },
   WETLAND: { art: streamArt, label: 'Forest stream' },
   RIVER_BANK: { art: streamArt, label: 'River bank' },
+  COAST: { art: streamArt, label: 'Open shore' },
   MOUNTAIN: { art: quarryArt, label: 'Stone basin' },
   HIGHLAND: { art: quarryArt, label: 'Highland quarry' },
   CLAY_DEPOSIT: { art: clayDepositArt, label: 'Clay deposit' },

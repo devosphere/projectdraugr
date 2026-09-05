@@ -121,11 +121,34 @@ public class WorldGenesisService {
         double moisture = 0.54 + 0.20 * Math.cos(nx * 8.0 - ny * 3.0) + variation * 0.14;
         int elevationValue = (int) Math.round(Math.clamp(elevation, 0, 1) * 1000), moistureValue = (int) Math.round(Math.clamp(moisture, 0, 1) * 1000);
         String biome = elevation < 0.30 ? "OCEAN" : elevation < 0.38 ? "WETLAND" : elevation > 0.82 ? "MOUNTAIN" : elevation > 0.68 ? "HIGHLAND" : moisture > 0.58 ? "TEMPERATE_FOREST" : "GRASSLAND";
+        // The shore (#157). COAST was the second biome the catalogue believed in and the generator never made:
+        // sea beet, samphire and sea buckthorn grow on it, an osprey works it, a bonecrab and a saltback
+        // crocodilian live on it, and there was nowhere in the world any of them could be. Ground that touches
+        // open water IS the shore, so it is derived rather than invented — no separate pass, just a look at the
+        // neighbours. Marsh is left alone deliberately: WETLAND here is a freshwater marsh carrying reeds, clay,
+        // cranberries and freshwater fish, and calling the sea-margin ones "coast" would move that ecology into
+        // salt water. Mountain is left alone too — a sea cliff is still a cliff, and that is where the ore is.
+        if (biome.equals("TEMPERATE_FOREST") || biome.equals("GRASSLAND") || biome.equals("HIGHLAND")) {
+            if (touchesOpenWater((int) Math.round(x), (int) Math.round(y), width, height, seed)) biome = "COAST";
+        }
         // Running fresh water (#156). Standing water stays what it is — a river does not overwrite the sea or a
-        // marsh it drains into — but any land the channel crosses is river bank.
+        // marsh it drains into — but any land the channel crosses is river bank. A river mouth reads as river
+        // rather than shore: fresh water is the rarer and more useful thing to find, and the channel is a place
+        // the Chronicle can follow inland.
         if (elevation >= 0.38 && riverCells(width, height, seed).contains(cellKey((int) Math.round(x), (int) Math.round(y))))
             biome = "RIVER_BANK";
         return new TerrainCell(elevationValue, moistureValue, biome);
+    }
+
+    /** Whether open water lies against this ground — the test that makes a chunk a shore rather than inland. */
+    private boolean touchesOpenWater(int x, int y, int width, int height, long seed) {
+        for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) {
+            if (dx == 0 && dy == 0) continue;
+            int tx = x + dx, ty = y + dy;
+            if (tx < 0 || ty < 0 || tx >= width || ty >= height) continue;
+            if (rawElevation(tx, ty, width, height, seed) < 0.30) return true;
+        }
+        return false;
     }
 
     /**
@@ -244,7 +267,7 @@ public class WorldGenesisService {
     }
 
     private Color shade(Color color, int elevation) { float factor = .78f + elevation / 1000f * .28f; return new Color(Math.min(255, (int) (color.getRed() * factor)), Math.min(255, (int) (color.getGreen() * factor)), Math.min(255, (int) (color.getBlue() * factor))); }
-    private Color colorFor(String biome) { return switch (biome) { case "OCEAN" -> new Color(42, 87, 123); case "WETLAND" -> new Color(73, 111, 104); case "TEMPERATE_FOREST" -> new Color(54, 103, 61); case "GRASSLAND" -> new Color(144, 145, 83); case "HIGHLAND" -> new Color(120, 111, 82); case "MOUNTAIN" -> new Color(122, 123, 121); case "RIVER_BANK" -> new Color(86, 132, 148); default -> Color.MAGENTA; }; }
+    private Color colorFor(String biome) { return switch (biome) { case "OCEAN" -> new Color(42, 87, 123); case "WETLAND" -> new Color(73, 111, 104); case "TEMPERATE_FOREST" -> new Color(54, 103, 61); case "GRASSLAND" -> new Color(144, 145, 83); case "HIGHLAND" -> new Color(120, 111, 82); case "MOUNTAIN" -> new Color(122, 123, 121); case "RIVER_BANK" -> new Color(86, 132, 148); case "COAST" -> new Color(198, 182, 143); default -> Color.MAGENTA; }; }
     private Path previewPath() { return exportDirectory.resolve("overseer-map.png"); }
 
     public record GenesisRequest(long seed, int widthChunks, int heightChunks) { public static GenesisRequest mvpDefault() { return new GenesisRequest(681_013_497L, 28, 20); } }

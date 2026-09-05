@@ -39,6 +39,17 @@ public class WildlifeEncounterService {
         // side of an outer join. Only the population row needs locking — the registry is
         // immutable reference data.
         Encounter candidate=jdbc.query("SELECT wp.id,wp.species_key,wp.ecological_role,wp.behavior_state,wp.population_count,ws.movement_class,ws.base_resistance,ws.ambush_hunter FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id LEFT JOIN wildlife_species ws ON ws.species_key=wp.species_key WHERE es.chunk_id=? AND wp.population_count>0 ORDER BY CASE wp.ecological_role WHEN 'CARNIVORE' THEN 0 WHEN 'OMNIVORE' THEN 1 ELSE 2 END LIMIT 1 FOR UPDATE OF wp",rs->rs.next()?new Encounter(rs.getObject(1,UUID.class),rs.getString(2),rs.getString(3),rs.getString(4),rs.getInt(5),rs.getString(6),(Integer)rs.getObject(7),rs.getBoolean(8)):null,chunk);
+        // Nothing seeded here to close with — which, before this, was almost the whole map. Confronting read only
+        // the dozen or so populations placed at wildlife markers, so on 98% of the world "hunt the deer" answered
+        // that the ground held nothing, standing in a wood full of deer. This is the last of the five places that
+        // all made the same assumption: perception, tracking, taming and monster lairs each had to be given the
+        // creatures the registry says live here, and so does the act of hunting them. It is the one #37 names
+        // outright — "we have hunt action but that won't work if we can't monitor, track, analyze, and survey".
+        //
+        // Like taming and unlike looking, this leaves something behind: you cannot fight an abstraction. The
+        // animal closed with is materialised as a real population on its own ground, so the kill takes it from a
+        // real herd and what survives stays there to be found again.
+        if(candidate==null) candidate = quarryOnThisGround(chunk, at);
         if(candidate==null)return new EncounterResult("FAILED","The ground answers only with rain and the small movements of the forest.");
         // One pass over what is worn and one over what is carried, aggregated conditionally — the combat-relevant
         // tally the encounter needs, replacing the dozen correlated COUNT subqueries this grew from. Column order
@@ -744,6 +755,46 @@ public class WildlifeEncounterService {
      * back to. Monsters and fish are not approached this way. Seeded as a small, real population on its own site,
      * so everything downstream — the bond, husbandry, yields, predation — works on it exactly as on any other.
      */
+    /**
+     * The creature actually on this ground to close with, made real (#37/#74).
+     *
+     * <p>Prefers game — the larger herbivores and omnivores a Chronicle would hunt — over whatever else the biome
+     * carries, and takes the most substantial of the handful this particular ground holds, so a place keeps its own
+     * quarry rather than every wood offering the same animal. Monsters are not conjured this way: a monster belongs
+     * to its lair, which the world places deliberately, and one should never appear merely because someone swung at
+     * the air. Fish are not confronted on land.
+     */
+    private Encounter quarryOnThisGround(UUID chunk, Instant at) {
+        String biome = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : null, chunk);
+        if (biome == null) return null;
+        java.util.List<java.util.Map<String,Object>> here = jdbc.queryForList(
+            "SELECT species_key, ecological_role, activity_cycle, movement_class, base_resistance, ambush_hunter, size_tier " +
+            "FROM wildlife_species WHERE kingdom_class <> 'MONSTRUM' AND movement_class <> 'AQUATIC' " +
+            "  AND biome_affinity ILIKE ? " +
+            "ORDER BY md5(species_key || ?::text) LIMIT 6", "%" + biome + "%", chunk.toString());
+        if (here.isEmpty()) return null;
+
+        // Worth closing with: the bigger the animal, the more it is worth and the more it can do about it.
+        java.util.Map<String,Object> pick = here.stream()
+            .max(java.util.Comparator.comparingInt(s -> switch (String.valueOf(s.get("size_tier"))) {
+                case "HUGE" -> 5; case "LARGE" -> 4; case "MEDIUM" -> 3; case "SMALL" -> 2; default -> 1; }))
+            .orElse(here.get(0));
+
+        String species = (String) pick.get("species_key");
+        UUID siteId = UUID.randomUUID(), populationId = UUID.randomUUID();
+        UUID world = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, chunk);
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE',?,?)",
+            siteId, display(species) + " ground", chunk);
+        jdbc.update("INSERT INTO ecology_site (id,world_id,chunk_id,site_category,site_kind,baseline_abundance) VALUES (?,?,?,'WILDLIFE',?,?)",
+            siteId, world, chunk, display(species) + " ground", 400);
+        jdbc.update("INSERT INTO wildlife_population (id,site_id,species_key,ecological_role,activity_cycle,population_count,carrying_capacity,behavior_state,last_simulated_at) " +
+            "VALUES (?,?,?,?,?,?,?,'FORAGING',?)",
+            populationId, siteId, species, pick.get("ecological_role"), pick.get("activity_cycle"), 3, 6, Timestamp.from(at));
+        return new Encounter(populationId, species, (String) pick.get("ecological_role"), "FORAGING", 3,
+            (String) pick.get("movement_class"), (Integer) pick.get("base_resistance"),
+            Boolean.TRUE.equals(pick.get("ambush_hunter")));
+    }
+
     private Tamable approachAmbient(UUID chunk, String actionText, Instant at) {
         String biome = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : null, chunk);
         if (biome == null) return null;
