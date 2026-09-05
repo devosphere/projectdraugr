@@ -590,6 +590,37 @@ class IntentClassificationRegressionTest {
         assertEquals("LIGHT_FIRE", classify("carry an ember from the old hearth"));
     }
 
+    /**
+     * V275: the pack basket is woven by the two-axis matcher, so CRAFT_BASKET must yield to it — a plain basket
+     * is the Java intent's job, anything worn or carried in bulk is a recipe's. "backpack" contains "pack", which
+     * is already one of the words that makes the intent stand aside.
+     */
+    @Test
+    void aBackpackBasketReachesTheRecipeAndAPlainBasketDoesNot() throws Exception {
+        assertEquals("UNKNOWN", classify("weave a backpack basket"));
+        assertEquals("UNKNOWN", classify("weave a back basket"));
+        assertEquals("UNKNOWN", classify("weave a burden basket"));
+        // A plain basket is still the Java intent.
+        assertEquals("CRAFT_BASKET", classify("weave a basket"));
+        assertEquals("CRAFT_BASKET", classify("make a small basket from vines"));
+    }
+
+    /**
+     * V272: the sewing table was defined, given an item_source, and then left out of the workstation list, so
+     * there was no way in the world to have one — while fifty-three sewing and leatherwork recipes asked for no
+     * station at all. It must reach the workstation path without disturbing the benches already there.
+     */
+    @Test
+    void aSewingTableIsAWorkstation() throws Exception {
+        assertEquals("CRAFT_WORKSTATION", classify("build a sewing table"));
+        assertEquals("CRAFT_WORKSTATION", classify("make a sewing bench"));
+        assertEquals("CRAFT_WORKSTATION", classify("set up a leatherwork table"));
+        // The benches that already worked still do.
+        assertEquals("CRAFT_WORKSTATION", classify("build a woodworking bench"));
+        assertEquals("CRAFT_WORKSTATION", classify("craft an upright loom"));
+        assertEquals("CRAFT_WORKSTATION", classify("build a stoneworking table"));
+    }
+
     /** V270 water's-edge foraging: "shellfish" contains "fish", so gathering it was classified as angling and
      *  never reached the harvest registry that actually holds mussels and snails. */
     @Test void shellfishIsForagedNotAngledFor() throws Exception {
