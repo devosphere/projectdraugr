@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.time.Duration;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /** Deterministic aggregate ecology. Individual creatures are materialized only for local encounters. */
@@ -239,11 +240,69 @@ public class WildlifeSimulationService {
 
     @Transactional
     void seedExistingSites(Instant now) {
-        List<Site> sites = jdbc.query("SELECT id, site_kind FROM ecology_site WHERE site_category = 'WILDLIFE' AND NOT EXISTS (SELECT 1 FROM wildlife_population wp WHERE wp.site_id = ecology_site.id)", (rs, row) -> new Site(rs.getObject(1, UUID.class), rs.getString(2)));
+        List<Site> sites = jdbc.query(
+            "SELECT es.id, es.site_kind, es.site_category, c.biome FROM ecology_site es JOIN world_chunk c ON c.id = es.chunk_id " +
+            "WHERE es.site_category IN ('WILDLIFE','MONSTER') " +
+            "AND NOT EXISTS (SELECT 1 FROM wildlife_population wp WHERE wp.site_id = es.id) ORDER BY es.id",
+            (rs, row) -> new Site(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3), rs.getString(4)));
         for (Site site : sites) {
-            Profile profile = profileFor(site.kind().toLowerCase());
+            Profile profile = "MONSTER".equals(site.category())
+                ? monsterFor(site)
+                : profileFor(site.kind().toLowerCase());
+            if (profile == null) continue;   // no creature of the catalogue belongs on this ground; leave the site empty
             jdbc.update("INSERT INTO wildlife_population (id, site_id, species_key, ecological_role, activity_cycle, population_count, carrying_capacity, behavior_state, last_simulated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'RESTING', ?)", UUID.randomUUID(), site.id(), profile.species(), profile.role(), profile.cycle(), profile.initial(), profile.capacity(), Timestamp.from(now));
         }
+    }
+
+    /**
+     * What actually keeps a monster lair (#86).
+     *
+     * <p>The world seeds ten MONSTER sites — a bog warden's lair, a mire hydra's nest, an ash hound den — and
+     * this method's absence meant every one of them was empty. Seeding filtered on {@code site_category =
+     * 'WILDLIFE'}, so no monster population was ever created anywhere, and every piece of code written to handle
+     * one was dead by construction: the boundary scout that warns of a lair joins through
+     * {@code wildlife_population} and found nothing; the pack hunt keyed on {@code site_category='MONSTER'} could
+     * never fire; the disturbance responses for monster ground never ran; and all thirty-nine
+     * {@code monster_profile} rows were unreachable as living creatures. The world had monsters in its catalogue,
+     * marks for them on its map, and none in it.
+     *
+     * <p>The species is chosen from the catalogue by the ground it must live on, so a wyvern is never seeded in a
+     * marsh. Where the lair's own name shares a word with a creature that belongs to that biome — a BOG warden
+     * and a bog wraith — that one is taken; otherwise the choice is deterministic per site, so a given world
+     * always holds the same things in the same places. A lair on ground the catalogue has no monster for is left
+     * empty rather than filled with something that does not belong there.
+     *
+     * <p>They are seeded scarce: one, at most two. A monster is not a herd.
+     */
+    private Profile monsterFor(Site site) {
+        List<Map<String, Object>> candidates = jdbc.queryForList(
+            "SELECT species_key, aggression, activity_cycle FROM monster_profile WHERE biome_affinity ILIKE ? ORDER BY species_key",
+            "%" + (site.biome() == null ? "~none~" : site.biome()) + "%");
+        if (candidates.isEmpty()) return null;
+
+        String label = site.kind() == null ? "" : site.kind().toLowerCase(java.util.Locale.ROOT);
+        Map<String, Object> chosen = candidates.stream()
+            .filter(m -> sharesAWord(label, (String) m.get("species_key")))
+            .findFirst()
+            .orElse(candidates.get(Math.floorMod(site.id().hashCode(), candidates.size())));
+
+        // What a thing eats follows from what it is: the passive ones browse, the apex ones hunt.
+        String role = switch ((String) chosen.get("aggression")) {
+            case "APEX", "AGGRESSIVE" -> "CARNIVORE";
+            case "PASSIVE" -> "HERBIVORE";
+            default -> "OMNIVORE";
+        };
+        String cycle = (String) chosen.get("activity_cycle");
+        return new Profile((String) chosen.get("species_key"), role, cycle == null ? "NOCTURNAL" : cycle, 1, 2);
+    }
+
+    /** Does the lair's name and the creature's name share a real word — "bog warden" and "bog wraith"? */
+    private static boolean sharesAWord(String label, String speciesKey) {
+        for (String part : speciesKey.split("_")) {
+            if (part.length() < 4) continue;                     // "pack", "cave" are too generic to match on
+            if (label.matches("(?s).*\\b" + java.util.regex.Pattern.quote(part) + "\\b.*")) return true;
+        }
+        return false;
     }
 
     @Transactional(readOnly = true)
@@ -270,7 +329,7 @@ public class WildlifeSimulationService {
         boolean active = switch (cycle) { case "NOCTURNAL" -> hour >= 19 || hour < 5; case "CREPUSCULAR" -> (hour >= 5 && hour <= 8) || (hour >= 17 && hour <= 20); default -> hour >= 7 && hour <= 18; };
         return active ? ("CARNIVORE".equals(role) ? "HUNTING" : "FORAGING") : "RESTING";
     }
-    private record Site(UUID id, String kind) { }
+    private record Site(UUID id, String kind, String category, String biome) { }
     private record Profile(String species, String role, String cycle, int initial, int capacity) { }
     public record PopulationView(String speciesKey, String ecologicalRole, String activityCycle, int populationCount, int carryingCapacity, String behaviorState, String siteKind) { }
 }
