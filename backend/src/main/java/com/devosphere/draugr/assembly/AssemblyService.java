@@ -291,11 +291,15 @@ public class AssemblyService {
         return new String[]{"SUCCEEDED", "You strip the " + ((String) flaw.get("name")).toLowerCase(java.util.Locale.ROOT) + " back out and ready the piece to be done again."};
     }
 
+    /**
+     * Read the tool registry rather than a hand-written list. These three cases each named a handful of item keys and
+     * had fallen behind tool_profile, which the material processes already consult: ten registered CUTTING tools were
+     * invisible here, four STRIKING ones, and every metal AXE — so a Chronicle could smelt an iron axe and still be
+     * refused a stage a stone axe could do. Every key the old lists named is in the registry, so this only widens.
+     */
     private boolean hasTool(UUID chronicle, String toolClass) {
         return switch (toolClass) {
-            case "CUTTING"  -> items.hasCuttingTool(chronicle);
-            case "STRIKING" -> items.hasAtLeast(chronicle, "stone_hammer", 1) || items.hasAtLeast(chronicle, "primitive_pickaxe", 1) || items.hasAtLeast(chronicle, "field_stone", 1) || items.hasAtLeast(chronicle, "granite_cobble", 1) || items.hasAtLeast(chronicle, "basalt_cobble", 1);
-            case "AXE"      -> items.hasAtLeast(chronicle, "stone_axe", 1) || items.hasAtLeast(chronicle, "stone_hatchet", 1);
+            case "CUTTING", "STRIKING", "AXE" -> items.hasToolOfClass(chronicle, toolClass);
             default -> true;
         };
     }
