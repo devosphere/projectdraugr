@@ -157,8 +157,23 @@ class MonsterLairsIntegrationTest {
             "JOIN wildlife_population wp ON wp.site_id = es.id AND wp.population_count > 0 " +
             "WHERE es.site_category='MONSTER' ORDER BY c.grid_y, c.grid_x LIMIT 1", UUID.class);
         assertNotNull(lairChunk);
+        String monster = jdbc.queryForObject(
+            "SELECT wp.species_key FROM ecology_site es JOIN wildlife_population wp ON wp.site_id = es.id " +
+            "WHERE es.chunk_id=? AND es.site_category='MONSTER' AND wp.population_count > 0 LIMIT 1",
+            String.class, lairChunk);
+        assertNotNull(monster);
+        String named = monster.replace('_', ' ');
         String said = examination.presentLife(lairChunk, 1.0);
-        assertFalse(said.contains("grazes the open ground") || said.contains("forages nearby"),
-            "a monster must never be narrated as a grazing or foraging animal: " + said);
+
+        // The ordinary fauna of this ground DO graze and forage, and should — the rule is about the monster.
+        // So this asks after that one creature specifically, not after the vocabulary.
+        for (String asFauna : new String[]{"A " + named + " grazes", "A " + named + " forages",
+                                           "A " + named + " moves along", "A " + named + " is here"})
+            assertFalse(said.contains(asFauna),
+                "the monster must never be narrated as ordinary fauna (\"" + asFauna + "\"): " + said);
+
+        // It belongs to the sign channel, where the rule against handing the player a hint is enforced.
+        assertTrue(said.contains("the sign of " + named),
+            "standing on its own ground, the monster must be read from its sign: " + said);
     }
 }
