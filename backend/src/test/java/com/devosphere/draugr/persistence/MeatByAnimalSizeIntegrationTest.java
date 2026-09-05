@@ -65,10 +65,16 @@ class MeatByAnimalSizeIntegrationTest {
     @Autowired PersistentStateAuditor auditor;
     @Autowired JdbcTemplate jdbc;
 
+    /**
+     * The service is a Spring proxy, and a PRIVATE method invoked reflectively on the proxy runs against the
+     * proxy's own fields — which are null, because only public calls are delegated to the target. Unwrap first,
+     * or {@code this.jdbc} is null and the reader cannot reach the registry it now reads.
+     */
     private int meatFor(String species) throws Exception {
+        WildlifeEncounterService target = org.springframework.test.util.AopTestUtils.getTargetObject(wildlife);
         var m = WildlifeEncounterService.class.getDeclaredMethod("meatFor", String.class);
         m.setAccessible(true);
-        return (int) m.invoke(wildlife, species);
+        return (int) m.invoke(target, species);
     }
 
     @Test
