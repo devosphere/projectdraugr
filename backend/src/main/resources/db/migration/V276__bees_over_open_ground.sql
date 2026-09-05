@@ -1,4 +1,9 @@
--- V271 — bees work open ground too (#162/#74).
+-- V276 — bees work open ground too (#162/#74).
+--
+-- Numbered 276 rather than 271 on purpose. This PR was opened before #502/#503, and those merged first, so a
+-- database that ran in between is already at V273. Flyway is not configured out-of-order, so a LOWER version
+-- appearing after a higher one has been applied is a hard boot failure -- not a warning. Renumbering above the
+-- current head costs a CI cycle and costs nobody a broken local database.
 --
 -- V270's companion. pollination_bonus is now read: a hive or a worm patch working a chunk fills out the stand
 -- grown on it. But honeybee_hive was confined to TEMPERATE_FOREST and HIGHLAND, and crops are sown on tilled
