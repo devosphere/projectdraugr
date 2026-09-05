@@ -591,6 +591,21 @@ class IntentClassificationRegressionTest {
     }
 
     /**
+     * V275: the pack basket is woven by the two-axis matcher, so CRAFT_BASKET must yield to it — a plain basket
+     * is the Java intent's job, anything worn or carried in bulk is a recipe's. "backpack" contains "pack", which
+     * is already one of the words that makes the intent stand aside.
+     */
+    @Test
+    void aBackpackBasketReachesTheRecipeAndAPlainBasketDoesNot() throws Exception {
+        assertEquals("UNKNOWN", classify("weave a backpack basket"));
+        assertEquals("UNKNOWN", classify("weave a back basket"));
+        assertEquals("UNKNOWN", classify("weave a burden basket"));
+        // A plain basket is still the Java intent.
+        assertEquals("CRAFT_BASKET", classify("weave a basket"));
+        assertEquals("CRAFT_BASKET", classify("make a small basket from vines"));
+    }
+
+    /**
      * V272: the sewing table was defined, given an item_source, and then left out of the workstation list, so
      * there was no way in the world to have one — while fifty-three sewing and leatherwork recipes asked for no
      * station at all. It must reach the workstation path without disturbing the benches already there.
