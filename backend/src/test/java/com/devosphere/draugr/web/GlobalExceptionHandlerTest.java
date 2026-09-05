@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tier. The handler turns exceptions into clean HTTP responses, and — for the two HARD
@@ -72,8 +73,45 @@ class GlobalExceptionHandlerTest {
     void unexpectedErrorStillProducesABodyAndIsRecorded() {
         ResponseEntity<GlobalExceptionHandler.ApiError> response = handler.handleUnexpected(new RuntimeException(), request("/api/chronicles/active"));
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-        assertEquals("RuntimeException", response.getBody().message());
+        assertNotNull(response.getBody().message());
         assertEquals(1, recorder.calls, "an otherwise-unhandled exception is a hard error and must be tracked");
         assertEquals("/api/chronicles/active", recorder.lastPath);
+    }
+
+    /**
+     * #83's definition of done, in as many words: a failure must be "a controlled, logged simulation error rather
+     * than a raw database message in the narration panel." The handler used to answer with the driver's own text,
+     * so a player gathering firewood could be shown a PostgreSQL grammar error naming a column.
+     */
+    @Test
+    void aDatabaseFaultNeverReachesThePlayerInItsOwnWords() {
+        String driverText = "ERROR: column fps.item_id does not exist\n  Position: 44";
+        ResponseEntity<GlobalExceptionHandler.ApiError> response =
+            handler.handlePersistence(new DataIntegrityViolationException(driverText), request("/api/actions"));
+
+        String shown = response.getBody().message();
+        assertFalse(shown.contains("item_id"), "the failing column must not be shown to the player: " + shown);
+        assertFalse(shown.contains("ERROR:"), "nor the driver's own error prefix: " + shown);
+        assertFalse(shown.toLowerCase().contains("sql") || shown.toLowerCase().contains("column"),
+            "nor any database vocabulary at all: " + shown);
+        assertFalse(shown.contains("\n"), "and it stays one concise line, never a stack trace");
+
+        // Filed, not lost — the whole message is still there for whoever has to fix it.
+        assertEquals(1, recorder.calls);
+        assertNotNull(recorder.lastError);
+        assertTrue(recorder.lastError.getMessage().contains("item_id"),
+            "the detail belongs in the error log, where a developer reads it");
+    }
+
+    /** The same rule for anything else: an unhandled exception's message routinely carries SQL or a file path. */
+    @Test
+    void anUnhandledFaultIsAlsoControlled() {
+        ResponseEntity<GlobalExceptionHandler.ApiError> response =
+            handler.handleUnexpected(new RuntimeException("SELECT * FROM chronicle WHERE id=? failed at C:\\build\\Foo.java"),
+                request("/api/actions"));
+        String shown = response.getBody().message();
+        assertFalse(shown.contains("SELECT"), "no query fragment reaches the player: " + shown);
+        assertFalse(shown.contains("C:\\"), "and no file path either: " + shown);
+        assertEquals(1, recorder.calls, "while the fault is still filed for triage");
     }
 }
