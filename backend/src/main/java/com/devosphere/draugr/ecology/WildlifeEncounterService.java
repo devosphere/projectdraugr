@@ -361,19 +361,22 @@ public class WildlifeEncounterService {
             "FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id " +
             "JOIN wildlife_sign g ON g.species_key=wp.species_key " +
             "WHERE es.chunk_id=? AND wp.population_count>0 ORDER BY g.readable_hours DESC", chunk));
+        boolean residentHere = !sign.isEmpty();
         // Ambient sign (#37/#74). The query above reads only the seeded herds at wildlife markers — a dozen or so
         // populations across the whole map — so every other creature in the registry was untrackable everywhere,
         // however plainly it lives on this ground. That is the complaint in #37 exactly: "wildlife are not even
         // traceable on the actions we currently have. We have hunt action but that won't work if we can't
         // monitor, track, analyze, and survey." Looking was fixed by the ambient cast; reading the ground was not.
         //
-        // A creature the registry says belongs to this biome leaves sign on it. A seeded herd still comes first —
-        // a real herd here marks the ground more than a passing animal — and the ambient sign fills in behind.
+        // A creature the registry says belongs to this biome leaves sign on it. A resident population still wins
+        // outright: where a herd is actually seeded, that herd is what the ground says, and reading it must not
+        // turn up a passing squirrel instead — a real herd marks ground far more than anything drifting through.
+        // Ambient sign is therefore only consulted where nothing is seeded, which is nearly the whole map.
         // Monsters are left out on purpose: their sign is handled where the hint rule is enforced, and tracking is
         // not a way around it. Ambient sign records no wildlife event, because there is no population it belongs
         // to; the action's own history row carries what was read.
         String biome = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : null, chunk);
-        if (biome != null) {
+        if (!residentHere && biome != null) {
             sign.addAll(jdbc.queryForList(
                 "SELECT NULL::uuid AS population_id, ws.species_key, NULL AS behavior_state, g.sign_kind, g.readable_hours " +
                 "FROM wildlife_species ws JOIN wildlife_sign g ON g.species_key=ws.species_key " +
