@@ -77,19 +77,92 @@ public class ChronicleActionService {
     private static final String[] UNRESOLVED_ATTEMPT = {
         "You work at it for a while, but nothing here answers to the attempt, and the moment passes into the rest.",
         "Whatever you meant by that, your hands find no purchase on it. The world around you goes on unchanged.",
-        "You try, and the effort goes into the air. The ground and everything on it is exactly as it was."};
+        "You try, and the effort goes into the air. The ground and everything on it is exactly as it was.",
+        "You begin, and get as far as beginning. Nothing within reach takes the shape of what you were after.",
+        "You spend the effort and come back with only the effort. Nothing here has moved for it.",
+        "It does not come to anything. You stand a moment with the intention still on you and nothing to put it into."};
     // A recognised piece of material/world work the world cannot yet resolve (#68): a grounded "no way comes to
     // you" that names the material effort, rather than the flat gibberish line above. The routing miss is still
     // recorded (inside runProcess) so the gap is on the backlog for review.
     private static final String[] MATERIAL_UNRESOLVED = {
         "You work the material over, turning it for a way in, but no method for what you meant comes to your hands here.",
         "You set to it in earnest, but the working of it into that is beyond what your hands and knowledge can find on this ground.",
-        "You handle and test it, feeling for the trick of it, but the way to make what you intend does not come to you yet."};
+        "You handle and test it, feeling for the trick of it, but the way to make what you intend does not come to you yet.",
+        "You turn it over and try it two or three ways. Each one stops at the same place, and you set it down again.",
+        "The stuff of it is willing enough; it is the working that will not come. You leave it as you found it.",
+        "You get your hands properly into it and still cannot find the step that would take it further."};
     private final JdbcTemplate jdbc; private final SimulationTickService ticks; private final ChroniclePhysiologyService physiology; private final NarrationPolicy narration; private final PhysicalItemService items; private final CapabilityAdaptationService capability; private final ConstructionService construction; private final ChronicleDiscoveryService discoveries; private final WildlifeEncounterService wildlife; private final FireService fire; private final LiteratureService literature; private final FoodPreservationService food; private final ActionInputClassifier inputClassifier; private final AssemblyService assembly; private final NarrationRouter narrationRouter; private final SimulationNarrator simulationNarrator; private final com.devosphere.draugr.narration.NarrationEngine narrationEngine; private final com.devosphere.draugr.ai.RuntimeAuthoringService authoring; private final ExaminationService examination;
     public ChronicleActionService(JdbcTemplate jdbc, SimulationTickService ticks, ChroniclePhysiologyService physiology, NarrationPolicy narration, PhysicalItemService items, CapabilityAdaptationService capability, ConstructionService construction, ChronicleDiscoveryService discoveries, WildlifeEncounterService wildlife, FireService fire, LiteratureService literature, FoodPreservationService food, ActionInputClassifier inputClassifier, AssemblyService assembly, NarrationRouter narrationRouter, SimulationNarrator simulationNarrator, com.devosphere.draugr.narration.NarrationEngine narrationEngine, com.devosphere.draugr.ai.RuntimeAuthoringService authoring, ExaminationService examination) { this.jdbc = jdbc; this.ticks = ticks; this.physiology = physiology; this.narration = narration; this.items=items; this.capability=capability; this.construction=construction; this.discoveries=discoveries; this.wildlife=wildlife; this.fire=fire; this.literature=literature; this.food=food; this.inputClassifier=inputClassifier; this.assembly=assembly; this.narrationRouter=narrationRouter; this.simulationNarrator=simulationNarrator; this.narrationEngine=narrationEngine; this.authoring=authoring; this.examination=examination; }
 
     @Transactional
     public ActionResult resolve(String text) { return resolve(text, null); }
+
+    /**
+     * Work through a written procedure step by step (#38).
+     *
+     * <p>The action composer takes 2,500 characters and the resolver matched exactly one process to the whole of
+     * it. A Chronicle who wrote "build a hearth board, then carve a spindle, then form a tinder nest, then spin
+     * the bow drill until it catches" had one of those four steps happen and the other three silently discarded.
+     * The player typed a lot for nothing, which is the failure #38 names.
+     *
+     * <p>Each declared step is now resolved in order, in this one transaction, and the world is told about every
+     * one of them. The rules that keep this safe:
+     * <ul>
+     *   <li><b>Order is the player's.</b> Steps run as written; nothing is reordered and nothing is invented.</li>
+     *   <li><b>A step that fails stops the plan.</b> The work already done stands — it really happened — and the
+     *       report says plainly where it stopped and what was not attempted. Later steps are never quietly
+     *       skipped, and never completed on the strength of a step that failed.</li>
+     *   <li><b>Each step is a real action</b> with its own time, labour and history row, because that is what it
+     *       costs. A plan is a way of writing four actions at once, not a way of getting them cheaply.</li>
+     *   <li><b>A single-step text is untouched</b> — it goes straight down the old path.</li>
+     * </ul>
+     *
+     * <p>Replay is safe: each step derives its own idempotency key from the plan's, so resubmitting a whole
+     * procedure replays step for step instead of doing the work twice.
+     */
+    @Transactional
+    public ActionResult resolvePlan(String text, UUID idempotencyKey) {
+        List<String> steps = ActionPlan.steps(text);
+        if (steps.size() <= 1) return resolve(text, idempotencyKey);
+
+        List<String> attempted = steps.size() > ActionPlan.MAX_STEPS ? steps.subList(0, ActionPlan.MAX_STEPS) : steps;
+        StringBuilder told = new StringBuilder();
+        ActionResult last = null;
+        int done = 0;
+        String outcome = "SUCCEEDED";
+        for (int i = 0; i < attempted.size(); i++) {
+            UUID stepKey = idempotencyKey == null ? null
+                : UUID.nameUUIDFromBytes((idempotencyKey + ":step:" + i).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            ActionResult step = resolve(attempted.get(i), stepKey);
+            last = step;
+            if (told.length() > 0) told.append(" ");
+            told.append(step.perception());
+            if ("SUCCEEDED".equals(step.outcome()) || "NO_EFFECT".equals(step.outcome())) {
+                done++;
+                // A step can end the life that was going to carry out the rest. There is no going on from here,
+                // and the next resolve would find no living Chronicle at all.
+                if (step.died()) { if (done < attempted.size()) outcome = "PARTIAL"; break; }
+                continue;
+            }
+            // Stopped. Say so, and say what was left — never let the report imply the rest happened.
+            outcome = done > 0 ? "PARTIAL" : "FAILED";
+            int remaining = steps.size() - (i + 1);
+            told.append(" You get no further than that. ");
+            told.append(done == 0
+                ? "The rest of what you set out to do is still ahead of you"
+                : "What you did before this stands, but the " + remaining + " step" + (remaining == 1 ? "" : "s")
+                  + " after it went undone");
+            told.append(", and until this part comes right there is no going on to them.");
+            break;
+        }
+        if ("SUCCEEDED".equals(outcome) && steps.size() > ActionPlan.MAX_STEPS) {
+            outcome = "PARTIAL";
+            told.append(" You have worked as far through that as one stretch of effort will carry, and set the rest aside for now.");
+        }
+        // The plan reports as the last step that actually ran: its identity, its clock, and the body as it stands.
+        return new ActionResult(last.actionId(), last.intent(), outcome, last.durationMinutes(), last.resolvedAt(),
+                told.toString(), last.body(), last.frame(), last.died());
+    }
 
     @Transactional
     public ActionResult resolve(String text, UUID idempotencyKey) {
@@ -505,7 +578,14 @@ public class ChronicleActionService {
         // the punctuation rule (weather when felt/changing, the land on deliberate looking) lives in the
         // NarrationEngine so it lands when it means something rather than tagging every line. OBSERVE is
         // excluded — its own survey prose already IS the setting, in far more detail.
-        if (intent != Intent.OBSERVE) perception = groundPerception(perception, chronicle.location(), attention, beforeWeather, resolvedAt);
+        // An attempt the world could not resolve is exactly the moment a person stops and looks up. That line
+        // was landing at LOW attention, which adds nothing at all — so the one narration a player sees when the
+        // world cannot help them was the barest in the game, the flat "nothing here answers to the attempt"
+        // #30 calls out by name. Ground it in the actual place, light and weather. Setting only: it still names
+        // no prerequisite and suggests no action, because the rule against hinting does not bend for a failure.
+        // The mechanical attention (what wildlife makes of the Chronicle) is deliberately left alone.
+        String narrationAttention = (intent == Intent.UNKNOWN && "FAILED".equals(outcome)) ? "HIGH" : attention;
+        if (intent != Intent.OBSERVE) perception = groundPerception(perception, chronicle.location(), narrationAttention, beforeWeather, resolvedAt);
         // chronicle_action is append-only IMMUTABLE history (the prevent_chronicle_action_mutation
         // trigger blocks any UPDATE/DELETE). Persist the deterministic prose ONCE, here, and never
         // touch the row again — the source of truth stays untouched. The death coda and the Simulation
@@ -1143,10 +1223,10 @@ public class ChronicleActionService {
         boolean usingNet = value.contains("net")&&(value.contains("cast")||value.contains("throw")||value.contains("haul")||value.contains("set the net")||value.contains("use the net")||value.contains("with the net")||value.contains("with a net"));
         boolean craftingNet = value.contains("net")&&!usingNet&&(value.contains("weave")||value.contains("craft")||value.contains("make")||value.contains("knot")||value.contains("braid")||value.contains("tie")||value.contains("assemble")||value.contains("mesh"));
         if(craftingNet) return Intent.CRAFT_NET;
-        if((usingNet||(value.contains("fish")&&!value.contains("landing")&&!value.contains("jetty"))||value.contains("angle")||((value.contains("catch")||value.contains("spear"))&&(value.contains("trout")||value.contains("perch")||value.contains("pike")||value.contains("carp")||value.contains("eel")||value.contains("catfish")||value.contains("crayfish"))))&&!items.actionMatchesProcess(action)) return Intent.FISH;
+        if((usingNet||(value.contains("fish")&&!value.contains("landing")&&!value.contains("jetty")&&!value.contains("shellfish"))||value.contains("angle")||((value.contains("catch")||value.contains("spear"))&&(value.contains("trout")||value.contains("perch")||value.contains("pike")||value.contains("carp")||value.contains("eel")||value.contains("catfish")||value.contains("crayfish"))))&&!items.actionMatchesProcess(action)) return Intent.FISH;
         if(value.contains("snare")||value.contains("set a trap")||value.contains("set trap")||((value.contains("trap")||value.contains("noose"))&&(value.contains("rabbit")||value.contains("hare")||value.contains("bird")||value.contains("fowl")||value.contains("small")||value.contains("run")))) return Intent.SNARE;
         if((value.contains("raid")||value.contains("harvest")||value.contains("smoke")||value.contains("rob")||value.contains("take")||value.contains("collect")||value.contains("gather"))&&(value.contains("hive")||value.contains("nest")||value.contains("honey")||value.contains("beeswax")||value.contains("bees")||value.contains("hornet"))) return Intent.RAID_HIVE;
-        if((value.contains("collect")||value.contains("gather")||value.contains("catch")||value.contains("dig")||value.contains("pick")||value.contains("forage")||value.contains("harvest"))&&(value.contains("insect")||value.contains("silk")||value.contains("cocoon")||value.contains("silkworm")||word(value,"ant")||word(value,"ants")||value.contains("chitin")||value.contains("grasshopper")||value.contains("cricket")||value.contains("earthworm")||word(value,"worm")||value.contains("spider")||word(value,"grub")||value.contains("larva"))) return Intent.COLLECT_INSECTS;
+        if((value.contains("collect")||value.contains("gather")||value.contains("catch")||value.contains("dig")||value.contains("pick")||value.contains("forage")||value.contains("harvest"))&&(value.contains("insect")||value.contains("silk")||value.contains("cocoon")||value.contains("silkworm")||word(value,"ant")||word(value,"ants")||value.contains("chitin")||value.contains("shellfish")||word(value,"mussel")||value.contains("mussels")||word(value,"snail")||value.contains("snails")||word(value,"clam")||value.contains("clams")||value.contains("caddis")||value.contains("grasshopper")||value.contains("cricket")||value.contains("earthworm")||word(value,"worm")||value.contains("spider")||word(value,"grub")||value.contains("larva"))) return Intent.COLLECT_INSECTS;
         // Felling needs a felling verb — bare "log" is not one. "split the oak log into
         // planks" is log *processing*, and the two-axis matcher claims it (split_planks);
         // only text that resolves to no process is heard as an attempt to fell (#17).

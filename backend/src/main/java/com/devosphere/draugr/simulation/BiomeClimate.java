@@ -58,6 +58,7 @@ public final class BiomeClimate {
             case "OCEAN"           -> { charC = -1; windOffset = 22; }  // damp sea air, nothing to break the wind
             case "GRASSLAND"       -> { charC =  1; windOffset =  8; }  // open, sun-warmed, exposed
             case "WETLAND"         -> { charC =  0; windOffset = -2; }  // humid, still air over the water
+            case "RIVER_BANK"      -> { charC = -1; windOffset =  4; }  // running water cools it; the valley funnels wind
             case "TEMPERATE_FOREST"-> { charC = -1; windOffset = -6; }  // shaded and sheltered under the canopy
             default                -> { charC =  0; windOffset =  0; }
         }

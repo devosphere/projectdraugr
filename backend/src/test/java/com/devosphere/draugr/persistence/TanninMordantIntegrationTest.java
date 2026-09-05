@@ -79,6 +79,13 @@ class TanninMordantIntegrationTest {
         assertNotNull(summary, "awakening must produce a living Chronicle");
         UUID chronicle = summary.id();
         jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
+        // Retting and leaching are wet work, so give this ground water on purpose. It used to rely on the
+        // arrival chunk happening to be a marsh, which is not something a test should be betting on (#156).
+        UUID here = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+        UUID worldHere = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, here);
+        UUID springHere = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE','Freshwater spring',?)", springHere, here);
+        jdbc.update("INSERT INTO ecology_site (id,world_id,chunk_id,site_category,site_kind,baseline_abundance) VALUES (?,?,?,'RESOURCE','Freshwater spring',700)", springHere, worldHere, here);
         Instant now = ticks.current().simulatedAt();
 
         // Leach a mordant from bark.

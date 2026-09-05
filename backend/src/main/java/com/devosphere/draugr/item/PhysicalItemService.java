@@ -418,6 +418,31 @@ public class PhysicalItemService {
     /** Whether the Chronicle carries anything that can hold water to fill or boil in (#71). */
     @Transactional(readOnly = true)
     public boolean hasWaterVessel(UUID chronicle) { for (String v : WATER_VESSELS) if (hasAtLeast(chronicle, v, 1)) return true; return false; }
+
+    /**
+     * Is there water here to work a process in — retting flax, leaching a mordant, soaking bast?
+     *
+     * <p>This gate accepted the single string {@code "WETLAND"} and nothing else, so the only place in the world
+     * a Chronicle could ret flax was a marsh. Not a river. Not a spring. Not a stream, and not a rainwater
+     * catchment they had built for exactly this. Every other reader of "is there water here" in the codebase
+     * already knew about all four — this one had been left behind, and running water (#156) made the gap plain:
+     * standing on a river bank is the most obvious place there is to ret flax, and the world said the ground was
+     * dry. Kept deliberately in step with ChronicleActionService.waterInReach.
+     */
+    @Transactional(readOnly = true)
+    public boolean waterToWorkWith(UUID location) {
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
+        if ("WETLAND".equals(biome) || "RIVER_BANK".equals(biome)) return true;
+        Integer sites = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM ecology_site WHERE chunk_id=? AND (site_category='WATER' OR site_kind ILIKE '%spring%' " +
+            "OR site_kind ILIKE '%stream%' OR site_kind ILIKE '%river%' OR site_kind ILIKE '%freshwater%')",
+            Integer.class, location);
+        if (sites != null && sites > 0) return true;
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "WHERE w.current_location_id=? AND cp.project_kind IN ('RAINWATER_CATCHMENT','WATERING_STATION') " +
+            "AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')", Boolean.class, location));
+    }
     /** Vessels that can sit on the flame without charring or melting — fired clay or soapstone (#125). Only these
      *  boil water directly; a wooden or hide vessel needs a boiling_stone_set instead. */
     private static final String[] FIREPROOF_VESSELS = {"clay_pot","clay_jar","fired_bowl","fired_cup","clay_water_filter","soapstone_bowl"};
@@ -1059,9 +1084,8 @@ public class PhysicalItemService {
             Boolean fire = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM fire_state fs JOIN world_object w ON w.id=fs.construction_id WHERE w.current_location_id=? AND fs.active=true)", Boolean.class, location);
             if (!Boolean.TRUE.equals(fire)) return new String[]{"FAILED", "This work needs heat, and no fire burns within reach of it. Cold, the material will not give."};
         }
-        if (Boolean.TRUE.equals(match.get("requires_water"))) {
-            String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
-            if (!"WETLAND".equals(biome)) return new String[]{"FAILED", "This work needs water, and there is none at hand to work it with. Dry, the process cannot even begin."};
+        if (Boolean.TRUE.equals(match.get("requires_water")) && !waterToWorkWith(location)) {
+            return new String[]{"FAILED", "This work needs water, and there is none at hand to work it with. Dry, the process cannot even begin."};
         }
 
         // Fixed inputs, then each either/or group.
@@ -1608,6 +1632,9 @@ public class PhysicalItemService {
             // out of the water, but gutting/filleting/splitting it produced UNTRACKED objects — so cleaning a fish
             // laundered perishable food into food that never spoiled at all. These stay raw, and keep raw's span.
             case "gutted_fish", "fish_fillet", "fish_side" -> "RAW";
+            // Shellfish and grubs off the water's edge go over faster than anything (V270): out of the water they
+            // are dead within the day, and a mussel that has sat is the classic way to poison yourself.
+            case "freshwater_mussel", "river_snail", "caddis_grub" -> "RAW";
             default -> null;
         };
     }
@@ -1803,6 +1830,22 @@ public class PhysicalItemService {
         return harvestColony(chronicle, location, actionText, occurredAt, "COLLECT_INSECTS");
     }
 
+    /** Can these hands work this colony at all — does it want a tool, and is one within reach (V270)? */
+    private boolean canWorkColony(java.util.Map<String,Object> kind, UUID chronicle) {
+        String needed = (String) kind.get("requires_tool_class");
+        return needed == null || needed.isBlank() || hasToolOfClass(chronicle, needed);
+    }
+
+    /** What to call the missing tool in the refusal, so it names a thing rather than a class name. */
+    private static String toolPhrase(String toolClass) {
+        return switch (toolClass == null ? "" : toolClass) {
+            case "CUTTING" -> "a blade or a pry";
+            case "STRIKING" -> "something to strike with";
+            case "AXE" -> "an axe";
+            default -> "a tool you do not carry";
+        };
+    }
+
     private InsectHarvest harvestColony(UUID chronicle, UUID location, String actionText, Instant occurredAt, String intent) {
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
         String lower = actionText.toLowerCase(java.util.Locale.ROOT);
@@ -1810,7 +1853,7 @@ public class PhysicalItemService {
 
         // Candidate colony kinds for this intent, present in this biome and season.
         java.util.List<java.util.Map<String,Object>> kinds = jdbc.queryForList(
-            "SELECT ck.colony_kind, ck.hazard_kind, ck.hazard_min, ck.hazard_max, ck.smoke_suppresses " +
+            "SELECT ck.colony_kind, ck.hazard_kind, ck.hazard_min, ck.hazard_max, ck.smoke_suppresses, ck.requires_tool_class " +
             "FROM insect_colony_kind ck " +
             "WHERE ck.harvest_intent=? AND ck.biome_affinity ILIKE ? " +
             "AND (ck.season_active='ALL' OR ck.season_active ILIKE ?) " +
@@ -1821,10 +1864,20 @@ public class PhysicalItemService {
                 : "You turn over the ground and growth for insects, but find nothing worth taking here.", 0, null);
         }
 
-        // Prefer a colony the action text names; otherwise the first available.
+        // Prefer a colony the action text names; otherwise the first one this pair of hands can actually work.
+        // Some colonies need a tool: a mussel prised off its stone without a blade is a mussel lost with the shell
+        // (V270). A named colony is attempted whatever the player carries — they asked for that one, and being
+        // told plainly why it will not open is more use than quietly working something else.
         java.util.Map<String,Object> kind = kinds.stream()
-            .filter(k -> lower.contains(((String)k.get("colony_kind")).replace("_"," ").replace(" colony","").replace(" swarm","").replace(" patch","").replace(" den","").replace(" nest","").replace(" hive","")))
-            .findFirst().orElse(kinds.get(0));
+            .filter(k -> lower.contains(((String)k.get("colony_kind")).replace("_"," ").replace(" colony","").replace(" swarm","").replace(" patch","").replace(" den","").replace(" nest","").replace(" bed","").replace(" shallows","").replace(" hive","")))
+            .findFirst()
+            .orElseGet(() -> kinds.stream().filter(k -> canWorkColony(k, chronicle)).findFirst().orElse(kinds.get(0)));
+        if (!canWorkColony(kind, chronicle)) {
+            String needed = (String) kind.get("requires_tool_class");
+            return new InsectHarvest("FAILED", "You find the " + ((String) kind.get("colony_kind")).replace("_", " ")
+                + ", but it will not open to bare hands — this wants " + toolPhrase(needed)
+                + ", and without one you would spoil what you were after.", 0, null);
+        }
         String colonyKind = (String) kind.get("colony_kind");
         String hazardKind = (String) kind.get("hazard_kind");
         int hazardMin = ((Number) kind.get("hazard_min")).intValue();
@@ -1861,11 +1914,16 @@ public class PhysicalItemService {
             if (take <= 0) continue;
             String displayName = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, itemKey);
             if (firstItemName == null) firstItemName = displayName;
+            // A colony harvest wrote item rows and nothing else, so anything perishable that came off one kept
+            // forever. Honey and chitin genuinely do not spoil and are absent from the map, so this only ever
+            // tracks what should be tracked — a mussel out of the water is dead within the day (V270).
+            String keepKind = preservationKind(itemKey);
             for (int i = 0; i < take; i++) {
                 UUID id = UUID.randomUUID();
                 jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM',?,?)", id, displayName, chronicle);
                 jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,?,'SOUND')", id, itemKey);
                 jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'GATHERED',jsonb_build_object('colonyKind',?,'biome',?))", id, Timestamp.from(occurredAt), colonyKind, biome);
+                if (keepKind != null) registerPreserved(id, keepKind, occurredAt);
             }
             totalTaken += take;
         }
