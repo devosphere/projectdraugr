@@ -928,6 +928,7 @@ public class ChronicleActionService {
             case "TEMPERATE_FOREST" -> "Tall trees close overhead, their trunks dark with damp and the floor deep in leaf litter.";
             case "WETLAND" -> "The ground is soft and waterlogged, reeds standing in slow, dark water.";
             case "RIVER_BANK" -> "A river runs past a bank of smoothed stone and packed earth.";
+            case "COAST" -> "The ground gives out to shingle and wrack, and open water runs from it to the edge of sight.";
             case "CLAY_DEPOSIT" -> "The earth here is heavy and grey-brown, slick clay breaking the surface.";
             case "MOUNTAIN" -> "Bare rock rises in broken shelves, the air thin and cold against exposed stone.";
             case "HIGHLAND" -> "High, open ground rolls away in coarse grass and outcrops of weathered rock.";
@@ -975,6 +976,7 @@ public class ChronicleActionService {
             case "MOUNTAIN", "HIGHLAND" -> "The ground rises toward higher, broken rock";
             case "TEMPERATE_FOREST" -> "The trees grow denser";
             case "GRASSLAND" -> "The land opens into grass";
+            case "COAST" -> "You taste salt on the air and hear water working at a shore";
             case "OCEAN" -> "You sense open water and a colder air";
             case "CLAY_DEPOSIT" -> "The earth looks heavier and greyer";
             default -> null;
