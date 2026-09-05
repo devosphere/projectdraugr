@@ -593,6 +593,50 @@ public class WildlifeEncounterService {
         return new String[]{"SUCCEEDED", "You clear the worst of the churned ground, scatter seed, and set what was disturbed back toward order. Given a little quiet now, the wild will find its way back the sooner."};
     }
 
+    /** A raided herd is left alone for a while afterwards — stock are thinned occasionally, not stripped. */
+    private static final int RAID_REST_HOURS = 48;
+
+    /**
+     * Predators take unprotected stock (#108). Once an animal was tamed it was safe forever — nothing reduced a
+     * bonded animal's population — so a goat left on open ground beside a wolf range was in no danger, and every
+     * secure structure in the catalogue had nothing to be secure against.
+     *
+     * <p>Deliberately conservative, because this is the one mechanic here that takes something from a Chronicle. A
+     * loss needs ALL of: a real carnivore population on the keeper's ground, darkness, no protection standing, and no
+     * loss from that herd inside the rest window. A completed animal pen — or any build the catalogue calls a
+     * shelter — prevents it outright, which is exactly why stock are penned at night. One animal at a time.
+     *
+     * @return the species taken, or null if nothing was lost.
+     */
+    @Transactional
+    public String raidUnprotectedStock(UUID chronicle, Instant at, boolean dark) {
+        if (!dark) return null;
+        java.util.Map<String,Object> herd = jdbc.query(
+            "SELECT wb.id, wp.id AS pop, wp.species_key FROM wildlife_bond wb " +
+            "JOIN wildlife_population wp ON wp.id = wb.population_id " +
+            "JOIN world_object cw ON cw.id = wb.chronicle_id " +
+            "WHERE wb.chronicle_id=? AND wb.bond_stage='TAMED' AND wp.population_count > 0 " +
+            "  AND (wb.last_raid_at IS NULL OR wb.last_raid_at <= ?) " +
+            // a predator actually present on the keeper's ground, hunting rather than merely existing
+            "  AND EXISTS (SELECT 1 FROM wildlife_population pp JOIN ecology_site pes ON pes.id=pp.site_id " +
+            "              WHERE pes.chunk_id = cw.current_location_id AND pp.ecological_role='CARNIVORE' " +
+            "                AND pp.population_count > 0 AND pp.behavior_state IN ('HUNTING','PACK_HUNT','ALERT','AGGRESSIVE')) " +
+            // nothing standing that would keep them off
+            "  AND NOT EXISTS (SELECT 1 FROM construction_project cp JOIN world_object pw ON pw.id=cp.object_id " +
+            "                  WHERE pw.current_location_id = cw.current_location_id AND cp.state='COMPLETED' " +
+            "                    AND cp.integrity_percent > 0 AND pw.lifecycle_state='ACTIVE' " +
+            "                    AND (cp.project_kind='ANIMAL_PEN' OR EXISTS(SELECT 1 FROM construction_kind ck WHERE ck.project_kind=cp.project_kind AND ck.is_shelter))) " +
+            "ORDER BY wb.last_raid_at NULLS FIRST LIMIT 1 FOR UPDATE OF wb",
+            rs -> rs.next() ? java.util.Map.of("bond", rs.getObject(1, UUID.class), "pop", rs.getObject(2, UUID.class),
+                    "species", rs.getString(3)) : null,
+            chronicle, Timestamp.from(at.minus(java.time.Duration.ofHours(RAID_REST_HOURS))));
+        if (herd == null) return null;
+
+        jdbc.update("UPDATE wildlife_population SET population_count = GREATEST(0, population_count - 1) WHERE id=?", herd.get("pop"));
+        jdbc.update("UPDATE wildlife_bond SET last_raid_at=? WHERE id=?", Timestamp.from(at), herd.get("bond"));
+        return (String) herd.get("species");
+    }
+
     /** Milk and eggs come daily; a fleece does not — shearing is a once-a-season job, not a chore. */
     private static final int YIELD_REST_HOURS = 20;
     private static final int FLEECE_REST_HOURS = 720;
