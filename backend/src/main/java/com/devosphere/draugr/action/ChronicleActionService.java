@@ -183,7 +183,14 @@ public class ChronicleActionService {
             jdbc.update("INSERT INTO world_object (id, object_type, display_name, current_location_id) VALUES (?, 'WASTE', ?, ?)", waste, bowel ? "Human waste" : "Urine-soaked ground", chronicle.location());
             perception = "You take a brief moment away from the immediate ground around you.";
         } else if (intent == Intent.REST) { physiology.rest(chronicle.id(), minutes); items.restDraftBeasts(chronicle.id()); perception = "You remain still while the forest continues around you."; }
-        else if (intent == Intent.SLEEP) { boolean safe = physiology.sleep(chronicle.id(), minutes); items.restDraftBeasts(chronicle.id()); perception = safe ? "You lie down under cover and let sleep take you. You wake to a changed sky, the deep tiredness lifted from your limbs." : "You settle onto the bare ground and drift into a broken, shallow sleep, waking stiff and only half-rested as the light shifts."; }
+        else if (intent == Intent.SLEEP) {
+            boolean safe = physiology.sleep(chronicle.id(), minutes); items.restDraftBeasts(chronicle.id());
+            perception = safe ? "You lie down under cover and let sleep take you. You wake to a changed sky, the deep tiredness lifted from your limbs." : "You settle onto the bare ground and drift into a broken, shallow sleep, waking stiff and only half-rested as the light shifts.";
+            // Stock left loose overnight are what predators come for (#108). A sleep spans the dark hours, so this
+            // is where an unpenned herd is thinned — and waking to a gap in the flock is how a keeper learns of it.
+            String lost = wildlife.raidUnprotectedStock(chronicle.id(), resolvedAt, isDark(resolvedAt) || isDark(resolvedAt.plus(java.time.Duration.ofMinutes(minutes))));
+            if (lost != null) perception += " The stock are uneasy in the grey light, and short: something came in the night and took one of them. There is blood on the ground where nothing stood between them and it.";
+        }
         else if (intent == Intent.GATHER_FIBER) { int bundles=items.gatherPlantFiber(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())); outcome=bundles>0?"SUCCEEDED":"FAILED"; perception=bundles>0?"You patiently separate usable plant fiber from the living growth around you.":"You search through the growth, but leave it as it is."; gatherEffectType="PLANT_FIBER_GATHERED"; gatherPayloadKey="bundles"; gatherCount=bundles; }
         else if (intent == Intent.GATHER_STONE) {
             // A pick breaks stone out of the ground far faster than bare hands prising at it — a proper metal pick
