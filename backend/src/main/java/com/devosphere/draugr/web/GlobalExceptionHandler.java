@@ -39,19 +39,38 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.CONFLICT, exception.getMessage());
     }
 
-    /** A persistence failure. Reported concisely without a stack trace, and recorded for triage — the presence of one indicates a bug to fix. */
+    /**
+     * What the player is told when the machinery underneath fails. It says a fault occurred and nothing about
+     * what the fault was — the detail belongs in {@code system_error_log}, where a developer reads it (#83).
+     */
+    private static final String HARD_FAULT_MESSAGE =
+        "Something in the world's own workings failed here, and the attempt was set aside rather than half-done. "
+      + "Nothing has changed. The fault has been recorded.";
+
+    /**
+     * A persistence failure. Recorded in full for triage; reported to the caller as a controlled fault (#83).
+     *
+     * <p>This used to answer with {@code "A persistence error occurred: " + cause.getMessage()} — the driver's
+     * own text, verbatim, into the narration panel. A player gathering firewood could be shown
+     * {@code ERROR: column fps.item_id does not exist}. #83 asks for the opposite in as many words: any failure
+     * must be "a controlled, logged simulation error rather than a raw database message in the narration panel".
+     * The message is not lost, it is filed — {@code errorRecorder} still records the most specific cause, its
+     * class and the request path.
+     */
     @ExceptionHandler(DataAccessException.class)
     public ResponseEntity<ApiError> handlePersistence(DataAccessException exception, HttpServletRequest request) {
-        Throwable cause = exception.getMostSpecificCause();
-        errorRecorder.record(HttpStatus.INTERNAL_SERVER_ERROR.value(), cause, request.getRequestURI());
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, "A persistence error occurred: " + cause.getMessage());
+        errorRecorder.record(HttpStatus.INTERNAL_SERVER_ERROR.value(), exception.getMostSpecificCause(), request.getRequestURI());
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, HARD_FAULT_MESSAGE);
     }
 
-    /** Anything else. Clean 500 with a concise message, never a stack trace, and recorded for triage. */
+    /**
+     * Anything else. Also a controlled fault: an unhandled exception's message is no safer than a driver's —
+     * it routinely carries the failing SQL, a file path, or an internal class name.
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleUnexpected(Exception exception, HttpServletRequest request) {
         errorRecorder.record(HttpStatus.INTERNAL_SERVER_ERROR.value(), exception, request.getRequestURI());
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage());
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, HARD_FAULT_MESSAGE);
     }
 
     private ResponseEntity<ApiError> build(HttpStatus status, String message) {
