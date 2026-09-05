@@ -99,11 +99,16 @@ public class FireService {
     }
 
     private LightResult lightCore(UUID chronicle, UUID location, Instant now, boolean emberCaught, UUID pit, String methodKey) {
-        // ...a tinder nest fine enough to catch it (consumed either way)...
-        if(!items.hasAtLeast(chronicle,"tinder_nest",1)) return LightResult.NO_TINDER;
+        // ...something fine enough to catch it (consumed either way). Charred tinder counts: taking a spark that raw
+        // fibre would shrug off is the whole reason to char it, and its own crafting narration says so — but only the
+        // tinder nest was ever accepted here, so char_tinder was craftable and then consumed by nothing at all.
+        // Char is spent first when both are carried, since it is the thing made for this.
+        String tinder = items.hasAtLeast(chronicle,"char_tinder",1) ? "char_tinder"
+                      : items.hasAtLeast(chronicle,"tinder_nest",1) ? "tinder_nest" : null;
+        if(tinder == null) return LightResult.NO_TINDER;
         // ...and dry fuel to build the caught flame into a fire (consumed on success).
         if(!items.hasAtLeast(chronicle,"dry_branch",1)) return LightResult.NO_FUEL;
-        if(!items.consumeOne(chronicle,"tinder_nest",now)) return LightResult.NO_TINDER;
+        if(!items.consumeOne(chronicle,tinder,now)) return LightResult.NO_TINDER;
         // A consumed requirement — a carried ember, charred tinder — is spent by the
         // attempt itself, exactly as the tinder is, whether or not the fire takes.
         if(methodKey != null)
