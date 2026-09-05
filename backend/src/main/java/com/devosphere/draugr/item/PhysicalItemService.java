@@ -418,6 +418,31 @@ public class PhysicalItemService {
     /** Whether the Chronicle carries anything that can hold water to fill or boil in (#71). */
     @Transactional(readOnly = true)
     public boolean hasWaterVessel(UUID chronicle) { for (String v : WATER_VESSELS) if (hasAtLeast(chronicle, v, 1)) return true; return false; }
+
+    /**
+     * Is there water here to work a process in — retting flax, leaching a mordant, soaking bast?
+     *
+     * <p>This gate accepted the single string {@code "WETLAND"} and nothing else, so the only place in the world
+     * a Chronicle could ret flax was a marsh. Not a river. Not a spring. Not a stream, and not a rainwater
+     * catchment they had built for exactly this. Every other reader of "is there water here" in the codebase
+     * already knew about all four — this one had been left behind, and running water (#156) made the gap plain:
+     * standing on a river bank is the most obvious place there is to ret flax, and the world said the ground was
+     * dry. Kept deliberately in step with ChronicleActionService.waterInReach.
+     */
+    @Transactional(readOnly = true)
+    public boolean waterToWorkWith(UUID location) {
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
+        if ("WETLAND".equals(biome) || "RIVER_BANK".equals(biome)) return true;
+        Integer sites = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM ecology_site WHERE chunk_id=? AND (site_category='WATER' OR site_kind ILIKE '%spring%' " +
+            "OR site_kind ILIKE '%stream%' OR site_kind ILIKE '%river%' OR site_kind ILIKE '%freshwater%')",
+            Integer.class, location);
+        if (sites != null && sites > 0) return true;
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "WHERE w.current_location_id=? AND cp.project_kind IN ('RAINWATER_CATCHMENT','WATERING_STATION') " +
+            "AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')", Boolean.class, location));
+    }
     /** Vessels that can sit on the flame without charring or melting — fired clay or soapstone (#125). Only these
      *  boil water directly; a wooden or hide vessel needs a boiling_stone_set instead. */
     private static final String[] FIREPROOF_VESSELS = {"clay_pot","clay_jar","fired_bowl","fired_cup","clay_water_filter","soapstone_bowl"};
@@ -1059,9 +1084,8 @@ public class PhysicalItemService {
             Boolean fire = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM fire_state fs JOIN world_object w ON w.id=fs.construction_id WHERE w.current_location_id=? AND fs.active=true)", Boolean.class, location);
             if (!Boolean.TRUE.equals(fire)) return new String[]{"FAILED", "This work needs heat, and no fire burns within reach of it. Cold, the material will not give."};
         }
-        if (Boolean.TRUE.equals(match.get("requires_water"))) {
-            String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
-            if (!"WETLAND".equals(biome)) return new String[]{"FAILED", "This work needs water, and there is none at hand to work it with. Dry, the process cannot even begin."};
+        if (Boolean.TRUE.equals(match.get("requires_water")) && !waterToWorkWith(location)) {
+            return new String[]{"FAILED", "This work needs water, and there is none at hand to work it with. Dry, the process cannot even begin."};
         }
 
         // Fixed inputs, then each either/or group.
