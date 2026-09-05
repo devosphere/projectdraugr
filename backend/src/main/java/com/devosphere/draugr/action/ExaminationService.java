@@ -143,15 +143,71 @@ public class ExaminationService {
                  .append(", and the quiet around it says to give it a wide berth. ");
         }
 
-        // Fish — visible in the water to a moderate eye, where the biome holds them.
-        if (acuity >= 0.4) {
-            List<String> fish = orEmpty(jdbc.query(
-                "SELECT species_key FROM wildlife_species WHERE movement_class='AQUATIC' AND biome_affinity ILIKE ? ORDER BY species_key LIMIT 1",
-                (rs, i) -> humanize(rs.getString(1)), "%" + biome + "%"));
-            if (!fish.isEmpty()) b.append("Fish hang in the water — ").append(fish.get(0)).append(" among them. ");
+        // Birds, and the small life underfoot and on the wing (#37). These had no way of ever being perceived.
+        // Both were drawn from the SAME budget as deer and boar, and lost it every time: a bird or an insect is
+        // outranked by anything larger, and the visibility model puts a TINY creature beyond an ordinary eye
+        // outright. So a Chronicle could stand in a summer meadow, look hard, and be told about nothing smaller
+        // than a hare — which is exactly the complaint in #37, that aerial species and insects are never returned
+        // however intently they are looked for.
+        //
+        // They get their own budgets here, because noticing a heron overhead is not the same act of attention as
+        // spotting a deer in the treeline and should not compete with it. Deterministic per chunk, so a place
+        // keeps its own birds and its own insects rather than every wetland reporting the alphabetically first.
+        if (biome != null) {
+            int birdsNamed = 0;
+            for (Map<String, Object> bird : orEmpty(jdbc.queryForList(
+                    "SELECT species_key, movement_class, size_tier, activity_cycle FROM wildlife_species " +
+                    "WHERE kingdom_class='AVES' AND biome_affinity ILIKE ? ORDER BY md5(species_key || ?::text)",
+                    "%" + biome + "%", chunk.toString()))) {
+                if (birdsNamed >= 2) break;
+                String key = (String) bird.get("species_key");
+                if (namedKeys.contains(key)) continue;
+                // A bird in the open is easy to see and hard to miss overhead; only the night birds hide from a
+                // daytime eye. Small ones want a little more attention than large ones.
+                double want = "NOCTURNAL".equals(bird.get("activity_cycle")) ? 0.75
+                            : "TINY".equals(bird.get("size_tier")) ? 0.45 : 0.3;
+                if (acuity < want) continue;
+                String name = humanize(key);
+                b.append("AERIAL".equals(bird.get("movement_class"))
+                        ? "A " + name + " passes overhead, and you follow it a moment. "
+                        : "A " + name + " works the ground a little way off. ");
+                birdsNamed++; namedKeys.add(key);
+            }
+
+            int smallNamed = 0;
+            for (Map<String, Object> tiny : orEmpty(jdbc.queryForList(
+                    "SELECT species_key, movement_class, kingdom_class FROM wildlife_species " +
+                    "WHERE kingdom_class IN ('INSECTA','ARACHNIDA','GASTROPODA','ANNELIDA','BIVALVIA') " +
+                    "AND biome_affinity ILIKE ? ORDER BY md5(species_key || ?::text)",
+                    "%" + biome + "%", chunk.toString()))) {
+                if (smallNamed >= 2) break;
+                String key = (String) tiny.get("species_key");
+                if (namedKeys.contains(key)) continue;
+                // Small life is not hard to see. It is easy to overlook — so it wants deliberate attention, not
+                // a keener eye than a wolf does.
+                if (acuity < 0.45) break;
+                String name = humanize(key);
+                b.append(switch ((String) tiny.get("movement_class")) {
+                    case "AERIAL" -> "You pick out " + name + " working the air above the ground. ";
+                    case "AQUATIC", "AMPHIBIOUS" -> "You pick out " + name + " at the water's edge. ";
+                    default -> "Down among the leaf litter and stems there is " + name + ". ";
+                });
+                smallNamed++; namedKeys.add(key);
+            }
         }
 
-        // Insects — hives and colonies announce themselves.
+        // Fish — visible in the water to a moderate eye, where the biome holds them. Named per chunk rather than
+        // alphabetically, so one stretch of water is not indistinguishable from every other (#37: "can't even
+        // know if there are fishes on the water body you're currently in").
+        if (acuity >= 0.4 && biome != null) {
+            List<String> fish = orEmpty(jdbc.query(
+                "SELECT species_key FROM wildlife_species WHERE movement_class='AQUATIC' AND kingdom_class <> 'MONSTRUM' " +
+                "AND biome_affinity ILIKE ? ORDER BY md5(species_key || ?::text) LIMIT " + (acuity >= 0.7 ? 2 : 1),
+                (rs, i) -> humanize(rs.getString(1)), "%" + biome + "%", chunk.toString()));
+            if (!fish.isEmpty()) b.append("Fish hang in the water — ").append(joinAnd(fish)).append(" among them. ");
+        }
+
+        // Insect colonies — a hive or a nest announces itself whether or not anyone is looking for it.
         List<String> colonies = orEmpty(jdbc.query(
             "SELECT colony_kind FROM insect_colony WHERE chunk_id=? ORDER BY colony_kind LIMIT 2",
             (rs, i) -> humanize(rs.getString(1)), chunk));
