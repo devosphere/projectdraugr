@@ -78,7 +78,22 @@ class FireReachesWhatBurnsIntegrationTest {
         chunk = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, summary.id());
         jdbc.update("DELETE FROM fire_state fs USING world_object w JOIN construction_project cp ON cp.object_id=w.id " +
                     "WHERE fs.construction_id=w.id AND w.current_location_id=?", chunk);
-        jdbc.update("UPDATE world_weather SET weather_kind='CLEAR'");
+        weather("CLEAR");
+    }
+
+    /**
+     * Set the sky. The scorch check reads {@code world_weather}, and that row is written by the WEATHER
+     * simulation on a tick — a test that never ticks has no row at all, so a bare UPDATE silently matches
+     * nothing, the weather reads as null, and the hazard declines to fire for a reason that has nothing to do
+     * with what is being tested. Upsert it, and check it took.
+     */
+    private void weather(String kind) {
+        UUID world = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, chunk);
+        jdbc.update("INSERT INTO world_weather (world_id, weather_kind, intensity, ambient_temperature_c, wind_speed_kph, observed_at) " +
+            "VALUES (?,?,60,12.0,8,now()) ON CONFLICT (world_id) DO UPDATE SET weather_kind=EXCLUDED.weather_kind, observed_at=now()",
+            world, kind);
+        assertEquals(kind, jdbc.queryForObject("SELECT weather_kind FROM world_weather WHERE world_id=?", String.class, world),
+            "the sky must actually be set, or this test proves nothing");
     }
 
     /** Something standing here, whole. */
@@ -127,7 +142,7 @@ class FireReachesWhatBurnsIntegrationTest {
         ground();
         UUID hut = standing("BARK_CABIN");
         roaringFireLeftFor(Duration.ofHours(6));
-        jdbc.update("UPDATE world_weather SET weather_kind='RAIN'");
+        weather("RAIN");
 
         fire.advanceTo(Instant.now());
 
