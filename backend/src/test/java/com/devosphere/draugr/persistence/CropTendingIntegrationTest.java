@@ -81,6 +81,14 @@ class CropTendingIntegrationTest {
 
     /** A ripe, untouched stand on clean ground — grazers cleared and soil pristine so weeding is the only variable. */
     private void ripeCrop(UUID chunk, Instant now) {
+        // Control for pollination (V271): a hive or worm patch working this ground fills the stand out, and
+        // this test is about tillage/weeding/grazing, not bees. Break the pollinators on this chunk so the
+        // yield it measures is the documented baseline and the one variable it names.
+        for (String kind : jdbc.queryForList("SELECT colony_kind FROM insect_colony_kind WHERE pollination_bonus > 0", String.class)) {
+            UUID spent = UUID.randomUUID();
+            jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE',?,?)", spent, "Spent " + kind.replace('_',' '), chunk);
+            jdbc.update("INSERT INTO insect_colony (object_id,colony_kind,chunk_id,health,last_disturbed_at) VALUES (?,?,?,0,now()) ON CONFLICT DO NOTHING", spent, kind, chunk);
+        }
         jdbc.update("DELETE FROM wildlife_population WHERE site_id IN (SELECT id FROM ecology_site WHERE chunk_id=?)", chunk);
         jdbc.update("INSERT INTO crop_stand (id, chunk_id, crop_key, sown_at, maturity_days, harvested) VALUES (?,?,?,?,30,false)",
             UUID.randomUUID(), chunk, "wild_grain", Timestamp.from(now.minus(Duration.ofDays(35))));

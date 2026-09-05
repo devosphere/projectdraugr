@@ -87,6 +87,17 @@ class TillageYieldIntegrationTest {
         List<UUID> chunks = jdbc.queryForList("SELECT id FROM world_chunk ORDER BY grid_y, grid_x LIMIT 2", UUID.class);
         UUID tilledField = chunks.get(0), plainField = chunks.get(1);
         jdbc.update("UPDATE world_chunk SET biome='GRASSLAND' WHERE id IN (?,?)", tilledField, plainField);
+        // Control for pollination (V271): a hive or worm patch working this ground fills the stand out, and this
+        // test is about tillage, not bees. Break the pollinators on both fields so what it measures is the
+        // documented tilled/untilled baseline and the one variable it names.
+        for (UUID field : List.of(tilledField, plainField))
+            for (String kind : jdbc.queryForList("SELECT colony_kind FROM insect_colony_kind WHERE pollination_bonus > 0", String.class)) {
+                UUID spent = UUID.randomUUID();
+                jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE',?,?)",
+                    spent, "Spent " + kind.replace('_', ' '), field);
+                jdbc.update("INSERT INTO insect_colony (object_id,colony_kind,chunk_id,health,last_disturbed_at) VALUES (?,?,?,0,now())",
+                    spent, kind, field);
+            }
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", tilledField, chronicle);
         jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
         Instant now = ticks.current().simulatedAt();
