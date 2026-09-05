@@ -589,4 +589,17 @@ class IntentClassificationRegressionTest {
         assertEquals("LIGHT_FIRE", classify("focus the sun onto the tinder with a lens"));
         assertEquals("LIGHT_FIRE", classify("carry an ember from the old hearth"));
     }
+
+    /** V270 water's-edge foraging: "shellfish" contains "fish", so gathering it was classified as angling and
+     *  never reached the harvest registry that actually holds mussels and snails. */
+    @Test void shellfishIsForagedNotAngledFor() throws Exception {
+        assertEquals("COLLECT_INSECTS", classify("collect mussels from the mussel bed"));
+        assertEquals("COLLECT_INSECTS", classify("gather shellfish along the shallows"));
+        assertEquals("COLLECT_INSECTS", classify("pick river snails off the stones"));
+        assertEquals("COLLECT_INSECTS", classify("dig caddis grubs out of the shallows"));
+        assertEquals("COLLECT_INSECTS", classify("collect clams"));
+        // Actual fishing is untouched.
+        assertEquals("FISH", classify("fish the stream with a spear"));
+        assertEquals("FISH", classify("catch trout in the pool"));
+    }
 }
