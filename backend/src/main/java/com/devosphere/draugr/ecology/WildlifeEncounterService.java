@@ -1139,7 +1139,33 @@ public class WildlifeEncounterService {
         return new EncounterResult("SUCCEEDED","The snare has held. A "+display(caught)+" hangs in the cord, long still by the time you reach it."+(got>0?"":""));
     }
 
-    private int meatFor(String species) { return species.contains("bear") || species.contains("elk") ? 4 : species.contains("deer") || species.contains("boar") ? 3 : 1; }
+    /**
+     * How much meat a carcass gives — read from the animal's actual size (#54).
+     *
+     * <p>This was a substring list: anything whose KEY contained "bear" or "elk" gave 4, "deer" or "boar" gave 3,
+     * and <b>everything else in the world gave 1</b>. So an aurochs, a cave bear, a moose-sized mud tortoise and
+     * a crocodilian each yielded a single piece of meat — the same as a bank vole — while a red deer yielded
+     * three because of the letters in its name. {@code wildlife_species.size_tier} has been accurate for all 204
+     * species the whole time and nothing read it.
+     *
+     * <p>Calibrated so the old values are roughly preserved where they were sensible: a LARGE animal (bear, elk,
+     * red deer, reindeer, crocodilian) still gives 4, a MEDIUM one (boar) 3. The change is at the ends — the
+     * HUGE animals now give what an animal that size gives, and a vole is no longer worth as much as a moose.
+     */
+    private int meatFor(String species) {
+        String tier = jdbc.query("SELECT size_tier FROM wildlife_species WHERE species_key=?",
+            rs -> rs.next() ? rs.getString(1) : null, species);
+        return switch (tier == null ? "" : tier) {
+            case "HUGE" -> 8;
+            case "LARGE" -> 4;
+            case "MEDIUM" -> 3;
+            case "SMALL" -> 2;
+            case "TINY" -> 1;
+            // Uncatalogued species keep the old reading, so nothing regresses for anything not in the registry.
+            default -> species.contains("bear") || species.contains("elk") ? 4
+                     : species.contains("deer") || species.contains("boar") ? 3 : 1;
+        };
+    }
     private String display(String species) { return species.replace('_',' '); }
     private record Encounter(UUID populationId,String species,String role,String behavior,int population,String movementClass,Integer baseResistance,boolean ambushHunter){}
     private record Combatant(int energy,int injury,int pain,int handWeapon,int stones,int armour,int poison,int lightShield,int rawhideShield,int blunt,int sling,int javelin,int bow,int arrows,int softArmour,int hardened,int bronze,int iron,int steel,int plate){}
