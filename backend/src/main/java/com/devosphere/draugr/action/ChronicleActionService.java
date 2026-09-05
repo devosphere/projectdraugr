@@ -77,14 +77,20 @@ public class ChronicleActionService {
     private static final String[] UNRESOLVED_ATTEMPT = {
         "You work at it for a while, but nothing here answers to the attempt, and the moment passes into the rest.",
         "Whatever you meant by that, your hands find no purchase on it. The world around you goes on unchanged.",
-        "You try, and the effort goes into the air. The ground and everything on it is exactly as it was."};
+        "You try, and the effort goes into the air. The ground and everything on it is exactly as it was.",
+        "You begin, and get as far as beginning. Nothing within reach takes the shape of what you were after.",
+        "You spend the effort and come back with only the effort. Nothing here has moved for it.",
+        "It does not come to anything. You stand a moment with the intention still on you and nothing to put it into."};
     // A recognised piece of material/world work the world cannot yet resolve (#68): a grounded "no way comes to
     // you" that names the material effort, rather than the flat gibberish line above. The routing miss is still
     // recorded (inside runProcess) so the gap is on the backlog for review.
     private static final String[] MATERIAL_UNRESOLVED = {
         "You work the material over, turning it for a way in, but no method for what you meant comes to your hands here.",
         "You set to it in earnest, but the working of it into that is beyond what your hands and knowledge can find on this ground.",
-        "You handle and test it, feeling for the trick of it, but the way to make what you intend does not come to you yet."};
+        "You handle and test it, feeling for the trick of it, but the way to make what you intend does not come to you yet.",
+        "You turn it over and try it two or three ways. Each one stops at the same place, and you set it down again.",
+        "The stuff of it is willing enough; it is the working that will not come. You leave it as you found it.",
+        "You get your hands properly into it and still cannot find the step that would take it further."};
     private final JdbcTemplate jdbc; private final SimulationTickService ticks; private final ChroniclePhysiologyService physiology; private final NarrationPolicy narration; private final PhysicalItemService items; private final CapabilityAdaptationService capability; private final ConstructionService construction; private final ChronicleDiscoveryService discoveries; private final WildlifeEncounterService wildlife; private final FireService fire; private final LiteratureService literature; private final FoodPreservationService food; private final ActionInputClassifier inputClassifier; private final AssemblyService assembly; private final NarrationRouter narrationRouter; private final SimulationNarrator simulationNarrator; private final com.devosphere.draugr.narration.NarrationEngine narrationEngine; private final com.devosphere.draugr.ai.RuntimeAuthoringService authoring; private final ExaminationService examination;
     public ChronicleActionService(JdbcTemplate jdbc, SimulationTickService ticks, ChroniclePhysiologyService physiology, NarrationPolicy narration, PhysicalItemService items, CapabilityAdaptationService capability, ConstructionService construction, ChronicleDiscoveryService discoveries, WildlifeEncounterService wildlife, FireService fire, LiteratureService literature, FoodPreservationService food, ActionInputClassifier inputClassifier, AssemblyService assembly, NarrationRouter narrationRouter, SimulationNarrator simulationNarrator, com.devosphere.draugr.narration.NarrationEngine narrationEngine, com.devosphere.draugr.ai.RuntimeAuthoringService authoring, ExaminationService examination) { this.jdbc = jdbc; this.ticks = ticks; this.physiology = physiology; this.narration = narration; this.items=items; this.capability=capability; this.construction=construction; this.discoveries=discoveries; this.wildlife=wildlife; this.fire=fire; this.literature=literature; this.food=food; this.inputClassifier=inputClassifier; this.assembly=assembly; this.narrationRouter=narrationRouter; this.simulationNarrator=simulationNarrator; this.narrationEngine=narrationEngine; this.authoring=authoring; this.examination=examination; }
 
@@ -505,7 +511,14 @@ public class ChronicleActionService {
         // the punctuation rule (weather when felt/changing, the land on deliberate looking) lives in the
         // NarrationEngine so it lands when it means something rather than tagging every line. OBSERVE is
         // excluded — its own survey prose already IS the setting, in far more detail.
-        if (intent != Intent.OBSERVE) perception = groundPerception(perception, chronicle.location(), attention, beforeWeather, resolvedAt);
+        // An attempt the world could not resolve is exactly the moment a person stops and looks up. That line
+        // was landing at LOW attention, which adds nothing at all — so the one narration a player sees when the
+        // world cannot help them was the barest in the game, the flat "nothing here answers to the attempt"
+        // #30 calls out by name. Ground it in the actual place, light and weather. Setting only: it still names
+        // no prerequisite and suggests no action, because the rule against hinting does not bend for a failure.
+        // The mechanical attention (what wildlife makes of the Chronicle) is deliberately left alone.
+        String narrationAttention = (intent == Intent.UNKNOWN && "FAILED".equals(outcome)) ? "HIGH" : attention;
+        if (intent != Intent.OBSERVE) perception = groundPerception(perception, chronicle.location(), narrationAttention, beforeWeather, resolvedAt);
         // chronicle_action is append-only IMMUTABLE history (the prevent_chronicle_action_mutation
         // trigger blocks any UPDATE/DELETE). Persist the deterministic prose ONCE, here, and never
         // touch the row again — the source of truth stays untouched. The death coda and the Simulation
