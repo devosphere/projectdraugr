@@ -42,9 +42,27 @@ public class ConstructionService {
             "WHERE cp.object_id=w.id AND cp.state='COMPLETED' " +
             "AND EXISTS (SELECT 1 FROM construction_kind ck WHERE ck.project_kind=cp.project_kind AND ck.decays AND NOT ck.is_shelter AND NOT ck.is_workstation) " +
             "AND EXTRACT(EPOCH FROM (?::timestamptz - cp.last_structural_update)) >= 86400", occurredAt, occurredAt, occurredAt);
+
+        // Shelter upkeep (#77/#220). Seventeen shelter kinds declare `decays`, and this pass excluded every one of
+        // them — only the LEAN_TO wore, and only in a storm. So a bark cabin, a hide tent, a pit house or a reed
+        // hut, once raised, stood forever: weatherproof, unmaintained, and permanent. REPAIR_STRUCTURE was already
+        // implemented and read against nothing for any of them.
+        //
+        // A built shelter is a far more substantial thing than a fence or a fuel rack, so it wears more slowly and
+        // only to WEATHER: fair days cost it nothing, wet ones take a little, and a storm takes more. Roughly a
+        // hundred wet days to bring a whole one down untended, against a single mending putting 25 back. The
+        // LEAN_TO keeps its own faster storm rule above and is left out here rather than wearing twice over.
+        jdbc.update("UPDATE construction_project cp SET " +
+            "integrity_percent = GREATEST(0, cp.integrity_percent - FLOOR(EXTRACT(EPOCH FROM (?::timestamptz - cp.last_structural_update))/86400)::int * " +
+            "(CASE ww.weather_kind WHEN 'STORM' THEN 2 WHEN 'RAIN' THEN 1 WHEN 'SNOW' THEN 1 ELSE 0 END)), last_structural_update = ? " +
+            "FROM world_object w JOIN world_chunk c ON c.id=w.current_location_id JOIN world_weather ww ON ww.world_id=c.world_id " +
+            "WHERE cp.object_id=w.id AND cp.state='COMPLETED' AND cp.project_kind <> 'LEAN_TO' " +
+            "AND EXISTS (SELECT 1 FROM construction_kind ck WHERE ck.project_kind=cp.project_kind AND ck.decays AND ck.is_shelter) " +
+            "AND EXTRACT(EPOCH FROM (?::timestamptz - cp.last_structural_update)) >= 86400", occurredAt, occurredAt, occurredAt);
+
         List<UUID> weathered = jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
             "JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
-            "WHERE ck.decays AND NOT ck.is_shelter AND NOT ck.is_workstation AND cp.state='COMPLETED' AND cp.integrity_percent=0 AND w.lifecycle_state='ACTIVE' FOR UPDATE",
+            "WHERE ck.decays AND NOT ck.is_workstation AND cp.state='COMPLETED' AND cp.integrity_percent=0 AND w.lifecycle_state='ACTIVE' FOR UPDATE",
             (rs, row) -> rs.getObject(1, UUID.class));
         for (UUID objectId : weathered) {
             jdbc.update("UPDATE construction_project SET state='DESTROYED' WHERE object_id=?", objectId);

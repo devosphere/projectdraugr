@@ -96,7 +96,12 @@ public class ExaminationService {
             "SELECT wp.species_key, wp.ecological_role, COALESCE(ws.size_tier,'SMALL') AS size_tier, wp.activity_cycle " +
             "FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id " +
             "LEFT JOIN wildlife_species ws ON ws.species_key=wp.species_key " +
-            "WHERE es.chunk_id=? AND wp.population_count>0 ORDER BY wp.population_count DESC", chunk));
+            // A monster is never reported as ordinary fauna, even standing on its own ground: it belongs to the
+            // sign channel below, which is where the rule about not handing the player a hint is enforced. Before
+            // lairs held anything this exclusion was moot; now that they do, without it a lair chunk would name
+            // its monster twice, once as a grazing animal.
+            "WHERE es.chunk_id=? AND wp.population_count>0 AND COALESCE(ws.kingdom_class,'') <> 'MONSTRUM' " +
+            "ORDER BY wp.population_count DESC", chunk));
         java.util.Set<String> namedKeys = new java.util.HashSet<>();
         int named = 0, cap = acuity >= 0.6 ? 3 : acuity >= 0.3 ? 2 : 1;
         for (Map<String, Object> a : animals) {
@@ -128,16 +133,31 @@ public class ExaminationService {
             }
         }
 
-        // Monsters (#86) are NOT ordinary fauna — scarce, territorial, uncanny. They are never casually named in the
-        // ambient cast; a keen eye only catches their SIGN, and only rarely (most ground in a monster's biome shows
-        // nothing of it). Deterministic per chunk: a monster leaves a readable sign here only when its hash falls in
-        // a narrow window, so a given place carries at most a hint of one, most places none.
-        if (acuity >= 0.5 && biome != null) {
+        // Monsters (#86) are NOT ordinary fauna — scarce, territorial, uncanny. They are never casually named in
+        // the ambient cast; a keen eye catches only their SIGN.
+        //
+        // That sign is now anchored to the ground a monster actually holds. It used to be a biome-wide hash: any
+        // monster of this biome might leave sign on any chunk of it, with no relation to where its lair was
+        // placed, so its territory was a statistical smear rather than a place. And monster_profile.sight_radius
+        // — how far a thing ranges and notices — was read by nothing at all, which is why a roc that quarters
+        // three chunks of highland marked no more ground than a hyena in its own gully.
+        //
+        // A lair's range is its sight_radius in chunks. Inside it you may read the sign; outside it there is
+        // nothing to read, because there is nothing there. The lair itself is still never named or located —
+        // naming one would hand the player a hint instead of something witnessed — only that something keeps
+        // this ground.
+        if (acuity >= 0.5) {
             List<String> lurking = orEmpty(jdbc.query(
-                "SELECT mp.species_key FROM monster_profile mp WHERE mp.biome_affinity ILIKE ? " +
-                "AND ('x' || substr(md5(mp.species_key || ?::text), 1, 1))::bit(4)::int < 2 " +
-                "ORDER BY md5(mp.species_key || ?::text) LIMIT 1",
-                (rs, i) -> humanize(rs.getString(1)), "%" + biome + "%", chunk.toString(), chunk.toString()));
+                "SELECT wp.species_key FROM world_chunk here " +
+                "JOIN world_chunk lair ON lair.world_id = here.world_id " +
+                "JOIN ecology_site es ON es.chunk_id = lair.id AND es.site_category='MONSTER' " +
+                "JOIN wildlife_population wp ON wp.site_id = es.id AND wp.population_count > 0 " +
+                "JOIN monster_profile mp ON mp.species_key = wp.species_key " +
+                "WHERE here.id = ? " +
+                "  AND abs(lair.grid_x - here.grid_x) <= GREATEST(1, mp.sight_radius) " +
+                "  AND abs(lair.grid_y - here.grid_y) <= GREATEST(1, mp.sight_radius) " +
+                "ORDER BY GREATEST(abs(lair.grid_x - here.grid_x), abs(lair.grid_y - here.grid_y)), mp.sight_radius DESC LIMIT 1",
+                (rs, i) -> humanize(rs.getString(1)), chunk));
             if (!lurking.isEmpty())
                 b.append("Something uncanny keeps this ground — the sign of ").append(lurking.get(0))
                  .append(", and the quiet around it says to give it a wide berth. ");
