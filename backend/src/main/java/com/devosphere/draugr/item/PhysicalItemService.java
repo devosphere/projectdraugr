@@ -410,7 +410,11 @@ public class PhysicalItemService {
     }
 
     // ---- water handling (#71) ----------------------------------------------------------------------------
-    private static final String[] WATER_VESSELS = {"waterskin","wooden_bucket","clay_pot","clay_jar","fired_bowl","fired_cup","clay_water_filter","wooden_bowl","wooden_trough"};
+    // soapstone_bowl was listed as fireproof but not as a water vessel, so a Chronicle could boil water in one and
+    // yet not collect any into it — a vessel you can set on the flame must be able to hold what goes in it. The
+    // folded bark cup is a drinking vessel by construction, and matters early: it holds water before there is any
+    // pottery to hold it in. bark_scoop is deliberately left out — a scoop lifts water, it does not carry it.
+    private static final String[] WATER_VESSELS = {"waterskin","wooden_bucket","clay_pot","clay_jar","fired_bowl","fired_cup","clay_water_filter","wooden_bowl","wooden_trough","soapstone_bowl","folded_bark_cup"};
     /** Whether the Chronicle carries anything that can hold water to fill or boil in (#71). */
     @Transactional(readOnly = true)
     public boolean hasWaterVessel(UUID chronicle) { for (String v : WATER_VESSELS) if (hasAtLeast(chronicle, v, 1)) return true; return false; }
