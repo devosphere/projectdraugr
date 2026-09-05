@@ -69,6 +69,7 @@ class MonsterLairsIntegrationTest {
     @Autowired ChronicleService chronicles;
     @Autowired ExaminationService examination;
     @Autowired PersistentStateAuditor auditor;
+    @Autowired com.devosphere.draugr.simulation.SimulationTickService ticks;
     @Autowired JdbcTemplate jdbc;
 
     private void world() {
@@ -76,8 +77,10 @@ class MonsterLairsIntegrationTest {
             worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
             ecology.seed();
         }
-        // The tick is what seeds populations into sites; awakening runs one.
         assertNotNull(chronicles.awaken());
+        // Populations are seeded into sites by the world TICK, and awakening does not run one — every other test
+        // that needs wildlife gets a tick incidentally by performing an action. This one asks for it outright.
+        ticks.advanceBy(java.time.Duration.ofMinutes(1));
     }
 
     @Test
