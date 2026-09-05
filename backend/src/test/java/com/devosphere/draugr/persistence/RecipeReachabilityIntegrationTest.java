@@ -59,9 +59,14 @@ class RecipeReachabilityIntegrationTest {
     @Autowired JdbcTemplate jdbc;
 
     /**
-     * The classification the real matcher performs: sum category_term weights over whole-word matches in the
-     * phrase and take the argmax, breaking a tie on category_key — which is why CONSTRUCT beats CRAFT, and why
-     * "lash" (weight 2 in both) sends every lashed CRAFT recipe to CONSTRUCT.
+     * The classification {@link com.devosphere.draugr.routing.ActivityClassifier} actually performs: sum
+     * {@code category_term} weights over whole-word matches and take the highest score, breaking a tie by
+     * <b>{@code activity_category.precedence}, lowest first</b> — HUNT 1, ACQUIRE 2, PROCESS 3, CRAFT 4,
+     * CONSTRUCT 5.
+     *
+     * <p>The precedence tie-break is the part that is easy to get wrong, and getting it wrong invents findings:
+     * on a tie CRAFT beats CONSTRUCT, so "carve a cage frame" (carve CRAFT 2 vs frame CONSTRUCT 2) and "lash a
+     * snowshoe" (lash is 2 in both) classify CRAFT and were correct all along.
      */
     @Test
     void everyRecipeCanBeReachedByItsOwnPhrases() {
@@ -75,8 +80,10 @@ class RecipeReachabilityIntegrationTest {
             "classified AS (" +
             "  SELECT kw.process_key, kw.category_key, " +
             "         (SELECT ct.category_key FROM category_term ct " +
+            "          JOIN activity_category ac ON ac.category_key = ct.category_key " +
             "          WHERE kw.phrase ~ ('\\m' || lower(ct.term) || '\\M') " +
-            "          GROUP BY ct.category_key ORDER BY SUM(ct.weight) DESC, ct.category_key LIMIT 1) AS lands_on " +
+            "          GROUP BY ct.category_key, ac.precedence " +
+            "          ORDER BY SUM(ct.weight) DESC, ac.precedence ASC LIMIT 1) AS lands_on " +
             "  FROM kw) " +
             "SELECT process_key || ' declares ' || category_key || ' but every one of its phrases classifies elsewhere' " +
             "FROM classified GROUP BY process_key, category_key " +
