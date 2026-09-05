@@ -50,6 +50,23 @@ public class WildlifeSimulationService {
      */
     @Transactional
     void applyCascades(Instant now) {
+        // A monster that never rests (#86). monster_profile.special_mechanic has carried ALWAYS_HUNTING since the
+        // catalogue was written and nothing read it, so the dire wolf that is supposed to be a standing danger
+        // slept through the day like a fox. It was doubly dead before lairs held anything at all. Applied before
+        // the pack cascade below, so a pack of them still coordinates.
+        jdbc.update("UPDATE wildlife_population wp SET behavior_state='HUNTING' FROM monster_profile mp " +
+            "WHERE mp.species_key=wp.species_key AND mp.special_mechanic='ALWAYS_HUNTING' AND wp.population_count>0 " +
+            "AND wp.behavior_state NOT IN ('HUNTING','PACK_HUNT','FLEEING')");
+
+        // A swarm that eats the ground bare (#86/#207). FLORA_DESTROY was likewise unread: a locust swarm sat on
+        // a chunk and the standing crop and wild growth were untouched by it. It takes from what actually grows
+        // here, and cannot take what is not there.
+        jdbc.update("UPDATE chunk_flora cf SET quantity = GREATEST(0, cf.quantity - 1) " +
+            "FROM ecology_site es JOIN wildlife_population wp ON wp.site_id=es.id " +
+            "JOIN monster_profile mp ON mp.species_key=wp.species_key " +
+            "WHERE es.chunk_id=cf.chunk_id AND mp.special_mechanic='FLORA_DESTROY' AND wp.population_count>0 " +
+            "AND cf.quantity > 0");
+
         // Pack cascade — a pack-hunting species that is hunting coordinates instead.
         jdbc.update("UPDATE wildlife_population wp SET behavior_state='PACK_HUNT' FROM wildlife_species ws WHERE ws.species_key=wp.species_key AND ws.pack_hunter AND wp.behavior_state='HUNTING' AND wp.population_count>1");
 
