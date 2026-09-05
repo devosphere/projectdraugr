@@ -737,6 +737,45 @@ public class WildlifeEncounterService {
     }
 
     /**
+     * The creature a Chronicle is actually approaching when nothing is seeded here, made real.
+     *
+     * <p>Prefers one the action names — "sit with the hare" should be the hare — and otherwise takes the most
+     * willing animal this biome carries, deterministically per chunk so a place keeps the same creature to come
+     * back to. Monsters and fish are not approached this way. Seeded as a small, real population on its own site,
+     * so everything downstream — the bond, husbandry, yields, predation — works on it exactly as on any other.
+     */
+    private Tamable approachAmbient(UUID chunk, String actionText, Instant at) {
+        String biome = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : null, chunk);
+        if (biome == null) return null;
+        java.util.List<java.util.Map<String,Object>> here = jdbc.queryForList(
+            "SELECT species_key, tamability, activity_cycle, ecological_role FROM wildlife_species " +
+            "WHERE tamability > 0 AND kingdom_class <> 'MONSTRUM' AND movement_class <> 'AQUATIC' " +
+            "  AND biome_affinity ILIKE ? ORDER BY md5(species_key || ?::text)",
+            "%" + biome + "%", chunk.toString());
+        if (here.isEmpty()) return null;
+
+        // Failing a name, take the most willing of the handful this particular ground carries — not the most
+        // willing in the whole biome, or every stretch of forest would offer the same animal.
+        java.util.List<java.util.Map<String,Object>> nearby = here.subList(0, Math.min(5, here.size()));
+        java.util.Map<String,Object> pick = here.stream()
+            .filter(s -> actionText.contains(((String) s.get("species_key")).replace('_', ' ')))
+            .findFirst()
+            .orElseGet(() -> nearby.stream().max(java.util.Comparator.comparingInt(s -> ((Number) s.get("tamability")).intValue())).orElse(here.get(0)));
+
+        String species = (String) pick.get("species_key");
+        UUID siteId = UUID.randomUUID(), populationId = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE',?,?)",
+            siteId, display(species) + " ground", chunk);
+        UUID world = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, chunk);
+        jdbc.update("INSERT INTO ecology_site (id,world_id,chunk_id,site_category,site_kind,baseline_abundance) VALUES (?,?,?,'WILDLIFE',?,?)",
+            siteId, world, chunk, display(species) + " ground", 400);
+        jdbc.update("INSERT INTO wildlife_population (id,site_id,species_key,ecological_role,activity_cycle,population_count,carrying_capacity,behavior_state,last_simulated_at) " +
+            "VALUES (?,?,?,?,?,?,?,'FORAGING',?)",
+            populationId, siteId, species, pick.get("ecological_role"), pick.get("activity_cycle"), 2, 4, Timestamp.from(at));
+        return new Tamable(populationId, species, ((Number) pick.get("tamability")).intValue(), "FORAGING");
+    }
+
+    /**
      * Approach an animal calmly and try to build trust. Trust is earned across many
      * returns, not won in one: each calm approach moves it a little, food moves it
      * more, and approaching with a weapon in hand moves it back. Species tamability
@@ -747,15 +786,26 @@ public class WildlifeEncounterService {
      */
     @Transactional
     public EncounterResult tame(UUID chronicle, UUID chunk, UUID action, Instant at, String actionText) {
+        String v = actionText.toLowerCase(java.util.Locale.ROOT);
         Tamable t = jdbc.query(
             "SELECT wp.id,wp.species_key,ws.tamability,wp.behavior_state FROM wildlife_population wp " +
             "JOIN ecology_site es ON es.id=wp.site_id JOIN wildlife_species ws ON ws.species_key=wp.species_key " +
             "WHERE es.chunk_id=? AND wp.population_count>0 AND ws.tamability>0 " +
             "ORDER BY ws.tamability DESC LIMIT 1 FOR UPDATE OF wp",
             rs -> rs.next() ? new Tamable(rs.getObject(1,UUID.class), rs.getString(2), rs.getInt(3), rs.getString(4)) : null, chunk);
+        // Nothing seeded here to approach — which, before this, was almost the whole map. Taming read only the
+        // dozen or so populations placed at wildlife markers, so of the 140 species that declare a tamability
+        // above zero, a Chronicle could only ever befriend the handful that a marker happened to put nearby. The
+        // rest were a number in a column. This is the third face of the same gap: perception and tracking both
+        // had to be given the ambient cast, and so does this.
+        //
+        // An animal cannot be befriended in the abstract, though, so unlike looking or reading the ground this
+        // has to leave something behind: the creature approached is materialised here as a real population, the
+        // same lazy pattern fish stock, mineral seams and worked colonies already use. It stays on this ground
+        // afterwards, which is what makes returning to it day after day mean anything.
+        if (t == null) t = approachAmbient(chunk, v, at);
         if (t == null) return new EncounterResult("FAILED","You stand still a long while, but there is nothing here that would let you near it.");
 
-        String v = actionText.toLowerCase(java.util.Locale.ROOT);
         boolean armed = Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id " +
             "WHERE e.chronicle_id=? AND e.body_position IN ('HAND_LEFT','HAND_RIGHT') " +
