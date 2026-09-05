@@ -255,10 +255,15 @@ public class ChronicleActionService {
             UUID waste = UUID.randomUUID();
             jdbc.update("INSERT INTO world_object (id, object_type, display_name, current_location_id) VALUES (?, 'WASTE', ?, ?)", waste, bowel ? "Human waste" : "Urine-soaked ground", chronicle.location());
             perception = "You take a brief moment away from the immediate ground around you.";
-        } else if (intent == Intent.REST) { physiology.rest(chronicle.id(), minutes); items.restDraftBeasts(chronicle.id()); perception = "You remain still while the forest continues around you."; }
+        } else if (intent == Intent.REST) {
+            physiology.rest(chronicle.id(), minutes); items.restDraftBeasts(chronicle.id());
+            perception = "You remain still while the forest continues around you.";
+            perception += bittenWhileStill(chronicle, resolvedAt, minutes);
+        }
         else if (intent == Intent.SLEEP) {
             boolean safe = physiology.sleep(chronicle.id(), minutes); items.restDraftBeasts(chronicle.id());
             perception = safe ? "You lie down under cover and let sleep take you. You wake to a changed sky, the deep tiredness lifted from your limbs." : "You settle onto the bare ground and drift into a broken, shallow sleep, waking stiff and only half-rested as the light shifts.";
+            perception += bittenWhileStill(chronicle, resolvedAt, minutes);
             // Stock left loose overnight are what predators come for (#108). A sleep spans the dark hours, so this
             // is where an unpenned herd is thinned — and waking to a gap in the flock is how a keeper learns of it.
             String lost = wildlife.raidUnprotectedStock(chronicle.id(), resolvedAt, isDark(resolvedAt) || isDark(resolvedAt.plus(java.time.Duration.ofMinutes(minutes))));
@@ -437,6 +442,10 @@ public class ChronicleActionService {
             String v = text.toLowerCase(Locale.ROOT); boolean ok; String made;
             if (v.contains("loom")) { ok = items.craftFurniture(chronicle.id(), chronicle.location(), "loom", "Upright loom", 4, 0, false, 0, 0, resolvedAt); made = "loom"; }
             else if (v.contains("stone")) { ok = items.craftFurniture(chronicle.id(), chronicle.location(), "stoneworking_bench", "Stoneworking bench", 3, 2, false, 0, 0, resolvedAt); made = "stoneworking bench"; }
+            // A sewing table (V272). It was defined, given an item_source, and then left out of this list, so there
+            // has never been a way to have one -- while fifty-three sewing and leatherwork recipes asked for no
+            // station at all. Lighter than the other benches: it holds cloth and hide flat, not timber and stone.
+            else if (v.contains("sewing") || v.contains("leatherwork")) { ok = items.craftFurniture(chronicle.id(), chronicle.location(), "sewing_table", "Sewing work table", 3, 0, false, 0, 0, resolvedAt); made = "sewing table"; }
             else { ok = items.craftFurniture(chronicle.id(), chronicle.location(), "woodworking_bench", "Woodworking bench", 5, 0, false, 0, 0, resolvedAt); made = "woodworking bench"; }
             outcome = ok ? "SUCCEEDED" : "FAILED";
             perception = ok ? "You frame and lash together a sturdy " + made + " and set it in place — a steady, waist-high surface to hold the work while your hands are busy." : "Without a blade, sound branches, and fiber to bind them, no workstation holds together.";
@@ -1133,7 +1142,7 @@ public class ChronicleActionService {
         // Workstations (V69) before the generic desk/table rule, which also matches "bench"/"table": a
         // woodworking/stoneworking bench, a workbench, or a loom is a workstation (it eases the crafts it
         // serves); a plain "bench" or "table" is still a desk.
-        if((value.contains("craft")||value.contains("make")||value.contains("build")||value.contains("construct")||value.contains("assemble")||value.contains("set up"))&&(value.contains("loom")||value.contains("workbench")||value.contains("work bench")||((value.contains("woodworking")||value.contains("stoneworking")||value.contains("weaving"))&&(value.contains("bench")||value.contains("table")||value.contains("station"))))) return Intent.CRAFT_WORKSTATION;
+        if((value.contains("craft")||value.contains("make")||value.contains("build")||value.contains("construct")||value.contains("assemble")||value.contains("set up"))&&(value.contains("loom")||value.contains("workbench")||value.contains("work bench")||((value.contains("woodworking")||value.contains("stoneworking")||value.contains("weaving")||value.contains("sewing")||value.contains("leatherwork"))&&(value.contains("bench")||value.contains("table")||value.contains("station"))))) return Intent.CRAFT_WORKSTATION;
         if((value.contains("craft")||value.contains("make")||value.contains("build")||value.contains("construct")||value.contains("assemble"))&&(value.contains("shelf")||value.contains("shelves")||value.contains("rack")||value.contains("archive"))&&!value.contains("drying")&&!value.contains("fuel rack")&&!value.contains("wood rack")&&!value.contains("firewood rack")&&!value.contains("log rack")&&!value.contains("kindling rack")&&!value.contains("hay rack")&&!value.contains("fodder rack")) return Intent.CRAFT_SHELF;
         if((value.contains("craft")||value.contains("make")||value.contains("build")||value.contains("construct")||value.contains("assemble"))&&(value.contains("desk")||value.contains("table")||value.contains("workbench")||value.contains("bench"))) return Intent.CRAFT_DESK;
         if((value.contains("craft")||value.contains("make")||value.contains("build")||value.contains("construct")||value.contains("assemble"))&&(value.contains("chair")||value.contains("stool")||value.contains("seat"))) return Intent.CRAFT_CHAIR;
@@ -1784,6 +1793,59 @@ public class ChronicleActionService {
     }
     /** Whether raw water here is safe to drink untreated (#71): moving water — a river bank, spring, or stream —
      *  is clean; standing water (a wetland) is not, and drinking it raw carries a gut-illness risk. */
+    /**
+     * What bites you while you lie still on the wrong ground (#219).
+     *
+     * <p>{@code insect_colony_kind} carries a mosquito swarm: WETLAND, spring through autumn, crepuscular, with a
+     * declared {@code hazard_kind} of ILLNESS. It has no {@code harvest_intent}, and the only code that ever read
+     * a colony's hazard applied it <em>after harvesting that colony</em> — so the one thing in the catalogue you
+     * could never harvest was also the one whose hazard could never reach you. A marsh at dusk in high summer was
+     * as harmless as a dry hill at noon.
+     *
+     * <p>A biting swarm is a hazard of the ground, not of going looking for it. It finds a Chronicle who spends a
+     * long stretch lying still on its ground, in its season, at its hours. Smoke turns it: an active fire here
+     * keeps the air moving and bitter, which is the oldest answer there is to biting insects. So does sleeping
+     * inside something built. Bites accumulate as illness the way untreated water does — one night is a misery,
+     * a season of them is how a person sickens.
+     */
+    private String bittenWhileStill(ActiveChronicle chronicle, Instant at, int minutes) {
+        if (minutes < 45) return "";                       // a moment's pause is not a night in the marsh
+        String season = switch (at.atZone(java.time.ZoneOffset.UTC).getMonthValue()) {
+            case 3, 4, 5 -> "SPRING"; case 6, 7, 8 -> "SUMMER"; case 9, 10, 11 -> "AUTUMN"; default -> "WINTER"; };
+        // A long rest spans hours, and the clock here reads the END of it. A swarm that is out at dusk finds a
+        // Chronicle who lay down at dusk, whatever hour they wake at — so the whole span is what matters, not the
+        // moment it finished.
+        String cycleAtEnd = cycleOf(at), cycleAtStart = cycleOf(at.minus(java.time.Duration.ofMinutes(minutes)));
+        java.util.Map<String,Object> swarm = jdbc.query(
+            "SELECT ck.colony_kind, ck.hazard_min, ck.hazard_max, ck.smoke_suppresses FROM insect_colony_kind ck " +
+            "JOIN world_chunk c ON c.id = ? " +
+            "WHERE ck.harvest_intent IS NULL AND ck.hazard_kind IS NOT NULL AND ck.hazard_max > 0 " +
+            "  AND ck.biome_affinity ILIKE '%' || c.biome || '%' " +
+            "  AND (ck.season_active='ALL' OR ck.season_active ILIKE ?) " +
+            "  AND (ck.activity_cycle='ALL' OR ck.activity_cycle IN (?, ?)) " +
+            "ORDER BY ck.hazard_max DESC LIMIT 1",
+            rs -> rs.next() ? java.util.Map.of("kind", rs.getString(1), "min", rs.getInt(2), "max", rs.getInt(3)) : null,
+            chronicle.location(), "%" + season + "%", cycleAtStart, cycleAtEnd);
+        if (swarm == null) return "";
+
+        // Smoke is the oldest answer to biting insects, and a roof is the other one.
+        if (fireInReach(chronicle.location()) || shelterInReach(chronicle.location()))
+            return " The air here is thick with biting insects, but the smoke keeps them off you and they settle on nothing.";
+
+        int severity = Math.max(1, (int) swarm.get("min"));
+        physiology.applyWaterborneRisk(chronicle.id(), severity);
+        return " You are not left alone: the air over this ground is alive with biting insects, and they work at every "
+             + "patch of skin you leave out. You come away marked, itching, and no more rested for the hours.";
+    }
+
+    /** Which part of the day an hour falls in, in the terms the ecology registry uses. */
+    private static String cycleOf(Instant at) {
+        int hour = at.atZone(java.time.ZoneOffset.UTC).getHour();
+        if (hour >= 20 || hour < 4) return "NOCTURNAL";
+        if (hour < 8 || hour >= 17) return "CREPUSCULAR";
+        return "DIURNAL";
+    }
+
     /** Deep night, when there is no working light to see fine detail by (#75): before dawn or after dusk. */
     private static boolean isDark(java.time.Instant at) {
         int h = at.atZone(java.time.ZoneOffset.UTC).getHour();
