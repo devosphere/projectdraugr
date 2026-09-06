@@ -58,7 +58,7 @@ public class WildlifeEncounterService {
         // held stock (stones, sling, javelin, bow, arrows) counts from what the chronicle owns and carries.
         Combatant body=jdbc.query(
             "SELECT p.energy_level,p.injury_severity,p.pain_level,eq.hand_weapon,own.stones,eq.armour,eq.poison," +
-            "eq.light_shield,eq.rawhide_shield,eq.blunt,own.sling,own.javelin,own.bow,own.arrows,eq.soft_armour,eq.hardened,eq.bronze,eq.iron,eq.steel,eq.plate " +
+            "eq.light_shield,eq.rawhide_shield,eq.blunt,own.sling,own.javelin,own.bow,own.arrows,eq.soft_armour,eq.hardened,eq.bronze,eq.iron,eq.steel,eq.plate,own.atlatl " +
             "FROM chronicle_physiology p " +
             "LEFT JOIN LATERAL (SELECT " +
             // Weapon capability is data-driven (#93): a HAND-position item with a weapon_profile of role HAND counts
@@ -81,10 +81,12 @@ public class WildlifeEncounterService {
             "  COALESCE(SUM(CASE WHEN wp.combat_role='SLING' THEN 1 ELSE 0 END),0) sling," +
             "  COALESCE(SUM(CASE WHEN wp.combat_role='JAVELIN' THEN 1 ELSE 0 END),0) javelin," +
             "  COALESCE(SUM(CASE WHEN wp.combat_role='BOW' THEN 1 ELSE 0 END),0) bow," +
-            "  COALESCE(SUM(CASE WHEN wp.combat_role='ARROW' THEN 1 ELSE 0 END),0) arrows" +
+            "  COALESCE(SUM(CASE WHEN wp.combat_role='ARROW' THEN 1 ELSE 0 END),0) arrows," +
+            // The thrower itself, which is not a weapon and so has no weapon_profile row of its own (#93).
+            "  COALESCE(SUM(CASE WHEN i.item_key='atlatl' THEN 1 ELSE 0 END),0) atlatl" +
             "  FROM world_object w JOIN item_instance i ON i.object_id=w.id LEFT JOIN weapon_profile wp ON wp.item_key=i.item_key WHERE w.current_owner_id=p.chronicle_id AND w.lifecycle_state='ACTIVE') own ON true " +
             "WHERE p.chronicle_id=?",
-            rs->rs.next()?new Combatant(rs.getInt(1),rs.getInt(2),rs.getInt(3),rs.getInt(4),rs.getInt(5),rs.getInt(6),rs.getInt(7),rs.getInt(8),rs.getInt(9),rs.getInt(10),rs.getInt(11),rs.getInt(12),rs.getInt(13),rs.getInt(14),rs.getInt(15),rs.getInt(16),rs.getInt(17),rs.getInt(18),rs.getInt(19),rs.getInt(20)):new Combatant(0,100,100,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),chronicle);
+            rs->rs.next()?new Combatant(rs.getInt(1),rs.getInt(2),rs.getInt(3),rs.getInt(4),rs.getInt(5),rs.getInt(6),rs.getInt(7),rs.getInt(8),rs.getInt(9),rs.getInt(10),rs.getInt(11),rs.getInt(12),rs.getInt(13),rs.getInt(14),rs.getInt(15),rs.getInt(16),rs.getInt(17),rs.getInt(18),rs.getInt(19),rs.getInt(20),rs.getInt(21)):new Combatant(0,100,100,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),chronicle);
         // A creature on the wing cannot be reached by a hand weapon. Throwing stones
         // is the only contact a chronicle has with it. The narrator witnesses the
         // futility without naming what would be needed.
@@ -114,9 +116,14 @@ public class WildlifeEncounterService {
         // primitive < fire-hardened, and stone axe < copper axe < poisoned. Closes the fire_hardened_spear dead-read
         // (hardening once DISARMED the Chronicle) and gives the smelted copper axe its terminal edge in a fight.
         // The metal ladder in the fight (#180/#184-187): each harder metal keeps a keener edge and bites deeper on
+        // The atlatl (#93): a spear-thrower is not a weapon and has no weapon_profile row, so nothing read it and
+        // the whole point of it was missing — an atlatl_dart is catalogued as a JAVELIN and threw exactly as well
+        // from a bare hand as from the thrower that exists to launch it. It adds its leverage only when there is
+        // something to throw, because a thrower with no dart is a stick.
+        //
         // top of the hand-weapon count — bronze +18 over copper, iron +25, steel +35. So the ordering runs
         // stone(+35) < copper(+45) < bronze(+53) < iron(+60) < steel(+70), the terminal payoff of the extraction chain.
-        int capability = body.energy()/3 - body.injury()/2 - body.pain()/3 + body.handWeapon()*35 + (body.hardened()>0?10:0) + (body.bronze()>0?18:0) + (body.iron()>0?25:0) + (body.steel()>0?35:0) + (body.blunt()>0?22:0) + (body.javelin()>0?25:0) + (archery?40:0) + thrownStones + Math.min(20,body.poison()*20) + tacticBonus + fireEdge;
+        int capability = body.energy()/3 - body.injury()/2 - body.pain()/3 + body.handWeapon()*35 + (body.hardened()>0?10:0) + (body.bronze()>0?18:0) + (body.iron()>0?25:0) + (body.steel()>0?35:0) + (body.blunt()>0?22:0) + (body.javelin()>0?25:0) + (body.atlatl()>0&&body.javelin()>0?12:0) + (archery?40:0) + thrownStones + Math.min(20,body.poison()*20) + tacticBonus + fireEdge;
         // Registry resistance is authoritative when catalogued; the old role-based
         // bands remain the fallback. Registry values are species-scaled, so they are
         // lifted onto the same footing as the bands they replace.
@@ -1219,7 +1226,7 @@ public class WildlifeEncounterService {
     }
     private String display(String species) { return species.replace('_',' '); }
     private record Encounter(UUID populationId,String species,String role,String behavior,int population,String movementClass,Integer baseResistance,boolean ambushHunter){}
-    private record Combatant(int energy,int injury,int pain,int handWeapon,int stones,int armour,int poison,int lightShield,int rawhideShield,int blunt,int sling,int javelin,int bow,int arrows,int softArmour,int hardened,int bronze,int iron,int steel,int plate){}
+    private record Combatant(int energy,int injury,int pain,int handWeapon,int stones,int armour,int poison,int lightShield,int rawhideShield,int blunt,int sling,int javelin,int bow,int arrows,int softArmour,int hardened,int bronze,int iron,int steel,int plate,int atlatl){}
     private record Carcass(UUID id,String species,int meat,boolean hide){}
     public record EncounterResult(String outcome,String narration){}
     public record HarvestResult(String outcome,String narration){}
