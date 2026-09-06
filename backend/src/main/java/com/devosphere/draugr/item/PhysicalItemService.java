@@ -1396,6 +1396,19 @@ public class PhysicalItemService {
     private static final int FERTILITY_COST_PER_HARVEST = 30;
     /** How much fertility a field wins back for each day left fallow. */
     private static final int FERTILITY_RECOVER_PER_DAY = 2;
+    /**
+     * What a floodplain wins back instead (#156). A floodplain is farmland that renews itself: the flood lays new
+     * silt over it, which is why river valleys were cropped continuously for thousands of years while ground on
+     * the terrace above had to be rested. It is the one piece of ground where working it hard is not a mistake.
+     */
+    private static final int FERTILITY_RECOVER_PER_DAY_ON_FLOODPLAIN = 5;
+
+    /** Ground the river renews — a floodplain site, which the world places on a river bank or a marsh margin. */
+    private boolean floodplainAt(UUID chunk) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM ecology_site WHERE chunk_id=? AND site_kind ILIKE '%floodplain%')",
+            Boolean.class, chunk));
+    }
 
     /** A field's current fertility (#164), pristine ground reading full — the stored level plus what fallow time since
      *  it was last worked has restored (not persisted until the next harvest writes it). */
@@ -1405,7 +1418,8 @@ public class PhysicalItemService {
             rs -> rs.next() ? java.util.Map.of("f", rs.getInt(1), "t", rs.getTimestamp(2).toInstant()) : null, chunk);
         if (soil == null) return 100; // never cropped — pristine
         long fallowDays = Math.max(0, java.time.Duration.between((Instant) soil.get("t"), at).toDays());
-        return Math.min(100, (int) soil.get("f") + (int) (fallowDays * FERTILITY_RECOVER_PER_DAY));
+        int perDay = floodplainAt(chunk) ? FERTILITY_RECOVER_PER_DAY_ON_FLOODPLAIN : FERTILITY_RECOVER_PER_DAY;
+        return Math.min(100, (int) soil.get("f") + (int) (fallowDays * perDay));
     }
 
     /** Draw a field's fertility down by a harvest (#164), from its fallow-recovered current level, and stamp the time. */

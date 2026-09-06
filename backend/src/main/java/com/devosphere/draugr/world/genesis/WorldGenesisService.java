@@ -279,7 +279,13 @@ public class WorldGenesisService {
                 // markers on a map that changed nothing — exactly the decoration this catalogue is meant not to
                 // carry. They want site-aware mineral richness first.
                 new MarkerSpec("RESOURCE", "Underground stream", "CAVE_MOUTH"),
-                new MarkerSpec("WILDLIFE", "Bat roost", "CAVE_MOUTH"));
+                new MarkerSpec("WILDLIFE", "Bat roost", "CAVE_MOUTH"),
+                // The floodplain #156 still owed. Placed only now that it means something: a floodplain recovers
+                // its fertility more than twice as fast as ordinary ground, because the flood lays new silt over
+                // it. That is why river valleys were cropped continuously for thousands of years while ground on
+                // the terrace above had to be rested — the one piece of ground where working it hard is not a
+                // mistake. Placed on a river bank or a marsh margin, which is where a flood actually reaches.
+                new MarkerSpec("RESOURCE", "Floodplain", "RIVER_BANK", "WETLAND"));
         List<PreviewMarker> markers = new ArrayList<>();
         for (int index = 0; index < specifications.size(); index++) {
             MarkerSpec spec = specifications.get(index);
