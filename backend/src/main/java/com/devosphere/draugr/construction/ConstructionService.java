@@ -88,7 +88,13 @@ public class ConstructionService {
     /** Line stock a trip-line can be strung from, best/strongest first (#126/#127 camp alarm). */
     private static final String[] ALARM_LINE = {"withy_rope", "fiber_cordage", "plant_fiber"};
     /** Anything that clatters a warning when the line is knocked — hung to sound off an approach. */
-    private static final String[][] ALARM_CLATTER = {{"animal_bone", "knocking bones"}, {"deer_antler", "antler"}, {"dry_branch", "hung branches"}};
+    /**
+     * What can be hung on the trip-line to sound it. The warning rattle comes first because it is the only one of
+     * these actually made for the job — the catalogue calls it "a rattle strung to warn of approach" — and it was
+     * missing from this list entirely, so a Chronicle could cut one and then be told they had nothing to hang.
+     * The rest are the improvisations you use when you have not made one.
+     */
+    private static final String[][] ALARM_CLATTER = {{"warning_rattle", "a strung rattle"}, {"animal_bone", "knocking bones"}, {"deer_antler", "antler"}, {"dry_branch", "hung branches"}};
 
     /**
      * String a perimeter trip-line alarm here (#126/#127): a length of line strung low across the approaches
@@ -104,7 +110,7 @@ public class ConstructionService {
         // Re-hanging an alarm that already stands here needs only fresh clatter — the line is already strung —
         // so resolve that case before demanding a new length of line the refresh would never consume.
         String clatter = null, clabel = null; for (String[] c : ALARM_CLATTER) if (items.hasAtLeast(chronicle, c[0], 1)) { clatter = c[0]; clabel = c[1]; break; }
-        if (clatter == null) return new String[]{"FAILED", "You have nothing to hang on the line that would sound a warning — bone, antler, or dry branches to knock together."};
+        if (clatter == null) return new String[]{"FAILED", "You have nothing to hang on the line that would sound a warning — a rattle made for it, or bone, antler, or dry branches to knock together."};
         UUID existing = jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='CAMP_ALARM' AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' LIMIT 1 FOR UPDATE", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, location);
         Timestamp ts = Timestamp.from(at);
         if (existing != null) {
