@@ -27,9 +27,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Ground already opened gives up more (#158).
  *
- * <p>The world has placed two "Stone outcrop" markers since the beginning and they did nothing whatever: mineral
- * richness came from {@code mineralSeedFor(chunk, mineral, rarity)}, which takes no account of sites, so an
- * outcrop was a symbol on a map beside ground exactly as poor as the ground next to it.
+ * <p>The world has placed two "Stone outcrop" markers since the beginning, and what they did was worse than
+ * nothing. A RESOURCE site raises the gathering profile by 12, but {@code ResourceEcologyService} applies that to
+ * {@code plant_fiber}, {@code wild_berries} and {@code dry_branch} only; mineral richness came from
+ * {@code mineralSeedFor(chunk, mineral, rarity)} alone, which takes no account of sites at all. So an outcrop
+ * made the BERRIES better and the STONE no better whatever — it enriched everything except the one thing it is
+ * named for.
  *
  * <p>A quarry or a worked outcrop is rock that has been broken into and left with a face standing, so the seam
  * runs further before it is worked out. Deliberately indifferent to WHICH mineral — what it gives you is access

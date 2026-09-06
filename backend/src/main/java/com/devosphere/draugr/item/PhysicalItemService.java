@@ -1813,9 +1813,12 @@ public class PhysicalItemService {
         // out. Deliberately indifferent to WHICH mineral: what a quarry gives you is access to the rock, and
         // everything here is in that rock — a limestone face does not know it is supposed to withhold the flint.
         //
-        // This is what makes those two sites worth placing at all. Until now mineral richness came from
-        // mineralSeedFor(chunk, mineral, rarity) alone and took no account of sites, so a quarry marked on the map
-        // would have changed nothing whatever — a token, which is the one thing this catalogue must not carry.
+        // This is what makes those sites worth placing at all, and the state it corrects was worse than nothing.
+        // The two "Stone outcrop" markers the world has always placed were not inert: a RESOURCE site raises the
+        // gathering profile by 12, but ResourceEcologyService applies that to plant_fiber, wild_berries and
+        // dry_branch only. Mineral richness came from mineralSeedFor(chunk, mineral, rarity) alone and took no
+        // account of sites at all. So an outcrop made the BERRIES better and the STONE no better whatever — it
+        // enriched everything except the one thing it is named for.
         if (stoneWorkingsAt(location)) seam = (int) Math.round(seam * 1.6);
         jdbc.update("INSERT INTO mineral_deposit (chunk_id, mineral_key, remaining_units) VALUES (?,?,?) " +
             "ON CONFLICT (chunk_id, mineral_key) DO UPDATE SET remaining_units = GREATEST(0, mineral_deposit.remaining_units - ?)",
