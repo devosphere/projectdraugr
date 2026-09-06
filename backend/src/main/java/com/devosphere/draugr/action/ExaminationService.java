@@ -146,9 +146,14 @@ public class ExaminationService {
         // nothing to read, because there is nothing there. The lair itself is still never named or located —
         // naming one would hand the player a hint instead of something witnessed — only that something keeps
         // this ground.
+        //
+        // Two of the catalogue's own mechanics decide how easily that sign is read, and neither was ever looked
+        // at. CAMOUFLAGE means a thing you will not see until it moves, so its sign wants a far keener eye than
+        // an ordinary lair's. TREMOR_WARNING means the opposite: something heavy enough that the ground tells you
+        // before anything else does, so it is felt whether or not you were looking carefully at all.
         if (acuity >= 0.5) {
-            List<String> lurking = orEmpty(jdbc.query(
-                "SELECT wp.species_key FROM world_chunk here " +
+            List<Map<String, Object>> lurking = orEmpty(jdbc.queryForList(
+                "SELECT wp.species_key, mp.special_mechanic FROM world_chunk here " +
                 "JOIN world_chunk lair ON lair.world_id = here.world_id " +
                 "JOIN ecology_site es ON es.chunk_id = lair.id AND es.site_category='MONSTER' " +
                 "JOIN wildlife_population wp ON wp.site_id = es.id AND wp.population_count > 0 " +
@@ -156,11 +161,22 @@ public class ExaminationService {
                 "WHERE here.id = ? " +
                 "  AND abs(lair.grid_x - here.grid_x) <= GREATEST(1, mp.sight_radius) " +
                 "  AND abs(lair.grid_y - here.grid_y) <= GREATEST(1, mp.sight_radius) " +
-                "ORDER BY GREATEST(abs(lair.grid_x - here.grid_x), abs(lair.grid_y - here.grid_y)), mp.sight_radius DESC LIMIT 1",
-                (rs, i) -> humanize(rs.getString(1)), chunk));
-            if (!lurking.isEmpty())
-                b.append("Something uncanny keeps this ground — the sign of ").append(lurking.get(0))
-                 .append(", and the quiet around it says to give it a wide berth. ");
+                // A thing the ground announces comes first, however carefully anyone was looking.
+                "ORDER BY (mp.special_mechanic='TREMOR_WARNING') DESC, " +
+                "  GREATEST(abs(lair.grid_x - here.grid_x), abs(lair.grid_y - here.grid_y)), mp.sight_radius DESC LIMIT 1",
+                chunk));
+            if (!lurking.isEmpty()) {
+                String species = humanize((String) lurking.get(0).get("species_key"));
+                String mechanic = String.valueOf(lurking.get(0).get("special_mechanic"));
+                if ("TREMOR_WARNING".equals(mechanic))
+                    b.append("The ground itself gives it away — a slow shudder through the soles of your feet, ")
+                     .append("spaced like a footfall. Something the size of a ").append(species).append(" keeps this ground. ");
+                else if (!"CAMOUFLAGE".equals(mechanic) || acuity >= 0.85)
+                    // Camouflage is the one thing here you will not read at an ordinary careful glance: it is not
+                    // hiding its sign, it is that there is almost none to read until it moves.
+                    b.append("Something uncanny keeps this ground — the sign of ").append(species)
+                     .append(", and the quiet around it says to give it a wide berth. ");
+            }
         }
 
         // Birds, and the small life underfoot and on the wing (#37). These had no way of ever being perceived.
