@@ -63,6 +63,7 @@ class CampAlarmIntegrationTest {
     @Autowired WorldEcologyGenesisService ecology;
     @Autowired ChronicleService chronicles;
     @Autowired ChronicleActionService actions;
+    @Autowired com.devosphere.draugr.construction.ConstructionService construction;
     @Autowired PhysicalItemService items;
     @Autowired SimulationTickService ticks;
     @Autowired PersistentStateAuditor auditor;
@@ -126,5 +127,47 @@ class CampAlarmIntegrationTest {
 
         PersistentStateAuditor.AuditReport report = auditor.inspect();
         assertTrue(report.consistent(), () -> "the world must stay Auditor-consistent after building the alarm: " + report.violations());
+    }
+
+    /**
+     * The purpose-made clatter must be accepted. The catalogue calls the {@code warning_rattle} "a rattle strung
+     * to warn of approach" and it was missing from the clatter list entirely, so a Chronicle could cut the one
+     * thing made for this line and still be told they had nothing to hang on it.
+     */
+    @Test
+    void aWarningRattleIsClatterTheLineAccepts() {
+        if (worldGenesis.current() == null) {
+            worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
+            ecology.seed();
+        }
+        ChronicleService.ChronicleSummary summary = chronicles.awaken();
+        assertNotNull(summary, "awakening must produce a living Chronicle");
+        UUID chronicle = summary.id();
+        UUID chunk = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+        Instant now = ticks.current().simulatedAt();
+
+        // Clear this ground and strip every improvised clatter, so the rattle is the only thing that could work.
+        jdbc.update("DELETE FROM construction_project cp USING world_object w WHERE w.id=cp.object_id AND w.current_location_id=?", chunk);
+        jdbc.update("UPDATE world_object SET current_owner_id=NULL WHERE current_owner_id=? AND id IN (" +
+                "SELECT object_id FROM item_instance WHERE item_key IN ('animal_bone','deer_antler','dry_branch','warning_rattle'))", chronicle);
+
+        // A line, but nothing to hang: the refusal must be grounded, not a success.
+        items.createCarriedItem(chronicle, "fiber_cordage", "Processed fiber cordage", now, "TEST_SEED");
+        String[] nothingToHang = construction.buildCampAlarm(chronicle, chunk, now);
+        assertEquals("FAILED", nothingToHang[0], () -> "with no clatter at all the line cannot sound: " + nothingToHang[1]);
+
+        // The rattle alone must be enough.
+        items.createCarriedItem(chronicle, "warning_rattle", "Warning rattle", now, "TEST_SEED");
+        String[] rigged = construction.buildCampAlarm(chronicle, chunk, now);
+        assertEquals("SUCCEEDED", rigged[0], () -> "a rattle made for this line must be clatter the line accepts: " + rigged[1]);
+        assertTrue(chunkIsAlarmed(chunk), "and the ambush check must read the camp as alarmed");
+
+        // It is hung on the line, so it is spent like any other clatter.
+        assertEquals(0, (int) jdbc.queryForObject(
+                "SELECT COUNT(*) FROM item_instance i JOIN world_object w ON w.id=i.object_id " +
+                "WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key='warning_rattle'",
+                Integer.class, chronicle), "the rattle is hung on the line, not kept in the pouch");
+
+        assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
 }
