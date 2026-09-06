@@ -240,7 +240,12 @@ public class ChronicleActionService {
         // rushlight, a tallow candle, or an oil lamp burning fish oil) is lit and spent to see the work.
         if (isSightWork(intent) && isDark(resolvedAt) && !fireInReach(chronicle.location()) && !items.consumePortableLight(chronicle.id(), resolvedAt)) {
             outcome = "FAILED";
-            perception = "It is too dark to see the fine of it. With no fire and no light to work by, this is not something your hands can do by feel alone.";
+            // Say which of the two it was. A Chronicle standing in a gale with a pouch full of candles is not
+            // short of light — the weather is taking it — and being told so is what points at the lantern cover.
+            perception = items.weatherWouldGutterALight(chronicle.id())
+                ? "It is too dark to see the fine of it, and the weather takes any flame you try to strike before it "
+                + "has caught. Without a fire in reach or a light you can hood against this, the work must wait."
+                : "It is too dark to see the fine of it. With no fire and no light to work by, this is not something your hands can do by feel alone.";
         }
         else if (intent == Intent.OBSERVE) perception = survey(chronicle, resolvedAt);
         else if (intent == Intent.MOVE) { perception = move(chronicle, text, actionId, resolvedAt); items.workDraftBeasts(chronicle.id()); }
