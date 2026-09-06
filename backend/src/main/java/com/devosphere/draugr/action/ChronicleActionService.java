@@ -238,13 +238,19 @@ public class ChronicleActionService {
         // Light (#75): fine sight-work — reading, writing, sketching, close examination, measuring — cannot be
         // done in the dark by feel alone. A fire in reach lights it for free; otherwise a portable light (a
         // rushlight, a tallow candle, or an oil lamp burning fish oil) is lit and spent to see the work.
-        if (isSightWork(intent) && isDark(resolvedAt) && !fireInReach(chronicle.location()) && !items.consumePortableLight(chronicle.id(), resolvedAt)) {
+        if (isSightWork(intent) && tooDarkForFineWork(chronicle.location(), resolvedAt) && !fireInReach(chronicle.location()) && !items.consumePortableLight(chronicle.id(), resolvedAt)) {
             outcome = "FAILED";
             // Say which of the two it was. A Chronicle standing in a gale with a pouch full of candles is not
             // short of light — the weather is taking it — and being told so is what points at the lantern cover.
+            //
+            // And say so when it is the ROCK and not the hour. Being told "it is too dark" at midday would read
+            // as a fault in the world rather than a fact about where the Chronicle is standing.
             perception = items.weatherWouldGutterALight(chronicle.id())
                 ? "It is too dark to see the fine of it, and the weather takes any flame you try to strike before it "
                 + "has caught. Without a fire in reach or a light you can hood against this, the work must wait."
+                : !isDark(resolvedAt)
+                ? "The daylight gets a few paces into the rock and no further, and you are past it. Close work here "
+                + "wants a fire or a light in your hand, whatever the hour outside."
                 : "It is too dark to see the fine of it. With no fire and no light to work by, this is not something your hands can do by feel alone.";
         }
         else if (intent == Intent.OBSERVE) perception = survey(chronicle, resolvedAt);
@@ -1870,6 +1876,23 @@ public class ChronicleActionService {
     private static boolean isDark(java.time.Instant at) {
         int h = at.atZone(java.time.ZoneOffset.UTC).getHour();
         return h < 6 || h >= 20;
+    }
+
+    /**
+     * Too dark for close work here and now (#75/#158): nightfall, or inside the rock at any hour of the day.
+     *
+     * <p>A cave mouth is dark whatever the sky is doing — the perception written for it says the daylight gets a
+     * few paces in and no further — so fine work in one turns on the same light a midnight camp does. That is what
+     * makes a lamp, a rushlight or a hooded flame worth carrying to a place rather than only to an hour.
+     *
+     * <p>Deliberately a SEPARATE question from {@link #isDark}, which stays purely about the hour. The other
+     * caller of that is the night predator raid, and a cave being dark inside must not make wolves take your
+     * stock at noon. Same flag, two questions, is the mistake this cycle has spent its time undoing.
+     */
+    private boolean tooDarkForFineWork(UUID location, java.time.Instant at) {
+        if (isDark(at)) return true;
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM world_chunk WHERE id=? AND biome='CAVE_MOUTH')", Boolean.class, location));
     }
     /** Intents that are fine, close, sight-dependent work — impossible in the dark without a light (#75). */
     private static boolean isSightWork(Intent intent) {

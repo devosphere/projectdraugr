@@ -608,6 +608,17 @@ class IntentClassificationRegressionTest {
     }
 
     /**
+     * The phrase the cave-darkness test leans on (#158). It must be MEASURE — which is sight-work — or that test
+     * would be asserting something about an intent it did not mean to exercise. Pinned here so it cannot drift
+     * onto another rule and quietly change what that test proves.
+     */
+    @Test
+    void measuringADistanceIsSightWorkAndClassifiesAsMeasure() throws Exception {
+        assertEquals("MEASURE", classify("measure how far it is to the far wall"));
+        assertEquals("MEASURE", classify("pace out the distance"));
+    }
+
+    /**
      * Marking a trail must reach MARK (#75). The rule wanted "leave a marker" contiguously, or "mark" beside a
      * tree, stone, stake or post — so "leave a trail marker", the most natural way to say it and the exact thing
      * the tracking_marker_bundle is for, classified as nothing at all and the bundle stayed unreachable.
