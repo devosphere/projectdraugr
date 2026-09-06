@@ -430,6 +430,25 @@ public class PhysicalItemService {
      * dry. Kept deliberately in step with ChronicleActionService.waterInReach.
      */
     @Transactional(readOnly = true)
+    /**
+     * Salt water within reach (#157) — a different question from {@link #waterToWorkWith}, and deliberately not
+     * folded into it. Retting, tanning, liming and the rest want fresh water and would be spoiled by brine, so the
+     * freshwater gate rightly excludes the shore; the shore is exactly where this one must succeed.
+     *
+     * <p>Standing on the shore counts. So does standing on ground that touches open sea, because a Chronicle on a
+     * sea cliff or a spit can reach the water below without the chunk itself being a beach. A salt marsh counts
+     * too — it is brine at the surface, which is why the world places salt there.
+     */
+    public boolean saltWaterToWorkWith(UUID location) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM world_chunk c WHERE c.id=? AND c.biome='COAST') " +
+            "    OR EXISTS(SELECT 1 FROM world_chunk here JOIN world_chunk sea ON sea.world_id=here.world_id " +
+            "              AND sea.biome='OCEAN' AND abs(sea.grid_x-here.grid_x)<=1 AND abs(sea.grid_y-here.grid_y)<=1 " +
+            "              WHERE here.id=?) " +
+            "    OR EXISTS(SELECT 1 FROM ecology_site es WHERE es.chunk_id=? AND lower(es.site_kind) LIKE '%salt%')",
+            Boolean.class, location, location, location));
+    }
+
     public boolean waterToWorkWith(UUID location) {
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
         if ("WETLAND".equals(biome) || "RIVER_BANK".equals(biome)) return true;
@@ -1054,7 +1073,7 @@ public class PhysicalItemService {
     public String[] executeProcess(UUID chronicle, UUID location, String key, String actionText, Instant at) {
         java.util.Map<String,Object> match = jdbc.queryForMap(
             "SELECT process_key, display_name, output_item_key, output_min, output_max, tool_class, " +
-            "requires_fire, requires_water, narration, station_kind FROM material_process WHERE process_key=?", key);
+            "requires_fire, requires_water, requires_salt_water, narration, station_kind FROM material_process WHERE process_key=?", key);
 
         // A workstation (bench/loom) sited within reach EASES this operation — it never gates it (bare-handed
         // always works) and never decides its grade (skill + materials do). See V69: it gives efficiency (less
@@ -1083,6 +1102,9 @@ public class PhysicalItemService {
         if (Boolean.TRUE.equals(match.get("requires_fire"))) {
             Boolean fire = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM fire_state fs JOIN world_object w ON w.id=fs.construction_id WHERE w.current_location_id=? AND fs.active=true)", Boolean.class, location);
             if (!Boolean.TRUE.equals(fire)) return new String[]{"FAILED", "This work needs heat, and no fire burns within reach of it. Cold, the material will not give."};
+        }
+        if (Boolean.TRUE.equals(match.get("requires_salt_water")) && !saltWaterToWorkWith(location)) {
+            return new String[]{"FAILED", "This work turns on salt water, and there is none within reach of it. Fresh water will not do — what it takes from the sea is not in a spring."};
         }
         if (Boolean.TRUE.equals(match.get("requires_water")) && !waterToWorkWith(location)) {
             return new String[]{"FAILED", "This work needs water, and there is none at hand to work it with. Dry, the process cannot even begin."};
