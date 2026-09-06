@@ -267,7 +267,19 @@ public class WorldGenesisService {
                 // them somebody remembered. That consolidation is what made this safe to add.
                 new MarkerSpec("RESOURCE", "Headwater spring", "HIGHLAND", "RIVER_BANK"),
                 new MarkerSpec("RESOURCE", "Still pond", "WETLAND", "RIVER_BANK"),
-                new MarkerSpec("RESOURCE", "Lake margin", "WETLAND", "RIVER_BANK"));
+                new MarkerSpec("RESOURCE", "Lake margin", "WETLAND", "RIVER_BANK"),
+                // Two more of the cave's own sites (#158). Both are functional the moment they exist, which is
+                // the reason these two and not the others the ticket names: an underground stream reads as fresh
+                // water through FreshWater, so a cave can be somewhere to drink as well as to shelter; and a bat
+                // roost is a wildlife site whose occupant profileFor now knows, so it holds bats rather than
+                // whatever the ground would otherwise have put there.
+                //
+                // A limestone quarry and a mineable outcrop are deliberately NOT added yet. Mineral richness comes
+                // from mineralSeedFor(chunk, mineral, rarity) and takes no account of sites, so both would be
+                // markers on a map that changed nothing — exactly the decoration this catalogue is meant not to
+                // carry. They want site-aware mineral richness first.
+                new MarkerSpec("RESOURCE", "Underground stream", "CAVE_MOUTH"),
+                new MarkerSpec("WILDLIFE", "Bat roost", "CAVE_MOUTH"));
         List<PreviewMarker> markers = new ArrayList<>();
         for (int index = 0; index < specifications.size(); index++) {
             MarkerSpec spec = specifications.get(index);

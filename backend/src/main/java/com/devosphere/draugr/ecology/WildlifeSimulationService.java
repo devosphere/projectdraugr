@@ -361,6 +361,10 @@ public class WildlifeSimulationService {
         // A fox earth keeps a fox. This was the only named site relying on the old blanket default, so it is named
         // here rather than left to the ground — the rest of what that default caught was never meant to be a fox.
         if (kind.contains("fox")) return new Profile("forest_fox", "OMNIVORE", "CREPUSCULAR", 4, 10);
+        // A bat roost keeps bats (#158). Without this it would fall to residentFor, which chooses by ground — and
+        // a cave mouth's other resident is a cave bear, so a roost would have stood an even chance of holding one.
+        // Bats are TINY and roost in numbers, so the colony is large where a bear's den is one animal.
+        if (kind.contains("bat")) return new Profile("common_bat", "OMNIVORE", "NOCTURNAL", 40, 90);
         return null;
     }
 
