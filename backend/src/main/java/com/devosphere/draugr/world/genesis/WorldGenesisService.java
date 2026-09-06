@@ -259,7 +259,15 @@ public class WorldGenesisService {
                 // which. The crystal pocket is the one cave RESOURCE: a quartz pocket is a cave find before it is a
                 // mountain one, and lens crystal is what a burning-glass is knapped from.
                 new MarkerSpec("MONSTER", "Troll shelter", "CAVE_MOUTH"), new MarkerSpec("WILDLIFE", "Deep cave roost", "CAVE_MOUTH"),
-                new MarkerSpec("RESOURCE", "Crystal pocket", "CAVE_MOUTH", "MOUNTAIN"));
+                new MarkerSpec("RESOURCE", "Crystal pocket", "CAVE_MOUTH", "MOUNTAIN"),
+                // Standing water (#156), appended for the same reason as the rest. The world had running water
+                // and springs and nothing that simply sits: no pond, no lake margin, no headwater. Every one of
+                // these reads as fresh water through com.devosphere.draugr.ecology.FreshWater, which is a single
+                // definition now — so a pond is water to the seven places that ask, rather than to whichever of
+                // them somebody remembered. That consolidation is what made this safe to add.
+                new MarkerSpec("RESOURCE", "Headwater spring", "HIGHLAND", "RIVER_BANK"),
+                new MarkerSpec("RESOURCE", "Still pond", "WETLAND", "RIVER_BANK"),
+                new MarkerSpec("RESOURCE", "Lake margin", "WETLAND", "RIVER_BANK"));
         List<PreviewMarker> markers = new ArrayList<>();
         for (int index = 0; index < specifications.size(); index++) {
             MarkerSpec spec = specifications.get(index);
