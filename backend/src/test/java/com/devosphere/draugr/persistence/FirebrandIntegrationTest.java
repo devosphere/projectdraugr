@@ -70,6 +70,25 @@ class FirebrandIntegrationTest {
     @Autowired PersistentStateAuditor auditor;
     @Autowired JdbcTemplate jdbc;
 
+    /**
+     * Take these off the Chronicle by setting them down, not by deleting the owner.
+     *
+     * <p>{@code world_object} requires every living object to have an owner OR a location and never both, so
+     * clearing the owner alone leaves the item nowhere at all and the check constraint refuses it. That is easy
+     * to miss because the usual strip in these fixtures matches nothing — but {@code chronicles.awaken()} returns
+     * the world's existing living Chronicle rather than minting a second one, so both tests here share a body and
+     * whatever one of them put in its hands the other really is holding.
+     */
+    private void setDown(UUID chronicle, UUID chunk, String keys) {
+        jdbc.update("UPDATE world_object SET current_owner_id=NULL, current_location_id=? " +
+            "WHERE current_owner_id=? AND id IN (SELECT object_id FROM item_instance WHERE item_key IN (" + keys + "))",
+            chunk, chronicle);
+    }
+
+    private UUID chunkOf(UUID chronicle) {
+        return jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+    }
+
     private UUID awaken() {
         if (worldGenesis.current() == null) {
             worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
@@ -93,8 +112,7 @@ class FirebrandIntegrationTest {
             "and someone who names an ember still means the ember — these are alternatives, not synonyms");
 
         // Without a brand the method is short of its one requirement; with one it is complete.
-        jdbc.update("UPDATE world_object SET current_owner_id=NULL WHERE current_owner_id=? AND id IN (" +
-            "SELECT object_id FROM item_instance WHERE item_key='firebrand')", chronicle);
+        setDown(chronicle, chunkOf(chronicle), "'firebrand'");
         assertTrue(!fire.profile(chronicle, "brand_transfer").missing().isEmpty(),
             "with no brand to hand, carrying a brand is missing what it turns on");
 
@@ -121,8 +139,7 @@ class FirebrandIntegrationTest {
         // Nothing alight on this ground, and no torch in the pack, so the brand is the only flame in play.
         jdbc.update("DELETE FROM fire_state fs USING construction_project cp, world_object w " +
             "WHERE fs.construction_id=cp.object_id AND w.id=cp.object_id AND w.current_location_id=?", chunk);
-        jdbc.update("UPDATE world_object SET current_owner_id=NULL WHERE current_owner_id=? AND id IN (" +
-            "SELECT object_id FROM item_instance WHERE item_key IN ('resin_torch','firebrand'))", chronicle);
+        setDown(chronicle, chunk, "'resin_torch','firebrand'");
 
         UUID site = UUID.randomUUID();
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE','Deer range',?)", site, chunk);
