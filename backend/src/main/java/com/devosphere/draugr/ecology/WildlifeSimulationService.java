@@ -263,9 +263,11 @@ public class WildlifeSimulationService {
             "AND NOT EXISTS (SELECT 1 FROM wildlife_population wp WHERE wp.site_id = es.id) ORDER BY es.id",
             (rs, row) -> new Site(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3), rs.getString(4)));
         for (Site site : sites) {
-            Profile profile = "MONSTER".equals(site.category())
+            Profile named = "MONSTER".equals(site.category())
                 ? monsterFor(site)
-                : profileFor(site.kind().toLowerCase());
+                : profileFor(site.kind().toLowerCase(java.util.Locale.ROOT));
+            Profile profile = named != null ? named
+                : "MONSTER".equals(site.category()) ? null : residentFor(site);
             if (profile == null) continue;   // no creature of the catalogue belongs on this ground; leave the site empty
             jdbc.update("INSERT INTO wildlife_population (id, site_id, species_key, ecological_role, activity_cycle, population_count, carrying_capacity, behavior_state, last_simulated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'RESTING', ?)", UUID.randomUUID(), site.id(), profile.species(), profile.role(), profile.cycle(), profile.initial(), profile.capacity(), Timestamp.from(now));
         }
@@ -298,9 +300,15 @@ public class WildlifeSimulationService {
         if (candidates.isEmpty()) return null;
 
         String label = site.kind() == null ? "" : site.kind().toLowerCase(java.util.Locale.ROOT);
+        // The MOST specific shared word wins, not the first candidate alphabetically. Where a family of creatures
+        // shares a word — cave bear, cave troll, cave screecher, all of which belong to a cave mouth — matching on
+        // the first would hand every one of their lairs to whichever sorts first, so a troll's shelter would keep a
+        // screecher. "Troll" is a longer and more particular word than "cave", and the longer word is the name.
         Map<String, Object> chosen = candidates.stream()
-            .filter(m -> sharesAWord(label, (String) m.get("species_key")))
-            .findFirst()
+            .filter(m -> sharedWordLength(label, (String) m.get("species_key")) > 0)
+            .max(java.util.Comparator
+                .comparingInt((Map<String, Object> m) -> sharedWordLength(label, (String) m.get("species_key")))
+                .thenComparing(m -> (String) m.get("species_key"), java.util.Comparator.reverseOrder()))
             .orElse(candidates.get(Math.floorMod(site.id().hashCode(), candidates.size())));
 
         // What a thing eats follows from what it is: the passive ones browse, the apex ones hunt.
@@ -313,13 +321,23 @@ public class WildlifeSimulationService {
         return new Profile((String) chosen.get("species_key"), role, cycle == null ? "NOCTURNAL" : cycle, 1, 2);
     }
 
-    /** Does the lair's name and the creature's name share a real word — "bog warden" and "bog wraith"? */
-    private static boolean sharesAWord(String label, String speciesKey) {
+    /**
+     * The longest real word the lair's name and the creature's name share — "bog warden" and "bog wraith" share
+     * "warden"; 0 if they share nothing.
+     *
+     * <p>Length is the answer rather than a yes/no because it is also the measure of how particular the match is.
+     * Words under four letters are ignored as too generic to name anything ("elk", "fox", "maw"), which leaves
+     * four-letter words like "deer", "boar", "wolf", "bear", "hare" and "goat" matching — the existing wildlife
+     * sites are named for exactly those, so the floor cannot be raised.
+     */
+    private static int sharedWordLength(String label, String speciesKey) {
+        int longest = 0;
         for (String part : speciesKey.split("_")) {
-            if (part.length() < 4) continue;                     // "pack", "cave" are too generic to match on
-            if (label.matches("(?s).*\\b" + java.util.regex.Pattern.quote(part) + "\\b.*")) return true;
+            if (part.length() < 4) continue;
+            if (label.matches("(?s).*\\b" + java.util.regex.Pattern.quote(part) + "\\b.*"))
+                longest = Math.max(longest, part.length());
         }
-        return false;
+        return longest;
     }
 
     @Transactional(readOnly = true)
@@ -338,7 +356,42 @@ public class WildlifeSimulationService {
         if (kind.contains("beaver")) return new Profile("beaver", "HERBIVORE", "CREPUSCULAR", 6, 14);
         if (kind.contains("otter")) return new Profile("river_otter", "CARNIVORE", "DIURNAL", 5, 12);
         if (kind.contains("fowl")) return new Profile("marsh_fowl", "OMNIVORE", "DIURNAL", 35, 85);
-        return new Profile("forest_fox", "OMNIVORE", "CREPUSCULAR", 4, 10);
+        // A fox earth keeps a fox. This was the only named site relying on the old blanket default, so it is named
+        // here rather than left to the ground — the rest of what that default caught was never meant to be a fox.
+        if (kind.contains("fox")) return new Profile("forest_fox", "OMNIVORE", "CREPUSCULAR", 4, 10);
+        return null;
+    }
+
+    /**
+     * What lives at a wildlife site the named list does not cover — chosen from the catalogue by the ground it
+     * must live on (#161).
+     *
+     * <p>This was a hardcoded {@code forest_fox}, returned for every site no keyword matched, whatever the ground:
+     * a river fishing run kept a forest fox, and once there was a cave, a roost in the rock would have kept one
+     * too. That is activation through an unrelated fallback, which is the thing the world-seed gate forbids —
+     * a creature must be placed because the ground supports it, not because it is the default.
+     *
+     * <p>Deterministic per site, so a given world always holds the same things in the same places, and a site on
+     * ground the catalogue has no ordinary creature for is left empty rather than filled with something that does
+     * not belong there. MONSTRUM is excluded: a monster belongs to a MONSTER lair, through {@code monsterFor}.
+     */
+    private Profile residentFor(Site site) {
+        List<Map<String, Object>> candidates = jdbc.queryForList(
+            "SELECT species_key, ecological_role, activity_cycle, size_tier FROM wildlife_species " +
+            "WHERE kingdom_class <> 'MONSTRUM' AND movement_class <> 'AQUATIC' " +
+            "AND ? = ANY(string_to_array(biome_affinity, ',')) ORDER BY species_key",
+            site.biome() == null ? "~none~" : site.biome());
+        if (candidates.isEmpty()) return null;
+
+        Map<String, Object> chosen = candidates.get(Math.floorMod(site.id().hashCode(), candidates.size()));
+        String role = (String) chosen.get("ecological_role");
+        String cycle = (String) chosen.get("activity_cycle");
+        // A big animal is scarce and a small one is not — the same shape the named profiles above already use.
+        int capacity = switch (String.valueOf(chosen.get("size_tier"))) {
+            case "HUGE" -> 5; case "LARGE" -> 12; case "MEDIUM" -> 28; case "SMALL" -> 55; default -> 70;
+        };
+        return new Profile((String) chosen.get("species_key"), role == null ? "OMNIVORE" : role,
+            cycle == null ? "CREPUSCULAR" : cycle, Math.max(1, capacity / 2), capacity);
     }
     private long reproductionIntervalHours(String role) { return "CARNIVORE".equals(role) ? 24L * 28 : "OMNIVORE".equals(role) ? 24L * 18 : 24L * 10; }
     private String behaviorFor(String role, int hour, String weather, String cycle) {

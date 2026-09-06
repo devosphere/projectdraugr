@@ -251,7 +251,15 @@ public class WorldGenesisService {
                 // Running water (#156). Appended at the end deliberately: a marker's placement is salted by its
                 // index, so anything inserted earlier would shift every existing site in the world.
                 new MarkerSpec("RESOURCE", "River ford", "RIVER_BANK"), new MarkerSpec("RESOURCE", "Gravel bar", "RIVER_BANK"), new MarkerSpec("RESOURCE", "Riverside withy bed", "RIVER_BANK", "WETLAND"),
-                new MarkerSpec("WILDLIFE", "River fishing run", "RIVER_BANK"), new MarkerSpec("WILDLIFE", "Otter waterway", "RIVER_BANK", "WETLAND"), new MarkerSpec("WILDLIFE", "Beaver lodge", "RIVER_BANK", "WETLAND"));
+                new MarkerSpec("WILDLIFE", "River fishing run", "RIVER_BANK"), new MarkerSpec("WILDLIFE", "Otter waterway", "RIVER_BANK", "WETLAND"), new MarkerSpec("WILDLIFE", "Beaver lodge", "RIVER_BANK", "WETLAND"),
+                // The rock (#158), appended for the same reason. The lair is named for its occupant rather than for
+                // the cave, because it takes the species whose name it shares the longest word with: calling it a
+                // cave shelter would let any of the cave-named creatures claim it. The roost is named for the place
+                // instead, deliberately — a cave mouth keeps a cave bear or a bat and the site should not promise
+                // which. The crystal pocket is the one cave RESOURCE: a quartz pocket is a cave find before it is a
+                // mountain one, and lens crystal is what a burning-glass is knapped from.
+                new MarkerSpec("MONSTER", "Troll shelter", "CAVE_MOUTH"), new MarkerSpec("WILDLIFE", "Deep cave roost", "CAVE_MOUTH"),
+                new MarkerSpec("RESOURCE", "Crystal pocket", "CAVE_MOUTH", "MOUNTAIN"));
         List<PreviewMarker> markers = new ArrayList<>();
         for (int index = 0; index < specifications.size(); index++) {
             MarkerSpec spec = specifications.get(index);
