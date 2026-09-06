@@ -341,7 +341,7 @@ public class ConstructionService {
         Timestamp ts = Timestamp.from(at);
         boolean enclosed = Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
-            "WHERE w.current_location_id=? AND cp.project_kind IN ('LEAN_TO','WATTLE_AND_DAUB_HUT','EARTH_SHELTERED_HUT','LOG_CABIN') " +
+            "WHERE w.current_location_id=? AND " + com.devosphere.draugr.construction.Shelters.ENCLOSING + " " +
             "AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')", Boolean.class, location));
         if (!enclosed) return new String[]{"FAILED", "A smoke-vent is a hole cut through a roof, and there is no shelter standing here to cut one in — raise an enclosing shelter first."};
         UUID existing = jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='SMOKE_VENT' AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' LIMIT 1 FOR UPDATE", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, location);

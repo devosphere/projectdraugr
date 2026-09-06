@@ -55,7 +55,7 @@ public class ChroniclePhysiologyService {
                 ",EXISTS(SELECT 1 FROM construction_project cp JOIN world_object wb ON wb.id=cp.object_id JOIN world_object body ON body.current_location_id=wb.current_location_id WHERE body.id=c.id AND cp.project_kind='WINDBREAK' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND wb.lifecycle_state='ACTIVE')" +
                 ",EXISTS(SELECT 1 FROM construction_project cp JOIN world_object rc ON rc.id=cp.object_id JOIN world_object body ON body.current_location_id=rc.current_location_id WHERE body.id=c.id AND cp.project_kind='RAIN_COVER' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND rc.lifecycle_state='ACTIVE')" +
                 ",EXISTS(SELECT 1 FROM construction_project cp JOIN world_object ss ON ss.id=cp.object_id JOIN world_object body ON body.current_location_id=ss.current_location_id WHERE body.id=c.id AND cp.project_kind='SUNSHADE' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND ss.lifecycle_state='ACTIVE')" +
-                ",EXISTS(SELECT 1 FROM construction_project cp JOIN world_object en ON en.id=cp.object_id JOIN world_object body ON body.current_location_id=en.current_location_id WHERE body.id=c.id AND cp.project_kind IN ('LEAN_TO','WATTLE_AND_DAUB_HUT','EARTH_SHELTERED_HUT','LOG_CABIN') AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND en.lifecycle_state='ACTIVE')" +
+                ",EXISTS(SELECT 1 FROM construction_project cp JOIN world_object en ON en.id=cp.object_id JOIN world_object body ON body.current_location_id=en.current_location_id WHERE body.id=c.id AND " + com.devosphere.draugr.construction.Shelters.ENCLOSING + " AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND en.lifecycle_state='ACTIVE')" +
                 ",(EXISTS(SELECT 1 FROM item_instance ii JOIN world_object hw ON hw.id=ii.object_id JOIN world_object body ON body.current_location_id=hw.current_location_id WHERE body.id=c.id AND ii.item_key='smoke_hood' AND hw.lifecycle_state='ACTIVE')" +
                 " OR EXISTS(SELECT 1 FROM construction_project cp JOIN world_object sv ON sv.id=cp.object_id JOIN world_object body ON body.current_location_id=sv.current_location_id WHERE body.id=c.id AND cp.project_kind='SMOKE_VENT' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND sv.lifecycle_state='ACTIVE'))" +
                 ",EXISTS(SELECT 1 FROM equipment_attachment e JOIN item_instance ii ON ii.object_id=e.item_id WHERE e.chronicle_id=c.id AND ii.item_key='smoke_face_wrap')" +
@@ -332,7 +332,7 @@ public class ChroniclePhysiologyService {
     @Transactional
     public void rest(UUID chronicleId, int minutes) {
         double hours = minutes / 60.0;
-        Boolean sheltered = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object shelter ON shelter.id=cp.object_id JOIN world_object body ON body.current_location_id=shelter.current_location_id WHERE body.id=? AND cp.project_kind IN ('LEAN_TO','WATTLE_AND_DAUB_HUT','EARTH_SHELTERED_HUT','LOG_CABIN') AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND shelter.lifecycle_state='ACTIVE')", Boolean.class, chronicleId);
+        Boolean sheltered = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object shelter ON shelter.id=cp.object_id JOIN world_object body ON body.current_location_id=shelter.current_location_id WHERE body.id=? AND " + com.devosphere.draugr.construction.Shelters.ENCLOSING + " AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND shelter.lifecycle_state='ACTIVE')", Boolean.class, chronicleId);
         boolean bed = beddedAt(chronicleId);
         // A rest recovers best under a shelter, next in a bed off the cold ground, next on a proper seat, and least
         // on the bare earth. A chair is a modest comfort — better than the ground, less than lying down — and only
@@ -346,7 +346,7 @@ public class ChroniclePhysiologyService {
     @Transactional
     public boolean sleep(UUID chronicleId, int minutes) {
         double hours = minutes / 60.0;
-        Boolean sheltered = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object shelter ON shelter.id=cp.object_id JOIN world_object body ON body.current_location_id=shelter.current_location_id WHERE body.id=? AND cp.project_kind IN ('LEAN_TO','WATTLE_AND_DAUB_HUT','EARTH_SHELTERED_HUT','LOG_CABIN') AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND shelter.lifecycle_state='ACTIVE')", Boolean.class, chronicleId);
+        Boolean sheltered = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object shelter ON shelter.id=cp.object_id JOIN world_object body ON body.current_location_id=shelter.current_location_id WHERE body.id=? AND " + com.devosphere.draugr.construction.Shelters.ENCLOSING + " AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND shelter.lifecycle_state='ACTIVE')", Boolean.class, chronicleId);
         boolean safe = Boolean.TRUE.equals(sheltered);
         boolean bed = beddedAt(chronicleId);
         // Sheltered sleep is deep and restorative; a bed off the cold, wet ground makes
