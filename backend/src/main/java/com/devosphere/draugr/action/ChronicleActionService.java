@@ -1881,12 +1881,16 @@ public class ChronicleActionService {
         //
         // The three legacy kinds without a construction_kind row (the huts and the log cabin, which are assemblies)
         // stay named explicitly so nothing that sheltered before stops sheltering now.
+        //
+        // A cave mouth shelters without being built (#158). It is the oldest roof there is, and the first reason
+        // to walk into one: rock over your head keeps the rain off whether or not you ever raised anything.
         return Boolean.TRUE.equals(jdbc.queryForObject(
-            "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "SELECT EXISTS(SELECT 1 FROM world_chunk c WHERE c.id=? AND c.biome='CAVE_MOUTH') " +
+            "    OR EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
             "WHERE w.current_location_id=? AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE' " +
             "AND (cp.project_kind IN ('WATTLE_AND_DAUB_HUT','EARTH_SHELTERED_HUT','LOG_CABIN') " +
             "     OR EXISTS(SELECT 1 FROM construction_kind ck WHERE ck.project_kind=cp.project_kind AND ck.is_shelter)))",
-            Boolean.class, location));
+            Boolean.class, location, location));
     }
     /**
      * The effort/skill yield bonus for a gather (#68): 0–2 extra units where the source holds them. A careful,
