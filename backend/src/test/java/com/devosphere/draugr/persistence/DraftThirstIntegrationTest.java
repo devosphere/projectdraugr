@@ -77,7 +77,7 @@ class DraftThirstIntegrationTest {
             "SELECT id FROM world_chunk WHERE biome NOT IN ('WETLAND','RIVER_BANK','OCEAN') ORDER BY grid_y, grid_x LIMIT 1", UUID.class);
         assertNotNull(chunk, "the world must have dry ground for this fixture");
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", chunk, chronicle);
-        jdbc.update("DELETE FROM ecology_site WHERE chunk_id=? AND (site_kind ILIKE '%spring%' OR site_kind ILIKE '%stream%' OR site_kind ILIKE '%river%' OR site_kind ILIKE '%freshwater%')", chunk);
+        jdbc.update("DELETE FROM ecology_site WHERE chunk_id=? AND " + com.devosphere.draugr.ecology.FreshWater.sites() + "", chunk);
         jdbc.update("DELETE FROM construction_project cp USING world_object w WHERE w.id=cp.object_id AND w.current_location_id=?", chunk);
 
         Instant now = Instant.now();

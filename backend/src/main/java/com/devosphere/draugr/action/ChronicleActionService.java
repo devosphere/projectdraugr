@@ -1799,7 +1799,7 @@ public class ChronicleActionService {
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
         if ("WETLAND".equals(biome) || "RIVER_BANK".equals(biome)) return true;
         Integer sites = jdbc.queryForObject(
-            "SELECT COUNT(*) FROM ecology_site WHERE chunk_id=? AND (site_kind ILIKE '%spring%' OR site_kind ILIKE '%stream%' OR site_kind ILIKE '%river%' OR site_kind ILIKE '%freshwater%')",
+            "SELECT COUNT(*) FROM ecology_site WHERE chunk_id=? AND (" + com.devosphere.draugr.ecology.FreshWater.sites() + ")",
             Integer.class, location);
         if (sites != null && sites > 0) return true;
         // A completed rainwater catchment (#77) is itself a source to fill from — the rain it has caught — so a camp
@@ -1881,7 +1881,7 @@ public class ChronicleActionService {
     private boolean safeWaterSource(UUID location) {
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
         if ("RIVER_BANK".equals(biome)) return true;
-        Integer moving = jdbc.queryForObject("SELECT COUNT(*) FROM ecology_site WHERE chunk_id=? AND (site_kind ILIKE '%spring%' OR site_kind ILIKE '%stream%' OR site_kind ILIKE '%river%' OR site_kind ILIKE '%freshwater%')", Integer.class, location);
+        Integer moving = jdbc.queryForObject("SELECT COUNT(*) FROM ecology_site WHERE chunk_id=? AND (" + com.devosphere.draugr.ecology.FreshWater.sites() + ")", Integer.class, location);
         return moving != null && moving > 0;
     }
     /** A fire burning within reach here — for warming and drying (#66). */

@@ -74,7 +74,7 @@ class RainwaterCatchmentWaterIntegrationTest {
         // Stand on dry ground: a forest chunk with every natural water source removed.
         UUID chunk = jdbc.queryForObject("SELECT id FROM world_chunk WHERE biome NOT IN ('WETLAND','RIVER_BANK') ORDER BY grid_y, grid_x LIMIT 1", UUID.class);
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", chunk, chronicle);
-        jdbc.update("DELETE FROM ecology_site WHERE chunk_id=? AND (site_kind ILIKE '%spring%' OR site_kind ILIKE '%stream%' OR site_kind ILIKE '%river%' OR site_kind ILIKE '%freshwater%')", chunk);
+        jdbc.update("DELETE FROM ecology_site WHERE chunk_id=? AND " + com.devosphere.draugr.ecology.FreshWater.sites() + "", chunk);
 
         Instant now = Instant.now();
         items.createCarriedItem(chronicle, "waterskin", "Waterskin", now, "TEST_FIXTURE");
