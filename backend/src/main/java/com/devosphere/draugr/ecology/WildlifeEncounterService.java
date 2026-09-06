@@ -307,6 +307,19 @@ public class WildlifeEncounterService {
         // stacking with actively going to ground — carried/worn, so they help even when not deliberately hiding.
         if (items.hasAtLeast(chronicle,"camouflage_cloak",1) || items.hasAtLeast(chronicle,"hide_screen",1)) chance -= 12;
         if (items.hasAtLeast(chronicle,"scent_mask_bundle",1)) chance -= 8;
+        // A whistle blown on the move defeats an ambush from the opposite direction to everything else here (#75).
+        // A cloak and a scent mask work by hiding you; a whistle works by announcing you, and an ambush needs
+        // surprise. Nothing stalks what already knows it is coming — it is the same reason people walking in bear
+        // country wear a bell. The catalogue calls it "a whistle" and nothing read it at all.
+        //
+        // Weighted like the scent mask rather than the cloak, because announcing yourself is a weaker defence
+        // than being unseen, and both are pure benefits here — the same shape those two already have.
+        //
+        // The realistic counterpart, that the same noise empties the ground ahead of you and so costs you the
+        // hunt, is NOT implemented and is deliberately not claimed. quarryOnThisGround does not take the
+        // Chronicle, so it cannot ask what they are carrying without changing its signature and every caller,
+        // and a downside half-built would be worse than one honestly absent.
+        if (items.hasAtLeast(chronicle,"whistle",1)) chance -= 8;
         // A camp alarm (#126) — a trip-line strung with anything that clatters — robs an ambush of its surprise:
         // nothing crosses the perimeter unheard, so even a heads-down Chronicle is not caught wholly unaware.
         boolean alarmed = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='CAMP_ALARM' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')", Boolean.class, chunk));
