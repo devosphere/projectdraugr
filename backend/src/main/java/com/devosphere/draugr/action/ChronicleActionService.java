@@ -1100,19 +1100,28 @@ public class ChronicleActionService {
     private String[] markLandmark(ActiveChronicle chronicle, String text, UUID actionId, Instant at) {
         String v = text.toLowerCase(Locale.ROOT);
         String kind; String need;
-        if (v.contains("cairn") || v.contains("pile") || v.contains("stack") || (v.contains("stone") && !v.contains("carve"))) { kind = "CAIRN"; need = "field_stone"; }
+        // A bundle made for this comes first (#75). The three kinds below are all improvisations — stones you
+        // gather, a branch you cut, a blaze you need a blade for — and the catalogue carries a
+        // tracking_marker_bundle, "a bundle to mark a trail", which nothing read. So a Chronicle could make the
+        // one thing meant for marking a way and still be told they had nothing to mark with, or need a knife to
+        // do it. Named explicitly rather than used as a silent fallback: a marker bundle is what you reach for
+        // when marking a trail, and stones are what you reach for when you have no bundle.
+        if (v.contains("trail") || v.contains("marker") || v.contains("tag") || v.contains("flag")) { kind = "TRAIL_MARK"; need = "tracking_marker_bundle"; }
+        else if (v.contains("cairn") || v.contains("pile") || v.contains("stack") || (v.contains("stone") && !v.contains("carve"))) { kind = "CAIRN"; need = "field_stone"; }
         else if (v.contains("stake") || v.contains("post") || v.contains("stick") || v.contains("stave")) { kind = "STAKE"; need = "dry_branch"; }
         else { kind = "BLAZE"; need = "tool"; }
-        if (kind.equals("CAIRN")) { if (!items.hasAtLeast(chronicle.id(),"field_stone",3)) return new String[]{"FAILED","You cast about for stones to pile, but you do not have enough to raise anything that would stand and be seen."}; for (int i=0;i<3;i++) items.consumeOne(chronicle.id(),"field_stone",at); }
+        if (kind.equals("TRAIL_MARK")) { if (!items.hasAtLeast(chronicle.id(),"tracking_marker_bundle",1)) return new String[]{"FAILED","You reach for a trail marker and find none — the bundle is spent, or you never made one. Stones or a cut stake would do instead."}; items.consumeOne(chronicle.id(),"tracking_marker_bundle",at); }
+        else if (kind.equals("CAIRN")) { if (!items.hasAtLeast(chronicle.id(),"field_stone",3)) return new String[]{"FAILED","You cast about for stones to pile, but you do not have enough to raise anything that would stand and be seen."}; for (int i=0;i<3;i++) items.consumeOne(chronicle.id(),"field_stone",at); }
         else if (kind.equals("STAKE")) { if (!items.hasAtLeast(chronicle.id(),"dry_branch",1)) return new String[]{"FAILED","You have nothing to drive into the ground as a marker."}; items.consumeOne(chronicle.id(),"dry_branch",at); }
         else { if (!items.hasCuttingTool(chronicle.id())) return new String[]{"FAILED","You set a hand to the bark, but with no blade you can cut no lasting mark."}; }
         String shape = extractShape(v);
         UUID id = UUID.randomUUID();
-        String label = kind.equals("CAIRN") ? "Stone cairn" : kind.equals("STAKE") ? "Driven stake" : "Carved blaze";
+        String label = kind.equals("TRAIL_MARK") ? "Trail marker" : kind.equals("CAIRN") ? "Stone cairn" : kind.equals("STAKE") ? "Driven stake" : "Carved blaze";
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'MARKER',?,?)", id, label, chronicle.location());
         jdbc.update("INSERT INTO location_marker (object_id,chunk_id,marker_kind,description,created_by_chronicle_id,created_at) VALUES (?,?,?,?,?,?)", id, chronicle.location(), kind, shape, chronicle.id(), java.sql.Timestamp.from(at));
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'MARKED',jsonb_build_object('kind',?))", id, java.sql.Timestamp.from(at), kind);
-        String made = kind.equals("CAIRN") ? "You stack stones into a cairn that will stand and be seen" : kind.equals("STAKE") ? "You drive a stake firmly into the ground" : "You cut a clear blaze into the bark of a tree";
+        String made = kind.equals("TRAIL_MARK") ? "You set a marker from the bundle where it will be seen from the way you came"
+            : kind.equals("CAIRN") ? "You stack stones into a cairn that will stand and be seen" : kind.equals("STAKE") ? "You drive a stake firmly into the ground" : "You cut a clear blaze into the bark of a tree";
         // If the same act also names the place, register it — a marked, named, and
         // (if asked) memorized spot is the surest kind to find one's way back to.
         String name = namesInMarking(v) ? extractDesignatedName(text) : null;
@@ -1215,6 +1224,10 @@ public class ChronicleActionService {
         if((value.contains("build")||value.contains("set")||value.contains("make")||value.contains("place")||value.contains("construct")||value.contains("lay"))&&(value.contains("deadfall")||value.contains("pit trap")||value.contains("fish trap")||value.contains("cage trap")||value.contains("box trap")||value.contains("snare")||(value.contains("trap")&&!value.contains("check")))) return Intent.SET_TRAP;
         if(value.contains("lure")||value.contains("bait the")||((value.contains("leave")||value.contains("put")||value.contains("place")||value.contains("set"))&&(value.contains("bait")||value.contains("draw them")||value.contains("draw it")))) return Intent.LURE;
         if(value.contains("tame")||value.contains("befriend")||value.contains("domesticate")||value.contains("gain its trust")||value.contains("earn its trust")||((value.contains("approach")||value.contains("offer")||value.contains("feed")||value.contains("hold out"))&&(value.contains("calm")||value.contains("slow")||value.contains("gentl")||value.contains("quiet")||value.contains("trust")||value.contains("goat")||value.contains("rabbit")||value.contains("fowl")||value.contains("turtle")||value.contains("hedgehog")||value.contains("pigeon")||value.contains("deer")||value.contains("reindeer")||value.contains("duck")))) return Intent.TAME;
+        // Marking a trail is not following one (#75). TRACK's trail branch fires on "trail" beside find/read/follow,
+        // so "mark the trail so I can find my way back" — the most natural way to say it — was read as tracking on
+        // the strength of the word "find". A marking verb beside a trail is marking; TRACK is left untouched.
+        if((value.contains("mark")||value.contains("tag")||value.contains("flag"))&&value.contains("trail")) return Intent.MARK;
         if(value.contains("track")||value.contains("follow the trail")||value.contains("read the ground")||value.contains("look for sign")||value.contains("look for tracks")||((value.contains("print")||value.contains("spoor")||value.contains("scat")||value.contains("droppings")||value.contains("trail"))&&(value.contains("find")||value.contains("read")||value.contains("follow")||value.contains("search")||value.contains("look")))) return Intent.TRACK;
         // Scan the boundary of the ground for a way clear of danger before moving into it (#128/#123: grounded
         // evidence before forced contact). Reads a predator ONE tile out by directional sense — scent on the

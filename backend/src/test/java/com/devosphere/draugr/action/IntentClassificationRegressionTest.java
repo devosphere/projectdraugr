@@ -608,6 +608,30 @@ class IntentClassificationRegressionTest {
     }
 
     /**
+     * Marking a trail must reach MARK (#75). The rule wanted "leave a marker" contiguously, or "mark" beside a
+     * tree, stone, stake or post — so "leave a trail marker", the most natural way to say it and the exact thing
+     * the tracking_marker_bundle is for, classified as nothing at all and the bundle stayed unreachable.
+     */
+    @Test
+    void markingATrailReachesTheMarkIntent() throws Exception {
+        assertEquals("MARK", classify("leave a trail marker here"));
+        assertEquals("MARK", classify("mark the trail behind me"));
+        assertEquals("MARK", classify("tag the trail so I can find my way back"));
+        // The sentence that exposed it: TRACK's trail branch fires on "trail" beside "find", so the most natural
+        // way to say this was read as following a trail rather than laying one.
+        assertEquals("MARK", classify("mark the trail so I can find my way back"));
+        // Following a trail is still tracking — the marking verb is what separates them, not the noun.
+        assertEquals("TRACK", classify("follow the trail"));
+        assertEquals("TRACK", classify("find the trail and read the ground"));
+        // The older phrasings still work.
+        assertEquals("MARK", classify("leave a marker"));
+        assertEquals("MARK", classify("build a cairn"));
+        assertEquals("MARK", classify("drive a stake"));
+        // "Trail" alone is not marking — a trail cake is food, and baking one must not leave a marker.
+        assertEquals("UNKNOWN", classify("bake a trail cake"));
+    }
+
+    /**
      * The wattle wall was one of six assemblies a hard intent had quietly claimed. In each case the player asked
      * for a structure and the classifier handed them something else entirely — a plank bench became a desk, a
      * smoke rack became a stone shelf, a clay-lined hearth became a friction fire kit, and both "work on the
