@@ -290,6 +290,45 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 > a rebalance that saturates it passes vacuously. Picking the quarry matters: with a javelin in hand a deer is beaten
 > on every roll, so the margin can only show against something like a brown bear.
 >
+> **▶ SAME DAY, SECOND HALF (2026-09-06): the catalogue tokens, and three more one-sided checks.**
+>
+> **Every inert equippable from the #134 sweep is now wired**, each to a mechanism that already existed rather
+> than an invented one: the `stone_lantern_cover` (hoods a flame against weather that guts a bare one), the
+> `firebrand` (gives light, **carries fire** as its own method, **wards beasts** in both the ambush check and the
+> close), the `atlatl`, the `float_bobber`, the `fire_poker`, the `warning_rattle`, the `tracking_marker_bundle`
+> and the `whistle`. Only `smoke_signal_bundle` is left, honestly blocked on #109 — signalling needs someone to
+> signal, and inventing a recipient would be worse than leaving it.
+>
+> **I called the whistle blocked and was wrong.** I had only thought of it as a way to CALL something. Warding is
+> the third thing a whistle does: it defeats an ambush from the opposite direction to a cloak or a scent mask —
+> those hide you, it announces you, and an ambush needs surprise. **The lesson is to enumerate what a thing
+> physically does before concluding its mechanism is missing.**
+>
+> **Other structures made functional:** `SMOKE_RACK`/`DRYING_RACK` were buildable and read by nothing while three
+> smoking and five drying processes ran beside them (V285 — and `station_kind` now accepts a construction kind
+> directly from the registry, so the next rack needs no Java); four species-appropriate animal shelters that work
+> because `is_barrier` is now read (V284); **salt from the sea** (V282), which needed its own `requires_salt_water`
+> gate because `waterToWorkWith` accepts a freshwater spring and deliberately excludes the coast.
+>
+> **THREE MORE ONE-SIDED CHECKS, all the same shape as the flags:**
+> 1. **Flammability** was asserted only as "stone must not burn", so a WOODEN build marked fireproof passed in
+>    silence — `THATCH_ROOF` had, and four new shelters of mine were about to. Both halves asserted now.
+> 2. **Fresh water** was spelled out in EIGHT places (seven main + a test fixture that clears water to assert dry
+>    ground). Consolidated to `FreshWater` as a deliberate NO-OP first, *then* the ponds were added (#156). Done in
+>    the other order, the first symptom would have been an unrelated test going red with nothing pointing at ponds.
+> 3. **`isDark` had two callers** — fine sight-work and the night predator raid. Cave darkness got its OWN
+>    question, because widening `isDark` would have brought wolves onto stock at noon.
+>
+> **A comment can lie, and two did.** `builtStationAt`'s claimed "the catalogue carries buildable WEAVING_TABLE,
+> WOODWORKING_TABLE and STONEWORKING_TABLE structures" — it does not; those five workstation kinds have no
+> assembly and nothing creates them as constructions (harmless: the item path is live, because `REACHABLE_CTE`
+> counts what is on the ground). And `monsterFor` promised determinism while hashing a `UUID.randomUUID()`.
+> **Check a comment that claims a capability, especially one claiming determinism.**
+>
+> **Why making the workshop tables buildable is not free** (recorded so it is not rediscovered): `CRAFT_DESK`
+> matches `(craft|make|build|construct|assemble)` beside `(desk|table|workbench|bench)`, so any assembly keyword
+> naming a table or a bench is shadowed before the matcher sees it.
+>
 > **▶ PREVIOUS (2026-08-13): confront query refactored (tech-debt cleared) + EPIC #222 backdrop registry story #223 landed.**
 > - **Tech debt RESOLVED:** `WildlifeEncounterService.confront` collapsed from ~13 correlated COUNT subqueries (12
 >   params) to two LATERAL conditional-aggregation passes (1 param). Proven behaviour-preserving by an old-vs-new
