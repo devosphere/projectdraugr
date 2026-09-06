@@ -87,7 +87,7 @@ class TallowLampFuelIntegrationTest {
 
         // Clear any higher-priority light the awakening kit may carry, so the only light in play is the tallow lamp.
         jdbc.update("UPDATE world_object SET current_owner_id=NULL WHERE current_owner_id=? AND id IN (" +
-                "SELECT object_id FROM item_instance WHERE item_key IN ('resin_torch','rush_light','tallow_candle','fish_oil'))", chronicle);
+                "SELECT object_id FROM item_instance WHERE item_key IN ('firebrand','resin_torch','rush_light','tallow_candle','fish_oil'))", chronicle);
         assertFalse(items.consumePortableLight(chronicle, now), "with nothing to burn, there is no light to work by");
 
         // An oil lamp but no fuel: it still cannot light.
@@ -126,7 +126,7 @@ class TallowLampFuelIntegrationTest {
 
         // Strip the awakening kit's lights so only what this test grants is in play.
         jdbc.update("UPDATE world_object SET current_owner_id=NULL WHERE current_owner_id=? AND id IN (" +
-                "SELECT object_id FROM item_instance WHERE item_key IN ('resin_torch','rush_light','tallow_candle','oil_lamp','fish_oil','rendered_tallow','stone_lantern_cover'))", chronicle);
+                "SELECT object_id FROM item_instance WHERE item_key IN ('firebrand','resin_torch','rush_light','tallow_candle','oil_lamp','fish_oil','rendered_tallow','stone_lantern_cover'))", chronicle);
 
         // Fair weather first: a bare candle is light enough. world_weather has no row until the weather sim runs,
         // so it must be UPSERTED here rather than updated, or the seeding silently matches nothing.
@@ -153,6 +153,13 @@ class TallowLampFuelIntegrationTest {
         assertTrue(items.consumePortableLight(chronicle, now), "a hooded flame holds in the weather it was shaped for");
         assertEquals(0, count(chronicle, "tallow_candle"), "the candle is spent by the work, cover or no cover");
         assertEquals(1, count(chronicle, "stone_lantern_cover"), "the cover is stone and keeps");
+
+        // A firebrand is a burning brand — "a wrapped brand to carry fire and ward off beasts" — and it lit
+        // nothing, because consumePortableLight had never heard of it. It is a light before it is anything else.
+        jdbc.update("UPDATE world_weather SET weather_kind='CLEAR', wind_speed_kph=5 WHERE world_id=?", worldId);
+        items.createCarriedItem(chronicle, "firebrand", "Firebrand", now, "TEST_SEED");
+        assertTrue(items.consumePortableLight(chronicle, now), "a burning brand must light work by");
+        assertEquals(0, count(chronicle, "firebrand"), "and it burns down in doing it");
 
         assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
