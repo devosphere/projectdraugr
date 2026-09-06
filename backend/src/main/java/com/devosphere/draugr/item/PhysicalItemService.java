@@ -2127,6 +2127,17 @@ public class PhysicalItemService {
      */
     @Transactional
     public boolean consumePortableLight(UUID chronicle, Instant at) {
+        // A bare flame will not stand in weather. The stone lantern cover exists for exactly this — the catalogue
+        // calls it "a stone cover to hood a flame and control its light" — and nothing read it, so a Chronicle
+        // could shape one, wear it, and be no better off in a gale than with a naked candle. Hooded, the flame
+        // holds; unhooded, wind and rain take it before it lights anything. An oil lamp is a covered flame by its
+        // own construction, so it is not gutted, and a fire in reach is the caller's business.
+        if (guttering(chronicle) && !hasAtLeast(chronicle,"stone_lantern_cover",1)) {
+            boolean lampInstead = hasAtLeast(chronicle,"oil_lamp",1)
+                && (hasAtLeast(chronicle,"fish_oil",1) || hasAtLeast(chronicle,"rendered_tallow",1));
+            if (!lampInstead) return false;
+        }
+        if (hasAtLeast(chronicle,"firebrand",1))     return consumeOne(chronicle,"firebrand",at);   // a burning brand is a light before it is anything else
         if (hasAtLeast(chronicle,"resin_torch",1))   return consumeOne(chronicle,"resin_torch",at); // the primitive bare-hand light (#125)
         if (hasAtLeast(chronicle,"rush_light",1))    return consumeOne(chronicle,"rush_light",at);
         if (hasAtLeast(chronicle,"tallow_candle",1)) return consumeOne(chronicle,"tallow_candle",at);
@@ -2136,6 +2147,17 @@ public class PhysicalItemService {
         // rendered_tallow a use beyond candles).
         if (hasAtLeast(chronicle,"oil_lamp",1) && hasAtLeast(chronicle,"rendered_tallow",1)) return consumeOne(chronicle,"rendered_tallow",at);
         return false;
+    }
+
+    /** Weather on the Chronicle's own ground that would take a bare flame: driven rain, snow, or a real wind. */
+    public boolean weatherWouldGutterALight(UUID chronicle) { return guttering(chronicle); }
+
+    private boolean guttering(UUID chronicle) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM world_object body JOIN world_chunk c ON c.id=body.current_location_id " +
+            "JOIN world_weather ww ON ww.world_id=c.world_id " +
+            "WHERE body.id=? AND (ww.weather_kind IN ('STORM','RAIN','SNOW') OR ww.wind_speed_kph >= 30))",
+            Boolean.class, chronicle));
     }
     /** Northern-hemisphere season derived from the simulated instant's month, until a dedicated world-clock season exists. */
     private static String seasonOf(Instant at) {
