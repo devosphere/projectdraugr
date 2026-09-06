@@ -1620,8 +1620,16 @@ public class PhysicalItemService {
 
     /** Whether a completed workstation of the right kind stands on this ground, standing in for the bench itself. */
     private boolean builtStationAt(UUID location, String stationKind) {
+        if (location == null || stationKind == null) return false;
         String kind = stationStructureFor(stationKind);
-        if (kind == null || location == null) return false;
+        // A station can be a structure in its own right, not only a bench that also exists as an item you carry.
+        // A smoke rack and a drying rack are raised and never carried, so the process names the construction kind
+        // directly and it is looked up in the registry rather than mapped by a hand-written case. Without this a
+        // SMOKE_RACK could be built and read by absolutely nothing.
+        if (kind == null && Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM construction_kind WHERE project_kind=?)", Boolean.class, stationKind)))
+            kind = stationKind;
+        if (kind == null) return false;
         return Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
             "WHERE w.current_location_id=? AND cp.project_kind=? AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
