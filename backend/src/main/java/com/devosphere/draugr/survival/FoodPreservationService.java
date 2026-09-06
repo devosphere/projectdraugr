@@ -20,6 +20,27 @@ public class FoodPreservationService {
     @Transactional public void registerCooked(UUID item, Instant at) { register(item,"COOKED",at,at.plus(Duration.ofHours(72))); }
     /** Produce — milk, eggs, picked greens — keeps for days, not the 18 hours of raw meat (V264/V266). */
     @Transactional public void registerFresh(UUID item, Instant at) { register(item,"FRESH",at,at.plus(Duration.ofHours(96))); }
+
+    /**
+     * Register a fresh taking from an animal — a butchered carcass, a catch out of the water (#54).
+     *
+     * <p>Three yield loops built their items straight from {@code wildlife_drop} and registered nothing, because
+     * each named the one item key it expected: game meat and raw fish were registered by hand, and everything else
+     * the same tables could yield fell through. Crayfish meat, fowl meat and a bird's egg were therefore immortal —
+     * they never spoiled, and smoking fowl bought a keeper nothing, because the raw bird kept just as well forever.
+     *
+     * <p>Keyed off the catalogue rather than a list of item keys, so the next drop added to a species is covered the
+     * day it is added: anything that is not FOOD is left alone, an egg or milk keeps as produce, and flesh keeps as
+     * raw. Idempotent, so a caller that already registered by hand is not a duplicate-key failure.
+     */
+    @Transactional public void registerTaking(UUID item, String itemKey, Instant at) {
+        String category = jdbc.query("SELECT category FROM item_definition WHERE item_key=?",
+            rs -> rs.next() ? rs.getString(1) : null, itemKey);
+        if (!"FOOD".equals(category)) return;
+        boolean produce = itemKey.contains("egg") || itemKey.contains("milk");
+        register(item, produce ? "FRESH" : "RAW", at,
+            at.plus(Duration.ofHours(produce ? 96 : 18)));
+    }
     @Transactional public void advanceTo(Instant now) {
         Timestamp occurredAt = Timestamp.from(now);
         // #218 — pests at a fouled camp gnaw at a Chronicle's food stores. Food held by a Chronicle whose ground is
@@ -60,7 +81,7 @@ public class FoodPreservationService {
         items.retire(item.id(), at, "CONSUMED", itemKey);
         return new Consumption(true,item.spoiled(),QualityGrade.of(item.grade()));
     }
-    private void register(UUID item,String kind,Instant createdAt,Instant safeUntil) { jdbc.update("INSERT INTO food_preservation_state (object_id,preparation_kind,safe_until,pest_checked_at) VALUES (?,?,?,?)",item,kind,Timestamp.from(safeUntil),Timestamp.from(createdAt)); }
+    private void register(UUID item,String kind,Instant createdAt,Instant safeUntil) { jdbc.update("INSERT INTO food_preservation_state (object_id,preparation_kind,safe_until,pest_checked_at) VALUES (?,?,?,?) ON CONFLICT (object_id) DO NOTHING",item,kind,Timestamp.from(safeUntil),Timestamp.from(createdAt)); }
     private record FoodItem(UUID id,boolean spoiled,String grade) { }
     /** How the eaten food was made: whether it was still consumed, whether it had spoiled, and its workmanship
      *  grade — a FINER cooked/preserved food nourishes a little more, a poorer one a little less (#271). */

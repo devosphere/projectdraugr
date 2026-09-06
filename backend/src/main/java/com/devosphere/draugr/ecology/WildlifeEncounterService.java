@@ -1061,7 +1061,7 @@ public class WildlifeEncounterService {
             int lo = ((Number)d.get("yield_min")).intValue(), hi = ((Number)d.get("yield_max")).intValue();
             int want = lo + (hi > lo ? (int)(Math.random()*(hi-lo+1)) : 0);
             String name = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, itemKey);
-            for (int i = 0; i < want; i++) { items.createCarriedItem(chronicle, itemKey, name, at, "HARVESTED_FROM_CARCASS"); taken++; }
+            for (int i = 0; i < want; i++) { UUID got = items.createCarriedItem(chronicle, itemKey, name, at, "HARVESTED_FROM_CARCASS"); food.registerTaking(got, itemKey, at); taken++; }
         }
         return taken;
     }
@@ -1127,7 +1127,7 @@ public class WildlifeEncounterService {
             int lo=((Number)d.get("yield_min")).intValue(), hi=((Number)d.get("yield_max")).intValue();
             int want = lo + (hi>lo ? (int)(Math.random()*(hi-lo+1)) : 0);
             String name = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, itemKey);
-            for (int i=0;i<want;i++) { UUID id=items.createCarriedItem(chronicle,itemKey,name,at,"CAUGHT_FROM_WATER"); if("raw_fish".equals(itemKey)){ food.registerRaw(id,at); jdbc.update("INSERT INTO aquatic_catch (object_id,species_key,method_used,caught_at) VALUES (?,?,?,?)",id,caught,method,Timestamp.from(at)); } got++; }
+            for (int i=0;i<want;i++) { UUID id=items.createCarriedItem(chronicle,itemKey,name,at,"CAUGHT_FROM_WATER"); food.registerTaking(id, itemKey, at); if("raw_fish".equals(itemKey)){ jdbc.update("INSERT INTO aquatic_catch (object_id,species_key,method_used,caught_at) VALUES (?,?,?,?)",id,caught,method,Timestamp.from(at)); } got++; }
         }
         if (got==0) return new EncounterResult("FAILED","Something takes and slips free again, and the water closes over it.");
         drawFishStock(chunk, got, at); // the catch draws the stretch down (#181/#36)
