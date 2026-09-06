@@ -28,6 +28,17 @@ INSERT INTO construction_kind (project_kind, display_name, domain_key, is_shelte
 UPDATE construction_kind SET encloses = TRUE  WHERE project_kind IN ('POULTRY_COOP','CATTLE_BYRE');
 UPDATE construction_kind SET is_barrier = TRUE WHERE project_kind IN ('POULTRY_COOP','CATTLE_BYRE','GOAT_FOLD','PIG_STY');
 
+-- And they burn, which is a flag it is very easy to forget because nothing forces it. A coop of hurdle and bark,
+-- a byre roofed in thatch and a ring of hazel hurdles are as combustible as the wattle fence and the reed hut
+-- already marked flammable; only the sty, which is a stone wall with a scrap of roof, is not.
+UPDATE construction_kind SET flammable = TRUE WHERE project_kind IN ('POULTRY_COOP','CATTLE_BYRE','GOAT_FOLD');
+
+-- THATCH_ROOF was marked not to burn, which is the same omission already in the tree: thatch is the most
+-- combustible roofing there has ever been, and a wattle fence beside it was flammable while it was not. The
+-- registry invariant only ever asserted that stone and earth do NOT burn, so a wooden build marked fireproof
+-- passed in silence — which is exactly how these four were about to.
+UPDATE construction_kind SET flammable = TRUE WHERE project_kind = 'THATCH_ROOF';
+
 INSERT INTO assembly_definition
   (assembly_key, subject_kind, display_name, portable, produces_item_key, construction_kind, domain_key, keywords, subjects, narration, review_state, reviewed_at)
 VALUES
@@ -98,5 +109,15 @@ BEGIN
   -- And the unroofed two must not claim to be shelter for a Chronicle.
   IF EXISTS (SELECT 1 FROM construction_kind WHERE project_kind IN ('GOAT_FOLD','PIG_STY') AND encloses) THEN
     RAISE EXCEPTION 'V284: a hurdle ring is a wall, not a roof — it must not enclose';
+  END IF;
+
+  -- Wood, bark, hurdle and thatch burn. This is the side of the flammability question nothing was asserting.
+  SELECT string_agg(project_kind, ', ' ORDER BY project_kind) INTO bad FROM construction_kind
+   WHERE project_kind IN ('POULTRY_COOP','CATTLE_BYRE','GOAT_FOLD','THATCH_ROOF') AND NOT flammable;
+  IF bad IS NOT NULL THEN RAISE EXCEPTION 'V284: hurdle, bark and thatch carry flame: %', bad; END IF;
+
+  -- The sty is stone and must not have been swept up with them.
+  IF EXISTS (SELECT 1 FROM construction_kind WHERE project_kind='PIG_STY' AND flammable) THEN
+    RAISE EXCEPTION 'V284: a stone-walled sty does not catch';
   END IF;
 END $$;

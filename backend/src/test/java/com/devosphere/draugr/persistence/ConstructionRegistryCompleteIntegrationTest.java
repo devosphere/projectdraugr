@@ -149,6 +149,19 @@ class ConstructionRegistryCompleteIntegrationTest {
             " 'PIT_HOUSE','WATTLE_AND_DAUB_HUT','EARTH_SHELTERED_HUT','CLAY_LINED_HEARTH') ORDER BY 1", String.class);
         assertTrue(burningStone.isEmpty(), "earth, clay, snow and stone do not carry flame: " + burningStone);
 
+        // The other half of the same question, which nothing asserted. Only "stone must not burn" was checked, so
+        // a WOODEN build marked fireproof passed in silence — and several were: a thatch roof, the most
+        // combustible roofing there has ever been, sat beside a flammable wattle fence and did not catch, and
+        // four new animal shelters of hurdle and bark were about to ship the same way.
+        List<String> fireproofTimber = jdbc.queryForList(
+            "SELECT project_kind FROM construction_kind WHERE NOT flammable AND project_kind IN " +
+            "('WATTLE_FENCE','BRUSH_FENCE','SPLIT_RAIL_FENCE','HIDE_TENT','REED_HUT','THATCH_ROOF','SMOKE_RACK'," +
+            " 'DRYING_RACK','WOOD_STORE','POULTRY_COOP','CATTLE_BYRE','GOAT_FOLD','LOG_SHELTER','BARK_SHELTER') ORDER BY 1",
+            String.class);
+        assertTrue(fireproofTimber.isEmpty(),
+            "hurdle, bark, reed, hide and thatch all carry flame, and a fire beside them must be able to catch: "
+          + fireproofTimber);
+
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
 }
