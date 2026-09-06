@@ -1079,10 +1079,24 @@ public class PhysicalItemService {
         // waste) plus a minor, bounded quality assist. Detected through the unified reachability model (Layer 1),
         // so a bench standing in an on-site workshop counts.
         String stationKind = (String) match.get("station_kind");
-        // A workstation you BUILT counts as the bench it is. The catalogue carries buildable WEAVING_TABLE,
-        // WOODWORKING_TABLE and STONEWORKING_TABLE structures, but a process asks for the station ITEM, so raising
-        // one eased nothing — is_workstation is read in only one place, negatively, to decide what decays. Same
-        // shape as the is_shelter gap: a flag that named a capability without any code granting it.
+        // A workstation you BUILT counts as the bench it is — which is true for a rack, and is NOT yet true for
+        // the tables, so the claim is corrected here rather than left standing.
+        //
+        // WEAVING_TABLE, WOODWORKING_TABLE, STONEWORKING_TABLE, SEWING_TABLE and KNOWLEDGE_STATION are rows in
+        // construction_kind and nothing anywhere creates a construction_project with any of those kinds: they have
+        // no assembly, and craftFurniture makes an ITEM standing at a location, not a build. So the three cases in
+        // stationStructureFor below are, for now, a mapping to something that cannot exist.
+        //
+        // Nothing is broken by that, because the item path is the live one and it works: craftFurniture places the
+        // bench on the ground, and REACHABLE_CTE counts what is on the ground where the Chronicle stands, so a
+        // crafted bench eases the work exactly as it should. The mapping is kept rather than deleted because the
+        // same method now has a genuinely live structure path (a smoke rack, a drying rack), and because making
+        // the tables raisable is the honest fix if #77 wants them.
+        //
+        // That fix is not free, and the reason is worth recording: CRAFT_DESK matches (craft|make|build|construct|
+        // assemble) beside (desk|table|workbench|bench), so any assembly keyword naming a table or a bench is
+        // shadowed by a Java intent before the assembly matcher ever sees it — the #513 trap. A buildable
+        // workshop needs vocabulary that does not collide, not just a migration.
         boolean atStation = stationKind != null
             && (hasAtLeast(chronicle, stationKind, 1) || builtStationAt(location, stationKind));
 
