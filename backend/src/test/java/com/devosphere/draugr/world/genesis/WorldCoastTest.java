@@ -73,7 +73,11 @@ class WorldCoastTest {
                 if ("MOUNTAIN".equals(b)) mountain++;
             }
         assertTrue(wetland >= 40, "the freshwater marsh must not be eaten by the shore — only " + wetland + " left");
-        assertTrue(mountain >= 40, "a sea cliff is still a cliff, and that is where the ore is — only " + mountain + " left");
+        // Open mountain now has two consumers, not one: the shore leaves sea cliffs alone, and the cave mouth
+        // (#158) takes a sparse share of the rock. Obsidian, pumice and clear quartz are found on open mountain
+        // and nowhere else, so this is the floor that keeps those chains alive — 40 of the original 57 remain.
+        assertTrue(mountain >= 35,
+            "a sea cliff is still a cliff, and that is where the ore is — only " + mountain + " left after shore and caves");
     }
 
     /** A river mouth reads as river: fresh water is rarer and more useful, and the channel leads inland. */

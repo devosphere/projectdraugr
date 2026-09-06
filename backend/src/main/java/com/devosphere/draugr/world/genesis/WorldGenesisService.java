@@ -137,7 +137,32 @@ public class WorldGenesisService {
         // the Chronicle can follow inland.
         if (elevation >= 0.38 && riverCells(width, height, seed).contains(cellKey((int) Math.round(x), (int) Math.round(y))))
             biome = "RIVER_BANK";
+        // The way in (#158). A cave bear, a cave troll, a cave screecher and a giant bat swarm were all in the
+        // catalogue and all of them denned on a bare, open mountaintop, because rock was the closest thing to a
+        // cave the world could offer. A cave mouth is derived rather than invented, the same way the shore is:
+        // it must be IN rock, and it must OPEN onto ground you can walk in from, so it is never a hole in the
+        // middle of an ice field or a cliff reachable only from the sea. Sparse by a deterministic hash — most
+        // rock is solid — which leaves the open mountain intact for the ore that belongs there.
+        if (biome.equals("MOUNTAIN") && caveMouthAt((int) Math.round(x), (int) Math.round(y), width, height, seed))
+            biome = "CAVE_MOUTH";
         return new TerrainCell(elevationValue, moistureValue, biome);
+    }
+
+    /** Rock that opens onto walkable ground, thinned deterministically — the making of a cave mouth (#158). */
+    private boolean caveMouthAt(int x, int y, int width, int height, long seed) {
+        boolean opensOntoWalkableGround = false;
+        for (int dy = -1; dy <= 1 && !opensOntoWalkableGround; dy++) for (int dx = -1; dx <= 1; dx++) {
+            if (dx == 0 && dy == 0) continue;
+            int nx = x + dx, ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+            double neighbour = rawElevation(nx, ny, width, height, seed);
+            // Anything that is neither open sea nor more mountain: ground a Chronicle can stand on to go in.
+            if (neighbour >= 0.30 && neighbour <= 0.82) { opensOntoWalkableGround = true; break; }
+        }
+        if (!opensOntoWalkableGround) return false;
+        long hash = seed ^ ((long) x * 0x100000001B3L) ^ ((long) y * 0xD6E8FEB86659FD93L);
+        hash ^= hash >>> 29; hash *= 0xBF58476D1CE4E5B9L; hash ^= hash >>> 32;
+        return Math.floorMod(hash, 4) == 0;
     }
 
     /** Whether open water lies against this ground — the test that makes a chunk a shore rather than inland. */
@@ -267,7 +292,7 @@ public class WorldGenesisService {
     }
 
     private Color shade(Color color, int elevation) { float factor = .78f + elevation / 1000f * .28f; return new Color(Math.min(255, (int) (color.getRed() * factor)), Math.min(255, (int) (color.getGreen() * factor)), Math.min(255, (int) (color.getBlue() * factor))); }
-    private Color colorFor(String biome) { return switch (biome) { case "OCEAN" -> new Color(42, 87, 123); case "WETLAND" -> new Color(73, 111, 104); case "TEMPERATE_FOREST" -> new Color(54, 103, 61); case "GRASSLAND" -> new Color(144, 145, 83); case "HIGHLAND" -> new Color(120, 111, 82); case "MOUNTAIN" -> new Color(122, 123, 121); case "RIVER_BANK" -> new Color(86, 132, 148); case "COAST" -> new Color(198, 182, 143); default -> Color.MAGENTA; }; }
+    private Color colorFor(String biome) { return switch (biome) { case "OCEAN" -> new Color(42, 87, 123); case "WETLAND" -> new Color(73, 111, 104); case "TEMPERATE_FOREST" -> new Color(54, 103, 61); case "GRASSLAND" -> new Color(144, 145, 83); case "HIGHLAND" -> new Color(120, 111, 82); case "MOUNTAIN" -> new Color(122, 123, 121); case "RIVER_BANK" -> new Color(86, 132, 148); case "COAST" -> new Color(198, 182, 143); case "CAVE_MOUTH" -> new Color(64, 58, 61); default -> Color.MAGENTA; }; }
     private Path previewPath() { return exportDirectory.resolve("overseer-map.png"); }
 
     public record GenesisRequest(long seed, int widthChunks, int heightChunks) { public static GenesisRequest mvpDefault() { return new GenesisRequest(681_013_497L, 28, 20); } }
