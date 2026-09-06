@@ -1873,14 +1873,10 @@ public class ChronicleActionService {
     /** A completed, standing shelter here — for getting out of the weather (#66). Any roofed,
      * enclosing form counts (#61): a lean-to, or the huts whose walls and roof actually keep weather off. */
     private boolean shelterInReach(UUID location) {
-        // Any completed build the catalogue declares a shelter counts, not a hardcoded four. Seventeen construction
-        // kinds carry is_shelter — hide tent, debris hut, pit house, bark cabin, snow shelter and the rest — but this
-        // check named only four project kinds, so all the others sheltered nobody: a Chronicle could raise a hide
-        // lodge and still be unable to get out of the rain, dry off, or find shade. is_shelter was read in just one
-        // place, negatively, to decide what decays.
-        //
-        // The three legacy kinds without a construction_kind row (the huts and the log cabin, which are assemblies)
-        // stay named explicitly so nothing that sheltered before stops sheltering now.
+        // Any completed build you can be inside counts, not a hardcoded four — and the four other places that ask
+        // this same question now ask it through the same constant, so none of them can drift again. This check was
+        // put onto is_shelter first, which reads too wide: thirty-four kinds carry that, fourteen of them doors,
+        // walls, screens, a roofing frame, a smoke hood and furniture. A bark door on open grassland is not cover.
         //
         // A cave mouth shelters without being built (#158). It is the oldest roof there is, and the first reason
         // to walk into one: rock over your head keeps the rain off whether or not you ever raised anything.
@@ -1888,8 +1884,7 @@ public class ChronicleActionService {
             "SELECT EXISTS(SELECT 1 FROM world_chunk c WHERE c.id=? AND c.biome='CAVE_MOUTH') " +
             "    OR EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
             "WHERE w.current_location_id=? AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE' " +
-            "AND (cp.project_kind IN ('WATTLE_AND_DAUB_HUT','EARTH_SHELTERED_HUT','LOG_CABIN') " +
-            "     OR EXISTS(SELECT 1 FROM construction_kind ck WHERE ck.project_kind=cp.project_kind AND ck.is_shelter)))",
+            "AND " + com.devosphere.draugr.construction.Shelters.ENCLOSING + ")",
             Boolean.class, location, location));
     }
     /**
