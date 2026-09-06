@@ -591,6 +591,57 @@ class IntentClassificationRegressionTest {
     }
 
     /**
+     * A wattle WALL and a wattle FENCE are different builds — the wall is a shelter, the fence is not — and the
+     * wall has its own staged assembly. BUILD_FENCE claimed "wattle wall" outright, from before that assembly
+     * existed, so every one of the assembly's four keywords was shadowed and asking for a wall gave a fence.
+     */
+    @Test
+    void aWattleWallIsNotAWattleFence() throws Exception {
+        assertEquals("UNKNOWN", classify("build a wattle wall"));
+        assertEquals("UNKNOWN", classify("weave a wattle wall"));
+        assertEquals("UNKNOWN", classify("raise a wattle wall"));
+        // Fences of every other description still reach the Java intent.
+        assertEquals("BUILD_FENCE", classify("build a wattle fence"));
+        assertEquals("BUILD_FENCE", classify("raise a palisade"));
+        assertEquals("BUILD_FENCE", classify("put up a stockade"));
+        assertEquals("BUILD_FENCE", classify("build a fence around the plot"));
+    }
+
+    /**
+     * The wattle wall was one of six assemblies a hard intent had quietly claimed. In each case the player asked
+     * for a structure and the classifier handed them something else entirely — a plank bench became a desk, a
+     * smoke rack became a stone shelf, a clay-lined hearth became a friction fire kit, and both "work on the
+     * clay hearth" and "work on the earth sheltered hut" became tilling a seedbed, the first of those because
+     * "hearth" contains "earth" as a substring. Each phrase must now fall through to the assembly matcher, and
+     * the ordinary reading of each intent must survive.
+     */
+    @Test
+    void fiveMoreAssembliesAreNoLongerClaimedByAHardIntent() throws Exception {
+        assertEquals("UNKNOWN", classify("build a sleeping bench"));
+        assertEquals("UNKNOWN", classify("raise a sleeping bench"));
+        assertEquals("UNKNOWN", classify("sleeping bench"));
+        assertEquals("CRAFT_DESK", classify("build a desk"));
+        assertEquals("SLEEP", classify("bed down for the night"));
+
+        assertEquals("UNKNOWN", classify("build a smoke rack"));
+        assertEquals("UNKNOWN", classify("make a smoke rack"));
+        assertEquals("CRAFT_SHELF", classify("build a shelf"));
+
+        assertEquals("UNKNOWN", classify("make a clay hearth"));
+        assertEquals("CRAFT_FIRE_KIT", classify("carve a fire drill"));
+
+        assertEquals("UNKNOWN", classify("work on the clay hearth"));
+        assertEquals("UNKNOWN", classify("work on the earth sheltered hut"));
+        assertEquals("TILL_GROUND", classify("break the ground"));
+        assertEquals("TILL_GROUND", classify("turn the earth"));
+        assertEquals("TILL_GROUND", classify("work the soil"));
+
+        assertEquals("UNKNOWN", classify("build a split rail fence"));
+        assertEquals("UNKNOWN", classify("raise a split rail fence"));
+        assertEquals("UNKNOWN", classify("build a rail fence"));
+    }
+
+    /**
      * V275: the pack basket is woven by the two-axis matcher, so CRAFT_BASKET must yield to it — a plain basket
      * is the Java intent's job, anything worn or carried in bulk is a recipe's. "backpack" contains "pack", which
      * is already one of the words that makes the intent stand aside.
