@@ -161,9 +161,13 @@ public class ExaminationService {
                 "WHERE here.id = ? " +
                 "  AND abs(lair.grid_x - here.grid_x) <= GREATEST(1, mp.sight_radius) " +
                 "  AND abs(lair.grid_y - here.grid_y) <= GREATEST(1, mp.sight_radius) " +
-                // A thing the ground announces comes first, however carefully anyone was looking.
-                "ORDER BY (mp.special_mechanic='TREMOR_WARNING') DESC, " +
-                "  GREATEST(abs(lair.grid_x - here.grid_x), abs(lair.grid_y - here.grid_y)), mp.sight_radius DESC LIMIT 1",
+                // Nearest ground first. This used to sort TREMOR_WARNING ahead of distance, which read well until
+                // two territories overlapped: a thunder lizard three chunks off then drowned out the thing whose
+                // ground you were actually standing on, and what you were told about was the further creature. A
+                // thing the ground announces still comes before anything at the same remove — that is what being
+                // felt through the ground means — but it cannot mask what is underfoot.
+                "ORDER BY GREATEST(abs(lair.grid_x - here.grid_x), abs(lair.grid_y - here.grid_y)), " +
+                "  (mp.special_mechanic='TREMOR_WARNING') DESC, mp.sight_radius DESC LIMIT 1",
                 chunk));
             if (!lurking.isEmpty()) {
                 String species = humanize((String) lurking.get(0).get("species_key"));

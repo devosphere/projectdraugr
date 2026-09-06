@@ -258,10 +258,10 @@ public class WildlifeSimulationService {
     @Transactional
     void seedExistingSites(Instant now) {
         List<Site> sites = jdbc.query(
-            "SELECT es.id, es.site_kind, es.site_category, c.biome FROM ecology_site es JOIN world_chunk c ON c.id = es.chunk_id " +
+            "SELECT es.id, es.site_kind, es.site_category, c.biome, c.grid_x, c.grid_y FROM ecology_site es JOIN world_chunk c ON c.id = es.chunk_id " +
             "WHERE es.site_category IN ('WILDLIFE','MONSTER') " +
             "AND NOT EXISTS (SELECT 1 FROM wildlife_population wp WHERE wp.site_id = es.id) ORDER BY es.id",
-            (rs, row) -> new Site(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3), rs.getString(4)));
+            (rs, row) -> new Site(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3), rs.getString(4), rs.getInt(5), rs.getInt(6)));
         for (Site site : sites) {
             Profile named = "MONSTER".equals(site.category())
                 ? monsterFor(site)
@@ -287,9 +287,11 @@ public class WildlifeSimulationService {
      *
      * <p>The species is chosen from the catalogue by the ground it must live on, so a wyvern is never seeded in a
      * marsh. Where the lair's own name shares a word with a creature that belongs to that biome — a BOG warden
-     * and a bog wraith — that one is taken; otherwise the choice is deterministic per site, so a given world
-     * always holds the same things in the same places. A lair on ground the catalogue has no monster for is left
-     * empty rather than filled with something that does not belong there.
+     * and a bog wraith — that one is taken; otherwise the choice is keyed on the site's ground and purpose, so a
+     * given world always holds the same things in the same places. (It said that before and did not do it: the key
+     * was the site's row id, which ecology genesis mints at random, so the same seed seeded twice put different
+     * creatures in the same lairs. See {@link Site#stableKey()}.) A lair on ground the catalogue has no monster
+     * for is left empty rather than filled with something that does not belong there.
      *
      * <p>They are seeded scarce: one, at most two. A monster is not a herd.
      */
@@ -309,7 +311,7 @@ public class WildlifeSimulationService {
             .max(java.util.Comparator
                 .comparingInt((Map<String, Object> m) -> sharedWordLength(label, (String) m.get("species_key")))
                 .thenComparing(m -> (String) m.get("species_key"), java.util.Comparator.reverseOrder()))
-            .orElse(candidates.get(Math.floorMod(site.id().hashCode(), candidates.size())));
+            .orElse(candidates.get(Math.floorMod(site.stableKey(), candidates.size())));
 
         // What a thing eats follows from what it is: the passive ones browse, the apex ones hunt.
         String role = switch ((String) chosen.get("aggression")) {
@@ -383,7 +385,7 @@ public class WildlifeSimulationService {
             site.biome() == null ? "~none~" : site.biome());
         if (candidates.isEmpty()) return null;
 
-        Map<String, Object> chosen = candidates.get(Math.floorMod(site.id().hashCode(), candidates.size()));
+        Map<String, Object> chosen = candidates.get(Math.floorMod(site.stableKey(), candidates.size()));
         String role = (String) chosen.get("ecological_role");
         String cycle = (String) chosen.get("activity_cycle");
         // A big animal is scarce and a small one is not — the same shape the named profiles above already use.
@@ -399,7 +401,17 @@ public class WildlifeSimulationService {
         boolean active = switch (cycle) { case "NOCTURNAL" -> hour >= 19 || hour < 5; case "CREPUSCULAR" -> (hour >= 5 && hour <= 8) || (hour >= 17 && hour <= 20); default -> hour >= 7 && hour <= 18; };
         return active ? ("CARNIVORE".equals(role) ? "HUNTING" : "FORAGING") : "RESTING";
     }
-    private record Site(UUID id, String kind, String category, String biome) { }
+    private record Site(UUID id, String kind, String category, String biome, int gridX, int gridY) {
+        /**
+         * A stable key for choosing what lives here when the name does not say.
+         *
+         * <p>This used to hash { site.id()}, and the comment beside it claimed the choice was "deterministic
+         * per site, so a given world always holds the same things in the same places". It was not: ecology genesis
+         * mints every site id with { UUID.randomUUID()}, so the same seed seeded twice put different creatures
+         * in the same lairs. Ground and purpose are what actually identify a site, and both are stable.
+         */
+        int stableKey() { return java.util.Objects.hash(gridX, gridY, kind == null ? "" : kind); }
+    }
     private record Profile(String species, String role, String cycle, int initial, int capacity) { }
     public record PopulationView(String speciesKey, String ecologicalRole, String activityCycle, int populationCount, int carryingCapacity, String behaviorState, String siteKind) { }
 }
