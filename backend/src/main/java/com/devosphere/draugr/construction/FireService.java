@@ -139,12 +139,20 @@ public class FireService {
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'FIRE_EXTINGUISHED','{}'::jsonb)",pit,Timestamp.from(now));
         return true;
     }
-    /** Bank a fire (#71): rake the coals together and cover them so the embers hold far longer than an open flame. */
+    /**
+     * Bank a fire (#71): rake the coals together and cover them so the embers hold far longer than an open flame.
+     *
+     * <p>A fire poker is exactly the tool for this — the catalogue calls it "a poker to tend a fire and reach hot
+     * coals" and nothing read it, so a Chronicle could cut one and bank no better than with their hands and a
+     * green stick. With one in reach the coals are raked into a tighter heap and hold longer (#75).
+     */
     @Transactional
-    public boolean bank(UUID location, Instant now) {
+    public boolean bank(UUID chronicle, UUID location, Instant now) {
         UUID pit=activeFirePit(location);
         if(pit==null) return false;
-        jdbc.update("UPDATE fire_state SET fuel_minutes=LEAST(fuel_minutes+90,240), last_updated_at=? WHERE construction_id=?",Timestamp.from(now),pit);
+        boolean poker = chronicle != null && items.hasAtLeast(chronicle,"fire_poker",1);
+        jdbc.update("UPDATE fire_state SET fuel_minutes=LEAST(fuel_minutes+?,?), last_updated_at=? WHERE construction_id=?",
+            poker?130:90, poker?320:240, Timestamp.from(now),pit);
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'FIRE_BANKED','{}'::jsonb)",pit,Timestamp.from(now));
         return true;
     }
