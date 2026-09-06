@@ -55,6 +55,7 @@ class ConstructionRegistryCompleteIntegrationTest {
     }
 
     @Autowired WorldGenesisService worldGenesis;
+    @Autowired com.devosphere.draugr.action.ChronicleActionService actions;
     @Autowired PersistentStateAuditor auditor;
     @Autowired JdbcTemplate jdbc;
 
@@ -88,6 +89,48 @@ class ConstructionRegistryCompleteIntegrationTest {
             "ORDER BY 1", String.class);
         assertTrue(clashes.isEmpty(),
             "assembly routing takes the longest keyword, so an exact tie is resolved arbitrarily: " + clashes);
+    }
+
+    /**
+     * A Java hard intent runs BEFORE the assembly matcher, so an intent that claims an assembly's own keyword
+     * shadows it completely. That is how "build a wattle wall" gave a wattle FENCE: BUILD_FENCE claimed the
+     * phrase from before the wall's own assembly existed, and all four of its keywords were unreachable.
+     *
+     * <p>Checked against the classifier itself rather than a hand-kept list, so a new assembly keyword that
+     * collides with an existing intent is caught the day it is added. Every keyword is checked, whatever its
+     * length — a short one like "smoke rack" is the most natural thing a player types, so it is exactly the
+     * case a length cutoff would hide.
+     *
+     * <p>A collision is only a defect when the two paths build different things. Three intents deliberately
+     * answer for an assembly by building the very same {@code construction_kind} in one shot — you get the
+     * structure you asked for, just not stage by stage — so the exemption is that equality, not a list of
+     * names: an intent that starts building something else is a finding no matter which assembly it steals.
+     */
+    private static final java.util.Map<String, String> INTENT_BUILDS = java.util.Map.of(
+        "START_LEAN_TO", "LEAN_TO", "BUILD_FIRE_PIT", "STONE_FIRE_PIT", "BUILD_FENCE", "WATTLE_FENCE");
+
+    @Test
+    void noJavaIntentShadowsAnAssemblysOwnKeywords() throws Exception {
+        world();
+        java.lang.reflect.Method classify =
+            com.devosphere.draugr.action.ChronicleActionService.class.getDeclaredMethod("classify", String.class);
+        classify.setAccessible(true);
+        Object target = org.springframework.test.util.AopTestUtils.getTargetObject(actions);
+
+        List<String> shadowed = new java.util.ArrayList<>();
+        for (java.util.Map<String, Object> row : jdbc.queryForList(
+                "SELECT ad.assembly_key, ad.construction_kind, trim(x) AS kw FROM assembly_definition ad, " +
+                "unnest(string_to_array(ad.keywords, ',')) x WHERE trim(x) <> ''")) {
+            String phrase = (String) row.get("kw");
+            String intent = ((Enum<?>) classify.invoke(target, phrase)).name();
+            // UNKNOWN is what lets a phrase fall through to the assembly matcher at all.
+            if ("UNKNOWN".equals(intent)) continue;
+            if (INTENT_BUILDS.getOrDefault(intent, "").equals(row.get("construction_kind"))) continue;
+            shadowed.add(row.get("assembly_key") + " :: \"" + phrase + "\" is taken by " + intent);
+        }
+        assertTrue(shadowed.isEmpty(),
+            "a hard intent runs before the assembly matcher, so these assemblies cannot be reached by their own "
+          + "words — the player asks for one thing and gets another: " + shadowed);
     }
 
     /** A shelter that cannot wear is a shelter that never needs mending; the two flags belong together. */
