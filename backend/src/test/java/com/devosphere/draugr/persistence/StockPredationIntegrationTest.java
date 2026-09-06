@@ -120,5 +120,49 @@ class StockPredationIntegrationTest {
         assertEquals(3, flockSize(flock), "penned stock are not taken");
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
+
+        // A FENCE must do it too (V281). The raid check asked for is_shelter, which is the wrong question twice
+        // over: every ordinary fence a keeper builds is is_shelter=false and so protected nothing, while a bark
+        // door lying on the open ground is is_shelter=true and did. It asks for a barrier or a roof now.
+        jdbc.update("DELETE FROM construction_project cp USING world_object w WHERE w.id=cp.object_id AND w.current_location_id=?", chunk);
+        jdbc.update("UPDATE wildlife_bond SET last_raid_at=NULL WHERE chronicle_id=?", chronicle);
+
+        UUID door = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,lifecycle_state,current_location_id) VALUES (?,'CONSTRUCTION','Bark door','ACTIVE',?)", door, chunk);
+        jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at,integrity_percent) VALUES (?,'BARK_DOOR','COMPLETED',100,?,100)", door, ts);
+        assertNotNull(wildlife.raidUnprotectedStock(chronicle, now, true),
+            "a bark door lying on open ground stands in nothing's way and must not protect a herd");
+        assertEquals(2, flockSize(flock), "the door bought the keeper nothing, so another goat is taken");
+
+        jdbc.update("DELETE FROM construction_project cp USING world_object w WHERE w.id=cp.object_id AND w.current_location_id=?", chunk);
+        jdbc.update("UPDATE wildlife_bond SET last_raid_at=NULL WHERE chronicle_id=?", chronicle);
+
+        UUID fence = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,lifecycle_state,current_location_id) VALUES (?,'CONSTRUCTION','Wattle fence','ACTIVE',?)", fence, chunk);
+        jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at,integrity_percent) VALUES (?,'WATTLE_FENCE','COMPLETED',100,?,100)", fence, ts);
+        assertNull(wildlife.raidUnprotectedStock(chronicle, now, true),
+            "a wattle fence is the thing a keeper actually builds to keep wolves off, and it must work");
+        assertEquals(2, flockSize(flock), "fenced stock are not taken");
+
+        assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
+
+    /** The registry must agree: the ordinary fences are barriers, and the parts of a shelter are not. */
+    @Test
+    void theThingsAKeeperBuildsAreBarriersAndDoorsAreNot() {
+        if (worldGenesis.current() == null) {
+            worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
+            ecology.seed();
+        }
+        java.util.List<String> shouldGuard = jdbc.queryForList(
+            "SELECT k FROM unnest(ARRAY['WATTLE_FENCE','SPLIT_RAIL_FENCE','BRUSH_FENCE','ANIMAL_PEN','DRY_STONE_WALL']) k " +
+            "WHERE k NOT IN (SELECT project_kind FROM construction_kind WHERE is_barrier) ORDER BY 1", String.class);
+        assertTrue(shouldGuard.isEmpty(), "these are what a keeper builds to keep wolves off a herd: " + shouldGuard);
+
+        java.util.List<String> shouldNot = jdbc.queryForList(
+            "SELECT project_kind FROM construction_kind WHERE is_barrier " +
+            "AND project_kind IN ('BARK_DOOR','REED_DOOR','DOOR_HANGING','SMOKE_HOOD','ROOFING_FRAME','THATCH_ROOF') ORDER BY 1",
+            String.class);
+        assertTrue(shouldNot.isEmpty(), "a door is what a barrier opens, and a roof is not a wall: " + shouldNot);
     }
 }
