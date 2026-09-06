@@ -97,7 +97,9 @@ class ConstructionRegistryCompleteIntegrationTest {
      * phrase from before the wall's own assembly existed, and all four of its keywords were unreachable.
      *
      * <p>Checked against the classifier itself rather than a hand-kept list, so a new assembly keyword that
-     * collides with an existing intent is caught the day it is added.
+     * collides with an existing intent is caught the day it is added. Every keyword is checked, whatever its
+     * length — a short one like "smoke rack" is the most natural thing a player types, so it is exactly the
+     * case a length cutoff would hide.
      *
      * <p>A collision is only a defect when the two paths build different things. Three intents deliberately
      * answer for an assembly by building the very same {@code construction_kind} in one shot — you get the
@@ -118,7 +120,7 @@ class ConstructionRegistryCompleteIntegrationTest {
         List<String> shadowed = new java.util.ArrayList<>();
         for (java.util.Map<String, Object> row : jdbc.queryForList(
                 "SELECT ad.assembly_key, ad.construction_kind, trim(x) AS kw FROM assembly_definition ad, " +
-                "unnest(string_to_array(ad.keywords, ',')) x WHERE length(trim(x)) >= 12")) {
+                "unnest(string_to_array(ad.keywords, ',')) x WHERE trim(x) <> ''")) {
             String phrase = (String) row.get("kw");
             String intent = ((Enum<?>) classify.invoke(target, phrase)).name();
             // UNKNOWN is what lets a phrase fall through to the assembly matcher at all.
