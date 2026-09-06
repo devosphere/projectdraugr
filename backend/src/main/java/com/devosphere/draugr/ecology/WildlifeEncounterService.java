@@ -1096,6 +1096,11 @@ public class WildlifeEncounterService {
         // the current, where a bare line only drifts on the top — a real lift to angling that the soft, dense
         // smelted metal is uniquely good for (#188). Line methods only; a trap or net is not weighted this way.
         if (method.equals("LINE") && (items.hasAtLeast(chronicle,"lead_sinker",1) || items.hasAtLeast(chronicle,"stone_fishing_weight",1))) chance = Math.min(90, chance + 15);
+        // A float holds the bait off the bottom at a set depth and shows the take, which is the other half of the
+        // rig the sinker is the first half of — shot below, float above, and the classic hand-line between them.
+        // The catalogue calls the float_bobber "a light float bound for a fishing line" and nothing read it, so a
+        // Chronicle could bind one to their line and fish exactly as they had before (#75).
+        if (method.equals("LINE") && items.hasAtLeast(chronicle,"float_bobber",1)) chance = Math.min(90, chance + 10);
         // Bait (#75): a worm on the hook, in the trap, or in the hand draws fish that clear water would not —
         // it is spent whether or not the fish takes. Bare hands and a sweeping net are the methods a worm does
         // not help — one grabs, the other encircles.
