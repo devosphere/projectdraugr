@@ -660,7 +660,11 @@ public class WildlifeEncounterService {
             "  AND NOT EXISTS (SELECT 1 FROM construction_project cp JOIN world_object pw ON pw.id=cp.object_id " +
             "                  WHERE pw.current_location_id = cw.current_location_id AND cp.state='COMPLETED' " +
             "                    AND cp.integrity_percent > 0 AND pw.lifecycle_state='ACTIVE' " +
-            "                    AND (cp.project_kind='ANIMAL_PEN' OR EXISTS(SELECT 1 FROM construction_kind ck WHERE ck.project_kind=cp.project_kind AND ck.is_shelter))) " +
+            // Something a wolf must get past: a fence, a wall, a gate, the pen itself — or a roofed shelter, since
+            // an animal indoors is out of reach too. This asked for is_shelter, which is neither question (V281):
+            // every ordinary fence a keeper builds is is_shelter=false and so protected nothing, while a bark door
+            // lying on open ground is is_shelter=true and did.
+            "                    AND EXISTS(SELECT 1 FROM construction_kind ck WHERE ck.project_kind=cp.project_kind AND (ck.is_barrier OR ck.encloses))) " +
             "ORDER BY wb.last_raid_at NULLS FIRST LIMIT 1 FOR UPDATE OF wb",
             rs -> rs.next() ? java.util.Map.of("bond", rs.getObject(1, UUID.class), "pop", rs.getObject(2, UUID.class),
                     "species", rs.getString(3)) : null,
