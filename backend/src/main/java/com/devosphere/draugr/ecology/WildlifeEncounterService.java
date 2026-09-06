@@ -100,14 +100,15 @@ public class WildlifeEncounterService {
         // A bow with arrows is the strongest reach a first-era Chronicle has — it strikes hard from a distance,
         // but only ever with an arrow nocked (no arrows, no shot).
         // Fire in the fight (#126): the same flame a predator will not ambush through tells in the close too.
-        // A lit fire at hand, or a brand raised from the carried stock, cows the animal — it presses less and
+        // A lit fire at hand, or a brand raised from the carried stock — a resin torch or a firebrand, the two
+        // things in the catalogue that are an open flame you can hold — cows the animal — it presses less and
         // breaks off sooner, so the Chronicle's effort counts for more. A creature that breathes fire is, of
         // course, unmoved by it. Weaker than a real weapon; it never makes a bare-handed stand a sure thing.
         int fireEdge = 0;
         boolean fireBreather = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM monster_profile WHERE species_key=? AND special_mechanic='FIRE_BREATH')", Boolean.class, candidate.species()));
         if (!fireBreather) {
             boolean fireAtHand = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id JOIN fire_state fs ON fs.construction_id=cp.object_id WHERE w.current_location_id=? AND fs.active=true AND w.lifecycle_state='ACTIVE')", Boolean.class, chunk));
-            boolean brandInHand = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key='resin_torch')", Boolean.class, chronicle));
+            boolean brandInHand = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key IN ('resin_torch','firebrand'))", Boolean.class, chronicle));
             fireEdge = fireAtHand ? 15 : (brandInHand ? 10 : 0);
         }
         // A keen, edge-holding weapon bites deeper than a plain or knapped one (#75/#77/#180): a fire-hardened
@@ -320,10 +321,11 @@ public class WildlifeEncounterService {
             "WHERE w.current_location_id=? AND cp.project_kind IN ('BRUSH_FENCE','WATTLE_FENCE') AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE'",
             Integer.class, chunk);
         if (fence != null) chance -= fence;
-        // A fire-brand to hand (#126) — a resin torch the Chronicle can raise and wave — reads to a predator
+        // A fire-brand to hand (#126) — a resin torch or a firebrand the Chronicle can raise and wave — reads to
+        // a predator
         // as the fire it fears: it presses a rush far less readily against someone carrying flame. Weaker than
         // a whole camp's fire (which the ecology's fire-fear cascade already answers), but real, and carried.
-        boolean hasBrand = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key='resin_torch')", Boolean.class, chronicle));
+        boolean hasBrand = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key IN ('resin_torch','firebrand'))", Boolean.class, chronicle));
         if (hasBrand) chance -= 12;
         // A fresh kill carried on the body (#123/#127) is blood and scent on the wind — it draws a hungry predator
         // in where it might otherwise have passed. Cook, store, or cache the meat and the draw is gone; carry a raw

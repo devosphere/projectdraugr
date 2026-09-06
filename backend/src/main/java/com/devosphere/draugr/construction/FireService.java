@@ -33,6 +33,9 @@ public class FireService {
     @Transactional(readOnly = true)
     public String detectMethod(UUID chronicle, String actionText) {
         String v = actionText == null ? "" : actionText.toLowerCase(java.util.Locale.ROOT);
+        // A brand walked from one fire to the next (#75). Checked before the ember, because someone who names a
+        // brand means the brand — the ember is the other way of doing the same thing, not a synonym for it.
+        if (v.contains("brand") && (v.contains("carry")||v.contains("bring")||v.contains("transfer")||v.contains("walk")||v.contains("light")||v.contains("start"))) return "brand_transfer";
         if (v.contains("ember") && (v.contains("carry")||v.contains("bring")||v.contains("transfer")||v.contains("bundle"))) return "ember_transfer";
         if (v.contains("bow drill")||v.contains("bow-drill")||(v.contains("bow")&&v.contains("drill"))) return "bow_drill";
         if (v.contains("hand drill")||v.contains("hand-drill")||(v.contains("palms")&&v.contains("spindle"))) return "hand_drill";
