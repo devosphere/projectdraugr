@@ -268,7 +268,7 @@ public class ExaminationService {
         String weather = jdbc.query("SELECT ww.weather_kind FROM world_weather ww JOIN world_chunk c ON c.world_id=ww.world_id WHERE c.id=?", rs -> rs.next() ? rs.getString(1) : null, location);
         boolean fire = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM fire_state fs JOIN world_object w ON w.id=fs.construction_id WHERE w.current_location_id=? AND fs.active=true)", Boolean.class, location));
         boolean water = "WETLAND".equals(biome) || "RIVER_BANK".equals(biome) || Boolean.TRUE.equals(jdbc.queryForObject(
-            "SELECT EXISTS(SELECT 1 FROM ecology_site WHERE chunk_id=? AND (site_kind ILIKE '%spring%' OR site_kind ILIKE '%stream%' OR site_kind ILIKE '%river%' OR site_kind ILIKE '%freshwater%'))", Boolean.class, location));
+            "SELECT EXISTS(SELECT 1 FROM ecology_site WHERE chunk_id=? AND (" + com.devosphere.draugr.ecology.FreshWater.sites() + "))", Boolean.class, location));
         boolean wet = "RAIN".equals(weather) || "STORM".equals(weather);
         double acuity = Math.min(1.0, 0.55 + capability.familiarity(chronicle, "ATTENTION"));
         StringBuilder b = new StringBuilder();
@@ -356,7 +356,7 @@ public class ExaminationService {
         if (lower.contains("depth") || lower.contains("how deep") || lower.contains("sound the")) {
             String biome = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : "", location);
             boolean water = "WETLAND".equals(biome) || "RIVER_BANK".equals(biome) || Boolean.TRUE.equals(jdbc.queryForObject(
-                "SELECT EXISTS(SELECT 1 FROM ecology_site WHERE chunk_id=? AND (site_kind ILIKE '%spring%' OR site_kind ILIKE '%stream%' OR site_kind ILIKE '%river%' OR site_kind ILIKE '%freshwater%'))", Boolean.class, location));
+                "SELECT EXISTS(SELECT 1 FROM ecology_site WHERE chunk_id=? AND (" + com.devosphere.draugr.ecology.FreshWater.sites() + "))", Boolean.class, location));
             return water ? new String[]{"SUCCEEDED", "You sound the water with a stick — it shelves off gradually, past a safe wade before long."}
                          : new String[]{"SUCCEEDED", "There is no standing water here to sound for depth."};
         }

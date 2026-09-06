@@ -324,7 +324,7 @@ public class PhysicalItemService {
             "UPDATE wildlife_bond wb SET draft_thirst = CASE WHEN EXISTS (" +
             "  SELECT 1 FROM world_object cw JOIN world_chunk ch ON ch.id=cw.current_location_id WHERE cw.id=wb.chronicle_id AND (" +
             "     ch.biome IN ('WETLAND','RIVER_BANK') " +
-            "     OR EXISTS(SELECT 1 FROM ecology_site es WHERE es.chunk_id=ch.id AND (es.site_kind ILIKE '%spring%' OR es.site_kind ILIKE '%stream%' OR es.site_kind ILIKE '%river%' OR es.site_kind ILIKE '%freshwater%')) " +
+            "     OR EXISTS(SELECT 1 FROM ecology_site es WHERE es.chunk_id=ch.id AND (" + com.devosphere.draugr.ecology.FreshWater.sites("es") + ")) " +
             "     OR EXISTS(SELECT 1 FROM construction_project cp JOIN world_object tw ON tw.id=cp.object_id " +
             "               WHERE cp.project_kind IN ('WATERING_STATION','RAINWATER_CATCHMENT') AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
             "                 AND tw.lifecycle_state='ACTIVE' AND tw.current_location_id=ch.id))) " +
@@ -453,8 +453,7 @@ public class PhysicalItemService {
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
         if ("WETLAND".equals(biome) || "RIVER_BANK".equals(biome)) return true;
         Integer sites = jdbc.queryForObject(
-            "SELECT COUNT(*) FROM ecology_site WHERE chunk_id=? AND (site_category='WATER' OR site_kind ILIKE '%spring%' " +
-            "OR site_kind ILIKE '%stream%' OR site_kind ILIKE '%river%' OR site_kind ILIKE '%freshwater%')",
+            "SELECT COUNT(*) FROM ecology_site WHERE chunk_id=? AND (site_category='WATER' OR " + com.devosphere.draugr.ecology.FreshWater.sites() + ")",
             Integer.class, location);
         if (sites != null && sites > 0) return true;
         return Boolean.TRUE.equals(jdbc.queryForObject(
