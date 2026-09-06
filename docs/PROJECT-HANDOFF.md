@@ -244,7 +244,53 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 
 #### Resume point
 
-> **▶ LATEST (2026-08-13): confront query refactored (tech-debt cleared) + EPIC #222 backdrop registry story #223 landed.**
+> **▶ LATEST (2026-09-06): the world-seed topology closed, and one flag that was answering three different questions.**
+>
+> **The biggest structural find: `is_shelter` was being asked three unrelated questions.** Five places in the Java
+> ask *"is there something here I can be inside, out of the weather"*; four named four project kinds literally, so a
+> pit house, hide tent, debris hut, bark cabin or snow shelter gave no warmth, no rest bonus, no deep sleep and no
+> roof for a smoke vent. But `is_shelter` reads far too wide for that question — 34 kinds carry it and **14 are
+> parts, not places** (doors, walls, screens, a roofing frame, a smoke hood, furniture). And a *third* consumer, the
+> predator raid on a tamed herd, needed a **barrier**, so every fence a keeper builds protected nothing while a bark
+> door did. Now three flags, one question each:
+> - `is_shelter` — any shelter-domain build; what decays together (unchanged, so nothing reading it broke)
+> - `encloses` (V280) — can a Chronicle be inside this
+> - `is_barrier` (V281) — does this stand in something's way
+>
+> **RULE learned: before wiring more consumers to a flag, check the flag means what they need.** A registry that has
+> grown can drift in *meaning*, not just membership. Found by `grep -rnoE "IN \('[A-Z_]+'(,'[A-Z_]+')*\)"` over main
+> Java, sorted by frequency — the four-shelter list was the most repeated in the codebase.
+>
+> **Topology (#155 family).** `CAVE_MOUTH` now generates (#158), derived like the shore: it must be *in* rock and
+> *open onto* walkable ground, thinned by a deterministic hash. 13 cave mouths, 40 of 57 mountain chunks still open
+> (obsidian/pumice/clear quartz need them), 0 opening onto nothing. V279 furnishes it. A cave mouth **shelters
+> without being built** — the oldest roof there is. With `RIVER_BANK` (#156) and `COAST` (#157) already landed, the
+> generator now emits **nine** biomes.
+>
+> **The standing gate that stops this recurring (#161, `CatalogueWorldSeedCompatibilityIntegrationTest`):** no
+> candidate stranded on ground that does not exist; **no affinity naming a habitat the generator never builds**
+> (the one that would have caught RIVER_BANK and COAST, since those entries named a second biome too); no generated
+> ground barren; preview and persisted world agree per biome. It also forced out two fallbacks that violated it —
+> `profileFor` returned a hardcoded `forest_fox` for every unmatched wildlife site *whatever the ground*, and
+> `monsterFor` took the first candidate alphabetically, which a cave breaks (cave bear/troll/screecher all share
+> "cave"). Longest shared word wins now; verified a no-op for all ten existing lairs.
+>
+> **Catalogue tokens made functional.** `encloses`/`is_barrier` above; three immortal foods (`crayfish_meat`,
+> `raw_fowl_meat`, `bird_egg` had no `food_preservation_state` row at all — `smoked_fowl` existed as a preserved
+> form that bought nothing); the `stone_lantern_cover` (now keeps a flame alight in weather that guts a bare one);
+> the `firebrand`; the `atlatl` (a spear-thrower that threw no better than a bare arm); the `float_bobber`.
+>
+> **Seams audited CLEAN — do not re-run without a reason:** all 727 items attainable; every process routable and
+> every tool class / station supplied; `technique_definition`'s 162 claims honest; all 47 `CODE_TERMINAL` entries
+> genuinely covered; no assembly keyword shadowed by another's longer one; declared numbers all vary meaningfully.
+> Full detail in the `reference-declared-but-ignored-audit` memory.
+>
+> **Test patterns worth copying.** A combat/tackle modifier is proven statistically: a fixed set of seeded action
+> ids, state restored before each trial, two cohorts compared — and **assert the baseline both wins and loses**, or
+> a rebalance that saturates it passes vacuously. Picking the quarry matters: with a javelin in hand a deer is beaten
+> on every roll, so the margin can only show against something like a brown bear.
+>
+> **▶ PREVIOUS (2026-08-13): confront query refactored (tech-debt cleared) + EPIC #222 backdrop registry story #223 landed.**
 > - **Tech debt RESOLVED:** `WildlifeEncounterService.confront` collapsed from ~13 correlated COUNT subqueries (12
 >   params) to two LATERAL conditional-aggregation passes (1 param). Proven behaviour-preserving by an old-vs-new
 >   set-wide `EXCEPT` on a 200-chronicle random dataset (0 rows diverge). Commit `f9c3b96`.
