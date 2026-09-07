@@ -113,10 +113,10 @@ class WaterMustBeCrossedIntegrationTest {
         // Whatever solid thing the catalogue actually holds, read from the definition rather than assumed — a key
         // guessed here would silently load nothing, and every assertion below would then pass for the wrong reason.
         java.util.Map<String,Object> ballast = jdbc.queryForMap(
-            "SELECT item_key, mass_grams FROM item_definition WHERE mass_grams BETWEEN 300 AND 6000 " +
-            "ORDER BY mass_grams DESC, item_key LIMIT 1");
+            "SELECT item_key, unit_mass_grams FROM item_definition WHERE unit_mass_grams BETWEEN 300 AND 6000 " +
+            "ORDER BY unit_mass_grams DESC, item_key LIMIT 1");
         String key = (String) ballast.get("item_key");
-        int each = ((Number) ballast.get("mass_grams")).intValue();
+        int each = ((Number) ballast.get("unit_mass_grams")).intValue();
         for (int carried = 0; carried < want; carried += each)
             items.createCarriedItem(chronicle, key, key, now, "FORAGED_FROM_GROUND");
         if (percentOfCapacity > 50)
@@ -197,10 +197,10 @@ class WaterMustBeCrossedIntegrationTest {
             "without a ford this load does not cross — that is the baseline the ford is measured against");
 
         UUID site = UUID.randomUUID();
+        UUID worldId = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, marsh);
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE','Shallow ford',?)", site, marsh);
-        jdbc.update("INSERT INTO ecology_site (id,world_id,chunk_id,site_kind,richness) " +
-            "VALUES (?,(SELECT id FROM world WHERE id=(SELECT world_id FROM world_chunk WHERE id=?)),?,'Shallow ford',50)",
-            site, marsh, marsh);
+        jdbc.update("INSERT INTO ecology_site (id,world_id,chunk_id,site_category,site_kind,baseline_abundance) " +
+            "VALUES (?,?,?,'RESOURCE','Shallow ford',20)", site, worldId, marsh);
 
         standWestOf(chronicle, "WETLAND");
         before = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
