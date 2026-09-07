@@ -70,7 +70,7 @@ class SmallLifePerceptionIntegrationTest {
             String.class, "%" + biome + "%");
         assertFalse(keys.isEmpty(), "this test needs a biome that actually holds " + kingdoms + " — " + biome + " holds none");
         String lower = account.toLowerCase(Locale.ROOT);
-        return keys.stream().anyMatch(k -> lower.contains(k.replace('_', ' ')));
+        return keys.stream().anyMatch(k -> com.devosphere.draugr.narration.Words.names(lower, k));
     }
 
     @Test

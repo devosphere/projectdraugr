@@ -1787,7 +1787,8 @@ public class PhysicalItemService {
             return new String[]{"FAILED", "You turn over what stone there is. This ground has nothing in it but dirt."};
 
         java.util.Map<String,Object> target = here.stream()
-            .filter(m -> v.contains(((String)m.get("mineral_key")).replace('_',' ')) || v.contains(((String)m.get("display_name")).toLowerCase()))
+            .filter(m -> com.devosphere.draugr.narration.Words.names(v, (String)m.get("mineral_key"))
+                || com.devosphere.draugr.narration.Words.word(v, ((String)m.get("display_name")).toLowerCase()))
             .findFirst().orElse(null);
         boolean named = target != null;
         if (target == null) target = here.get(0);

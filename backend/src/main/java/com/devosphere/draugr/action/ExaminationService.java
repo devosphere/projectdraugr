@@ -209,8 +209,8 @@ public class ExaminationService {
                 if (acuity < want) continue;
                 String name = humanize(key);
                 b.append("AERIAL".equals(bird.get("movement_class"))
-                        ? "A " + name + " passes overhead, and you follow it a moment. "
-                        : "A " + name + " works the ground a little way off. ");
+                        ? com.devosphere.draugr.narration.Words.startingSentence(name) + " passes overhead, and you follow it a moment. "
+                        : com.devosphere.draugr.narration.Words.startingSentence(name) + " works the ground a little way off. ");
                 birdsNamed++; namedKeys.add(key);
             }
 
@@ -388,10 +388,10 @@ public class ExaminationService {
     }
     private static String seenLine(String name, String role) {
         return switch (role == null ? "" : role) {
-            case "HERBIVORE" -> "A " + name + " grazes the open ground. ";
-            case "CARNIVORE" -> "A " + name + " moves along the treeline, watchful. ";
-            case "OMNIVORE" -> "A " + name + " forages nearby. ";
-            default -> "A " + name + " is here. ";
+            case "HERBIVORE" -> com.devosphere.draugr.narration.Words.startingSentence(name) + " grazes the open ground. ";
+            case "CARNIVORE" -> com.devosphere.draugr.narration.Words.startingSentence(name) + " moves along the treeline, watchful. ";
+            case "OMNIVORE" -> com.devosphere.draugr.narration.Words.startingSentence(name) + " forages nearby. ";
+            default -> com.devosphere.draugr.narration.Words.startingSentence(name) + " is here. ";
         };
     }
 
