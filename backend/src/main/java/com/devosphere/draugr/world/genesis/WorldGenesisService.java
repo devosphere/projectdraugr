@@ -301,6 +301,18 @@ public class WorldGenesisService {
                 // fen put their crop, because it is the only ground there that will hold one. Unlike a floodplain
                 // it does not flood, so it wins no silt back: it is somewhere to farm, not somewhere that renews.
                 new MarkerSpec("RESOURCE", "Marsh island", "WETLAND"),
+                // Fast and slow water (#156). The ticket asks for these as connected topology and not
+                // interchangeable labels, so what separates them is not their names but what works in them: a
+                // fixed trap or a net set in a fast stream does not have to find the fish, because the current
+                // delivers them into it, which is the principle a weir is built on; a hand-line is the reverse,
+                // swept off the hold in fast water and sitting where the fish lie in a slow reach.
+                //
+                // Both on RIVER_BANK, which V269 already stocked: trout, chub, dace, minnow, perch, pike, eel,
+                // lamprey, sturgeon, bream, catfish and crayfish all hold in running water, so a named stretch of
+                // it is somewhere a Chronicle can actually fish rather than somewhere to be told there is nothing
+                // here worth taking.
+                new MarkerSpec("RESOURCE", "Fast stream", "RIVER_BANK"),
+                new MarkerSpec("RESOURCE", "Slow river reach", "RIVER_BANK"),
                 // The limestone quarry #158 asks for, added last of all and deliberately so. When the cave sites
                 // went in it would have been a marker that changed nothing, because mineral richness took no
                 // account of sites; the stone-workings rule came first, and only now is a quarry worth the walk.

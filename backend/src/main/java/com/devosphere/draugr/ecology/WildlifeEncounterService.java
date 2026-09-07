@@ -1093,9 +1093,26 @@ public class WildlifeEncounterService {
     }
 
     /**
+     * How the water here runs (#156): {@code "FAST"} at a fast stream, {@code "SLOW"} at a slow river reach, and
+     * null where the world has said nothing about it — which is most water, and which goes on behaving exactly as
+     * it did before.
+     *
+     * <p>Read from the site rather than the biome, because both stand on RIVER_BANK. A distinction carried by the
+     * biome could not tell one stretch of river from the next, and the ticket's requirement is precisely that
+     * these are connected physical topology and not interchangeable labels.
+     */
+    private String waterCharacterAt(UUID chunk) {
+        return jdbc.query(
+            "SELECT CASE WHEN site_kind ILIKE '%fast stream%' THEN 'FAST' ELSE 'SLOW' END FROM ecology_site " +
+            "WHERE chunk_id=? AND (site_kind ILIKE '%fast stream%' OR site_kind ILIKE '%slow river%') LIMIT 1",
+            rs -> rs.next() ? rs.getString(1) : null, chunk);
+    }
+
+    /**
      * Take a fish from the water. Method decides the odds: bare hands rarely work,
      * a spear is a real tool for it, a woven trap works patiently and well. The
-     * fish species present are those the registry places in this biome.
+     * fish species present are those the registry places in this biome, and how
+     * the water runs decides which methods suit it ({@link #waterCharacterAt}).
      */
     @Transactional
     public EncounterResult fish(UUID chronicle, UUID chunk, UUID action, Instant at, String actionText) {
@@ -1140,6 +1157,28 @@ public class WildlifeEncounterService {
             "WHERE w.current_location_id=? AND cp.project_kind='FISHING_WEIR' AND cp.state='COMPLETED' " +
             "AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')", Boolean.class, chunk));
         if (weir) { chance = Math.max(chance, 85); method = "TRAP"; } // a weir is a fixed trap (aquatic_catch method set)
+        // The water's own character (#156). A fast stream and a slow river are the two named sites the ticket asks
+        // for, and it asks for them as connected topology rather than interchangeable labels — so what must differ
+        // is not their names but what works in them.
+        //
+        // Current is the difference, and it cuts opposite ways for the two families of method. A fixed trap or a
+        // net standing in fast water does not have to find the fish: the current delivers them into it, which is
+        // the whole principle a weir is built on. A hand-line is the reverse — in a fast stream the bait is swept
+        // off the hold before anything takes it, and the float rides away downstream — while in a slow reach it
+        // sits where the fish are lying. Bare hands want slack water for the same reason they want no current to
+        // fight.
+        //
+        // So gear that is wrong for the water still catches, and gear that is right for it is not made certain:
+        // this shifts the odds, it does not decide them, and it is applied after gear and bait so those still tell.
+        String current = waterCharacterAt(chunk);
+        if (current != null) {
+            int shift = switch (method) {
+                case "TRAP", "NET" -> current.equals("FAST") ? 12 : -8;
+                case "LINE" -> current.equals("FAST") ? -14 : 12;
+                default -> current.equals("FAST") ? -10 : 8; // bare hands
+            };
+            chance = Math.max(5, Math.min(90, chance + shift));
+        }
         java.util.List<String> species = jdbc.queryForList("SELECT species_key FROM wildlife_species WHERE movement_class='AQUATIC' AND biome_affinity ILIKE ? ORDER BY species_key", String.class, "%"+biome+"%");
         if (species.isEmpty()) return new EncounterResult("FAILED","You watch the ground a while. There is no water here that holds anything worth taking.");
         // #181/#36 finite water: a stretch fished relentlessly thins until it is fished out here, and needs rest to

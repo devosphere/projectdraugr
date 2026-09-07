@@ -67,6 +67,31 @@ class WorldMarkerPlacementTest {
     }
 
     /**
+     * Fast and slow water must be two places, not one. {@code waterCharacterAt} reads the site on the chunk and
+     * takes the first it finds, so a stream and a reach sharing a chunk would make that ground arbitrarily one or
+     * the other — and the two sites exist precisely to be different waters.
+     */
+    @Test
+    void fastAndSlowWaterAreDifferentStretchesOfRiver() throws Exception {
+        for (long seed : new long[]{ WorldGenesisService.GenesisRequest.mvpDefault().seed(), 1L, 7L, 4242L, 99991L }) {
+            WorldGenesisService.GenesisRequest request = seeded(seed);
+            List<WorldGenesisService.PreviewMarker> markers = generator.markerPlan(request);
+            WorldGenesisService.PreviewMarker fast = named(markers, "Fast stream");
+            WorldGenesisService.PreviewMarker slow = named(markers, "Slow river reach");
+            assertTrue(fast != null && slow != null, "the world must plan both waters at seed " + seed);
+            assertEquals("RIVER_BANK", biomeAt(request, fast.x(), fast.y()), "a stream runs in a river channel");
+            assertEquals("RIVER_BANK", biomeAt(request, slow.x(), slow.y()), "so does a slow reach");
+            assertTrue(fast.x() != slow.x() || fast.y() != slow.y(),
+                "fast and slow water share a chunk at seed " + seed + " (" + fast.x() + "," + fast.y()
+                    + "), which makes that ground arbitrarily one or the other");
+        }
+    }
+
+    private WorldGenesisService.PreviewMarker named(List<WorldGenesisService.PreviewMarker> markers, String label) {
+        return markers.stream().filter(m -> m.label().equals(label)).findFirst().orElse(null);
+    }
+
+    /**
      * The marsh island specifically, because it is the one whose whole meaning is the ground under it: it makes its
      * chunk arable, and a marsh island that is not in a marsh is farmland handed out somewhere arbitrary.
      */
