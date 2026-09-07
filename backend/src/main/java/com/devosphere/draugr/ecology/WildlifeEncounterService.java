@@ -1101,10 +1101,18 @@ public class WildlifeEncounterService {
      * biome could not tell one stretch of river from the next, and the ticket's requirement is precisely that
      * these are connected physical topology and not interchangeable labels.
      */
+    /** Water a beaver has dammed (#156) — standing, deep, and richer than the run it drowned. */
+    private boolean beaverPoolAt(UUID chunk) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM ecology_site WHERE chunk_id=? AND site_kind ILIKE '%beaver pool%')",
+            Boolean.class, chunk));
+    }
+
     private String waterCharacterAt(UUID chunk) {
         return jdbc.query(
             "SELECT CASE WHEN site_kind ILIKE '%fast stream%' THEN 'FAST' ELSE 'SLOW' END FROM ecology_site " +
-            "WHERE chunk_id=? AND (site_kind ILIKE '%fast stream%' OR site_kind ILIKE '%slow river%') LIMIT 1",
+            "WHERE chunk_id=? AND (site_kind ILIKE '%fast stream%' OR site_kind ILIKE '%slow river%' " +
+            "                      OR site_kind ILIKE '%beaver pool%') LIMIT 1",
             rs -> rs.next() ? rs.getString(1) : null, chunk);
     }
 
@@ -1218,6 +1226,14 @@ public class WildlifeEncounterService {
      *  is lazily full (not yet recorded). Public so a survey can read how well-stocked the water is (#181/#36). */
     public int fishRemaining(UUID chunk, Instant at) {
         int full = fishStockSeedFor(chunk);
+        // A beaver pool holds more than the stream it drowned (#156). The dam turns a thin run into standing water
+        // with depth, cover and dead timber in it, and that water carries far more fish than the reach did — the
+        // reason a beaver pond is worth walking to and the reason people fished them.
+        //
+        // Applied here rather than in fishStockSeedFor because that is static and knows only the chunk id, which
+        // is exactly the shape the stone outcrop was in before #538: a site the world placed that changed nothing,
+        // because the richness it was supposed to affect was computed without ever looking at sites.
+        if (beaverPoolAt(chunk)) full = full * 16 / 10;
         java.util.Map<String,Object> row = jdbc.query(
             "SELECT remaining_units, last_fished_at FROM fish_stock WHERE chunk_id=?",
             rs -> rs.next() ? java.util.Map.of("r", rs.getInt(1), "t", rs.getTimestamp(2).toInstant()) : null, chunk);

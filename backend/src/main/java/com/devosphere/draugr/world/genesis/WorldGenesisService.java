@@ -319,6 +319,11 @@ public class WorldGenesisService {
                 // one place it can be. On WETLAND because that is the crossing worth having — a fen causeway is
                 // the thing itself, built for this and nothing else.
                 new MarkerSpec("RESOURCE", "Shallow ford", "WETLAND"),
+                // The beaver pool (#156), which is not the Beaver lodge already placed above — a lodge is where
+                // the animals are, a pool is what their dam made. It holds more fish than the run it drowned,
+                // because a dam turns a thin stream into standing water with depth, cover and dead timber in it;
+                // it reads as slack water for the fishing methods that want that; and it is water to drink.
+                new MarkerSpec("RESOURCE", "Beaver pool", "WETLAND", "RIVER_BANK"),
                 // The limestone quarry #158 asks for, added last of all and deliberately so. When the cave sites
                 // went in it would have been a marker that changed nothing, because mineral richness took no
                 // account of sites; the stone-workings rule came first, and only now is a quarry worth the walk.
