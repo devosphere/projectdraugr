@@ -883,10 +883,20 @@ public class WildlifeEncounterService {
         if (t == null) t = approachAmbient(chunk, v, at);
         if (t == null) return new EncounterResult("FAILED","You stand still a long while, but there is nothing here that would let you near it.");
 
+        // What the animal sees in your hands, read from weapon_profile rather than from a list written when the
+        // catalogue held six weapons (#93). It now holds 36, and 33 of them were invisible here: a Chronicle could
+        // walk up to a wild animal holding a bronze spear, a hunting bow, a war club or a poisoned spear and be
+        // read as empty-handed, while a stone hammer frightened it. The registry is what the catalogue keeps
+        // current; the list was a snapshot of it that stopped being true.
+        //
+        // Ammunition is deliberately excluded by combat_role: a loose arrow or a sling stone in the hand is not a
+        // weapon brandished, and an animal that bolted from a pebble would be the same error in the other
+        // direction.
         boolean armed = Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id " +
+            "JOIN weapon_profile w ON w.item_key=i.item_key " +
             "WHERE e.chronicle_id=? AND e.body_position IN ('HAND_LEFT','HAND_RIGHT') " +
-            "AND i.item_key IN ('primitive_spear','stone_axe','stone_hatchet','stone_knife','stone_hammer','primitive_pickaxe'))",
+            "AND w.combat_role IN ('HAND','BLUNT','JAVELIN','BOW','SLING'))",
             Boolean.class, chronicle));
         // Offering food is the strongest single thing a chronicle can do, and it costs
         // real food from their own stores.

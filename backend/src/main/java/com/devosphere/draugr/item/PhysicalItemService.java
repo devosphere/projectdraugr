@@ -757,7 +757,10 @@ public class PhysicalItemService {
             "  JOIN reachable r ON r.id=ic.container_id" +
             "  JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE')" +
             "SELECT i.object_id, i.condition_state, i.use_count, i.item_key FROM reachable r JOIN item_instance i ON i.object_id=r.id " +
-            "WHERE i.item_key IN ('stone_axe','stone_hatchet','copper_axe','bronze_axe','iron_axe','steel_axe','hand_axe') " +
+            // Which items are axes is tool_profile's answer, not a list kept here (#93). The list this replaces
+            // named 'hand_axe', which is not an item key the catalogue has ever held — a phantom that could never
+            // match anything — and would have gone on missing any axe added after it was written.
+            "WHERE i.item_key IN (SELECT item_key FROM tool_profile WHERE tool_class='AXE') " +
             "ORDER BY CASE i.condition_state WHEN 'SOUND' THEN 0 WHEN 'WORN' THEN 1 WHEN 'BROKEN' THEN 2 ELSE 3 END, i.use_count LIMIT 1",
             rs -> rs.next() ? java.util.Map.of("id", rs.getObject(1, UUID.class), "cond", rs.getString(2), "uses", rs.getInt(3), "key", rs.getString(4)) : null,
             chronicle);
@@ -1471,7 +1474,10 @@ public class PhysicalItemService {
             " UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id" +
             " JOIN world_object n ON n.id=ic.item_id WHERE n.lifecycle_state='ACTIVE')" +
             " SELECT EXISTS(SELECT 1 FROM reachable r JOIN item_instance i ON i.object_id=r.id" +
-            " WHERE i.item_key IN ('stone_axe','stone_hatchet','copper_axe','bronze_axe','iron_axe','steel_axe','hand_axe')" +
+            // Same registry, same reason (#93): the felled-tree question is "have I an axe", and tool_profile is
+            // where the catalogue answers it. Note a hand axe is deliberately not one: you can cut and scrape
+            // with a knapped biface, but you cannot fell woodland with a stone held in the fist.
+            " WHERE i.item_key IN (SELECT item_key FROM tool_profile WHERE tool_class='AXE')" +
             " AND i.condition_state <> 'BROKEN')", Boolean.class, chronicle));
         if (!axe)
             return new String[]{"FAILED", "Clearing wooded ground wants an axe to fell the trees and cut back the brush, and you have none sound to hand."};
