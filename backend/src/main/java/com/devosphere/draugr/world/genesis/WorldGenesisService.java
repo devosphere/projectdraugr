@@ -242,8 +242,16 @@ public class WorldGenesisService {
         return ((value & 0xFFFF) / 65535.0) - 0.5;
     }
 
-    private List<PreviewMarker> markersFor(GenesisRequest request) {
-        List<MarkerSpec> specifications = List.of(
+    /**
+     * Every marker the world places, and the ground each one is allowed to stand on.
+     *
+     * <p>Lifted out of {@code markersFor} so it can be asserted against. {@link #marker} falls back to the middle of
+     * the map when a spec names no biome the terrain actually generates, and it does so silently — so a marker
+     * whose ground the world stopped making, or never made, becomes a label sitting on whatever happens to be at
+     * the centre. That is precisely the decoration this catalogue is meant not to carry, and it cannot be seen by
+     * reading the list. {@code WorldMarkerPlacementTest} walks these and checks each one landed on ground it names.
+     */
+    static final List<MarkerSpec> MARKER_SPECIFICATIONS = List.of(
                 new MarkerSpec("RESOURCE", "Freshwater spring", "GRASSLAND", "TEMPERATE_FOREST"), new MarkerSpec("RESOURCE", "Freshwater spring", "HIGHLAND", "WETLAND"), new MarkerSpec("RESOURCE", "Old-growth timber", "TEMPERATE_FOREST"), new MarkerSpec("RESOURCE", "Old-growth timber", "TEMPERATE_FOREST"), new MarkerSpec("RESOURCE", "Wild herb grove", "TEMPERATE_FOREST", "GRASSLAND"), new MarkerSpec("RESOURCE", "Wild herb grove", "WETLAND", "TEMPERATE_FOREST"), new MarkerSpec("RESOURCE", "Edible-root patch", "GRASSLAND", "TEMPERATE_FOREST"), new MarkerSpec("RESOURCE", "Edible-root patch", "GRASSLAND", "WETLAND"), new MarkerSpec("RESOURCE", "Reed marsh", "WETLAND"), new MarkerSpec("RESOURCE", "Reed marsh", "WETLAND"), new MarkerSpec("RESOURCE", "Clay beds", "WETLAND", "GRASSLAND"), new MarkerSpec("RESOURCE", "Flint field", "HIGHLAND", "GRASSLAND"), new MarkerSpec("RESOURCE", "Stone outcrop", "HIGHLAND", "MOUNTAIN"), new MarkerSpec("RESOURCE", "Stone outcrop", "HIGHLAND", "MOUNTAIN"), new MarkerSpec("RESOURCE", "Iron vein", "MOUNTAIN", "HIGHLAND"), new MarkerSpec("RESOURCE", "Copper seam", "MOUNTAIN", "HIGHLAND"), new MarkerSpec("RESOURCE", "Salt marsh", "WETLAND", "OCEAN"), new MarkerSpec("RESOURCE", "Mushroom hollow", "TEMPERATE_FOREST"), new MarkerSpec("RESOURCE", "Fiber grassland", "GRASSLAND"), new MarkerSpec("RESOURCE", "Shelter grove", "TEMPERATE_FOREST"),
                 new MarkerSpec("WILDLIFE", "Deer range", "TEMPERATE_FOREST", "GRASSLAND"), new MarkerSpec("WILDLIFE", "Deer range", "TEMPERATE_FOREST", "GRASSLAND"), new MarkerSpec("WILDLIFE", "Boar range", "WETLAND", "TEMPERATE_FOREST"), new MarkerSpec("WILDLIFE", "Elk range", "GRASSLAND", "HIGHLAND"), new MarkerSpec("WILDLIFE", "Wolf pack ground", "TEMPERATE_FOREST", "HIGHLAND"), new MarkerSpec("WILDLIFE", "Bear den", "TEMPERATE_FOREST", "MOUNTAIN"), new MarkerSpec("WILDLIFE", "Marsh-fowl nesting", "WETLAND"), new MarkerSpec("WILDLIFE", "Hare warren", "GRASSLAND"), new MarkerSpec("WILDLIFE", "Fox earth", "TEMPERATE_FOREST", "GRASSLAND"), new MarkerSpec("WILDLIFE", "Goat cliff range", "HIGHLAND", "MOUNTAIN"), new MarkerSpec("WILDLIFE", "Beaver lodge", "WETLAND"), new MarkerSpec("WILDLIFE", "Otter waterway", "WETLAND", "OCEAN"),
                 new MarkerSpec("MONSTER", "Bog warden lair", "WETLAND"), new MarkerSpec("MONSTER", "Ridge stalker lair", "HIGHLAND", "MOUNTAIN"), new MarkerSpec("MONSTER", "Glasswing roost", "MOUNTAIN", "HIGHLAND"), new MarkerSpec("MONSTER", "Mire hydra nest", "WETLAND"), new MarkerSpec("MONSTER", "Deepwater maw", "OCEAN"), new MarkerSpec("MONSTER", "Dusk prowler territory", "TEMPERATE_FOREST"), new MarkerSpec("MONSTER", "Thornback wallow", "GRASSLAND", "TEMPERATE_FOREST"), new MarkerSpec("MONSTER", "Ash hound den", "HIGHLAND", "MOUNTAIN"), new MarkerSpec("MONSTER", "Fen siren pool", "WETLAND"), new MarkerSpec("MONSTER", "Gloom moth colony", "TEMPERATE_FOREST"),
@@ -286,6 +294,13 @@ public class WorldGenesisService {
                 // the terrace above had to be rested — the one piece of ground where working it hard is not a
                 // mistake. Placed on a river bank or a marsh margin, which is where a flood actually reaches.
                 new MarkerSpec("RESOURCE", "Floodplain", "RIVER_BANK", "WETLAND"),
+                // The marsh island #156 still owed, and the other half of a defect the floodplain exposed. Wet
+                // country was ground no Chronicle could ever farm: sowing takes grassland or ground cleared of
+                // forest, and clearing takes woodland only, so a marsh had no path to a field at all. That is what
+                // a marsh island IS — the dry rise standing above the water, which is where anybody living in a
+                // fen put their crop, because it is the only ground there that will hold one. Unlike a floodplain
+                // it does not flood, so it wins no silt back: it is somewhere to farm, not somewhere that renews.
+                new MarkerSpec("RESOURCE", "Marsh island", "WETLAND"),
                 // The limestone quarry #158 asks for, added last of all and deliberately so. When the cave sites
                 // went in it would have been a marker that changed nothing, because mineral richness took no
                 // account of sites; the stone-workings rule came first, and only now is a quarry worth the walk.
@@ -293,6 +308,9 @@ public class WorldGenesisService {
                 // Limestone country is exactly where caves are — a cave is what limestone dissolves into — so a
                 // quarry belongs beside a cave mouth as readily as on an open highland shoulder.
                 new MarkerSpec("RESOURCE", "Limestone quarry", "CAVE_MOUTH", "HIGHLAND"));
+
+    private List<PreviewMarker> markersFor(GenesisRequest request) {
+        List<MarkerSpec> specifications = MARKER_SPECIFICATIONS;
         List<PreviewMarker> markers = new ArrayList<>();
         for (int index = 0; index < specifications.size(); index++) {
             MarkerSpec spec = specifications.get(index);
@@ -341,5 +359,6 @@ public class WorldGenesisService {
     public record GenesisSummary(UUID worldId, long seed, int widthChunks, int heightChunks, Map<String, Integer> biomeCounts, String previewPath, Instant generatedAt) { }
     private record TerrainCell(int elevation, int moisture, String biome) { }
     public record PreviewMarker(String category, String label, int x, int y) { }
-    private record MarkerSpec(String category, String label, String... biomes) { }
+    /** Package-private so the placement invariant can read the ground each marker claims. */
+    record MarkerSpec(String category, String label, String... biomes) { }
 }

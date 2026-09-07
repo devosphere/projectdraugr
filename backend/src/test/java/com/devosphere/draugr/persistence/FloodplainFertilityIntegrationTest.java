@@ -37,8 +37,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>Asserted through {@code harvestCrop} — the real path — rather than by re-computing the fertility rule here.
  * A test that restates the arithmetic it is checking would pass just as happily against a broken implementation.
  * Two fields are given identical worked-out soil and identical fallow time, so the site is the only difference,
- * and the fallow window is chosen to land the two on opposite sides of the low-fertility threshold. Skips without
- * Docker.
+ * and the fallow window is chosen to land the two on opposite sides of the low-fertility threshold.
+ *
+ * <p>It does insert the ripe stand directly, because waiting a season for one is not a thing a test can do — which
+ * means it cannot see whether a floodplain will take a sowing in the first place. It would not: RIVER_BANK and
+ * WETLAND were not arable, so this rule was unreachable when it shipped.
+ * {@link WetGroundIsFarmableIntegrationTest} is the assertion that closes that hole, and the two are only worth
+ * anything together. Skips without Docker.
  */
 @SpringBootTest
 class FloodplainFertilityIntegrationTest {

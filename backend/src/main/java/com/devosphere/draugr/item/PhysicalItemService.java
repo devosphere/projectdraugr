@@ -1429,11 +1429,27 @@ public class PhysicalItemService {
         jdbc.update("INSERT INTO field_soil (chunk_id, fertility, last_updated_at) VALUES (?,?,?) " +
             "ON CONFLICT (chunk_id) DO UPDATE SET fertility=EXCLUDED.fertility, last_updated_at=EXCLUDED.last_updated_at", chunk, next, ts);
     }
-    /** Ground a crop will take (#164/#165): open grassland by nature, or forest ground a Chronicle has cleared. Rock,
-     *  ocean, mountain, and standing forest are not arable until the trees are taken off them. */
+    /**
+     * Open, workable ground in wet country (#156) — a floodplain, or a marsh island standing dry above the water.
+     *
+     * <p>This is what the floodplain was missing. The flood-silt fertility rule above was written against ground no
+     * Chronicle could ever sow: a floodplain sits on RIVER_BANK or WETLAND, which {@link #isArable} refused, and
+     * {@link #clearLand} takes woodland only — so the ground that renews itself fastest was ground you could not
+     * put a field on at all. The rule was real and unreachable, which is the same as absent.
+     */
+    private boolean dryWorkableGroundAt(UUID chunk) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM ecology_site WHERE chunk_id=? " +
+            "AND (site_kind ILIKE '%floodplain%' OR site_kind ILIKE '%marsh island%'))", Boolean.class, chunk));
+    }
+
+    /** Ground a crop will take (#164/#165): open grassland by nature, forest ground a Chronicle has cleared, or the
+     *  dry silt of a floodplain or marsh island. Rock, ocean, mountain, open bog, and standing forest are not arable
+     *  until the trees are taken off them. */
     private boolean isArable(UUID location) {
         String biome = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : null, location);
         if ("GRASSLAND".equals(biome)) return true;
+        if (dryWorkableGroundAt(location)) return true;
         return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM cleared_ground WHERE chunk_id=?)", Boolean.class, location));
     }
 
@@ -1475,7 +1491,7 @@ public class PhysicalItemService {
     @Transactional
     public String[] tillGround(UUID chronicle, UUID location, Instant at) {
         if (!isArable(location))
-            return new String[]{"FAILED", "Tillage wants open, workable ground — a grassland clearing, or wooded ground you have first cleared — and this ground is not it."};
+            return new String[]{"FAILED", "Tillage wants open, workable ground — a grassland clearing, wooded ground you have first cleared, or the dry silt of a floodplain — and this ground is not it."};
         if (!hasAtLeast(chronicle, "digging_stick", 1) && !hasAtLeast(chronicle, "wooden_shovel", 1)
                 && !hasAtLeast(chronicle, "fire_hardened_digging_stick", 1))
             return new String[]{"FAILED", "Breaking ground wants a tool — a digging stick or a shovel — and you have none to hand."};
@@ -1499,7 +1515,7 @@ public class PhysicalItemService {
     @Transactional
     public String[] sowCrop(UUID chronicle, UUID location, Instant at) {
         if (!isArable(location))
-            return new String[]{"FAILED", "Grain wants open, workable ground — a grassland clearing, or wooded ground you have first cleared — and this ground is not it."};
+            return new String[]{"FAILED", "Grain wants open, workable ground — a grassland clearing, wooded ground you have first cleared, or the dry silt of a floodplain — and this ground is not it."};
         Integer growing = jdbc.queryForObject("SELECT COUNT(*) FROM crop_stand WHERE chunk_id=? AND harvested=false", Integer.class, location);
         if (growing != null && growing > 0)
             return new String[]{"FAILED", "A crop is already coming up on this ground; there is no room to sow another until it is reaped."};
