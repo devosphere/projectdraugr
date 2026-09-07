@@ -345,7 +345,7 @@ public class WildlifeEncounterService {
         // carcass through predator ground and you are the bait. A built camp store on this ground (#207 heritage
         // STORAGE_AREA) is a larder to set the kill down in — home ground with a store is somewhere a carcass can
         // be brought back to without turning it into an ambush, so the draw does not follow you there.
-        boolean freshKill = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key IN ('raw_game_meat','raw_fish'))", Boolean.class, chronicle));
+        boolean freshKill = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key IN (SELECT item_key FROM carcass_scent))", Boolean.class, chronicle));
         if (freshKill && !hasStorageArea(chunk)) chance += 10;
         // A camp choked with refuse (#218) carries the scent of rot on the wind and draws hungry animals in the
         // way a fresh kill does — scavengers and opportunists both, come to see what a filthy ground offers. A

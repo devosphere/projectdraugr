@@ -1351,7 +1351,12 @@ public class PhysicalItemService {
         java.util.List<java.util.Map<String,Object>> exposed = jdbc.queryForList(
             "SELECT i.object_id, i.weathered_at FROM item_instance i JOIN world_object w ON w.id=i.object_id JOIN world_chunk wc ON wc.id=w.current_location_id " +
             "WHERE w.lifecycle_state='ACTIVE' AND w.current_owner_id IS NULL AND wc.biome IN ('WETLAND','RIVER_BANK') " +
-            "AND i.item_key IN ('unfired_bowl','unfired_cup')");
+            // Green ware is anything not yet fired, and the catalogue names it so. The two keys this replaces
+            // missed unfired_vessel — which form_vessel makes and fire_vessel fires, wet clay by every test that
+            // matters — so a bowl and a cup slumped in the rain while the same clay called a vessel did not.
+            // clay_jar deliberately stays out: no process fires it, so treating it as green ware would leave it
+            // slumping with no way to save it.
+            "AND i.item_key LIKE 'unfired%'");
         for (java.util.Map<String,Object> r : exposed) {
             java.util.UUID id = (java.util.UUID) r.get("object_id");
             java.sql.Timestamp weatheredAt = (java.sql.Timestamp) r.get("weathered_at");
