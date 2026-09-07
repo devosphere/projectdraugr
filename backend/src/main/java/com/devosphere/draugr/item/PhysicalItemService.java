@@ -2595,6 +2595,9 @@ public class PhysicalItemService {
         LoadState state=loadState(chronicle); Capacity cap=new Capacity(state.sustainedMassCapacityGrams(),state.directBulkCapacityMl(),state.maximumSingleLiftGrams()); Load load=new Load(state.massGrams(),state.bulkMl(),state.heaviestObjectGrams());
         if(load.mass()>cap.mass()||load.volume()>cap.volume()||load.largest()>cap.singleLift()) throw new IllegalStateException("The Chronicle cannot physically carry that load.");
     }
+    /** What the Chronicle is carrying and what they can carry — public so movement can ask before deep water (#156/#157). */
+    public LoadState currentLoad(UUID chronicle) { return loadState(chronicle); }
+
     private LoadState loadState(UUID chronicle) {
         // A carrying aid (pole/yoke/harness/pack frame) worn or held adds its bonus to sustained mass / bulk
         // capacity while equipped (#57 carry_aid_bonus). The single-object lift limit is unchanged — an aid

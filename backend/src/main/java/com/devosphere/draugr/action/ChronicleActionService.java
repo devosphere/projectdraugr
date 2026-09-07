@@ -1041,6 +1041,8 @@ public class ChronicleActionService {
         if (direction == null) return "You shift through the wet ground, but do not commit to a direction.";
         UUID destination = jdbc.query("SELECT next.id FROM world_chunk current JOIN world_chunk next ON next.world_id=current.world_id AND next.grid_x=current.grid_x+? AND next.grid_y=current.grid_y+? WHERE current.id=?", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, direction.dx, direction.dy, chronicle.location());
         if (destination == null) return "The ground gives way toward the edge of what you can cross. You turn back before leaving the land behind.";
+        String crossing = waterCrossing(chronicle.id(), destination);
+        if (crossing != null) return crossing;
         java.sql.Timestamp occurredTs = java.sql.Timestamp.from(occurredAt);
         jdbc.update("UPDATE world_object SET current_location_id=?, updated_at=? WHERE id=?", destination, occurredTs, chronicle.id());
         jdbc.update("UPDATE chronicle SET current_zone=NULL WHERE id=?", chronicle.id()); // left the settlement's zones behind
@@ -1049,6 +1051,45 @@ public class ChronicleActionService {
         recordVisit(chronicle.id(), destination, occurredAt);
         return "You travel " + direction.description + ", the ground shifting under you as you go.";
     }
+    /**
+     * Water that has to be crossed rather than walked over (#156/#157), or null when the ground takes an ordinary step.
+     *
+     * <p>{@code move} used to hand over any adjacent chunk without ever asking what it was, so a Chronicle could
+     * walk off a beach and stand in the open sea carrying a hundred kilos of stone. Nothing in the world said no.
+     *
+     * <p>What replaces that is not a wall. Open water can be swum — people have always swum — but not while
+     * loaded: the load is what drowns you, which is why anybody crossing water puts it down first. So the sea
+     * refuses a burdened Chronicle and takes an unburdened one, and the threshold is a fraction of what they can
+     * carry on land rather than a fixed weight, because a stronger body swims a heavier load.
+     *
+     * <p>A marsh is the same question with a gentler answer. Soft ground will take a walker and will not take a
+     * walker with a heavy pack — you sink to the thigh and there is nothing to push off — so the marsh allows far
+     * more than the sea does and still has a limit. A shallow ford is the place where neither rule applies, which
+     * is what a ford IS, and why fen causeways were built at all.
+     *
+     * <p>Both thresholds are fractions of what this body can shoulder on dry land rather than fixed weights,
+     * because a stronger Chronicle swims and wades a heavier load than a weaker one.
+     */
+    private String waterCrossing(UUID chronicle, UUID destination) {
+        String biome = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : null, destination);
+        if (biome == null) return null;
+        boolean ford = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM ecology_site WHERE chunk_id=? AND site_kind ILIKE '%ford%')", Boolean.class, destination));
+        if (ford) return null; // a ford is where the water is crossed dryshod; that is the whole of what it is
+        boolean sea = "OCEAN".equals(biome), marsh = "WETLAND".equals(biome);
+        if (!sea && !marsh) return null;
+        var load = items.currentLoad(chronicle);
+        int capacity = load.sustainedMassCapacityGrams();
+        if (capacity <= 0) return null;
+        int allowed = sea ? capacity / 4 : capacity * 3 / 4;
+        if (load.massGrams() <= allowed) return null;
+        return sea
+            ? "You wade out until the bottom falls away, and what you are carrying takes you straight down with it. "
+            + "You struggle back to the shallows and stand there dripping. Not with this load."
+            : "You start across the soft ground and sink to the knee, then the thigh. Loaded as you are there is no "
+            + "bottom to push off. You work your way back to firmer ground — this wants a ford, or a lighter back.";
+    }
+
     /** Register the chronicle's presence in a chunk — the raw material of route memory and the decay clock on named places. */
     private void recordVisit(UUID chronicle, UUID chunk, Instant at) {
         java.sql.Timestamp ts = java.sql.Timestamp.from(at);

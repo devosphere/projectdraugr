@@ -313,6 +313,12 @@ public class WorldGenesisService {
                 // here worth taking.
                 new MarkerSpec("RESOURCE", "Fast stream", "RIVER_BANK"),
                 new MarkerSpec("RESOURCE", "Slow river reach", "RIVER_BANK"),
+                // The shallow ford (#156), which had nothing to do until movement asked what it was crossing.
+                // move() handed over any adjacent chunk without ever looking at it, so soft ground and open sea
+                // cost a Chronicle exactly what a meadow did; now a load has to be got across, and a ford is the
+                // one place it can be. On WETLAND because that is the crossing worth having — a fen causeway is
+                // the thing itself, built for this and nothing else.
+                new MarkerSpec("RESOURCE", "Shallow ford", "WETLAND"),
                 // The limestone quarry #158 asks for, added last of all and deliberately so. When the cave sites
                 // went in it would have been a marker that changed nothing, because mineral richness took no
                 // account of sites; the stone-workings rule came first, and only now is a quarry worth the walk.
