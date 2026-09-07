@@ -152,9 +152,10 @@ class RiverCurrentFishingIntegrationTest {
         int trapFast = catchesOver(chronicle, fast, "set the trap in the water", now);
         int trapSlow = catchesOver(chronicle, slow, "set the trap in the water", now);
 
-        // A separate body, so the trap is not still to hand and picked ahead of the line.
-        jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED' WHERE current_owner_id=? " +
-            "AND id IN (SELECT object_id FROM item_instance WHERE item_key='fish_trap')", chronicle);
+        // The trap stays carried. fish() reads the method from what the Chronicle SAYS before it looks at what
+        // they hold — naming a line selects LINE whether or not a trap is in the pack — so there is nothing to
+        // dispose of here. My first draft destroyed the trap with raw SQL and left it owned by a living body and
+        // with no record of how it died, which the Auditor caught in CI. It was right to.
         items.createCarriedItem(chronicle, "bone_fish_hook", "Bone fish hook", now, "CRAFTED");
         int lineFast = catchesOver(chronicle, fast, "fish the water with hook and line", now);
         int lineSlow = catchesOver(chronicle, slow, "fish the water with hook and line", now);

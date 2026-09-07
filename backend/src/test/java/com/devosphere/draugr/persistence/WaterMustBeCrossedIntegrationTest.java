@@ -100,8 +100,14 @@ class WaterMustBeCrossedIntegrationTest {
 
     /** Load the Chronicle to roughly the given percentage of what they can shoulder. */
     private void loadTo(UUID chronicle, int percentOfCapacity, Instant now) {
+        // Put down what is already carried rather than destroying it: an object set to DESTROYED while still
+        // owned by a living body, with no record of how it died, is exactly what the Auditor exists to catch —
+        // and did catch, in CI, when this fixture's first draft did that. Setting it on the ground is both
+        // consistent and what a Chronicle would actually do before crossing water.
+        UUID here = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
         jdbc.update("DELETE FROM item_containment WHERE item_id IN (SELECT id FROM world_object WHERE current_owner_id=?)", chronicle);
-        jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED' WHERE current_owner_id=? AND lifecycle_state='ACTIVE'", chronicle);
+        jdbc.update("UPDATE world_object SET current_owner_id=NULL, current_location_id=? " +
+            "WHERE current_owner_id=? AND lifecycle_state='ACTIVE'", here, chronicle);
         var capacity = items.currentLoad(chronicle).sustainedMassCapacityGrams();
         int want = capacity * percentOfCapacity / 100;
         // Whatever solid thing the catalogue actually holds, read from the definition rather than assumed — a key
