@@ -1711,6 +1711,19 @@ public class PhysicalItemService {
      *  seam with its own richness. It scales with the mineral's commonness (common ores form broad seams, rare ones
      *  small pockets) and varies from one patch of ground to the next, deterministically, so some ground is genuinely
      *  richer than other ground for the same mineral. Generous overall, so only sustained extraction exhausts a seam. */
+    /**
+     * Ground where the rock has already been opened — a quarry face, or an outcrop that has been worked (#158).
+     *
+     * <p>Kept beside {@link #mineralSeedFor} rather than folded into it because that method is static and pure on
+     * the chunk id, which is what makes the base richness of a piece of ground reproducible. The site is a fact
+     * about the world rather than about the mineral, so it multiplies the result instead of changing the seed.
+     */
+    public boolean stoneWorkingsAt(UUID location) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM ecology_site WHERE chunk_id=? " +
+            "AND (site_kind ILIKE '%quarry%' OR site_kind ILIKE '%outcrop%'))", Boolean.class, location));
+    }
+
     public static int mineralSeedFor(UUID chunk, String mineralKey, double rarity) {
         int base = 20 + (int) Math.round(rarity * 50);               // rarity 0.15 -> 28, 0.40 -> 40, 0.55 -> 48
         int h = Math.floorMod((chunk.toString() + ":" + mineralKey).hashCode(), 100); // 0..99, fixed for this ground
@@ -1795,6 +1808,18 @@ public class PhysicalItemService {
         // #181: draw the seam down by what was taken. The first working of this ground records the deposit at full;
         // thereafter it is decremented, and floored at zero so it reads as worked out next time.
         int seam = mineralSeedFor(location, key, ((Number) target.get("rarity")).doubleValue());
+        // Ground already opened gives up more of whatever is in it (#158). A quarry or a worked outcrop is rock
+        // that has been broken into and left with a face standing, so the seam runs further before it is worked
+        // out. Deliberately indifferent to WHICH mineral: what a quarry gives you is access to the rock, and
+        // everything here is in that rock — a limestone face does not know it is supposed to withhold the flint.
+        //
+        // This is what makes those sites worth placing at all, and the state it corrects was worse than nothing.
+        // The two "Stone outcrop" markers the world has always placed were not inert: a RESOURCE site raises the
+        // gathering profile by 12, but ResourceEcologyService applies that to plant_fiber, wild_berries and
+        // dry_branch only. Mineral richness came from mineralSeedFor(chunk, mineral, rarity) alone and took no
+        // account of sites at all. So an outcrop made the BERRIES better and the STONE no better whatever — it
+        // enriched everything except the one thing it is named for.
+        if (stoneWorkingsAt(location)) seam = (int) Math.round(seam * 1.6);
         jdbc.update("INSERT INTO mineral_deposit (chunk_id, mineral_key, remaining_units) VALUES (?,?,?) " +
             "ON CONFLICT (chunk_id, mineral_key) DO UPDATE SET remaining_units = GREATEST(0, mineral_deposit.remaining_units - ?)",
             location, key, Math.max(0, seam - take), take);
