@@ -91,7 +91,9 @@ class WaterMustBeCrossedIntegrationTest {
         java.util.Map<String,Object> pair = jdbc.query(
             "SELECT w.id AS from_id, t.id AS to_id FROM world_chunk t JOIN world_chunk w " +
             "  ON w.world_id=t.world_id AND w.grid_x=t.grid_x-1 AND w.grid_y=t.grid_y " +
-            "WHERE t.biome=? AND w.biome<>? LIMIT 1",
+            // Ordered, not just LIMIT 1: the ford case calls this twice and compares the two crossings, so both
+            // calls must land on the same stretch of marsh or it is comparing two different pieces of ground.
+            "WHERE t.biome=? AND w.biome<>? ORDER BY t.grid_y, t.grid_x LIMIT 1",
             rs -> rs.next() ? java.util.Map.of("from", rs.getObject(1), "to", rs.getObject(2)) : null, biome, biome);
         if (pair == null) return null;
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", pair.get("from"), chronicle);
@@ -108,20 +110,44 @@ class WaterMustBeCrossedIntegrationTest {
         jdbc.update("DELETE FROM item_containment WHERE item_id IN (SELECT id FROM world_object WHERE current_owner_id=?)", chronicle);
         jdbc.update("UPDATE world_object SET current_owner_id=NULL, current_location_id=? " +
             "WHERE current_owner_id=? AND lifecycle_state='ACTIVE'", here, chronicle);
-        var capacity = items.currentLoad(chronicle).sustainedMassCapacityGrams();
-        int want = capacity * percentOfCapacity / 100;
+        // Carry the ballast first, with every limit out of the way, and fit the BODY to the load afterwards.
+        //
+        // Loading up to a fraction of a fixed capacity does not work here, and CI showed both reasons. A Chronicle
+        // is refused a load for bulk and for one object too heavy to heave as well as for weight, so piling toward
+        // 90% of the mass capacity hit the bulk cap first — "The Chronicle cannot physically carry that load."
+        // And the heaviest ordinary thing in the catalogue is a six-kilo log, which is far too coarse a step to
+        // land between a 75% threshold and a 95% target: the loop would stop at 72% and the marsh would let it
+        // through, passing the wrong way.
+        //
+        // Setting the capacity to suit the load says exactly what the fixture means — "a body carrying this
+        // fraction of what it can shoulder" — and is exact whatever the catalogue's masses happen to be.
+        jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, " +
+            "direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
+
         // Whatever solid thing the catalogue actually holds, read from the definition rather than assumed — a key
         // guessed here would silently load nothing, and every assertion below would then pass for the wrong reason.
-        java.util.Map<String,Object> ballast = jdbc.queryForMap(
-            "SELECT item_key, unit_mass_grams FROM item_definition WHERE unit_mass_grams BETWEEN 300 AND 6000 " +
-            "ORDER BY unit_mass_grams DESC, item_key LIMIT 1");
-        String key = (String) ballast.get("item_key");
-        int each = ((Number) ballast.get("unit_mass_grams")).intValue();
-        for (int carried = 0; carried < want; carried += each)
-            items.createCarriedItem(chronicle, key, key, now, "FORAGED_FROM_GROUND");
-        if (percentOfCapacity > 50)
-            assertTrue(items.currentLoad(chronicle).massGrams() > capacity / 2,
-                "the ballast must actually weigh something, or a refusal below would prove nothing");
+        String key = jdbc.queryForObject(
+            "SELECT item_key FROM item_definition WHERE unit_mass_grams BETWEEN 300 AND 6000 " +
+            "ORDER BY unit_mass_grams DESC, item_key LIMIT 1", String.class);
+        for (int i = 0; i < 3; i++) items.createCarriedItem(chronicle, key, key, now, "FORAGED_FROM_GROUND");
+        int loaded = items.currentLoad(chronicle).massGrams();
+        assertTrue(loaded > 0, "the ballast must actually weigh something, or every refusal below proves nothing");
+
+        // The capacity the service reports is not the stored column — conditioning and carry aids scale it — so
+        // measure that scaling rather than assuming it, then set the column that lands the wanted fraction.
+        double scale = items.currentLoad(chronicle).sustainedMassCapacityGrams() / 100000000.0;
+        if (scale <= 0) scale = 1;
+        double wantedCapacity = loaded * 100.0 / percentOfCapacity;
+        // Cast to int deliberately: the column is integer, and a long parameter would be sent as bigint, which
+        // Postgres refuses against an integer column.
+        int column = (int) Math.max(1, Math.min(Integer.MAX_VALUE, Math.round(wantedCapacity / scale)));
+        jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=? WHERE chronicle_id=?", column, chronicle);
+
+        var check = items.currentLoad(chronicle);
+        long actualPercent = check.massGrams() * 100L / Math.max(1, check.sustainedMassCapacityGrams());
+        assertTrue(Math.abs(actualPercent - percentOfCapacity) <= 5,
+            () -> "the fixture must place the body at about " + percentOfCapacity + "% of capacity, or it is not "
+                + "testing the threshold it claims to (got " + actualPercent + "%)");
     }
 
     /** One step east, through the real action path — the classifier, the intent, and move() itself. */
