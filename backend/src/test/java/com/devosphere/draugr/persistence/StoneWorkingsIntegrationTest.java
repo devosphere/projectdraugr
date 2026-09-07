@@ -77,6 +77,26 @@ class StoneWorkingsIntegrationTest {
         }
     }
 
+    /**
+     * The quarry #158 asks for, added only once it could mean something. Limestone country is where caves are — a
+     * cave is what limestone dissolves into — so it belongs beside a cave mouth or on a highland shoulder.
+     */
+    @Test
+    void theLimestoneQuarryIsPlacedInLimestoneCountryAndIsAWorking() {
+        world();
+
+        UUID quarry = jdbc.queryForObject(
+            "SELECT chunk_id FROM ecology_site WHERE site_kind='Limestone quarry' LIMIT 1", UUID.class);
+        assertNotNull(quarry, "the world must place a limestone quarry");
+
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, quarry);
+        assertTrue("CAVE_MOUTH".equals(biome) || "HIGHLAND".equals(biome),
+            "limestone country is a cave mouth or a highland shoulder, not " + biome);
+
+        assertTrue(items.stoneWorkingsAt(quarry),
+            "a quarry is the plainest case of ground already opened — if this is false the marker is decoration");
+    }
+
     /** The outcrops the world has always placed must now be ground that reads as opened. */
     @Test
     void theStoneOutcropsTheWorldPlacesAreWorkings() {

@@ -285,7 +285,14 @@ public class WorldGenesisService {
                 // it. That is why river valleys were cropped continuously for thousands of years while ground on
                 // the terrace above had to be rested — the one piece of ground where working it hard is not a
                 // mistake. Placed on a river bank or a marsh margin, which is where a flood actually reaches.
-                new MarkerSpec("RESOURCE", "Floodplain", "RIVER_BANK", "WETLAND"));
+                new MarkerSpec("RESOURCE", "Floodplain", "RIVER_BANK", "WETLAND"),
+                // The limestone quarry #158 asks for, added last of all and deliberately so. When the cave sites
+                // went in it would have been a marker that changed nothing, because mineral richness took no
+                // account of sites; the stone-workings rule came first, and only now is a quarry worth the walk.
+                //
+                // Limestone country is exactly where caves are — a cave is what limestone dissolves into — so a
+                // quarry belongs beside a cave mouth as readily as on an open highland shoulder.
+                new MarkerSpec("RESOURCE", "Limestone quarry", "CAVE_MOUTH", "HIGHLAND"));
         List<PreviewMarker> markers = new ArrayList<>();
         for (int index = 0; index < specifications.size(); index++) {
             MarkerSpec spec = specifications.get(index);
