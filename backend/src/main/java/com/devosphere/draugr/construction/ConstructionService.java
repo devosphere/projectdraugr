@@ -613,8 +613,8 @@ public class ConstructionService {
             "WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' AND cp.state='COMPLETED' ORDER BY length(w.display_name) DESC", location);
         if (projects.isEmpty()) return new String[]{"FAILED", "You look for something built here to set right, but the ground is bare."};
         java.util.Map<String,Object> proj = projects.stream()
-            .filter(p -> lower.contains(((String)p.get("display_name")).toLowerCase(java.util.Locale.ROOT))
-                || lower.contains(((String)p.get("project_kind")).toLowerCase(java.util.Locale.ROOT).replace('_', ' ')))
+            .filter(p -> com.devosphere.draugr.narration.Words.word(lower, ((String)p.get("display_name")).toLowerCase(java.util.Locale.ROOT))
+                || com.devosphere.draugr.narration.Words.names(lower, ((String)p.get("project_kind")).toLowerCase(java.util.Locale.ROOT)))
             .findFirst().orElse(projects.size() == 1 ? projects.get(0) : null);
         if (proj == null) return new String[]{"FAILED", "There is more than one thing standing here — name the one to work on."};
         UUID id = (UUID) proj.get("object_id");
@@ -652,8 +652,8 @@ public class ConstructionService {
             "WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' AND cp.state<>'DESTROYED' ORDER BY length(w.display_name) DESC", location);
         if (projects.isEmpty()) return new String[]{"FAILED", "There is nothing built here to take apart."};
         java.util.Map<String,Object> proj = projects.stream()
-            .filter(p -> lower.contains(((String)p.get("display_name")).toLowerCase(java.util.Locale.ROOT))
-                || lower.contains(((String)p.get("project_kind")).toLowerCase(java.util.Locale.ROOT).replace('_', ' ')))
+            .filter(p -> com.devosphere.draugr.narration.Words.word(lower, ((String)p.get("display_name")).toLowerCase(java.util.Locale.ROOT))
+                || com.devosphere.draugr.narration.Words.names(lower, ((String)p.get("project_kind")).toLowerCase(java.util.Locale.ROOT)))
             .findFirst().orElse(projects.size() == 1 ? projects.get(0) : null);
         if (proj == null) return new String[]{"FAILED", "There is more than one thing built here — name the one to take apart."};
         UUID id = (UUID) proj.get("object_id"); String name = ((String) proj.get("display_name")).toLowerCase(java.util.Locale.ROOT); String kind = (String) proj.get("project_kind");

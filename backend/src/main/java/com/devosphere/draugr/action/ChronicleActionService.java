@@ -1442,8 +1442,8 @@ public class ChronicleActionService {
         if(action.contains(":")&&(value.contains("write")||value.contains("draw")||value.contains("sketch")||value.contains("record")||value.contains("inscribe")||value.contains("mark ")||value.contains("note"))) return Intent.WRITE;
         return classifyLegacy(action);
     }
-    /** Whole-word containment: word("smoke the meat","eat") is false, word("take a nap","nap") is true. */
-    private static boolean word(String haystack, String w) { return haystack.matches("(?s).*\\b" + w + "\\b.*"); }
+    /** Whole-word containment, delegating to the one definition of it — see {@link com.devosphere.draugr.narration.Words}. */
+    private static boolean word(String haystack, String w) { return com.devosphere.draugr.narration.Words.word(haystack, w); }
     private Intent classifyLeanTo(String value) {
         if(value.contains("repair")) return Intent.REPAIR_LEAN_TO;
         if(value.contains("abandon")||value.contains("leave")) return Intent.ABANDON_LEAN_TO;

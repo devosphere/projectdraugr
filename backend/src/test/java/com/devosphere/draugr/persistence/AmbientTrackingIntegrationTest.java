@@ -98,12 +98,12 @@ class AmbientTrackingIntegrationTest {
             "SELECT ws.species_key FROM wildlife_species ws JOIN wildlife_sign g ON g.species_key=ws.species_key " +
             "WHERE ws.kingdom_class<>'MONSTRUM' AND ws.biome_affinity ILIKE '%TEMPERATE_FOREST%'", String.class);
         String said = read.narration().toLowerCase(Locale.ROOT);
-        assertTrue(here.stream().anyMatch(k -> said.contains(k.replace('_', ' '))),
+        assertTrue(here.stream().anyMatch(k -> com.devosphere.draugr.narration.Words.names(said, k)),
             "the sign must belong to a creature of this biome, not an arbitrary one: " + read.narration());
 
         // A monster is never handed over by tracking; its sign is governed where the hint rule is enforced.
         List<String> monsters = jdbc.queryForList("SELECT species_key FROM wildlife_species WHERE kingdom_class='MONSTRUM'", String.class);
-        assertFalse(monsters.stream().anyMatch(k -> said.contains(k.replace('_', ' '))),
+        assertFalse(monsters.stream().anyMatch(k -> com.devosphere.draugr.narration.Words.names(said, k)),
             "tracking must not become a way around the rule that a monster is never casually named: " + read.narration());
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());

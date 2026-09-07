@@ -443,7 +443,7 @@ public class WildlifeEncounterService {
         // glance gets only that something was here.
         boolean reads = "HIGH".equals(attention) || familiarity > 0.15;
         if (reads) {
-            s.append("A ").append(display(species)).append(", by the look of it");
+            s.append(com.devosphere.draugr.narration.Words.startingSentence(display(species))).append(", by the look of it");
             String behavior = (String) found.get("behavior_state");
             String doing = switch (behavior == null ? "" : behavior) {
                 case "HUNTING", "PACK_HUNT", "STALKING" -> ", and moving with purpose";
@@ -835,7 +835,7 @@ public class WildlifeEncounterService {
         // willing in the whole biome, or every stretch of forest would offer the same animal.
         java.util.List<java.util.Map<String,Object>> nearby = here.subList(0, Math.min(5, here.size()));
         java.util.Map<String,Object> pick = here.stream()
-            .filter(s -> actionText.contains(((String) s.get("species_key")).replace('_', ' ')))
+            .filter(s -> com.devosphere.draugr.narration.Words.names(actionText, (String) s.get("species_key")))
             .findFirst()
             .orElseGet(() -> nearby.stream().max(java.util.Comparator.comparingInt(s -> ((Number) s.get("tamability")).intValue())).orElse(here.get(0)));
 
@@ -960,7 +960,7 @@ public class WildlifeEncounterService {
         for (java.util.Map<String,Object> b : baits) {
             String key = (String) b.get("item_key");
             if (!items.hasAtLeast(chronicle, key, 1)) continue;
-            if (v.contains(key.replace('_',' '))) { chosen = b; break; }
+            if (com.devosphere.draugr.narration.Words.names(v, key)) { chosen = b; break; }
             if (chosen == null) chosen = b;
         }
         if (chosen == null) return new EncounterResult("FAILED","You look through what you carry for something worth leaving out, and find nothing that would draw anything in.");
