@@ -600,7 +600,7 @@ public class PhysicalItemService {
         // Charcoal comes from wood that has actually burned. A fire pit that was
         // built but never lit is just a ring of cold stone. Require a fire_state
         // row (the pit was lit at least once) that is no longer burning.
-        Integer spent = jdbc.queryForObject("SELECT COUNT(*) FROM construction_project cp JOIN world_object w ON w.id=cp.object_id JOIN fire_state fs ON fs.construction_id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='STONE_FIRE_PIT' AND cp.state='COMPLETED' AND fs.active=false", Integer.class, location);
+        Integer spent = jdbc.queryForObject("SELECT COUNT(*) FROM construction_project cp JOIN world_object w ON w.id=cp.object_id JOIN fire_state fs ON fs.construction_id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind IN (SELECT project_kind FROM construction_kind WHERE holds_fire) AND cp.state='COMPLETED' AND fs.active=false", Integer.class, location);
         if (spent == null || spent == 0) return false;
         if (capacityHeadroomUnits(chronicle, "charcoal") <= 0) return false;
         UUID id = UUID.randomUUID();
