@@ -39,8 +39,23 @@ public final class BiomeClimate {
     private static final double LAT_C_PER_CHUNK = 0.5;       // per chunk of N–S distance from the map's middle
     private static final double LAT_C_CAP = 10.0;            // no more than this much either side, however large the map
 
+    /**
+     * How much warmer ground is for facing the sun (#159). A slope that falls away to the south takes the light
+     * square-on through the middle of the day instead of glancing, and it is out of the north wind behind it —
+     * which is why the same hillside is bare on one face and green on the other, and why anyone wintering in hill
+     * country camps on the southern shoulder. A few degrees, which is the difference that matters when the rest
+     * of the model is already deciding whether rain falls as snow.
+     */
+    private static final double SUN_WARMED_SLOPE_C = 2.5;
+
+    /** Ground with no aspect of its own — the reading every caller got before slopes were noticed. */
     public static Local at(String biome, int elevation, int moisture, int gridY, int worldHeightChunks,
                            String globalKind, double globalTempC, int globalWindKph) {
+        return at(biome, elevation, moisture, gridY, worldHeightChunks, globalKind, globalTempC, globalWindKph, false);
+    }
+
+    public static Local at(String biome, int elevation, int moisture, int gridY, int worldHeightChunks,
+                           String globalKind, double globalTempC, int globalWindKph, boolean sunWarmedSlope) {
         // 1. Altitude: cool with real height above the lowland reference (never warm below it).
         double metresAboveRef = Math.max(0, elevation - LOWLAND_REFERENCE) * METRES_PER_ELEVATION_UNIT;
         double lapseC = -LAPSE_C_PER_KM * (metresAboveRef / 1000.0);
@@ -69,7 +84,12 @@ public final class BiomeClimate {
             default                -> { charC =  0; windOffset =  0; }
         }
 
-        double temp = clampTemp(globalTempC + lapseC + latC + charC);
+        // 3b. Aspect: a slope that falls away to the south takes the light square-on and shelters from the north
+        //     wind. Added after the biome residual and before the phase decision, so a warmed slope can be the
+        //     ground where the same front falls as rain while it snows on the shoulder above.
+        double aspectC = sunWarmedSlope ? SUN_WARMED_SLOPE_C : 0;
+
+        double temp = clampTemp(globalTempC + lapseC + latC + charC + aspectC);
         int wind = Math.max(0, Math.min(180, globalWindKph + windOffset));
 
         // 4. Phase, biased by humidity (wet-bulb): dry air freezes precipitation at a higher air temperature.
