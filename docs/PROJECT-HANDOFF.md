@@ -244,7 +244,49 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 
 #### Resume point
 
-> **▶ LATEST (2026-09-07): #156 hydrology closed out — and three rules that were real but unreachable.**
+> **▶ LATEST (2026-09-08): #158 closed, #157/#159/#77 advanced — and the same defect found seven more times.**
+>
+> **The shape, stated once:** a thing is declared in the catalogue and the code names literals instead, so the
+> declaration does nothing. Seven instances this cycle, each fixed by moving the list into data:
+>
+> | was | now | what it cost |
+> |---|---|---|
+> | `STONE_FIRE_PIT` ×7 literals | `construction_kind.holds_fire` (V289) | a `CLAY_LINED_HEARTH` was buildable in three stages **and could not be lit** |
+> | taming's six weapon keys | `weapon_profile` | **33 of 36 weapons invisible** — a bronze spear read as empty hands, a stone hammer frightened the animal |
+> | `clearLand`'s seven axe keys | `tool_profile` | named a **phantom** `hand_axe` (0 rows) and missed `stone_hand_axe`, which had no tool row at all — barring the archetypal biface from **156** CUTTING processes |
+> | predator draw's two keys | `carcass_scent` (V287) | a goose over the shoulder drew nothing |
+> | pottery's two keys | `LIKE 'unfired%'` | `unfired_vessel` was wet clay the rain could not touch |
+> | colony regrowth | `insect_colony_kind.shellfish` (V292) | every stretch of coast came back at one rate |
+> | `requires_fire` | `retained_heat_minutes` (V290) | nothing could hold heat past the flame |
+>
+> **The Auditor is part of the fix, not just the check.** Its "displaced fire" rule named `STONE_FIRE_PIT` too, so
+> fixing only `FireService` would have made every fire in a hearth read as world corruption.
+>
+> **Delivered:** #158 **closed** (cave interior derived from the mouths — dark at noon, out of the weather, one way
+> in, its own ecology in V288; `karst_sink` explicitly rejected). #157 — the shore now **holds fish** (five species,
+> no new item keys; every aquatic species was freshwater) and a **shell bed** recovers faster than a scatter. #159 —
+> the **wood's edge** carries more than the wood, with markers that can now require a neighbour. #77 — the **earth
+> oven**, which cooks after the fire is out, chosen over three more fireplaces that would have been three names for
+> one behaviour.
+>
+> **⚠ PROCESS — the three that cost real time:**
+> 1. **A green local suite is not evidence for an integration test.** They skip here. Validate their SQL on a
+>    throwaway Postgres with `PREPARE` **before pushing** — that found `mass_grams` (it is `unit_mass_grams`), a
+>    missing `site_category`, `ecology_site.richness` (it is `baseline_abundance`), no `world` table (it is
+>    `world_genesis`), and `timestamp > interval` needing an explicit cast. Each would have been its own 47-minute
+>    CI round trip.
+> 2. **Every catalogue migration should assert the Auditor's obtainability rule in its guard block.** `flora_drop`
+>    is NOT consulted — `cave_mushroom` dropped off a plant and still counted unobtainable, failing ~20 tests.
+> 3. **Probe EVERY assembly keyword, not a sample.** `"work on the earth oven"` was taken by TILL_GROUND ("earth"
+>    is a whole word in it). The catalogue-wide shadow invariant needs Docker and so does not run here; the
+>    Docker-free assertions now live in `IntentClassificationRegressionTest`.
+>
+> **And two things I got wrong and corrected:** I claimed the rivers held no fish and wrote a migration for it —
+> V269 had already stocked them, and I had grepped `INSERT` rows instead of the live state (deleted it). I also
+> claimed a process produced nothing because `material_process_output` was empty — outputs live in the
+> `output_item_key` **column**. **Query the live database, never the migration text.**
+>
+> **▶ PREVIOUS (2026-09-07): #156 hydrology closed out — and three rules that were real but unreachable.**
 >
 > The recurring shape this cycle: **a rule can be correct, tested, and impossible to reach.** Three of them, in
 > the same ticket.
