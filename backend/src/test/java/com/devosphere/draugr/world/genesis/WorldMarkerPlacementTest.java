@@ -49,9 +49,11 @@ class WorldMarkerPlacementTest {
         for (long seed : new long[]{ WorldGenesisService.GenesisRequest.mvpDefault().seed(), 1L, 7L, 4242L, 99991L }) {
             WorldGenesisService.GenesisRequest request = seeded(seed);
             List<WorldGenesisService.PreviewMarker> markers = generator.markerPlan(request);
-            assertEquals(WorldGenesisService.MARKER_SPECIFICATIONS.size(), markers.size(),
-                "the plan must place one marker per spec");
-            for (int i = 0; i < markers.size(); i++) {
+            assertEquals(WorldGenesisService.MARKER_SPECIFICATIONS.size() + WorldGenesisService.EDGE_SPECIFICATIONS.size(),
+                markers.size(), "the plan must place one marker per spec, edge specs included");
+            // Only the plain specs here; the edge specs are appended after them and have their own test below,
+            // because their rule has a second half this loop cannot see.
+            for (int i = 0; i < WorldGenesisService.MARKER_SPECIFICATIONS.size(); i++) {
                 WorldGenesisService.MarkerSpec spec = WorldGenesisService.MARKER_SPECIFICATIONS.get(i);
                 WorldGenesisService.PreviewMarker placed = markers.get(i);
                 String actual = biomeAt(request, placed.x(), placed.y());
@@ -89,6 +91,41 @@ class WorldMarkerPlacementTest {
 
     private WorldGenesisService.PreviewMarker named(List<WorldGenesisService.PreviewMarker> markers, String label) {
         return markers.stream().filter(m -> m.label().equals(label)).findFirst().orElse(null);
+    }
+
+    /**
+     * An edge marker must stand on ground of its own kind AND touch the other kind — that neighbour is the whole
+     * of what makes it an edge. A "forest edge" in the middle of a wood is the right name on ground that does not
+     * answer to it, which is exactly what {@code marker()}'s silent centre-of-map fallback would produce.
+     */
+    @Test
+    void everyEdgeMarkerStandsWhereTwoKindsOfGroundMeet() throws Exception {
+        List<String> wrong = new ArrayList<>();
+        for (long seed : new long[]{ WorldGenesisService.GenesisRequest.mvpDefault().seed(), 1L, 7L, 4242L, 99991L }) {
+            WorldGenesisService.GenesisRequest request = seeded(seed);
+            List<WorldGenesisService.PreviewMarker> markers = generator.markerPlan(request);
+            for (int i = 0; i < WorldGenesisService.EDGE_SPECIFICATIONS.size(); i++) {
+                WorldGenesisService.EdgeMarkerSpec spec = WorldGenesisService.EDGE_SPECIFICATIONS.get(i);
+                // Edge specs are appended after the main list, so their markers begin at that offset.
+                WorldGenesisService.PreviewMarker placed = markers.get(WorldGenesisService.MARKER_SPECIFICATIONS.size() + i);
+                String on = biomeAt(request, placed.x(), placed.y());
+                if (!Arrays.asList(spec.biomes()).contains(on)) {
+                    wrong.add("seed " + seed + ": '" + spec.label() + "' stands on " + on);
+                    continue;
+                }
+                boolean touches = false;
+                for (int[] step : new int[][]{ {0,-1}, {0,1}, {-1,0}, {1,0} }) {
+                    int nx = placed.x() + step[0], ny = placed.y() + step[1];
+                    if (nx < 0 || ny < 0 || nx >= request.widthChunks() || ny >= request.heightChunks()) continue;
+                    if (Arrays.asList(spec.besides()).contains(biomeAt(request, nx, ny))) { touches = true; break; }
+                }
+                if (!touches)
+                    wrong.add("seed " + seed + ": '" + spec.label() + "' at (" + placed.x() + "," + placed.y()
+                        + ") touches none of " + Arrays.toString(spec.besides()));
+            }
+        }
+        assertTrue(wrong.isEmpty(),
+            () -> "an edge that does not touch the other kind of ground is not an edge: " + String.join("; ", wrong));
     }
 
     /**

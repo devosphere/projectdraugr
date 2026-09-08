@@ -384,12 +384,37 @@ public class WorldGenesisService {
                 // quarry belongs beside a cave mouth as readily as on an open highland shoulder.
                 new MarkerSpec("RESOURCE", "Limestone quarry", "CAVE_MOUTH", "HIGHLAND"));
 
+    /**
+     * Ground that is richer for what it stands between (#159).
+     *
+     * <p>An ecotone is the line where two kinds of country meet, and it carries more than either side because
+     * both are within reach of it — the forager on a wood's edge has the trees at their back and the open in
+     * front. That is a real effect and this world already models it: any RESOURCE site lifts what the ground
+     * gives up ({@code ResourceEcologyService}), so an edge placed truthfully is functional the moment it exists.
+     *
+     * <p>Placed truthfully is the whole point. A "forest edge" dropped anywhere among the trees would be the
+     * right name on ground that does not answer to it, so these require the neighbour that makes them what they
+     * are. The woodland meadow the ticket also names is deliberately NOT here: it is the same line seen from the
+     * grass, and adding it would be a second name for one effect.
+     */
+    static final List<EdgeMarkerSpec> EDGE_SPECIFICATIONS = List.of(
+        new EdgeMarkerSpec("RESOURCE", "Forest edge",
+            new String[]{ "TEMPERATE_FOREST" }, new String[]{ "GRASSLAND" }),
+        new EdgeMarkerSpec("RESOURCE", "Forest edge",
+            new String[]{ "TEMPERATE_FOREST" }, new String[]{ "GRASSLAND", "COAST" }));
+
     private List<PreviewMarker> markersFor(GenesisRequest request) {
         List<MarkerSpec> specifications = MARKER_SPECIFICATIONS;
         List<PreviewMarker> markers = new ArrayList<>();
         for (int index = 0; index < specifications.size(); index++) {
             MarkerSpec spec = specifications.get(index);
             markers.add(marker(spec.category(), spec.label(), spec.biomes(), request, 11 + index * 17));
+        }
+        // Edges last, for the same reason every other addition went to the end: the placement salt is the index,
+        // so inserting anywhere else would move ground that is already fixed for a given seed.
+        for (int index = 0; index < EDGE_SPECIFICATIONS.size(); index++) {
+            EdgeMarkerSpec spec = EDGE_SPECIFICATIONS.get(index);
+            markers.add(marker(spec.category(), spec.label(), spec.biomes(), spec.besides(), request, 7919 + index * 31));
         }
         return List.copyOf(markers);
     }
@@ -401,13 +426,41 @@ public class WorldGenesisService {
     }
 
     private PreviewMarker marker(String category, String label, String[] accepted, GenesisRequest request, int salt) {
+        return marker(category, label, accepted, null, request, salt);
+    }
+
+    /**
+     * Place a marker on the first acceptable ground the scan reaches, optionally requiring a neighbour (#159).
+     *
+     * <p>The neighbour condition is what an ecotone needs. A forest edge is not a patch of forest that happens to
+     * be richer — it is the line where the wood meets the open, and the reason it is richer is that both sides
+     * are within reach of it. Placing one anywhere in the trees would be the decoration this catalogue is meant
+     * not to carry: the right name on ground that does not answer to it.
+     */
+    private PreviewMarker marker(String category, String label, String[] accepted, String[] besides,
+                                 GenesisRequest request, int salt) {
         int count = request.widthChunks() * request.heightChunks(), start = Math.floorMod((int) (request.seed() ^ (salt * 0x9E3779B9L)), count);
         for (int attempt = 0; attempt < count; attempt++) {
             int index = Math.floorMod(start + attempt * 37, count), x = index % request.widthChunks(), y = index / request.widthChunks();
             String biome = terrainAt(x, y, request.widthChunks(), request.heightChunks(), request.seed(), true).biome();
-            for (String permitted : accepted) if (permitted.equals(biome)) return new PreviewMarker(category, label, x, y);
+            boolean permitted = false;
+            for (String candidate : accepted) if (candidate.equals(biome)) { permitted = true; break; }
+            if (!permitted) continue;
+            if (besides != null && !touches(x, y, besides, request)) continue;
+            return new PreviewMarker(category, label, x, y);
         }
         return new PreviewMarker(category, label, request.widthChunks() / 2, request.heightChunks() / 2);
+    }
+
+    /** Whether any of the four ground squares around this one is of a wanted kind. */
+    private boolean touches(int x, int y, String[] wanted, GenesisRequest request) {
+        for (int[] step : new int[][]{ {0,-1}, {0,1}, {-1,0}, {1,0} }) {
+            int nx = x + step[0], ny = y + step[1];
+            if (nx < 0 || ny < 0 || nx >= request.widthChunks() || ny >= request.heightChunks()) continue;
+            String neighbour = terrainAt(nx, ny, request.widthChunks(), request.heightChunks(), request.seed(), true).biome();
+            for (String candidate : wanted) if (candidate.equals(neighbour)) return true;
+        }
+        return false;
     }
 
     private void drawMarker(Graphics2D g, PreviewMarker marker, int imageWidth, int mapHeight, int header, GenesisRequest request) {
@@ -436,4 +489,14 @@ public class WorldGenesisService {
     public record PreviewMarker(String category, String label, int x, int y) { }
     /** Package-private so the placement invariant can read the ground each marker claims. */
     record MarkerSpec(String category, String label, String... biomes) { }
+
+    /**
+     * A marker that must stand where two kinds of ground meet (#159).
+     *
+     * <p>Kept separate from {@link MarkerSpec} rather than adding a field to it: that record takes its biomes as
+     * varargs, so a new component would have to go before them and every one of the sixty-odd existing specs
+     * would need rewriting to say nothing new. Sixty lines of churn to express "no neighbour required" is a worse
+     * diff than one more record.
+     */
+    record EdgeMarkerSpec(String category, String label, String[] biomes, String[] besides) { }
 }
