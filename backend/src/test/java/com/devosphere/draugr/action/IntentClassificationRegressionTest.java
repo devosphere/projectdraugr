@@ -719,4 +719,30 @@ class IntentClassificationRegressionTest {
         assertEquals("FISH", classify("fish the stream with a spear"));
         assertEquals("FISH", classify("catch trout in the pool"));
     }
+
+    /**
+     * V290's earth oven, and the reason its keywords are checked here rather than only by the shadow invariant.
+     *
+     * <p>An assembly is only reachable by a phrase the classifier lets fall through as UNKNOWN — a hard intent
+     * runs first and takes the phrase entirely. {@code ConstructionRegistryCompleteIntegrationTest} enforces that
+     * over every assembly in the catalogue, which is the right net, but it needs Docker: on a machine where
+     * Testcontainers cannot reach the daemon it silently does not run, and the collision surfaces 45 minutes into
+     * CI instead.
+     *
+     * <p>It surfaced exactly that way. I probed two of the five keywords I shipped, and the one I did not probe —
+     * "work on the earth oven" — was taken by TILL_GROUND, because "earth" is a whole word in it. That is the same
+     * collision that made "hearth" match "earth" before word boundaries were introduced, wearing a different coat.
+     * These run without Docker, so the next one is caught before it is pushed.
+     */
+    @Test void theEarthOvensOwnWordsReachTheAssemblyMatcher() throws Exception {
+        assertEquals("UNKNOWN", classify("build an earth oven"));
+        assertEquals("UNKNOWN", classify("dig an earth oven"));
+        assertEquals("UNKNOWN", classify("earth oven"));
+        assertEquals("UNKNOWN", classify("work on the oven"));
+        assertEquals("UNKNOWN", classify("line the oven pit"));
+        // The phrase that was actually stolen, kept as the record of why the wording changed.
+        assertEquals("TILL_GROUND", classify("work on the earth oven"));
+        // And tilling itself still classifies, so the fix above was a wording change and not a loosening.
+        assertEquals("TILL_GROUND", classify("break the earth for a seedbed"));
+    }
 }
