@@ -1115,9 +1115,8 @@ public class PhysicalItemService {
             if ("BROKEN".equals(toolUsed.get("cond")) || "DESTROYED".equals(toolUsed.get("cond")))
                 return new String[]{"FAILED", "The tool this work turns on is past biting — its edge gone or its head loose. Mend it against a whetstone or with cordage before it will serve."};
         }
-        if (Boolean.TRUE.equals(match.get("requires_fire"))) {
-            Boolean fire = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM fire_state fs JOIN world_object w ON w.id=fs.construction_id WHERE w.current_location_id=? AND fs.active=true)", Boolean.class, location);
-            if (!Boolean.TRUE.equals(fire)) return new String[]{"FAILED", "This work needs heat, and no fire burns within reach of it. Cold, the material will not give."};
+        if (Boolean.TRUE.equals(match.get("requires_fire")) && !heatToWorkWith(location, at)) {
+            return new String[]{"FAILED", "This work needs heat, and none is within reach of it — no fire burning, and no stone still holding yesterday's. Cold, the material will not give."};
         }
         if (Boolean.TRUE.equals(match.get("requires_salt_water")) && !saltWaterToWorkWith(location)) {
             return new String[]{"FAILED", "This work turns on salt water, and there is none within reach of it. Fresh water will not do — what it takes from the sea is not in a spring."};
@@ -1400,6 +1399,36 @@ public class PhysicalItemService {
     private static final int CROP_YIELD_HEADS_TILLED = 6;
     /** Below this the soil is worn and gives a thinner stand (#164). */
     private static final int FERTILITY_LOW_THRESHOLD = 60;
+    /**
+     * Heat enough to work by, here and now (#77) — a fire burning, or stone still holding one.
+     *
+     * <p>An earth oven is a pit lined with close-set stone, filled with fire until the rock is soaked through,
+     * then raked out and covered. The stones hold that heat for hours and the food cooks in it with no flame at
+     * all. That is the whole technology, it is how people have cooked in pits everywhere they have lived, and it
+     * is the only reason to dig one rather than lay a fire on the ground.
+     *
+     * <p>Which structures do it, and for how long, is declared in {@code construction_kind.retained_heat_minutes}
+     * rather than named here — the same move V289 made for what can hold a fire at all. A hearth with no retained
+     * heat reads as zero and behaves exactly as it always has, so nothing that worked before changes.
+     */
+    private boolean heatToWorkWith(UUID location, Instant at) {
+        Boolean burning = jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM fire_state fs JOIN world_object w ON w.id=fs.construction_id " +
+            "WHERE w.current_location_id=? AND fs.active=true)", Boolean.class, location);
+        if (Boolean.TRUE.equals(burning)) return true;
+        // A fire that has gone out in something built to hold its heat still counts, until the stone gives it up.
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM fire_state fs " +
+            "JOIN world_object w ON w.id=fs.construction_id " +
+            "JOIN construction_project cp ON cp.object_id=fs.construction_id " +
+            "JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
+            "WHERE w.current_location_id=? AND fs.active=false AND ck.retained_heat_minutes > 0 " +
+            // The cast is not decoration: without it Postgres cannot infer the parameter's type and reads the
+            // whole expression as an interval — "operator does not exist: timestamp with time zone > interval".
+            "  AND fs.last_updated_at > CAST(? AS timestamptz) - make_interval(mins => ck.retained_heat_minutes))",
+            Boolean.class, location, java.sql.Timestamp.from(at)));
+    }
+
     /** What one harvest takes from a field's fertility. */
     private static final int FERTILITY_COST_PER_HARVEST = 30;
     /** How much fertility a field wins back for each day left fallow. */
