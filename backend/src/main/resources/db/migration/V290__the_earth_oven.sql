@@ -23,7 +23,7 @@ INSERT INTO assembly_definition
     (assembly_key, subject_kind, display_name, portable, produces_item_key, construction_kind, domain_key, keywords, subjects, narration)
 VALUES
     ('earth_oven', 'STRUCTURE', 'Earth oven', FALSE, NULL, 'EARTH_OVEN', 'construction',
-     'build an earth oven,dig an earth oven,earth oven,work on the earth oven,line the oven pit',
+     'build an earth oven,dig an earth oven,earth oven,work on the oven,line the oven pit',
      'oven,pit',
      'The pit lies lined with close-set stone, its walls scorched — heat it once and it will hold that heat long after the flame is gone.')
 ON CONFLICT (assembly_key) DO NOTHING;
