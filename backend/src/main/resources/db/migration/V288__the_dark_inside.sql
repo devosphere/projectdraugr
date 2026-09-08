@@ -25,6 +25,14 @@ INSERT INTO flora_drop (flora_key, item_key, yield_min, yield_max, season) VALUE
 ('cave_fungus', 'cave_mushroom', 2, 4, NULL)
 ON CONFLICT DO NOTHING;
 
+-- And the row that says the mushroom can be got at all. The Auditor holds every item to having a DECLARED
+-- source and does not read flora_drop to work one out: the question it asks is "does the catalogue claim a way
+-- to get this", not "could a way be derived". So an item can drop off a plant and still count as unobtainable.
+-- Without this line CI goes red on every test that checks the Auditor, which is most of them — it did.
+INSERT INTO item_source (item_key, source_kind, detail) VALUES
+('cave_mushroom', 'FLORA_DROP', 'flora_drop')
+ON CONFLICT (item_key, source_kind) DO NOTHING;
+
 -- 2. The animals that go all the way in. Bats roost deep and the two cave predators hunt there; the cave BEAR is
 --    deliberately left at the mouth, because a bear dens where it can get its bulk in and out, not down a passage.
 UPDATE wildlife_species SET biome_affinity = biome_affinity || ',CAVE_INTERIOR'
@@ -64,5 +72,17 @@ BEGIN
        OR NOT EXISTS (SELECT 1 FROM flora_definition WHERE biome_affinity LIKE '%CAVE_INTERIOR%')
        OR NOT EXISTS (SELECT 1 FROM wildlife_species WHERE biome_affinity LIKE '%CAVE_INTERIOR%')
     THEN RAISE EXCEPTION 'V288: CAVE_INTERIOR would generate barren — it must hold stone, growth and life';
+    END IF;
+
+    -- The Auditor's own rule, asserted here where it costs a second rather than in CI where it costs an hour.
+    -- The first cut of this migration added cave_mushroom with a flora_drop and no item_source, and every test
+    -- in the suite that checks Auditor consistency went red on one line: "1 item definition(s) have no way to
+    -- be obtained." A catalogue migration should answer that question before it is asked.
+    SELECT string_agg(d.item_key, ', ') INTO missing
+      FROM item_definition d
+     WHERE NOT EXISTS (SELECT 1 FROM item_source s WHERE s.item_key = d.item_key)
+       AND NOT EXISTS (SELECT 1 FROM item_unreachable_known k WHERE k.item_key = d.item_key);
+    IF missing IS NOT NULL THEN
+        RAISE EXCEPTION 'V288: item(s) with no declared way to be obtained: %', missing;
     END IF;
 END $$;
