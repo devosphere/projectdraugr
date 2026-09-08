@@ -345,7 +345,7 @@ public class WildlifeEncounterService {
         // carcass through predator ground and you are the bait. A built camp store on this ground (#207 heritage
         // STORAGE_AREA) is a larder to set the kill down in — home ground with a store is somewhere a carcass can
         // be brought back to without turning it into an ambush, so the draw does not follow you there.
-        boolean freshKill = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key IN ('raw_game_meat','raw_fish'))", Boolean.class, chronicle));
+        boolean freshKill = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key IN (SELECT item_key FROM carcass_scent))", Boolean.class, chronicle));
         if (freshKill && !hasStorageArea(chunk)) chance += 10;
         // A camp choked with refuse (#218) carries the scent of rot on the wind and draws hungry animals in the
         // way a fresh kill does — scavengers and opportunists both, come to see what a filthy ground offers. A
@@ -883,10 +883,20 @@ public class WildlifeEncounterService {
         if (t == null) t = approachAmbient(chunk, v, at);
         if (t == null) return new EncounterResult("FAILED","You stand still a long while, but there is nothing here that would let you near it.");
 
+        // What the animal sees in your hands, read from weapon_profile rather than from a list written when the
+        // catalogue held six weapons (#93). It now holds 36, and 33 of them were invisible here: a Chronicle could
+        // walk up to a wild animal holding a bronze spear, a hunting bow, a war club or a poisoned spear and be
+        // read as empty-handed, while a stone hammer frightened it. The registry is what the catalogue keeps
+        // current; the list was a snapshot of it that stopped being true.
+        //
+        // Ammunition is deliberately excluded by combat_role: a loose arrow or a sling stone in the hand is not a
+        // weapon brandished, and an animal that bolted from a pebble would be the same error in the other
+        // direction.
         boolean armed = Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id " +
+            "JOIN weapon_profile w ON w.item_key=i.item_key " +
             "WHERE e.chronicle_id=? AND e.body_position IN ('HAND_LEFT','HAND_RIGHT') " +
-            "AND i.item_key IN ('primitive_spear','stone_axe','stone_hatchet','stone_knife','stone_hammer','primitive_pickaxe'))",
+            "AND w.combat_role IN ('HAND','BLUNT','JAVELIN','BOW','SLING'))",
             Boolean.class, chronicle));
         // Offering food is the strongest single thing a chronicle can do, and it costs
         // real food from their own stores.
@@ -1093,9 +1103,34 @@ public class WildlifeEncounterService {
     }
 
     /**
+     * How the water here runs (#156): {@code "FAST"} at a fast stream, {@code "SLOW"} at a slow river reach, and
+     * null where the world has said nothing about it — which is most water, and which goes on behaving exactly as
+     * it did before.
+     *
+     * <p>Read from the site rather than the biome, because both stand on RIVER_BANK. A distinction carried by the
+     * biome could not tell one stretch of river from the next, and the ticket's requirement is precisely that
+     * these are connected physical topology and not interchangeable labels.
+     */
+    /** Water a beaver has dammed (#156) — standing, deep, and richer than the run it drowned. */
+    private boolean beaverPoolAt(UUID chunk) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM ecology_site WHERE chunk_id=? AND site_kind ILIKE '%beaver pool%')",
+            Boolean.class, chunk));
+    }
+
+    private String waterCharacterAt(UUID chunk) {
+        return jdbc.query(
+            "SELECT CASE WHEN site_kind ILIKE '%fast stream%' THEN 'FAST' ELSE 'SLOW' END FROM ecology_site " +
+            "WHERE chunk_id=? AND (site_kind ILIKE '%fast stream%' OR site_kind ILIKE '%slow river%' " +
+            "                      OR site_kind ILIKE '%beaver pool%') LIMIT 1",
+            rs -> rs.next() ? rs.getString(1) : null, chunk);
+    }
+
+    /**
      * Take a fish from the water. Method decides the odds: bare hands rarely work,
      * a spear is a real tool for it, a woven trap works patiently and well. The
-     * fish species present are those the registry places in this biome.
+     * fish species present are those the registry places in this biome, and how
+     * the water runs decides which methods suit it ({@link #waterCharacterAt}).
      */
     @Transactional
     public EncounterResult fish(UUID chronicle, UUID chunk, UUID action, Instant at, String actionText) {
@@ -1140,6 +1175,28 @@ public class WildlifeEncounterService {
             "WHERE w.current_location_id=? AND cp.project_kind='FISHING_WEIR' AND cp.state='COMPLETED' " +
             "AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')", Boolean.class, chunk));
         if (weir) { chance = Math.max(chance, 85); method = "TRAP"; } // a weir is a fixed trap (aquatic_catch method set)
+        // The water's own character (#156). A fast stream and a slow river are the two named sites the ticket asks
+        // for, and it asks for them as connected topology rather than interchangeable labels — so what must differ
+        // is not their names but what works in them.
+        //
+        // Current is the difference, and it cuts opposite ways for the two families of method. A fixed trap or a
+        // net standing in fast water does not have to find the fish: the current delivers them into it, which is
+        // the whole principle a weir is built on. A hand-line is the reverse — in a fast stream the bait is swept
+        // off the hold before anything takes it, and the float rides away downstream — while in a slow reach it
+        // sits where the fish are lying. Bare hands want slack water for the same reason they want no current to
+        // fight.
+        //
+        // So gear that is wrong for the water still catches, and gear that is right for it is not made certain:
+        // this shifts the odds, it does not decide them, and it is applied after gear and bait so those still tell.
+        String current = waterCharacterAt(chunk);
+        if (current != null) {
+            int shift = switch (method) {
+                case "TRAP", "NET" -> current.equals("FAST") ? 12 : -8;
+                case "LINE" -> current.equals("FAST") ? -14 : 12;
+                default -> current.equals("FAST") ? -10 : 8; // bare hands
+            };
+            chance = Math.max(5, Math.min(90, chance + shift));
+        }
         java.util.List<String> species = jdbc.queryForList("SELECT species_key FROM wildlife_species WHERE movement_class='AQUATIC' AND biome_affinity ILIKE ? ORDER BY species_key", String.class, "%"+biome+"%");
         if (species.isEmpty()) return new EncounterResult("FAILED","You watch the ground a while. There is no water here that holds anything worth taking.");
         // #181/#36 finite water: a stretch fished relentlessly thins until it is fished out here, and needs rest to
@@ -1179,6 +1236,14 @@ public class WildlifeEncounterService {
      *  is lazily full (not yet recorded). Public so a survey can read how well-stocked the water is (#181/#36). */
     public int fishRemaining(UUID chunk, Instant at) {
         int full = fishStockSeedFor(chunk);
+        // A beaver pool holds more than the stream it drowned (#156). The dam turns a thin run into standing water
+        // with depth, cover and dead timber in it, and that water carries far more fish than the reach did — the
+        // reason a beaver pond is worth walking to and the reason people fished them.
+        //
+        // Applied here rather than in fishStockSeedFor because that is static and knows only the chunk id, which
+        // is exactly the shape the stone outcrop was in before #538: a site the world placed that changed nothing,
+        // because the richness it was supposed to affect was computed without ever looking at sites.
+        if (beaverPoolAt(chunk)) full = full * 16 / 10;
         java.util.Map<String,Object> row = jdbc.query(
             "SELECT remaining_units, last_fished_at FROM fish_stock WHERE chunk_id=?",
             rs -> rs.next() ? java.util.Map.of("r", rs.getInt(1), "t", rs.getTimestamp(2).toInstant()) : null, chunk);

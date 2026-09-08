@@ -244,7 +244,62 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 
 #### Resume point
 
-> **▶ LATEST (2026-09-06): the world-seed topology closed, and one flag that was answering three different questions.**
+> **▶ LATEST (2026-09-07): #156 hydrology closed out — and three rules that were real but unreachable.**
+>
+> The recurring shape this cycle: **a rule can be correct, tested, and impossible to reach.** Three of them, in
+> the same ticket.
+>
+> - **The floodplain (#541).** #539 gave it fertility recovering twice as fast as ordinary ground — and it stands
+>   on `RIVER_BANK`/`WETLAND`, which `sowCrop` refused, while `clearLand` takes woodland only. So the ground that
+>   renews fastest was ground **no Chronicle could put a field on.** The fertility test could not see it: it
+>   inserts a ripe `crop_stand` directly, because waiting a season is not a thing a test can do, and that walks
+>   past whether sowing there is possible at all. `isArable` now also takes floodplain and marsh-island silt, and
+>   `WetGroundIsFarmableIntegrationTest` asserts it through `sowCrop` — **including the negative**, that open bog
+>   is still not farmland, or the change would read "wetland is arable now", which is a different and false claim.
+> - **The sea was walkable (#544).** `move()` handed over any adjacent chunk without ever asking what it was. You
+>   could step off a beach into open ocean carrying a hundred kilos. The fix is not a wall: open water can be swum
+>   but not while loaded (¼ of capacity), a marsh takes a walker but not a heavy pack (¾), dry land is unchanged.
+>   **That is what finally gave `shallow_ford` something to do** — until movement asked what it was crossing, a
+>   ford could only ever have been a label.
+> - **Fast vs slow water (#543).** #156 demands these as topology, *not interchangeable labels*, so what differs is
+>   what works in them: a fixed trap or net gains in fast water (the current delivers the fish — the principle a
+>   weir is built on), a hand-line gains in slack water. Applied after gear and bait, so it shifts odds rather than
+>   deciding them; unnamed water is asserted unchanged.
+>
+> **A silent hole in genesis, now closed.** `marker()` returns the middle of the map when a spec names no biome the
+> terrain generates — no check, no warning. Such a marker does not go *missing*, which would be noticed; it appears
+> in a plausible place and means nothing. `WorldMarkerPlacementTest` walks every spec across five seeds. Probing it
+> with a deliberately bad spec showed the centre chunk is **open sea in three of five seeds**.
+>
+> **`roc` is inside `au-roc-hs` (#542).** CI flaked on "a monster is never casually named" against *"A aurochs, by
+> the look of it"*. The matcher was the bug and it was **live in gameplay** — `"hunt the aurochs"` could select the
+> roc. Six call sites now go through `narration.Words`, which bounds with lookarounds rather than `\b` (a name
+> ending in punctuation, `lean-to`, has no word boundary after it). Also fixes "A aurochs" → "An aurochs".
+>
+> **Two process notes.** (1) Merge only on `gh pr checks --watch` exit status — two hand-rolled jq watchers merged
+> #541/#542 before the backend suite reported (`//` substitutes for `null`, not `""`). (2) I wrote a migration to
+> "put fish in the rivers" and **deleted it**: V269 had already done it, and I had grepped the original `INSERT`
+> rows instead of the live state. A throwaway Postgres with all migrations applied is what caught it.
+>
+> **#156 is closed out.** Every site the ticket names is placed and functional: `headwater_spring`, `pond`,
+> `lake_margin`, `riverbank`, `floodplain`, `marsh_island`, `fast_stream`, `slow_river`, `shallow_ford`,
+> `beaver_pool`, `springhead`. The beaver pool is not the `Beaver lodge` already placed — a lodge is where the
+> animals are, a pool is what their dam made: it holds more fish, reads as slack water, and is water to drink.
+>
+> **The audit that keeps paying, run again:** grep the hardcoded `IN ('a','b',…)` lists out of the main source and
+> diff each against the table it stands in for. It found that an animal could not see 33 of the world's 36 weapons
+> (a bronze spear or hunting bow read as empty hands, while a stone hammer frightened it); that `hand_axe`, named
+> in two felling checks, is a key the catalogue has never held; that `stone_hand_axe` had no `tool_profile` row and
+> so could not perform any of 156 CUTTING processes; that fowl and crayfish carcasses drew no predators; and that
+> `unfired_vessel` was green ware the rain could not touch.
+>
+> **⚠ Process, learned the hard way twice in one cycle.** A green local suite is NOT evidence for a new
+> integration test — they skip without Docker here, so their SQL is unrun. Validate it against a throwaway
+> Postgres (`PREPARE` each statement) BEFORE pushing; doing that after the first red found three further errors in
+> one fixture, each of which would have cost its own 46-minute round trip. And do not stack PRs on unverified
+> work: four were invalidated at once by one bad fixture in the base.
+>
+> **▶ PREVIOUS (2026-09-06): the world-seed topology closed, and one flag that was answering three different questions.**
 >
 > **The biggest structural find: `is_shelter` was being asked three unrelated questions.** Five places in the Java
 > ask *"is there something here I can be inside, out of the weather"*; four named four project kinds literally, so a

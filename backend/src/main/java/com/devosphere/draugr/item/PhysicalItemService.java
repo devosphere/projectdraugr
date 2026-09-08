@@ -757,7 +757,10 @@ public class PhysicalItemService {
             "  JOIN reachable r ON r.id=ic.container_id" +
             "  JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE')" +
             "SELECT i.object_id, i.condition_state, i.use_count, i.item_key FROM reachable r JOIN item_instance i ON i.object_id=r.id " +
-            "WHERE i.item_key IN ('stone_axe','stone_hatchet','copper_axe','bronze_axe','iron_axe','steel_axe','hand_axe') " +
+            // Which items are axes is tool_profile's answer, not a list kept here (#93). The list this replaces
+            // named 'hand_axe', which is not an item key the catalogue has ever held — a phantom that could never
+            // match anything — and would have gone on missing any axe added after it was written.
+            "WHERE i.item_key IN (SELECT item_key FROM tool_profile WHERE tool_class='AXE') " +
             "ORDER BY CASE i.condition_state WHEN 'SOUND' THEN 0 WHEN 'WORN' THEN 1 WHEN 'BROKEN' THEN 2 ELSE 3 END, i.use_count LIMIT 1",
             rs -> rs.next() ? java.util.Map.of("id", rs.getObject(1, UUID.class), "cond", rs.getString(2), "uses", rs.getInt(3), "key", rs.getString(4)) : null,
             chronicle);
@@ -1348,7 +1351,12 @@ public class PhysicalItemService {
         java.util.List<java.util.Map<String,Object>> exposed = jdbc.queryForList(
             "SELECT i.object_id, i.weathered_at FROM item_instance i JOIN world_object w ON w.id=i.object_id JOIN world_chunk wc ON wc.id=w.current_location_id " +
             "WHERE w.lifecycle_state='ACTIVE' AND w.current_owner_id IS NULL AND wc.biome IN ('WETLAND','RIVER_BANK') " +
-            "AND i.item_key IN ('unfired_bowl','unfired_cup')");
+            // Green ware is anything not yet fired, and the catalogue names it so. The two keys this replaces
+            // missed unfired_vessel — which form_vessel makes and fire_vessel fires, wet clay by every test that
+            // matters — so a bowl and a cup slumped in the rain while the same clay called a vessel did not.
+            // clay_jar deliberately stays out: no process fires it, so treating it as green ware would leave it
+            // slumping with no way to save it.
+            "AND i.item_key LIKE 'unfired%'");
         for (java.util.Map<String,Object> r : exposed) {
             java.util.UUID id = (java.util.UUID) r.get("object_id");
             java.sql.Timestamp weatheredAt = (java.sql.Timestamp) r.get("weathered_at");
@@ -1471,7 +1479,10 @@ public class PhysicalItemService {
             " UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id" +
             " JOIN world_object n ON n.id=ic.item_id WHERE n.lifecycle_state='ACTIVE')" +
             " SELECT EXISTS(SELECT 1 FROM reachable r JOIN item_instance i ON i.object_id=r.id" +
-            " WHERE i.item_key IN ('stone_axe','stone_hatchet','copper_axe','bronze_axe','iron_axe','steel_axe','hand_axe')" +
+            // Same registry, same reason (#93): the felled-tree question is "have I an axe", and tool_profile is
+            // where the catalogue answers it. Note a hand axe is deliberately not one: you can cut and scrape
+            // with a knapped biface, but you cannot fell woodland with a stone held in the fist.
+            " WHERE i.item_key IN (SELECT item_key FROM tool_profile WHERE tool_class='AXE')" +
             " AND i.condition_state <> 'BROKEN')", Boolean.class, chronicle));
         if (!axe)
             return new String[]{"FAILED", "Clearing wooded ground wants an axe to fell the trees and cut back the brush, and you have none sound to hand."};
@@ -2595,6 +2606,9 @@ public class PhysicalItemService {
         LoadState state=loadState(chronicle); Capacity cap=new Capacity(state.sustainedMassCapacityGrams(),state.directBulkCapacityMl(),state.maximumSingleLiftGrams()); Load load=new Load(state.massGrams(),state.bulkMl(),state.heaviestObjectGrams());
         if(load.mass()>cap.mass()||load.volume()>cap.volume()||load.largest()>cap.singleLift()) throw new IllegalStateException("The Chronicle cannot physically carry that load.");
     }
+    /** What the Chronicle is carrying and what they can carry — public so movement can ask before deep water (#156/#157). */
+    public LoadState currentLoad(UUID chronicle) { return loadState(chronicle); }
+
     private LoadState loadState(UUID chronicle) {
         // A carrying aid (pole/yoke/harness/pack frame) worn or held adds its bonus to sustained mass / bulk
         // capacity while equipped (#57 carry_aid_bonus). The single-object lift limit is unchanged — an aid

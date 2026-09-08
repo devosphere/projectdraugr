@@ -18,13 +18,14 @@ package com.devosphere.draugr.ecology;
  * whichever places somebody remembered to update.
  *
  * <p>Deliberately NOT included: {@code pool}. "Fen siren pool" is a monster lair, and a word that broad would
- * quietly turn one into a drinking source.
+ * quietly turn one into a drinking source. {@code beaver pool} is named in full for exactly that reason — a
+ * dammed pool is water to drink, and the siren's is not, and the difference between them is the whole phrase.
  */
 public final class FreshWater {
 
     private FreshWater() { }
 
-    private static final String[] KINDS = { "spring", "stream", "river", "freshwater", "pond", "lake" };
+    private static final String[] KINDS = { "spring", "stream", "river", "freshwater", "pond", "lake", "beaver pool" };
 
     /**
      * A parenthesised SQL predicate over {@code ecology_site} rows.
