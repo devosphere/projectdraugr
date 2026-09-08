@@ -45,7 +45,7 @@ public class PersistentStateAuditor {
         // Fire: a live fire needs fuel, a hearth to sit in, and that hearth intact.
         Integer starvedFire = jdbc.queryForObject("SELECT COUNT(*) FROM fire_state WHERE active=true AND fuel_minutes=0", Integer.class);
         if (starvedFire != null && starvedFire > 0) violations.add(starvedFire + " fire(s) burn with no fuel remaining.");
-        Integer displacedFire = jdbc.queryForObject("SELECT COUNT(*) FROM fire_state fs JOIN construction_project cp ON cp.object_id=fs.construction_id JOIN world_object w ON w.id=fs.construction_id WHERE fs.active=true AND (cp.project_kind <> 'STONE_FIRE_PIT' OR w.lifecycle_state='DESTROYED')", Integer.class);
+        Integer displacedFire = jdbc.queryForObject("SELECT COUNT(*) FROM fire_state fs JOIN construction_project cp ON cp.object_id=fs.construction_id JOIN world_object w ON w.id=fs.construction_id WHERE fs.active=true AND (cp.project_kind NOT IN (SELECT project_kind FROM construction_kind WHERE holds_fire) OR w.lifecycle_state='DESTROYED')", Integer.class);
         if (displacedFire != null && displacedFire > 0) violations.add(displacedFire + " fire(s) burn on something other than an intact fire pit.");
         // A carcass emptied of both meat and hide should have been retired, not left
         // standing as an active object the world still offers up.
