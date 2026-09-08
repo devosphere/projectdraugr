@@ -376,6 +376,11 @@ public class WorldGenesisService {
                 // because a dam turns a thin stream into standing water with depth, cover and dead timber in it;
                 // it reads as slack water for the fishing methods that want that; and it is water to drink.
                 new MarkerSpec("RESOURCE", "Beaver pool", "WETLAND", "RIVER_BANK"),
+                // The shell bed (#157). Not a place where mussels happen to be — a dense mat of them cemented to
+                // each other and the rock, which is what lets it recover: spat settles on the shells already
+                // there, so the bed reseeds from its own population where a thin scatter cannot. The colonies
+                // already reached the shore; what was missing was any ground where the recovery differs.
+                new MarkerSpec("RESOURCE", "Shell bed", "COAST"),
                 // The limestone quarry #158 asks for, added last of all and deliberately so. When the cave sites
                 // went in it would have been a marker that changed nothing, because mineral richness took no
                 // account of sites; the stone-workings rule came first, and only now is a quarry worth the walk.

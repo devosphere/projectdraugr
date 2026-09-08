@@ -1440,6 +1440,13 @@ public class PhysicalItemService {
      */
     private static final int FERTILITY_RECOVER_PER_DAY_ON_FLOODPLAIN = 5;
 
+    /** A shell bed on this ground (#157) — dense enough to reseed itself, unlike a scatter over open shore. */
+    private boolean shellBedAt(UUID chunk) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM ecology_site WHERE chunk_id=? AND site_kind ILIKE '%shell bed%')",
+            Boolean.class, chunk));
+    }
+
     /** Ground the river renews — a floodplain site, which the world places on a river bank or a marsh margin. */
     private boolean floodplainAt(UUID chunk) {
         return Boolean.TRUE.equals(jdbc.queryForObject(
@@ -2028,7 +2035,7 @@ public class PhysicalItemService {
 
         // Candidate colony kinds for this intent, present in this biome and season.
         java.util.List<java.util.Map<String,Object>> kinds = jdbc.queryForList(
-            "SELECT ck.colony_kind, ck.hazard_kind, ck.hazard_min, ck.hazard_max, ck.smoke_suppresses, ck.requires_tool_class, ck.regrowth_days, " +
+            "SELECT ck.colony_kind, ck.hazard_kind, ck.hazard_min, ck.hazard_max, ck.smoke_suppresses, ck.requires_tool_class, ck.regrowth_days, ck.shellfish, " +
             "  (SELECT ic.product_ready_at FROM insect_colony ic WHERE ic.chunk_id=? AND ic.colony_kind=ck.colony_kind) AS ready_at " +
             "FROM insect_colony_kind ck " +
             "WHERE ck.harvest_intent=? AND ck.biome_affinity ILIKE ? " +
@@ -2119,6 +2126,13 @@ public class PhysicalItemService {
         // fish stock and mineral seams use — so untouched ground carries no rows, and worked ground remembers.
         if (totalTaken > 0) {
             int regrowth = ((Number) kind.get("regrowth_days")).intValue();
+            // A bed comes back faster than a scatter (#157). A mussel bed is a dense mat cemented to itself and
+            // the rock, and that density is what lets it recover: spat settles on the shells already there, so
+            // the bed reseeds from its own population. Work a thin scatter as hard and you have taken the seed
+            // with the crop. Only shellfish, and only where the world has put a bed — everything else keeps the
+            // rate it always had, so nothing that worked before changes.
+            if (Boolean.TRUE.equals(kind.get("shellfish")) && shellBedAt(location))
+                regrowth = Math.max(1, regrowth / 2);
             Timestamp readyAgain = Timestamp.from(occurredAt.plus(java.time.Duration.ofDays(Math.max(1, regrowth))));
             UUID colonyId = jdbc.query("SELECT object_id FROM insect_colony WHERE chunk_id=? AND colony_kind=?",
                 rs -> rs.next() ? rs.getObject(1, UUID.class) : null, location, colonyKind);
