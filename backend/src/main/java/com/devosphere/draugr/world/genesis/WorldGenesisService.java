@@ -116,10 +116,35 @@ public class WorldGenesisService {
 
     private TerrainCell terrainAt(double x, double y, int width, int height, long seed, boolean localVariation) {
         double nx = x / Math.max(1, width - 1), ny = y / Math.max(1, height - 1);
+        double variationForCell = localVariation ? deterministicVariation((int) Math.round(x), (int) Math.round(y), seed) : 0;
+        int elevationOut = (int) Math.round(Math.clamp(
+            0.49 + 0.22 * Math.sin(nx * 7.0 + seed * 0.00000003) + 0.16 * Math.cos(ny * 8.0)
+                 + 0.09 * Math.sin((nx + ny) * 15.0) + variationForCell * 0.10, 0, 1) * 1000);
+        int moistureOut = (int) Math.round(Math.clamp(
+            0.54 + 0.20 * Math.cos(nx * 8.0 - ny * 3.0) + variationForCell * 0.14, 0, 1) * 1000);
+        String surfaced = surfaceBiomeAt(x, y, width, height, seed, localVariation);
+        // Inside the rock (#158). A cave mouth is the way in; this is what it is the way into. Derived from the
+        // mouths rather than invented, and deliberately narrow: rock that touches an entrance AND does not itself
+        // open onto walkable ground — the chamber behind the doorway, not another stretch of cliff face. That
+        // keeps the open mountain intact for the ore that belongs on it, and it guarantees the ground is reachable,
+        // because every interior by construction has a mouth beside it to come in through.
+        if (surfaced.equals("MOUNTAIN")
+                && caveInteriorAt((int) Math.round(x), (int) Math.round(y), width, height, seed, localVariation))
+            return new TerrainCell(elevationOut, moistureOut, "CAVE_INTERIOR");
+        return new TerrainCell(elevationOut, moistureOut, surfaced);
+    }
+
+    /**
+     * The biome as the surface makes it — everything up to and including the cave mouth, and nothing after.
+     *
+     * <p>Split out so the cave interior can ask what its neighbours are without asking a question that would come
+     * back round to itself. Nothing here consults the interior step, so the recursion has a floor.
+     */
+    private String surfaceBiomeAt(double x, double y, int width, int height, long seed, boolean localVariation) {
+        double nx = x / Math.max(1, width - 1), ny = y / Math.max(1, height - 1);
         double variation = localVariation ? deterministicVariation((int) Math.round(x), (int) Math.round(y), seed) : 0;
         double elevation = 0.49 + 0.22 * Math.sin(nx * 7.0 + seed * 0.00000003) + 0.16 * Math.cos(ny * 8.0) + 0.09 * Math.sin((nx + ny) * 15.0) + variation * 0.10;
         double moisture = 0.54 + 0.20 * Math.cos(nx * 8.0 - ny * 3.0) + variation * 0.14;
-        int elevationValue = (int) Math.round(Math.clamp(elevation, 0, 1) * 1000), moistureValue = (int) Math.round(Math.clamp(moisture, 0, 1) * 1000);
         String biome = elevation < 0.30 ? "OCEAN" : elevation < 0.38 ? "WETLAND" : elevation > 0.82 ? "MOUNTAIN" : elevation > 0.68 ? "HIGHLAND" : moisture > 0.58 ? "TEMPERATE_FOREST" : "GRASSLAND";
         // The shore (#157). COAST was the second biome the catalogue believed in and the generator never made:
         // sea beet, samphire and sea buckthorn grow on it, an osprey works it, a bonecrab and a saltback
@@ -145,7 +170,34 @@ public class WorldGenesisService {
         // rock is solid — which leaves the open mountain intact for the ore that belongs there.
         if (biome.equals("MOUNTAIN") && caveMouthAt((int) Math.round(x), (int) Math.round(y), width, height, seed))
             biome = "CAVE_MOUTH";
-        return new TerrainCell(elevationValue, moistureValue, biome);
+        return biome;
+    }
+
+    /**
+     * Rock behind an entrance (#158): touching a cave mouth, and closed to the outside itself.
+     *
+     * <p>The second condition is what stops a cave from swallowing the mountain. Without it every piece of rock
+     * beside an entrance becomes cave, and the open summits the ore lives on go with them; with it, an interior
+     * is only ever the rock that has no daylight of its own — which is also exactly what makes it dark inside at
+     * noon, and what makes the mouth the only way in.
+     */
+    private boolean caveInteriorAt(int x, int y, int width, int height, long seed, boolean localVariation) {
+        boolean touchesAMouth = false;
+        for (int[] step : new int[][]{ {0,-1}, {0,1}, {-1,0}, {1,0} }) {
+            int nx = x + step[0], ny = y + step[1];
+            if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+            if ("CAVE_MOUTH".equals(surfaceBiomeAt(nx, ny, width, height, seed, localVariation))) { touchesAMouth = true; break; }
+        }
+        if (!touchesAMouth) return false;
+        // Closed to the sky: nothing around it that a Chronicle could walk in from directly.
+        for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) {
+            if (dx == 0 && dy == 0) continue;
+            int nx = x + dx, ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+            double neighbour = rawElevation(nx, ny, width, height, seed);
+            if (neighbour >= 0.30 && neighbour <= 0.82) return false;
+        }
+        return true;
     }
 
     /** Rock that opens onto walkable ground, thinned deterministically — the making of a cave mouth (#158). */
@@ -374,7 +426,7 @@ public class WorldGenesisService {
     }
 
     private Color shade(Color color, int elevation) { float factor = .78f + elevation / 1000f * .28f; return new Color(Math.min(255, (int) (color.getRed() * factor)), Math.min(255, (int) (color.getGreen() * factor)), Math.min(255, (int) (color.getBlue() * factor))); }
-    private Color colorFor(String biome) { return switch (biome) { case "OCEAN" -> new Color(42, 87, 123); case "WETLAND" -> new Color(73, 111, 104); case "TEMPERATE_FOREST" -> new Color(54, 103, 61); case "GRASSLAND" -> new Color(144, 145, 83); case "HIGHLAND" -> new Color(120, 111, 82); case "MOUNTAIN" -> new Color(122, 123, 121); case "RIVER_BANK" -> new Color(86, 132, 148); case "COAST" -> new Color(198, 182, 143); case "CAVE_MOUTH" -> new Color(64, 58, 61); default -> Color.MAGENTA; }; }
+    private Color colorFor(String biome) { return switch (biome) { case "OCEAN" -> new Color(42, 87, 123); case "WETLAND" -> new Color(73, 111, 104); case "TEMPERATE_FOREST" -> new Color(54, 103, 61); case "GRASSLAND" -> new Color(144, 145, 83); case "HIGHLAND" -> new Color(120, 111, 82); case "MOUNTAIN" -> new Color(122, 123, 121); case "RIVER_BANK" -> new Color(86, 132, 148); case "COAST" -> new Color(198, 182, 143); case "CAVE_MOUTH" -> new Color(64, 58, 61); case "CAVE_INTERIOR" -> new Color(38, 34, 38); default -> Color.MAGENTA; }; }
     private Path previewPath() { return exportDirectory.resolve("overseer-map.png"); }
 
     public record GenesisRequest(long seed, int widthChunks, int heightChunks) { public static GenesisRequest mvpDefault() { return new GenesisRequest(681_013_497L, 28, 20); } }

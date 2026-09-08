@@ -61,6 +61,10 @@ public final class BiomeClimate {
             case "RIVER_BANK"      -> { charC = -1; windOffset =  4; }  // running water cools it; the valley funnels wind
             case "COAST"           -> { charC = -1; windOffset = 16; }  // the sea evens the temperature and nothing breaks the onshore wind
             case "CAVE_MOUTH"      -> { charC =  1; windOffset = -20; } // rock evens the swing and blocks the wind: the reason to shelter here
+            // Inside the rock (#158) the weather stops entirely. A cave holds one temperature while the seasons
+            // turn outside — cool against a summer noon, and far warmer than the open mountain on a winter night,
+            // which is the whole reason anything dens in one. The wind offset takes the wind to nothing.
+            case "CAVE_INTERIOR"   -> { charC =  2; windOffset = -200; }
             case "TEMPERATE_FOREST"-> { charC = -1; windOffset = -6; }  // shaded and sheltered under the canopy
             default                -> { charC =  0; windOffset =  0; }
         }

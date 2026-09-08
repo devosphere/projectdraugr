@@ -130,16 +130,17 @@ public class NarrationEngine {
             "The record grows by a few lines."})
     );
 
-    private static final Map<String, String> BIOME_COLOR = Map.of(
-        "TEMPERATE_FOREST", "The trees stand close and dark around you, the floor deep in leaf-mould",
-        "HIGHLAND", "The ground falls away in long open slopes, and the wind is never quite still",
-        "MOUNTAIN", "Bare rock shows through everywhere, the air thin and hard to draw",
-        "GRASSLAND", "The grass runs out flat to every horizon, bending in slow waves",
-        "WETLAND", "The ground gives underfoot, and water stands dark and still in the low places",
-        "RIVER_BANK", "The river runs past below you, working steadily at a bank of smoothed stone and packed earth",
-        "COAST", "Open water runs out to the edge of sight, and the ground gives way to shingle and wrack at the tide line",
-        "CAVE_MOUTH", "The rock opens at your shoulder into a dark that the daylight gets a few paces into and no further",
-        "OCEAN", "Water reaches grey to the edge of sight, restless and without end");
+    private static final Map<String, String> BIOME_COLOR = Map.ofEntries(
+        Map.entry("TEMPERATE_FOREST", "The trees stand close and dark around you, the floor deep in leaf-mould"),
+        Map.entry("HIGHLAND", "The ground falls away in long open slopes, and the wind is never quite still"),
+        Map.entry("MOUNTAIN", "Bare rock shows through everywhere, the air thin and hard to draw"),
+        Map.entry("GRASSLAND", "The grass runs out flat to every horizon, bending in slow waves"),
+        Map.entry("WETLAND", "The ground gives underfoot, and water stands dark and still in the low places"),
+        Map.entry("RIVER_BANK", "The river runs past below you, working steadily at a bank of smoothed stone and packed earth"),
+        Map.entry("COAST", "Open water runs out to the edge of sight, and the ground gives way to shingle and wrack at the tide line"),
+        Map.entry("CAVE_MOUTH", "The rock opens at your shoulder into a dark that the daylight gets a few paces into and no further"),
+        Map.entry("OCEAN", "Water reaches grey to the edge of sight, restless and without end"),
+        Map.entry("CAVE_INTERIOR", "The passage closes over behind you and the dark is complete, the rock cold and near on every side"));
 
     private static final Map<String, String> TIME_COLOR = Map.of(
         "DAWN", "the light still grey and unformed",
@@ -157,16 +158,17 @@ public class NarrationEngine {
         "CLEAR", "");
 
     /** A sound or smell of the place, surfaced only on deliberate attention — the world reaching a sense other than sight. */
-    private static final Map<String, String> AMBIENT = Map.of(
-        "TEMPERATE_FOREST", "Somewhere off among the trunks a bird falls quiet, then takes it up again.",
-        "HIGHLAND", "The wind pulls steadily at you and carries the dry smell of turf and stone.",
-        "MOUNTAIN", "The cold has a mineral edge to it, and nothing moves that you can hear.",
-        "GRASSLAND", "Insects work unseen in the grass, and the whole plain smells of dry seed.",
-        "WETLAND", "The air hangs thick with the green smell of standing water and slow rot.",
-        "RIVER_BANK", "The water keeps up its noise over the stones, and the air off it is cold and clean.",
-        "COAST", "Salt is on everything, and the water works at the shore without ever stopping.",
-        "CAVE_MOUTH", "Cold comes steadily out of the opening, smelling of wet stone, and the drip of water carries a long way back.",
-        "OCEAN", "Salt hangs in the air, and the water works without pause at the shore.");
+    private static final Map<String, String> AMBIENT = Map.ofEntries(
+        Map.entry("TEMPERATE_FOREST", "Somewhere off among the trunks a bird falls quiet, then takes it up again."),
+        Map.entry("HIGHLAND", "The wind pulls steadily at you and carries the dry smell of turf and stone."),
+        Map.entry("MOUNTAIN", "The cold has a mineral edge to it, and nothing moves that you can hear."),
+        Map.entry("GRASSLAND", "Insects work unseen in the grass, and the whole plain smells of dry seed."),
+        Map.entry("WETLAND", "The air hangs thick with the green smell of standing water and slow rot."),
+        Map.entry("RIVER_BANK", "The water keeps up its noise over the stones, and the air off it is cold and clean."),
+        Map.entry("COAST", "Salt is on everything, and the water works at the shore without ever stopping."),
+        Map.entry("CAVE_MOUTH", "Cold comes steadily out of the opening, smelling of wet stone, and the drip of water carries a long way back."),
+        Map.entry("OCEAN", "Salt hangs in the air, and the water works without pause at the shore."),
+        Map.entry("CAVE_INTERIOR", "Water finds stone somewhere out of sight and counts the seconds with it. Nothing else moves at all."));
 
     private static final String[] GENERIC_SUCCESS = {
         "It is done. The world carries the difference.",

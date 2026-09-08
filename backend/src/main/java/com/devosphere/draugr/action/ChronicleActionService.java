@@ -1041,6 +1041,8 @@ public class ChronicleActionService {
         if (direction == null) return "You shift through the wet ground, but do not commit to a direction.";
         UUID destination = jdbc.query("SELECT next.id FROM world_chunk current JOIN world_chunk next ON next.world_id=current.world_id AND next.grid_x=current.grid_x+? AND next.grid_y=current.grid_y+? WHERE current.id=?", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, direction.dx, direction.dy, chronicle.location());
         if (destination == null) return "The ground gives way toward the edge of what you can cross. You turn back before leaving the land behind.";
+        String intoTheRock = caveEntry(chronicle.location(), destination);
+        if (intoTheRock != null) return intoTheRock;
         String crossing = waterCrossing(chronicle.id(), destination);
         if (crossing != null) return crossing;
         java.sql.Timestamp occurredTs = java.sql.Timestamp.from(occurredAt);
@@ -1051,6 +1053,26 @@ public class ChronicleActionService {
         recordVisit(chronicle.id(), destination, occurredAt);
         return "You travel " + direction.description + ", the ground shifting under you as you go.";
     }
+    /**
+     * The rock has one way in (#158), or null when the step is not into a cave at all.
+     *
+     * <p>A cave interior is the chamber behind an entrance — the generator only ever makes one where the rock is
+     * closed to the sky — so it is not something a Chronicle can walk into off an open mountainside. You go in
+     * through the mouth, or along the passage from another chamber. Without this the biome would be a label: a
+     * dark, sheltered square you could step onto from the summit as easily as from the doorway, which is not a
+     * cave, only a differently-worded piece of mountain.
+     *
+     * <p>Coming back out is unrestricted, and deliberately so. Nothing about rock stops you leaving.
+     */
+    private String caveEntry(UUID from, UUID destination) {
+        String into = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : null, destination);
+        if (!"CAVE_INTERIOR".equals(into)) return null;
+        String standingOn = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : null, from);
+        if ("CAVE_MOUTH".equals(standingOn) || "CAVE_INTERIOR".equals(standingOn)) return null;
+        return "The rock stands unbroken in front of you. Whatever hollow is behind it, there is no way into it "
+             + "from here — a cave is entered at its mouth.";
+    }
+
     /**
      * Water that has to be crossed rather than walked over (#156/#157), or null when the ground takes an ordinary step.
      *
@@ -1933,7 +1955,8 @@ public class ChronicleActionService {
     private boolean tooDarkForFineWork(UUID location, java.time.Instant at) {
         if (isDark(at)) return true;
         return Boolean.TRUE.equals(jdbc.queryForObject(
-            "SELECT EXISTS(SELECT 1 FROM world_chunk WHERE id=? AND biome='CAVE_MOUTH')", Boolean.class, location));
+            "SELECT EXISTS(SELECT 1 FROM world_chunk WHERE id=? AND biome IN ('CAVE_MOUTH','CAVE_INTERIOR'))",
+            Boolean.class, location));
     }
     /** Intents that are fine, close, sight-dependent work — impossible in the dark without a light (#75). */
     private static boolean isSightWork(Intent intent) {
@@ -1961,9 +1984,10 @@ public class ChronicleActionService {
         // walls, screens, a roofing frame, a smoke hood and furniture. A bark door on open grassland is not cover.
         //
         // A cave mouth shelters without being built (#158). It is the oldest roof there is, and the first reason
-        // to walk into one: rock over your head keeps the rain off whether or not you ever raised anything.
+        // to walk into one: rock over your head keeps the rain off whether or not you ever raised anything. The
+        // chamber behind it shelters more completely still — no weather reaches it at all — so both count.
         return Boolean.TRUE.equals(jdbc.queryForObject(
-            "SELECT EXISTS(SELECT 1 FROM world_chunk c WHERE c.id=? AND c.biome='CAVE_MOUTH') " +
+            "SELECT EXISTS(SELECT 1 FROM world_chunk c WHERE c.id=? AND c.biome IN ('CAVE_MOUTH','CAVE_INTERIOR')) " +
             "    OR EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
             "WHERE w.current_location_id=? AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE' " +
             "AND " + com.devosphere.draugr.construction.Shelters.ENCLOSING + ")",
