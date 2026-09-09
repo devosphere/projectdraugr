@@ -2305,11 +2305,25 @@ public class PhysicalItemService {
     /** Weather on the Chronicle's own ground that would take a bare flame: driven rain, snow, or a real wind. */
     public boolean weatherWouldGutterALight(UUID chronicle) { return guttering(chronicle); }
 
+    /**
+     * Whether the weather here would take a flame before it caught.
+     *
+     * <p>Not under rock. A cave mouth already counts as shelter for the body ({@code shelterInReach}) and
+     * {@code BiomeClimate} blocks its wind; a cave interior has no weather at all. Anything that keeps the rain
+     * off a Chronicle keeps it off the flame in their hand, so neither can gutter a light.
+     *
+     * <p>This was a real fault, and an intermittent one. The refusal message checks guttering BEFORE it checks
+     * the rock, so a Chronicle in a cave during a storm was told the weather was taking their flame — untrue of
+     * where they were standing, and it made the cave's own "the daylight gets a few paces into the rock"
+     * message unreachable whenever it happened to be raining outside. CI failed on exactly that, in a run whose
+     * only other change was narration prose.
+     */
     private boolean guttering(UUID chronicle) {
         return Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM world_object body JOIN world_chunk c ON c.id=body.current_location_id " +
             "JOIN world_weather ww ON ww.world_id=c.world_id " +
-            "WHERE body.id=? AND (ww.weather_kind IN ('STORM','RAIN','SNOW') OR ww.wind_speed_kph >= 30))",
+            "WHERE body.id=? AND c.biome NOT IN ('CAVE_MOUTH','CAVE_INTERIOR') " +
+            "  AND (ww.weather_kind IN ('STORM','RAIN','SNOW') OR ww.wind_speed_kph >= 30))",
             Boolean.class, chronicle));
     }
     /** Northern-hemisphere season derived from the simulated instant's month, until a dedicated world-clock season exists. */
