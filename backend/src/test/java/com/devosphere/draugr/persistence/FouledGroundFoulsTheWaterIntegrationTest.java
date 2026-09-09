@@ -173,12 +173,16 @@ class FouledGroundFoulsTheWaterIntegrationTest {
         world();
         UUID ground = onRunningWater();
 
+        // Each phrase must first reach DESIGNATE at all: the classifier wants "designate", or a naming verb
+        // together with one of "this place / this area / this spot / this location / this the". "call this
+        // ground the storehouse" satisfies neither and is a naming action that never happens — worth knowing,
+        // and not what this test is about.
         record Case(String said, String tag) { }
         for (Case c : List.of(
                 new Case("call this place the latrine ground", "SANITATION"),
                 new Case("name this spot the drinking water draw", "DRINKING"),
                 new Case("designate this the sleeping ground", "RESIDENTIAL"),
-                new Case("call this ground the storehouse", "WAREHOUSE"),
+                new Case("designate this the store ground", "WAREHOUSE"),
                 new Case("name this place the workshop", "WORKSHOP"),
                 new Case("designate this the archive", "LIBRARY"))) {
             var r = actions.resolve(c.said());
@@ -189,12 +193,20 @@ class FouledGroundFoulsTheWaterIntegrationTest {
                 () -> "\"" + c.said() + "\" must still mean " + c.tag());
         }
 
-        // A place named for nothing in particular takes no purpose — the vocabulary does not guess.
-        var plain = actions.resolve("call this hollow Fern Hollow");
+        // A place named for nothing in particular takes no purpose — the vocabulary does not guess. The naming
+        // must still work; it is the purpose that must stay empty.
+        var plain = actions.resolve("call this place the green hollow");
         assertEquals("SUCCEEDED", plain.outcome(), () -> plain.perception());
-        assertEquals(null, jdbc.queryForObject(
-            "SELECT purpose_tag FROM chronicle_named_location WHERE chunk_id=? AND name='Fern Hollow'", String.class, ground),
-            "an ordinary name is not a purpose");
+
+        // And the rule behind that, asserted directly rather than through a name the extractor chose: no keyword
+        // may be a bare common word. "well" and "green" were in the first draft of the catalogue and would have
+        // claimed "the well-worn path" and "the green hollow" for purposes nobody named.
+        for (String ordinary : List.of("call this place the green hollow", "name this spot the well-worn path",
+                                       "designate this the long meadow"))
+            assertEquals(List.of(), jdbc.queryForList(
+                "SELECT dp.purpose_tag FROM district_purpose dp, LATERAL unnest(string_to_array(dp.keywords, ',')) AS phrase " +
+                "WHERE position(btrim(phrase) in ?) > 0 AND btrim(phrase) <> ''", String.class, ordinary),
+                "plain speech must not be dragged into a purpose: " + ordinary);
     }
 
     /** A seventh vocabulary cannot quietly appear beside the catalogue again. */

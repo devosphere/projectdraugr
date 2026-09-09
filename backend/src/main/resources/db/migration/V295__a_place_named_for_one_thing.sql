@@ -52,7 +52,12 @@ ON CONFLICT (purpose_tag) DO NOTHING;
 
 UPDATE district_purpose SET keywords = CASE purpose_tag
     WHEN 'SANITATION'          THEN 'latrine,sanitation,waste ground,waste area,privy,toilet,midden,dung heap,defecate,urinate'
-    WHEN 'DRINKING'            THEN 'drinking water,water draw,drinking place,drinking,well,water point'
+    -- "well" and "green" were in the first draft of these and are deliberately not here. A keyword that is also
+    -- an ordinary English word steals designations from plain speech — "the well-worn path", "the green hollow"
+    -- — which is the same failure the collision guard below catches between purposes, coming from outside the
+    -- catalogue instead of inside it. Every phrase here has to be something a person would only say when they
+    -- mean the purpose.
+    WHEN 'DRINKING'            THEN 'drinking water,water draw,drinking place,drinking,water well,water point'
     WHEN 'RESIDENTIAL'         THEN 'sleeping ground,sleeping place,sleeping,dwelling,living quarters,bed ground,residential'
     WHEN 'WAREHOUSE'           THEN 'storehouse,store ground,storage,warehouse,stores,larder,granary'
     WHEN 'WORKSHOP'            THEN 'workshop,work ground,crafting ground,craft ground,forge,work bench,workbench'
@@ -60,7 +65,7 @@ UPDATE district_purpose SET keywords = CASE purpose_tag
     WHEN 'TEXTILE'             THEN 'textile,weaving ground,spinning ground,sewing ground,loom ground'
     WHEN 'LIBRARY'             THEN 'library,archive,knowledge,reading ground,record ground'
     WHEN 'ARSENAL'             THEN 'arsenal,armoury,armory,tool store,tool ground,weapon store'
-    WHEN 'PARK'                THEN 'park,open ground,green,commons,left unbuilt'
+    WHEN 'PARK'                THEN 'parkland,open ground,common ground,the commons,left unbuilt'
     ELSE keywords END;
 
 UPDATE district_purpose SET fouls_water = TRUE WHERE purpose_tag = 'SANITATION';
@@ -106,6 +111,19 @@ BEGIN
     JOIN (SELECT purpose_tag, btrim(unnest(string_to_array(keywords, ','))) AS kb FROM district_purpose) b
       ON a.ka = b.kb AND a.purpose_tag < b.purpose_tag;
   IF wrong IS NOT NULL THEN RAISE EXCEPTION 'V295: %', wrong; END IF;
+
+  -- The collision that is NOT between two purposes: a keyword that is also an ordinary English word steals
+  -- designations from plain speech. "well" would have claimed "the well-worn path" for the drinking ground and
+  -- "green" would have claimed "the green hollow" for the park. Both were in the first draft. A phrase has to be
+  -- something a person would only say when they mean the purpose, which in practice means several characters and
+  -- not a bare common word.
+  SELECT string_agg(DISTINCT purpose_tag || ' claims "' || k || '"', ', ') INTO wrong
+    FROM (SELECT purpose_tag, btrim(unnest(string_to_array(keywords, ','))) AS k FROM district_purpose) x
+   WHERE length(k) < 5
+      OR k IN ('well','green','store','place','ground','water','area','park','work','the','common','open','line');
+  IF wrong IS NOT NULL THEN
+    RAISE EXCEPTION 'V295: a keyword must not be a bare common word — it would steal plain speech: %', wrong;
+  END IF;
 
   -- The half that makes any of this matter: something must read a purpose.
   SELECT count(*) INTO n FROM district_purpose WHERE fouls_water;
