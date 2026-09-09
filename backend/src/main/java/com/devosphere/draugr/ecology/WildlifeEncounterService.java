@@ -698,74 +698,91 @@ public class WildlifeEncounterService {
         return (String) herd.get("species");
     }
 
-    /** Milk and eggs come daily; a fleece does not — shearing is a once-a-season job, not a chore. */
-    private static final int YIELD_REST_HOURS = 20;
-    private static final int FLEECE_REST_HOURS = 720;
-
     /**
      * Take the produce a tamed animal gives (#52/#79/#106). fowl_egg, goat_milk and wool_tuft each declared an
      * item_source of TAMED_YIELD, but nothing in the codebase produced them and TAMED_YIELD was handled nowhere — so
      * keeping animals yielded nothing renewable, and taming a goat or a flock of fowl was worth strictly less than
      * hunting them. This is what husbandry is for.
      *
-     * <p>The animal must be genuinely TAMED and of a species that gives what is being asked for, and it must have
-     * rested since it last gave. Milk and eggs are perishable and are registered as such, so a full pail is not a
-     * permanent larder.
+     * <p><b>What gives what, and how often, is the catalogue's to say (V294).</b> This used to decide all three of
+     * those things here — the item, the species list, and the interval — while {@code tamed_yield} sat holding
+     * exactly that, consulted once at the moment of taming and never again. The consequences were nobody's
+     * decision: a reindeer could not be milked though the catalogue had said since V45 that it gives milk; every
+     * tamed bird laid eating-eggs daily because the clause was {@code kingdom_class = 'AVES'}, so a peregrine
+     * falcon and a vulture were poultry; and two constants stood in for the whole interval column.
+     *
+     * <p>Each product now keeps <b>its own clock</b> in {@code tamed_production}, the table that was written at
+     * taming time and then read by nothing. One {@code last_yield_at} on the bond meant milking a goat made it
+     * unshearable and shearing it made it unmilkable — the same animal, one timer, two entirely different jobs.
+     *
+     * <p>The animal must be genuinely TAMED and of a species the catalogue says gives what is being asked for, and
+     * that product must have rested since it was last taken. Milk and eggs are perishable and are registered as
+     * such, so a full pail is not a permanent larder.
      */
     @Transactional
     public EncounterResult takeTamedYield(UUID chronicle, Instant at, String actionText) {
         String v = actionText == null ? "" : actionText.toLowerCase(java.util.Locale.ROOT);
-        final String itemKey, displayName, wanted;
-        final int restHours;
-        if (v.contains("milk"))                                   { itemKey="goat_milk"; displayName="Goat milk"; wanted="MILK";   restHours=YIELD_REST_HOURS; }
-        else if (v.contains("shear")||v.contains("fleece")||v.contains("wool")) { itemKey="wool_tuft"; displayName="Wool tuft"; wanted="WOOL"; restHours=FLEECE_REST_HOURS; }
-        else                                                      { itemKey="fowl_egg"; displayName="Fowl egg";  wanted="EGG";    restHours=YIELD_REST_HOURS; }
-
-        // Which tamed animals can give this. Eggs come from any tamed bird; milk and wool from the species that
-        // actually carry them, rather than from anything a rope has been put on.
-        String speciesClause = switch (wanted) {
-            case "MILK" -> "ws.species_key IN ('mountain_goat','aurochs','ox')";
-            case "WOOL" -> "ws.species_key IN ('bighorn_sheep','mountain_goat')";
-            default     -> "ws.kingdom_class = 'AVES'";
-        };
-
-        java.util.Map<String,Object> bond = jdbc.query(
-            "SELECT wb.id, wb.last_yield_at, wp.species_key FROM wildlife_bond wb " +
-            "JOIN wildlife_population wp ON wp.id = wb.population_id " +
-            "JOIN wildlife_species ws ON ws.species_key = wp.species_key " +
-            "WHERE wb.chronicle_id=? AND wb.bond_stage='TAMED' AND " + speciesClause + " " +
-            "ORDER BY wb.last_yield_at NULLS FIRST LIMIT 1 FOR UPDATE OF wb",
-            rs -> rs.next() ? java.util.Map.of("id", rs.getObject(1, UUID.class),
-                    "last", rs.getTimestamp(2) == null ? "" : rs.getTimestamp(2).toInstant().toString(),
-                    "species", rs.getString(3)) : null, chronicle);
+        // The phrase maps to a KIND. Which species answer that kind, as what, and how often, is data.
+        final String wanted =
+            v.contains("milk") ? "MILK"
+          : (v.contains("shear") || v.contains("fleece") || v.contains("wool")) ? "WOOL"
+          : "EGG";
 
         // Milk has to go into something (#52 milking_pail). Eggs travel in cupped hands and a fleece under the arm,
         // but milk drawn with nothing to catch it is milk on the ground.
         if ("MILK".equals(wanted) && !items.hasWaterVessel(chronicle))
             return new EncounterResult("FAILED", "You have nothing to milk into. A pail, a pot, or any vessel that will hold liquid has to come first, or it goes straight onto the ground.");
 
-        if (bond == null) return new EncounterResult("FAILED", switch (wanted) {
+        // The best animal to go to is the one whose product has rested longest — never taken at all, first of all.
+        // The clock is per product, so this joins tamed_production on the bond AND the item.
+        java.util.Map<String,Object> ready = jdbc.query(
+            "SELECT wb.id, wp.species_key, ty.item_key, ty.interval_hours, tp.last_yielded_at, d.display_name " +
+            "FROM wildlife_bond wb " +
+            "JOIN wildlife_population wp ON wp.id = wb.population_id " +
+            "JOIN tamed_yield ty ON ty.species_key = wp.species_key AND ty.yield_kind = ? " +
+            "JOIN item_definition d ON d.item_key = ty.item_key " +
+            "LEFT JOIN tamed_production tp ON tp.bond_id = wb.id AND tp.item_key = ty.item_key " +
+            "WHERE wb.chronicle_id = ? AND wb.bond_stage = 'TAMED' " +
+            "ORDER BY tp.last_yielded_at NULLS FIRST LIMIT 1 FOR UPDATE OF wb",
+            rs -> rs.next() ? java.util.Map.of(
+                    "id", rs.getObject(1, UUID.class),
+                    "species", rs.getString(2),
+                    "item", rs.getString(3),
+                    "interval", rs.getInt(4),
+                    "last", rs.getTimestamp(5) == null ? "" : rs.getTimestamp(5).toInstant().toString(),
+                    "display", rs.getString(6)) : null, wanted, chronicle);
+
+        if (ready == null) return new EncounterResult("FAILED", switch (wanted) {
             case "MILK" -> "You have nothing tamed here that gives milk — a goat or a cow must be won over first, and won over properly.";
             case "WOOL" -> "There is no tamed fleece-bearer here to shear.";
             default     -> "You have no tamed fowl here to gather eggs from.";
         });
 
-        String last = (String) bond.get("last");
+        String last = (String) ready.get("last");
         if (!last.isEmpty()) {
             long hours = java.time.Duration.between(Instant.parse(last), at).toHours();
-            if (hours < restHours) return new EncounterResult("FAILED", "MILK".equals(wanted)
+            if (hours < (Integer) ready.get("interval")) return new EncounterResult("FAILED", "MILK".equals(wanted)
                 ? "The animal has been milked out already and has given what it has; it will come back to the pail in its own time."
                 : "WOOL".equals(wanted)
                 ? "The fleece is short yet — there is nothing worth taking off it until it has grown back."
                 : "The nests are empty. What was laid has been gathered already, and there will be no more until they have had time.");
         }
 
-        UUID id = items.createCarriedItem(chronicle, itemKey, displayName, at, "TAKEN_FROM_TAMED_ANIMAL");
+        String itemKey = (String) ready.get("item");
+        UUID id = items.createCarriedItem(chronicle, itemKey, (String) ready.get("display"), at, "TAKEN_FROM_TAMED_ANIMAL");
         // Milk and eggs are perishable from the moment they are taken. A fleece is not food and is left untracked.
         if (!"WOOL".equals(wanted)) food.registerFresh(id, at);
-        jdbc.update("UPDATE wildlife_bond SET last_yield_at=? WHERE id=?", Timestamp.from(at), bond.get("id"));
+        // This product's own clock. Upserted rather than assumed present: the catalogue may have gained a row
+        // since this animal was tamed, and a beast that was tamed before it gave milk still gives milk.
+        jdbc.update(
+            "INSERT INTO tamed_production (bond_id, item_key, interval_hours, last_yielded_at) VALUES (?,?,?,?) " +
+            "ON CONFLICT (bond_id, item_key) DO UPDATE SET last_yielded_at = EXCLUDED.last_yielded_at, " +
+            "  interval_hours = EXCLUDED.interval_hours",
+            ready.get("id"), itemKey, ready.get("interval"), Timestamp.from(at));
+        // Kept in step for the bond-level record of when this animal last gave anything at all.
+        jdbc.update("UPDATE wildlife_bond SET last_yield_at=? WHERE id=?", Timestamp.from(at), ready.get("id"));
 
-        String beast = display((String) bond.get("species"));
+        String beast = display((String) ready.get("species"));
         return new EncounterResult("SUCCEEDED", switch (wanted) {
             case "MILK" -> "You settle beside the " + beast + ", work it patiently, and carry away what it gives.";
             case "WOOL" -> "You work the fleece off the " + beast + " in careful handfuls, leaving the animal lighter and unhurt.";
@@ -945,7 +962,10 @@ public class WildlifeEncounterService {
             jdbc.update("UPDATE wildlife_bond SET tamed_object_id=? WHERE id=?", beast, bondId);
             jdbc.update("UPDATE wildlife_population SET population_count=GREATEST(0,population_count-1) WHERE id=?", t.populationId());
             for (java.util.Map<String,Object> y : jdbc.queryForList("SELECT item_key,interval_hours FROM tamed_yield WHERE species_key=?", t.species()))
-                jdbc.update("INSERT INTO tamed_production (bond_id,item_key,interval_hours,last_yielded_at) VALUES (?,?,?,?)", bondId, y.get("item_key"), y.get("interval_hours"), Timestamp.from(at));
+                // last_yielded_at stays NULL: the animal has not given yet, so the first taking waits on nothing.
+                // Stamping it with the moment of taming would make a goat in milk unmilkable for its first day.
+                jdbc.update("INSERT INTO tamed_production (bond_id,item_key,interval_hours,last_yielded_at) VALUES (?,?,?,NULL) " +
+                            "ON CONFLICT (bond_id,item_key) DO NOTHING", bondId, y.get("item_key"), y.get("interval_hours"));
             return new EncounterResult("SUCCEEDED","It comes to you without being called, and stays when you turn away. Whatever it was before, it is yours now.");
         }
         return new EncounterResult(armed ? "PARTIAL" : "SUCCEEDED", note);

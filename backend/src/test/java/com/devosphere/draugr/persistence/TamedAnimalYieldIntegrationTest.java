@@ -117,4 +117,78 @@ class TamedAnimalYieldIntegrationTest {
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
+
+    /**
+     * V294: the catalogue decides what an animal gives, and each product keeps its own clock.
+     *
+     * <p>Three things were decided in Java while {@code tamed_yield} sat holding exactly them. A reindeer has
+     * given milk every thirty-six hours in the catalogue since V45 and could not be milked, because the Java list
+     * did not name it. Every tamed bird laid eating-eggs daily, because the clause was {@code kingdom_class =
+     * 'AVES'} — a peregrine falcon was poultry. And one {@code last_yield_at} on the bond covered every product
+     * at once, so milking a goat made it unshearable.
+     */
+    @Test
+    void theCatalogueDecidesWhatAnAnimalGivesAndEachProductKeepsItsOwnClock() {
+        if (worldGenesis.current() == null) {
+            worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
+            ecology.seed();
+        }
+        ChronicleService.ChronicleSummary summary = chronicles.awaken();
+        assertNotNull(summary);
+        UUID chronicle = summary.id();
+        UUID chunk = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+        UUID worldId = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, chunk);
+        jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
+        Timestamp ts = Timestamp.from(Instant.now());
+        items.createCarriedItem(chronicle, "wooden_bowl", "Wooden bowl", Instant.now(), "TEST_FIXTURE");
+
+        // A tamed raptor is not poultry. It lays no eating-eggs because the catalogue does not say it does.
+        tame(chronicle, chunk, worldId, "peregrine_falcon", ts);
+        var falconEggs = actions.resolve("collect the eggs");
+        assertEquals("FAILED", falconEggs.outcome(),
+            () -> "a tamed falcon must not be a source of breakfast eggs: " + falconEggs.perception());
+
+        // A reindeer gives milk, and has said so since V45.
+        tame(chronicle, chunk, worldId, "reindeer", ts);
+        var milked = actions.resolve("milk the reindeer");
+        assertEquals("SUCCEEDED", milked.outcome(), () -> "the catalogue says a reindeer gives milk: " + milked.perception());
+        assertTrue(items.hasAtLeast(chronicle, "goat_milk", 1), "the milk must be in hand");
+
+        // Milking an animal must not make it unshearable — that is one animal with two entirely different jobs.
+        tame(chronicle, chunk, worldId, "mountain_goat", ts);
+        assertEquals("SUCCEEDED", actions.resolve("milk the goat").outcome(), "the goat gives milk");
+        var shorn = actions.resolve("shear the goat");
+        assertEquals("SUCCEEDED", shorn.outcome(),
+            () -> "milking an animal must not stop it being shorn — each product keeps its own clock: " + shorn.perception());
+        assertTrue(items.hasAtLeast(chronicle, "wool_tuft", 1), "the fleece must be in hand");
+
+        // The interval is the catalogue's, not a constant: a fleece is a once-a-season job.
+        var shornAgain = actions.resolve("shear the goat");
+        assertEquals("FAILED", shornAgain.outcome(),
+            () -> "a fleece just taken has not grown back: " + shornAgain.perception());
+        assertEquals(720, (int) jdbc.queryForObject(
+            "SELECT interval_hours FROM tamed_production WHERE item_key='wool_tuft' ORDER BY last_yielded_at DESC LIMIT 1", Integer.class),
+            "the clock a product runs on must be the one the catalogue set, not a constant in Java");
+
+        assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
+
+    /**
+     * The catalogue must be able to answer every phrase the code can turn into a kind, or a keeper asks for
+     * something no animal in the world gives and is told so forever.
+     */
+    @Test
+    void everyKindThePhrasesMapToIsAnsweredBySomething() {
+        for (String kind : java.util.List.of("EGG", "MILK", "WOOL"))
+            assertTrue(jdbc.queryForObject("SELECT COUNT(*) FROM tamed_yield WHERE yield_kind=?", Integer.class, kind) > 0,
+                "nothing in the world gives " + kind);
+
+        assertEquals(java.util.List.of(), jdbc.queryForList(
+            "SELECT species_key FROM tamed_yield WHERE yield_kind='WOOL' AND interval_hours < 240 ORDER BY 1", String.class),
+            "shearing is a once-a-season job, not a chore");
+
+        assertEquals(java.util.List.of(), jdbc.queryForList(
+            "SELECT species_key FROM tamed_yield WHERE yield_kind IN ('EGG','MILK') AND interval_hours > 72 ORDER BY 1", String.class),
+            "milk and eggs come daily, not seasonally");
+    }
 }
