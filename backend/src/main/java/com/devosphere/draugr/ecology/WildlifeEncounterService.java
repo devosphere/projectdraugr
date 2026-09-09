@@ -328,10 +328,18 @@ public class WildlifeEncounterService {
         // many turn aside rather than try. A woven wattle wall stands stronger than a piled brush one. This is
         // the barrier layer of the defence catalogue, layered with the alarm (warning) and escape (flight), not
         // folded into them.
+        //
+        // Which structures those are, and what each is worth, is data (V293). This scored two literals while
+        // V281 had already made `is_barrier` the thing the NIGHT raid on a herd reads — so a dry stone wall, an
+        // earth berm, a split-rail fence and the animal houses turned a wolf aside at midnight and were invisible
+        // at noon. That was never a rule anyone chose; it was two lists written at different times. Both now ask
+        // the same catalogue: the raid asks whether a thing is a barrier, this asks how much of one. The strongest
+        // single barrier counts, not the sum — a camp is only as closed as its stoutest ring.
         Integer fence = jdbc.queryForObject(
-            "SELECT MAX(CASE cp.project_kind WHEN 'WATTLE_FENCE' THEN 22 WHEN 'BRUSH_FENCE' THEN 12 ELSE 0 END) " +
-            "FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
-            "WHERE w.current_location_id=? AND cp.project_kind IN ('BRUSH_FENCE','WATTLE_FENCE') AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE'",
+            "SELECT MAX(ck.barrier_strength) FROM construction_project cp " +
+            "JOIN world_object w ON w.id=cp.object_id " +
+            "JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
+            "WHERE w.current_location_id=? AND ck.barrier_strength > 0 AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE'",
             Integer.class, chunk);
         if (fence != null) chance -= fence;
         // A fire-brand to hand (#126) — a resin torch or a firebrand the Chronicle can raise and wave — reads to
