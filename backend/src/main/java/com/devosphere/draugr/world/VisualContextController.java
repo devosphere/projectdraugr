@@ -44,19 +44,27 @@ public class VisualContextController {
      * anything about the place has moved. That is the difference between a cache that is correct and one that is
      * merely lucky.
      *
+     * <p><b>candidates</b> carries the eligibility chain (#226/#236): the same place offered darkest-and-most-
+     * covered first, degrading to {@code key}, which is always its last entry. A caller walks it and takes the
+     * first it has an image for. Serving only {@code key} would have left that work deciding nothing — the chain
+     * exists precisely so a snow-lying, after-dark version of a place can be shown when it exists and quietly
+     * not be when it does not.
+     *
      * @param version the contract version, matching the payload's
      * @param key     the backdrop key, always present — {@link BackdropResolver#FALLBACK_KEY} when a place has
      *                nothing remarkable on it, which is an answer and not a failure
      * @param reason  why that key, in terms of what is underfoot; safe to show
+     * @param candidates the eligibility chain, most specific first, always ending in {@code key}
      * @param fingerprint the visual context's fingerprint, for caching
      */
-    public record Backdrop(int version, String key, String reason, String fingerprint) { }
+    public record Backdrop(int version, String key, String reason, java.util.List<String> candidates,
+                           String fingerprint) { }
 
     @GetMapping("/v1/backdrop")
     public Backdrop backdrop() {
         VisualContextService.VisualContext here = context.active(ticks.current().simulatedAt());
         BackdropResolver.Choice choice = BackdropResolver.resolve(here);
-        return new Backdrop(VisualContextService.VERSION, choice.key(), choice.reason(),
+        return new Backdrop(VisualContextService.VERSION, choice.key(), choice.reason(), choice.candidates(),
             here == null ? null : here.fingerprint());
     }
 }

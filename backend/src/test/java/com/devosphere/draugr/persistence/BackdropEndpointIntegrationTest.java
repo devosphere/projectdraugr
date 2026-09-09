@@ -172,6 +172,30 @@ class BackdropEndpointIntegrationTest {
         VisualContextController.Backdrop served = controller.backdrop();
         assertEquals(direct.key(), served.key(), "the endpoint must serve the resolver's choice, not its own");
         assertEquals(direct.reason(), served.reason());
+        assertEquals(direct.candidates(), served.candidates(),
+            "the eligibility chain must be served whole — a caller cannot degrade through a chain it never sees");
         assertEquals(here.fingerprint(), served.fingerprint());
+    }
+
+    /**
+     * The chain has to survive the wire, or #236 decided nothing. A caller walks it and takes the first it has an
+     * image for, so it must arrive non-empty, ordered, and ending in the key the tiers guaranteed.
+     */
+    @Test
+    void theEligibilityChainReachesTheCaller() {
+        world();
+        var summary = chronicles.awaken();
+        assertNotNull(summary);
+        for (UUID chunk : jdbc.queryForList("SELECT id FROM world_chunk ORDER BY grid_y, grid_x LIMIT 25", UUID.class)) {
+            jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", chunk, summary.id());
+            VisualContextController.Backdrop served = controller.backdrop();
+            assertNotNull(served.candidates(), () -> "no ground may be served without a chain: " + chunk);
+            assertFalse(served.candidates().isEmpty(), () -> "an empty chain leaves a caller nothing to try: " + chunk);
+            assertEquals(served.key(), served.candidates().get(served.candidates().size() - 1),
+                () -> "the chain must end in the key the tiers guaranteed: " + served.candidates());
+            assertTrue(served.candidates().size() <= 4, () -> "the chain must stay bounded: " + served.candidates());
+            assertEquals(served.candidates().stream().distinct().toList(), served.candidates(),
+                () -> "no candidate may be offered twice: " + served.candidates());
+        }
     }
 }
