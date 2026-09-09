@@ -155,6 +155,40 @@ public class PersistentStateAuditor {
         // it already carries — the foundation domains must always be present.
         Integer domains = jdbc.queryForObject("SELECT COUNT(*) FROM domain_registry", Integer.class);
         if (domains == null || domains == 0) violations.add("The domain registry is empty.");
+
+        // --- Visual context (#233) ------------------------------------------------------------------------
+        // What a Chronicle can SEE is derived from chunk, site and structure state, so it is only as sound as
+        // that state. These check the ground the derivation stands on rather than the payload itself: a
+        // corrupt fact here becomes a wrong picture there, silently, because the payload will faithfully
+        // report whatever it is given.
+
+        // Two corruptions this was first written to catch are NOT here, deliberately: a site on ground that does
+        // not exist, and a standing structure with no ground at all. The schema already makes both impossible —
+        // ecology_site.chunk_id carries a foreign key to world_chunk, and the world_object CHECK is
+        // (location OR owner OR DESTROYED), so an ACTIVE object cannot be nowhere. An invariant the database
+        // already guarantees is not a check; it is a line that can never fire, and it would read as coverage.
+        //
+        // What follows is what the schema permits and the world should not.
+
+        // A destroyed structure must stop being scenery. If it keeps a live location the visual context would
+        // go on reporting it, so the place would look built long after it was pulled down.
+        Integer ghostBuilds = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM construction_project cp JOIN world_object w ON w.id = cp.object_id " +
+            "WHERE w.lifecycle_state = 'DESTROYED' AND w.current_location_id IS NOT NULL", Integer.class);
+        if (ghostBuilds != null && ghostBuilds > 0)
+            violations.add(ghostBuilds + " destroyed structure(s) still occupy ground and would still be visible.");
+
+        // The living Chronicle must be standing on real ground. current_location_id references world_object, not
+        // world_chunk, so the foreign key is satisfied by ANY object — a Chronicle can be sited on the world root,
+        // or inside a basket, and the database will not object. Then every perception in the game is answered
+        // from a location that is not a place, and the visual context has nothing to describe.
+        Integer lostChronicles = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM chronicle c JOIN world_object w ON w.id = c.id " +
+            "WHERE c.life_state = 'LIVING' AND (w.current_location_id IS NULL " +
+            "  OR NOT EXISTS (SELECT 1 FROM world_chunk k WHERE k.id = w.current_location_id))", Integer.class);
+        if (lostChronicles != null && lostChronicles > 0)
+            violations.add(lostChronicles + " living Chronicle(s) stand on ground that is not a place.");
+
         return new AuditReport(violations.isEmpty(), List.copyOf(violations));
     }
 
