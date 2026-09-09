@@ -293,17 +293,26 @@ public class PhysicalItemService {
     /** How much a penned beast recovers each turn of the world (#100/#108). */
     private static final int PEN_REST_RECOVERY = 25;
 
-    /** Rest the draft beasts of any keeper who has a completed animal pen at hand (#108): each turn of the world, a
-     *  beast whose keeper stands where a pen stands recovers draft-fatigue even as the keeper works — so a pen keeps
-     *  the draft team fresh. Set-based over the whole world; runs in the tick. */
+    /** Rest the draft beasts of any keeper who has somewhere at hand to keep them (#108): each turn of the world, a
+     *  beast whose keeper stands where a stock shelter stands recovers draft-fatigue even as the keeper works — so a
+     *  pen keeps the draft team fresh.
+     *
+     *  <p>Which structures those are is <b>data</b>, not a list written here (V293). This named three literals —
+     *  ANIMAL_PEN, HITCHING_POST, TETHER_LINE — while the catalogue grew the animal houses a keeper would actually
+     *  raise: a cattle byre, a goat fold, a pig sty, a poultry coop, a timber barn, every one of them buildable
+     *  today from a verified assembly. None of them rested anything. A byre exists to be the place an ox stands
+     *  overnight, and it was scenery. {@code construction_kind.shelters_stock} is now the question, so raising one
+     *  more animal house is a data row rather than another literal to remember.
+     *
+     *  <p>A ruined shelter holds nothing, so integrity is required here as it is everywhere else stock are kept.
+     *  Set-based over the whole world; runs in the tick. */
     @Transactional
     public void restPennedDraftBeasts(Instant now) {
         jdbc.update(
             "UPDATE wildlife_bond wb SET draft_fatigue = GREATEST(0, draft_fatigue - ?) " +
             "WHERE wb.draft_fatigue > 0 AND EXISTS (" +
-            // A full pen is not the only way to hold stock (#106): a hitching post or a picketed tether line keeps a
-            // beast standing at the camp just as well, and it rests there the same.
-            "  SELECT 1 FROM world_object cw JOIN construction_project cp ON cp.project_kind IN ('ANIMAL_PEN','HITCHING_POST','TETHER_LINE') AND cp.state='COMPLETED' " +
+            "  SELECT 1 FROM world_object cw JOIN construction_project cp ON cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
+            "    AND EXISTS(SELECT 1 FROM construction_kind ck WHERE ck.project_kind=cp.project_kind AND ck.shelters_stock) " +
             "  JOIN world_object pw ON pw.id=cp.object_id AND pw.lifecycle_state='ACTIVE' AND pw.current_location_id=cw.current_location_id " +
             "  WHERE cw.id=wb.chronicle_id)", PEN_REST_RECOVERY);
     }
