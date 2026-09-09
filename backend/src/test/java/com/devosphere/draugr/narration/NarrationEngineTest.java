@@ -162,12 +162,56 @@ class NarrationEngineTest {
     }
 
     /**
+     * The two families a settling Chronicle spends most of their days inside.
+     *
+     * <p>Coverage stopped at sixty scenes against a classifier producing a hundred and twenty-seven intents, and
+     * BUILD_* and CRAFT_* were almost entirely absent — so a player who raised a fence, dug a latrine, hafted a
+     * hatchet and set a trap on the same afternoon read <em>"It is done. The world carries the difference."</em>
+     * four times. These are the acts the middle of the game is made of.
+     */
+    @Test void theThingsAChronicleBuildsAndMakesHaveTheirOwnWords() {
+        List<String> families = List.of(
+            "BUILD_FENCE", "BUILD_PEN", "BUILD_LATRINE", "BUILD_LOOKOUT", "BUILD_FUEL_RACK",
+            "BUILD_TOOL_SHED", "BUILD_STORAGE_AREA", "BUILD_SMOKE_VENT", "BUILD_ALARM",
+            "CRAFT_KNIFE", "CRAFT_HAMMER", "CRAFT_PICKAXE", "CRAFT_HATCHET", "CRAFT_FIRE_KIT",
+            "CRAFT_FIRE_TOOL", "CRAFT_TINDER", "CRAFT_NET", "CRAFT_BELT", "CRAFT_GARMENT",
+            "CRAFT_DESK", "CRAFT_CHAIR", "CRAFT_SHELF", "CRAFT_WORKSTATION");
+
+        List<String> covered = engine.coveredScenes();
+        // Every one of them must be able to say what happened AND what happened instead when it did not work.
+        // A build or a craft fails constantly, and a generic failure line is the worse of the two gaps.
+        List<String> missing = families.stream()
+            .flatMap(i -> List.of(i + "|SUCCEEDED", i + "|FAILED").stream())
+            .filter(k -> !covered.contains(k)).toList();
+        assertTrue(missing.isEmpty(), "the middle of the game must not fall to the generic line: " + missing);
+    }
+
+    /**
+     * A failure line must say what the hands met, never what was wanted. "The ground turns the point aside" is
+     * perception; "you have no timber" is a recipe hint wearing a sentence's clothes, and it is the specific
+     * failure mode #30 exists to stop — so the FAILED half of every scene is held to it explicitly.
+     */
+    @Test void noFailureLineNamesTheMissingIngredient() {
+        // Deliberately narrow. An earlier draft included "without a", which flagged "without any sign of caring"
+        // — a perception line, not a hint. A check that cries wolf gets deleted by the next person to see it.
+        List<String> hints = List.of("you have no", "you have nothing", "you lack", "requires", "first you",
+                                     "you would need", "is needed", "are needed", "is required", "must come first");
+        for (String key : engine.coveredScenes()) {
+            if (!key.endsWith("|FAILED")) continue;
+            String[] parts = key.split("\\|");
+            String line = engine.narrate(scene(parts[0], parts[1])).toLowerCase();
+            for (String hint : hints)
+                assertFalse(line.contains(hint), key + " names what was wanted rather than what happened: " + line);
+        }
+    }
+
+    /**
      * A ratchet, not a target. Coverage may grow and must not shrink — a template deleted or a key renamed
      * silently sends its scene back to the generic pool, which reads as working and is the thing #30 exists to
      * stop.
      */
     @Test void narrationCoverageDoesNotGoBackwards() {
-        assertTrue(engine.coveredScenes().size() >= 60,
+        assertTrue(engine.coveredScenes().size() >= 180,
             "specific scenes must not fall below the coverage already delivered — have "
                 + engine.coveredScenes().size());
     }
