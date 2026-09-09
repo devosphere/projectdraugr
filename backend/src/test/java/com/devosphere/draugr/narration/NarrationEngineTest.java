@@ -121,4 +121,54 @@ class NarrationEngineTest {
         for (String hud : List.of("hunger","thirst","energy","health"))
             assertFalse(high.toLowerCase().contains(hud), "grounding must name no HUD state");
     }
+
+    /**
+     * #30's real complaint, made measurable: the ordinary work of a day must have its own words.
+     *
+     * <p>The engine had lines for twenty-one scenes while the classifier produces a hundred and twenty-seven
+     * intents, so nearly everything a Chronicle actually did — gathering fibre, filling a waterskin, checking a
+     * trap, taking a crop in — fell through to <em>"It is done. The world carries the difference."</em> That is
+     * the robotic narration the ticket is about, and it is also wasted money: a generic line is exactly the
+     * moment the AI narrator has to be paid to say something specific.
+     *
+     * <p>These are the acts a player performs constantly. Each must have a scene of its own rather than a
+     * fallback, and the witness-stance and no-advice policies above already hold every one of them to saying
+     * what happened without naming a prerequisite or suggesting the action that would have worked.
+     */
+    @Test void theOrdinaryWorkOfADayHasItsOwnWords() {
+        List<String> everyday = List.of(
+            "GATHER_FIBER|SUCCEEDED", "GATHER_FIBER|FAILED",
+            "GATHER_STONE|SUCCEEDED", "GATHER_STONE|FAILED",
+            "GATHER_BRANCHES|SUCCEEDED", "GATHER_BRANCHES|FAILED",
+            "GATHER_BERRIES|SUCCEEDED", "GATHER_BERRIES|FAILED",
+            "GATHER_MINERAL|SUCCEEDED", "GATHER_MINERAL|FAILED",
+            "COLLECT_WATER|SUCCEEDED", "COLLECT_WATER|FAILED",
+            "HARVEST_CROP|SUCCEEDED", "HARVEST_CROP|FAILED",
+            "CHECK_TRAP|SUCCEEDED", "CHECK_TRAP|FAILED",
+            "ADVANCE_ASSEMBLY|SUCCEEDED", "ADVANCE_ASSEMBLY|FAILED",
+            "COLLECT_INSECTS|SUCCEEDED", "COLLECT_INSECTS|FAILED",
+            "FORAGE_GROUND|SUCCEEDED", "FORAGE_GROUND|FAILED",
+            "DISENGAGE|SUCCEEDED", "DISENGAGE|FAILED",
+            "AGGRESSION_INANIMATE|SUCCEEDED", "AGGRESSION_INANIMATE|FAILED",
+            "EXAMINE|SUCCEEDED", "EQUIP|SUCCEEDED", "DROP|SUCCEEDED", "LISTEN|SUCCEEDED",
+            "INSPECT|SUCCEEDED", "BOIL_WATER|SUCCEEDED", "FILTER_WATER|SUCCEEDED",
+            "CLEAR_LAND|SUCCEEDED", "BANK_FIRE|SUCCEEDED", "EXTINGUISH_FIRE|SUCCEEDED",
+            "FEED_ANIMAL|SUCCEEDED", "DRY_BODY|SUCCEEDED", "COOL_BODY|SUCCEEDED", "DEFECATE|SUCCEEDED");
+
+        List<String> covered = engine.coveredScenes();
+        List<String> missing = everyday.stream().filter(k -> !covered.contains(k)).toList();
+        assertTrue(missing.isEmpty(),
+            "these are things a Chronicle does constantly, and they would fall to the generic line: " + missing);
+    }
+
+    /**
+     * A ratchet, not a target. Coverage may grow and must not shrink — a template deleted or a key renamed
+     * silently sends its scene back to the generic pool, which reads as working and is the thing #30 exists to
+     * stop.
+     */
+    @Test void narrationCoverageDoesNotGoBackwards() {
+        assertTrue(engine.coveredScenes().size() >= 60,
+            "specific scenes must not fall below the coverage already delivered — have "
+                + engine.coveredScenes().size());
+    }
 }

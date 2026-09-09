@@ -118,6 +118,136 @@ public class NarrationEngine {
             "Stone, shaft, and binding become one thing with a point on the end of it.",
             "You test the weight of it. It sits right in the hand."}),
 
+        // --- #30: the ordinary work of a day -------------------------------------------------------------
+        // Twenty-one intents had lines and the classifier produces a hundred and twenty-seven, so nearly
+        // everything a Chronicle actually did fell to "It is done. The world carries the difference." These
+        // witness the specific act instead. None of them names a prerequisite, suggests the action that would
+        // have worked, or reports a state the resolver did not establish — a failure line says what the hands
+        // met, not what to do about it.
+        Map.entry("GATHER_FIBER|SUCCEEDED", new String[]{
+            "You strip the long fibres down the stem and coil them against your palm, green and faintly wet.",
+            "The stalks give up their length in ribbons, and you gather them into a hank."}),
+        Map.entry("GATHER_FIBER|FAILED", new String[]{
+            "What grows here tears short and ragged in the hand. None of it runs long enough to hold.",
+            "You work at the stems. They break where they should have peeled."}),
+        Map.entry("GATHER_STONE|SUCCEEDED", new String[]{
+            "You turn the loose stone over, choose what will serve, and take it up cold and gritty.",
+            "The stone comes away from the ground with a dull knock and settles heavy in your grip."}),
+        Map.entry("GATHER_STONE|FAILED", new String[]{
+            "You turn over what is here. It is all too small or too rotten to be worth carrying.",
+            "The ground gives up dirt and root and nothing with an edge in it."}),
+        Map.entry("GATHER_BRANCHES|SUCCEEDED", new String[]{
+            "You gather fallen wood from under the trees, snapping each piece to hear how dry it rings.",
+            "Deadfall comes up out of the leaf litter, light and grey and ready to burn."}),
+        Map.entry("GATHER_BRANCHES|FAILED", new String[]{
+            "Everything on the ground here is damp through and bends instead of breaking.",
+            "You go over the ground twice. What wood there is has gone soft with rot."}),
+        Map.entry("GATHER_BERRIES|SUCCEEDED", new String[]{
+            "The fruit comes off between finger and thumb, and your hands go dark with the juice of it.",
+            "You work along the canes and take what is ripe, leaving the hard green ones where they are."}),
+        Map.entry("GATHER_BERRIES|FAILED", new String[]{
+            "The canes are bare. Whatever was on them has gone to the birds or the season.",
+            "You search the growth and find only leaf and thorn."}),
+        Map.entry("GATHER_MINERAL|SUCCEEDED", new String[]{
+            "You work it loose from the seam and turn it in the light, heavier than it looks.",
+            "The rock gives up what was in it, and the broken face shines where it parted."}),
+        Map.entry("GATHER_MINERAL|FAILED", new String[]{
+            "You break at the rock until your arms burn. It holds nothing but more rock.",
+            "The stone here is dead through — no seam, no shine, nothing worth the swing."}),
+        Map.entry("COLLECT_WATER|SUCCEEDED", new String[]{
+            "You dip and fill, and the cold of it comes through to your fingers.",
+            "Water goes in with a hollow note that flattens as the vessel fills."}),
+        Map.entry("COLLECT_WATER|FAILED", new String[]{
+            "There is nothing here to draw from — the ground is dry to the touch.",
+            "You look for water and find only damp earth that gives none up."}),
+        Map.entry("BOIL_WATER|SUCCEEDED", new String[]{
+            "It climbs to a rolling boil and holds there, throwing steam that beads on everything above it.",
+            "The surface breaks and keeps breaking. Whatever was living in it is not living now."}),
+        Map.entry("EXAMINE|SUCCEEDED", new String[]{
+            "You take your time with it, and the details come up out of the general shape.",
+            "Looking closely, you find the small particulars the glance had smoothed over."}),
+        Map.entry("EQUIP|SUCCEEDED", new String[]{
+            "You settle it into place and shift once until it sits where it will not shift again.",
+            "It comes to hand, and your grip closes around it as though it had been waiting."}),
+        Map.entry("DROP|SUCCEEDED", new String[]{
+            "You set it down on the ground and straighten. Your back reads the difference immediately.",
+            "It leaves your hands and stays where you put it."}),
+        Map.entry("HARVEST_CROP|SUCCEEDED", new String[]{
+            "You take the stand down a handful at a time, and the heads come away dry and rattling.",
+            "The crop comes in. What stood in rows this morning is a weight against your chest now."}),
+        Map.entry("HARVEST_CROP|FAILED", new String[]{
+            "The stand is not ready. What is on it comes away green and useless in your hand.",
+            "You go along the row and find nothing on it worth taking yet."}),
+        Map.entry("CLEAR_LAND|SUCCEEDED", new String[]{
+            "Trees down, brush hauled off, roots grubbed out — and an open patch of earth where the wood stood.",
+            "The last of the growth comes out and the ground lies bare and workable for the first time."}),
+        Map.entry("COLLECT_INSECTS|SUCCEEDED", new String[]{
+            "You turn the ground and take what moves in it, quick, before it can go back under.",
+            "They come up out of the damp and dark, and you have them before they scatter."}),
+        Map.entry("COLLECT_INSECTS|FAILED", new String[]{
+            "You turn the ground over and nothing moves in it.",
+            "Whatever lived here has gone deeper than your hands reach."}),
+        Map.entry("CHECK_TRAP|SUCCEEDED", new String[]{
+            "The trap has held. You take what is in it and reset the whole business behind you.",
+            "It sprung, and it kept what it caught."}),
+        Map.entry("CHECK_TRAP|FAILED", new String[]{
+            "The trap sits exactly as you left it, unsprung and empty.",
+            "Nothing has come this way, or nothing careless enough."}),
+        Map.entry("ADVANCE_ASSEMBLY|SUCCEEDED", new String[]{
+            "The work moves on a stage. What was a heap of parts this morning is beginning to hold its own shape.",
+            "You finish this piece of it and stand back. It is further along than it was."}),
+        Map.entry("ADVANCE_ASSEMBLY|FAILED", new String[]{
+            // The first draft of this line read "will not join to what you need" — and the no-advice policy
+            // caught it, correctly: naming what is wanted is the recipe hint #30 forbids. It says what the
+            // hands met instead.
+            "The work will not go further today. The pieces you have will not meet.",
+            "You turn the parts over and set them down again as they were."}),
+        Map.entry("LISTEN|SUCCEEDED", new String[]{
+            "You go still, and the place fills in around you — small sounds, and the shape of the distance between them.",
+            "Held still, you hear what movement covers: water somewhere, wind working, something small in the litter."}),
+        Map.entry("INSPECT|SUCCEEDED", new String[]{
+            "You go over it closely, and its condition tells you plainly how it has been used.",
+            "Turning it in your hands, you read the wear on it."}),
+        Map.entry("DISENGAGE|SUCCEEDED", new String[]{
+            "You break contact and put ground between you, watching behind until the watching stops mattering.",
+            "You back off the way you came. Nothing follows."}),
+        Map.entry("DISENGAGE|FAILED", new String[]{
+            "You break for open ground and it comes with you, closing the distance as fast as you make it.",
+            "There is no getting clear of this. It is still there when you turn."}),
+        Map.entry("DRY_BODY|SUCCEEDED", new String[]{
+            "The wet goes out of your clothes by degrees, and the shivering loosens its hold.",
+            "Warmth works in and the cold that had settled in your bones gives ground."}),
+        Map.entry("COOL_BODY|SUCCEEDED", new String[]{
+            "The heat comes off you slowly, and your breathing lengthens out of its shallow rhythm.",
+            "In the shade the worst of it passes and the pounding behind your eyes eases."}),
+        Map.entry("FEED_ANIMAL|SUCCEEDED", new String[]{
+            "It takes the feed from the ground without hurry, and does not move away from you while it eats.",
+            "The food goes down fast. Whatever wariness it had is thinner afterwards."}),
+        Map.entry("EXTINGUISH_FIRE|SUCCEEDED", new String[]{
+            "The flame goes out in a rush of grey, and the heat leaves the air faster than it came into it.",
+            "You smother it down to black and the place is suddenly much darker than it was."}),
+        Map.entry("BANK_FIRE|SUCCEEDED", new String[]{
+            "You rake the coals together and cover them, and the fire settles to a low red that will keep.",
+            "Banked under ash, it stops throwing light and starts keeping itself."}),
+        Map.entry("FILTER_WATER|SUCCEEDED", new String[]{
+            "What comes through runs clear where it went in cloudy, and the sediment stays behind.",
+            "It passes slowly, and what collects below has lost its colour and its grit."}),
+        Map.entry("FORAGE_GROUND|SUCCEEDED", new String[]{
+            "You work the ground over close and take what is worth taking from it.",
+            "Going slowly with your eyes down, you find what a walking pace would have passed."}),
+        Map.entry("FORAGE_GROUND|FAILED", new String[]{
+            "You go over the ground and it offers nothing you could use.",
+            "There is growth here and none of it is anything."}),
+        Map.entry("DEFECATE|SUCCEEDED", new String[]{
+            "You go apart from the camp, and afterwards cover it over.",
+            "The body's business, done away from where you sleep and eat."}),
+        Map.entry("AGGRESSION_INANIMATE|SUCCEEDED", new String[]{
+            "You strike it and it gives — wood splitting, or stone shifting, or whatever it is coming apart.",
+            "The blow lands with a flat crack and something in it breaks."}),
+        Map.entry("AGGRESSION_INANIMATE|FAILED", new String[]{
+            "You hit it hard enough to jar your arms and it takes the blow without changing at all.",
+            "It absorbs everything you put into it and sits there exactly as it was."}),
+
         // Literature
         Map.entry("WRITE|SUCCEEDED", new String[]{
             "The charcoal leaves its marks. What was only in your head is now outside of it.",
