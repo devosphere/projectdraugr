@@ -178,4 +178,78 @@ class CatalogueWorldSeedCompatibilityIntegrationTest {
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
+
+    /**
+     * The Atlas and the persisted world must agree on <b>every site's placement and category</b> (#161), not
+     * merely on how many there are.
+     *
+     * <p>What existed before this was a count: the bootstrap test asserts {@code ecology_site} has as many rows as
+     * {@code markerPlan} has markers. That would pass with every site seeded on the wrong chunk, under the wrong
+     * name, in the wrong category — the numbers would match and the world would be silently unlike its own map.
+     * It is the same shape as the marker fallback that put a stranded label at the centre of the map: nothing
+     * goes missing, so nothing is noticed.
+     *
+     * <p>Checked in both directions, because drift can add as easily as it can move: every planned marker must be
+     * on the ground the plan names, and no persisted site may exist that the plan never asked for.
+     */
+    @Test
+    void theAtlasAndTheWorldAgreeOnEverySitesPlacementAndCategory() {
+        world();
+        var current = worldGenesis.current();
+        var plan = worldGenesis.markerPlan(new WorldGenesisService.GenesisRequest(
+            current.seed(), current.widthChunks(), current.heightChunks()));
+
+        List<java.util.Map<String,Object>> persisted = jdbc.queryForList(
+            "SELECT es.site_kind, es.site_category, c.grid_x, c.grid_y " +
+            "FROM ecology_site es JOIN world_chunk c ON c.id = es.chunk_id");
+
+        // Multiset comparison: two markers of the same kind may legitimately share a label, so match on the whole
+        // tuple and remove as we go rather than asking "does one like this exist".
+        List<String> remaining = new java.util.ArrayList<>();
+        for (var row : persisted)
+            remaining.add(row.get("site_kind") + "|" + row.get("site_category")
+                + "|" + row.get("grid_x") + "," + row.get("grid_y"));
+
+        List<String> missing = new java.util.ArrayList<>();
+        for (var marker : plan) {
+            String wanted = marker.label() + "|" + marker.category() + "|" + marker.x() + "," + marker.y();
+            if (!remaining.remove(wanted)) missing.add(wanted);
+        }
+
+        assertTrue(missing.isEmpty(),
+            () -> "the Atlas plans sites the world did not seed where it said, with the name and category it said"
+                + " — " + missing.size() + " of " + plan.size() + ":\n" + String.join("\n", missing));
+        assertTrue(remaining.isEmpty(),
+            () -> "the world holds sites the Atlas never planned — seeding has drifted from the plan:\n"
+                + String.join("\n", remaining));
+    }
+
+    /**
+     * The seasonal dimension of the matrix (#161): no season may be one in which the world offers nothing.
+     *
+     * <p>Foraging filters {@code flora_drop} by the current season, and the clock has four — the data uses three.
+     * That is not itself wrong: winter is lean, and it is carried by the eighty drops that name no season at all.
+     * But a later seasonal pass that gave every drop a season would take winter away entirely and read as
+     * tightening realism, so the thing that keeps winter fed is asserted rather than left to hold by accident.
+     */
+    @Test
+    void noSeasonLeavesTheWorldWithNothingToForage() {
+        Integer anySeason = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM flora_drop WHERE season IS NULL", Integer.class);
+        assertTrue(anySeason != null && anySeason > 0,
+            "every flora drop names a season, so winter — which no drop names — offers nothing at all");
+
+        List<String> biomes = jdbc.queryForList(
+            "SELECT DISTINCT unnest(string_to_array(f.biome_affinity, ',')) FROM flora_drop d " +
+            "JOIN flora_definition f ON f.flora_key = d.flora_key WHERE d.season IS NULL", String.class);
+        assertTrue(biomes.size() >= 4,
+            () -> "out-of-season food must be findable across the world, not on one kind of ground: " + biomes);
+
+        // And no entry may be gated on a season the clock never reaches.
+        List<String> impossible = jdbc.queryForList(
+            "SELECT DISTINCT season FROM flora_drop " +
+            "WHERE season IS NOT NULL AND season NOT IN ('SPRING','SUMMER','AUTUMN','WINTER')", String.class);
+        assertTrue(impossible.isEmpty(),
+            () -> "a drop gated on a season the clock never reports can never be taken: " + impossible);
+    }
 }
