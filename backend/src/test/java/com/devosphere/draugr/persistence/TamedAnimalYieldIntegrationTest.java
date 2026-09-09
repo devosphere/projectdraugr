@@ -105,7 +105,14 @@ class TamedAnimalYieldIntegrationTest {
             "SELECT f.preparation_kind FROM food_preservation_state f JOIN item_instance i ON i.object_id=f.object_id WHERE i.item_key='goat_milk' LIMIT 1", String.class),
             "milk is perishable from the moment it is drawn");
 
-        // It has given what it has; it cannot be milked again on the spot.
+        // It has given what it has; it cannot be milked again on the spot. Drain every milk animal the Chronicle
+        // holds first — the tests in this class share a database, and a keeper with two goats can milk both, so
+        // the count is asked for rather than assumed rather than depending on which test ran first.
+        int milkAnimals = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id=wb.population_id " +
+            "JOIN tamed_yield ty ON ty.species_key=wp.species_key AND ty.yield_kind='MILK' " +
+            "WHERE wb.chronicle_id=? AND wb.bond_stage='TAMED'", Integer.class, chronicle);
+        for (int i = 1; i < milkAnimals; i++) actions.resolve("milk the goat");
         var again = actions.resolve("milk the goat");
         assertEquals("FAILED", again.outcome(), () -> "a milked-out animal must be allowed to rest: " + again.perception());
 
@@ -162,7 +169,19 @@ class TamedAnimalYieldIntegrationTest {
             () -> "milking an animal must not stop it being shorn — each product keeps its own clock: " + shorn.perception());
         assertTrue(items.hasAtLeast(chronicle, "wool_tuft", 1), "the fleece must be in hand");
 
-        // The interval is the catalogue's, not a constant: a fleece is a once-a-season job.
+        // The interval is the catalogue's, not a constant: a fleece is a once-a-season job. Shear out every
+        // fleece-bearer the Chronicle holds first — a keeper with two goats can of course shear both, and this
+        // test shares its database with the other tests in the class, so the count is asked for rather than
+        // assumed. The one that must fail is the attempt after every animal has given.
+        int woolBearers = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id=wb.population_id " +
+            "JOIN tamed_yield ty ON ty.species_key=wp.species_key AND ty.yield_kind='WOOL' " +
+            "WHERE wb.chronicle_id=? AND wb.bond_stage='TAMED'", Integer.class, chronicle);
+        for (int i = 1; i < woolBearers; i++) {
+            var more = actions.resolve("shear the goat");
+            assertEquals("SUCCEEDED", more.outcome(),
+                () -> "every fleece-bearer gives its own fleece: " + more.perception());
+        }
         var shornAgain = actions.resolve("shear the goat");
         assertEquals("FAILED", shornAgain.outcome(),
             () -> "a fleece just taken has not grown back: " + shornAgain.perception());
