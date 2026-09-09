@@ -1775,6 +1775,11 @@ public class ChronicleActionService {
     private String groundPerception(String core, UUID location, String attention, String beforeWeather, Instant at) {
         java.util.Map<String,Object> env = jdbc.queryForMap(
             "SELECT wc.biome, wc.elevation, wc.moisture, wc.grid_y, wg.height_chunks, ww.weather_kind, " +
+            // Aspect (#159): ground that falls away to the south takes the light square-on and sits out of the
+            // north wind. Derived from the neighbour's stored elevation rather than a column of its own, so the
+            // pinned world needs no migration and no regeneration to have slopes it always had.
+            "EXISTS(SELECT 1 FROM world_chunk n WHERE n.world_id=wc.world_id AND n.grid_x=wc.grid_x " +
+            "       AND n.grid_y=wc.grid_y-1 AND n.elevation > wc.elevation + 40) AS sun_warmed, " +
             "COALESCE(ww.ambient_temperature_c,18.0) AS t, COALESCE(ww.wind_speed_kph,6) AS w " +
             "FROM world_chunk wc JOIN world_genesis wg ON wg.world_id=wc.world_id " +
             "LEFT JOIN world_weather ww ON ww.world_id=wc.world_id WHERE wc.id=?", location);
@@ -1786,7 +1791,8 @@ public class ChronicleActionService {
         com.devosphere.draugr.simulation.BiomeClimate.Local local = com.devosphere.draugr.simulation.BiomeClimate.at(
             biome, ((Number) env.get("elevation")).intValue(), ((Number) env.get("moisture")).intValue(),
             ((Number) env.get("grid_y")).intValue(), ((Number) env.get("height_chunks")).intValue(),
-            globalKind, ((Number) env.get("t")).doubleValue(), ((Number) env.get("w")).intValue());
+            globalKind, ((Number) env.get("t")).doubleValue(), ((Number) env.get("w")).intValue(),
+            Boolean.TRUE.equals(env.get("sun_warmed")));
         boolean weatherChanged = beforeWeather != null && globalKind != null && !beforeWeather.equals(globalKind);
         return narrationEngine.ground(core, biome, timeOfDayLabel(at), local.kind(), attention, weatherChanged);
     }
