@@ -1009,11 +1009,34 @@ public class ChronicleActionService {
         if (xs.size() == 2) return xs.get(0) + " and " + xs.get(1);
         return String.join(", ", xs.subList(0, xs.size() - 1)) + ", and " + xs.get(xs.size() - 1);
     }
+    /**
+     * What the Chronicle says this ground is for (V295) — read from {@code district_purpose}, not from a chain of
+     * literals here.
+     *
+     * <p>V47 wrote down the nine purposes the Wolf Kingdom used, saying in as many words that it existed so a
+     * future chronicle would not have to re-derive the vocabulary. It was re-derived: this method used to write
+     * SLEEPING, WATER, STORAGE, WORKSHOP, KNOWLEDGE and SANITATION against a catalogue holding RESIDENTIAL,
+     * DRINKING, WAREHOUSE, HEAVY_MANUFACTURING, TEXTILE, LIBRARY, ARSENAL, PARK and SANITATION. One word
+     * overlapped, and `district_purpose` was the only table in the schema no Java file so much as named.
+     *
+     * <p>Longest phrase wins, so "drinking water" is a draw rather than merely water, and the migration refuses
+     * to let two purposes claim the same phrase — a substring collision steals a designation exactly the way it
+     * steals a process.
+     */
+    private String purposeNamedIn(String value) {
+        return jdbc.query(
+            "SELECT dp.purpose_tag FROM district_purpose dp, " +
+            "  LATERAL unnest(string_to_array(dp.keywords, ',')) AS phrase " +
+            "WHERE position(btrim(phrase) in ?) > 0 AND btrim(phrase) <> '' " +
+            "ORDER BY length(btrim(phrase)) DESC LIMIT 1",
+            rs -> rs.next() ? rs.getString(1) : null, value);
+    }
+
     private String[] designate(ActiveChronicle chronicle, String text, UUID actionId, Instant at) {
         String name = extractDesignatedName(text);
         if (name == null || name.isBlank()) return new String[]{"FAILED", "You mean to give this place a name, but no clear name forms."};
         String value = text.toLowerCase(Locale.ROOT);
-        String purpose = value.contains("sleep") ? "SLEEPING" : (value.contains("urinat")||value.contains("latrine")||value.contains("defecat")||value.contains("toilet")) ? "SANITATION" : (value.contains("drink")||value.contains("water")) ? "WATER" : (value.contains("store")||value.contains("storage")) ? "STORAGE" : (value.contains("craft")||value.contains("work")||value.contains("forge")||value.contains("manufactur")) ? "WORKSHOP" : (value.contains("archive")||value.contains("library")||value.contains("knowledge")) ? "KNOWLEDGE" : null;
+        String purpose = purposeNamedIn(value);
         boolean memorize = value.contains("memoriz") || value.contains("memoris") || value.contains("remember") || value.contains("commit to memory") || value.contains("fix in") || value.contains("by heart");
         java.sql.Timestamp ts = java.sql.Timestamp.from(at);
         // Many named zones per chunk now (V70/F8): conflict on the name, so a chronicle may name several
@@ -1971,11 +1994,39 @@ public class ChronicleActionService {
             default -> false;
         };
     }
+    /** The refuse level at which a camp is visibly choked and its water is no longer worth calling clean. */
+    private static final int FOULED_DRAW_REFUSE = 40;
+
+    /**
+     * Water here fit to drink untreated.
+     *
+     * <p>This used to call a river bank or any moving-freshwater site clean, unconditionally, so a keeper could
+     * foul their camp to refuse 100 with their own leavings and their livestock's muck, stand on the bank, and
+     * draw water that carried no risk at all, for ever. Refuse is wired to real consequences everywhere else —
+     * it draws predators, costs the body condition, docks the shelf life of stored food — and the one place it
+     * could not reach was the water, which is the first thing a fouled camp ruins.
+     *
+     * <p>Ground the Chronicle themselves designated for waste is never a clean draw, at any refuse level (V295).
+     * They said what the place was for; a latrine upstream of the pot is not made safe by the stream moving.
+     *
+     * <p>Neither is a punishment invented for the occasion. MAINTAIN_CAMP clears refuse and a latrine contains
+     * it, so a fouled camp is always recoverable — and the water comes back with it.
+     */
     private boolean safeWaterSource(UUID location) {
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
-        if ("RIVER_BANK".equals(biome)) return true;
-        Integer moving = jdbc.queryForObject("SELECT COUNT(*) FROM ecology_site WHERE chunk_id=? AND (" + com.devosphere.draugr.ecology.FreshWater.sites() + ")", Integer.class, location);
-        return moving != null && moving > 0;
+        boolean water = "RIVER_BANK".equals(biome);
+        if (!water) {
+            Integer moving = jdbc.queryForObject("SELECT COUNT(*) FROM ecology_site WHERE chunk_id=? AND (" + com.devosphere.draugr.ecology.FreshWater.sites() + ")", Integer.class, location);
+            water = moving != null && moving > 0;
+        }
+        if (!water) return false;
+
+        Integer refuse = jdbc.queryForObject("SELECT COALESCE((SELECT refuse_level FROM chunk_refuse WHERE chunk_id=?),0)", Integer.class, location);
+        if (refuse != null && refuse >= FOULED_DRAW_REFUSE) return false;
+
+        return !Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM chronicle_named_location nl JOIN district_purpose dp ON dp.purpose_tag=nl.purpose_tag " +
+            "WHERE nl.chunk_id=? AND dp.fouls_water)", Boolean.class, location));
     }
     /** A fire burning within reach here — for warming and drying (#66). */
     private boolean fireInReach(UUID location) {
