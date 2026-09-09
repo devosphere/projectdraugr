@@ -30,4 +30,33 @@ public class VisualContextController {
     public VisualContextService.VisualContext current() {
         return context.active(ticks.current().simulatedAt());
     }
+
+    /**
+     * Which backdrop this place calls for (#225/#234).
+     *
+     * <p>The resolver was written as a pure function and then called by nothing but its own test, so no place in
+     * the world actually got a backdrop out of it. This is where the decision is made for real: the same context
+     * the payload above reports, run through the same precedence, every time.
+     *
+     * <p>The <b>fingerprint</b> is carried through deliberately. It is the answer to "is this still the same
+     * place, unchanged" — so a caller can hold an image while it matches and only fetch or decode again when it
+     * does not. Two different places can call for the same backdrop key; only the fingerprint says whether
+     * anything about the place has moved. That is the difference between a cache that is correct and one that is
+     * merely lucky.
+     *
+     * @param version the contract version, matching the payload's
+     * @param key     the backdrop key, always present — {@link BackdropResolver#FALLBACK_KEY} when a place has
+     *                nothing remarkable on it, which is an answer and not a failure
+     * @param reason  why that key, in terms of what is underfoot; safe to show
+     * @param fingerprint the visual context's fingerprint, for caching
+     */
+    public record Backdrop(int version, String key, String reason, String fingerprint) { }
+
+    @GetMapping("/v1/backdrop")
+    public Backdrop backdrop() {
+        VisualContextService.VisualContext here = context.active(ticks.current().simulatedAt());
+        BackdropResolver.Choice choice = BackdropResolver.resolve(here);
+        return new Backdrop(VisualContextService.VERSION, choice.key(), choice.reason(),
+            here == null ? null : here.fingerprint());
+    }
 }
