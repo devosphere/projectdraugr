@@ -188,7 +188,7 @@ class AHerdThatGrowsIntegrationTest {
         jdbc.update("DELETE FROM tamed_gestation"); jdbc.update("DELETE FROM tamed_young");
 
         // One of a kind, with everything else in place.
-        UUID shelter = byre(chunk, t0);
+        byre(chunk, t0);
         tame(chronicle, chunk, "reindeer", t0);
         items.advanceBreeding(t0);
         assertEquals(0, count("tamed_gestation", "WHERE species_key='reindeer'"),
@@ -210,8 +210,12 @@ class AHerdThatGrowsIntegrationTest {
         assertEquals(0, count("tamed_gestation", "WHERE species_key='reindeer'"),
             "a byre fallen to ruin shelters nothing, and stock on open ground do not settle to breed");
 
-        // Put it back, and starve them instead.
-        jdbc.update("UPDATE construction_project SET integrity_percent=100 WHERE object_id=?", shelter);
+        // Put them ALL back — the restore has to mirror the teardown exactly. Restoring only this test's own byre
+        // left the sibling's standing at zero integrity, which the Auditor correctly reports as world corruption:
+        // "completed construction(s) have zero integrity while still active".
+        jdbc.update("UPDATE construction_project cp SET integrity_percent=100 FROM world_object w " +
+                    "WHERE w.id=cp.object_id AND w.current_location_id=? " +
+                    "  AND EXISTS (SELECT 1 FROM construction_kind ck WHERE ck.project_kind=cp.project_kind AND ck.shelters_stock)", chunk);
         jdbc.update("UPDATE wildlife_bond SET draft_hunger=90 WHERE chronicle_id=? AND population_id IN " +
                     "(SELECT id FROM wildlife_population WHERE species_key='reindeer')", chronicle);
         items.advanceBreeding(t0);
