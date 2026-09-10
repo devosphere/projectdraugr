@@ -372,6 +372,106 @@ public class PhysicalItemService {
             LIVESTOCK_FOULING_PER_TURN, ts, LIVESTOCK_FOULING_PER_TURN, ts);
     }
 
+    /** A beast in this state is not thriving, and stock that are not thriving do not breed. */
+    private static final int BREEDING_CONDITION_LIMIT = 60;
+
+    /**
+     * Turn of the world for breeding (#52/#79/#108): kept stock in good condition get in calf, carry, give birth,
+     * and their young grow up into stock of their own.
+     *
+     * <p>Everything about keeping animals existed except the one thing that makes it husbandry rather than
+     * ownership. A keeper could tame a goat, feed it, water it, rest it in a byre, muck out after it, milk it and
+     * shear it — and the number of goats in the world would never change except downward. A herd was a fixed
+     * count to draw down and could never be built.
+     *
+     * <p>Three conditions, and each is something a keeper does rather than a die roll:
+     * <ul>
+     *   <li><b>Two of a kind.</b> Breeding needs two tamed animals of the species. Sex is deliberately not
+     *       modelled (see V296), and two is the honest floor of what a herd requires without claiming to know
+     *       which is which.</li>
+     *   <li><b>Condition.</b> A beast that is hungry, thirsty or worked to exhaustion does not conceive. This is
+     *       the first thing in the simulation that makes feeding and watering matter beyond haulage.</li>
+     *   <li><b>Somewhere to be kept.</b> A completed, intact stock shelter on the ground (V293's
+     *       {@code shelters_stock}) — the byre, fold, sty, coop or barn a keeper raised. Stock scattered on open
+     *       ground do not settle to breed, which is the oldest reason to build a pen.</li>
+     * </ul>
+     *
+     * <p>And a recovery period after birth, because a dam worked straight back into calf is how a herd is ruined.
+     * Set-based over the whole world; runs in the tick.
+     */
+    @Transactional
+    public void advanceBreeding(Instant now) {
+        java.sql.Timestamp ts = java.sql.Timestamp.from(now);
+
+        // 1. Conceive. One pregnancy per bond, so the primary key is the guard against a beast carrying twice.
+        jdbc.update(
+            "INSERT INTO tamed_gestation (bond_id, species_key, conceived_at, due_at) " +
+            "SELECT wb.id, wp.species_key, ?, ? + make_interval(hours => bp.gestation_hours) " +
+            "FROM wildlife_bond wb " +
+            "JOIN wildlife_population wp ON wp.id = wb.population_id " +
+            "JOIN breeding_profile bp ON bp.species_key = wp.species_key " +
+            "JOIN world_object cw ON cw.id = wb.chronicle_id " +
+            "WHERE wb.bond_stage = 'TAMED' " +
+            "  AND wb.draft_hunger < ? AND wb.draft_thirst < ? AND wb.draft_fatigue < ? " +
+            "  AND (wb.last_birth_at IS NULL OR wb.last_birth_at <= ? - make_interval(hours => bp.recovery_hours)) " +
+            // Two of a kind, counted among this keeper's own tamed stock.
+            "  AND (SELECT COUNT(*) FROM wildlife_bond o JOIN wildlife_population op ON op.id = o.population_id " +
+            "        WHERE o.chronicle_id = wb.chronicle_id AND o.bond_stage = 'TAMED' AND op.species_key = wp.species_key) >= 2 " +
+            // Somewhere to be kept: a completed, intact stock shelter on the keeper's ground.
+            "  AND EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
+            "              JOIN construction_kind ck ON ck.project_kind = cp.project_kind AND ck.shelters_stock " +
+            "              WHERE cp.state = 'COMPLETED' AND cp.integrity_percent > 0 " +
+            "                AND sw.lifecycle_state = 'ACTIVE' AND sw.current_location_id = cw.current_location_id) " +
+            "ON CONFLICT (bond_id) DO NOTHING",
+            ts, ts, BREEDING_CONDITION_LIMIT, BREEDING_CONDITION_LIMIT, BREEDING_CONDITION_LIMIT, ts);
+
+        // 2. Give birth. The litter size is deterministic per pregnancy rather than random, so a save resumed
+        //    twice does not produce two different herds — the bond id and the hour it was conceived decide it.
+        jdbc.update(
+            "INSERT INTO tamed_young (bond_id, species_key, born_at, matures_at) " +
+            "SELECT tg.bond_id, tg.species_key, tg.due_at, tg.due_at + make_interval(hours => bp.maturity_hours) " +
+            "FROM tamed_gestation tg " +
+            "JOIN breeding_profile bp ON bp.species_key = tg.species_key " +
+            "CROSS JOIN LATERAL generate_series(1, bp.litter_min + " +
+            "  (('x' || substr(md5(tg.bond_id::text || tg.conceived_at::text), 1, 8))::bit(32)::bigint " +
+            "   % (bp.litter_max - bp.litter_min + 1))::int) " +
+            "WHERE tg.due_at <= ?", ts);
+        jdbc.update("UPDATE wildlife_bond SET last_birth_at = tg.due_at FROM tamed_gestation tg " +
+                    "WHERE tg.bond_id = wildlife_bond.id AND tg.due_at <= ?", ts);
+        jdbc.update("DELETE FROM tamed_gestation WHERE due_at <= ?", ts);
+
+        // 3. Grow up. A matured animal JOINS THE HERD — its parent's population, which is what a herd is in this
+        //    model: one bond is a Chronicle's relationship with a population, not with an individual beast.
+        //
+        //    An earlier draft gave each matured animal a bond of its own and could not have worked: wildlife_bond
+        //    is UNIQUE (chronicle_id, population_id), so a keeper holds exactly one bond per population, and
+        //    wildlife_population is UNIQUE (site_id), so a second population would have needed a second ecology
+        //    site — a new "site" in the world for every kid born, which perception reads and would have littered
+        //    the ground with phantom habitats. The herd is the count. That is what the schema already says.
+        jdbc.update(
+            "UPDATE wildlife_population wp SET population_count = wp.population_count + grown.n " +
+            "FROM (SELECT parent.population_id AS pid, COUNT(*) AS n FROM tamed_young ty " +
+            "      JOIN wildlife_bond parent ON parent.id = ty.bond_id " +
+            "      WHERE ty.matures_at <= ? GROUP BY parent.population_id) grown " +
+            "WHERE wp.id = grown.pid", ts);
+        // Carrying capacity is what the ground will support. A herd grown past it is a herd outgrowing its
+        // pasture, and the ecology simulation already knows what to do about that — this only makes sure the
+        // ceiling rises with a herd a keeper has deliberately built, rather than capping it at the wild number.
+        jdbc.update(
+            "UPDATE wildlife_population SET carrying_capacity = GREATEST(carrying_capacity, population_count) " +
+            "WHERE population_count > carrying_capacity");
+        jdbc.update("DELETE FROM tamed_young WHERE matures_at <= ?", ts);
+    }
+
+    /** How many young this Chronicle is raising, and of what — for perception, not for working with. */
+    @Transactional(readOnly = true)
+    public int youngInCare(UUID chronicle) {
+        Integer n = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM tamed_young ty JOIN wildlife_bond wb ON wb.id = ty.bond_id WHERE wb.chronicle_id = ?",
+            Integer.class, chronicle);
+        return n == null ? 0 : n;
+    }
+
     private static final int DRAFT_HUNGER_PER_TURN = 3;   // a beast grows hungry as the world turns
     private static final int DRAFT_GRAZE_RELIEF   = 10;   // pasture feeds it faster than it hungers
     private static final int DRAFT_FEED_RELIEF     = 60;   // a bundle of fodder is a good feed
