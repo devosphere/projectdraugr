@@ -706,6 +706,9 @@ public class WildlifeEncounterService {
         return (String) herd.get("species");
     }
 
+    /** How many animals one person gets through in a single taking, however large the herd. */
+    private static final int MOST_A_PERSON_CAN_WORK_THROUGH = 6;
+
     /**
      * Take the produce a tamed animal gives (#52/#79/#106). fowl_egg, goat_milk and wool_tuft each declared an
      * item_source of TAMED_YIELD, but nothing in the codebase produced them and TAMED_YIELD was handled nowhere — so
@@ -744,13 +747,14 @@ public class WildlifeEncounterService {
         // The best animal to go to is the one whose product has rested longest — never taken at all, first of all.
         // The clock is per product, so this joins tamed_production on the bond AND the item.
         java.util.Map<String,Object> ready = jdbc.query(
-            "SELECT wb.id, wp.species_key, ty.item_key, ty.interval_hours, tp.last_yielded_at, d.display_name " +
+            "SELECT wb.id, wp.species_key, ty.item_key, ty.interval_hours, tp.last_yielded_at, d.display_name, " +
+            "       wp.population_count " +
             "FROM wildlife_bond wb " +
             "JOIN wildlife_population wp ON wp.id = wb.population_id " +
             "JOIN tamed_yield ty ON ty.species_key = wp.species_key AND ty.yield_kind = ? " +
             "JOIN item_definition d ON d.item_key = ty.item_key " +
             "LEFT JOIN tamed_production tp ON tp.bond_id = wb.id AND tp.item_key = ty.item_key " +
-            "WHERE wb.chronicle_id = ? AND wb.bond_stage = 'TAMED' " +
+            "WHERE wb.chronicle_id = ? AND wb.bond_stage = 'TAMED' AND wp.population_count > 0 " +
             "ORDER BY tp.last_yielded_at NULLS FIRST LIMIT 1 FOR UPDATE OF wb",
             rs -> rs.next() ? java.util.Map.of(
                     "id", rs.getObject(1, UUID.class),
@@ -758,7 +762,8 @@ public class WildlifeEncounterService {
                     "item", rs.getString(3),
                     "interval", rs.getInt(4),
                     "last", rs.getTimestamp(5) == null ? "" : rs.getTimestamp(5).toInstant().toString(),
-                    "display", rs.getString(6)) : null, wanted, chronicle);
+                    "display", rs.getString(6),
+                    "herd", rs.getInt(7)) : null, wanted, chronicle);
 
         if (ready == null) return new EncounterResult("FAILED", switch (wanted) {
             case "MILK" -> "You have nothing tamed here that gives milk — a goat or a cow must be won over first, and won over properly.";
@@ -777,9 +782,21 @@ public class WildlifeEncounterService {
         }
 
         String itemKey = (String) ready.get("item");
-        UUID id = items.createCarriedItem(chronicle, itemKey, (String) ready.get("display"), at, "TAKEN_FROM_TAMED_ANIMAL");
-        // Milk and eggs are perishable from the moment they are taken. A fleece is not food and is left untracked.
-        if (!"WOOL".equals(wanted)) food.registerFresh(id, at);
+        // The taking comes from the HERD, not from one animal (#52/#79). `wildlife_population.population_count`
+        // has always been in the schema and nothing about husbandry read it beyond `> 0`, so a keeper with twenty
+        // goats got exactly what a keeper with one got — which is the reason breeding stock could never be worth
+        // the fodder. A herd is the whole point of keeping animals.
+        //
+        // Capped, because this is one person's morning and not an abstraction: past a handful the milk in the
+        // pail is souring before the last animal is done, and the day is gone. The cap is what a person can work
+        // through, not what the herd holds.
+        int herd = Math.max(1, (Integer) ready.get("herd"));
+        int taken = Math.min(herd, MOST_A_PERSON_CAN_WORK_THROUGH);
+        for (int i = 0; i < taken; i++) {
+            UUID id = items.createCarriedItem(chronicle, itemKey, (String) ready.get("display"), at, "TAKEN_FROM_TAMED_ANIMAL");
+            // Milk and eggs are perishable from the moment they are taken. A fleece is not food and is untracked.
+            if (!"WOOL".equals(wanted)) food.registerFresh(id, at);
+        }
         // This product's own clock. Upserted rather than assumed present: the catalogue may have gained a row
         // since this animal was tamed, and a beast that was tamed before it gave milk still gives milk.
         jdbc.update(
@@ -791,10 +808,15 @@ public class WildlifeEncounterService {
         jdbc.update("UPDATE wildlife_bond SET last_yield_at=? WHERE id=?", Timestamp.from(at), ready.get("id"));
 
         String beast = display((String) ready.get("species"));
-        return new EncounterResult("SUCCEEDED", switch (wanted) {
+        if (taken == 1) return new EncounterResult("SUCCEEDED", switch (wanted) {
             case "MILK" -> "You settle beside the " + beast + ", work it patiently, and carry away what it gives.";
             case "WOOL" -> "You work the fleece off the " + beast + " in careful handfuls, leaving the animal lighter and unhurt.";
             default     -> "You go through the nests and gather what the fowl have laid, still warm.";
+        });
+        return new EncounterResult("SUCCEEDED", switch (wanted) {
+            case "MILK" -> "You work down the line of them, one after another, and carry away what " + taken + " have given.";
+            case "WOOL" -> "You work the fleece off " + taken + " of them in turn, and the pile of it grows beside you.";
+            default     -> "You go through the nests one by one and come away with what " + taken + " of them have laid.";
         });
     }
 
