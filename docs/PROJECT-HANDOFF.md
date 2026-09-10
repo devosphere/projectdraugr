@@ -244,7 +244,59 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 
 #### Resume point
 
-> **▶ LATEST (2026-09-08): #158 closed, #157/#159/#77 advanced — and the same defect found seven more times.**
+> **▶ LATEST (2026-09-09/10): eight slices merged — the declared-but-ignored defect found nine more times, and
+> husbandry given the one stage it never had.**
+>
+> **The shape is unchanged and still the richest seam in this codebase:** a capability is declared in the
+> catalogue and the code names literals instead, so the declaration does nothing.
+>
+> | was | now | what it cost |
+> |---|---|---|
+> | `restPennedDraftBeasts`' three literals | `construction_kind.shelters_stock` (V293) | a **cattle byre** was buildable in two stages from a VERIFIED assembly and **rested no ox** — likewise the goat fold, pig sty, poultry coop, timber barn |
+> | day encounter's two fence literals | `construction_kind.barrier_strength` (V293) | V281 had already made `is_barrier` what the **night** raid reads, so a dry stone wall turned a wolf aside at midnight and was **invisible at noon** |
+> | `takeTamedYield`'s species lists | `tamed_yield.yield_kind` (V294) | a **reindeer could not be milked** though the catalogue said so since V45; `kingdom_class='AVES'` made a **peregrine falcon poultry** |
+> | one `last_yield_at` per bond | `tamed_production` per product (V294) | **milking a goat made it unshearable** — one animal, one timer, two different jobs |
+> | DESIGNATE's six invented tags | `district_purpose.keywords` (V295) | `district_purpose` was **the only table in the schema no Java file named**; the two vocabularies shared **one word** |
+> | `safeWaterSource`'s unconditional river | refuse + `fouls_water` (V295) | a camp fouled to refuse 100 drew **risk-free water for ever** |
+> | `BackdropResolver` | served at `/v1/backdrop` (#561) | the resolver was **called by nothing but its own test** |
+> | the eligibility chain | served as `candidates` (#566) | built in #562 and **not put on the wire**, so no caller could degrade through it |
+> | `wildlife_population.population_count` | herd-scaled yields (V296) | read **only as `> 0`** — twenty goats gave exactly what one gave |
+>
+> **The ship test remains the filter:** *does anything change because this exists?* It is what rejected three more
+> fireplaces last cycle and what forced V296 to grow past breeding alone — a herd that grows is bookkeeping unless
+> the herd is worth having.
+>
+> **Delivered:** #108 (stock shelters + day/night barrier agreement, with a full mapping of its 40-odd named
+> structures to what exists); #52 (yield catalogue, per-product clocks, **breeding and young** — the one husbandry
+> stage the simulation lacked, which four of #108's structures were waiting on); #64 (one district vocabulary,
+> enforced, and a camp that can foul its own water); #30 (**~130 narration scenes** — 78 intents had none at all,
+> and `BUILD_*`/`CRAFT_*` were nearly absent); #234/#236 (backdrop endpoint + eligibility chain).
+>
+> **⚠ PROCESS — the three that cost real time this cycle, all of them about *verification*, not code:**
+> 1. **`PREPARE p(type)` HIDES THE DEFECT IT IS MEANT TO CATCH.** A declared parameter list types the parameter
+>    *for* you — and that declaration is exactly what JDBC does not supply. V296 passed `PREPARE p1(timestamptz)`
+>    and then failed **thirty-odd integration tests** with `operator does not exist: timestamp with time zone <=
+>    interval`, because a bare `?` beside `make_interval` resolves as an *interval*. **Use `PREPARE name AS` with
+>    no parameter list** — that reproduces the driver exactly. Any `?` in date arithmetic needs `?::timestamptz`.
+> 2. **Anything wired into `SimulationTickService.advance()` runs in every test that ticks the world.** One bad
+>    statement there fails the whole suite rather than one test. Treat it as the highest-risk place for new SQL.
+> 3. **`@Test` methods in one class share one Testcontainers database, and "shared" is wider than fixture rows.**
+>    Three separate failures from it: a species count another test had grown; **a structure a sibling test built
+>    on the same chunk**; and a population the **ecology simulation** grew during the tick that resolving an
+>    action runs. Scope every count, every teardown, and every aggregate to the thing under test — or call the
+>    service boundary directly and keep the tick out of it.
+>
+> **Honest tally on #567:** three CI rounds, and the production code was wrong in **one** of them. The other two
+> were assertions resting on state the test did not own. That is a pattern worth watching for, not bad luck.
+>
+> **Recommended next:** #108's remaining structures now have a mechanism to hang on (`farrowing_shelter`,
+> `brooder_shelter`, `foaling_stall`, `boar_isolation_pen` all wanted young, and young now exist). After that, the
+> honest gaps in husbandry are **animal health** (no disease/parasite state for `quarantine_pen` to act on) and
+> **riding** (draft haulage exists; being carried does not). `technique_definition` is the last substantial
+> declared-but-ignored table — 162 hand-written techniques whose `principle` a player can never see — but it wants
+> a design answer first, because the game has no model of what a Chronicle *knows*.
+>
+> **▶ PREVIOUS (2026-09-08): #158 closed, #157/#159/#77 advanced — and the same defect found seven more times.**
 >
 > **The shape, stated once:** a thing is declared in the catalogue and the code names literals instead, so the
 > declaration does nothing. Seven instances this cycle, each fixed by moving the list into data:
