@@ -406,14 +406,19 @@ public class PhysicalItemService {
         // 1. Conceive. One pregnancy per bond, so the primary key is the guard against a beast carrying twice.
         jdbc.update(
             "INSERT INTO tamed_gestation (bond_id, species_key, conceived_at, due_at) " +
-            "SELECT wb.id, wp.species_key, ?, ? + make_interval(hours => bp.gestation_hours) " +
+            // Every timestamp parameter in interval arithmetic is cast explicitly. A bare `?` beside
+            // make_interval gives the driver nothing to infer from, and Postgres resolves it as an interval —
+            // "operator does not exist: timestamp with time zone <= interval", at runtime, in every test that
+            // ticks the world. A PREPARE with a declared parameter type will not reproduce it, because the
+            // declaration is exactly the thing JDBC does not supply.
+            "SELECT wb.id, wp.species_key, ?::timestamptz, ?::timestamptz + make_interval(hours => bp.gestation_hours) " +
             "FROM wildlife_bond wb " +
             "JOIN wildlife_population wp ON wp.id = wb.population_id " +
             "JOIN breeding_profile bp ON bp.species_key = wp.species_key " +
             "JOIN world_object cw ON cw.id = wb.chronicle_id " +
             "WHERE wb.bond_stage = 'TAMED' " +
             "  AND wb.draft_hunger < ? AND wb.draft_thirst < ? AND wb.draft_fatigue < ? " +
-            "  AND (wb.last_birth_at IS NULL OR wb.last_birth_at <= ? - make_interval(hours => bp.recovery_hours)) " +
+            "  AND (wb.last_birth_at IS NULL OR wb.last_birth_at <= ?::timestamptz - make_interval(hours => bp.recovery_hours)) " +
             // Two of a kind, counted among this keeper's own tamed stock.
             "  AND (SELECT COUNT(*) FROM wildlife_bond o JOIN wildlife_population op ON op.id = o.population_id " +
             "        WHERE o.chronicle_id = wb.chronicle_id AND o.bond_stage = 'TAMED' AND op.species_key = wp.species_key) >= 2 " +
