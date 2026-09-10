@@ -364,6 +364,81 @@ class AHerdThatGrowsIntegrationTest {
     }
 
     /**
+     * Not all of them live, and what the keeper built decides how many (#108/#52).
+     *
+     * <p>Perinatal loss is the largest single loss in keeping stock — far larger than winter — and reducing it
+     * is precisely and only what a farrowing house, a brooder and a foaling box are for. Without it those three
+     * structures would have been a fourth name for a byre, which is the shape this catalogue has rejected before.
+     *
+     * <p>Three tiers, each a thing the keeper built: open ground takes the species' full loss, any roofed stock
+     * shelter halves it, and a purpose-built birthing house removes it.
+     *
+     * <p>The fixture pins the bond id and the hour of conception, because the roll is deterministic from exactly
+     * those two things. A randomly generated bond gives a correct but arbitrary outcome — this pregnancy is
+     * chosen so that all three tiers land on different numbers, which is the only way the assertion can fail
+     * when the tiers stop mattering.
+     */
+    @Test
+    void whatTheKeeperBuiltDecidesHowManyOfTheLitterLive() {
+        world();
+        UUID chronicle = livingChronicle();
+        UUID chunk = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+        UUID worldId = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, chunk);
+        Instant conceived = Instant.parse("2026-01-01T01:59:00Z");
+        Instant due = Instant.parse("2026-01-21T00:00:00Z");
+        Instant after = Instant.parse("2026-02-01T00:00:00Z");
+        UUID bond = UUID.fromString("88888888-0000-0000-0000-000000000001");
+
+        // A flock of fowl: the biggest clutches, so the tiers have room to differ.
+        UUID site = UUID.randomUUID(), pop = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE','Flock',?)", site, chunk);
+        jdbc.update("INSERT INTO ecology_site (id,world_id,chunk_id,site_category,site_kind,baseline_abundance) VALUES (?,?,?,'WILDLIFE','Flock',30)", site, worldId, chunk);
+        jdbc.update("INSERT INTO wildlife_population (id,site_id,species_key,ecological_role,activity_cycle,population_count,carrying_capacity,behavior_state,last_simulated_at) " +
+                "VALUES (?,?,'marsh_fowl','HERBIVORE','DIURNAL',2,20,'FORAGING',?)", pop, site, Timestamp.from(conceived));
+        jdbc.update("INSERT INTO wildlife_bond (id,chronicle_id,population_id,bond_stage,trust_level,interaction_count,last_interaction_at," +
+                "draft_hunger,draft_thirst,draft_fatigue) VALUES (?,?,?,'TAMED',95,12,?,0,0,0)", bond, chronicle, pop, Timestamp.from(conceived));
+
+        try {
+            int onOpenGround = born(bond, conceived, due, after, chunk, false, false);
+            int underARoof   = born(bond, conceived, due, after, chunk, true,  false);
+            int inABirthingHouse = born(bond, conceived, due, after, chunk, true, true);
+
+            assertTrue(onOpenGround < underARoof,
+                () -> "a roof over the stock must save some of what open ground takes (" + onOpenGround + " vs " + underARoof + ")");
+            assertTrue(underARoof < inABirthingHouse,
+                () -> "a birthing house must save what a mere roof does not, or it is a fourth name for a byre ("
+                      + underARoof + " vs " + inABirthingHouse + ")");
+            assertEquals(5, inABirthingHouse, "a birthing house loses none of the clutch");
+        } finally {
+            jdbc.update("DELETE FROM tamed_young"); jdbc.update("DELETE FROM tamed_gestation");
+            jdbc.update("UPDATE construction_project cp SET integrity_percent=100 FROM world_object w " +
+                        "WHERE w.id=cp.object_id AND w.current_location_id=?", chunk);
+        }
+
+        assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
+
+    /** Run one birth for this pregnancy with the given shelter standing, and report how many lived. */
+    private int born(UUID bond, Instant conceived, Instant due, Instant after, UUID chunk, boolean roof, boolean birthingHouse) {
+        jdbc.update("DELETE FROM tamed_young"); jdbc.update("DELETE FROM tamed_gestation");
+        // Every shelter on this ground comes down first, so each tier is built up from nothing rather than
+        // inheriting whatever a sibling test left standing.
+        jdbc.update("UPDATE construction_project cp SET integrity_percent=0 FROM world_object w " +
+                    "WHERE w.id=cp.object_id AND w.current_location_id=?", chunk);
+        if (roof) byre(chunk, conceived);
+        if (birthingHouse) {
+            UUID id = UUID.randomUUID();
+            jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'STRUCTURE','Brooder shelter',?)", id, chunk);
+            jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at,integrity_percent) " +
+                        "VALUES (?,'BROODER_SHELTER','COMPLETED',100,?,100)", id, Timestamp.from(conceived));
+        }
+        jdbc.update("INSERT INTO tamed_gestation (bond_id,species_key,conceived_at,due_at) VALUES (?,'marsh_fowl',?,?)",
+            bond, Timestamp.from(conceived), Timestamp.from(due));
+        items.advanceBreeding(after);
+        return count("tamed_young", "WHERE bond_id=?", bond);
+    }
+
+    /**
      * The catalogue must be able to grow a herd at all, and the litter it declares must be the litter that is
      * born — a bound that holds for every species rather than the one the lifecycle test happened to use.
      */
