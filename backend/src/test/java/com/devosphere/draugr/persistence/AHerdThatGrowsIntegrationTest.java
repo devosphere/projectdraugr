@@ -135,7 +135,15 @@ class AHerdThatGrowsIntegrationTest {
         jdbc.update("DELETE FROM tamed_young");
         jdbc.update("DELETE FROM tamed_gestation");
 
+        // A byre to keep them in, and a foaling stall so that NONE of the litter is lost at birth (V298). This
+        // test is about the lifecycle — carried, born, grown — and the birth losses are an unrelated variable
+        // that would make its arithmetic depend on a roll. Removing them here keeps the counts below exact and
+        // leaves the losses to be asserted where the three shelter tiers are.
         byre(chunk, t0);
+        UUID stall = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'STRUCTURE','Foaling stall',?)", stall, chunk);
+        jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at,integrity_percent) " +
+                    "VALUES (?,'FOALING_STALL','COMPLETED',100,?,100)", stall, Timestamp.from(t0));
         UUID first = tame(chronicle, chunk, "mountain_goat", t0);
         tame(chronicle, chunk, "mountain_goat", t0);
 
