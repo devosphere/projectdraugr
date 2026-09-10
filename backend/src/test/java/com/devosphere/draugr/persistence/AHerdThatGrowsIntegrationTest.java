@@ -114,6 +114,15 @@ class AHerdThatGrowsIntegrationTest {
         return summary.id();
     }
 
+    /** Upsert, because a freshly generated world carries no weather row until a tick makes one. */
+    private void setWeather(UUID worldId, double tempC, String kind, Instant at) {
+        jdbc.update("INSERT INTO world_weather (world_id, weather_kind, intensity, ambient_temperature_c, wind_speed_kph, observed_at) " +
+                    "VALUES (?,?,?,?,?,?) ON CONFLICT (world_id) DO UPDATE SET " +
+                    "  weather_kind=EXCLUDED.weather_kind, ambient_temperature_c=EXCLUDED.ambient_temperature_c, " +
+                    "  observed_at=EXCLUDED.observed_at",
+            worldId, kind, 3, tempC, 12, Timestamp.from(at));
+    }
+
     @Test
     void keptStockGetInCalfCarryToTermAndTheYoungGrowIntoStock() {
         world();
@@ -293,13 +302,16 @@ class AHerdThatGrowsIntegrationTest {
         jdbc.update("DELETE FROM tamed_young");
         jdbc.update("DELETE FROM tamed_gestation");
 
-        // The weather is world-wide state the other tests share, so it is put back at the end.
-        Double wasTemp = jdbc.queryForObject("SELECT ambient_temperature_c FROM world_weather WHERE world_id=?", Double.class, worldId);
+        // The weather is world-wide state the other tests share, so it is put back at the end. Read tolerantly
+        // and written as an upsert: a freshly generated world has no weather row until a tick makes one, so
+        // queryForObject would throw and a bare UPDATE would silently change nothing and never bring the cold.
+        Double wasTemp = jdbc.query("SELECT ambient_temperature_c FROM world_weather WHERE world_id=?",
+            rs -> rs.next() ? rs.getDouble(1) : null, worldId);
         try {
             UUID bond = tame(chronicle, chunk, "mountain_goat", winter);
             jdbc.update("INSERT INTO tamed_young (bond_id, species_key, born_at, matures_at) VALUES (?,?,?,?)",
                 bond, "mountain_goat", Timestamp.from(winter), Timestamp.from(winter.plus(Duration.ofDays(300))));
-            jdbc.update("UPDATE world_weather SET ambient_temperature_c=-8.0, weather_kind='SNOW' WHERE world_id=?", worldId);
+            setWeather(worldId, -8.0, "SNOW", winter);
 
             // A roofed byre stands: the frost does not reach them, and no clock starts.
             byre(chunk, winter);
@@ -322,7 +334,7 @@ class AHerdThatGrowsIntegrationTest {
             assertEquals(1, count("tamed_young", ""), "two days of hard cold does not take a kid");
 
             // The thaw breaks the spell outright — three days either side of a warm week is not three days.
-            jdbc.update("UPDATE world_weather SET ambient_temperature_c=6.0, weather_kind='CLEAR' WHERE world_id=?", worldId);
+            setWeather(worldId, 6.0, "CLEAR", winter);
             items.exposeYoungToTheCold(winter.plus(Duration.ofHours(60)));
             assertEquals(0, count("tamed_young", "WHERE cold_since IS NOT NULL"),
                 "the thaw ends the spell; what follows is a new one");
@@ -331,14 +343,16 @@ class AHerdThatGrowsIntegrationTest {
                 "a kid that came through the frost is not killed retroactively by how long ago it started");
 
             // Back into the cold, and this time it runs its course.
-            jdbc.update("UPDATE world_weather SET ambient_temperature_c=-8.0, weather_kind='SNOW' WHERE world_id=?", worldId);
+            setWeather(worldId, -8.0, "SNOW", winter);
             Instant relapse = winter.plus(Duration.ofHours(300));
             items.exposeYoungToTheCold(relapse);
             items.exposeYoungToTheCold(relapse.plus(Duration.ofHours(96)));
             assertEquals(0, count("tamed_young", ""), "four days with no roof takes them");
         } finally {
-            jdbc.update("UPDATE world_weather SET ambient_temperature_c=? WHERE world_id=?",
-                wasTemp == null ? 12.0 : wasTemp, worldId);
+            // Put the sky back exactly as it was found — including having had no row at all, which is what a
+            // freshly generated world looks like before its first tick.
+            if (wasTemp == null) jdbc.update("DELETE FROM world_weather WHERE world_id=?", worldId);
+            else jdbc.update("UPDATE world_weather SET ambient_temperature_c=? WHERE world_id=?", wasTemp, worldId);
             // The restore mirrors the teardown — a completed build left at zero integrity is world corruption.
             jdbc.update("UPDATE construction_project cp SET integrity_percent=100 FROM world_object w " +
                         "WHERE w.id=cp.object_id AND w.current_location_id=? " +
