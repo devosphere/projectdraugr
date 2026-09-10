@@ -114,6 +114,15 @@ class AHerdThatGrowsIntegrationTest {
         return summary.id();
     }
 
+    /** Upsert, because a freshly generated world carries no weather row until a tick makes one. */
+    private void setWeather(UUID worldId, double tempC, String kind, Instant at) {
+        jdbc.update("INSERT INTO world_weather (world_id, weather_kind, intensity, ambient_temperature_c, wind_speed_kph, observed_at) " +
+                    "VALUES (?,?,?,?,?,?) ON CONFLICT (world_id) DO UPDATE SET " +
+                    "  weather_kind=EXCLUDED.weather_kind, ambient_temperature_c=EXCLUDED.ambient_temperature_c, " +
+                    "  observed_at=EXCLUDED.observed_at",
+            worldId, kind, 3, tempC, 12, Timestamp.from(at));
+    }
+
     @Test
     void keptStockGetInCalfCarryToTermAndTheYoungGrowIntoStock() {
         world();
@@ -270,6 +279,86 @@ class AHerdThatGrowsIntegrationTest {
         assertEquals("SUCCEEDED", big.outcome(), () -> big.narration());
         assertEquals(beforeBig + 6, count("item_instance", "WHERE item_key='goat_milk'"),
             () -> "past a handful the milk sours in the pail and the day is gone: " + big.narration());
+
+        assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
+
+    /**
+     * A hard winter takes the young, and a roof is what stands between (#52/#108).
+     *
+     * <p>V296 gave the world young animals that nothing could interrupt: a kid born into a January night on open
+     * ground reached maturity as reliably as one born in a byre in May. What decides it was already in the
+     * catalogue — {@code encloses} has meant "out of the weather" since V280, and the stock shelters split
+     * cleanly into buildings (byre, coop, barn) and fences (pen, fold, sty). Until now those were identical to a
+     * keeper. This is the first thing that tells them apart.
+     */
+    @Test
+    void aHardWinterTakesTheYoungAndARoofIsWhatStandsBetween() {
+        world();
+        UUID chronicle = livingChronicle();
+        UUID chunk = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+        UUID worldId = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, chunk);
+        Instant winter = Instant.parse("2026-01-15T00:00:00Z");
+        jdbc.update("DELETE FROM tamed_young");
+        jdbc.update("DELETE FROM tamed_gestation");
+
+        // The weather is world-wide state the other tests share, so it is put back at the end. Read tolerantly
+        // and written as an upsert: a freshly generated world has no weather row until a tick makes one, so
+        // queryForObject would throw and a bare UPDATE would silently change nothing and never bring the cold.
+        Double wasTemp = jdbc.query("SELECT ambient_temperature_c FROM world_weather WHERE world_id=?",
+            rs -> rs.next() ? rs.getDouble(1) : null, worldId);
+        try {
+            UUID bond = tame(chronicle, chunk, "mountain_goat", winter);
+            jdbc.update("INSERT INTO tamed_young (bond_id, species_key, born_at, matures_at) VALUES (?,?,?,?)",
+                bond, "mountain_goat", Timestamp.from(winter), Timestamp.from(winter.plus(Duration.ofDays(300))));
+            setWeather(worldId, -8.0, "SNOW", winter);
+
+            // A roofed byre stands: the frost does not reach them, and no clock starts.
+            byre(chunk, winter);
+            items.exposeYoungToTheCold(winter);
+            assertEquals(0, count("tamed_young", "WHERE cold_since IS NOT NULL"),
+                "a byre keeps the weather off what is in it, so no spell begins");
+            assertEquals(1, count("tamed_young", ""), "and nothing is lost");
+
+            // Bring every roof on this ground down — a fence is not a roof.
+            jdbc.update("UPDATE construction_project cp SET integrity_percent=0 FROM world_object w " +
+                        "WHERE w.id=cp.object_id AND w.current_location_id=? " +
+                        "  AND EXISTS (SELECT 1 FROM construction_kind ck WHERE ck.project_kind=cp.project_kind " +
+                        "              AND ck.shelters_stock AND ck.encloses)", chunk);
+            items.exposeYoungToTheCold(winter);
+            assertEquals(1, count("tamed_young", "WHERE cold_since IS NOT NULL"),
+                "with nothing over them in a hard frost, the spell begins");
+
+            // Two days of it is survivable. Three is the deadline, and it is a deadline rather than a dice game.
+            items.exposeYoungToTheCold(winter.plus(Duration.ofHours(48)));
+            assertEquals(1, count("tamed_young", ""), "two days of hard cold does not take a kid");
+
+            // The thaw breaks the spell outright — three days either side of a warm week is not three days.
+            setWeather(worldId, 6.0, "CLEAR", winter);
+            items.exposeYoungToTheCold(winter.plus(Duration.ofHours(60)));
+            assertEquals(0, count("tamed_young", "WHERE cold_since IS NOT NULL"),
+                "the thaw ends the spell; what follows is a new one");
+            items.exposeYoungToTheCold(winter.plus(Duration.ofHours(200)));
+            assertEquals(1, count("tamed_young", ""),
+                "a kid that came through the frost is not killed retroactively by how long ago it started");
+
+            // Back into the cold, and this time it runs its course.
+            setWeather(worldId, -8.0, "SNOW", winter);
+            Instant relapse = winter.plus(Duration.ofHours(300));
+            items.exposeYoungToTheCold(relapse);
+            items.exposeYoungToTheCold(relapse.plus(Duration.ofHours(96)));
+            assertEquals(0, count("tamed_young", ""), "four days with no roof takes them");
+        } finally {
+            // Put the sky back exactly as it was found — including having had no row at all, which is what a
+            // freshly generated world looks like before its first tick.
+            if (wasTemp == null) jdbc.update("DELETE FROM world_weather WHERE world_id=?", worldId);
+            else jdbc.update("UPDATE world_weather SET ambient_temperature_c=? WHERE world_id=?", wasTemp, worldId);
+            // The restore mirrors the teardown — a completed build left at zero integrity is world corruption.
+            jdbc.update("UPDATE construction_project cp SET integrity_percent=100 FROM world_object w " +
+                        "WHERE w.id=cp.object_id AND w.current_location_id=? " +
+                        "  AND EXISTS (SELECT 1 FROM construction_kind ck WHERE ck.project_kind=cp.project_kind " +
+                        "              AND ck.shelters_stock)", chunk);
+        }
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }

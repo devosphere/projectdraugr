@@ -468,6 +468,61 @@ public class PhysicalItemService {
         jdbc.update("DELETE FROM tamed_young WHERE matures_at <= ?", ts);
     }
 
+    /** Hard cold: at or below freezing, where a young animal without a roof cannot keep its own heat. */
+    private static final double HARD_COLD_C = 0.0;
+    /** Three days of unbroken hard cold with nothing over them takes the young (#52/#108). */
+    private static final int COLD_HOURS_THAT_KILL = 72;
+
+    /**
+     * A hard winter takes the young (#52/#108).
+     *
+     * <p>V296 gave the world young animals and nothing could interrupt them: a kid born into a January night on
+     * open ground reached maturity as reliably as one born in a byre in May. The young were a timer rather than
+     * something a keeper keeps alive — which is also why #108's farrowing and brooder shelters could not honestly
+     * be built, since a structure that reduces losses is meaningless while there are no losses.
+     *
+     * <p><b>What decides it was already in the catalogue.</b> {@code construction_kind.encloses} has meant "can a
+     * Chronicle be inside this, out of the weather" since V280, and the stock shelters split cleanly along it: a
+     * byre, a coop and a barn are buildings; a pen, a fold and a sty are fences. Until now those two kinds were
+     * identical to a keeper — both rested a beast, both stood in a wolf's way — and the difference between walls
+     * and hurdles meant nothing. It means this.
+     *
+     * <p><b>The shape of the loss is a deadline, not a dice game.</b> {@code cold_since} marks when an unbroken
+     * hard spell began and is cleared the moment the animal is sheltered or the weather turns, so a keeper who
+     * sees the frost coming and raises a byre saves them, and a keeper away for a week does not. Set-based over
+     * the whole world; runs in the tick, after birth so a newborn is not judged before it exists.
+     */
+    @Transactional
+    public void exposeYoungToTheCold(Instant now) {
+        java.sql.Timestamp ts = java.sql.Timestamp.from(now);
+
+        // Exposed: hard cold on the keeper's ground, and nothing roofed standing over the stock. The clock starts
+        // once and is not restarted while the spell holds, which is what makes it a spell.
+        String exposed =
+            "SELECT ty.id FROM tamed_young ty " +
+            "JOIN wildlife_bond wb ON wb.id = ty.bond_id " +
+            "JOIN world_object cw ON cw.id = wb.chronicle_id " +
+            "JOIN world_chunk ch ON ch.id = cw.current_location_id " +
+            "JOIN world_weather ww ON ww.world_id = ch.world_id " +
+            "WHERE ww.ambient_temperature_c <= ? " +
+            "  AND NOT EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
+            "                  JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
+            "                  WHERE ck.shelters_stock AND ck.encloses AND cp.state = 'COMPLETED' " +
+            "                    AND cp.integrity_percent > 0 AND sw.lifecycle_state = 'ACTIVE' " +
+            "                    AND sw.current_location_id = ch.id)";
+
+        jdbc.update("UPDATE tamed_young SET cold_since = ?::timestamptz " +
+                    "WHERE cold_since IS NULL AND id IN (" + exposed + ")", ts, HARD_COLD_C);
+
+        // Sheltered again, or the thaw came. Either breaks the spell outright — three days of cold either side of
+        // a warm week is not three days of cold.
+        jdbc.update("UPDATE tamed_young SET cold_since = NULL " +
+                    "WHERE cold_since IS NOT NULL AND id NOT IN (" + exposed + ")", HARD_COLD_C);
+
+        jdbc.update("DELETE FROM tamed_young WHERE cold_since IS NOT NULL " +
+                    "AND cold_since <= ?::timestamptz - make_interval(hours => ?)", ts, COLD_HOURS_THAT_KILL);
+    }
+
     /** How many young this Chronicle is raising, and of what — for perception, not for working with. */
     @Transactional(readOnly = true)
     public int youngInCare(UUID chronicle) {
