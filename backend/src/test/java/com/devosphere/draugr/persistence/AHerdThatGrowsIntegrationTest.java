@@ -1,8 +1,8 @@
 package com.devosphere.draugr.persistence;
 
-import com.devosphere.draugr.action.ChronicleActionService;
 import com.devosphere.draugr.audit.PersistentStateAuditor;
 import com.devosphere.draugr.chronicle.ChronicleService;
+import com.devosphere.draugr.ecology.WildlifeEncounterService;
 import com.devosphere.draugr.item.PhysicalItemService;
 import com.devosphere.draugr.world.genesis.WorldEcologyGenesisService;
 import com.devosphere.draugr.world.genesis.WorldGenesisService;
@@ -66,8 +66,8 @@ class AHerdThatGrowsIntegrationTest {
     @Autowired WorldGenesisService worldGenesis;
     @Autowired WorldEcologyGenesisService ecology;
     @Autowired ChronicleService chronicles;
-    @Autowired ChronicleActionService actions;
     @Autowired PhysicalItemService items;
+    @Autowired WildlifeEncounterService wildlife;
     @Autowired PersistentStateAuditor auditor;
     @Autowired JdbcTemplate jdbc;
 
@@ -168,7 +168,7 @@ class AHerdThatGrowsIntegrationTest {
             "WHERE wb.chronicle_id=? AND wp.species_key='mountain_goat'", Integer.class, chronicle);
         assertEquals(herdBefore + young, herdAfter,
             "every kid raised to maturity must join the herd — that is what makes it larger");
-        assertEquals(0, count("wildlife_population", "WHERE population_count > carrying_capacity"),
+        assertEquals(0, count("wildlife_population", "WHERE species_key='mountain_goat' AND population_count > carrying_capacity"),
             "a herd a keeper deliberately built must not be capped at the wild number");
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
@@ -199,9 +199,13 @@ class AHerdThatGrowsIntegrationTest {
         items.advanceBreeding(t0);
         assertEquals(2, count("tamed_gestation", "WHERE species_key='reindeer'"), "a pair in a byre gets in calf");
 
-        // Take the byre away: stock on open ground do not settle to breed.
+        // Take the byre away: stock on open ground do not settle to breed. EVERY stock shelter on this ground has
+        // to come down, not only the one this test raised — the sibling test builds its own byre on the same
+        // chunk, and ruining just this one left that one standing and the herd still sheltered.
         jdbc.update("DELETE FROM tamed_gestation"); jdbc.update("DELETE FROM tamed_young");
-        jdbc.update("UPDATE construction_project SET integrity_percent=0 WHERE object_id=?", shelter);
+        jdbc.update("UPDATE construction_project cp SET integrity_percent=0 FROM world_object w " +
+                    "WHERE w.id=cp.object_id AND w.current_location_id=? " +
+                    "  AND EXISTS (SELECT 1 FROM construction_kind ck WHERE ck.project_kind=cp.project_kind AND ck.shelters_stock)", chunk);
         items.advanceBreeding(t0);
         assertEquals(0, count("tamed_gestation", "WHERE species_key='reindeer'"),
             "a byre fallen to ruin shelters nothing, and stock on open ground do not settle to breed");
@@ -240,23 +244,28 @@ class AHerdThatGrowsIntegrationTest {
         UUID pop = jdbc.queryForObject("SELECT population_id FROM wildlife_bond WHERE id=?", UUID.class, bond);
         // Silence every other milk animal in the shared database so the count below is this herd's alone.
         jdbc.update("UPDATE wildlife_bond SET bond_stage='BONDED' WHERE chronicle_id=? AND id<>?", chronicle, bond);
-        jdbc.update("UPDATE wildlife_population SET population_count=4, carrying_capacity=40 WHERE id=?", pop);
+        // Carrying capacity stays where the fixture put it. An earlier draft raised it to 40 to leave room for the
+        // herd, and the ECOLOGY simulation promptly grew the population toward it during the tick that resolving
+        // an action runs — so four goats had become six by the time they were milked. Not a bug; the simulation
+        // doing its job. This calls the husbandry boundary directly rather than through an action, so the count
+        // under test is the one the test set. The action route is covered by TamedAnimalYieldIntegrationTest.
+        jdbc.update("UPDATE wildlife_population SET population_count=4 WHERE id=?", pop);
 
         int before = count("item_instance", "WHERE item_key='goat_milk'");
-        var milked = actions.resolve("milk the goats");
-        assertEquals("SUCCEEDED", milked.outcome(), () -> "a herd in milk must give: " + milked.perception());
+        var milked = wildlife.takeTamedYield(chronicle, t0, "milk the goats");
+        assertEquals("SUCCEEDED", milked.outcome(), () -> "a herd in milk must give: " + milked.narration());
         assertEquals(before + 4, count("item_instance", "WHERE item_key='goat_milk'"),
-            () -> "four goats must give four milkings, not one: " + milked.perception());
+            () -> "four goats must give four milkings, not one: " + milked.narration());
 
         // And a herd larger than one person can work through in a morning is capped at what they can do.
         jdbc.update("DELETE FROM tamed_production");
         jdbc.update("UPDATE wildlife_bond SET last_yield_at=NULL WHERE id=?", bond);
-        jdbc.update("UPDATE wildlife_population SET population_count=20 WHERE id=?", pop);
+        jdbc.update("UPDATE wildlife_population SET population_count=20, carrying_capacity=20 WHERE id=?", pop);
         int beforeBig = count("item_instance", "WHERE item_key='goat_milk'");
-        var big = actions.resolve("milk the goats");
-        assertEquals("SUCCEEDED", big.outcome(), () -> big.perception());
+        var big = wildlife.takeTamedYield(chronicle, t0, "milk the goats");
+        assertEquals("SUCCEEDED", big.outcome(), () -> big.narration());
         assertEquals(beforeBig + 6, count("item_instance", "WHERE item_key='goat_milk'"),
-            () -> "past a handful the milk sours in the pail and the day is gone: " + big.perception());
+            () -> "past a handful the milk sours in the pail and the day is gone: " + big.narration());
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
