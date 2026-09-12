@@ -706,6 +706,9 @@ public class WildlifeEncounterService {
         return (String) herd.get("species");
     }
 
+    /** What a bad-tempered beast does to a keeper who works on it with nothing holding it still. */
+    private static final int HANDLING_INJURY = 12;
+
     /** How many animals one person gets through in a single taking, however large the herd. */
     private static final int MOST_A_PERSON_CAN_WORK_THROUGH = 6;
 
@@ -784,6 +787,27 @@ public class WildlifeEncounterService {
                 : "The nests are empty. What was laid has been gathered already, and there will be no more until they have had time.");
         }
 
+        // An animal that will hurt you (#106/V302). Every tamed animal used to behave identically — a milk goat
+        // and a full-grown ox were the same creature to handle. A DANGEROUS beast is not, and getting in close to
+        // milk or shear one is exactly when that matters. A milking stanchion holds it still and the work is
+        // safe; without one the keeper is taking a chance with something that weighs six times what they do.
+        String handled = (String) ready.get("species");
+        boolean dangerous = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM wildlife_species WHERE species_key=? AND temperament='DANGEROUS')",
+            Boolean.class, handled));
+        boolean restrained = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "JOIN world_object keeper ON keeper.id=? " +
+            "JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
+            "WHERE ck.holds_an_animal_still AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
+            "  AND w.lifecycle_state='ACTIVE' AND w.current_location_id=keeper.current_location_id)",
+            Boolean.class, chronicle));
+        String hurt = "";
+        if (dangerous && !restrained) {
+            physiology.applyInjury(chronicle, HANDLING_INJURY, null, at, "handling a " + display(handled));
+            hurt = " It shifts its weight against you without warning, and you come away with something wrenched.";
+        }
+
         String itemKey = (String) ready.get("item");
         // The taking comes from the HERD, not from one animal (#52/#79). `wildlife_population.population_count`
         // has always been in the schema and nothing about husbandry read it beyond `> 0`, so a keeper with twenty
@@ -811,16 +835,16 @@ public class WildlifeEncounterService {
         jdbc.update("UPDATE wildlife_bond SET last_yield_at=? WHERE id=?", Timestamp.from(at), ready.get("id"));
 
         String beast = display((String) ready.get("species"));
-        if (taken == 1) return new EncounterResult("SUCCEEDED", switch (wanted) {
+        if (taken == 1) return new EncounterResult("SUCCEEDED", (switch (wanted) {
             case "MILK" -> "You settle beside the " + beast + ", work it patiently, and carry away what it gives.";
             case "WOOL" -> "You work the fleece off the " + beast + " in careful handfuls, leaving the animal lighter and unhurt.";
             default     -> "You go through the nests and gather what the fowl have laid, still warm.";
-        });
-        return new EncounterResult("SUCCEEDED", switch (wanted) {
+        }) + hurt);
+        return new EncounterResult("SUCCEEDED", (switch (wanted) {
             case "MILK" -> "You work down the line of them, one after another, and carry away what " + taken + " have given.";
             case "WOOL" -> "You work the fleece off " + taken + " of them in turn, and the pile of it grows beside you.";
             default     -> "You go through the nests one by one and come away with what " + taken + " of them have laid.";
-        });
+        }) + hurt);
     }
 
     /**
