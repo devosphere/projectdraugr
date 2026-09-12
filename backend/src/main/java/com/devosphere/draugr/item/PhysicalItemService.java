@@ -2288,16 +2288,46 @@ public class PhysicalItemService {
             affinity.add("%" + deposit + "%");
         }
         String affinityOr = affinity.stream().map(a -> "biome_affinity ILIKE ?").collect(java.util.stream.Collectors.joining(" OR "));
+
+        // #160 geology: a broad biome label is not a deposit. A mineral with a province in mineral_province is
+        // found ONLY on a chunk carrying its own site, on top of its affinity — both conditions, so a province
+        // narrows and never widens. A mineral with no province is gated by affinity alone exactly as before,
+        // which is what keeps flint, stone, clay, sand, iron and copper working as they always have.
+        java.util.List<Object> args = new java.util.ArrayList<>(affinity);
+        args.add(location);
         java.util.List<java.util.Map<String,Object>> here = jdbc.queryForList(
-            "SELECT mineral_key, display_name, rarity, tool_required, yield_min, yield_max FROM mineral_definition " +
-            "WHERE " + affinityOr + " ORDER BY rarity DESC", affinity.toArray());
-        if (here.isEmpty())
-            return new String[]{"FAILED", "You turn over what stone there is. This ground has nothing in it but dirt."};
+            "SELECT mineral_key, display_name, rarity, tool_required, yield_min, yield_max FROM mineral_definition md " +
+            "WHERE (" + affinityOr + ") AND (" +
+            "  NOT EXISTS (SELECT 1 FROM mineral_province p WHERE p.mineral_key = md.mineral_key) " +
+            "  OR EXISTS (SELECT 1 FROM mineral_province p JOIN ecology_site s ON s.site_kind = p.site_kind " +
+            "              WHERE p.mineral_key = md.mineral_key AND s.chunk_id = ?)) " +
+            "ORDER BY rarity DESC", args.toArray());
 
         java.util.Map<String,Object> target = here.stream()
             .filter(m -> com.devosphere.draugr.narration.Words.names(v, (String)m.get("mineral_key"))
                 || com.devosphere.draugr.narration.Words.word(v, ((String)m.get("display_name")).toLowerCase()))
             .findFirst().orElse(null);
+
+        // Asking by name for something whose province is elsewhere must say so. A gate that answers "nothing but
+        // dirt" teaches the player that the mineral does not exist; one that names the ground it belongs to
+        // teaches them what to look for, which is the whole value of binding a mineral to its geology.
+        if (target == null) {
+            for (java.util.Map<String,Object> m : jdbc.queryForList(
+                    "SELECT DISTINCT md.mineral_key, md.display_name, p.site_kind FROM mineral_definition md " +
+                    "JOIN mineral_province p ON p.mineral_key = md.mineral_key " +
+                    "WHERE NOT EXISTS (SELECT 1 FROM ecology_site s WHERE s.chunk_id=? AND s.site_kind=p.site_kind)", location)) {
+                String askedKey = (String) m.get("mineral_key"), askedName = (String) m.get("display_name");
+                if (!com.devosphere.draugr.narration.Words.names(v, askedKey)
+                    && !com.devosphere.draugr.narration.Words.word(v, askedName.toLowerCase(java.util.Locale.ROOT))) continue;
+                return new String[]{"FAILED", "You work over the ground looking for " + askedName.toLowerCase(java.util.Locale.ROOT)
+                    + ". It does not come out of country like this — it comes from a " + ((String) m.get("site_kind")).toLowerCase(java.util.Locale.ROOT)
+                    + ", and there is none here."};
+            }
+        }
+
+        if (here.isEmpty())
+            return new String[]{"FAILED", "You turn over what stone there is. This ground has nothing in it but dirt."};
+
         boolean named = target != null;
         if (target == null) target = here.get(0);
 
