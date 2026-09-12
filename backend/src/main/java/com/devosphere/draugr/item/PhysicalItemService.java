@@ -337,9 +337,44 @@ public class PhysicalItemService {
             "     OR EXISTS(SELECT 1 FROM construction_project cp JOIN world_object tw ON tw.id=cp.object_id " +
             "               WHERE cp.project_kind IN ('WATERING_STATION','RAINWATER_CATCHMENT') AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
             "                 AND tw.lifecycle_state='ACTIVE' AND tw.current_location_id=ch.id))) " +
-            "  THEN GREATEST(0, draft_thirst - ?) ELSE LEAST(100, draft_thirst + ?) END " +
+            "  THEN GREATEST(0, draft_thirst - ?) ELSE LEAST(100, draft_thirst + ? + " + heatOnStock() + ") END " +
             "WHERE wb.bond_stage='TAMED' AND EXISTS (SELECT 1 FROM wildlife_population wp JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wp.id=wb.population_id)",
             DRAFT_WATER_RELIEF, DRAFT_THIRST_PER_TURN);
+    }
+
+    /** Above this, the day is hot enough that stock are working to shed heat rather than just standing in it. */
+    private static final int HOT_ENOUGH_TO_TELL_C = 26;
+    /** What a hot day adds to a beast's thirst, on top of the ordinary turn. */
+    private static final int HEAT_THIRST = 5;
+
+    /**
+     * What the heat adds to a beast's thirst (#108/V303) — a SQL fragment, because it belongs inside the single
+     * set-based thirst statement rather than in a second pass over the same rows.
+     *
+     * <p>Thirst has risen by a flat amount in every weather there is since V267: a buffalo in a July heatwave
+     * dried out at exactly the same rate as a reindeer in a cold drizzle. Weather is the one thing that decides
+     * how much water an animal needs, and it was the one thing the rule did not look at. That is also why #108's
+     * shade shelter and wallows were blocked — both are answers to heat, and there was no heat.
+     *
+     * <p><b>Two answers, and they are not interchangeable.</b> Most stock shed heat by sweating and panting and
+     * want <em>shade</em>; a keeper with a byre has already solved it. <b>Pigs and buffalo cannot sweat</b> —
+     * that is not a flourish, it is why both species wallow — so shade does nothing for them and only a
+     * <em>wallow</em> will do. {@code needs_a_wallow} says which is which.
+     */
+    private static String heatOnStock() {
+        return "(CASE WHEN EXISTS (" +
+            "  SELECT 1 FROM world_object cw2 JOIN world_chunk ch2 ON ch2.id=cw2.current_location_id " +
+            "  JOIN world_weather ww ON ww.world_id=ch2.world_id " +
+            "  WHERE cw2.id=wb.chronicle_id AND ww.ambient_temperature_c >= " + HOT_ENOUGH_TO_TELL_C +
+            // Relief from the heat, and which relief depends on the animal rather than on what is cheapest to build.
+            "    AND NOT EXISTS (SELECT 1 FROM construction_project cp2 JOIN world_object sw2 ON sw2.id=cp2.object_id " +
+            "                    JOIN construction_kind ck2 ON ck2.project_kind=cp2.project_kind " +
+            "                    JOIN wildlife_population wp2 ON wp2.id=wb.population_id " +
+            "                    JOIN wildlife_species ws2 ON ws2.species_key=wp2.species_key " +
+            "                    WHERE cp2.state='COMPLETED' AND cp2.integrity_percent>0 AND sw2.lifecycle_state='ACTIVE' " +
+            "                      AND sw2.current_location_id=ch2.id " +
+            "                      AND (CASE WHEN ws2.needs_a_wallow THEN ck2.is_wallow ELSE ck2.gives_shade END))" +
+            ") THEN " + HEAT_THIRST + " ELSE 0 END)";
     }
 
     private static final int LIVESTOCK_FOULING_PER_TURN = 4; // kept stock foul the ground they stand on
