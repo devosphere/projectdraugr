@@ -244,7 +244,61 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 
 #### Resume point
 
-> **▶ LATEST (2026-09-12): husbandry finished as a loop — #108 is out of work it can do, and every structure it
+> **▶ LATEST (2026-09-12): the two systems husbandry was waiting on got built, and the biggest
+> declared-in-code seam yet — what every action does to the world — moved into data behind a gate.**
+>
+> | slice | what it made possible |
+> |---|---|
+> | **V303** stock in the heat | Grown animals feel heat above 26°C. The cold rule (V297) was about *young*, so a full-grown beast could stand in any weather indefinitely. Gives the **shade shelter** and the **mud wallow** each a job the other cannot do — a wallow does nothing for a goat, and shade does not replace a wallow for a pig. |
+> | **V304** a bull among the young | **Temperament.** Every tamed animal behaved identically once TAMED, which is why `boar_isolation_pen` had nothing to isolate. |
+> | **V305** fire clay and a lined furnace | A *better* smelt rather than a replaced one: `station_kind` is single-key equality, so a lined furnace cannot satisfy the processes naming the plain one — it enables a **new** process instead. Nothing existing changes. Also moved the `GATHER_MINERAL` mineral list out of Java literals, which made **limestone** diggable by name for the first time. |
+> | **V306** minerals bound to their geology | `mineral_province`: obsidian comes off a volcanic field, not off any mountain. Nine new marker sites, and `ecology.reconcile()` so the **pinned world receives them without being regenerated**. |
+> | **V307** an impact card for every procedure | What an act does to the land was decided in **four** places in Java covering **seven** procedures; the other **121 left nothing and none of them had ever said so**. One table, one reader, and a gate that makes a card mandatory. |
+> | **V308** something to hold a beast with | A `leg_hobble` for a keeper with a dangerous animal and no stanchion for a mile. Carried restraint **reduces** the injury and never removes it, or the stanchion is a building nobody would raise. |
+> | **V309** the card carries the cost | `laborOf` and `capabilityDomainOf` join the footprint on the same row. |
+>
+> **PUTTING THE THREE LISTS ON ONE ROW MADE A QUESTION ASKABLE THAT HAD NEVER BEEN ASKED:** does anything mark
+> the land while costing the body nothing? Two did. `AGGRESSION_WILDLIFE` is correct (a fight runs its own
+> physiology). **`COPPICE` was a defect** — in none of `laborOf`'s three tiers, so cutting a stool back with an
+> axe took the canopy down and tired nobody. Nothing could have seen it while the footprint and the labour lived
+> in different switches in different parts of the same file.
+>
+> **⚠ THE EXPENSIVE LESSON OF THIS CYCLE — one catalogue row failed 301 of 679 tests.**
+> `make_lined_bloomery_furnace` is 96kg of standing shaft out of 15kg of carried clay and stone. The plain
+> bloomery has the same shape and has been `conservation_exempt` since it was written; I added a furnace beside
+> it without carrying the exemption across. **Nearly every integration test ends in
+> `assertTrue(auditor.inspect().consistent())`**, so one bad row is a 50-minute CI round for the whole suite.
+> **Reproduce the Auditor's conservation query inside any migration that adds a `material_process`** — V305 and
+> V308 now do, over the whole catalogue rather than their own rows.
+>
+> **AND MY OWN GUARD HAD BLESSED THE DEEPER FAULT.** The recipe said "the same ore, twice the bloom" — two
+> blooms weigh 2800g, two ore weigh 2600g: iron from nothing. The guard I wrote asserted *"the hot smelt must not
+> eat more ore"*, which **forced** it. A slogan written into a guard, defending itself against the physics. **A
+> better process means better RECOVERY (output per input), never more matter** — write the guard as a ratio
+> against the process it improves on, never as "no more inputs".
+>
+> **⚠ PROCESS — what else cost time:**
+> 1. **A Java intent runs before the assembly matcher.** V303's shade shelter answered to `"build a sun shade"`,
+>    which `coverKindOf` has owned since #195 — the V284 `BUILD_PEN` trap wearing another face. CI's
+>    `noJavaIntentShadowsAnAssemblysOwnKeywords` caught it. Both things were kept and the *phrasing* moved.
+> 2. **A gate is only as honest as what the player is told.** V306 gated obsidian to its province and
+>    `groundGeology` still read minerals by biome alone — the survey would have promised what the hand could not
+>    get. **Two places answering the same question from different data** is this project's signature defect;
+>    check for the second reader every time a gate is added.
+> 3. **`development` can be red for reasons nobody owns.** `RiverSandGravelIntegrationTest` made 60 attempts
+>    through `actions.resolve`, each advancing the world 40 minutes — up to forty simulated hours of standing in
+>    a marsh — and the Chronicle sometimes died before the assertion. Fixed by making the routing claim and the
+>    yield claim separately: one `resolve` (whose intent is now actually asserted) and the rest at the service
+>    boundary, which moves no clock.
+>
+> **Recommended next:** finish the card. #216 also names inputs, outputs/waste, and time — and `durationFor` is
+> the same shape (one switch, 120+ intents) though much the riskiest to move, since it sets every action's
+> duration. After that, the card's most arguable silence is worth settling deliberately: a fence line, a lean-to
+> and an assembly stage are hours of work on ground a Chronicle already lives on, and whether that deserves a
+> mark is now a one-row decision instead of an invisible omission.
+>
+
+> **▶ PREVIOUS (2026-09-12, earlier): husbandry finished as a loop — #108 is out of work it can do, and every structure it
 > still names waits on a system rather than on a decision.**
 >
 > Six slices (V297–V301 + tending). Each one existed because the slice before it created something for it to act

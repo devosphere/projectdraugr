@@ -2315,6 +2315,32 @@ public class PhysicalItemService {
         return Math.max(12, (int) Math.round(base * richness));
     }
 
+    /**
+     * Whether the text names, whole-word, a mineral that has to be broken out of the rock.
+     *
+     * <p>This exists so the intent classifier can stop keeping its own hand-written copy of part of
+     * {@code mineral_definition}. It is deliberately narrowed to minerals with a {@code tool_required} rather
+     * than asking about all of them, and the narrowing is what makes it safe to add: those are exactly the ones
+     * a player must ask for by name, while the toolless ones are the ones whose names would be taken from
+     * intents that already own them — "gather field stone" belongs to GATHER_STONE, "dig clay" to GATHER_CLAY,
+     * and both are minerals here too.
+     *
+     * <p>Matched on a normalised copy with word boundaries, so " ore " does not fire on "forest" and a mineral
+     * named "Lead ore (galena)" is reached by its key rather than by a display name no player would type.
+     */
+    @Transactional(readOnly = true)
+    public boolean namesADugMineral(String actionText) {
+        if (actionText == null || actionText.isBlank()) return false;
+        String v = " " + actionText.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim() + " ";
+        for (java.util.Map<String,Object> m : jdbc.queryForList(
+                "SELECT mineral_key, display_name FROM mineral_definition WHERE tool_required IS NOT NULL")) {
+            if (v.contains(" " + ((String) m.get("mineral_key")).replace('_', ' ') + " ")) return true;
+            String shown = ((String) m.get("display_name")).toLowerCase(java.util.Locale.ROOT);
+            if (v.contains(" " + shown + " ")) return true;
+        }
+        return false;
+    }
+
     @Transactional
     public String[] gatherMineral(UUID chronicle, UUID location, String actionText, Instant occurredAt) {
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
