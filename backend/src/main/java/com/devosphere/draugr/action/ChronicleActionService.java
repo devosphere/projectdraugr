@@ -200,7 +200,18 @@ public class ChronicleActionService {
         // "go to the Tool Shed" names a zone in the CURRENT settlement — a short walk within the chunk, not an
         // inter-chunk journey (V70/F8). Reachability is unaffected (it's chunk-wide either way).
         String localZone = intent == Intent.TRAVEL ? matchLocalZone(chronicle, text) : null;
-        int minutes = localZone != null ? 5 : (intent == Intent.TRAVEL ? (travel == null ? 20 : Math.max(15, travel.distance() * 18)) : durationFor(text, intent));
+        // Riding (#108/#106/#100) is not a state with a mount and a dismount — it is HOW YOU TRAVEL. A Chronicle
+        // setting out with a tamed rideable beast, a harness to guide it by, and a way up if they are laden goes
+        // at better than twice walking pace. One who does not qualify walks, and is told nothing about it,
+        // because walking is not a failure. Asked at the ORIGIN, which is where a rider mounts.
+        UUID mount = (intent == Intent.TRAVEL && localZone == null && travel != null)
+            ? items.beastToRide(chronicle.id(), chronicle.location()) : null;
+        int minutes = localZone != null ? 5
+            : (intent == Intent.TRAVEL
+                ? (travel == null ? 20
+                    : mount != null ? Math.max(10, travel.distance() * RIDDEN_MINUTES_PER_DISTANCE)
+                                    : Math.max(15, travel.distance() * 18))
+                : durationFor(text, intent));
         // A completed tool shed at the settlement keeps tools and made stock to hand and out of the weather, so a
         // Chronicle no longer opens each fabrication or repair by hunting for what they need — the setting-up is
         // shorter (#207 heritage TOOL_SHED, "reduces preparation time"). A fair no-op when no shed stands here.
@@ -257,7 +268,16 @@ public class ChronicleActionService {
         else if (intent == Intent.MOVE) { perception = move(chronicle, text, actionId, resolvedAt); items.workDraftBeasts(chronicle.id()); }
         else if (intent == Intent.TRAVEL) {
             if (localZone != null) { jdbc.update("UPDATE chronicle SET current_zone=? WHERE id=?", localZone, chronicle.id()); perception = "You cross the settlement to " + localZone + ", a short walk over ground you know by heart."; }
-            else { String[] r = travelTo(chronicle, travel, resolvedAt); outcome = r[0]; perception = r[1]; items.workDraftBeasts(chronicle.id()); }
+            else {
+                String[] r = travelTo(chronicle, travel, resolvedAt); outcome = r[0]; perception = r[1];
+                items.workDraftBeasts(chronicle.id());
+                // The journey's cost is moved, not removed: a ridden beast takes it. Draft fatigue already gates
+                // haulage, so a keeper who rides everywhere finds their draft team useless when they need it.
+                if (mount != null && "SUCCEEDED".equals(outcome)) {
+                    items.tireRiddenBeast(mount, travel.distance());
+                    perception = perception.replace("You set out,", "You set out at a ride,");
+                }
+            }
         }
         else if (intent == Intent.MARK) { String[] r = markLandmark(chronicle, text, actionId, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.URINATE || intent == Intent.DEFECATE) {
@@ -1777,6 +1797,9 @@ public class ChronicleActionService {
         if(value.contains("alarm")||value.contains("trip line")||value.contains("trip-line")||value.contains("tripwire")||value.contains("trip wire")||value.contains("warning line")||value.contains("warning rattle")||value.contains("noise line")||value.contains("perimeter line")) return "CAMP_ALARM";
         return null;
     }
+    /** Minutes per chunk crossed on horseback — better than twice walking pace, which is 18. */
+    private static final int RIDDEN_MINUTES_PER_DISTANCE = 8;
+
     private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;} }
     /**
