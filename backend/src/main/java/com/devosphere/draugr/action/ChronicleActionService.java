@@ -1242,10 +1242,29 @@ public class ChronicleActionService {
     }
     private boolean namesInMarking(String v) { return v.contains(" as ")||v.contains("name it")||v.contains("name this")||v.contains("call it")||v.contains("call this")||v.contains("named"); }
     private String extractShape(String v) { for (String s : new String[]{"triangle","circle","cross","square","arrow","spiral","line","star","diamond","chevron"}) if (v.contains(s)) return s; return null; }
+    /**
+     * How long the act takes (#216).
+     *
+     * <p>Two rules, and only the second is catalogue. A player who writes an explicit span — "rest for two
+     * hours", "work at it for forty minutes" — gets that span, clamped between a minute and a day; that is
+     * parsing and stays here. When they did not say, the act's own impact card answers.
+     *
+     * <p>That per-intent default was the fourth and last switch over the Intent enum in this file, alongside the
+     * three the card has already absorbed. Four lists over the same 128 values, each ending in a {@code
+     * default}, is four independent chances to forget an intent — and forgetting is silent, because a default
+     * arm looks exactly like a decision. Both defects found while moving them were of that kind and neither was
+     * visible from inside the switch that was wrong: {@code COPPICE} cost nothing while taking the canopy down,
+     * and {@code REPAIR_LEAN_TO} spent twelve energy and eight hygiene in five minutes.
+     *
+     * <p>Five minutes when a card is missing, which is what the switch's own default gave, so a catalogue gap
+     * behaves as it always did rather than faulting mid-action.
+     */
     private int durationFor(String action, Intent intent) {
         Matcher match = DURATION.matcher(action);
         if (match.find()) { int amount = Integer.parseInt(match.group(1)); int minutes = match.group(2).toLowerCase(Locale.ROOT).startsWith("h") ? amount * 60 : amount; return Math.max(1, Math.min(minutes, 24 * 60)); }
-        return switch (intent) { case OBSERVE -> 10; case REST -> 60; case SLEEP -> 480; case GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES -> 25; case GATHER_CLAY -> 20; case GATHER_STONE_SLAB -> 30; case GATHER_PLANT, FORAGE_GROUND -> 20; case FELL_TREE -> 60; case PLANT_TREE -> 25; case COPPICE -> 35; case TILL_GROUND -> 50; case SOW -> 40; case HARVEST_CROP -> 45; case WEED_CROP -> 35; case CLEAR_LAND -> 60; case FEED_ANIMAL -> 10; case TAKE_ANIMAL_YIELD -> 15; case TEND_ANIMAL -> 20; case RAID_HIVE -> 15; case COLLECT_INSECTS -> 20; case FISH -> 45; case SNARE -> 25; case TRACK -> 25; case SCOUT -> 20; case TAME -> 30; case LURE -> 10; case SET_TRAP -> 35; case CHECK_TRAP -> 10; case CRAFT_GARMENT -> 90; case GATHER_MINERAL -> 40; case CRAFT_FIRE_TOOL -> 30; case PROCESS_MATERIAL -> 45; case EAT, DRINK, FEED_FIRE, EXTINGUISH_FIRE -> 5; case WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, BANK_FIRE, COLLECT_WATER -> 10; case FILTER_WATER -> 15; case BOIL_WATER -> 20; case STRETCH -> 5; case MAKE_BED -> 20; case MAINTAIN_CAMP -> 25; case PLACE_WINDBREAK, PLACE_COVER -> 20; case LIGHT_FIRE -> 20; case COOK_MEAT, TREAT_WOUND, CONFRONT_WILDLIFE, HARVEST_CARCASS -> 10; case EDIT_DOCUMENT, WRITE -> 15; case SKETCH_MAP -> 30; case STRIP_BARK -> 15; case MAKE_CHARCOAL -> 10; case CRAFT_BASKET -> 45; case CRAFT_NET -> 90; case CRAFT_BELT -> 40; case CRAFT_SPEAR, CRAFT_HATCHET -> 35; case CRAFT_FIRE_KIT -> 25; case CRAFT_TINDER -> 10; case CRAFT_DESK, CRAFT_WORKSTATION -> 60; case CRAFT_CHAIR -> 40; case CRAFT_SHELF -> 50; case BUILD_FIRE_PIT, START_LEAN_TO -> 30; case BUILD_ALARM -> 25; case BUILD_FENCE -> 40; case BUILD_PEN -> 50; case BUILD_LOOKOUT -> 45; case BUILD_FUEL_RACK -> 35; case BUILD_LATRINE -> 40; case BUILD_TOOL_SHED -> 60; case BUILD_SMOKE_VENT -> 30; case BUILD_STORAGE_AREA -> 50; case RESTORE_HABITAT -> 45; case WORK_LEAN_TO -> 45; case DISMANTLE -> 45; case ABANDON_LEAN_TO, RESUME_LEAN_TO -> 5; case MOVE -> 30; case DISENGAGE -> 10; case MARK -> 15; case EQUIP, UNEQUIP, DROP -> 5; case DESIGNATE -> 10; case REFINE -> 30; case REPAIR_ITEM -> 20; case REPAIR_STRUCTURE -> 35; case ADVANCE_ASSEMBLY -> 45; case INSPECT -> 5; case EXAMINE -> 5; case ANALYZE -> 10; case INVESTIGATE -> 15; case SEARCH -> 10; case LISTEN, SMELL, FEEL -> 5; case READ -> 15; case MEASURE -> 10; case REWORK -> 30; case PERSONAL_ACT -> 20; case AGGRESSION_WILDLIFE -> 5; case AGGRESSION_INANIMATE -> 1; default -> 5; };
+        Integer carded = jdbc.query("SELECT duration_minutes FROM activity_impact WHERE intent_key = ?",
+            rs -> rs.next() ? rs.getInt(1) : null, intent.name());
+        return carded == null ? 5 : carded;
     }
     private Intent classify(String action) {
         String value=action.toLowerCase(Locale.ROOT);
