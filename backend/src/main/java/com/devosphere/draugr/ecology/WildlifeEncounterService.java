@@ -754,7 +754,10 @@ public class WildlifeEncounterService {
             "JOIN tamed_yield ty ON ty.species_key = wp.species_key AND ty.yield_kind = ? " +
             "JOIN item_definition d ON d.item_key = ty.item_key " +
             "LEFT JOIN tamed_production tp ON tp.bond_id = wb.id AND tp.item_key = ty.item_key " +
+            // A sick animal gives nothing (V299) — no milk, no eggs, no fleece. The herd stops paying until it is
+            // looked after, which is what makes mucking out a decision rather than housekeeping.
             "WHERE wb.chronicle_id = ? AND wb.bond_stage = 'TAMED' AND wp.population_count > 0 " +
+            "  AND wb.sickness < " + com.devosphere.draugr.item.PhysicalItemService.TOO_SICK_TO_GIVE + " " +
             "ORDER BY tp.last_yielded_at NULLS FIRST LIMIT 1 FOR UPDATE OF wb",
             rs -> rs.next() ? java.util.Map.of(
                     "id", rs.getObject(1, UUID.class),

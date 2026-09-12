@@ -417,7 +417,9 @@ public class PhysicalItemService {
             "JOIN breeding_profile bp ON bp.species_key = wp.species_key " +
             "JOIN world_object cw ON cw.id = wb.chronicle_id " +
             "WHERE wb.bond_stage = 'TAMED' " +
-            "  AND wb.draft_hunger < ? AND wb.draft_thirst < ? AND wb.draft_fatigue < ? " +
+            // Condition, and health (V299). A sick animal does not get in calf — the same rule as hunger and
+            // thirst, and the second thing that makes looking after stock matter rather than merely owning them.
+            "  AND wb.draft_hunger < ? AND wb.draft_thirst < ? AND wb.draft_fatigue < ? AND wb.sickness < ? " +
             "  AND (wb.last_birth_at IS NULL OR wb.last_birth_at <= ?::timestamptz - make_interval(hours => bp.recovery_hours)) " +
             // Two of a kind, counted among this keeper's own tamed stock.
             "  AND (SELECT COUNT(*) FROM wildlife_bond o JOIN wildlife_population op ON op.id = o.population_id " +
@@ -428,7 +430,7 @@ public class PhysicalItemService {
             "              WHERE cp.state = 'COMPLETED' AND cp.integrity_percent > 0 " +
             "                AND sw.lifecycle_state = 'ACTIVE' AND sw.current_location_id = cw.current_location_id) " +
             "ON CONFLICT (bond_id) DO NOTHING",
-            ts, ts, BREEDING_CONDITION_LIMIT, BREEDING_CONDITION_LIMIT, BREEDING_CONDITION_LIMIT, ts);
+            ts, ts, BREEDING_CONDITION_LIMIT, BREEDING_CONDITION_LIMIT, BREEDING_CONDITION_LIMIT, TOO_SICK_TO_GIVE, ts);
 
         // 2. Give birth. The litter size is deterministic per pregnancy rather than random, so a save resumed
         //    twice does not produce two different herds — the bond id and the hour it was conceived decide it.
@@ -495,6 +497,66 @@ public class PhysicalItemService {
             "UPDATE wildlife_population SET carrying_capacity = GREATEST(carrying_capacity, population_count) " +
             "WHERE population_count > carrying_capacity");
         jdbc.update("DELETE FROM tamed_young WHERE matures_at <= ?", ts);
+    }
+
+    /** The refuse level at which the ground a beast stands on starts to make it ill. */
+    private static final int FOUL_GROUND_SICKENS = 40;
+    private static final int SICKNESS_PER_TURN   = 5;   // standing in filth
+    private static final int SICKNESS_SPREAD     = 4;   // caught from the rest of the keeper's stock
+    private static final int SICKNESS_RECOVERY   = 7;   // clean ground, and the animal mends
+    /** At or past this, an animal is too ill to give anything or to get in calf. */
+    public  static final int TOO_SICK_TO_GIVE    = 50;
+
+    /**
+     * What spreads through a herd (#108/#52/#79).
+     *
+     * <p>Stock could be hungry, thirsty and worked to exhaustion, and their newborns could die of cold. They
+     * could not get sick — which is why #108's quarantine pen and sick-animal shelter sat recorded as blocked for
+     * three cycles: there was nothing to isolate an animal <em>from</em>.
+     *
+     * <p>It also left a hole in the middle of a loop that already runs. Kept stock have fouled the ground they
+     * stand on since {@link #foulGroundWithLivestock}, and a manure pit or compost bay contains that muck. But the
+     * cost was only ever paid by the Chronicle and their larder — refuse draws predators, costs body condition,
+     * docks the shelf life of stored food — and <b>the animals standing in it were unaffected</b>, which is
+     * exactly backwards. Filth is the oldest reason stock sicken and the oldest reason to muck out.
+     *
+     * <p>So this is not a new system bolted on; it is the missing consequence of one that already ran:
+     * <em>stock foul the ground, the ground sickens the stock, the keeper mucks out or does not.</em>
+     *
+     * <p><b>It spreads</b> through a keeper's animals of the same species, and an isolation shelter is what stops
+     * it — the whole of that structure's job, and why it is not a fourth pen. Set-based; runs in the tick.
+     */
+    @Transactional
+    public void advanceHerdSickness(Instant now) {
+        // Fouled ground underfoot, and nowhere to put the sick apart from the rest.
+        String groundIsFoul =
+            "EXISTS (SELECT 1 FROM chunk_refuse cr WHERE cr.chunk_id = cw.current_location_id AND cr.refuse_level >= ?)";
+        String isolationHere =
+            "EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
+            "        JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
+            "        WHERE ck.isolates_sick AND cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
+            "          AND sw.lifecycle_state='ACTIVE' AND sw.current_location_id = cw.current_location_id)";
+
+        // Standing in filth makes an animal ill; clean ground lets it mend. One statement so a beast cannot both
+        // sicken and recover in the same turn.
+        jdbc.update(
+            "UPDATE wildlife_bond wb SET sickness = CASE WHEN " + groundIsFoul +
+            "    THEN LEAST(100, wb.sickness + ?) ELSE GREATEST(0, wb.sickness - ?) END " +
+            "FROM world_object cw WHERE cw.id = wb.chronicle_id AND wb.bond_stage = 'TAMED'",
+            FOUL_GROUND_SICKENS, SICKNESS_PER_TURN, SICKNESS_RECOVERY);
+
+        // And it runs through the rest of the keeper's stock of the same kind — unless there is somewhere to put
+        // the sick one. The shelter does not cure what is already in it; it stops the next animal catching it.
+        jdbc.update(
+            "UPDATE wildlife_bond wb SET sickness = LEAST(100, wb.sickness + ?) " +
+            "FROM world_object cw, wildlife_population wp " +
+            "WHERE cw.id = wb.chronicle_id AND wp.id = wb.population_id AND wb.bond_stage = 'TAMED' " +
+            "  AND wb.sickness < ? " +
+            "  AND NOT " + isolationHere +
+            "  AND EXISTS (SELECT 1 FROM wildlife_bond o JOIN wildlife_population op ON op.id = o.population_id " +
+            "              WHERE o.chronicle_id = wb.chronicle_id AND o.id <> wb.id AND o.bond_stage = 'TAMED' " +
+            "                AND op.species_key = wp.species_key AND o.sickness >= ?)",
+            SICKNESS_SPREAD, TOO_SICK_TO_GIVE, TOO_SICK_TO_GIVE);
     }
 
     /** Hard cold: at or below freezing, where a young animal without a roof cannot keep its own heat. */
