@@ -13,12 +13,22 @@
 --     away, and the catalogue half of the work is pure data.
 --
 -- SO: fire clay is dug like any other mineral, a lined bloomery is raised from it, and that lined furnace is the
--- station for a hotter smelt returning two blooms where the plain one returns one, from the same ore and the same
--- charcoal. A keeper who never finds fire clay smelts iron exactly as they always did.
+-- station for a hotter smelt that recovers two blooms from three ore where the bare shaft recovers one from two.
+-- A keeper who never finds fire clay smelts iron exactly as they always did.
 --
 -- WHY THAT IS THE TRUE CHAIN. A bloomery is lined with refractory clay precisely because ordinary clay fails at
 -- smelting heat: a furnace that holds its heat instead of shedding it through a slumping wall reduces more of the
--- ore and loses less of it to the slag. "More iron from the same ore" is exactly what a lining buys.
+-- ore and loses less of it to the slag. A lining does not make iron — it stops iron being lost, which is a
+-- different claim and the only one the figures will carry. The bare shaft recovers a bit over half the metal in
+-- the ore; the lined one recovers two thirds. And since two blooms out of the bare shaft means firing it twice —
+-- four ore and six charcoal against three and three — the lining still saves an ore, half the fuel and a day at
+-- the bellows.
+--
+-- That distinction cost three hundred and one failing tests to learn. The recipe first said "the same ore, twice
+-- the bloom", which is two blooms (2800g) out of two ore (2600g): iron made from nothing. The Auditor's
+-- conservation rule caught it, and it fails nearly every integration test at once because nearly all of them ask
+-- the Auditor whether the world still adds up. A guard reproducing that rule over the whole catalogue is at the
+-- foot of this file now, so the next migration to try it is stopped by the migration rather than by the suite.
 --
 -- The Java half is one method and one clause, in the commit alongside this file: the GATHER_MINERAL rule in
 -- ChronicleActionService names its minerals as literals (flint, chert, obsidian, pyrite, ...), so a mineral row
@@ -63,22 +73,29 @@ ON CONFLICT (item_key, source_kind) DO NOTHING;
 -- here because changing its category would take "make a bloomery furnace" away from everyone mid-chronicle.
 INSERT INTO material_process
   (process_key, display_name, output_item_key, output_min, output_max, tool_class, requires_fire, requires_water,
-   duration_minutes, domain_key, keywords, narration, review_state, reviewed_at, category_key, station_kind)
+   duration_minutes, domain_key, keywords, narration, review_state, reviewed_at, category_key, station_kind,
+   conservation_exempt, exempt_reason)
 VALUES
   ('make_lined_bloomery_furnace', 'Raise a lined bloomery furnace', 'lined_bloomery_furnace', 1, 1, NULL, FALSE, FALSE,
    180, 'stoneworking',
    'build a lined bloomery furnace,raise a lined bloomery furnace,build a lined bloomery,raise a lined bloomery,build a lined furnace,lined bloomery furnace',
    'You raise the shaft as you would any bloomery, and then pack the hearth with pale fire clay before it is ever fired — a lining that will hold its heat where ordinary clay would slump and take the wall down with it.',
-   'VERIFIED', now(), 'CONSTRUCT', NULL),
-  -- Same ore, same charcoal, twice the bloom, and longer at it: heat kept is heat that has to be raised first.
+   'VERIFIED', now(), 'CONSTRUCT', NULL,
+   -- Exempt for the same reason the plain bloomery is, and in the same words: a furnace is rammed up in place
+   -- out of the ground it stands on, so the ninety-odd kilos of standing shaft are mostly earth that was never
+   -- carried there. Without this the Auditor reads it as matter from nothing — correctly, on the figures.
+   TRUE, 'A lined bloomery is rammed up in place from clay and earth dug at the site; its mass legitimately exceeds the carried fire clay, clay lumps and facing stones.'),
+  -- Three ore and three charcoal for two blooms. The plain shaft needs two firings — four ore and SIX charcoal —
+  -- to reach the same two, so the lining saves an ore, half the fuel and a whole day's work. See the note below
+  -- on why this is three ore and not two.
   ('smelt_iron_hot', 'Smelt iron in a lined furnace', 'iron_bloom', 2, 2, NULL, TRUE, FALSE,
    240, 'stoneworking',
    -- Every phrase here names iron on purpose. The matcher's second axis is the subject, so a keyword carrying
    -- only the verb ("run a hot smelt") passes the keyword gate and then fails the subject gate against every
    -- text there is — a phrase that looks like vocabulary and answers to nothing. Checked, not assumed.
    'smelt iron in the lined furnace,smelt the iron in the lined furnace,smelt iron in a lined furnace,smelt iron hot,hot smelt of iron',
-   'The lined hearth holds its heat instead of bleeding it out through the wall, and the charge comes down further than it ever did in the bare shaft — two blooms out of what gave you one.',
-   'VERIFIED', now(), 'PROCESS', 'lined_bloomery_furnace')
+   'The lined hearth holds its heat instead of bleeding it out through the wall, and far more of the charge comes down to metal rather than away in the slag — two blooms off a firing the bare shaft would have got one and a half out of, if it could have held the heat to do it.',
+   'VERIFIED', now(), 'PROCESS', 'lined_bloomery_furnace', FALSE, NULL)
 ON CONFLICT (process_key) DO NOTHING;
 
 INSERT INTO material_process_input (process_key, item_key, quantity) VALUES
@@ -86,7 +103,19 @@ INSERT INTO material_process_input (process_key, item_key, quantity) VALUES
   ('make_lined_bloomery_furnace', 'fire_clay', 4),
   ('make_lined_bloomery_furnace', 'clay_lump', 3),
   ('make_lined_bloomery_furnace', 'field_stone', 8),
-  ('smelt_iron_hot', 'iron_ore', 2),
+  -- THREE ore, not two, and the reason is the whole design of this recipe.
+  --
+  -- Two ore is 2600g and two blooms are 2800g, so "the same ore, twice the iron" would have been iron made out
+  -- of nothing. It was written that way first and the Auditor's conservation rule caught it — three hundred and
+  -- one tests at once, because nearly every integration test asks the Auditor whether the world still adds up.
+  --
+  -- It was also just wrong about furnaces. A lining does not conjure iron; it stops iron being lost. The plain
+  -- shaft gets one bloom from two ore, which is a bit over half the metal recovered and the rest gone into the
+  -- slag. The lined shaft gets two blooms from three, which is two thirds — a real gain of the kind a real
+  -- lining gives. And a keeper wanting two blooms out of the bare shaft must fire it twice: four ore and six
+  -- charcoal against three and three. The lining still saves an ore, half the fuel and a day at the bellows;
+  -- it just no longer claims to break conservation to do it.
+  ('smelt_iron_hot', 'iron_ore', 3),
   ('smelt_iron_hot', 'charcoal', 3)
 ON CONFLICT (process_key, item_key) DO NOTHING;
 
@@ -177,10 +206,44 @@ BEGIN
     RAISE EXCEPTION 'V305: a lined furnace must return more iron than a plain one (% against %)', hot, plain;
   END IF;
 
-  -- And it must beat it on the same ore, or it is not a better furnace, only a bigger charge.
-  IF (SELECT quantity FROM material_process_input WHERE process_key='smelt_iron_hot' AND item_key='iron_ore')
-     > (SELECT quantity FROM material_process_input WHERE process_key='smelt_iron' AND item_key='iron_ore') THEN
-    RAISE EXCEPTION 'V305: the hot smelt must not eat more ore for its extra iron';
+  -- And it must beat it on RECOVERY — bloom per ore — which is what a lining actually buys. The first draft of
+  -- this guard demanded the hot smelt eat no more ore than the plain one, which sounds like the same thing and
+  -- is not: it forced two blooms out of two ore, and two blooms weigh more than two ore do. The guard was
+  -- enshrining a slogan over the physics, and the Auditor caught what the guard had blessed.
+  IF (SELECT output_max::numeric FROM material_process WHERE process_key='smelt_iron_hot')
+     / (SELECT quantity FROM material_process_input WHERE process_key='smelt_iron_hot' AND item_key='iron_ore')
+     <= (SELECT output_max::numeric FROM material_process WHERE process_key='smelt_iron')
+      / (SELECT quantity FROM material_process_input WHERE process_key='smelt_iron' AND item_key='iron_ore') THEN
+    RAISE EXCEPTION 'V305: the lined furnace must recover more iron per ore than the bare shaft, or the lining buys nothing';
+  END IF;
+
+  -- Nor may it cost more fuel per bloom, or the saving is only being moved from the ore pile to the charcoal pile.
+  IF (SELECT quantity::numeric FROM material_process_input WHERE process_key='smelt_iron_hot' AND item_key='charcoal')
+     / (SELECT output_max FROM material_process WHERE process_key='smelt_iron_hot')
+     >= (SELECT quantity::numeric FROM material_process_input WHERE process_key='smelt_iron' AND item_key='charcoal')
+      / (SELECT output_max FROM material_process WHERE process_key='smelt_iron') THEN
+    RAISE EXCEPTION 'V305: the lined furnace must also burn less charcoal per bloom';
+  END IF;
+
+  -- Conservation, reproduced here from PersistentStateAuditor so this class of mistake is caught by the
+  -- migration that makes it instead of by three hundred integration tests an hour later. Asserted over the WHOLE
+  -- catalogue rather than only over the two rows added above, because that is the check that would have caught
+  -- this one: the furnace fails it too, and is exempt for the same reason the plain bloomery is — it is rammed
+  -- up out of the ground it stands on.
+  SELECT string_agg(b.process_key || ' (' || b.max_output_grams || 'g out of ' || b.min_input_grams || 'g in)', ', ')
+    INTO bad
+    FROM process_mass_balance b JOIN material_process mp ON mp.process_key = b.process_key
+   WHERE mp.review_state = 'VERIFIED' AND NOT mp.conservation_exempt
+     AND b.min_input_grams > 0 AND b.max_output_grams > b.min_input_grams * 1.05;
+  IF bad IS NOT NULL THEN RAISE EXCEPTION 'V305: these processes would create matter from nothing: %', bad; END IF;
+
+  -- An exemption has to be argued, never merely taken. The CHECK on the table requires a reason to exist; this
+  -- requires the two new rows to be on the right side of it, so a later edit cannot quietly exempt the smelt.
+  IF NOT (SELECT conservation_exempt FROM material_process WHERE process_key='make_lined_bloomery_furnace') THEN
+    RAISE EXCEPTION 'V305: a furnace rammed up in place must be conservation-exempt, as the plain bloomery is';
+  END IF;
+  IF (SELECT conservation_exempt FROM material_process WHERE process_key='smelt_iron_hot') THEN
+    RAISE EXCEPTION 'V305: a smelt turns carried ore into carried metal and must balance on its own figures';
   END IF;
 
   -- Purely additive: the ordinary smelt keeps working exactly as it did, for everyone who never finds fire clay.
