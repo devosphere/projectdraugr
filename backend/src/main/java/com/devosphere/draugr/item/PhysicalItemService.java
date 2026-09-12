@@ -499,6 +499,51 @@ public class PhysicalItemService {
         jdbc.update("DELETE FROM tamed_young WHERE matures_at <= ?", ts);
     }
 
+    /** What tending a beast with a herbal remedy takes out of its sickness. */
+    private static final int TENDING_RELIEF = 35;
+
+    /**
+     * Tend a sick animal (#106/#108).
+     *
+     * <p>V299 gave stock sickness and two ways out of it: clean ground, and time. Both are things a keeper does
+     * to the GROUND. There was nothing a keeper could do to the ANIMAL — no tending, no dosing, no sitting up
+     * with it — which is why #106's grooming-and-health group (`animal_first_aid_roll`, `animal_bandage`,
+     * `hoof_wrap`, `curry_comb` and the rest) had nothing to hang on.
+     *
+     * <p>This closes that loop with the medicine the catalogue already carries: a herbal poultice, an infusion,
+     * or a bundle of dried herbs. No new item — those exist, they are already made by a Chronicle who has learned
+     * to, and until now the only patient they had was the Chronicle themselves.
+     *
+     * <p>Takes the worst-off animal first, which is what a keeper walking into a byre actually does. The remedy
+     * is consumed, so tending a herd through a bad spell costs what it should.
+     */
+    @Transactional
+    public String[] tendSickAnimal(UUID chronicle, Instant at) {
+        java.util.Map<String,Object> patient = jdbc.query(
+            "SELECT wb.id, wp.species_key, wb.sickness FROM wildlife_bond wb " +
+            "JOIN wildlife_population wp ON wp.id = wb.population_id " +
+            "WHERE wb.chronicle_id = ? AND wb.bond_stage = 'TAMED' AND wb.sickness > 0 " +
+            "ORDER BY wb.sickness DESC LIMIT 1 FOR UPDATE OF wb",
+            rs -> rs.next() ? java.util.Map.of("id", rs.getObject(1, UUID.class),
+                    "species", rs.getString(2), "sickness", rs.getInt(3)) : null, chronicle);
+        if (patient == null)
+            return new String[]{"FAILED", "You go among the stock looking for one that needs tending, and find none that is ailing."};
+
+        String remedy = hasAtLeast(chronicle, "herbal_poultice", 1) ? "herbal_poultice"
+                      : hasAtLeast(chronicle, "herbal_infusion", 1) ? "herbal_infusion"
+                      : hasAtLeast(chronicle, "dried_herb_bundle", 1) ? "dried_herb_bundle" : null;
+        if (remedy == null)
+            return new String[]{"FAILED", "You have nothing to treat it with — no poultice, no infusion, nothing dried and put by."};
+
+        consumeOne(chronicle, remedy, at);
+        jdbc.update("UPDATE wildlife_bond SET sickness = GREATEST(0, sickness - ?) WHERE id = ?", TENDING_RELIEF, patient.get("id"));
+        int now = Math.max(0, (Integer) patient.get("sickness") - TENDING_RELIEF);
+        String beast = ((String) patient.get("species")).replace('_', ' ');
+        return new String[]{"SUCCEEDED", now == 0
+            ? "You work the " + remedy.replace('_', ' ') + " into the " + beast + " and stay with it a while. By the end of it the animal is standing easy again."
+            : "You dose the " + beast + " with the " + remedy.replace('_', ' ') + " and stay with it a while. It is not well yet, but it is better than it was."};
+    }
+
     /** A beast this tired, hungry, thirsty or ill will not carry anyone. */
     private static final int UNFIT_TO_CARRY = 70;
     /** Carrying this share of what you can bear makes getting up onto a tall animal the hard part. */
