@@ -244,7 +244,46 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 
 #### Resume point
 
-> **▶ LATEST (2026-09-09/10): eight slices merged — the declared-but-ignored defect found nine more times, and
+> **▶ LATEST (2026-09-12): husbandry finished as a loop — #108 is out of work it can do, and every structure it
+> still names waits on a system rather than on a decision.**
+>
+> Six slices (V297–V301 + tending). Each one existed because the slice before it created something for it to act
+> on, which is the opposite of the catalogue-token habit this project keeps guarding against:
+>
+> | slice | what it made possible |
+> |---|---|
+> | **V297** a hard winter takes the young | Young could be *lost*. This is the first thing that tells a **byre from a fold** — `encloses` has been in the catalogue since V280 and the two kinds of stock shelter were identical to a keeper until now. |
+> | **V298** the ones that do not live | Birth losses, so the **farrowing shelter / brooder / foaling stall** answer something a byre cannot. Three tiers: open ground → full loss, roofed shelter → half, birthing house → none. |
+> | **V299** what spreads through a herd | **Sickness**, which is the missing consequence of a loop that already ran: stock foul the ground, and the ground had been harming only the Chronicle's larder. Gives the **isolation shelter** a job. |
+> | **V300** a cart left in the rain | Vehicles **weather** (nothing wooden could be touched by weather before), and `condition_state` is finally read — a **broken cart had been hauling a sound cart's load**. |
+> | **V301** what carries you | **Riding.** Eight species pulled and none could be ridden; a horse and an ox were the same number of grams. Riding is *how you travel*, not a state, and the journey's fatigue lands on the animal — so a keeper who rides everywhere cannot pull. |
+> | **tending a sick beast** | V299 left sickness curable only by acting on the *ground*. Now a keeper can dose the animal, with medicine the catalogue already had. |
+>
+> **THE SHIP TEST DID MORE WORK THAN THE CODE.** Four structures #108 names were **declined**, each with its
+> reason recorded in the migration that declined it, so none reads as forgotten:
+> `quarantine_pen` (one behaviour with `sick_animal_shelter`), `cart_shed` + `yoke_rack` + `harness_rack` +
+> `loading_platform` (renames of stores that exist, until a **size/capacity model** exists to tell them apart).
+> Twice the mechanic had to be built *before* the structure could honestly exist at all — a shelter that reduces
+> losses is meaningless while there are no losses.
+>
+> **⚠ PROCESS — what actually cost time, and it was never the code:**
+> 1. **`PREPARE p(type)` hides the defect it is meant to catch** (see the previous entry). Used correctly since,
+>    and every slice from V299 on went green on the first CI run.
+> 2. **`object_transition` is immutable by trigger.** Test teardown must **retire** (DESTROYED + cause + no
+>    location/owner), never DELETE. And a `DELETE` matching **zero rows succeeds** — a probe that finds nothing
+>    proves nothing, which briefly convinced me the history was mutable.
+> 3. **Read the source before asserting what routes where.** `TREAT_WOUND` comes only from `classifyLegacy`
+>    (verbs bind/bandage/dress); `"treat the wound"` was **already unrouted** and I had written the wrong claim
+>    into a code comment. Two failed local assertions found it in seconds — the cheap version of the morning's
+>    narration mistake.
+>
+> **Recommended next:** **temperament** is the largest single unlock left in husbandry — five items in #106 plus
+> `boar_isolation_pen` in #108 — but it is a real new system and wants its own story, not a gear ticket. After
+> that, **stock thermoregulation** and **site-level hygiene**. Do not build the remaining structures first: each
+> is one data row once its system exists, and building them earlier means inventing the system to justify the
+> structure, which is the wrong way round.
+>
+> **▶ PREVIOUS (2026-09-09/10): eight slices merged — the declared-but-ignored defect found nine more times, and
 > husbandry given the one stage it never had.**
 >
 > **The shape is unchanged and still the richest seam in this codebase:** a capability is declared in the
