@@ -1868,25 +1868,24 @@ public class ChronicleActionService {
      * who does not look remain, dangerously, uninformed.
      */
     /**
-     * The capability family an action exercises, so repetition builds the RELEVANT mastery (GitHub #26).
-     * LOAD = strength/carrying, AIM = precision at a target, ATTENTION = perception, LOCOMOTION = travel,
-     * RECOVERY = rest, FINE_MOTOR = skilled hand-work. One family per intent; the growth itself is slow,
-     * hidden, and lifelong (CapabilityAdaptationService).
+     * The capability family an action exercises, from its impact card (#216/#26).
+     *
+     * <p>LOAD = strength and carrying, AIM = precision at a target, ATTENTION = perception, LOCOMOTION = travel,
+     * RECOVERY = rest, KNOWLEDGE and INSIGHT = what reading and reasoning build, FINE_MOTOR = skilled hand-work.
+     * One family per intent; the growth itself is slow, hidden and lifelong (CapabilityAdaptationService).
+     *
+     * <p>Was a switch over the enum, moved onto the card with the labour and the footprint so that all three can
+     * be read as one statement about an act instead of three lists that could disagree. The families are exactly
+     * the ones the switch gave — V309's guard asserts the count in each against what the switch produced, so a
+     * slip in moving them could not have passed quietly.
+     *
+     * <p>FINE_MOTOR when a card is missing, which is what the switch's own default gave, so a catalogue gap
+     * behaves as it always did rather than faulting mid-action.
      */
     private String capabilityDomainOf(Intent intent) {
-        return switch (intent) {
-            case FELL_TREE, PLANT_TREE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, CLEAR_LAND, GATHER_STONE, GATHER_STONE_SLAB, GATHER_MINERAL, GATHER_CLAY, GATHER_FIBER,
-                 GATHER_BRANCHES, GATHER_BERRIES, GATHER_PLANT, FORAGE_GROUND, HARVEST_CARCASS, RAID_HIVE, COLLECT_INSECTS,
-                 BUILD_FIRE_PIT, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, REPAIR_LEAN_TO, REPAIR_STRUCTURE, DISMANTLE, PLACE_WINDBREAK, PLACE_COVER -> "LOAD";
-            case CONFRONT_WILDLIFE, FISH, SNARE, SET_TRAP, CHECK_TRAP, LURE, TAME -> "AIM";
-            case OBSERVE, TRACK, SCOUT, INSPECT, EXAMINE, SEARCH, LISTEN, SMELL, FEEL, MEASURE, MAINTAIN_CAMP -> "ATTENTION";
-            case READ -> "KNOWLEDGE"; // reading a record builds knowledge, not perception
-            case ANALYZE -> "INSIGHT";       // #25: reading what a thing is and does builds understanding
-            case INVESTIGATE -> "KNOWLEDGE"; // #25: inferring origin/provenance builds knowledge
-            case MOVE, TRAVEL, DISENGAGE -> "LOCOMOTION";
-            case REST, SLEEP, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH -> "RECOVERY";
-            default -> "FINE_MOTOR"; // crafts, processing, assembly, writing, fire-tending, handling gear, wound care
-        };
+        String domain = jdbc.query("SELECT capability_domain FROM activity_impact WHERE intent_key = ?",
+            rs -> rs.next() ? rs.getString(1) : null, intent.name());
+        return domain == null ? "FINE_MOTOR" : domain;
     }
     /**
      * Record what a successful act did to the ground it was done on, as its impact card says (#215/#216).
@@ -1921,25 +1920,28 @@ public class ChronicleActionService {
 
     /** The physical cost of an action beyond the passive tick (GitHub #27): energy spent, hygiene lost. */
     private record Labor(int energy, int hygiene) { }
+
+    /**
+     * What the act costs the body, from its impact card (#216).
+     *
+     * <p>This was a switch over the Intent enum, beside two others: one for the mark the act leaves on the land
+     * and one for the mastery it builds. Three lists over the same 128 values, in the same file, each ending in
+     * a {@code default} — so an intent added to one and forgotten by the others was silent, and an act that
+     * costs nothing, builds nothing and marks nothing read exactly like an act somebody had decided was free.
+     *
+     * <p>Putting them on one row made a question askable that had never been asked: does anything mark the land
+     * while costing the body nothing? Two did. One was {@code AGGRESSION_WILDLIFE}, which is right — a fight
+     * runs its own physiology and charging it here would charge the body twice. The other was {@code COPPICE},
+     * which was in none of the three labour tiers at all: cutting a stool back with an axe took the canopy down
+     * and tired nobody. That is fixed in V309 rather than preserved.
+     *
+     * <p>Falls back to costing nothing when a card is missing, because play must not fault on a catalogue gap —
+     * ActivityImpactCardIntegrationTest is the gate that makes a missing card impossible to ship.
+     */
     private Labor laborOf(Intent intent) {
-        return switch (intent) {
-            // Heavy, dirty labour — swinging, hauling, breaking ground, butchering, building, fighting.
-            case FELL_TREE, CLEAR_LAND, GATHER_MINERAL, GATHER_STONE, GATHER_STONE_SLAB, GATHER_CLAY, HARVEST_CARCASS, TILL_GROUND,
-                 CONFRONT_WILDLIFE, PROCESS_MATERIAL, ADVANCE_ASSEMBLY, BUILD_FIRE_PIT, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_STORAGE_AREA, START_LEAN_TO,
-                 WORK_LEAN_TO, REPAIR_LEAN_TO, REPAIR_STRUCTURE, DISMANTLE -> new Labor(12, 8);
-            // Steady work — foraging, fishing, trapping, tending, and the bench crafts.
-            case GATHER_FIBER, GATHER_BRANCHES, GATHER_BERRIES, GATHER_PLANT, PLANT_TREE, SOW, HARVEST_CROP, WEED_CROP, FORAGE_GROUND, RAID_HIVE, COLLECT_INSECTS,
-                 FISH, SNARE, SET_TRAP, CHECK_TRAP, TRACK, TAME, FEED_ANIMAL, LURE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE,
-                 COOK_MEAT, MOVE, TRAVEL, REFINE, REWORK, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER,
-                 CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_GARMENT, CRAFT_FIRE_TOOL,
-                 CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, REPAIR_ITEM,
-                 MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, BUILD_ALARM, BUILD_SMOKE_VENT, RESTORE_HABITAT -> new Labor(6, 3);
-            // Light acts — looking, marking, writing, handling gear, dressing a wound, tending a fire.
-            case OBSERVE, SCOUT, MARK, DESIGNATE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WRITE, EDIT_DOCUMENT, SKETCH_MAP, INSPECT,
-                 EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, TREAT_WOUND, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE -> new Labor(2, 0);
-            // Rest, sleep, eat, drink, wash, relief, personal/aggression acts run their own physiology.
-            default -> new Labor(0, 0);
-        };
+        Labor card = jdbc.query("SELECT labor_energy, labor_hygiene FROM activity_impact WHERE intent_key = ?",
+            rs -> rs.next() ? new Labor(rs.getInt(1), rs.getInt(2)) : null, intent.name());
+        return card == null ? new Labor(0, 0) : card;
     }
     /**
      * Fresh water the Chronicle can reach here — a wetland, a river bank, or a freshwater spring/stream site

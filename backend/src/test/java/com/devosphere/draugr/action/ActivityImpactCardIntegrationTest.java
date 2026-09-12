@@ -110,6 +110,45 @@ class ActivityImpactCardIntegrationTest {
             "these cards describe procedures that no longer exist, so nothing reads them: " + orphaned);
     }
 
+    /**
+     * The card carries what the act costs the actor as well as what it costs the ground (#216, V309).
+     *
+     * <p>{@code laborOf} and {@code capabilityDomainOf} were two more switches over the same enum in the same
+     * file, each ending in a {@code default} — so an intent added to one and forgotten by the others was silent,
+     * and an act that cost nothing, built nothing and marked nothing read exactly like an act somebody had
+     * decided was free.
+     *
+     * <p>Putting all three on one row made a question askable that had never been asked, and the question found
+     * something the first time it was asked. That is what is guarded here.
+     */
+    @Test
+    void nothingMarksTheLandWhileCostingTheBodyNothing() {
+        List<String> free = jdbc.queryForList(
+            "SELECT intent_key FROM activity_impact " +
+            "WHERE footprint_kind IS NOT NULL AND labor_energy = 0 AND intent_key <> 'AGGRESSION_WILDLIFE' ORDER BY 1",
+            String.class);
+        assertTrue(free.isEmpty(),
+            "these change the world and tire nobody, which is work being done by no one: " + free);
+
+        // The one exempted by name, asserted as an exemption rather than left to look like an oversight: a fight
+        // resolves its own exhaustion and its own injuries, so a labour figure would charge the body twice.
+        assertEquals(0, (int) jdbc.queryForObject(
+            "SELECT labor_energy FROM activity_impact WHERE intent_key='AGGRESSION_WILDLIFE'", Integer.class),
+            "aggression runs its own physiology and must not be charged a second time here");
+
+        // The defect the question found. COPPICE was in none of laborOf's three tiers, so cutting a stool back
+        // with an axe took the canopy down by 8 and tired nobody at all.
+        assertTrue(jdbc.queryForObject(
+            "SELECT labor_energy FROM activity_impact WHERE intent_key='COPPICE'", Integer.class) > 0,
+            "coppicing is axe work and must cost something — it cost nothing until the cards were put together");
+
+        // And cleanliness is lost to the kind of labour that puts you in the mud. Costing hygiene without
+        // costing effort would describe an act nobody performs.
+        List<String> cleanButDirtying = jdbc.queryForList(
+            "SELECT intent_key FROM activity_impact WHERE labor_hygiene > 0 AND labor_energy = 0 ORDER BY 1", String.class);
+        assertTrue(cleanButDirtying.isEmpty(), "these cost cleanliness without costing effort: " + cleanButDirtying);
+    }
+
     /** A card that marks nothing is a decision, and a decision has to be written down. */
     @Test
     void everySilentCardSaysWhyItIsSilent() {
