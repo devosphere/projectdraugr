@@ -432,15 +432,44 @@ public class PhysicalItemService {
 
         // 2. Give birth. The litter size is deterministic per pregnancy rather than random, so a save resumed
         //    twice does not produce two different herds — the bond id and the hour it was conceived decide it.
+        //
+        //    Not all of them live (V298). Perinatal loss is the largest single loss in keeping stock, far larger
+        //    than winter, and it is the one thing a purpose-built birthing house is for — which is what stops
+        //    #108's farrowing shelter being a fourth name for a byre. Three tiers, each of them something the
+        //    keeper built:
+        //
+        //        open ground             -> the full loss the species carries
+        //        a roofed stock shelter  -> half of it
+        //        a birthing house        -> none
+        //
+        //    Rolled per ANIMAL, from the pregnancy and its index in the litter, so a resumed save loses the same
+        //    young. Per animal rather than per litter because a cow carries one, and a percentage of a litter of
+        //    one rounds to nothing — a foaling stall that helped every species except horses would be absurd.
+        String birthingHouseHere =
+            "EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
+            "        JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
+            "        WHERE ck.shelters_birth AND cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
+            "          AND sw.lifecycle_state='ACTIVE' AND sw.current_location_id = cw.current_location_id)";
+        String roofOverStockHere =
+            "EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
+            "        JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
+            "        WHERE ck.shelters_stock AND ck.encloses AND cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
+            "          AND sw.lifecycle_state='ACTIVE' AND sw.current_location_id = cw.current_location_id)";
         jdbc.update(
             "INSERT INTO tamed_young (bond_id, species_key, born_at, matures_at) " +
             "SELECT tg.bond_id, tg.species_key, tg.due_at, tg.due_at + make_interval(hours => bp.maturity_hours) " +
             "FROM tamed_gestation tg " +
             "JOIN breeding_profile bp ON bp.species_key = tg.species_key " +
+            "JOIN wildlife_bond wb ON wb.id = tg.bond_id " +
+            "JOIN world_object cw ON cw.id = wb.chronicle_id " +
             "CROSS JOIN LATERAL generate_series(1, bp.litter_min + " +
             "  (('x' || substr(md5(tg.bond_id::text || tg.conceived_at::text), 1, 8))::bit(32)::bigint " +
-            "   % (bp.litter_max - bp.litter_min + 1))::int) " +
-            "WHERE tg.due_at <= ?", ts);
+            "   % (bp.litter_max - bp.litter_min + 1))::int) AS n " +
+            "WHERE tg.due_at <= ?::timestamptz " +
+            "  AND (('x' || substr(md5(tg.bond_id::text || tg.conceived_at::text || n::text), 1, 8))::bit(32)::bigint % 100) >= " +
+            "      CASE WHEN " + birthingHouseHere + " THEN 0 " +
+            "           WHEN " + roofOverStockHere + " THEN bp.birth_loss_percent / 2 " +
+            "           ELSE bp.birth_loss_percent END", ts);
         jdbc.update("UPDATE wildlife_bond SET last_birth_at = tg.due_at FROM tamed_gestation tg " +
                     "WHERE tg.bond_id = wildlife_bond.id AND tg.due_at <= ?", ts);
         jdbc.update("DELETE FROM tamed_gestation WHERE due_at <= ?", ts);
