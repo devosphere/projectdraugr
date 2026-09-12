@@ -19,11 +19,16 @@ class IntentClassificationRegressionTest {
     private String classify(String text) throws Exception { return classify(text, false); }
 
     /**
-     * classify(String) is private and pure over text plus one collaborator: it asks
-     * {@link com.devosphere.draugr.item.PhysicalItemService#actionMatchesProcess} whether
-     * the text is really a material process, so it can yield ambiguous noun-driven
-     * intents (FISH, MARK-by-carving) to the two-axis matcher. That answer is stubbed
-     * here — the routing itself is covered by ProcessRoutingTest and live E2E.
+     * classify(String) is private and pure over text plus two collaborator answers, both stubbed here.
+     *
+     * <p>It asks {@link com.devosphere.draugr.item.PhysicalItemService#actionMatchesProcess} whether the text is
+     * really a material process, so it can yield ambiguous noun-driven intents (FISH, MARK-by-carving) to the
+     * two-axis matcher; the routing itself is covered by ProcessRoutingTest and live E2E.
+     *
+     * <p>And since V305 it asks {@code namesADugMineral} whether the text names a mineral that must be broken out
+     * of the rock, which replaced the hand-written literal list the GATHER_MINERAL rule used to carry. That one is
+     * answered here from a two-entry fake catalogue rather than from a database, which is enough to assert both
+     * directions of the rule: the classifier's job is to act on the answer, not to produce it.
      */
     private String classify(String text, boolean processMatches) throws Exception {
         Method m = ChronicleActionService.class.getDeclaredMethod("classify", String.class);
@@ -31,6 +36,10 @@ class IntentClassificationRegressionTest {
         com.devosphere.draugr.item.PhysicalItemService items =
             new com.devosphere.draugr.item.PhysicalItemService(null, null, null) {
                 @Override public boolean actionMatchesProcess(String t) { return processMatches; }
+                @Override public boolean namesADugMineral(String t) {
+                    String v = t == null ? "" : t.toLowerCase(java.util.Locale.ROOT);
+                    return v.contains("fire clay") || v.contains("limestone");
+                }
             };
         ChronicleActionService svc = new ChronicleActionService(null, null, null, null, items, null, null, null, null, null, null, null, new com.devosphere.draugr.narration.ActionInputClassifier(), null, null, null, new com.devosphere.draugr.narration.NarrationEngine(), (com.devosphere.draugr.ai.RuntimeAuthoringService) null, (ExaminationService) null);
         return ((Enum<?>) m.invoke(svc, text)).name();
@@ -72,6 +81,29 @@ class IntentClassificationRegressionTest {
         // Genuine fishing and marking still classify when no process matches.
         assertEquals("FISH", classify("fish the stream with a spear", false));
         assertEquals("MARK", classify("carve a blaze into the tree", false));
+    }
+
+    /**
+     * #160/V305: the GATHER_MINERAL rule asks the catalogue instead of a hand-written list of mineral names.
+     *
+     * <p>The list was a copy of part of mineral_definition, and a copy goes stale the moment a mineral is added:
+     * fire clay would have been catalogued, placed in the ground, and dug by nobody, and limestone — never in the
+     * list at all — has been undiggable by name for as long as it has existed. What matters more than either fix
+     * is the direction it must NOT go: the catalogue also holds Field stone and Surface clay, and if the rule
+     * asked about every mineral it would take "gather field stone" from GATHER_STONE and "dig clay" from
+     * GATHER_CLAY. It asks only about minerals with a tool_required, which those two do not have. Both
+     * directions asserted, because only one of them is the regression.
+     */
+    @Test void aMineralNamedInTheCatalogueIsDugWithoutStealingStoneOrClay() throws Exception {
+        assertEquals("GATHER_MINERAL", classify("dig for fire clay"));
+        assertEquals("GATHER_MINERAL", classify("prospect for limestone"));
+        assertEquals("GATHER_MINERAL", classify("gather fire clay from the bank"));
+        // The two the narrowing protects: both are minerals in the same table, and both must keep their intents.
+        assertEquals("GATHER_CLAY", classify("gather clay"));
+        assertEquals("GATHER_CLAY", classify("dig clay from the bank"));
+        assertEquals("GATHER_STONE", classify("gather field stone"));
+        // A gather verb is still required. Calcining limestone is material work, not prospecting.
+        assertEquals("UNKNOWN", classify("burn the limestone into lime", true));
     }
 
     /** #133 ground scavenge: a pointed forest-floor search yields material (FORAGE_GROUND); a bare look-around
