@@ -90,6 +90,21 @@ class ACartLeftInTheRainIntegrationTest {
         return id;
     }
 
+    /**
+     * Retire this test's carts rather than deleting them.
+     *
+     * <p>{@code object_transition} is append-only immutable history and the database enforces it with a trigger —
+     * a DELETE comes back as "object_transition is immutable", which is the schema doing exactly its job. The
+     * weathering steps write transitions, so a teardown that deletes rows cannot work and should not. Retiring
+     * leaves the history intact and satisfies the Auditor: destroyed, with a cause, holding neither a location
+     * nor an owner.
+     */
+    private void retireTestCarts() {
+        jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED', destroyed_cause='TEST_TEARDOWN', " +
+                    "current_location_id=NULL, current_owner_id=NULL " +
+                    "WHERE display_name='Cart' AND lifecycle_state='ACTIVE'");
+    }
+
     private String condition(UUID item) {
         return jdbc.queryForObject("SELECT condition_state FROM item_instance WHERE object_id=?", String.class, item);
     }
@@ -138,9 +153,7 @@ class ACartLeftInTheRainIntegrationTest {
             assertEquals("ACTIVE", jdbc.queryForObject("SELECT lifecycle_state FROM world_object WHERE id=?", String.class, cart),
                 "and it is still a thing in the world to be mended");
         } finally {
-            jdbc.update("DELETE FROM object_transition WHERE object_id IN (SELECT object_id FROM item_instance WHERE item_key='cart')");
-            jdbc.update("DELETE FROM item_instance WHERE item_key='cart'");
-            jdbc.update("DELETE FROM world_object WHERE display_name='Cart'");
+            retireTestCarts();
             jdbc.update("UPDATE construction_project cp SET integrity_percent=100 FROM world_object w " +
                         "WHERE w.id=cp.object_id AND w.current_location_id=?", chunk);
         }
@@ -181,9 +194,7 @@ class ACartLeftInTheRainIntegrationTest {
             items.weatherExposedGear(t0.plus(Duration.ofDays(120)));
             assertEquals("SOUND", condition(cart), "what is under cover does not weather at all");
         } finally {
-            jdbc.update("DELETE FROM object_transition WHERE object_id IN (SELECT object_id FROM item_instance WHERE item_key='cart')");
-            jdbc.update("DELETE FROM item_instance WHERE item_key='cart'");
-            jdbc.update("DELETE FROM world_object WHERE display_name='Cart'");
+            retireTestCarts();
             jdbc.update("UPDATE construction_project cp SET integrity_percent=100 FROM world_object w " +
                         "WHERE w.id=cp.object_id AND w.current_location_id=?", chunk);
         }
@@ -216,8 +227,7 @@ class ACartLeftInTheRainIntegrationTest {
             jdbc.update("UPDATE item_instance SET condition_state='WORN' WHERE object_id=?", cart);
             assertTrue(vehicleCounts(chronicle), "mended back to worn, it pulls again");
         } finally {
-            jdbc.update("DELETE FROM item_instance WHERE item_key='cart'");
-            jdbc.update("DELETE FROM world_object WHERE display_name='Cart'");
+            retireTestCarts();
         }
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
