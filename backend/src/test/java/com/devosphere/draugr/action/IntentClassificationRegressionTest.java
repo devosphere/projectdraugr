@@ -39,6 +39,29 @@ class IntentClassificationRegressionTest {
     // --- V57 alignment: a large batch of material processes exposed the intent
     // --- classifier's naive substring matching. "salt the fish" is not fishing,
     // --- "carve a spoon" is not marking, "meat" is not "eat", "knap" is not "nap".
+    /**
+     * #106/#108 tending a sick beast. "tend" already belonged to WEED_CROP and "treat" to TREAT_WOUND, so this
+     * rule needs BOTH a tending verb and an animal — and the danger is not that it fails to match, it is that it
+     * quietly steals the two phrases that were already spoken for. Both directions asserted.
+     */
+    @Test void tendingAnAnimalDoesNotStealTendingACropOrTreatingAWound() throws Exception {
+        assertEquals("TEND_ANIMAL", classify("tend the sick goat"));
+        assertEquals("TEND_ANIMAL", classify("treat the sick animal"));
+        assertEquals("TEND_ANIMAL", classify("dose the horse"));
+        assertEquals("TEND_ANIMAL", classify("nurse the beast through it"));
+        // The two it must not take.
+        assertEquals("WEED_CROP", classify("tend the crop"));
+        assertEquals("WEED_CROP", classify("tend the row"));
+        // Wound care is routed only from classifyLegacy, whose verbs are bind/bandage/dress. So "bind the wound"
+        // reaches TREAT_WOUND and must keep doing so, while "treat the wound" was ALREADY unrouted before this
+        // rule existed — "treat" is in none of the wound verbs. Both are asserted as they actually behave, which
+        // is the point: the risk was this rule swallowing them, and it takes neither.
+        assertEquals("TREAT_WOUND", classify("bind the wound"));
+        assertEquals("UNKNOWN", classify("treat the wound"));
+        // And a tending verb with nothing to tend is not an animal action.
+        assertEquals("MAINTAIN_CAMP", classify("tidy the camp"));
+    }
+
     @Test void processActionsAreNotStolenByGreedyIntents() throws Exception {
         // When the two-axis matcher claims the text, the ambiguous intent must yield,
         // so the dispatch falls through to PROCESS_MATERIAL (classify returns UNKNOWN).
