@@ -4,6 +4,7 @@ import com.devosphere.draugr.action.ChronicleActionService;
 import com.devosphere.draugr.audit.PersistentStateAuditor;
 import com.devosphere.draugr.chronicle.ChronicleService;
 import com.devosphere.draugr.item.PhysicalItemService;
+import com.devosphere.draugr.simulation.SimulationTickService;
 import com.devosphere.draugr.world.genesis.WorldEcologyGenesisService;
 import com.devosphere.draugr.world.genesis.WorldGenesisService;
 import org.junit.jupiter.api.AfterAll;
@@ -21,6 +22,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import java.time.Instant;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -56,6 +58,7 @@ class RiverSandGravelIntegrationTest {
     @Autowired ChronicleService chronicles;
     @Autowired ChronicleActionService actions;
     @Autowired PhysicalItemService items;
+    @Autowired SimulationTickService ticks;
     @Autowired PersistentStateAuditor auditor;
     @Autowired JdbcTemplate jdbc;
 
@@ -75,19 +78,42 @@ class RiverSandGravelIntegrationTest {
 
         // Gathering succeeds by chance each attempt (rarity 0.9, named ~0.675); over many attempts the abundant
         // aggregate is reliably obtained. No tool is needed — it is scooped by hand.
-        boolean gotSand = gatherUntil("gather river sand from the bar", "river_sand", chronicle);
+        boolean gotSand = gatherUntil("gather river sand from the bar", "river_sand", chronicle, chunk);
         assertTrue(gotSand, "river sand must be gatherable by hand from a river bar");
-        boolean gotGravel = gatherUntil("gather river gravel from the bar", "river_gravel", chronicle);
+        boolean gotGravel = gatherUntil("gather river gravel from the bar", "river_gravel", chronicle, chunk);
         assertTrue(gotGravel, "river gravel must be gatherable by hand from a river bar");
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
 
-    private boolean gatherUntil(String phrase, String itemKey, UUID chronicle) {
-        // Named search succeeds at rarity*0.75 (~0.26 here), so allow plenty of attempts: the chance of never
-        // turning any up across this many is negligible (~1 in 7000).
-        for (int i = 0; i < 30 && !items.hasAtLeast(chronicle, itemKey, 1); i++) {
-            actions.resolve(phrase);
+    /**
+     * One pass through the real router, then the rest at the service boundary it dispatches into.
+     *
+     * <p>This loop used to make every attempt through {@code actions.resolve}, and each resolve advances the
+     * world by the action's duration — forty minutes for a mineral search. Thirty attempts for the sand and
+     * thirty for the gravel is up to forty simulated hours of a Chronicle standing in a marsh with no fire, no
+     * shelter and nothing to drink, and the assertion is only reached if they survive it. They did not always:
+     * the suite failed on development with "No living Chronicle exists", thrown from the next resolve after the
+     * body gave out. Exposure or thirst, the test does not say which, and it should not have to — proving that
+     * river sand is gatherable has nothing to do with how long a person lasts in a fen.
+     *
+     * <p>So the routing claim and the yield claim are made separately, and each is made where it belongs. The
+     * first attempt goes through {@code resolve} and its intent is asserted, which is the only part of this that
+     * needed the router at all: it proves "gather river sand from the bar" is heard as prospecting rather than
+     * as foraging or as fishing. Every attempt after it calls {@code gatherMineral} directly — the same method
+     * the router dispatches into, on the same text — so the chance-per-attempt is exercised exactly as before
+     * without moving the clock at all.
+     */
+    private boolean gatherUntil(String phrase, String itemKey, UUID chronicle, UUID chunk) {
+        assertEquals("GATHER_MINERAL", actions.resolve(phrase).intent(),
+            () -> "the phrase must be heard as prospecting, or the rest of this proves nothing: " + phrase);
+        // Naming a specific mineral searches at rarity*0.75 — about 0.26 for these aggregates — so thirty
+        // attempts left roughly a one-in-eight-thousand chance of turning none up, which across a suite run
+        // often enough is a flake waiting its turn. The attempts cost no simulated time now, so there is no
+        // longer any reason to be stingy with them: eighty puts it past one in ten billion.
+        Instant at = ticks.current().simulatedAt();
+        for (int i = 0; i < 80 && !items.hasAtLeast(chronicle, itemKey, 1); i++) {
+            items.gatherMineral(chronicle, chunk, phrase, at);
         }
         return items.hasAtLeast(chronicle, itemKey, 1);
     }

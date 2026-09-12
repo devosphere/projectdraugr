@@ -169,6 +169,31 @@ class IntentClassificationRegressionTest {
     }
 
     /**
+     * #108's shade shelter, and the keyword it is not allowed to claim.
+     *
+     * <p>V303 first gave the assembly "build a sun shade", and a Java intent runs before the assembly matcher:
+     * {@code coverKindOf} has answered to sunshade / sun shade / sun awning / awning / shade overhead since #195,
+     * so the phrase went to PLACE_COVER and a keeper asking for a shade shelter would have got a cloth propped
+     * over themselves. That is the BUILD_PEN trap of V284 wearing another face, and the integration guard caught
+     * it in CI.
+     *
+     * <p>The two are genuinely different and both are kept: the #195 cover is a person's own shade, thrown up by
+     * hand and gone again; the assembly is a posted, thatched structure that stock stand under. So the phrasing
+     * was taken off the assembly rather than taken off the cover — and it is asserted here, at the cheapest level
+     * that can see it, because this test needs no database and runs in a tenth of a second.
+     */
+    @Test void theShadeShelterReachesTheAssemblyEngineWithoutTakingTheBareHandSunshade() throws Exception {
+        assertEquals("UNKNOWN", classify("build a shade shelter", false));
+        assertEquals("UNKNOWN", classify("raise a shade shelter", false));
+        assertEquals("UNKNOWN", classify("build a shade screen", false));
+        assertEquals("UNKNOWN", classify("build a shade roof", false));
+        // And the cover #195 already had keeps every word it answered to.
+        assertEquals("PLACE_COVER", classify("rig a sun shade", false));
+        assertEquals("PLACE_COVER", classify("put up a sunshade", false));
+        assertEquals("PLACE_COVER", classify("set up an awning", false));
+    }
+
+    /**
      * #71 camp upkeep: make_bed and maintain_camp classify, without stealing "bed down" (sleep) or the
      * raised-platform assembly phrase; and the cooking-verb aliases reach COOK_MEAT when flesh is named.
      */

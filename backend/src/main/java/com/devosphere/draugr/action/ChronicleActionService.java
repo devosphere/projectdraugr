@@ -23,6 +23,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -319,13 +320,13 @@ public class ChronicleActionService {
         else if (intent == Intent.GATHER_PLANT) { String[] r=items.gatherPlant(chronicle.id(),chronicle.location(),text,resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.PLANT_TREE) { String[] r=items.plantTree(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.FORAGE_GROUND) { String[] r=items.forageGround(chronicle.id(),chronicle.location(),text,resolvedAt); outcome=r[0]; perception=r[1]; }
-        else if (intent == Intent.FELL_TREE) { String[] r=items.fellTree(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; if("SUCCEEDED".equals(outcome)) wildlife.recordEmissionDrift(chronicle.location(),"CANOPY_LOSS",25,resolvedAt); }
-        else if (intent == Intent.COPPICE) { String[] r=items.coppice(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; if("SUCCEEDED".equals(outcome)) wildlife.recordDisturbance(chronicle.location(),"CANOPY_LOSS",8,resolvedAt); }
+        else if (intent == Intent.FELL_TREE) { String[] r=items.fellTree(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
+        else if (intent == Intent.COPPICE) { String[] r=items.coppice(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.TILL_GROUND) { String[] r=items.tillGround(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.SOW) { String[] r=items.sowCrop(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.HARVEST_CROP) { String[] r=items.harvestCrop(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.WEED_CROP) { String[] r=items.tendCrop(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
-        else if (intent == Intent.CLEAR_LAND) { String[] r=items.clearLand(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; if("SUCCEEDED".equals(outcome)) wildlife.recordEmissionDrift(chronicle.location(),"CANOPY_LOSS",25,resolvedAt); }
+        else if (intent == Intent.CLEAR_LAND) { String[] r=items.clearLand(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.PROCESS_MATERIAL) { String[] r=items.runProcess(chronicle.id(),chronicle.location(),text,resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.CRAFT_FIRE_TOOL) { String[] r=items.craftFireTool(chronicle.id(),text,resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.GATHER_MINERAL) { String[] r=items.gatherMineral(chronicle.id(),chronicle.location(),text,resolvedAt); outcome=r[0]; perception=r[1]; }
@@ -570,21 +571,13 @@ public class ChronicleActionService {
                 }
             }
         }
-        // Industrial disturbance sources (#207/#208) — breaking ground and smoky burns mark the land beyond a
-        // fight or a felled tree, so the wildlife that live here respond to the whole shape of a Chronicle's work.
-        // Only successful work leaves a mark; the amount scales with how disruptive the act is.
-        if ("SUCCEEDED".equals(outcome)) {
-            switch (intent) {
-                case GATHER_MINERAL -> wildlife.recordDisturbance(chronicle.location(), "EXCAVATION", 30, resolvedAt);
-                case GATHER_STONE, GATHER_STONE_SLAB, GATHER_CLAY -> wildlife.recordDisturbance(chronicle.location(), "EXCAVATION", 15, resolvedAt);
-                case MAKE_CHARCOAL -> wildlife.recordEmissionDrift(chronicle.location(), "SMOKE", 20, resolvedAt);
-                // A fire-using material process — a smelt, a kiln firing, a forge, a charcoal char — is a smoky
-                // working; its plume marks the ground and drifts onto the neighbours (#219), the same footprint the
-                // charcoal code-intent lays. Only fire processes qualify; cold bench work leaves no smoke.
-                case PROCESS_MATERIAL -> { if (items.actionIsFireProcess(text)) wildlife.recordEmissionDrift(chronicle.location(), "SMOKE", 15, resolvedAt); }
-                default -> { }
-            }
-        }
+        // What this act does to the ground it was done on (#215/#216). Every intent has a card in
+        // activity_impact — including the ones that mark nothing, which have to say why — and this is the only
+        // place a footprint is decided. It replaced a switch here and three recordings written inline into the
+        // felling, coppicing and clearing dispatch lines: four places, none of which could say what the other
+        // hundred and twenty-one intents did, because the answer was "nothing" by omission rather than by
+        // decision. Only successful work leaves a mark.
+        if ("SUCCEEDED".equals(outcome)) markTheGround(intent, text, chronicle.location(), resolvedAt);
         // The world's turn (V44). While the chronicle was occupied, anything hunting
         // this ground had the chance to reach them. It is checked only for acts that
         // take real time and leave the body exposed — not for a moment's equipping,
@@ -1919,6 +1912,37 @@ public class ChronicleActionService {
             default -> "FINE_MOTOR"; // crafts, processing, assembly, writing, fire-tending, handling gear, wound care
         };
     }
+    /**
+     * Record what a successful act did to the ground it was done on, as its impact card says (#215/#216).
+     *
+     * <p>This is the whole of the footprint rule and the only implementation of it. Before the card table there
+     * were four: a switch over five intents, and three recordings written inline into the dispatch lines for
+     * felling, coppicing and clearing. Nothing anywhere could answer what the other hundred and twenty-one
+     * intents did to the land, because their answer was "nothing" by omission — nobody had ever decided it.
+     *
+     * <p>A missing card is a failure, not a silence. The Intent enum and {@code activity_impact} are asserted to
+     * be the same set by ActivityImpactCardIntegrationTest, so a new intent added without a card fails the suite
+     * rather than quietly joining the hundred and twenty-one; and a card that marks nothing still has to carry
+     * the sentence saying why, which the table's own CHECK enforces. That is #216's acceptance criterion — no
+     * procedure activated without a complete card — expressed where it can actually be enforced.
+     */
+    private void markTheGround(Intent intent, String text, UUID location, Instant at) {
+        Map<String, Object> card = jdbc.query(
+            "SELECT footprint_kind, footprint_amount, drifts, only_with_fire FROM activity_impact WHERE intent_key = ?",
+            rs -> rs.next() ? Map.of("kind", rs.getString(1) == null ? "" : rs.getString(1),
+                                     "amount", rs.getInt(2), "drifts", rs.getBoolean(3), "fire", rs.getBoolean(4))
+                            : null,
+            intent.name());
+        if (card == null) return;                                   // The test is the gate; play does not fault.
+        String kind = (String) card.get("kind");
+        int amount = (Integer) card.get("amount");
+        if (kind.isEmpty() || amount <= 0) return;                  // A card that says the land is left as found.
+        // PROCESS_MATERIAL is every material process there is, and only the ones that burn lay a plume.
+        if ((Boolean) card.get("fire") && !items.actionIsFireProcess(text)) return;
+        if ((Boolean) card.get("drifts")) wildlife.recordEmissionDrift(location, kind, amount, at);
+        else wildlife.recordDisturbance(location, kind, amount, at);
+    }
+
     /** The physical cost of an action beyond the passive tick (GitHub #27): energy spent, hygiene lost. */
     private record Labor(int energy, int hygiene) { }
     private Labor laborOf(Intent intent) {
