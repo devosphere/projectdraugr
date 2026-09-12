@@ -1,6 +1,7 @@
 package com.devosphere.draugr.world.genesis;
 
 import com.devosphere.draugr.audit.PersistentStateAuditor;
+import com.devosphere.draugr.action.ChronicleActionService;
 import com.devosphere.draugr.chronicle.ChronicleService;
 import com.devosphere.draugr.item.PhysicalItemService;
 import com.devosphere.draugr.simulation.SimulationTickService;
@@ -71,6 +72,7 @@ class MineralProvinceIntegrationTest {
     @Autowired WorldGenesisService worldGenesis;
     @Autowired WorldEcologyGenesisService ecology;
     @Autowired ChronicleService chronicles;
+    @Autowired ChronicleActionService actions;
     @Autowired PhysicalItemService items;
     @Autowired SimulationTickService ticks;
     @Autowired PersistentStateAuditor auditor;
@@ -192,6 +194,15 @@ class MineralProvinceIntegrationTest {
         Instant now = ticks.current().simulatedAt();
 
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", barren, chronicle);
+
+        // What the eye reads off this ground and what the hand can get out of it must be the same list. The
+        // survey's geology used to name minerals by biome affinity alone, so on this mountain it would have
+        // promised obsidian that gatherMineral then refuses — the survey lying to the player about the world it
+        // is surveying, which is worse than the gate not existing.
+        String onPlainGround = actions.resolve("look around and read the ground").perception().toLowerCase();
+        assertFalse(onPlainGround.contains("obsidian"),
+            () -> "an ordinary mountain must not promise obsidian it cannot give: " + onPlainGround);
+
         String[] refused = items.gatherMineral(chronicle, barren, "dig for obsidian here", now);
         assertEquals("FAILED", refused[0], "obsidian must not come off an ordinary mountain");
         assertTrue(refused[1].toLowerCase().contains("obsidian field"),
@@ -200,6 +211,13 @@ class MineralProvinceIntegrationTest {
         // At the field it is a matter of searching, never of the wrong country. The rarity roll can refuse, and
         // that refusal must never be the province one.
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", field, chronicle);
+
+        // And on the ground that does hold it, the survey must say so — a province is the rarest thing about a
+        // piece of country and the whole reason it is worth the walk.
+        String atTheField = actions.resolve("look around and read the ground").perception().toLowerCase();
+        assertTrue(atTheField.contains("obsidian"),
+            () -> "the ground that holds obsidian must read as holding it: " + atTheField);
+
         boolean found = false;
         for (int attempt = 0; attempt < 60 && !found; attempt++) {
             String[] dig = items.gatherMineral(chronicle, field, "dig for obsidian here", now);
