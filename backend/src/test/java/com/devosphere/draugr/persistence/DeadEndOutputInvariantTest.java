@@ -88,7 +88,12 @@ class DeadEndOutputInvariantTest {
             // Snare components — a running loop, or a wire cord + trigger, build a snare (#93, WildlifeEncounterService.setTrap reads them).
             "snare_loop", "snare_trigger_stick", "snare_wire_fibre",
             // A woven weir — carried, fish() fishes the stretch by the NET method (#93, WildlifeEncounterService.fish reads it).
-            "weir_net_panel");
+            "weir_net_panel",
+            // Restraint for a dangerous beast — carried, it eases the handling injury when a DANGEROUS animal is
+            // milked or sheared with no stanchion standing (#106/V308, WildlifeEncounterService.takeTamedYield
+            // reads animal_restraint). It is consumed by no recipe because a hobble is not a material: it is
+            // worn down by the work instead, SOUND to WORN to BROKEN, which is its own kind of terminal.
+            "leg_hobble");
 
     @Test
     void everyProducedItemIsTerminallyUsefulOrAKnownCodeReadItem() {
