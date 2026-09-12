@@ -29,8 +29,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * A furnace that holds its heat (#160, V305). Ordinary clay slumps at smelting heat and takes the wall with it;
- * fire clay does not, which is the whole reason a bloomery is lined. A lined shaft loses less of the charge to the
- * slag, so the same ore and the same charcoal come down to twice the iron.
+ * fire clay does not, which is the whole reason a bloomery is lined. A lined shaft loses less of the charge to
+ * the slag: the bare one recovers one bloom from two ore, the lined one two blooms from three, on the same three
+ * charcoal that the bare shaft would have to burn twice over to match.
  *
  * <p>Two things are proven here, because either one alone would be a catalogue token.
  *
@@ -148,14 +149,17 @@ class AFurnaceThatHoldsItsHeatIntegrationTest {
         assertTrue(items.hasAtLeast(chronicle, "lined_bloomery_furnace", 1), "raising it must yield the furnace itself");
         assertFalse(items.hasAtLeast(chronicle, "fire_clay", 1), "the lining must be consumed into the wall, not kept");
 
-        // The same charge again, in the lined shaft this time.
-        for (int i = 0; i < 2; i++) items.createCarriedItem(chronicle, "iron_ore", "Iron ore", now, "TEST_SEED");
+        // Now the lined shaft. Three ore and the same three charcoal, and it returns two blooms — where the bare
+        // shaft would have needed two firings, four ore and six charcoal to reach the same two. The lining buys
+        // recovery, not matter: two blooms weigh more than two ore do, and the first draft of this recipe asked
+        // for exactly that and was caught by the Auditor.
+        for (int i = 0; i < 3; i++) items.createCarriedItem(chronicle, "iron_ore", "Iron ore", now, "TEST_SEED");
         for (int i = 0; i < 3; i++) items.createCarriedItem(chronicle, "charcoal", "Charcoal", now, "TEST_SEED");
         int beforeHot = bloomsHeld(chronicle);
         String[] hot = items.runProcess(chronicle, chunk, "smelt iron in the lined furnace", now);
         assertEquals("SUCCEEDED", hot[0], () -> "the hot smelt must run at the lined furnace: " + hot[1]);
         assertEquals(2, bloomsHeld(chronicle) - beforeHot,
-                "the whole point of the lining: two blooms from the ore that gave one");
+                "the whole point of the lining: two blooms off a charge the bare shaft got one out of");
 
         assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
