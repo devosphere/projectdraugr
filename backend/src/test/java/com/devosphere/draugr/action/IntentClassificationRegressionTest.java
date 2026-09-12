@@ -106,6 +106,19 @@ class IntentClassificationRegressionTest {
         assertEquals("UNKNOWN", classify("burn the limestone into lime", true));
     }
 
+    /**
+     * "look around" is a survey and "read the ground" is tracking, and a test that wants the first must not ask
+     * for the second. MineralProvinceIntegrationTest asked for "look around and read the ground" and got back
+     * droppings and a reindeer — it was asserting against tracking prose while believing it was reading a survey,
+     * and it PASSED the negative half for entirely the wrong reason. Both phrasings pinned here so the mistake
+     * is visible at the cheapest level rather than after a fifty-minute suite.
+     */
+    @Test void lookingAroundSurveysAndReadingTheGroundTracks() throws Exception {
+        assertEquals("OBSERVE", classify("look around"));
+        assertEquals("OBSERVE", classify("look around and take in the place"));
+        assertEquals("TRACK", classify("read the ground for sign"));
+    }
+
     /** #133 ground scavenge: a pointed forest-floor search yields material (FORAGE_GROUND); a bare look-around
      *  still just perceives (SEARCH); attached-bark stripping stays the tool path (STRIP_BARK), loose bark forages. */
     @Test void groundScavengeClassifies() throws Exception {

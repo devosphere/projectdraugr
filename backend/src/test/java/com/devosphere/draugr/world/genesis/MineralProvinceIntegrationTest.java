@@ -199,7 +199,10 @@ class MineralProvinceIntegrationTest {
         // survey's geology used to name minerals by biome affinity alone, so on this mountain it would have
         // promised obsidian that gatherMineral then refuses — the survey lying to the player about the world it
         // is surveying, which is worse than the gate not existing.
-        String onPlainGround = actions.resolve("look around and read the ground").perception().toLowerCase();
+        var plainLook = actions.resolve("look around");
+        assertEquals("OBSERVE", plainLook.intent(),
+            () -> "this must be a survey or it is testing the wrong thing: " + plainLook.perception());
+        String onPlainGround = plainLook.perception().toLowerCase();
         assertFalse(onPlainGround.contains("obsidian"),
             () -> "an ordinary mountain must not promise obsidian it cannot give: " + onPlainGround);
 
@@ -214,7 +217,10 @@ class MineralProvinceIntegrationTest {
 
         // And on the ground that does hold it, the survey must say so — a province is the rarest thing about a
         // piece of country and the whole reason it is worth the walk.
-        String atTheField = actions.resolve("look around and read the ground").perception().toLowerCase();
+        var fieldLook = actions.resolve("look around");
+        assertEquals("OBSERVE", fieldLook.intent(),
+            () -> "this must be a survey or it is testing the wrong thing: " + fieldLook.perception());
+        String atTheField = fieldLook.perception().toLowerCase();
         assertTrue(atTheField.contains("obsidian"),
             () -> "the ground that holds obsidian must read as holding it: " + atTheField);
 
