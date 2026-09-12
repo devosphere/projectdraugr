@@ -278,7 +278,7 @@ public class PhysicalItemService {
             "WHERE wb.chronicle_id=? AND wb.bond_stage='TAMED' " +
             "AND EXISTS (SELECT 1 FROM wildlife_population wp JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wp.id=wb.population_id) " +
             "AND EXISTS (SELECT 1 FROM item_instance ti JOIN world_object tw ON tw.id=ti.object_id " +
-            "  WHERE ti.item_key IN (SELECT item_key FROM draft_vehicle) AND tw.current_owner_id=? AND tw.lifecycle_state='ACTIVE')",
+            "  WHERE ti.item_key IN (SELECT item_key FROM draft_vehicle) AND ti.condition_state <> 'BROKEN' AND tw.current_owner_id=? AND tw.lifecycle_state='ACTIVE')",
             fatiguePerWork, chronicle, chronicle);
     }
 
@@ -497,6 +497,65 @@ public class PhysicalItemService {
             "UPDATE wildlife_population SET carrying_capacity = GREATEST(carrying_capacity, population_count) " +
             "WHERE population_count > carrying_capacity");
         jdbc.update("DELETE FROM tamed_young WHERE matures_at <= ?", ts);
+    }
+
+    /** How long a vehicle stands out in the open before the weather takes a step out of it. */
+    private static final int GEAR_WEATHER_HOURS = 240;   // ten days of rain on unprotected timber
+
+    /**
+     * A cart left in the rain (#108/#100).
+     *
+     * <p>Metal rusts, hides rot, unfired pottery slakes back to mud — and a wooden cart left standing in the open
+     * through a winter was exactly as good as the day it was built, for ever. It is the largest wooden thing a
+     * Chronicle owns and the only one the weather could not touch.
+     *
+     * <p>What protects it is a roofed store the keeper already builds ({@code shelters_gear}, V300) — a tool
+     * shed, a barn, a covered wood store. There is deliberately no cart shed: nothing in this model distinguishes
+     * what will fit inside a building, so a cart shed would keep a cart dry exactly as a tool shed does under
+     * another name.
+     *
+     * <p>Graded rather than fatal, on the {@code condition_state} ladder the catalogue already carries: SOUND to
+     * WORN to BROKEN, and no further. REPAIR_ITEM takes it back up again with cordage, so a neglected cart is a
+     * job to do rather than a thing lost. Only gear left ON THE GROUND weathers — what a Chronicle carries is
+     * with them, not standing out in it.
+     */
+    @Transactional
+    public void weatherExposedGear(Instant now) {
+        java.sql.Timestamp ts = java.sql.Timestamp.from(now);
+        java.util.List<java.util.Map<String,Object>> exposed = jdbc.queryForList(
+            "SELECT i.object_id, i.weathered_at, i.condition_state FROM item_instance i " +
+            "JOIN world_object w ON w.id = i.object_id " +
+            "WHERE w.lifecycle_state='ACTIVE' AND w.current_owner_id IS NULL AND w.current_location_id IS NOT NULL " +
+            "  AND i.item_key IN (SELECT item_key FROM draft_vehicle) " +
+            "  AND i.condition_state IN ('SOUND','WORN') " +
+            "  AND NOT EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
+            "                  JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
+            "                  WHERE ck.shelters_gear AND cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
+            "                    AND sw.lifecycle_state='ACTIVE' AND sw.current_location_id = w.current_location_id)");
+        for (java.util.Map<String,Object> r : exposed) {
+            UUID id = (UUID) r.get("object_id");
+            java.sql.Timestamp since = (java.sql.Timestamp) r.get("weathered_at");
+            if (since == null) { // first spell in the open: the clock starts, it does not bite yet
+                jdbc.update("UPDATE item_instance SET weathered_at=? WHERE object_id=?", ts, id);
+                continue;
+            }
+            if (java.time.Duration.between(since.toInstant(), now).toHours() < GEAR_WEATHER_HOURS) continue;
+            String next = "SOUND".equals(r.get("condition_state")) ? "WORN" : "BROKEN";
+            jdbc.update("UPDATE item_instance SET condition_state=?, weathered_at=? WHERE object_id=?", next, ts, id);
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) " +
+                        "VALUES (?,?,'WEATHERED',jsonb_build_object('to',?))", id, ts, next);
+        }
+        // Put away, or the rain stopped mattering: the spell breaks and the clock is cleared, so ten days under
+        // cover and ten days out is not twenty days of weather.
+        jdbc.update(
+            "UPDATE item_instance i SET weathered_at = NULL FROM world_object w " +
+            "WHERE w.id = i.object_id AND i.weathered_at IS NOT NULL " +
+            "  AND i.item_key IN (SELECT item_key FROM draft_vehicle) " +
+            "  AND (w.current_owner_id IS NOT NULL OR EXISTS (" +
+            "        SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
+            "        JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
+            "        WHERE ck.shelters_gear AND cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
+            "          AND sw.lifecycle_state='ACTIVE' AND sw.current_location_id = w.current_location_id))");
     }
 
     /** The refuse level at which the ground a beast stands on starts to make it ill. */
@@ -2936,9 +2995,9 @@ public class PhysicalItemService {
         Capacity cap=jdbc.query("SELECT c.sustained_mass_grams, c.direct_bulk_ml, c.maximum_single_lift_grams, COALESCE(a.load_conditioning,0), COALESCE(a.recovery_readiness,.5), " +
             "COALESCE((SELECT SUM(b.mass_bonus_grams) FROM equipment_attachment e JOIN item_instance ii ON ii.object_id=e.item_id JOIN carry_aid_bonus b ON b.item_key=ii.item_key WHERE e.chronicle_id=c.chronicle_id),0), " +
             "COALESCE((SELECT SUM(b.bulk_bonus_ml)    FROM equipment_attachment e JOIN item_instance ii ON ii.object_id=e.item_id JOIN carry_aid_bonus b ON b.item_key=ii.item_key WHERE e.chronicle_id=c.chronicle_id),0), " +
-            "CASE WHEN EXISTS(SELECT 1 FROM item_instance ti JOIN world_object tw ON tw.id=ti.object_id WHERE ti.item_key IN (SELECT item_key FROM draft_vehicle) AND tw.current_owner_id=c.chronicle_id AND tw.lifecycle_state='ACTIVE') " +
+            "CASE WHEN EXISTS(SELECT 1 FROM item_instance ti JOIN world_object tw ON tw.id=ti.object_id WHERE ti.item_key IN (SELECT item_key FROM draft_vehicle) AND ti.condition_state <> 'BROKEN' AND tw.current_owner_id=c.chronicle_id AND tw.lifecycle_state='ACTIVE') " +
             " THEN COALESCE((SELECT SUM(ds.haul_bonus_grams * (100 - GREATEST(wb.draft_fatigue, wb.draft_hunger, wb.draft_thirst) * (200 - wb.draft_conditioning) / 200) / 100) FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id=wb.population_id JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wb.chronicle_id=c.chronicle_id AND wb.bond_stage='TAMED'),0) ELSE 0 END, " +
-            "CASE WHEN EXISTS(SELECT 1 FROM item_instance ti JOIN world_object tw ON tw.id=ti.object_id WHERE ti.item_key IN (SELECT item_key FROM draft_vehicle) AND tw.current_owner_id=c.chronicle_id AND tw.lifecycle_state='ACTIVE') " +
+            "CASE WHEN EXISTS(SELECT 1 FROM item_instance ti JOIN world_object tw ON tw.id=ti.object_id WHERE ti.item_key IN (SELECT item_key FROM draft_vehicle) AND ti.condition_state <> 'BROKEN' AND tw.current_owner_id=c.chronicle_id AND tw.lifecycle_state='ACTIVE') " +
             " THEN COALESCE((SELECT SUM(ds.bulk_bonus_ml * (100 - GREATEST(wb.draft_fatigue, wb.draft_hunger, wb.draft_thirst) * (200 - wb.draft_conditioning) / 200) / 100)    FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id=wb.population_id JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wb.chronicle_id=c.chronicle_id AND wb.bond_stage='TAMED'),0) ELSE 0 END " +
             "FROM chronicle_carry_capacity c LEFT JOIN chronicle_capability_adaptation a ON a.chronicle_id=c.chronicle_id WHERE c.chronicle_id=?",rs->rs.next()?new Capacity((int)(rs.getInt(1)*(1+rs.getDouble(4)*.12*rs.getDouble(5)))+rs.getInt(6)+rs.getInt(8),rs.getInt(2)+rs.getInt(7)+rs.getInt(9),(int)(rs.getInt(3)*(1+rs.getDouble(4)*.08*rs.getDouble(5)))):new Capacity(0,0,0),chronicle);
         Load load=jdbc.query("WITH RECURSIVE carried(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN carried c ON ic.container_id=c.id) SELECT COALESCE(SUM(d.unit_mass_grams),0),COALESCE(SUM(d.unit_volume_ml),0),COALESCE(MAX(d.unit_mass_grams),0) FROM carried JOIN item_instance i ON i.object_id=carried.id JOIN item_definition d ON d.item_key=i.item_key",rs->rs.next()?new Load(rs.getInt(1),rs.getInt(2),rs.getInt(3)):new Load(0,0,0),chronicle);
