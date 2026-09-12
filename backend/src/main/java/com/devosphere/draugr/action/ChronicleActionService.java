@@ -919,13 +919,31 @@ public class ChronicleActionService {
         }
         if (affinity.isEmpty()) return "";
         String affinityOr = affinity.stream().map(a -> "d.biome_affinity ILIKE ?").collect(java.util.stream.Collectors.joining(" OR "));
+        // #160: what the eye reads off this ground and what a hand can get out of it have to be the same list.
+        // A mineral bound to a province is in the ground only where that province is, so naming obsidian on an
+        // ordinary mountain would promise a Chronicle something gatherMineral then refuses them — the survey
+        // lying to the player about the world it is surveying. The same condition, in both places.
+        //
+        // And where a province IS here, its mineral is named first. It is the rarest thing about this ground and
+        // the whole reason the site is worth walking to; buried under field stone and cobbles by a plain rarity
+        // sort, it would be the one fact the survey failed to mention.
+        String provinceHere =
+            "EXISTS (SELECT 1 FROM mineral_province p JOIN ecology_site s ON s.site_kind = p.site_kind " +
+            "         WHERE p.mineral_key = d.mineral_key AND s.chunk_id = ?)";
         java.util.List<Object> args = new java.util.ArrayList<>();
+        // Positional, in the order the ?s appear in the text below: provinceHere in the select list, the deposit
+        // join, the affinity clauses, then provinceHere again in the where. The first two are both the chunk.
+        args.add(loc);
         args.add(loc);
         args.addAll(affinity);
+        args.add(loc);
         java.util.List<java.util.Map<String,Object>> minerals = jdbc.queryForList(
-            "SELECT d.display_name, d.mineral_key, d.rarity, md.remaining_units FROM mineral_definition d " +
+            "SELECT d.display_name, d.mineral_key, d.rarity, md.remaining_units, " + provinceHere + " AS at_its_province " +
+            "FROM mineral_definition d " +
             "LEFT JOIN mineral_deposit md ON md.mineral_key=d.mineral_key AND md.chunk_id=? " +
-            "WHERE " + affinityOr + " ORDER BY d.rarity DESC LIMIT 4", args.toArray());
+            "WHERE (" + affinityOr + ") AND (" +
+            "  NOT EXISTS (SELECT 1 FROM mineral_province p WHERE p.mineral_key = d.mineral_key) OR " + provinceHere + ") " +
+            "ORDER BY at_its_province DESC, d.rarity DESC LIMIT 4", args.toArray());
         if (minerals.isEmpty()) return "";
         java.util.List<String> likely = new java.util.ArrayList<>();
         java.util.List<String> worked = new java.util.ArrayList<>();
