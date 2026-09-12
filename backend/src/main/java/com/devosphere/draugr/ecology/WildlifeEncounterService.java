@@ -706,8 +706,37 @@ public class WildlifeEncounterService {
         return (String) herd.get("species");
     }
 
-    /** What a bad-tempered beast does to a keeper who works on it with nothing holding it still. */
-    private static final int HANDLING_INJURY = 12;
+    /**
+     * What a bad-tempered beast does to a keeper who works on it with nothing holding it still.
+     *
+     * <p>Public because {@code animal_restraint.eases_handling_by} is bounded against it — no carried restraint
+     * may be as good as a milking stanchion, or the stanchion is a building nobody would raise — and a bound in
+     * data against a constant in code is worth nothing unless something compares the two. That comparison is in
+     * RestraintForADangerousBeastIntegrationTest, which needs to read this.
+     */
+    public static final int HANDLING_INJURY = 12;
+
+    /**
+     * Wear one restraint a step for having taken a struggling animal's weight: SOUND to WORN to BROKEN.
+     *
+     * <p>Takes the most worn sound one first, so a keeper carrying two hobbles finishes the first before
+     * starting on the second rather than ruining both at once. A BROKEN restraint is left alone — it has already
+     * stopped easing anything, which the lookup above enforces by ignoring it.
+     */
+    private void strainRestraint(UUID chronicle, String itemKey, Instant at) {
+        UUID worn = jdbc.query(
+            "SELECT w.id FROM world_object w JOIN item_instance i ON i.object_id = w.id " +
+            "WHERE w.current_owner_id = ? AND w.lifecycle_state = 'ACTIVE' AND i.item_key = ? " +
+            "  AND i.condition_state IN ('SOUND','WORN') " +
+            "ORDER BY CASE i.condition_state WHEN 'WORN' THEN 0 ELSE 1 END LIMIT 1",
+            rs -> rs.next() ? rs.getObject(1, UUID.class) : null, chronicle, itemKey);
+        if (worn == null) return;
+        String next = "WORN".equals(jdbc.queryForObject(
+            "SELECT condition_state FROM item_instance WHERE object_id = ?", String.class, worn)) ? "BROKEN" : "WORN";
+        jdbc.update("UPDATE item_instance SET condition_state = ? WHERE object_id = ?", next, worn);
+        jdbc.update("INSERT INTO object_transition (object_id, occurred_at, transition_type, payload) " +
+                    "VALUES (?, ?, 'STRAINED', jsonb_build_object('to', ?))", worn, Timestamp.from(at), next);
+    }
 
     /** How many animals one person gets through in a single taking, however large the herd. */
     private static final int MOST_A_PERSON_CAN_WORK_THROUGH = 6;
@@ -802,10 +831,31 @@ public class WildlifeEncounterService {
             "WHERE ck.holds_an_animal_still AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
             "  AND w.lifecycle_state='ACTIVE' AND w.current_location_id=keeper.current_location_id)",
             Boolean.class, chronicle));
+        // Something to hold it with (#106/V308). A stanchion above makes the work safe; carried gear only makes
+        // it possible. The best single restraint applies and they do not stack — enough rope would otherwise be
+        // as good as a building, and nobody would raise the building. Broken gear holds nothing.
+        java.util.Map<String,Object> restraint = jdbc.query(
+            "SELECT r.item_key, r.eases_handling_by, r.strains FROM animal_restraint r " +
+            "WHERE EXISTS (SELECT 1 FROM world_object w JOIN item_instance i ON i.object_id = w.id " +
+            "               WHERE w.current_owner_id = ? AND w.lifecycle_state = 'ACTIVE' " +
+            "                 AND i.item_key = r.item_key AND i.condition_state <> 'BROKEN') " +
+            "ORDER BY r.eases_handling_by DESC LIMIT 1",
+            rs -> rs.next() ? java.util.Map.of("key", rs.getString(1), "eases", rs.getInt(2), "strains", rs.getBoolean(3)) : null,
+            chronicle);
+
         String hurt = "";
         if (dangerous && !restrained) {
-            physiology.applyInjury(chronicle, HANDLING_INJURY, null, at, "handling a " + display(handled));
-            hurt = " It shifts its weight against you without warning, and you come away with something wrenched.";
+            int eased = restraint == null ? 0 : (Integer) restraint.get("eases");
+            physiology.applyInjury(chronicle, Math.max(1, HANDLING_INJURY - eased), null, at, "handling a " + display(handled));
+            if (restraint == null) {
+                hurt = " It shifts its weight against you without warning, and you come away with something wrenched.";
+            } else {
+                String gear = ((String) restraint.get("key")).replace('_', ' ');
+                hurt = " It throws its weight against the " + gear + " and some of that still comes back through you — but nothing like what it would have been with nothing on it at all.";
+                // The animal's strength has to go somewhere. What the gear absorbs is what the keeper does not,
+                // so gear built to absorb it wears out doing so.
+                if (Boolean.TRUE.equals(restraint.get("strains"))) strainRestraint(chronicle, (String) restraint.get("key"), at);
+            }
         }
 
         String itemKey = (String) ready.get("item");
