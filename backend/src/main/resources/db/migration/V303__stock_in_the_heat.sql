@@ -63,8 +63,16 @@ INSERT INTO assembly_definition
   (assembly_key, subject_kind, display_name, portable, produces_item_key, construction_kind, domain_key, keywords, subjects, narration, review_state, reviewed_at)
 VALUES
   ('shade_shelter','STRUCTURE','Shade shelter',FALSE,NULL,'SHADE_SHELTER','construction',
-   'build a shade shelter,raise a shade shelter,build a shade screen,build a sun shade,build a shade roof,shade shelter,shade screen,sun shade',
-   'shade shelter,shade screen,sun shade,shade roof',
+   -- NO "sun shade" here, and the omission is the point. `coverKindOf` already answers to sunshade/sun shade/
+   -- sun awning/awning/shade overhead with the bare-hand SUNSHADE cover from #195, and a Java intent runs before
+   -- the assembly matcher — so "build a sun shade" would be taken by PLACE_COVER and a keeper asking for a shade
+   -- shelter would get a cloth propped over themselves. That is the BUILD_PEN trap of V284 wearing another face,
+   -- and the two really are different things: the #195 cover is a person's own shade, thrown up by hand and gone
+   -- again, while this is a posted, thatched structure that stock stand under.
+   -- ConstructionRegistryCompleteIntegrationTest.noJavaIntentShadowsAnAssemblysOwnKeywords caught this, which is
+   -- exactly what it exists for; the phrasing was removed rather than the guard weakened.
+   'build a shade shelter,raise a shade shelter,build a shade screen,build a shade roof,shade shelter,shade screen',
+   'shade shelter,shade screen,shade roof',
    'Four posts and a thatched top, open on every side so the air moves through and the sun does not reach under.',
    'VERIFIED', now()),
   ('mud_wallow','STRUCTURE','Mud wallow',FALSE,NULL,'MUD_WALLOW','construction',
