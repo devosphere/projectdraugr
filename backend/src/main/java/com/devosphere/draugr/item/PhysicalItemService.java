@@ -337,9 +337,44 @@ public class PhysicalItemService {
             "     OR EXISTS(SELECT 1 FROM construction_project cp JOIN world_object tw ON tw.id=cp.object_id " +
             "               WHERE cp.project_kind IN ('WATERING_STATION','RAINWATER_CATCHMENT') AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
             "                 AND tw.lifecycle_state='ACTIVE' AND tw.current_location_id=ch.id))) " +
-            "  THEN GREATEST(0, draft_thirst - ?) ELSE LEAST(100, draft_thirst + ?) END " +
+            "  THEN GREATEST(0, draft_thirst - ?) ELSE LEAST(100, draft_thirst + ? + " + heatOnStock() + ") END " +
             "WHERE wb.bond_stage='TAMED' AND EXISTS (SELECT 1 FROM wildlife_population wp JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wp.id=wb.population_id)",
             DRAFT_WATER_RELIEF, DRAFT_THIRST_PER_TURN);
+    }
+
+    /** Above this, the day is hot enough that stock are working to shed heat rather than just standing in it. */
+    private static final int HOT_ENOUGH_TO_TELL_C = 26;
+    /** What a hot day adds to a beast's thirst, on top of the ordinary turn. */
+    private static final int HEAT_THIRST = 5;
+
+    /**
+     * What the heat adds to a beast's thirst (#108/V303) — a SQL fragment, because it belongs inside the single
+     * set-based thirst statement rather than in a second pass over the same rows.
+     *
+     * <p>Thirst has risen by a flat amount in every weather there is since V267: a buffalo in a July heatwave
+     * dried out at exactly the same rate as a reindeer in a cold drizzle. Weather is the one thing that decides
+     * how much water an animal needs, and it was the one thing the rule did not look at. That is also why #108's
+     * shade shelter and wallows were blocked — both are answers to heat, and there was no heat.
+     *
+     * <p><b>Two answers, and they are not interchangeable.</b> Most stock shed heat by sweating and panting and
+     * want <em>shade</em>; a keeper with a byre has already solved it. <b>Pigs and buffalo cannot sweat</b> —
+     * that is not a flourish, it is why both species wallow — so shade does nothing for them and only a
+     * <em>wallow</em> will do. {@code needs_a_wallow} says which is which.
+     */
+    private static String heatOnStock() {
+        return "(CASE WHEN EXISTS (" +
+            "  SELECT 1 FROM world_object cw2 JOIN world_chunk ch2 ON ch2.id=cw2.current_location_id " +
+            "  JOIN world_weather ww ON ww.world_id=ch2.world_id " +
+            "  WHERE cw2.id=wb.chronicle_id AND ww.ambient_temperature_c >= " + HOT_ENOUGH_TO_TELL_C +
+            // Relief from the heat, and which relief depends on the animal rather than on what is cheapest to build.
+            "    AND NOT EXISTS (SELECT 1 FROM construction_project cp2 JOIN world_object sw2 ON sw2.id=cp2.object_id " +
+            "                    JOIN construction_kind ck2 ON ck2.project_kind=cp2.project_kind " +
+            "                    JOIN wildlife_population wp2 ON wp2.id=wb.population_id " +
+            "                    JOIN wildlife_species ws2 ON ws2.species_key=wp2.species_key " +
+            "                    WHERE cp2.state='COMPLETED' AND cp2.integrity_percent>0 AND sw2.lifecycle_state='ACTIVE' " +
+            "                      AND sw2.current_location_id=ch2.id " +
+            "                      AND (CASE WHEN ws2.needs_a_wallow THEN ck2.is_wallow ELSE ck2.gives_shade END))" +
+            ") THEN " + HEAT_THIRST + " ELSE 0 END)";
     }
 
     private static final int LIVESTOCK_FOULING_PER_TURN = 4; // kept stock foul the ground they stand on
@@ -787,6 +822,43 @@ public class PhysicalItemService {
 
         jdbc.update("DELETE FROM tamed_young WHERE cold_since IS NOT NULL " +
                     "AND cold_since <= ?::timestamptz - make_interval(hours => ?)", ts, COLD_HOURS_THAT_KILL);
+    }
+
+    /**
+     * A bull among the young (#108/V304).
+     *
+     * <p>V302 gave species a temperament, and a DANGEROUS animal hurts the keeper who works on it unrestrained.
+     * It did not yet hurt anything else: a bull, a boar or a buffalo stood in the same fold as the kids and lambs
+     * and was no more trouble to them than a goose. That is the last thing #108's boar pen was waiting on, and
+     * why V302 deliberately did not build it — restraining an animal while you work and keeping it away from the
+     * herd are two different jobs, and the second needs the herd to be able to come to harm.
+     *
+     * <p>Trampling and goring by breeding males is a real and ordinary loss in stock-keeping, and separating the
+     * boar is the ordinary answer. The young are what is at risk, being the small and slow thing in a herd —
+     * and already the fragile thing in this simulation, lost to cold (V297) and to a hard birth (V298).
+     *
+     * <p>Takes the <b>youngest</b> first, which is what actually happens, and takes one per turn rather than a
+     * herd at a stroke: a keeper who notices has time to build the yard. Runs in the tick after the cold.
+     */
+    @Transactional
+    public void dangerousStockAmongTheYoung(Instant now) {
+        jdbc.update(
+            "DELETE FROM tamed_young WHERE id IN (" +
+            "  SELECT ty.id FROM tamed_young ty " +
+            "  JOIN wildlife_bond wb ON wb.id = ty.bond_id " +
+            "  JOIN world_object cw ON cw.id = wb.chronicle_id " +
+            // A dangerous animal the same keeper holds, standing on the same ground as the young.
+            "  WHERE EXISTS (SELECT 1 FROM wildlife_bond d " +
+            "                JOIN wildlife_population dp ON dp.id = d.population_id " +
+            "                JOIN wildlife_species ds ON ds.species_key = dp.species_key " +
+            "                WHERE d.chronicle_id = wb.chronicle_id AND d.bond_stage = 'TAMED' " +
+            "                  AND ds.temperament = 'DANGEROUS') " +
+            // Unless there is somewhere to keep it apart.
+            "    AND NOT EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
+            "                    JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
+            "                    WHERE ck.separates_dangerous AND cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
+            "                      AND sw.lifecycle_state='ACTIVE' AND sw.current_location_id = cw.current_location_id) " +
+            "  ORDER BY ty.born_at DESC LIMIT 1)");
     }
 
     /** How many young this Chronicle is raising, and of what — for perception, not for working with. */
