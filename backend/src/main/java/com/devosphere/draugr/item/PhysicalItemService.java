@@ -499,6 +499,77 @@ public class PhysicalItemService {
         jdbc.update("DELETE FROM tamed_young WHERE matures_at <= ?", ts);
     }
 
+    /** A beast this tired, hungry, thirsty or ill will not carry anyone. */
+    private static final int UNFIT_TO_CARRY = 70;
+    /** Carrying this share of what you can bear makes getting up onto a tall animal the hard part. */
+    private static final double LADEN_ENOUGH_TO_NEED_A_LEG_UP = 0.55;
+    /** What a journey on horseback takes out of the animal, per chunk crossed. */
+    private static final int RIDDEN_FATIGUE_PER_DISTANCE = 6;
+
+    /**
+     * The beast a Chronicle would ride if they set out now, or null if they would walk (#108/#106/#100).
+     *
+     * <p>Eight species pull, and <b>nothing in the world could be ridden</b> — a horse and an ox were the same
+     * animal to this simulation, a number of grams. Riding is not a convenience; it is the reason a horse was
+     * worth more than the meat on it, and its absence is what left #108's mounting block and the tack half of
+     * #106 blocked.
+     *
+     * <p><b>Riding is not a state here.</b> There is no mount action, no dismount, no saddle to lose track of.
+     * It is how you travel: set out with a beast that can be ridden and something to guide it by, and you ride.
+     * A Chronicle who does not qualify walks, and is told nothing about it, because walking is not a failure.
+     *
+     * <p>Four things decide it, and each is something the keeper did:
+     * <ul>
+     *   <li>a TAMED beast of a species people actually rode ({@code draft_species.rideable});</li>
+     *   <li>that beast fit to carry — not worked out, starved, parched or ill;</li>
+     *   <li>a harness to guide it by, which the catalogue already has;</li>
+     *   <li>and a way up, if the handler is laden: a mounting block, or a light enough load.</li>
+     * </ul>
+     */
+    @Transactional(readOnly = true)
+    public UUID beastToRide(UUID chronicle, UUID at) {
+        if (!hasAtLeast(chronicle, "draft_harness", 1) && !hasAtLeast(chronicle, "rope_harness", 1)) return null;
+
+        UUID beast = jdbc.query(
+            "SELECT wb.id FROM wildlife_bond wb " +
+            "JOIN wildlife_population wp ON wp.id = wb.population_id " +
+            "JOIN draft_species ds ON ds.species_key = wp.species_key AND ds.rideable " +
+            "WHERE wb.chronicle_id = ? AND wb.bond_stage = 'TAMED' AND wp.population_count > 0 " +
+            "  AND wb.draft_fatigue < ? AND wb.draft_hunger < ? AND wb.draft_thirst < ? AND wb.sickness < ? " +
+            "ORDER BY wb.draft_fatigue LIMIT 1",
+            rs -> rs.next() ? rs.getObject(1, UUID.class) : null,
+            chronicle, UNFIT_TO_CARRY, UNFIT_TO_CARRY, UNFIT_TO_CARRY, TOO_SICK_TO_GIVE);
+        if (beast == null) return null;
+
+        // Getting up onto a tall animal while carrying a load is the part that actually stops people, and a
+        // block is the oldest answer to it. Under that load it does not arise.
+        LoadState load = currentLoad(chronicle);
+        boolean laden = load.sustainedMassCapacityGrams() > 0
+            && (double) load.massGrams() / load.sustainedMassCapacityGrams() >= LADEN_ENOUGH_TO_NEED_A_LEG_UP;
+        if (!laden) return beast;
+
+        boolean somethingToClimbFrom = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id = cp.object_id " +
+            "JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
+            "WHERE ck.aids_mounting AND cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
+            "  AND w.lifecycle_state='ACTIVE' AND w.current_location_id = ?)", Boolean.class, at));
+        return somethingToClimbFrom ? beast : null;
+    }
+
+    /**
+     * The journey's cost, moved rather than removed: it tires the ANIMAL.
+     *
+     * <p>Draft fatigue already gates haulage, so a horse ridden hard all week is a horse that cannot pull — and
+     * a keeper who rides everywhere finds their draft team useless exactly when they need it. That is the trade
+     * real keepers made, and it costs no new state to express.
+     */
+    @Transactional
+    public void tireRiddenBeast(UUID bond, int distance) {
+        jdbc.update("UPDATE wildlife_bond SET draft_fatigue = LEAST(100, draft_fatigue + ?), " +
+                    "  draft_conditioning = LEAST(100, draft_conditioning + 2) WHERE id = ?",
+            Math.max(1, distance) * RIDDEN_FATIGUE_PER_DISTANCE, bond);
+    }
+
     /** How long a vehicle stands out in the open before the weather takes a step out of it. */
     private static final int GEAR_WEATHER_HOURS = 240;   // ten days of rain on unprotected timber
 
