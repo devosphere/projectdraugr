@@ -824,6 +824,43 @@ public class PhysicalItemService {
                     "AND cold_since <= ?::timestamptz - make_interval(hours => ?)", ts, COLD_HOURS_THAT_KILL);
     }
 
+    /**
+     * A bull among the young (#108/V304).
+     *
+     * <p>V302 gave species a temperament, and a DANGEROUS animal hurts the keeper who works on it unrestrained.
+     * It did not yet hurt anything else: a bull, a boar or a buffalo stood in the same fold as the kids and lambs
+     * and was no more trouble to them than a goose. That is the last thing #108's boar pen was waiting on, and
+     * why V302 deliberately did not build it — restraining an animal while you work and keeping it away from the
+     * herd are two different jobs, and the second needs the herd to be able to come to harm.
+     *
+     * <p>Trampling and goring by breeding males is a real and ordinary loss in stock-keeping, and separating the
+     * boar is the ordinary answer. The young are what is at risk, being the small and slow thing in a herd —
+     * and already the fragile thing in this simulation, lost to cold (V297) and to a hard birth (V298).
+     *
+     * <p>Takes the <b>youngest</b> first, which is what actually happens, and takes one per turn rather than a
+     * herd at a stroke: a keeper who notices has time to build the yard. Runs in the tick after the cold.
+     */
+    @Transactional
+    public void dangerousStockAmongTheYoung(Instant now) {
+        jdbc.update(
+            "DELETE FROM tamed_young WHERE id IN (" +
+            "  SELECT ty.id FROM tamed_young ty " +
+            "  JOIN wildlife_bond wb ON wb.id = ty.bond_id " +
+            "  JOIN world_object cw ON cw.id = wb.chronicle_id " +
+            // A dangerous animal the same keeper holds, standing on the same ground as the young.
+            "  WHERE EXISTS (SELECT 1 FROM wildlife_bond d " +
+            "                JOIN wildlife_population dp ON dp.id = d.population_id " +
+            "                JOIN wildlife_species ds ON ds.species_key = dp.species_key " +
+            "                WHERE d.chronicle_id = wb.chronicle_id AND d.bond_stage = 'TAMED' " +
+            "                  AND ds.temperament = 'DANGEROUS') " +
+            // Unless there is somewhere to keep it apart.
+            "    AND NOT EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
+            "                    JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
+            "                    WHERE ck.separates_dangerous AND cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
+            "                      AND sw.lifecycle_state='ACTIVE' AND sw.current_location_id = cw.current_location_id) " +
+            "  ORDER BY ty.born_at DESC LIMIT 1)");
+    }
+
     /** How many young this Chronicle is raising, and of what — for perception, not for working with. */
     @Transactional(readOnly = true)
     public int youngInCare(UUID chronicle) {
