@@ -53,29 +53,26 @@ public class WildlifeEncounterService {
         if(candidate==null)return new EncounterResult("FAILED","The ground answers only with rain and the small movements of the forest.");
         // One pass over what is worn and one over what is carried, aggregated conditionally — the combat-relevant
         // tally the encounter needs, replacing the dozen correlated COUNT subqueries this grew from. Column order
-        // is the Combatant record's: energy, injury, pain, handWeapon, stones, armour, poison, lightShield,
-        // rawhideShield, blunt, sling, javelin, bow, arrows. Worn items count from equipment_attachment; thrown/
+        // is the Combatant record's: energy, injury, pain, handWeapon, stones, poison, blunt, sling, javelin, bow,
+        // arrows, hardened, bronze, iron, steel, protection, atlatl. Worn items count from equipment_attachment; thrown/
         // held stock (stones, sling, javelin, bow, arrows) counts from what the chronicle owns and carries.
         Combatant body=jdbc.query(
-            "SELECT p.energy_level,p.injury_severity,p.pain_level,eq.hand_weapon,own.stones,eq.armour,eq.poison," +
-            "eq.light_shield,eq.rawhide_shield,eq.blunt,own.sling,own.javelin,own.bow,own.arrows,eq.soft_armour,eq.hardened,eq.bronze,eq.iron,eq.steel,eq.plate,own.atlatl " +
+            "SELECT p.energy_level,p.injury_severity,p.pain_level,eq.hand_weapon,own.stones,eq.poison," +
+            "eq.blunt,own.sling,own.javelin,own.bow,own.arrows,eq.hardened,eq.bronze,eq.iron,eq.steel,eq.protection,own.atlatl " +
             "FROM chronicle_physiology p " +
             "LEFT JOIN LATERAL (SELECT " +
             // Weapon capability is data-driven (#93): a HAND-position item with a weapon_profile of role HAND counts
-            // as a hand weapon, and its edge_tier drives the extra bite; BLUNT likewise. Armour/shields stay by key.
+            // as a hand weapon, and its edge_tier drives the extra bite; BLUNT likewise. Armour and shields are data too (#134):
+            // protection below sums armour_protection over what is actually worn.
             "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND wp.combat_role='HAND' THEN 1 ELSE 0 END),0) hand_weapon," +
-            "  COALESCE(SUM(CASE WHEN i.item_key IN ('scale_armour','chitin_helm','war_shield') THEN 1 ELSE 0 END),0) armour," +
             "  COALESCE(SUM(CASE WHEN wp.envenomed THEN 1 ELSE 0 END),0) poison," +
-            "  COALESCE(SUM(CASE WHEN i.item_key IN ('bark_shield','woven_reed_shield') THEN 1 ELSE 0 END),0) light_shield," +
-            "  COALESCE(SUM(CASE WHEN i.item_key='rawhide_shield' THEN 1 ELSE 0 END),0) rawhide_shield," +
             "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND wp.combat_role='BLUNT' THEN 1 ELSE 0 END),0) blunt," +
-            "  COALESCE(SUM(CASE WHEN i.item_key IN ('leather_armor','leather_helm_cap','leather_bracer') THEN 1 ELSE 0 END),0) soft_armour," +
             "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND wp.combat_role='HAND' AND wp.edge_tier='HARDENED' THEN 1 ELSE 0 END),0) hardened," +
             "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND wp.combat_role='HAND' AND wp.edge_tier='BRONZE' THEN 1 ELSE 0 END),0) bronze," +
             "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND wp.combat_role='HAND' AND wp.edge_tier='IRON' THEN 1 ELSE 0 END),0) iron," +
             "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND wp.combat_role='HAND' AND wp.edge_tier='STEEL' THEN 1 ELSE 0 END),0) steel," +
-            "  COALESCE(SUM(CASE WHEN i.item_key='bronze_cuirass' THEN 12 WHEN i.item_key='iron_cuirass' THEN 20 WHEN i.item_key='steel_cuirass' THEN 28 ELSE 0 END),0) plate" +
-            "  FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id LEFT JOIN weapon_profile wp ON wp.item_key=i.item_key WHERE e.chronicle_id=p.chronicle_id) eq ON true " +
+            "  COALESCE(SUM(ap.blunting),0) protection" +
+            "  FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id LEFT JOIN weapon_profile wp ON wp.item_key=i.item_key LEFT JOIN armour_protection ap ON ap.item_key=i.item_key WHERE e.chronicle_id=p.chronicle_id) eq ON true " +
             "LEFT JOIN LATERAL (SELECT " +
             "  COALESCE(SUM(CASE WHEN wp.combat_role='THROWN_STONE' THEN 1 ELSE 0 END),0) stones," +
             "  COALESCE(SUM(CASE WHEN wp.combat_role='SLING' THEN 1 ELSE 0 END),0) sling," +
@@ -86,7 +83,7 @@ public class WildlifeEncounterService {
             "  COALESCE(SUM(CASE WHEN i.item_key='atlatl' THEN 1 ELSE 0 END),0) atlatl" +
             "  FROM world_object w JOIN item_instance i ON i.object_id=w.id LEFT JOIN weapon_profile wp ON wp.item_key=i.item_key WHERE w.current_owner_id=p.chronicle_id AND w.lifecycle_state='ACTIVE') own ON true " +
             "WHERE p.chronicle_id=?",
-            rs->rs.next()?new Combatant(rs.getInt(1),rs.getInt(2),rs.getInt(3),rs.getInt(4),rs.getInt(5),rs.getInt(6),rs.getInt(7),rs.getInt(8),rs.getInt(9),rs.getInt(10),rs.getInt(11),rs.getInt(12),rs.getInt(13),rs.getInt(14),rs.getInt(15),rs.getInt(16),rs.getInt(17),rs.getInt(18),rs.getInt(19),rs.getInt(20),rs.getInt(21)):new Combatant(0,100,100,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),chronicle);
+            rs->rs.next()?new Combatant(rs.getInt(1),rs.getInt(2),rs.getInt(3),rs.getInt(4),rs.getInt(5),rs.getInt(6),rs.getInt(7),rs.getInt(8),rs.getInt(9),rs.getInt(10),rs.getInt(11),rs.getInt(12),rs.getInt(13),rs.getInt(14),rs.getInt(15),rs.getInt(16),rs.getInt(17)):new Combatant(0,100,100,0,0,0,0,0,0,0,0,0,0,0,0,0,0),chronicle);
         // A creature on the wing cannot be reached by a hand weapon. Throwing stones
         // is the only contact a chronicle has with it. The narrator witnesses the
         // futility without naming what would be needed.
@@ -187,7 +184,11 @@ public class WildlifeEncounterService {
         // one +20, and a case-hardened steel one +28 — all above knapped scale/shell/war-shield (+7) and soft leather
         // (+4). The `plate` column already carries these blunting points (bronze 12 / iron 20 / steel 28), so it adds
         // in directly, not as a count.
-        int blunted = body.plate() + body.armour()*7 + body.rawhideShield()*6 + body.lightShield()*4 + body.softArmour()*4;
+        // Every worn piece now answers from armour_protection (#134, V313), with the old values preserved exactly:
+        // cuirasses 12/20/28, scale, shell helm and war shield 7, rawhide shield 6, light shields and soft leather 4.
+        // Before that table this line named eleven items, and a crafted leather cuirass, pauldrons and bracers turned
+        // nothing — most of them could not even be put on, until V313 widened the attachment CHECKs.
+        int blunted = body.protection();
         if (blunted > 0) severity = Math.max(1, severity - blunted);
         physiology.applyInjury(chronicle,severity,action,at,"WILDLIFE_CONTACT");
         // A venomous ordinary animal — the common adder among wildlife (#V174) — does more than wound: its bite
@@ -1442,7 +1443,7 @@ public class WildlifeEncounterService {
     }
     private String display(String species) { return species.replace('_',' '); }
     private record Encounter(UUID populationId,String species,String role,String behavior,int population,String movementClass,Integer baseResistance,boolean ambushHunter){}
-    private record Combatant(int energy,int injury,int pain,int handWeapon,int stones,int armour,int poison,int lightShield,int rawhideShield,int blunt,int sling,int javelin,int bow,int arrows,int softArmour,int hardened,int bronze,int iron,int steel,int plate,int atlatl){}
+    private record Combatant(int energy,int injury,int pain,int handWeapon,int stones,int poison,int blunt,int sling,int javelin,int bow,int arrows,int hardened,int bronze,int iron,int steel,int protection,int atlatl){}
     private record Carcass(UUID id,String species,int meat,boolean hide){}
     public record EncounterResult(String outcome,String narration){}
     public record HarvestResult(String outcome,String narration){}

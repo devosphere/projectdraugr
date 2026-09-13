@@ -57,16 +57,28 @@ function EquipmentHierarchy({ prototype, equipped }: { prototype: boolean; equip
     group('Head', [['Upper head', attached('HEAD')], ['Mid head', 'Empty'], ['Lower head', attached('FACE')]]),
     group('Neck & Shoulders', [['Neck', attached('NECK')], ['Left shoulder', attached('SHOULDER_LEFT')], ['Right shoulder', attached('SHOULDER_RIGHT')]]),
     group('Upper Body', [['Inner layer', prototype ? 'Linen shirt' : attached('TORSO')], ['Body layer', 'Empty'], ['Outer layer', 'Empty'], ['Protective layer', 'Empty'], ['Back equipment', prototype ? 'Woven basket' : attached('BACK')]]),
-    group('Arms', [['Left arm · protection', attached('ARM_LEFT')], ['Right arm · protection', attached('ARM_RIGHT')]]),
+    group('Arms', [
+      ['Left arm · protection', attached('ARM_LEFT')],
+      ['Left elbow · protection', attached('ELBOW_LEFT')],
+      ['Left forearm · protection', attached('FOREARM_LEFT')],
+      ['Right arm · protection', attached('ARM_RIGHT')],
+      ['Right elbow · protection', attached('ELBOW_RIGHT')],
+      ['Right forearm · protection', attached('FOREARM_RIGHT')]
+    ]),
     group('Hands', [['Left hand', attached('HAND_LEFT')], ['Right hand', attached('HAND_RIGHT')]]),
     group('Fingers', [['Left thumb', 'Empty'], ['Left index', 'Empty'], ['Left middle', 'Empty'], ['Left ring', 'Empty'], ['Left little', 'Empty'], ['Right thumb', 'Empty'], ['Right index', 'Empty'], ['Right middle', 'Empty'], ['Right ring', 'Empty'], ['Right little', 'Empty']]),
     group('Waist', [['Waist', prototype ? 'Fiber cord' : attached('WAIST')]]),
     group('Lower Body', [['Under layer', 'Empty'], ['Outer layer', 'Empty'], ['Protective layer', 'Empty']]),
     group('Legs & Knees', [
+      ['Legs', attached('LEGS')],
       ['Left leg · protection', attached('LEG_LEFT')],
+      ['Left thigh · protection', attached('THIGH_LEFT')],
       ['Left knee · protection', attached('KNEE_LEFT')],
+      ['Left shin · protection', attached('LOWER_LEG_LEFT')],
       ['Right leg · protection', attached('LEG_RIGHT')],
-      ['Right knee · protection', attached('KNEE_RIGHT')]
+      ['Right thigh · protection', attached('THIGH_RIGHT')],
+      ['Right knee · protection', attached('KNEE_RIGHT')],
+      ['Right shin · protection', attached('LOWER_LEG_RIGHT')]
     ]),
     group('Feet', [
       ['Left foot · inner layer', 'Empty'],
