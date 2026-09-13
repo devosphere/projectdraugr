@@ -223,6 +223,12 @@ try {
             Start-Sleep -Seconds 1
         }
         if (-not ($backendReady -and $frontendReady)) { throw 'Project Draugr did not become ready in time. PostgreSQL was left running for inspection.' }
+        # The verification gate (#83): a build is not playable until the schema this checkout ships is applied and
+        # the Persistent State Auditor finds the world consistent. It takes seconds. The full regression suite is
+        # CI's gate on every change and is not rerun here; this is the check that the world you are about to enter
+        # is the one that suite passed against. A failure throws into the handler below, which stops what started.
+        Set-SplashStatus $splashState 'Checking that the world holds together...'
+        & (Join-Path $PSScriptRoot 'Verify-Draugr.ps1')
         Set-SplashStatus $splashState 'Entering the world...'
         if ($AppWindow) { Open-GameWindow 'http://127.0.0.1:5173' $root }
         elseif (-not $NoBrowser) { Start-Process 'http://127.0.0.1:5173' }
