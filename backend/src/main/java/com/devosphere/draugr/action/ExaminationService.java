@@ -100,7 +100,7 @@ public class ExaminationService {
             // sign channel below, which is where the rule about not handing the player a hint is enforced. Before
             // lairs held anything this exclusion was moot; now that they do, without it a lair chunk would name
             // its monster twice, once as a grazing animal.
-            "WHERE es.chunk_id=? AND wp.population_count>0 AND COALESCE(ws.kingdom_class,'') <> 'MONSTRUM' " +
+            "WHERE es.chunk_id=? AND wp.population_count>0 AND COALESCE(ws.kingdom_class,'') <> 'MONSTRUM' AND wildlife_abroad(wp.species_key) " +
             "ORDER BY wp.population_count DESC", chunk));
         java.util.Set<String> namedKeys = new java.util.HashSet<>();
         int named = 0, cap = acuity >= 0.6 ? 3 : acuity >= 0.3 ? 2 : 1;
@@ -120,7 +120,7 @@ public class ExaminationService {
         if (named < cap && biome != null) {
             List<Map<String, Object>> ambient = orEmpty(jdbc.queryForList(
                 "SELECT species_key, ecological_role, size_tier, activity_cycle FROM wildlife_species " +
-                "WHERE movement_class <> 'AQUATIC' AND kingdom_class <> 'MONSTRUM' AND biome_affinity ILIKE ? " +
+                "WHERE movement_class <> 'AQUATIC' AND kingdom_class <> 'MONSTRUM' AND biome_affinity ILIKE ? AND wildlife_abroad(species_key) " +
                 "ORDER BY md5(species_key || ?::text)", "%" + biome + "%", chunk.toString()));
             for (Map<String, Object> a : ambient) {
                 if (named >= cap) break;
@@ -197,7 +197,7 @@ public class ExaminationService {
             int birdsNamed = 0;
             for (Map<String, Object> bird : orEmpty(jdbc.queryForList(
                     "SELECT species_key, movement_class, size_tier, activity_cycle FROM wildlife_species " +
-                    "WHERE kingdom_class='AVES' AND biome_affinity ILIKE ? ORDER BY md5(species_key || ?::text)",
+                    "WHERE kingdom_class='AVES' AND biome_affinity ILIKE ? AND wildlife_abroad(species_key) ORDER BY md5(species_key || ?::text)",
                     "%" + biome + "%", chunk.toString()))) {
                 if (birdsNamed >= 2) break;
                 String key = (String) bird.get("species_key");
@@ -218,7 +218,7 @@ public class ExaminationService {
             for (Map<String, Object> tiny : orEmpty(jdbc.queryForList(
                     "SELECT species_key, movement_class, kingdom_class FROM wildlife_species " +
                     "WHERE kingdom_class IN ('INSECTA','ARACHNIDA','GASTROPODA','ANNELIDA','BIVALVIA') " +
-                    "AND biome_affinity ILIKE ? ORDER BY md5(species_key || ?::text)",
+                    "AND biome_affinity ILIKE ? AND wildlife_abroad(species_key) ORDER BY md5(species_key || ?::text)",
                     "%" + biome + "%", chunk.toString()))) {
                 if (smallNamed >= 2) break;
                 String key = (String) tiny.get("species_key");
