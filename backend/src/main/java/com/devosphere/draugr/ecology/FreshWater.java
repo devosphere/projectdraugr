@@ -1,7 +1,10 @@
 package com.devosphere.draugr.ecology;
 
+import java.util.List;
+import java.util.Locale;
+
 /**
- * What counts as fresh water on a piece of ground, written once (#156).
+ * What counts as fresh water on a piece of ground, written once (#156) — and what that water is called (#37).
  *
  * <p>Eight places asked this question and every one of them spelled the answer out again: a site whose kind reads
  * as a spring, a stream, a river or freshwater. Seven in the main code — collecting water, safe drinking water,
@@ -20,6 +23,11 @@ package com.devosphere.draugr.ecology;
  * <p>Deliberately NOT included: {@code pool}. "Fen siren pool" is a monster lair, and a word that broad would
  * quietly turn one into a drinking source. {@code beaver pool} is named in full for exactly that reason — a
  * dammed pool is water to drink, and the siren's is not, and the difference between them is the whole phrase.
+ *
+ * <p><b>Naming (#37).</b> The world places a fast stream, a slow river reach, a still pond, a lake margin, a beaver
+ * pool and a headwater spring, and every line that spoke of water said "the standing water here" or "the water
+ * here" over all of them alike — a Chronicle kneeling at a fast stream was told they drank standing water. What the
+ * water is called is read from the same sites that make it water, so the name and the fact cannot disagree.
  */
 public final class FreshWater {
 
@@ -44,4 +52,32 @@ public final class FreshWater {
 
     /** The unqualified form, which is what most callers want. */
     public static String sites() { return sites(""); }
+
+    /**
+     * The fresh-water sites standing on one chunk ({@code ?} = chunk id), open water first: a stream, reach, pond or
+     * lake is what a person drinks from or fishes, and a spring or a ford beside it is not the name they would use.
+     * RESOURCE sites only — "River fishing run" is a wildlife site that happens to contain the word, not a water.
+     */
+    public static final String SITE_KINDS_ON_CHUNK =
+        "SELECT site_kind FROM ecology_site WHERE chunk_id=? AND site_category='RESOURCE' AND " + sites() + " " +
+        "GROUP BY site_kind ORDER BY MAX(CASE WHEN site_kind ILIKE '%spring%' OR site_kind ILIKE '%ford%' THEN 1 ELSE 0 END), site_kind";
+
+    /**
+     * What the water on this ground is called, with its article: "the still pond", "the river", "the water here".
+     * Pure, so the naming can be tested without a world.
+     *
+     * @param siteKinds the rows of {@link #SITE_KINDS_ON_CHUNK}, in order
+     * @param biome     the chunk's biome, for ground that is water with no named site on it
+     */
+    public static String name(List<String> siteKinds, String biome) {
+        if (siteKinds != null && !siteKinds.isEmpty()) return "the " + siteKinds.get(0).toLowerCase(Locale.ROOT);
+        if ("RIVER_BANK".equals(biome)) return "the river";
+        if ("WETLAND".equals(biome)) return "the marsh water";
+        return "the water here";
+    }
+
+    /** The same name opening a sentence: "The still pond". */
+    public static String capitalised(String name) {
+        return name == null || name.isEmpty() ? name : Character.toUpperCase(name.charAt(0)) + name.substring(1);
+    }
 }

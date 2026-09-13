@@ -461,8 +461,10 @@ public class ChronicleActionService {
                 else { physiology.applyWaterborneRisk(chronicle.id(), silver ? 2 : ladle ? 3 : 5); perception = silver ? "You drink the raw water from the silver cup; something in the bright metal keeps it sweeter than it has any right to be, and it sits easy." : ladle ? "You draw the raw water with the ladle, skimming the clearer water off the top; it eases the dryness and sits a little easier for the care." : "You drink the raw water you carry. It eases the dryness, but sits uneasy in the gut."; }
             } else if (waterInReach(chronicle.location())) {
                 physiology.drink(chronicle.id());
-                if (safeWaterSource(chronicle.location())) perception = "You drink from the clean, moving water and let the cold settle in your throat.";
-                else { physiology.applyWaterborneRisk(chronicle.id(), silver ? 3 : ladle ? 4 : 6); perception = silver ? "You dip the silver cup and drink; the bright metal keeps the standing water from turning the gut as it otherwise would." : ladle ? "You dip the ladle and draw the standing water from above the silt; it is still not clean, but the gut will fare better than from a careless gulp." : "You drink from the standing water here. It eases the dryness, but it is not clean, and the gut will know it."; }
+                // Named for the water actually drunk from (#37): it said "the standing water" at a fast stream.
+                String drunkFrom = waterNamed(chronicle.location());
+                if (safeWaterSource(chronicle.location())) perception = "You drink from " + drunkFrom + " and let the cold settle in your throat.";
+                else { physiology.applyWaterborneRisk(chronicle.id(), silver ? 3 : ladle ? 4 : 6); perception = silver ? "You dip the silver cup into " + drunkFrom + " and drink; the bright metal keeps it from turning the gut as it otherwise would." : ladle ? "You dip the ladle into " + drunkFrom + " and draw from above the silt; it is still not clean, but the gut will fare better than from a careless gulp." : "You drink from " + drunkFrom + ". It eases the dryness, but it is not clean, and the gut will know it."; }
             } else { outcome = "FAILED"; perception = "You look about, but there is no water here fit to drink — no stream, no spring, only dry ground that gives nothing back."; }
         }
         else if (intent == Intent.COLLECT_WATER) {
@@ -946,10 +948,12 @@ public class ChronicleActionService {
         int full = com.devosphere.draugr.ecology.WildlifeEncounterService.fishStockSeedFor(loc);
         int fish = wildlife.fishRemaining(loc, at);
         double frac = full > 0 ? (double) fish / full : 0.0;
-        return (fish <= 0 ? "The water here is fished out, empty of anything worth taking."
-              : frac < 0.25 ? "The water here is fished thin — the take would be poor."
-              : frac < 0.70 ? "The water here holds fish enough to work."
-              : "The water here is thick with fish.") + " ";
+        // The water is named for what it is (#37) — a slow reach, a still pond — where it used to be "the water here".
+        String named = com.devosphere.draugr.ecology.FreshWater.capitalised(waterNamed(loc));
+        return (fish <= 0 ? named + " is fished out, empty of anything worth taking."
+              : frac < 0.25 ? named + " is fished thin — the take would be poor."
+              : frac < 0.70 ? named + " holds fish enough to work."
+              : named + " is thick with fish.") + " ";
     }
     /** How wooded this ground is (#200/#201): the tree stand that grows here — from a recorded stand where one
      *  exists, or the full natural stand a wooded biome carries until it is first cut — and whether it stands thick,
@@ -2206,6 +2210,12 @@ public class ChronicleActionService {
         return !Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM chronicle_named_location nl JOIN district_purpose dp ON dp.purpose_tag=nl.purpose_tag " +
             "WHERE nl.chunk_id=? AND dp.fouls_water)", Boolean.class, location));
+    }
+    /** What the water on this ground is called, read from the same sites that make it water (#37, FreshWater). */
+    private String waterNamed(UUID location) {
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
+        return com.devosphere.draugr.ecology.FreshWater.name(
+            jdbc.queryForList(com.devosphere.draugr.ecology.FreshWater.SITE_KINDS_ON_CHUNK, String.class, location), biome);
     }
     /** A fire burning within reach here — for warming and drying (#66). */
     private boolean fireInReach(UUID location) {
