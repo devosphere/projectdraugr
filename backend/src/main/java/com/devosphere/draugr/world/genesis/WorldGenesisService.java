@@ -409,7 +409,12 @@ public class WorldGenesisService {
                 new MarkerSpec("RESOURCE", "Pyrite exposure", "MOUNTAIN", "HIGHLAND"),
                 new MarkerSpec("RESOURCE", "Soapstone outcrop", "HIGHLAND", "MOUNTAIN"),
                 new MarkerSpec("RESOURCE", "Precision tool-stone exposure", "MOUNTAIN", "HIGHLAND"),
-                new MarkerSpec("RESOURCE", "Refractory clay bed", "HIGHLAND", "RIVER_BANK"));
+                new MarkerSpec("RESOURCE", "Refractory clay bed", "HIGHLAND", "RIVER_BANK"),
+                // The iron sand bar (#160/#155), appended for the index-salt reason above. Black heavy-mineral sand is
+                // sorted out of lighter quartz only where water slackens — the inside of a river bend, a beach face —
+                // so it is a deposit and not a quality of every bank. mineral_province (V320) binds iron_sand to it,
+                // and the bloomery smelts it: a second way to iron that asks for a river or a shore, not a mountain.
+                new MarkerSpec("RESOURCE", "Iron sand bar", "RIVER_BANK", "COAST"));
 
     /**
      * Ground that is richer for what it stands between (#159).
