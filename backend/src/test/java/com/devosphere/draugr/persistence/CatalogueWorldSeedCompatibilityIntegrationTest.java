@@ -309,4 +309,17 @@ class CatalogueWorldSeedCompatibilityIntegrationTest {
             "   OR EXISTS (SELECT 1 FROM assembly_definition a WHERE a.produces_item_key=u.item_key) ORDER BY 1", String.class);
         assertTrue(stale.isEmpty(), () -> "recorded as unobtainable, yet something makes them — give them a source: " + stale);
     }
+
+    /**
+     * Season eligibility for what only a season gives (#161, V322). Flax is pulled at the end of summer, chamomile is
+     * picked in flower, water chestnuts drop in autumn — none of them is there to take in the dead of winter, and all
+     * three once were. Roots, bark, fibre and fungus stay any-season on purpose; winter depends on them.
+     */
+    @Test
+    void whatOnlyASeasonGivesIsTakenOnlyInThatSeason() {
+        List<String> timeless = jdbc.queryForList(
+            "SELECT item_key FROM flora_drop WHERE season IS NULL " +
+            "AND item_key IN ('flax_stalk','chamomile_flower','water_chestnut') ORDER BY 1", String.class);
+        assertTrue(timeless.isEmpty(), () -> "these grow only in a season, and can still be gathered in any: " + timeless);
+    }
 }
