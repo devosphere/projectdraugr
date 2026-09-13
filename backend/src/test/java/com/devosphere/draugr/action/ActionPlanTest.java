@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -85,5 +86,21 @@ class ActionPlanTest {
         assertTrue(steps.size() > ActionPlan.MAX_STEPS, "the parser reads every step the player wrote");
         assertTrue(ActionPlan.exceedsLimit(plan.toString()),
             "and says plainly that it is more than one stretch of effort, rather than dropping the tail in silence");
+    }
+
+    /**
+     * #38 resume: only a bare request to go on counts, matched against the whole submission. Each negative here is a
+     * phrase that already means something else in the world, and a substring match would take it.
+     */
+    @Test
+    void onlyABareRequestToGoOnTakesUpWhatWasSetAside() {
+        for (String yes : List.of("carry on", "Carry on.", "I carry on", "ok, carry on then", "continue", "resume the plan",
+                                  "pick up where I left off", "now go on with the rest", "finish what I started"))
+            assertTrue(ActionPlan.isResumeRequest(yes), "should take up what was set aside: " + yes);
+        for (String no : List.of("carry on my back the bundle of wood", "continue building the wall", "resume the lean-to",
+                                 "continue working on the lean-to", "go on north", "carry on to the river", "finish the basket",
+                                 "look around", ""))
+            assertFalse(ActionPlan.isResumeRequest(no), "means something else and must not be taken: " + no);
+        assertFalse(ActionPlan.isResumeRequest(null));
     }
 }
