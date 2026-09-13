@@ -133,6 +133,34 @@ class ProcessRoutingTest {
         assertEquals("split_planks", subject.nearProcessKey());
     }
 
+    /**
+     * #38: words that fit two processes equally are reported as a tie, not quietly given to the key that sorts first.
+     * The made thing the text names settles it where it names one; a longer keyword settles it outright.
+     */
+    @Test
+    @DisplayName("equal words for two pieces of work are a tie, settled only by what the text names (#38)")
+    void equalWordsAreATie() {
+        java.util.List<ProcessMatcher.Candidate> bowls = java.util.List.of(
+            ProcessMatcher.Candidate.of("carve_soapstone_bowl", "CRAFT", "soapstone bowl,carve a soapstone bowl,carve a bowl,hollow a bowl", "bowl,soapstone", "soapstone_bowl"),
+            ProcessMatcher.Candidate.of("carve_wooden_bowl", "CRAFT", "wooden bowl,bowl,hollow a bowl,carve a bowl,carve,hollow", "bowl,component,wooden", "wooden_bowl"));
+        ProcessMatcher.Result either = ProcessMatcher.resolve("carve a bowl", null, bowls);
+        assertEquals(java.util.List.of("carve_soapstone_bowl", "carve_wooden_bowl"), either.tied(), "a bowl of either stock is a tie");
+        org.junit.jupiter.api.Assertions.assertTrue(either.ambiguous());
+        assertEquals("carve_soapstone_bowl", either.processKey(), "read-only callers still get the same deterministic pick");
+
+        ProcessMatcher.Result wooden = ProcessMatcher.resolve("carve a wooden bowl", null, bowls);
+        assertEquals("carve_wooden_bowl", wooden.processKey(), "naming the wood is a longer keyword and settles it");
+        org.junit.jupiter.api.Assertions.assertFalse(wooden.ambiguous());
+
+        java.util.List<ProcessMatcher.Candidate> flax = java.util.List.of(
+            ProcessMatcher.Candidate.of("ret_flax", "PROCESS", "ret the flax,ret flax,ret", "flax", "retted_flax"),
+            ProcessMatcher.Candidate.of("ret_flax_cordage", "PROCESS", "flax into cordage,ret the flax,ret flax,flax", "flax", "fiber_cordage"));
+        ProcessMatcher.Result retting = ProcessMatcher.resolve("ret the flax", null, flax);
+        assertEquals("ret_flax", retting.processKey(), "the text names flax, which ret_flax makes and the cordage process does not");
+        org.junit.jupiter.api.Assertions.assertFalse(retting.ambiguous());
+        assertEquals("ret_flax_cordage", ProcessMatcher.resolve("ret the flax into cordage", null, flax).processKey());
+    }
+
     /** Nothing at all should come back for text that names no work and no material. */
     @Test
     @DisplayName("empty and irrelevant text resolves to nothing")
