@@ -62,6 +62,23 @@ class TamedAnimalYieldIntegrationTest {
     @Autowired PersistentStateAuditor auditor;
     @Autowired JdbcTemplate jdbc;
 
+    /**
+     * Milk, eggs and wool keep their seasons (#161, V323), so these tests take stock in June — the one month all three
+     * are given — rather than on whatever date the suite happens to run. The clock is put back afterwards.
+     */
+    private Timestamp clockBefore;
+
+    @org.junit.jupiter.api.BeforeEach
+    void inSeason() {
+        clockBefore = jdbc.queryForObject("SELECT simulated_at FROM simulation_clock WHERE id=1", Timestamp.class);
+        jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", Timestamp.from(Instant.parse("2031-06-10T08:00:00Z")));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void restoreClock() {
+        if (clockBefore != null) jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", clockBefore);
+    }
+
     private void tame(UUID chronicle, UUID chunk, UUID worldId, String species, Timestamp ts) {
         UUID site = UUID.randomUUID();
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE','Kept stock',?)", site, chunk);

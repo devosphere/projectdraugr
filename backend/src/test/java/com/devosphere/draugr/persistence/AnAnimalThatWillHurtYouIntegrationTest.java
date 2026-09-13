@@ -67,6 +67,20 @@ class AnAnimalThatWillHurtYouIntegrationTest {
     @Autowired PersistentStateAuditor auditor;
     @Autowired JdbcTemplate jdbc;
 
+    /** Milk keeps its season (#161, V323): these tests milk in June, not on whatever date the suite runs. */
+    private java.sql.Timestamp clockBefore;
+
+    @org.junit.jupiter.api.BeforeEach
+    void inSeason() {
+        clockBefore = jdbc.queryForObject("SELECT simulated_at FROM simulation_clock WHERE id=1", java.sql.Timestamp.class);
+        jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", java.sql.Timestamp.from(java.time.Instant.parse("2031-06-10T08:00:00Z")));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void restoreClock() {
+        if (clockBefore != null) jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", clockBefore);
+    }
+
     private void world() {
         if (worldGenesis.current() == null) {
             worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
