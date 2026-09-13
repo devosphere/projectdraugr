@@ -149,6 +149,42 @@ class ActivityImpactCardIntegrationTest {
         assertTrue(cleanButDirtying.isEmpty(), "these cost cleanliness without costing effort: " + cleanButDirtying);
     }
 
+    /**
+     * And the fourth column, time (V310) — which found the same defect a second time.
+     *
+     * <p>{@code durationFor} was the last of four switches over the Intent enum in one file, and four lists over
+     * the same 128 values is four independent chances to forget an intent. Forgetting is silent, because a
+     * {@code default} arm reads exactly like a decision, and neither defect was visible from inside the switch
+     * that was wrong about it — only from another one.
+     */
+    @Test
+    void heavyWorkTakesTimeAndRecoveryIsNeverInstant() {
+        // REPAIR_LEAN_TO had no arm in durationFor at all, so mending a shelter fell to the five-minute default
+        // while laborOf had it in the HEAVY tier: twelve energy and eight hygiene spent in five minutes.
+        List<String> instantHeavy = jdbc.queryForList(
+            "SELECT intent_key || ' (' || duration_minutes || 'min)' FROM activity_impact " +
+            "WHERE labor_energy >= 12 AND duration_minutes < 10 ORDER BY 1", String.class);
+        assertTrue(instantHeavy.isEmpty(),
+            "swinging, hauling and breaking ground are not done in under ten minutes: " + instantHeavy);
+
+        // Nothing takes real time, changes the world, and tires nobody. Aggression is the standing exception and
+        // its reason is on its card: a fight runs its own physiology and would otherwise be charged twice.
+        List<String> freeAndSlow = jdbc.queryForList(
+            "SELECT intent_key FROM activity_impact WHERE footprint_kind IS NOT NULL AND labor_energy = 0 " +
+            "  AND duration_minutes >= 10 AND intent_key <> 'AGGRESSION_WILDLIFE' ORDER BY 1", String.class);
+        assertTrue(freeAndSlow.isEmpty(), "these take time, mark the land, and cost nobody anything: " + freeAndSlow);
+
+        // A night's sleep is 480 minutes and rest is 60. Recovery that took no time would mend a Chronicle for
+        // free, which is the one thing the physiology model cannot survive.
+        List<String> instantRest = jdbc.queryForList(
+            "SELECT intent_key FROM activity_impact WHERE capability_domain = 'RECOVERY' AND duration_minutes < 5 ORDER BY 1",
+            String.class);
+        assertTrue(instantRest.isEmpty(), "recovery cannot be instant: " + instantRest);
+        assertEquals(480, (int) jdbc.queryForObject(
+            "SELECT duration_minutes FROM activity_impact WHERE intent_key='SLEEP'", Integer.class),
+            "a night's sleep is eight hours and the card is now where that is written");
+    }
+
     /** A card that marks nothing is a decision, and a decision has to be written down. */
     @Test
     void everySilentCardSaysWhyItIsSilent() {
