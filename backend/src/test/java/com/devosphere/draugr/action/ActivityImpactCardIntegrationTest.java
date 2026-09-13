@@ -195,6 +195,26 @@ class ActivityImpactCardIntegrationTest {
     }
 
     /**
+     * Building is heard (#216, V324). The card's most arguable silence was left open because nothing distinguished a
+     * worked camp from an unworked one; chunk disturbance does — wildlife quits ground at 40 — so raising structures
+     * now leaves COMMOTION. And no single job may be as loud as a fight with an animal: one afternoon's fence must not
+     * clear the ground by itself; only a camp built up day after day keeps the animals off.
+     */
+    @Test
+    void buildingIsHeardButNoSingleJobClearsTheGround() {
+        List<String> silentBuilding = jdbc.queryForList(
+            "SELECT intent_key FROM activity_impact WHERE intent_key ~ '^(BUILD_|ADVANCE_ASSEMBLY|START_LEAN_TO|WORK_LEAN_TO)' " +
+            "AND footprint_kind IS NULL ORDER BY 1", String.class);
+        assertTrue(silentBuilding.isEmpty(), "raising a structure is loud work, and these still leave the ground as if nothing happened: " + silentBuilding);
+
+        List<String> tooLoud = jdbc.queryForList(
+            "SELECT intent_key || ' (' || footprint_amount || ')' FROM activity_impact " +
+            "WHERE intent_key ~ '^(BUILD_|ADVANCE_ASSEMBLY|START_LEAN_TO|WORK_LEAN_TO)' AND footprint_kind = 'COMMOTION' " +
+            "AND footprint_amount >= (SELECT footprint_amount FROM activity_impact WHERE intent_key = 'CONFRONT_WILDLIFE') ORDER BY 1", String.class);
+        assertTrue(tooLoud.isEmpty(), "a single building job as loud as a fight would clear the ground on its own: " + tooLoud);
+    }
+
+    /**
      * The card drives the world. Two acts on the same ground, one that the table says marks it and one that the
      * table says does not, both through the real router — so this fails if the reading is wrong, if the wiring
      * is wrong, or if the row is wrong.
