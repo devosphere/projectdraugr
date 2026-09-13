@@ -100,7 +100,7 @@ public class ExaminationService {
             // sign channel below, which is where the rule about not handing the player a hint is enforced. Before
             // lairs held anything this exclusion was moot; now that they do, without it a lair chunk would name
             // its monster twice, once as a grazing animal.
-            "WHERE es.chunk_id=? AND wp.population_count>0 AND COALESCE(ws.kingdom_class,'') <> 'MONSTRUM' " +
+            "WHERE es.chunk_id=? AND wp.population_count>0 AND COALESCE(ws.kingdom_class,'') <> 'MONSTRUM' AND wildlife_abroad(wp.species_key) " +
             "ORDER BY wp.population_count DESC", chunk));
         java.util.Set<String> namedKeys = new java.util.HashSet<>();
         int named = 0, cap = acuity >= 0.6 ? 3 : acuity >= 0.3 ? 2 : 1;
@@ -113,6 +113,17 @@ public class ExaminationService {
             else if (acuity >= 0.5) { b.append("You find the sign of ").append(name).append(" — tracks pressed into the ground. "); named++; namedKeys.add(key); }
         }
 
+        // A sleeper is not seen, but where it sleeps can be found (#161). The query above hides anything out of season
+        // through wildlife_abroad, and that is right — a denned bear is not grazing the clearing. Leaving no trace at
+        // all would be wrong the other way: a stopped-up den, a burrow mouth packed with leaves, is exactly what a
+        // careful eye picks out on winter ground. The sleeper is not named — you see the den, not the animal in it.
+        if (acuity >= 0.5 && Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id " +
+                "LEFT JOIN wildlife_species ws ON ws.species_key=wp.species_key " +
+                "WHERE es.chunk_id=? AND wp.population_count>0 AND COALESCE(ws.kingdom_class,'') <> 'MONSTRUM' " +
+                "  AND NOT wildlife_abroad(wp.species_key))", Boolean.class, chunk)))
+            b.append("Somewhere on this ground a den is dug in and stopped up for the winter. Whatever lies in it will not stir before spring. ");
+
         // Ambient fauna (#74) — the ordinary small and medium creatures a biome carries even with no seeded herd here.
         // Drawn straight from the species registry by biome affinity (as the fish line does), so every registered
         // land creature is a real, perceivable inhabitant of the ground it belongs to — not a catalogue token. A
@@ -120,7 +131,7 @@ public class ExaminationService {
         if (named < cap && biome != null) {
             List<Map<String, Object>> ambient = orEmpty(jdbc.queryForList(
                 "SELECT species_key, ecological_role, size_tier, activity_cycle FROM wildlife_species " +
-                "WHERE movement_class <> 'AQUATIC' AND kingdom_class <> 'MONSTRUM' AND biome_affinity ILIKE ? " +
+                "WHERE movement_class <> 'AQUATIC' AND kingdom_class <> 'MONSTRUM' AND biome_affinity ILIKE ? AND wildlife_abroad(species_key) " +
                 "ORDER BY md5(species_key || ?::text)", "%" + biome + "%", chunk.toString()));
             for (Map<String, Object> a : ambient) {
                 if (named >= cap) break;
@@ -197,7 +208,7 @@ public class ExaminationService {
             int birdsNamed = 0;
             for (Map<String, Object> bird : orEmpty(jdbc.queryForList(
                     "SELECT species_key, movement_class, size_tier, activity_cycle FROM wildlife_species " +
-                    "WHERE kingdom_class='AVES' AND biome_affinity ILIKE ? ORDER BY md5(species_key || ?::text)",
+                    "WHERE kingdom_class='AVES' AND biome_affinity ILIKE ? AND wildlife_abroad(species_key) ORDER BY md5(species_key || ?::text)",
                     "%" + biome + "%", chunk.toString()))) {
                 if (birdsNamed >= 2) break;
                 String key = (String) bird.get("species_key");
@@ -218,7 +229,7 @@ public class ExaminationService {
             for (Map<String, Object> tiny : orEmpty(jdbc.queryForList(
                     "SELECT species_key, movement_class, kingdom_class FROM wildlife_species " +
                     "WHERE kingdom_class IN ('INSECTA','ARACHNIDA','GASTROPODA','ANNELIDA','BIVALVIA') " +
-                    "AND biome_affinity ILIKE ? ORDER BY md5(species_key || ?::text)",
+                    "AND biome_affinity ILIKE ? AND wildlife_abroad(species_key) ORDER BY md5(species_key || ?::text)",
                     "%" + biome + "%", chunk.toString()))) {
                 if (smallNamed >= 2) break;
                 String key = (String) tiny.get("species_key");

@@ -38,7 +38,7 @@ public class WildlifeEncounterService {
         // uncatalogued populations still resolve, and Postgres refuses to lock the nullable
         // side of an outer join. Only the population row needs locking — the registry is
         // immutable reference data.
-        Encounter candidate=jdbc.query("SELECT wp.id,wp.species_key,wp.ecological_role,wp.behavior_state,wp.population_count,ws.movement_class,ws.base_resistance,ws.ambush_hunter FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id LEFT JOIN wildlife_species ws ON ws.species_key=wp.species_key WHERE es.chunk_id=? AND wp.population_count>0 ORDER BY CASE wp.ecological_role WHEN 'CARNIVORE' THEN 0 WHEN 'OMNIVORE' THEN 1 ELSE 2 END LIMIT 1 FOR UPDATE OF wp",rs->rs.next()?new Encounter(rs.getObject(1,UUID.class),rs.getString(2),rs.getString(3),rs.getString(4),rs.getInt(5),rs.getString(6),(Integer)rs.getObject(7),rs.getBoolean(8)):null,chunk);
+        Encounter candidate=jdbc.query("SELECT wp.id,wp.species_key,wp.ecological_role,wp.behavior_state,wp.population_count,ws.movement_class,ws.base_resistance,ws.ambush_hunter FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id LEFT JOIN wildlife_species ws ON ws.species_key=wp.species_key WHERE es.chunk_id=? AND wp.population_count>0 AND wildlife_abroad(wp.species_key) ORDER BY CASE wp.ecological_role WHEN 'CARNIVORE' THEN 0 WHEN 'OMNIVORE' THEN 1 ELSE 2 END LIMIT 1 FOR UPDATE OF wp",rs->rs.next()?new Encounter(rs.getObject(1,UUID.class),rs.getString(2),rs.getString(3),rs.getString(4),rs.getInt(5),rs.getString(6),(Integer)rs.getObject(7),rs.getBoolean(8)):null,chunk);
         // Nothing seeded here to close with — which, before this, was almost the whole map. Confronting read only
         // the dozen or so populations placed at wildlife markers, so on 98% of the world "hunt the deer" answered
         // that the ground held nothing, standing in a wood full of deer. This is the last of the five places that
@@ -268,7 +268,7 @@ public class WildlifeEncounterService {
             "SELECT wp.id,wp.species_key,wp.behavior_state,ws.base_resistance,ws.ambush_hunter,ws.size_tier " +
             "FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id " +
             "LEFT JOIN wildlife_species ws ON ws.species_key=wp.species_key " +
-            "WHERE es.chunk_id=? AND wp.population_count>0 AND wp.ecological_role IN ('CARNIVORE','OMNIVORE') " +
+            "WHERE es.chunk_id=? AND wp.population_count>0 AND wildlife_abroad(wp.species_key) AND wp.ecological_role IN ('CARNIVORE','OMNIVORE') " +
             "AND wp.behavior_state IN ('HUNTING','PACK_HUNT','STALKING','TERRITORIAL','ALERT') " +
             "ORDER BY CASE wp.behavior_state WHEN 'PACK_HUNT' THEN 0 WHEN 'HUNTING' THEN 1 WHEN 'STALKING' THEN 2 ELSE 3 END LIMIT 1",
             rs -> rs.next() ? new Threat(rs.getObject(1,UUID.class), rs.getString(2), rs.getString(3), (Integer)rs.getObject(4), rs.getBoolean(5), rs.getString(6)) : null, chunk);
@@ -401,7 +401,7 @@ public class WildlifeEncounterService {
             "SELECT wp.id AS population_id, wp.species_key, wp.behavior_state, g.sign_kind, g.readable_hours " +
             "FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id " +
             "JOIN wildlife_sign g ON g.species_key=wp.species_key " +
-            "WHERE es.chunk_id=? AND wp.population_count>0 ORDER BY g.readable_hours DESC", chunk));
+            "WHERE es.chunk_id=? AND wp.population_count>0 AND wildlife_abroad(wp.species_key) ORDER BY g.readable_hours DESC", chunk));
         boolean residentHere = !sign.isEmpty();
         // Ambient sign (#37/#74). The query above reads only the seeded herds at wildlife markers — a dozen or so
         // populations across the whole map — so every other creature in the registry was untrackable everywhere,
@@ -421,7 +421,7 @@ public class WildlifeEncounterService {
             sign.addAll(jdbc.queryForList(
                 "SELECT NULL::uuid AS population_id, ws.species_key, NULL AS behavior_state, g.sign_kind, g.readable_hours " +
                 "FROM wildlife_species ws JOIN wildlife_sign g ON g.species_key=ws.species_key " +
-                "WHERE ws.kingdom_class <> 'MONSTRUM' AND ws.movement_class <> 'AQUATIC' AND ws.biome_affinity ILIKE ? " +
+                "WHERE ws.kingdom_class <> 'MONSTRUM' AND ws.movement_class <> 'AQUATIC' AND ws.biome_affinity ILIKE ? AND wildlife_abroad(ws.species_key) " +
                 "  AND NOT EXISTS (SELECT 1 FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id " +
                 "                  WHERE es.chunk_id=? AND wp.species_key=ws.species_key AND wp.population_count>0) " +
                 "ORDER BY md5(ws.species_key || ?::text) LIMIT 6", "%" + biome + "%", chunk, chunk.toString()));
@@ -548,7 +548,7 @@ public class WildlifeEncounterService {
         return jdbc.query(
             "SELECT wp.species_key, wp.behavior_state, (es.site_category='MONSTER') AS monster FROM world_chunk c " +
             "JOIN ecology_site es ON es.chunk_id=c.id JOIN wildlife_population wp ON wp.site_id=es.id " +
-            "WHERE c.world_id=? AND c.grid_x=? AND c.grid_y=? AND (wp.ecological_role='CARNIVORE' OR es.site_category='MONSTER') AND wp.population_count>0 " +
+            "WHERE c.world_id=? AND c.grid_x=? AND c.grid_y=? AND (wp.ecological_role='CARNIVORE' OR es.site_category='MONSTER') AND wp.population_count>0 AND wildlife_abroad(wp.species_key) " +
             "ORDER BY (es.site_category='MONSTER') DESC, CASE wp.behavior_state WHEN 'HUNTING' THEN 0 WHEN 'PACK_HUNT' THEN 0 WHEN 'STALKING' THEN 1 " +
             "WHEN 'AGGRESSIVE' THEN 1 WHEN 'ALERT' THEN 2 WHEN 'TERRITORIAL' THEN 2 ELSE 3 END LIMIT 1",
             rs -> rs.next() ? java.util.Map.of("species", rs.getString(1), "behavior", rs.getString(2) == null ? "" : rs.getString(2), "monster", rs.getBoolean(3)) : null,
@@ -685,7 +685,7 @@ public class WildlifeEncounterService {
             // a predator actually present on the keeper's ground, hunting rather than merely existing
             "  AND EXISTS (SELECT 1 FROM wildlife_population pp JOIN ecology_site pes ON pes.id=pp.site_id " +
             "              WHERE pes.chunk_id = cw.current_location_id AND pp.ecological_role='CARNIVORE' " +
-            "                AND pp.population_count > 0 AND pp.behavior_state IN ('HUNTING','PACK_HUNT','ALERT','AGGRESSIVE')) " +
+            "                AND pp.population_count > 0 AND wildlife_abroad(pp.species_key) AND pp.behavior_state IN ('HUNTING','PACK_HUNT','ALERT','AGGRESSIVE')) " +
             // nothing standing that would keep them off
             "  AND NOT EXISTS (SELECT 1 FROM construction_project cp JOIN world_object pw ON pw.id=cp.object_id " +
             "                  WHERE pw.current_location_id = cw.current_location_id AND cp.state='COMPLETED' " +
@@ -920,7 +920,7 @@ public class WildlifeEncounterService {
         java.util.List<java.util.Map<String,Object>> here = jdbc.queryForList(
             "SELECT species_key, ecological_role, activity_cycle, movement_class, base_resistance, ambush_hunter, size_tier " +
             "FROM wildlife_species WHERE kingdom_class <> 'MONSTRUM' AND movement_class <> 'AQUATIC' " +
-            "  AND biome_affinity ILIKE ? " +
+            "  AND biome_affinity ILIKE ? AND wildlife_abroad(species_key) " +
             "ORDER BY md5(species_key || ?::text) LIMIT 6", "%" + biome + "%", chunk.toString());
         if (here.isEmpty()) return null;
 
@@ -951,7 +951,7 @@ public class WildlifeEncounterService {
         java.util.List<java.util.Map<String,Object>> here = jdbc.queryForList(
             "SELECT species_key, tamability, activity_cycle, ecological_role FROM wildlife_species " +
             "WHERE tamability > 0 AND kingdom_class <> 'MONSTRUM' AND movement_class <> 'AQUATIC' " +
-            "  AND biome_affinity ILIKE ? ORDER BY md5(species_key || ?::text)",
+            "  AND biome_affinity ILIKE ? AND wildlife_abroad(species_key) ORDER BY md5(species_key || ?::text)",
             "%" + biome + "%", chunk.toString());
         if (here.isEmpty()) return null;
 
@@ -991,7 +991,7 @@ public class WildlifeEncounterService {
         Tamable t = jdbc.query(
             "SELECT wp.id,wp.species_key,ws.tamability,wp.behavior_state FROM wildlife_population wp " +
             "JOIN ecology_site es ON es.id=wp.site_id JOIN wildlife_species ws ON ws.species_key=wp.species_key " +
-            "WHERE es.chunk_id=? AND wp.population_count>0 AND ws.tamability>0 " +
+            "WHERE es.chunk_id=? AND wp.population_count>0 AND ws.tamability>0 AND wildlife_abroad(wp.species_key) " +
             "ORDER BY ws.tamability DESC LIMIT 1 FOR UPDATE OF wp",
             rs -> rs.next() ? new Tamable(rs.getObject(1,UUID.class), rs.getString(2), rs.getInt(3), rs.getString(4)) : null, chunk);
         // Nothing seeded here to approach — which, before this, was almost the whole map. Taming read only the
@@ -1187,7 +1187,7 @@ public class WildlifeEncounterService {
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, chunk);
         java.util.List<String> prey = jdbc.queryForList(
             aquatic ? "SELECT species_key FROM wildlife_species WHERE movement_class='AQUATIC' AND biome_affinity ILIKE ? ORDER BY species_key"
-                    : "SELECT species_key FROM wildlife_species WHERE size_tier IN ('TINY','SMALL','MEDIUM') AND movement_class IN ('TERRESTRIAL','AERIAL') AND biome_affinity ILIKE ? ORDER BY species_key",
+                    : "SELECT species_key FROM wildlife_species WHERE size_tier IN ('TINY','SMALL','MEDIUM') AND movement_class IN ('TERRESTRIAL','AERIAL') AND biome_affinity ILIKE ? AND wildlife_abroad(species_key) ORDER BY species_key",
             String.class, "%"+biome+"%");
         if (prey.isEmpty()) return new EncounterResult("PARTIAL","The trap is untouched. Nothing that uses this ground has come near it.");
         // The longer it has stood, the likelier it has caught — up to a point.
@@ -1398,7 +1398,7 @@ public class WildlifeEncounterService {
         if (!items.hasAtLeast(chronicle,"plant_fiber",2) && !items.hasAtLeast(chronicle,"hazel_rod",1))
             return new EncounterResult("FAILED","You crouch over the run and find you have nothing to build a snare from.");
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, chunk);
-        java.util.List<String> prey = jdbc.queryForList("SELECT species_key FROM wildlife_species WHERE size_tier IN ('TINY','SMALL') AND movement_class IN ('TERRESTRIAL','AERIAL') AND biome_affinity ILIKE ? ORDER BY species_key", String.class, "%"+biome+"%");
+        java.util.List<String> prey = jdbc.queryForList("SELECT species_key FROM wildlife_species WHERE size_tier IN ('TINY','SMALL') AND movement_class IN ('TERRESTRIAL','AERIAL') AND biome_affinity ILIKE ? AND wildlife_abroad(species_key) ORDER BY species_key", String.class, "%"+biome+"%");
         if (prey.isEmpty()) return new EncounterResult("FAILED","You set a snare across the run, but nothing here uses this ground.");
         if (items.hasAtLeast(chronicle,"plant_fiber",2)) { items.consumeOne(chronicle,"plant_fiber",at); items.consumeOne(chronicle,"plant_fiber",at); }
         else items.consumeOne(chronicle,"hazel_rod",at);
