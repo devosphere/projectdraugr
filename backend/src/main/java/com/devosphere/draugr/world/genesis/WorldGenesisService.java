@@ -387,7 +387,29 @@ public class WorldGenesisService {
                 //
                 // Limestone country is exactly where caves are — a cave is what limestone dissolves into — so a
                 // quarry belongs beside a cave mouth as readily as on an open highland shoulder.
-                new MarkerSpec("RESOURCE", "Limestone quarry", "CAVE_MOUTH", "HIGHLAND"));
+                new MarkerSpec("RESOURCE", "Limestone quarry", "CAVE_MOUTH", "HIGHLAND"),
+                // The geological provinces (#160), appended last for the same index-salt reason as everything
+                // above. Until now a mineral's only gate was its biome, so obsidian came off any mountain in the
+                // world and ochre out of any river bank — a broad label standing in for a deposit, which is the
+                // one thing the ticket says must not happen. mineral_province binds each of these minerals to the
+                // site below, and gatherMineral will not give it anywhere else.
+                //
+                // These are markers that change something the day they appear, which is the bar the quarry above
+                // had to clear too: without the site, the mineral is not in the ground at all.
+                //
+                // The ground each stands on is copied into mineral_province.site_biomes, and
+                // MineralProvinceInvariantTest checks the copy against this list in both directions — a name here
+                // with no province is a marker that gates nothing, and a province naming ground this list does
+                // not give it is a mineral gated to nowhere.
+                new MarkerSpec("RESOURCE", "Obsidian field", "MOUNTAIN"),
+                new MarkerSpec("RESOURCE", "Volcanic scree", "MOUNTAIN"),
+                new MarkerSpec("RESOURCE", "Ochre earth bank", "RIVER_BANK", "WETLAND"),
+                new MarkerSpec("RESOURCE", "Tin exposure", "MOUNTAIN", "HIGHLAND"),
+                new MarkerSpec("RESOURCE", "Silver-lead exposure", "MOUNTAIN", "HIGHLAND"),
+                new MarkerSpec("RESOURCE", "Pyrite exposure", "MOUNTAIN", "HIGHLAND"),
+                new MarkerSpec("RESOURCE", "Soapstone outcrop", "HIGHLAND", "MOUNTAIN"),
+                new MarkerSpec("RESOURCE", "Precision tool-stone exposure", "MOUNTAIN", "HIGHLAND"),
+                new MarkerSpec("RESOURCE", "Refractory clay bed", "HIGHLAND", "RIVER_BANK"));
 
     /**
      * Ground that is richer for what it stands between (#159).

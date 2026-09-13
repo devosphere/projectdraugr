@@ -38,7 +38,16 @@ public class CanonicalWorldBootstrap implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         if (!enabled) return;
         if (world.current() != null) {
-            log.info("Canonical world already present; leaving it untouched.");
+            // The world stands as it is — but the approved Atlas can gain markers after it was generated, and a
+            // site that only ever appears at genesis would then exist in no world anybody is playing. #160's
+            // geological provinces are the case in point: without their sites, the minerals bound to them are in
+            // the ground nowhere. Reconciling places only what is missing, at the position genesis itself would
+            // have chosen, and touches nothing else.
+            WorldEcologyGenesisService.EcologySummary added = ecology.reconcile();
+            if (added.siteCount() > 0)
+                log.info("Canonical world already present; added {} ecology site(s) the approved Atlas has gained since it was generated.", added.siteCount());
+            else
+                log.info("Canonical world already present and complete; leaving it untouched.");
             return;
         }
         WorldGenesisService.GenesisSummary summary = world.generate(WorldGenesisService.GenesisRequest.mvpDefault());
