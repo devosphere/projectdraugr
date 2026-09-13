@@ -139,6 +139,9 @@ class WhatSleepsThroughTheWinterIntegrationTest {
             setClock(MID_JANUARY);
             String winterLook = examination.presentLife(chunk, 1.0).toLowerCase();
             assertFalse(winterLook.contains("brown bear"), () -> "a denned bear must not be seen: " + winterLook);
+            // But where it sleeps is findable. Hiding the animal and leaving no trace of it would be wrong the other way.
+            assertTrue(winterLook.contains("stopped up for the winter"),
+                () -> "a careful eye finds the den even though it cannot see the sleeper: " + winterLook);
             var winterTrack = wildlife.track(chronicle, chunk, UUID.randomUUID(), MID_JANUARY, "HIGH", 1.0);
             assertFalse(winterTrack.narration().toLowerCase().contains("brown bear"),
                 () -> "a denned bear leaves no fresh sign to follow: " + winterTrack.narration());
@@ -150,6 +153,7 @@ class WhatSleepsThroughTheWinterIntegrationTest {
             setClock(MID_JULY);
             String summerLook = examination.presentLife(chunk, 1.0).toLowerCase();
             assertTrue(summerLook.contains("brown bear"), () -> "the same bear on the same ground is plain to see in July: " + summerLook);
+            assertFalse(summerLook.contains("stopped up for the winter"), () -> "no den is stopped up in July: " + summerLook);
         } finally {
             jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", original);
             jdbc.update("UPDATE wildlife_population SET population_count=0 WHERE id=?", bear);
