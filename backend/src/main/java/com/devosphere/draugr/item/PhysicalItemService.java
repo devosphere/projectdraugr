@@ -2727,36 +2727,39 @@ public class PhysicalItemService {
         return new InsectHarvest(outcome, narration, hazardSeverity, hazardKind);
     }
 
-    // A basket is woven from whatever flexible stock is to hand — split withies, vines, plant fibre, or
-    // twisted cordage — not plant fibre alone (#34). Each length is one "weave unit"; cordage is stronger and
-    // longer, so it counts double. Eight units make a basket. This is why a player carrying cordage, branches,
+    // A basket is woven from whatever flexible stock is to hand — split withies, vines, reeds, rush, fibre, or
+    // twisted cordage — not plant fibre alone (#34). What counts, and how many "weave units" each length is worth,
+    // is weaving_stock (#134, V314): this comment named withies for years while the code never accepted them.
+    // Eight units make a basket. This is why a player carrying cordage, branches,
     // and vines can now actually reach a basket instead of being told, wrongly, that only fibre will do.
     private static final int BASKET_WEAVE_UNITS = 8;
 
-    /** Reachable weave units for a basket: plant fibre / vine (1 each) + cordage (2 each). */
+    /** Reachable weave units for a basket, summed over weaving_stock — the same reach query craftBasket locks. */
     @Transactional(readOnly = true)
     public int basketWeaveUnitsInReach(UUID chronicle) {
         UUID location = chronicleLocation(chronicle);
-        return reachCount(chronicle, location, "plant_fiber")
-             + reachCount(chronicle, location, "vine")
-             + 2 * reachCount(chronicle, location, "fiber_cordage");
+        Integer units = jdbc.queryForObject(REACHABLE_CTE +
+            "SELECT COALESCE(SUM(ws.weave_units),0) FROM reachable r JOIN item_instance i ON i.object_id=r.id " +
+            "JOIN weaving_stock ws ON ws.item_key=i.item_key", Integer.class, chronicle, location);
+        return units == null ? 0 : units;
     }
 
     @Transactional
     public ItemView craftBasket() {
         UUID chronicle=activeChronicle(); UUID location=chronicleLocation(chronicle);
-        // Reachable flexible stock, weakest/most-plentiful first so cordage (scarcer, stronger) is spared where
-        // fibre or vine will do. Each row is one physical length; cordage carries two weave units. Reach is the
+        // Reachable flexible stock in weaving_stock.spare_order, most plentiful first so cordage (scarcer, wanted
+        // by many recipes) is spared where fibre, rush or withies will do. Each row is one physical length carrying
+        // its declared weave units. Reach is the
         // SAME as the dispatch guard (basketWeaveUnitsInReach) — carried, in carried containers, and on the
         // ground here — so the guard and the craft never disagree and drop a raw error on a stock mismatch.
-        List<java.util.Map<String,Object>> stock=jdbc.query(REACHABLE_CTE + "SELECT r.id, i.item_key FROM reachable r JOIN item_instance i ON i.object_id=r.id WHERE i.item_key IN ('plant_fiber','vine','fiber_cordage') ORDER BY CASE i.item_key WHEN 'plant_fiber' THEN 0 WHEN 'vine' THEN 1 ELSE 2 END, r.id FOR UPDATE OF i", (rs,row)->java.util.Map.of("id",rs.getObject(1,UUID.class),"key",rs.getString(2)), chronicle, location);
-        int units=0; for (java.util.Map<String,Object> m : stock) units += "fiber_cordage".equals(m.get("key")) ? 2 : 1;
-        if(units<BASKET_WEAVE_UNITS) throw new IllegalStateException("Weaving a basket needs eight lengths of flexible stock — plant fibre, vine, or cordage — within reach of the Chronicle.");
+        List<java.util.Map<String,Object>> stock=jdbc.query(REACHABLE_CTE + "SELECT r.id, i.item_key, ws.weave_units FROM reachable r JOIN item_instance i ON i.object_id=r.id JOIN weaving_stock ws ON ws.item_key=i.item_key ORDER BY ws.spare_order, r.id FOR UPDATE OF i", (rs,row)->java.util.Map.of("id",rs.getObject(1,UUID.class),"key",rs.getString(2),"units",rs.getInt(3)), chronicle, location);
+        int units=0; for (java.util.Map<String,Object> m : stock) units += (Integer) m.get("units");
+        if(units<BASKET_WEAVE_UNITS) throw new IllegalStateException("Weaving a basket needs eight lengths of flexible stock — fibre, vine, withies, reed, rush or cordage — within reach of the Chronicle.");
         Instant now=Instant.now(); UUID basket=UUID.randomUUID();
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM','Woven basket',?)",basket,chronicle);
         jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,'woven_basket','SOUND')",basket);
         jdbc.update("INSERT INTO container_properties (object_id,max_mass_grams,max_volume_ml) VALUES (?,12000,18000)",basket);
-        int consumed=0; for (java.util.Map<String,Object> m : stock) { if (consumed>=BASKET_WEAVE_UNITS) break; String key=(String)m.get("key"); retire((UUID)m.get("id"),now,"CONSUMED_FOR_CRAFTING",key); consumed += "fiber_cordage".equals(key) ? 2 : 1; }
+        int consumed=0; for (java.util.Map<String,Object> m : stock) { if (consumed>=BASKET_WEAVE_UNITS) break; String key=(String)m.get("key"); retire((UUID)m.get("id"),now,"CONSUMED_FOR_CRAFTING",key); consumed += (Integer) m.get("units"); }
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CRAFTED',jsonb_build_object('recipe','woven_basket'))",basket,Timestamp.from(now));
         // A crafted thing goes to the carried load if it fits, not onto the body — the Chronicle
         // decides what to wear or wield ("sling the basket on my back" equips it). If there is no
