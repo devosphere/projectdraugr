@@ -40,12 +40,20 @@ import java.util.List;
 @Component
 public class ProcessMatcher {
 
-    /** A process reduced to what matching needs. */
-    public record Candidate(String processKey, String categoryKey, List<String> keywords, List<String> subjects) {
+    /**
+     * A process reduced to what matching needs. {@code outputKey} may be null; it is read only to settle a tie by the
+     * words of what the text asks to make (#38).
+     */
+    public record Candidate(String processKey, String categoryKey, List<String> keywords, List<String> subjects, String outputKey) {
 
         /** Build from the comma-separated forms the tables store. */
         public static Candidate of(String processKey, String categoryKey, String keywordCsv, String subjectCsv) {
-            return new Candidate(processKey, categoryKey, split(keywordCsv), split(subjectCsv));
+            return of(processKey, categoryKey, keywordCsv, subjectCsv, null);
+        }
+
+        /** As above, with the item the process makes. */
+        public static Candidate of(String processKey, String categoryKey, String keywordCsv, String subjectCsv, String outputKey) {
+            return new Candidate(processKey, categoryKey, split(keywordCsv), split(subjectCsv), outputKey);
         }
 
         private static List<String> split(String csv) {
@@ -76,25 +84,33 @@ public class ProcessMatcher {
      * phrasing, KEYWORD means the right process was reached and rejected the material.
      *
      * @param processKey the winning process, or null when nothing matched
-     * @param furthestGate NONE, CATEGORY or KEYWORD — the last gate a candidate passed
+     * @param furthestGate NONE, CATEGORY, KEYWORD, or AMBIGUOUS when recorded as a tie the play path could not settle
      * @param nearProcessKey the candidate that got furthest, or null when none did
+     * @param tied every process the words fit equally when more than one does, lexically ordered with
+     *             {@code processKey} first; empty when the text chose one
      */
-    public record Result(String processKey, String furthestGate, String nearProcessKey) {
+    public record Result(String processKey, String furthestGate, String nearProcessKey, List<String> tied) {
+        public Result(String processKey, String furthestGate, String nearProcessKey) { this(processKey, furthestGate, nearProcessKey, List.of()); }
         boolean matched() { return processKey != null; }
+        /** The words fit more than one process equally, and nothing in the text chose between them (#38). */
+        public boolean ambiguous() { return tied.size() > 1; }
     }
 
     /**
      * Apply the rule. Pure — no database, no clock, no randomness.
      *
-     * <p>The longest matching keyword wins, so "fire the pot" beats a bare "pot"
-     * elsewhere; ties fall to the lexically first process key so that the same text
-     * always resolves to the same process no matter what order the rows arrive in.
+     * <p>The longest matching keyword wins, so "fire the pot" beats a bare "pot" elsewhere. When several processes
+     * answer to equally long words, the one whose made thing the text names more of wins — "ret the flax" makes
+     * retted flax, not cordage. Whatever is still tied after that is reported in {@link Result#tied()}, and
+     * {@code processKey} is the lexically first of them, so the same text always resolves to the same process for a
+     * read-only caller. The play path does not take that pick on trust: it settles the tie by what is in reach, or
+     * asks (#38).
      *
      * @param category the classified category, or null to drop the category condition
      */
     public static Result resolve(String text, String category, List<Candidate> candidates) {
         String v = ActivityClassifier.normalise(text);
-        String best = null; int bestLen = -1;
+        int bestLen = -1; List<Candidate> best = new ArrayList<>();
         String nearKey = null; String gate = "NONE";
         for (Candidate c : candidates) {
             if (category != null && !category.equals(c.categoryKey())) continue;
@@ -113,11 +129,28 @@ public class ProcessMatcher {
                 if (!"KEYWORD".equals(gate)) { gate = "KEYWORD"; nearKey = c.processKey(); }
                 continue;
             }
-            if (len > bestLen || (len == bestLen && c.processKey().compareTo(best) < 0)) {
-                best = c.processKey(); bestLen = len;
-            }
+            if (len > bestLen) { bestLen = len; best.clear(); best.add(c); }
+            else if (len == bestLen) best.add(c);
         }
-        return new Result(best, gate, nearKey);
+        if (best.isEmpty()) return new Result(null, gate, nearKey);
+
+        // Equal words: the text's own naming of what it makes decides, where it names anything.
+        int mostNamed = -1; List<String> tied = new ArrayList<>();
+        for (Candidate c : best) {
+            int named = namedOutputWords(v, c.outputKey());
+            if (named > mostNamed) { mostNamed = named; tied.clear(); tied.add(c.processKey()); }
+            else if (named == mostNamed) tied.add(c.processKey());
+        }
+        java.util.Collections.sort(tied);
+        return new Result(tied.get(0), gate, nearKey, tied.size() > 1 ? List.copyOf(tied) : List.of());
+    }
+
+    /** How many words of an output item's key the text names ("retted_flax" in "ret the flax": one). */
+    private static int namedOutputWords(String normalised, String outputKey) {
+        if (outputKey == null) return 0;
+        int n = 0;
+        for (String w : outputKey.split("_")) if (w.length() > 2 && ActivityClassifier.containsSubject(normalised, w)) n++;
+        return n;
     }
 
     /** The winning process key alone, for callers that do not care why it missed. */
@@ -152,10 +185,23 @@ public class ProcessMatcher {
      * merely being assessed for routing is not evidence of anything.
      */
     public String matchAndRecord(String actionText, java.util.UUID chronicle) {
+        return resolveAndRecord(actionText, chronicle).processKey();
+    }
+
+    /** As {@link #matchAndRecord}, keeping the whole result so the play path can see a tie (#38). */
+    public Result resolveAndRecord(String actionText, java.util.UUID chronicle) {
         String category = classifier.classify(actionText);
         Result r = resolve(actionText, category, candidates(chronicle));
         if (!r.matched()) misses.record(actionText, category, r);
-        return r.processKey();
+        return r;
+    }
+
+    /**
+     * Record a tie the play path could not settle by what was in reach: the words fit several processes and the
+     * Chronicle was asked which they meant. Backlog kind AMBIGUITY (V318) — fixed by a sharper keyword.
+     */
+    public void recordAmbiguity(String actionText, List<String> tied) {
+        misses.record(actionText, classifier.classify(actionText), new Result(null, "AMBIGUOUS", tied.get(0), tied));
     }
 
 
@@ -182,9 +228,9 @@ public class ProcessMatcher {
         return jdbc.query(
             "SELECT mp.process_key, mp.category_key, mp.keywords, " +
             "       (SELECT string_agg(s.subject_term, ',') FROM process_subject s " +
-            "        WHERE s.process_key = mp.process_key) AS subjects " +
+            "        WHERE s.process_key = mp.process_key) AS subjects, mp.output_item_key " +
             "FROM material_process mp WHERE mp.review_state = 'VERIFIED' " +
             "  AND (mp.discovered_by_chronicle_id IS NULL OR mp.discovered_by_chronicle_id = ?)",
-            (rs, row) -> Candidate.of(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4)), chronicle);
+            (rs, row) -> Candidate.of(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5)), chronicle);
     }
 }

@@ -39,15 +39,17 @@ public class RoutingMissRecorder {
             if (normalised.isEmpty()) return;
             jdbc.update(
                 "INSERT INTO routing_miss (text_hash, normalised_text, sample_text, " +
-                "                          classified_category, furthest_gate, near_process_key) " +
-                "VALUES (md5(?), ?, ?, ?, ?, ?) " +
+                "                          classified_category, furthest_gate, near_process_key, tied_process_keys) " +
+                "VALUES (md5(?), ?, ?, ?, ?, ?, string_to_array(NULLIF(?, ''), ',')) " +
                 "ON CONFLICT (text_hash) DO UPDATE SET " +
                 "  hit_count = routing_miss.hit_count + 1, " +
                 "  last_seen = now(), " +
                 "  classified_category = EXCLUDED.classified_category, " +
                 "  furthest_gate = EXCLUDED.furthest_gate, " +
-                "  near_process_key = EXCLUDED.near_process_key",
-                normalised, normalised, actionText, category, result.furthestGate(), result.nearProcessKey());
+                "  near_process_key = EXCLUDED.near_process_key, " +
+                "  tied_process_keys = EXCLUDED.tied_process_keys",
+                normalised, normalised, actionText, category, result.furthestGate(), result.nearProcessKey(),
+                String.join(",", result.tied()));
         } catch (RuntimeException e) {
             log.debug("Could not record routing miss for '{}'", actionText, e);
         }

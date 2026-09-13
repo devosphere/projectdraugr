@@ -1522,12 +1522,56 @@ public class PhysicalItemService {
         // the world simply does not yet know how to do it.
         // matchAndRecord, not match: this is the play path, so a miss here is a real
         // gap a player walked into and belongs in the backlog (V56).
-        String key = matcher.matchAndRecord(actionText, chronicle);
+        ProcessMatcher.Result resolved = matcher.resolveAndRecord(actionText, chronicle);
+        String key = resolved.processKey();
+        // Words that fit several pieces of work equally — "carve a bowl" is soapstone and wood alike — used to run
+        // whichever key sorted first, so a Chronicle holding wood was told they had no soapstone (#38). What is in
+        // reach settles it when only one of them can be worked; otherwise the Chronicle is asked, by name, and
+        // nothing is spent.
+        if (resolved.ambiguous()) {
+            java.util.List<String> workable = resolved.tied().stream().filter(k -> inputsInReach(chronicle, location, k)).toList();
+            if (workable.size() == 1) key = workable.get(0);
+            else {
+                matcher.recordAmbiguity(actionText, resolved.tied());
+                return new String[]{"FAILED", whichOfThese(workable.isEmpty() ? resolved.tied() : workable, workable.isEmpty())};
+            }
+        }
         if (key != null) return executeProcess(chronicle, location, key, actionText, at);
         // A deterministic miss. The AI Procedure Interpreter may compose this from existing processes
         // (DR-0021), but that orchestration lives in ChronicleActionService where the AI seam is; here
         // the world simply does not yet know how, and says so.
         return new String[]{"FAILED", "You turn the material over in your hands, but no way to work it into what you meant comes to you here. Whatever that would take, it is not a thing your hands find on their own."};
+    }
+
+    /**
+     * Whether every input a process wants is within reach: each fixed input in quantity, and at least one member of each
+     * either/or group — the same test executeProcess applies before it spends anything. Read only to settle a tie (#38).
+     */
+    private boolean inputsInReach(UUID chronicle, UUID location, String processKey) {
+        for (java.util.Map<String,Object> in : jdbc.queryForList(
+                "SELECT item_key, quantity FROM material_process_input WHERE process_key=?", processKey))
+            if (!hasAtLeastHere(chronicle, location, (String) in.get("item_key"), ((Number) in.get("quantity")).intValue())) return false;
+        for (String g : jdbc.queryForList(
+                "SELECT DISTINCT group_name FROM material_process_input_group WHERE process_key=?", String.class, processKey)) {
+            boolean any = false;
+            for (java.util.Map<String,Object> o : jdbc.queryForList(
+                    "SELECT item_key, quantity FROM material_process_input_group WHERE process_key=? AND group_name=?", processKey, g))
+                if (hasAtLeastHere(chronicle, location, (String) o.get("item_key"), ((Number) o.get("quantity")).intValue())) { any = true; break; }
+            if (!any) return false;
+        }
+        return true;
+    }
+
+    /** The question put to a Chronicle whose words named more than one piece of work (#38). */
+    private String whichOfThese(java.util.List<String> processKeys, boolean noneInReach) {
+        java.util.List<String> names = new java.util.ArrayList<>();
+        for (String k : processKeys)
+            names.add(jdbc.queryForObject("SELECT lower(display_name) FROM material_process WHERE process_key=?", String.class, k));
+        String choices = names.size() == 2 ? names.get(0) + ", or " + names.get(1)
+            : String.join(", ", names.subList(0, names.size() - 1)) + ", or " + names.get(names.size() - 1);
+        return noneInReach
+            ? "Those words fit more than one piece of work — " + choices + " — and you have the makings of none of them within reach. Say which you mean."
+            : "Those words fit more than one piece of work you could do here — " + choices + ". Say which you mean, and your hands will know where to begin.";
     }
 
     /** True if a verified process by this key exists (canonical). Used to validate an AI-composed plan. */
