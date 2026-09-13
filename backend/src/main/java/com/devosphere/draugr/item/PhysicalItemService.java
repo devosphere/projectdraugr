@@ -2707,7 +2707,9 @@ public class PhysicalItemService {
 
         // Yield each product by its rarity roll, respecting carry capacity.
         java.util.List<java.util.Map<String,Object>> products = jdbc.queryForList(
-            "SELECT item_key, yield_min, yield_max, rarity FROM insect_colony_product WHERE colony_kind=? ORDER BY rarity DESC", colonyKind);
+            // Only what the season gives (#161, V323): a hive holds no honey worth taking in winter, and crickets are
+            // not adults until midsummer. in_season() is the one definition every living yield reads.
+            "SELECT item_key, yield_min, yield_max, rarity FROM insect_colony_product WHERE colony_kind=? AND in_season(available_months) ORDER BY rarity DESC", colonyKind);
         int totalTaken = 0; String firstItemName = null;
         for (java.util.Map<String,Object> p : products) {
             double rarity = ((Number) p.get("rarity")).doubleValue();
