@@ -368,7 +368,10 @@ public class ExaminationService {
             String biome = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : "", location);
             boolean water = "WETLAND".equals(biome) || "RIVER_BANK".equals(biome) || Boolean.TRUE.equals(jdbc.queryForObject(
                 "SELECT EXISTS(SELECT 1 FROM ecology_site WHERE chunk_id=? AND (" + com.devosphere.draugr.ecology.FreshWater.sites() + "))", Boolean.class, location));
-            return water ? new String[]{"SUCCEEDED", "You sound the water with a stick — it shelves off gradually, past a safe wade before long."}
+            // Named for the water that is there (#37): a still pond and a fast stream are not sounded alike in words.
+            String sounded = com.devosphere.draugr.ecology.FreshWater.name(
+                jdbc.queryForList(com.devosphere.draugr.ecology.FreshWater.SITE_KINDS_ON_CHUNK, String.class, location), biome);
+            return water ? new String[]{"SUCCEEDED", "You sound " + sounded + " with a stick — it shelves off gradually, past a safe wade before long."}
                          : new String[]{"SUCCEEDED", "There is no standing water here to sound for depth."};
         }
         return new String[]{"SUCCEEDED", "You pace it out and reckon by eye. Without any instrument the figure is rough — near enough to plan by, not to build to."};
