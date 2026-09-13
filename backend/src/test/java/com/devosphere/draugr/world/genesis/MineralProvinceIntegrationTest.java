@@ -235,4 +235,58 @@ class MineralProvinceIntegrationTest {
 
         assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
+
+    /**
+     * Iron sand (#160/#155, V320): scooped off its bar and nowhere else, asked for by name through the ordinary action
+     * path, and smelted by its own process without touching the ore smelt.
+     */
+    @Test
+    void ironSandComesOffItsBarByNameAndSmeltsWithoutTouchingTheOreSmelt() {
+        world();
+        ecology.reconcile();
+
+        UUID bar = jdbc.queryForObject("SELECT chunk_id FROM ecology_site WHERE site_kind='Iron sand bar' LIMIT 1", UUID.class);
+        assertNotNull(bar, "the world must hold an iron sand bar");
+        String barGround = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, bar);
+        UUID plainBank = jdbc.queryForObject(
+            "SELECT c.id FROM world_chunk c WHERE c.biome=? " +
+            "AND NOT EXISTS (SELECT 1 FROM ecology_site s WHERE s.chunk_id=c.id AND s.site_kind='Iron sand bar') " +
+            "ORDER BY c.grid_y, c.grid_x LIMIT 1", UUID.class, barGround);
+        assertNotNull(plainBank, "the world must hold ordinary " + barGround + " to contrast with");
+
+        assertTrue(inTheGroundAt(bar, "iron_sand"), "iron sand must be in the ground at its bar");
+        assertFalse(inTheGroundAt(plainBank, "iron_sand"), "iron sand must NOT be on an ordinary " + barGround);
+        assertTrue(items.namesADugMineral("gather iron sand"), "a province mineral must be recognised by name even though it takes no tool");
+        assertFalse(items.namesADugMineral("gather river sand"), "toolless commons stay with their own gather rules");
+
+        ChronicleService.ChronicleSummary summary = chronicles.awaken();
+        assertNotNull(summary);
+        UUID chronicle = summary.id();
+        jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
+
+        jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", plainBank, chronicle);
+        var refused = actions.resolve("gather iron sand");
+        assertEquals("GATHER_MINERAL", refused.intent(), () -> "asking for iron sand must be a mineral gather: " + refused.perception());
+        assertTrue(refused.perception().toLowerCase().contains("iron sand bar"),
+            () -> "off its bar, the refusal must name where iron sand comes from: " + refused.perception());
+
+        jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", bar, chronicle);
+        boolean found = false;
+        for (int attempt = 0; attempt < 60 && !found; attempt++) {
+            var dig = actions.resolve("gather iron sand");
+            assertEquals("GATHER_MINERAL", dig.intent());
+            found = "SUCCEEDED".equals(dig.outcome());
+        }
+        assertTrue(found, "iron sand must actually be gatherable at its bar");
+
+        assertEquals("smelt_iron", com.devosphere.draugr.routing.ProcessMatcher.match("smelt iron ore", "PROCESS",
+            List.of(com.devosphere.draugr.routing.ProcessMatcher.Candidate.of("smelt_iron", "PROCESS", "smelt iron,smelt the iron,smelt iron ore", "bloom,iron,ore"),
+                    com.devosphere.draugr.routing.ProcessMatcher.Candidate.of("smelt_iron_sand", "PROCESS", "smelt the iron sand,smelt iron sand", "sand,iron sand,bloom"))),
+            "ore is still smelted by the ore smelt");
+        assertEquals(1, (int) jdbc.queryForObject(
+            "SELECT count(*) FROM material_process WHERE process_key='smelt_iron_sand' AND station_kind='bloomery_furnace' AND output_item_key='iron_bloom'", Integer.class),
+            "iron sand must smelt to a bloom at the bloomery");
+
+        assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
 }

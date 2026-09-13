@@ -2333,7 +2333,12 @@ public class PhysicalItemService {
         if (actionText == null || actionText.isBlank()) return false;
         String v = " " + actionText.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim() + " ";
         for (java.util.Map<String,Object> m : jdbc.queryForList(
-                "SELECT mineral_key, display_name FROM mineral_definition WHERE tool_required IS NOT NULL")) {
+                // Toolless minerals are left out so "field stone", "surface clay" and "river sand" stay with GATHER_STONE
+                // and GATHER_CLAY (V305). A province-bound mineral is the exception: it is found only at its own site,
+                // so it is only ever had by asking for it there, and its name — iron sand, obsidian, ochre — is no
+                // one else's gather phrase. Without this, toolless iron sand (V320) could be smelted and never dug.
+                "SELECT mineral_key, display_name FROM mineral_definition WHERE tool_required IS NOT NULL " +
+                "OR mineral_key IN (SELECT mineral_key FROM mineral_province)")) {
             if (v.contains(" " + ((String) m.get("mineral_key")).replace('_', ' ') + " ")) return true;
             String shown = ((String) m.get("display_name")).toLowerCase(java.util.Locale.ROOT);
             if (v.contains(" " + shown + " ")) return true;
