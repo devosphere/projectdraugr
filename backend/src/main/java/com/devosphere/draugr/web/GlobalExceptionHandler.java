@@ -55,11 +55,12 @@ public class GlobalExceptionHandler {
      * {@code ERROR: column fps.item_id does not exist}. #83 asks for the opposite in as many words: any failure
      * must be "a controlled, logged simulation error rather than a raw database message in the narration panel".
      * The message is not lost, it is filed — {@code errorRecorder} still records the most specific cause, its
-     * class and the request path.
+     * class and the request path. The whole exception is handed over rather than its innermost cause, because the
+     * Spring wrapper is what carries the failing statement the regression record needs (#83, V321).
      */
     @ExceptionHandler(DataAccessException.class)
     public ResponseEntity<ApiError> handlePersistence(DataAccessException exception, HttpServletRequest request) {
-        errorRecorder.record(HttpStatus.INTERNAL_SERVER_ERROR.value(), exception.getMostSpecificCause(), request.getRequestURI());
+        errorRecorder.record(HttpStatus.INTERNAL_SERVER_ERROR.value(), exception, request.getRequestURI());
         return build(HttpStatus.INTERNAL_SERVER_ERROR, HARD_FAULT_MESSAGE);
     }
 
