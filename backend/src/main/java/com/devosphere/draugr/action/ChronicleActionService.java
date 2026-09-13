@@ -2317,8 +2317,10 @@ public class ChronicleActionService {
             "SELECT EXISTS(SELECT 1 FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id " +
             // The primitive tool carriers count too. A cordage tool belt and a reed tool loop are the same idea as a
             // utility belt — tools kept to hand instead of set down and hunted for — but only 'utility_belt' was read
-            // here, so both were craftable, wearable and completely inert.
-            "JOIN world_object w ON w.id=e.item_id WHERE e.chronicle_id=? AND i.item_key IN ('utility_belt','cordage_tool_belt','reed_tool_loop') AND w.lifecycle_state='ACTIVE')",
+            // here, so both were craftable, wearable and completely inert. The fix named them in a second list, and
+            // the leather tool girdle (V248) then went unread the same way; what counts is now tool_carrier (V315).
+            "JOIN tool_carrier tc ON tc.item_key=i.item_key " +
+            "JOIN world_object w ON w.id=e.item_id WHERE e.chronicle_id=? AND w.lifecycle_state='ACTIVE')",
             Boolean.class, chronicle));
     }
     /**
