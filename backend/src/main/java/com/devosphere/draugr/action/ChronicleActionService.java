@@ -120,21 +120,59 @@ public class ChronicleActionService {
      *
      * <p>Replay is safe: each step derives its own idempotency key from the plan's, so resubmitting a whole
      * procedure replays step for step instead of doing the work twice.
+     *
+     * <p><b>What stops is set aside, not lost.</b> When a plan stops at a failed step or at the step limit, the
+     * steps not yet done are kept in {@code chronicle_plan_remainder}, in the player's order and words, and a
+     * bare "carry on" takes them up once the player has put right what stopped them. Without that, the undone
+     * steps existed only in the narration and had to be retyped from memory — the same wasted typing #38 was
+     * opened for, moved one turn later.
      */
     @Transactional
     public ActionResult resolvePlan(String text, UUID idempotencyKey) {
+        if (text != null && ActionPlan.isResumeRequest(text)) {
+            ActionResult resumed = takeUpWhatWasSetAside(idempotencyKey);
+            // With nothing set aside, "carry on" reaches the world exactly as it always did.
+            if (resumed != null) return resumed;
+        }
         List<String> steps = ActionPlan.steps(text);
         if (steps.size() <= 1) return resolve(text, idempotencyKey);
 
+        // A resubmitted procedure replays step for step; it must not also rewrite what was set aside.
+        boolean replay = alreadyRecorded(stepKey(idempotencyKey, "step", 0));
+        // Writing a new procedure is moving on from whatever was set aside before it.
+        if (!replay) endOpenRemainder("REPLACED");
+        return workThrough(steps, idempotencyKey, "step", replay, "");
+    }
+
+    /** The steps of a set-aside plan, worked again from where they stopped; null when nothing was set aside. */
+    private ActionResult takeUpWhatWasSetAside(UUID idempotencyKey) {
+        UUID chronicle = jdbc.query("SELECT id FROM chronicle WHERE life_state='LIVING'", rs -> rs.next() ? rs.getObject(1, UUID.class) : null);
+        if (chronicle == null) return null;
+        org.springframework.jdbc.core.RowMapper<java.util.Map.Entry<UUID, List<String>>> row = (rs, n) ->
+            java.util.Map.entry(rs.getObject(1, UUID.class), List.of((String[]) rs.getArray(2).getArray()));
+        // The same resume submitted twice is one resume: find the plan it already took up, and replay it.
+        java.util.Map.Entry<UUID, List<String>> plan = idempotencyKey == null ? null : jdbc.query(
+            "SELECT id, steps FROM chronicle_plan_remainder WHERE resume_key = ?", row, idempotencyKey).stream().findFirst().orElse(null);
+        boolean replay = plan != null;
+        if (plan == null) plan = jdbc.query(
+            "SELECT id, steps FROM chronicle_plan_remainder WHERE chronicle_id = ? AND state = 'OPEN'", row, chronicle).stream().findFirst().orElse(null);
+        if (plan == null) return null;
+        if (!replay) jdbc.update("UPDATE chronicle_plan_remainder SET state='RESUMED', resume_key=?, resumed_at=? WHERE id=?",
+                idempotencyKey, java.sql.Timestamp.from(ticks.current().simulatedAt()), plan.getKey());
+        return workThrough(plan.getValue(), idempotencyKey, "resume", replay, "You take up what you set aside.");
+    }
+
+    /** Work the steps in order, stopping where one fails; keep what was not done unless this is a replay. */
+    private ActionResult workThrough(List<String> steps, UUID idempotencyKey, String tag, boolean replay, String opening) {
         List<String> attempted = steps.size() > ActionPlan.MAX_STEPS ? steps.subList(0, ActionPlan.MAX_STEPS) : steps;
-        StringBuilder told = new StringBuilder();
+        StringBuilder told = new StringBuilder(opening);
         ActionResult last = null;
         int done = 0;
         String outcome = "SUCCEEDED";
+        List<String> undone = List.of();
+        String stoppedBecause = null;
         for (int i = 0; i < attempted.size(); i++) {
-            UUID stepKey = idempotencyKey == null ? null
-                : UUID.nameUUIDFromBytes((idempotencyKey + ":step:" + i).getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            ActionResult step = resolve(attempted.get(i), stepKey);
+            ActionResult step = resolve(attempted.get(i), stepKey(idempotencyKey, tag, i));
             last = step;
             if (told.length() > 0) told.append(" ");
             told.append(step.perception());
@@ -154,15 +192,58 @@ public class ChronicleActionService {
                 : "What you did before this stands, but the " + remaining + " step" + (remaining == 1 ? "" : "s")
                   + " after it went undone");
             told.append(", and until this part comes right there is no going on to them.");
+            // The failed step is kept with the rest: it is the part that has to come right first.
+            undone = steps.subList(i, steps.size());
+            stoppedBecause = "FAILED_STEP";
             break;
         }
         if ("SUCCEEDED".equals(outcome) && steps.size() > ActionPlan.MAX_STEPS) {
             outcome = "PARTIAL";
             told.append(" You have worked as far through that as one stretch of effort will carry, and set the rest aside for now.");
+            undone = steps.subList(ActionPlan.MAX_STEPS, steps.size());
+            stoppedBecause = "STEP_LIMIT";
+        }
+        if (!replay) {
+            if (last.died()) endOpenRemainder("ENDED");
+            else if (!undone.isEmpty()) setAside(undone, stoppedBecause, last, idempotencyKey, tag);
         }
         // The plan reports as the last step that actually ran: its identity, its clock, and the body as it stands.
         return new ActionResult(last.actionId(), last.intent(), outcome, last.durationMinutes(), last.resolvedAt(),
                 told.toString(), last.body(), last.frame(), last.died());
+    }
+
+    private static UUID stepKey(UUID idempotencyKey, String tag, int i) {
+        return idempotencyKey == null ? null
+            : UUID.nameUUIDFromBytes((idempotencyKey + ":" + tag + ":" + i).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    private boolean alreadyRecorded(UUID key) {
+        return key != null && Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM chronicle_action WHERE idempotency_key = ?)", Boolean.class, key));
+    }
+
+    private void endOpenRemainder(String state) {
+        jdbc.update("UPDATE chronicle_plan_remainder SET state = ? WHERE state = 'OPEN' " +
+                    "AND chronicle_id IN (SELECT id FROM chronicle WHERE life_state = 'LIVING')", state);
+    }
+
+    private void setAside(List<String> undone, String stoppedBecause, ActionResult last, UUID idempotencyKey, String tag) {
+        UUID chronicle = jdbc.query("SELECT id FROM chronicle WHERE life_state='LIVING'", rs -> rs.next() ? rs.getObject(1, UUID.class) : null);
+        if (chronicle == null) return;
+        UUID id = idempotencyKey == null ? UUID.randomUUID()
+            : UUID.nameUUIDFromBytes((idempotencyKey + ":" + tag + ":remainder").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        jdbc.update(con -> {
+            java.sql.PreparedStatement ps = con.prepareStatement(
+                "INSERT INTO chronicle_plan_remainder (id, chronicle_id, steps, stopped_because, set_aside_at, source_action_id) " +
+                "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING");
+            ps.setObject(1, id);
+            ps.setObject(2, chronicle);
+            ps.setArray(3, con.createArrayOf("text", undone.toArray()));
+            ps.setString(4, stoppedBecause);
+            ps.setTimestamp(5, java.sql.Timestamp.from(last.resolvedAt()));
+            ps.setObject(6, last.actionId());
+            return ps;
+        });
     }
 
     @Transactional

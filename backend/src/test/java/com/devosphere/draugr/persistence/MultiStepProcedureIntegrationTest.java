@@ -1,5 +1,6 @@
 package com.devosphere.draugr.persistence;
 
+import com.devosphere.draugr.action.ActionPlan;
 import com.devosphere.draugr.action.ChronicleActionService;
 import com.devosphere.draugr.audit.PersistentStateAuditor;
 import com.devosphere.draugr.chronicle.ChronicleService;
@@ -19,6 +20,7 @@ import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -141,5 +143,85 @@ class MultiStepProcedureIntegrationTest {
         ChronicleActionService.ActionResult one = actions.resolvePlan("look around at the ground here", null);
         assertEquals(before + 1, actionsRecorded(chronicle), "one action is still one action");
         assertEquals("OBSERVE", one.intent(), "and routes exactly as it did before the plan parser existed");
+    }
+
+    private String openRemainder(UUID chronicle) {
+        List<String> open = jdbc.query("SELECT array_to_string(steps, ' | ') FROM chronicle_plan_remainder WHERE chronicle_id=? AND state='OPEN'",
+            (rs, n) -> rs.getString(1), chronicle);
+        return open.isEmpty() ? null : open.get(0);
+    }
+
+    /**
+     * #38's remaining acceptance item: restart/resume of a partially-executed plan. The step that stopped the plan
+     * and every step after it are kept in the player's words; once what stopped it is put right, "carry on" works
+     * through exactly those steps and no others — the step that already happened is not done again.
+     */
+    @Test
+    void aStoppedPlanIsTakenUpAgainWhereItStopped() {
+        UUID chronicle = awaken();
+        UUID chunk = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+        jdbc.update("DELETE FROM crop_stand WHERE chunk_id=?", chunk);
+        jdbc.update("UPDATE chronicle_plan_remainder SET state='REPLACED' WHERE chronicle_id=? AND state='OPEN'", chronicle);
+
+        ChronicleActionService.ActionResult stopped = actions.resolvePlan(
+            "look around at the ground here. Then reap the ripe grain. Then listen for a while.", null);
+        assertEquals("PARTIAL", stopped.outcome(), stopped::perception);
+        assertEquals("reap the ripe grain | listen for a while", openRemainder(chronicle),
+            "the failed step and the one after it must be kept, in order and in the player's own words");
+
+        // Nothing has been put right yet, so taking it up stops at the same place and keeps the same remainder.
+        int before = actionsRecorded(chronicle);
+        ChronicleActionService.ActionResult again = actions.resolvePlan("carry on", null);
+        assertEquals(before + 1, actionsRecorded(chronicle), "carrying on attempts the stopped step, and stops there again");
+        assertTrue(again.perception().startsWith("You take up what you set aside."), again::perception);
+        assertEquals("reap the ripe grain | listen for a while", openRemainder(chronicle),
+            "a resume that stops again sets the same remainder aside rather than losing it");
+
+        // Replace the failed step by writing a new procedure: the old remainder is let go, not resumed later.
+        actions.resolvePlan("listen for a while. Then take a short rest.", null);
+        assertEquals(null, openRemainder(chronicle), "a completed new procedure leaves nothing set aside");
+        assertTrue(jdbc.queryForObject("SELECT COUNT(*) FROM chronicle_plan_remainder WHERE chronicle_id=? AND state='REPLACED'",
+            Integer.class, chronicle) > 0, "the plan it replaced is kept as history, not deleted");
+
+        assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
+
+    /** A plan longer than one stretch of effort keeps the steps past the limit, and "carry on" works them. */
+    @Test
+    void stepsPastTheLimitAreWorkedWhenTheChronicleCarriesOn() {
+        UUID chronicle = awaken();
+        jdbc.update("UPDATE chronicle_plan_remainder SET state='REPLACED' WHERE chronicle_id=? AND state='OPEN'", chronicle);
+        StringBuilder ten = new StringBuilder();
+        for (int i = 0; i < ActionPlan.MAX_STEPS + 2; i++) ten.append(i == 0 ? "" : " Then ").append("listen for a while.");
+
+        int before = actionsRecorded(chronicle);
+        ChronicleActionService.ActionResult first = actions.resolvePlan(ten.toString(), null);
+        assertEquals("PARTIAL", first.outcome(), first::perception);
+        assertEquals(before + ActionPlan.MAX_STEPS, actionsRecorded(chronicle));
+        assertEquals("listen for a while | listen for a while", openRemainder(chronicle), "the two steps past the limit are kept");
+
+        ChronicleActionService.ActionResult rest = actions.resolvePlan("carry on", null);
+        assertEquals("SUCCEEDED", rest.outcome(), rest::perception);
+        assertEquals(before + ActionPlan.MAX_STEPS + 2, actionsRecorded(chronicle), "exactly the kept steps are worked — no more, no fewer");
+        assertEquals(null, openRemainder(chronicle), "once worked through, nothing is left set aside");
+    }
+
+    /** With nothing set aside, the words go where they always went, and a resume replayed with its key does not work twice. */
+    @Test
+    void carryingOnWithNothingSetAsideChangesNothingAndAReplayedResumeDoesNotWorkTwice() {
+        UUID chronicle = awaken();
+        jdbc.update("UPDATE chronicle_plan_remainder SET state='REPLACED' WHERE chronicle_id=? AND state='OPEN'", chronicle);
+        ChronicleActionService.ActionResult plain = actions.resolvePlan("carry on", null);
+        assertEquals(plain.intent(), actions.resolve("carry on", null).intent(),
+            "with no plan set aside, 'carry on' must be exactly the ordinary action it was before");
+
+        StringBuilder nine = new StringBuilder();
+        for (int i = 0; i < ActionPlan.MAX_STEPS + 1; i++) nine.append(i == 0 ? "" : " Then ").append("listen for a while.");
+        actions.resolvePlan(nine.toString(), null);
+        UUID key = UUID.randomUUID();
+        actions.resolvePlan("carry on", key);
+        int afterFirst = actionsRecorded(chronicle);
+        actions.resolvePlan("carry on", key);
+        assertEquals(afterFirst, actionsRecorded(chronicle), "the same resume submitted twice is one resume");
     }
 }

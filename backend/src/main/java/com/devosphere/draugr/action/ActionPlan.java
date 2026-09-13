@@ -73,6 +73,32 @@ public final class ActionPlan {
         return List.copyOf(steps);
     }
 
+    /**
+     * The whole of what a player says to take up a procedure that stopped (#38). Matched against the ENTIRE
+     * submission, never as a substring: "carry on my back" is equipping, "continue building the wall" is an
+     * assembly, and "resume the lean-to" belongs to the lean-to. Only a bare request to go on with what was set
+     * aside counts, and even then only when something was — otherwise the words reach the world exactly as before.
+     */
+    private static final java.util.Set<String> RESUME_PHRASES = java.util.Set.of(
+        "carry on", "carry on with it", "carry on with the rest", "carry on where i left off",
+        "carry on with what i was doing", "continue", "continue with it", "continue with the rest",
+        "continue where i left off", "continue the plan", "continue with the plan", "continue what i was doing",
+        "resume", "resume the plan", "resume what i was doing", "resume where i left off",
+        "pick up where i left off", "take up where i left off", "go on", "go on with it", "go on with the rest",
+        "finish what i started", "finish the rest");
+
+    /** Filler a person puts either side of "carry on" that changes nothing about what they mean. */
+    private static final Pattern RESUME_LEAD = Pattern.compile("^(?:(?:i|i'll|i will|now|then|so|ok|okay|right|and|let me)\\s+)+");
+    private static final Pattern RESUME_TAIL = Pattern.compile("(?:\\s+(?:now|then|please))+$");
+
+    /** Whether the whole submission is a request to take up what was set aside. */
+    public static boolean isResumeRequest(String text) {
+        if (text == null) return false;
+        String v = text.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z' ]+", " ").replaceAll("\\s+", " ").trim();
+        v = RESUME_TAIL.matcher(RESUME_LEAD.matcher(v).replaceFirst("")).replaceFirst("").trim();
+        return RESUME_PHRASES.contains(v);
+    }
+
     /** Whether this text declares more steps than the world will work through in one submission. */
     public static boolean exceedsLimit(String text) {
         return steps(text).size() > MAX_STEPS;
