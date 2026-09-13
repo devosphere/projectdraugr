@@ -235,7 +235,9 @@ public class FireService {
             for (UUID item : jdbc.queryForList(
                 "SELECT w.id FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
                 "WHERE w.current_location_id=? AND w.current_owner_id IS NULL AND w.lifecycle_state='ACTIVE' " +
-                "AND i.item_key IN ('dry_branch','tinder_nest','wood_shaving') ORDER BY w.id LIMIT ?", UUID.class, chunk, consumable)) {
+                // What catches is loose_fuel (V316), as what structure catches is construction_kind.flammable (V274).
+                // It was three names here, and dry grass, fatwood, birch bark and char tinder never caught.
+                "AND i.item_key IN (SELECT item_key FROM loose_fuel) ORDER BY w.id LIMIT ?", UUID.class, chunk, consumable)) {
                 jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED', destroyed_at=?, destroyed_location_id=current_location_id, destroyed_cause='FIRE_SPREAD', current_location_id=NULL WHERE id=?", ts, item);
                 jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'BURNED_IN_FIRE_SPREAD','{}'::jsonb)", item, ts);
             }

@@ -153,4 +153,43 @@ class FireCatchesFuelStockIntegrationTest {
 
         assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
+
+    /** Tinder by its very purpose catches too — dry grass and fatwood were never on the three-name list (#134, V316). */
+    @Test
+    void dryGrassAndFatwoodPiledByARoaringFireCatch() {
+        if (worldGenesis.current() == null) {
+            worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
+            ecology.seed();
+        }
+        ChronicleService.ChronicleSummary summary = chronicles.awaken();
+        assertNotNull(summary);
+        UUID chronicle = summary.id();
+        UUID chunk = jdbc.queryForObject("SELECT id FROM world_chunk WHERE biome='TEMPERATE_FOREST' ORDER BY grid_y DESC, grid_x DESC LIMIT 1", UUID.class);
+        UUID world = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, chunk);
+        jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", chunk, chronicle);
+        jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
+        Instant base = ticks.current().simulatedAt();
+
+        UUID pit = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CONSTRUCTION','Stone fire pit',?)", pit, chunk);
+        jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at) VALUES (?,'STONE_FIRE_PIT','COMPLETED',100,?)", pit, Timestamp.from(base));
+        jdbc.update("INSERT INTO fire_state (construction_id,active,fuel_minutes,last_updated_at) VALUES (?,true,960,?)", pit, Timestamp.from(base));
+
+        List<UUID> pile = new ArrayList<>();
+        for (int i = 0; i < 3; i++) pile.add(items.createCarriedItem(chronicle, "dry_grass_bundle", "Dry grass bundle", base, "TEST_PILE"));
+        for (int i = 0; i < 3; i++) pile.add(items.createCarriedItem(chronicle, "fatwood_stick", "Fatwood stick", base, "TEST_PILE"));
+        for (UUID id : pile) jdbc.update("UPDATE world_object SET current_owner_id=NULL, current_location_id=? WHERE id=?", chunk, id);
+
+        setWeather(world, "CLEAR", base);
+        seatRoaringFire(pit, base);
+        fires.advanceTo(base.plus(Duration.ofHours(16)));
+
+        Integer burned = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.lifecycle_state='DESTROYED' " +
+            "AND w.destroyed_cause='FIRE_SPREAD' AND i.item_key IN ('dry_grass_bundle','fatwood_stick') AND w.destroyed_location_id=?",
+            Integer.class, chunk);
+        assertTrue(burned != null && burned >= 1, "dry grass and fatwood left beside a roaring fire must catch (burned " + burned + ")");
+
+        assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
 }
