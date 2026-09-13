@@ -252,4 +252,61 @@ class CatalogueWorldSeedCompatibilityIntegrationTest {
         assertTrue(impossible.isEmpty(),
             () -> "a drop gated on a season the clock never reports can never be taken: " + impossible);
     }
+
+    /**
+     * The dependency dimension of the matrix (#161): a claim that a thing is made must be honoured by something.
+     *
+     * <p>The Auditor catches an item with no source. It cannot catch a source nobody honours: V51 derived a TECHNIQUE
+     * source from every Phase-0 technique that names a product, so naming a thing was enough to look obtainable.
+     * An honoured claim is a process output or by-product, an assembly (by item or by the construction it raises), a
+     * declared code maker, or a recorded reason in {@code item_unreachable_known}.
+     */
+    @Test
+    void everyClaimThatSomethingIsMadeHasAMaker() {
+        List<String> unhonoured = jdbc.queryForList(
+            "SELECT s.item_key || ' (' || COALESCE(s.detail, '') || ')' FROM item_source s " +
+            "WHERE s.source_kind='TECHNIQUE' " +
+            "  AND NOT EXISTS (SELECT 1 FROM material_process mp WHERE mp.output_item_key=s.item_key) " +
+            "  AND NOT EXISTS (SELECT 1 FROM material_process_output o WHERE o.item_key=s.item_key) " +
+            "  AND NOT EXISTS (SELECT 1 FROM assembly_definition a WHERE a.produces_item_key=s.item_key OR lower(a.construction_kind)=s.item_key) " +
+            "  AND NOT EXISTS (SELECT 1 FROM item_source c WHERE c.item_key=s.item_key AND c.source_kind='CODE') " +
+            "  AND NOT EXISTS (SELECT 1 FROM item_unreachable_known u WHERE u.item_key=s.item_key) ORDER BY 1", String.class);
+        assertTrue(unhonoured.isEmpty(),
+            () -> "these are said to be made by a technique, and nothing makes them — declare the maker or record why not: " + unhonoured);
+    }
+
+    /**
+     * A station a process is eased by must be something a Chronicle can have (#161). A process naming a station nobody
+     * can make or raise offers a bonus that can never be earned, and nothing about the process shows it.
+     */
+    @Test
+    void everyStationAProcessWantsCanBeHad() {
+        List<String> unreachable = jdbc.queryForList(
+            "SELECT DISTINCT mp.station_kind || ' (wanted by ' || mp.process_key || ')' FROM material_process mp " +
+            "WHERE mp.station_kind IS NOT NULL AND mp.review_state='VERIFIED' " +
+            "  AND NOT EXISTS (SELECT 1 FROM assembly_definition a WHERE a.construction_kind=mp.station_kind) " +
+            "  AND NOT ( EXISTS (SELECT 1 FROM item_definition d WHERE d.item_key=mp.station_kind) " +
+            "        AND NOT EXISTS (SELECT 1 FROM item_unreachable_known u WHERE u.item_key=mp.station_kind) " +
+            "        AND ( EXISTS (SELECT 1 FROM material_process p2 WHERE p2.output_item_key=mp.station_kind) " +
+            "           OR EXISTS (SELECT 1 FROM material_process_output o WHERE o.item_key=mp.station_kind) " +
+            "           OR EXISTS (SELECT 1 FROM assembly_definition a WHERE a.produces_item_key=mp.station_kind) " +
+            "           OR EXISTS (SELECT 1 FROM item_source s WHERE s.item_key=mp.station_kind AND s.source_kind<>'TECHNIQUE') ) ) " +
+            "ORDER BY 1", String.class);
+        assertTrue(unreachable.isEmpty(),
+            () -> "processes are eased by stations nobody can make or raise: " + unreachable);
+    }
+
+    /**
+     * A recorded gap closes when the world starts making the thing (#161). V51 wrote steel_striker off as "no smelting
+     * exists yet" and V162 made it for years afterward with no source — a stale reason reads as a decision.
+     */
+    @Test
+    void noRecordedGapNamesSomethingTheWorldMakes() {
+        List<String> stale = jdbc.queryForList(
+            "SELECT u.item_key FROM item_unreachable_known u " +
+            "WHERE EXISTS (SELECT 1 FROM material_process mp WHERE mp.output_item_key=u.item_key AND mp.review_state='VERIFIED') " +
+            "   OR EXISTS (SELECT 1 FROM material_process_output o WHERE o.item_key=u.item_key) " +
+            "   OR EXISTS (SELECT 1 FROM assembly_definition a WHERE a.produces_item_key=u.item_key) ORDER BY 1", String.class);
+        assertTrue(stale.isEmpty(), () -> "recorded as unobtainable, yet something makes them — give them a source: " + stale);
+    }
 }
