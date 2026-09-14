@@ -93,7 +93,11 @@ class DeadEndOutputInvariantTest {
             // milked or sheared with no stanchion standing (#106/V308, WildlifeEncounterService.takeTamedYield
             // reads animal_restraint). It is consumed by no recipe because a hobble is not a material: it is
             // worn down by the work instead, SOUND to WORN to BROKEN, which is its own kind of terminal.
-            "leg_hobble");
+            "leg_hobble",
+            // Covers for grown stock against the weather — carried, one cover spares one beast the hunger a frost or
+            // cold rain costs it (#106/V325, PhysicalItemService.advanceDraftHunger reads stock_cover). Worn, not
+            // consumed, like the hobble.
+            "winter_stock_blanket", "stock_rain_sheet");
 
     @Test
     void everyProducedItemIsTerminallyUsefulOrAKnownCodeReadItem() {
