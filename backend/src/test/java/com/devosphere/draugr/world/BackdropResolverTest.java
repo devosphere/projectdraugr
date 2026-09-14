@@ -192,4 +192,62 @@ class BackdropResolverTest {
             assertTrue(key.matches("[a-z0-9.-]+"), "a key must be safe to use as a name: " + key);
         }
     }
+
+    private VisualContextService.VisualContext standing(String biome, List<String> around, String weather, double tempC, boolean lit) {
+        return new VisualContextService.VisualContext(
+            VisualContextService.VERSION, biome, List.of(), "DAY", "SUMMER", weather, tempC, lit, around, "fp");
+    }
+
+    /**
+     * #232/#234: what can be seen of the next ground refines the picture of this ground — a dominant landform
+     * beside it (adjacent), a different kind of country at its edge (ecotone), or the same country all round
+     * (regional). It never changes which place this is: the key and the reason are still the ground's own.
+     */
+    @Test void theSettingRefinesTheGroundButNeverReplacesIt() {
+        var beside = BackdropResolver.resolve(standing("GRASSLAND", List.of("GRASSLAND", "MOUNTAIN", "TEMPERATE_FOREST"), "CLEAR", 14.0, true));
+        assertEquals("biome.grassland", beside.key(), "the ground is still grassland");
+        assertEquals("BIOME", beside.reason());
+        assertEquals(List.of("biome.grassland.beside-mountain", "biome.grassland"), beside.candidates(),
+            "a mountain in view dominates the picture over a wood at the edge");
+
+        assertEquals(List.of("biome.grassland.edge-temperate-forest", "biome.grassland"),
+            BackdropResolver.resolve(standing("GRASSLAND", List.of("GRASSLAND", "TEMPERATE_FOREST"), "CLEAR", 14.0, true)).candidates(),
+            "a different country at the edge of this one is an ecotone");
+
+        assertEquals(List.of("biome.grassland.deep", "biome.grassland"),
+            BackdropResolver.resolve(standing("GRASSLAND", List.of("GRASSLAND"), "CLEAR", 14.0, true)).candidates(),
+            "the same country in every direction is deep in it");
+
+        assertEquals(List.of("biome.grassland"),
+            BackdropResolver.resolve(standing("GRASSLAND", List.of(), "CLEAR", 14.0, true)).candidates(),
+            "nothing seen beyond this ground refines nothing");
+    }
+
+    /** Ties among neighbours break by name, and snow can lie on a setting; the chain stays within its bound. */
+    @Test void theSettingIsDeterministicAndStaysBounded() {
+        var a = standing("HIGHLAND", List.of("WETLAND", "GRASSLAND", "HIGHLAND"), "SNOW", -4.0, true);
+        var b = standing("HIGHLAND", List.of("HIGHLAND", "GRASSLAND", "WETLAND"), "SNOW", -4.0, true);
+        assertEquals(BackdropResolver.resolve(a).candidates(), BackdropResolver.resolve(b).candidates(),
+            "the order neighbours arrive in must not change the picture");
+        assertEquals(List.of("biome.highland.edge-grassland.snow", "biome.highland.edge-grassland", "biome.highland.snow", "biome.highland"),
+            BackdropResolver.resolve(a).candidates());
+
+        assertEquals(List.of("biome.grassland.beside-mountain", "biome.grassland"),
+            BackdropResolver.resolve(standing("GRASSLAND", List.of("OCEAN", "MOUNTAIN"), "CLEAR", 12.0, true)).candidates(),
+            "the sea and a mountain both dominate; the tie breaks by name, and MOUNTAIN sorts first");
+
+        for (String weather : List.of("CLEAR", "SNOW"))
+            for (boolean lit : new boolean[]{true, false}) {
+                var choice = BackdropResolver.resolve(standing("TEMPERATE_FOREST", List.of("MOUNTAIN", "WETLAND"), weather, -2.0, lit));
+                assertTrue(choice.candidates().size() <= 4, "bounded: " + choice.candidates());
+                assertEquals(choice.key(), choice.candidates().get(choice.candidates().size() - 1), "ends in the key: " + choice.candidates());
+            }
+    }
+
+    /** A site or a build is already the most specific picture; the setting only refines bare ground. */
+    @Test void theSettingDoesNotDecorateASiteOrABuild() {
+        var onSite = new VisualContextService.VisualContext(VisualContextService.VERSION, "WETLAND", List.of(site("Still pond")),
+            "DAY", "SUMMER", "CLEAR", 14.0, true, List.of("MOUNTAIN"), "fp");
+        assertEquals(List.of("site.still-pond"), BackdropResolver.resolve(onSite).candidates());
+    }
 }

@@ -19,11 +19,11 @@ import java.util.Optional;
  * </ul>
  *
  * <p><b>Precedence</b>, most specific first. The ticket names a longer chain — exact/interior → site → habitat
- * evidence → adjacent → ecotone → regional → biome → global. The tiers below stop at the ones the context can
- * honestly answer: <em>adjacent</em>, <em>ecotone</em> and <em>regional</em> all need facts about neighbouring
- * ground, and the visual context deliberately carries none, because reporting a neighbour's sites is how a
- * payload becomes a way to read the Overseer's map. Those tiers want the context to first expose what a standing
- * person can actually see of the next chunk, which is its own piece of work and its own perception question.
+ * evidence → adjacent → ecotone → regional → biome → global. <em>Adjacent</em>, <em>ecotone</em> and
+ * <em>regional</em> are answered from what a standing person can see of the next ground (#232): its kind of country,
+ * never what stands on it, and nothing at all in the dark. They refine the ground's own key rather than replacing
+ * it — see {@code setting} — because a tier's key is the one link a caller is promised an image for, and a place at a
+ * forest's edge with no edge image must fall back to its ground, not to nothing.
  *
  * <p>Every tier returns a key, and the last one always matches, so the resolver can never return nothing.
  *
@@ -78,9 +78,9 @@ public final class BackdropResolver {
             .findFirst();
         if (built.isPresent()) return outdoors("built." + built.get(), "BUILT_HERE", context);
 
-        // 4. The ground itself.
+        // 4. The ground itself — seen in its setting where the setting can be seen (#232/#234).
         if (context.biome() != null && !context.biome().isBlank())
-            return outdoors("biome." + slug(context.biome()), "BIOME", context);
+            return outdoors("biome." + slug(context.biome()), "BIOME", context, setting(context));
 
         return plain(FALLBACK_KEY, "NO_BIOME");
     }
@@ -113,15 +113,50 @@ public final class BackdropResolver {
      * be asked to have.
      */
     private static Choice outdoors(String key, String reason, VisualContextService.VisualContext context) {
+        return outdoors(key, reason, context, null);
+    }
+
+    /**
+     * The same, with the ground seen in its setting (#232/#234). The ticket's adjacent, ecotone and regional tiers
+     * live here rather than as tiers of their own, deliberately. A tier replaces the key, and the key is the one link
+     * a caller is promised an image for — a place at a forest's edge with no edge image would have been left with
+     * nothing, where it should fall back to its ground. So the setting refines the ground's own key and degrades to
+     * it, exactly as the dark and the snow do. A setting is only ever offered in daylight: nothing next door can be
+     * seen in the dark (the context reports no surroundings then), so the chain never has to hold both, and stays
+     * within its bound.
+     */
+    private static Choice outdoors(String key, String reason, VisualContextService.VisualContext context, String setting) {
         boolean dark = !context.lit();
         boolean snow = "SNOW".equals(context.weather()) || context.temperatureC() <= 0.0;
 
         java.util.List<String> chain = new java.util.ArrayList<>();
+        if (setting != null && !dark) {
+            if (snow) chain.add(key + "." + setting + ".snow");
+            chain.add(key + "." + setting);
+        }
         if (dark && snow) chain.add(key + ".snow.night");
         if (dark)         chain.add(key + ".night");
         if (snow)         chain.add(key + ".snow");
         chain.add(key);
         return new Choice(key, reason, java.util.List.copyOf(chain));
+    }
+
+    /** Landforms that dominate any view they are in: a mountain wall, the open sea. */
+    private static final java.util.Set<String> DOMINANT = java.util.Set.of("MOUNTAIN", "OCEAN");
+
+    /**
+     * Which one setting this ground is seen in, most commanding first (#232/#234), or null when nothing beyond it is
+     * seen. Adjacent: a dominant landform next door. Ecotone: a different kind of country at the edge of this one.
+     * Regional: the same country in every direction. Ties break by name, so neighbours never toss a coin.
+     */
+    private static String setting(VisualContextService.VisualContext context) {
+        java.util.List<String> around = context.surroundings();
+        if (around == null || around.isEmpty() || context.biome() == null) return null;
+        java.util.List<String> other = around.stream().filter(b -> b != null && !b.equals(context.biome())).sorted().toList();
+        java.util.Optional<String> dominant = other.stream().filter(DOMINANT::contains).findFirst();
+        if (dominant.isPresent()) return "beside-" + slug(dominant.get());
+        if (!other.isEmpty()) return "edge-" + slug(other.get(0));
+        return "deep";
     }
 
     /** Lower-case, underscore-free, punctuation-free — a key that reads the same however the name was written. */

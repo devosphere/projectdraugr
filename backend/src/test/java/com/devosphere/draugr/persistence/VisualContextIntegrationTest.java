@@ -197,5 +197,32 @@ class VisualContextIntegrationTest {
         assertNotNull(seen);
         assertEquals("DAY", seen.timeOfDay(), "the sky outside is at midday");
         assertTrue(!seen.lit(), "and inside the rock it is dark anyway — that is what a cave is");
+        assertTrue(seen.surroundings().isEmpty(), "and nothing beyond the rock can be seen from inside it");
+    }
+
+    /**
+     * #232's visible-nearby tier: by day a standing person sees what kind of country lies next door — and only that.
+     * The neighbours' sites stay unreported, and in the dark nothing beyond this ground is seen at all.
+     */
+    @Test
+    void byDayTheNextGroundIsSeenButNotWhatStandsOnIt() {
+        world();
+        UUID ground = plainGround();
+        assertNotNull(ground);
+        chronicleOn(ground);
+
+        java.util.List<String> neighbours = jdbc.queryForList(
+            "SELECT DISTINCT n.biome FROM world_chunk c JOIN world_chunk n ON n.world_id=c.world_id " +
+            "AND abs(n.grid_x-c.grid_x)+abs(n.grid_y-c.grid_y)=1 WHERE c.id=? ORDER BY 1", String.class, ground);
+
+        var noon = visual.active(Instant.parse("2026-06-15T12:00:00Z"));
+        assertTrue(noon.lit(), "open ground at noon is lit");
+        assertEquals(neighbours, noon.surroundings(), "by day the kinds of the four neighbouring grounds are seen");
+        assertTrue(noon.features().isEmpty(), () -> "and nothing standing on them is reported here: " + noon.features());
+
+        var midnight = visual.active(Instant.parse("2026-06-15T00:30:00Z"));
+        if (!midnight.lit())
+            assertTrue(midnight.surroundings().isEmpty(), "in the dark nothing beyond this ground can be seen");
+        assertNotEquals(noon.fingerprint(), midnight.fingerprint(), "what is seen changed, so the fingerprint moves");
     }
 }

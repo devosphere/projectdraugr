@@ -57,11 +57,20 @@ public class VisualContextService {
      * @param weather     the weather as FELT here, not the global sky
      * @param temperatureC the temperature as felt here
      * @param lit         whether there is light enough to see by — daylight, or a fire burning here
+     * @param surroundings the kinds of ground visible on the four neighbouring chunks (#232), distinct and sorted;
+     *                    empty in the dark or inside a cave, where nothing beyond this ground can be seen. Only the
+     *                    lie of the land — never what stands on it.
      * @param fingerprint stable hash of all of the above
      */
     public record VisualContext(int version, String biome, List<Feature> features, String timeOfDay,
                                 String season, String weather, double temperatureC, boolean lit,
-                                String fingerprint) { }
+                                List<String> surroundings, String fingerprint) {
+        /** The shape before #232's visible-nearby tier: nothing seen beyond this ground. */
+        public VisualContext(int version, String biome, List<Feature> features, String timeOfDay, String season,
+                             String weather, double temperatureC, boolean lit, String fingerprint) {
+            this(version, biome, features, timeOfDay, season, weather, temperatureC, lit, List.of(), fingerprint);
+        }
+    }
 
     /** The ground the Chronicle stands on, and the sky over it — a record because Map.of stops at ten pairs. */
     private record Ground(java.util.UUID chunk, java.util.UUID worldId, String biome, int elevation, int moisture,
@@ -117,9 +126,22 @@ public class VisualContextService {
         // Inside the rock the sky is irrelevant: a cave is dark at noon unless something is burning (#158).
         if ("CAVE_INTERIOR".equals(biome) || "CAVE_MOUTH".equals(biome)) lit = fireBurningAt(chunk);
 
+        // What can be seen of the next ground (#232): the kind of country on the four neighbouring chunks, and only
+        // that. The lie of the land is visible from where anyone stands — a mountain wall, the sea, a wood's edge —
+        // but what stands on it is not: a lair two chunks east is exactly what this payload must never tell a player,
+        // so no neighbour's sites or structures are read here. Nothing is seen from inside a cave, or in the dark.
+        List<String> surroundings = (!lit || "CAVE_INTERIOR".equals(biome)) ? List.of() : jdbc.queryForList(
+            "SELECT DISTINCT n.biome FROM world_chunk n WHERE n.world_id=? AND abs(n.grid_x-?)+abs(n.grid_y-?)=1 ORDER BY 1",
+            String.class, here.worldId(), here.gridX(), here.gridY());
+
+        String fingerprint = fingerprint(biome, features, timeOfDay, season, local, lit);
+        // Folded in only when something beyond this ground is seen, so a place with no view keeps the fingerprint it
+        // always had.
+        if (!surroundings.isEmpty())
+            fingerprint = Integer.toHexString((fingerprint + "|around:" + String.join(",", surroundings)).hashCode());
+
         return new VisualContext(VERSION, biome, List.copyOf(features), timeOfDay, season,
-            local.kind(), local.temperatureC(), lit,
-            fingerprint(biome, features, timeOfDay, season, local, lit));
+            local.kind(), local.temperatureC(), lit, List.copyOf(surroundings), fingerprint);
     }
 
     private boolean fireBurningAt(java.util.UUID chunk) {
