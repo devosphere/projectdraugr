@@ -77,10 +77,14 @@ class WhatTheWaterPassesThroughIntegrationTest {
     /** Stand here with no water carried, nothing in hand that eases a draw, and a clean body. */
     private void standAt(UUID chronicle, UUID chunk) {
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", chunk, chronicle);
-        // Set down rather than destroyed — a destroyed object with a live owner is what the Auditor exists to catch.
+        // Set down rather than destroyed — a destroyed object with a live owner is what the Auditor exists to catch —
+        // and set down on dry ground ELSEWHERE. What lies on the ground underfoot is still within reach, so water set
+        // down here would be drunk instead of the spring (the other test fills a skin with filtered water).
+        UUID elsewhere = jdbc.queryForObject(
+            "SELECT id FROM world_chunk WHERE id<>? AND biome NOT IN ('WETLAND','RIVER_BANK') ORDER BY grid_x, grid_y LIMIT 1", UUID.class, chunk);
         jdbc.update("UPDATE world_object w SET current_owner_id=NULL, current_location_id=? " +
-                    "FROM item_instance i WHERE i.object_id=w.id AND w.current_owner_id=? " +
-                    "  AND i.item_key IN ('raw_water','clean_water','filtered_water','water_ladle','silver_cup')", chunk, chronicle);
+                    "FROM item_instance i WHERE i.object_id=w.id AND (w.current_owner_id=? OR w.current_location_id=?) " +
+                    "  AND i.item_key IN ('raw_water','clean_water','filtered_water','water_ladle','silver_cup')", elsewhere, chronicle, chunk);
     }
 
     private int drinkRisk(UUID chronicle, String phrase) {
