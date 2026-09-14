@@ -624,7 +624,7 @@ public class ConstructionService {
         if (integ != null && integ >= 100) return new String[]{"SUCCEEDED", "You look the " + name + " over, but it already stands sound — there is nothing here that needs setting right."};
         // Kind-appropriate repair stock, best first — earth and clay for the fired forms, poles and binding for the rest.
         String[] mats = switch (kind) {
-            case "CLAY_LINED_HEARTH", "RAINWATER_CATCHMENT" -> new String[]{"clay_lump"};
+            case "CLAY_LINED_HEARTH", "RAINWATER_CATCHMENT", "SETTLING_BASIN", "SAND_FILTER_BED", "SPRING_HEAD_PROTECTION" -> new String[]{"clay_lump"};
             case "SPLIT_RAIL_FENCE" -> new String[]{"straight_sapling", "dry_branch"};
             case "WATTLE_AND_DAUB_HUT", "EARTH_SHELTERED_HUT" -> new String[]{"clay_lump", "straw_bundle", "withy_rope"};
             default -> new String[]{"withy_rope", "plant_fiber", "dry_branch", "straight_sapling"};

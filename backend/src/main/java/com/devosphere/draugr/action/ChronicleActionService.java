@@ -464,13 +464,22 @@ public class ChronicleActionService {
                 // Named for the water actually drunk from (#37): it said "the standing water" at a fast stream.
                 String drunkFrom = waterNamed(chronicle.location());
                 if (safeWaterSource(chronicle.location())) perception = "You drink from " + drunkFrom + " and let the cold settle in your throat.";
-                else { physiology.applyWaterborneRisk(chronicle.id(), silver ? 3 : ladle ? 4 : 6); perception = silver ? "You dip the silver cup into " + drunkFrom + " and drink; the bright metal keeps it from turning the gut as it otherwise would." : ladle ? "You dip the ladle into " + drunkFrom + " and draw from above the silt; it is still not clean, but the gut will fare better than from a careless gulp." : "You drink from " + drunkFrom + ". It eases the dryness, but it is not clean, and the gut will know it."; }
+                else { DrawTreatment through = drawTreatment(chronicle.location()); physiology.applyWaterborneRisk(chronicle.id(), Math.max(1, (silver ? 3 : ladle ? 4 : 6) - (through == null ? 0 : through.clarifies()))); perception = through != null ? "You draw the water off through the " + through.name() + " beside " + drunkFrom + " and drink; it comes clearer than the source itself, though it has not been boiled." : silver ? "You dip the silver cup into " + drunkFrom + " and drink; the bright metal keeps it from turning the gut as it otherwise would." : ladle ? "You dip the ladle into " + drunkFrom + " and draw from above the silt; it is still not clean, but the gut will fare better than from a careless gulp." : "You drink from " + drunkFrom + ". It eases the dryness, but it is not clean, and the gut will know it."; }
             } else { outcome = "FAILED"; perception = "You look about, but there is no water here fit to drink — no stream, no spring, only dry ground that gives nothing back."; }
         }
         else if (intent == Intent.COLLECT_WATER) {
             if (!waterInReach(chronicle.location())) { outcome = "FAILED"; perception = "There is no water here to fill from — no stream, spring, or standing water within reach."; }
             else if (!items.hasWaterVessel(chronicle.id())) { outcome = "FAILED"; perception = "You have nothing that will carry water — a waterskin, bucket, or pot must come first."; }
-            else { int n = items.makeWater(chronicle.id(), "raw_water", "Raw water", 3, resolvedAt); outcome = n > 0 ? "SUCCEEDED" : "FAILED"; perception = n > 0 ? "You fill your vessel with water from the source here — raw yet, and better boiled before you trust it." : "Your vessels are already brimful; there is no room for more water."; }
+            else {
+                // A sand filter bed (#77) is drawn off beneath the sand, so what fills the vessel is already filtered.
+                DrawTreatment bed = drawTreatment(chronicle.location());
+                boolean filtered = bed != null && bed.filtered();
+                int n = filtered ? items.makeWater(chronicle.id(), "filtered_water", "Filtered water", 3, resolvedAt) : items.makeWater(chronicle.id(), "raw_water", "Raw water", 3, resolvedAt);
+                outcome = n > 0 ? "SUCCEEDED" : "FAILED";
+                perception = n == 0 ? "Your vessels are already brimful; there is no room for more water."
+                    : filtered ? "You fill your vessel at the draw below the " + bed.name() + "; the water comes through the sand clear — filtered, though not yet boiled."
+                    : "You fill your vessel with water from the source here — raw yet, and better boiled before you trust it.";
+            }
         }
         else if (intent == Intent.BOIL_WATER) {
             boolean fireproof = items.hasFireproofVessel(chronicle.id());
@@ -2092,6 +2101,24 @@ public class ChronicleActionService {
     private boolean catchmentInReach(UUID location) {
         return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='RAINWATER_CATCHMENT' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')", Boolean.class, location));
     }
+    /** The best standing structure here that the water is drawn through (#77, V329): its name, how much of a raw draw's risk it clears, and whether it fills vessels filtered. */
+    private record DrawTreatment(String name, int clarifies, boolean filtered) {}
+    private DrawTreatment drawTreatment(UUID location) {
+        return jdbc.query(
+            "SELECT lower(ck.display_name), ck.clarifies_draw, ck.draws_filtered FROM construction_project cp " +
+            "JOIN world_object w ON w.id=cp.object_id JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
+            "WHERE w.current_location_id=? AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE' " +
+            "AND (ck.clarifies_draw>0 OR ck.draws_filtered) ORDER BY ck.clarifies_draw DESC, ck.draws_filtered DESC LIMIT 1",
+            rs -> rs.next() ? new DrawTreatment(rs.getString(1), rs.getInt(2), rs.getBoolean(3)) : null, location);
+    }
+    /** A spring on this ground, walled and covered by a standing structure that shields it (#77, V329). */
+    private boolean springShielded(UUID location) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM ecology_site es WHERE es.chunk_id=? AND es.site_kind ILIKE '%spring%') " +
+            "AND EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "JOIN construction_kind ck ON ck.project_kind=cp.project_kind WHERE w.current_location_id=? AND ck.shields_spring " +
+            "AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')", Boolean.class, location, location));
+    }
     /** Whether raw water here is safe to drink untreated (#71): moving water — a river bank, spring, or stream —
      *  is clean; standing water (a wetland) is not, and drinking it raw carries a gut-illness risk. */
     /**
@@ -2205,7 +2232,8 @@ public class ChronicleActionService {
         if (!water) return false;
 
         Integer refuse = jdbc.queryForObject("SELECT COALESCE((SELECT refuse_level FROM chunk_refuse WHERE chunk_id=?),0)", Integer.class, location);
-        if (refuse != null && refuse >= FOULED_DRAW_REFUSE) return false;
+        // A walled, covered spring head (#77) is fed from below: the refuse of a fouled camp does not run into it.
+        if (refuse != null && refuse >= FOULED_DRAW_REFUSE && !springShielded(location)) return false;
 
         return !Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM chronicle_named_location nl JOIN district_purpose dp ON dp.purpose_tag=nl.purpose_tag " +
