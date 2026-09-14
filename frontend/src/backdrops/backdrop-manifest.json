@@ -33,7 +33,21 @@
       "bytes": 3315030,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -66,7 +80,21 @@
       "bytes": 2858135,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FRESHWATER"
+        "family": "FRESHWATER",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -99,7 +127,21 @@
       "bytes": 2656733,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "RUIN"
+        "family": "RUIN",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -132,7 +174,21 @@
       "bytes": 2448966,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "COAST"
+        "family": "COAST",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -167,7 +223,21 @@
       "bytes": 1490875,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -201,7 +271,21 @@
       "bytes": 2457842,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "MONSTER_TERRITORY"
+        "family": "MONSTER_TERRITORY",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -236,7 +320,21 @@
       "bytes": 2486820,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -269,7 +367,21 @@
       "bytes": 2880153,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -304,7 +416,21 @@
       "bytes": 2558891,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "KARST"
+        "family": "KARST",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -337,7 +463,21 @@
       "bytes": 2768015,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -370,7 +510,21 @@
       "bytes": 2997396,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FRESHWATER"
+        "family": "FRESHWATER",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -404,7 +558,21 @@
       "bytes": 2847137,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FLORA_SITE"
+        "family": "FLORA_SITE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -437,7 +605,21 @@
       "bytes": 3094823,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -471,7 +653,21 @@
       "bytes": 3170897,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -506,7 +702,21 @@
       "bytes": 2634965,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "RESOURCE_SITE"
+        "family": "RESOURCE_SITE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -541,7 +751,21 @@
       "bytes": 3185992,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FLORA_SITE"
+        "family": "FLORA_SITE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -575,7 +799,21 @@
       "bytes": 2280631,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "MONSTER_TERRITORY"
+        "family": "MONSTER_TERRITORY",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -608,7 +846,21 @@
       "bytes": 2591141,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "RUIN"
+        "family": "RUIN",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -641,7 +893,21 @@
       "bytes": 2651997,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "RUIN"
+        "family": "RUIN",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -675,7 +941,21 @@
       "bytes": 2698340,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "KARST"
+        "family": "KARST",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -709,7 +989,21 @@
       "bytes": 3094248,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "KARST"
+        "family": "KARST",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -743,7 +1037,21 @@
       "bytes": 2679479,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "MONSTER_TERRITORY"
+        "family": "MONSTER_TERRITORY",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -777,7 +1085,21 @@
       "bytes": 2317625,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "MONSTER_TERRITORY"
+        "family": "MONSTER_TERRITORY",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -810,7 +1132,21 @@
       "bytes": 2931773,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "RESOURCE_SITE"
+        "family": "RESOURCE_SITE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -845,7 +1181,21 @@
       "bytes": 2893166,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "GEOLOGICAL"
+        "family": "GEOLOGICAL",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -877,7 +1227,21 @@
       "bytes": 2504065,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "BASE_BIOME"
+        "family": "BASE_BIOME",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -911,7 +1275,21 @@
       "bytes": 2346810,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "COAST"
+        "family": "COAST",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -944,7 +1322,21 @@
       "bytes": 2509732,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "RUIN"
+        "family": "RUIN",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -977,7 +1369,21 @@
       "bytes": 3288737,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "RESOURCE_SITE"
+        "family": "RESOURCE_SITE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1011,7 +1417,21 @@
       "bytes": 3039411,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FRESHWATER"
+        "family": "FRESHWATER",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1047,7 +1467,21 @@
       "bytes": 1865892,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1082,7 +1516,21 @@
       "bytes": 2262019,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FRESHWATER"
+        "family": "FRESHWATER",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1116,7 +1564,21 @@
       "bytes": 2431178,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "BASE_BIOME"
+        "family": "BASE_BIOME",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1151,7 +1613,21 @@
       "bytes": 2280853,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FRESHWATER"
+        "family": "FRESHWATER",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1185,7 +1661,21 @@
       "bytes": 2195305,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "MONSTER_TERRITORY"
+        "family": "MONSTER_TERRITORY",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1218,7 +1708,21 @@
       "bytes": 2861869,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1251,7 +1755,21 @@
       "bytes": 2907062,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "BASE_BIOME"
+        "family": "BASE_BIOME",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1286,7 +1804,21 @@
       "bytes": 2616468,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1318,7 +1850,21 @@
       "bytes": 2772262,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "DOMESTICATION"
+        "family": "DOMESTICATION",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1351,7 +1897,21 @@
       "bytes": 3098870,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "BASE_BIOME"
+        "family": "BASE_BIOME",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1385,7 +1945,21 @@
       "bytes": 2190983,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "MONSTER_TERRITORY"
+        "family": "MONSTER_TERRITORY",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1420,7 +1994,21 @@
       "bytes": 2170780,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1454,7 +2042,21 @@
       "bytes": 3016008,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FLORA_SITE"
+        "family": "FLORA_SITE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1487,7 +2089,21 @@
       "bytes": 2607085,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1520,7 +2136,21 @@
       "bytes": 2415303,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "COAST"
+        "family": "COAST",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1554,7 +2184,21 @@
       "bytes": 2600354,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "RUIN"
+        "family": "RUIN",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1588,7 +2232,21 @@
       "bytes": 2693672,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "MONSTER_TERRITORY"
+        "family": "MONSTER_TERRITORY",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1621,7 +2279,21 @@
       "bytes": 2684242,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FLORA_SITE"
+        "family": "FLORA_SITE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1655,7 +2327,21 @@
       "bytes": 2868511,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "GEOLOGICAL"
+        "family": "GEOLOGICAL",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1688,7 +2374,21 @@
       "bytes": 2168300,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "RUIN"
+        "family": "RUIN",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1723,7 +2423,21 @@
       "bytes": 3064845,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1757,7 +2471,21 @@
       "bytes": 2976984,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "ECOTONE"
+        "family": "ECOTONE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1792,7 +2520,21 @@
       "bytes": 3076656,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "ECOTONE"
+        "family": "ECOTONE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1825,7 +2567,21 @@
       "bytes": 2868598,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FRESHWATER"
+        "family": "FRESHWATER",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1860,7 +2616,21 @@
       "bytes": 3377588,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1894,7 +2664,21 @@
       "bytes": 2786289,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1926,7 +2710,21 @@
       "bytes": 3091280,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "BASE_BIOME"
+        "family": "BASE_BIOME",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1960,7 +2758,21 @@
       "bytes": 3110264,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "ECOTONE"
+        "family": "ECOTONE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -1993,7 +2805,21 @@
       "bytes": 3061448,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2028,7 +2854,21 @@
       "bytes": 2587535,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2061,7 +2901,21 @@
       "bytes": 2576421,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "MONSTER_TERRITORY"
+        "family": "MONSTER_TERRITORY",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2097,7 +2951,21 @@
       "bytes": 2245639,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "MONSTER_TERRITORY"
+        "family": "MONSTER_TERRITORY",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2132,7 +3000,21 @@
       "bytes": 3010260,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2165,7 +3047,21 @@
       "bytes": 2749143,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2200,7 +3096,21 @@
       "bytes": 2768684,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "ECOTONE"
+        "family": "ECOTONE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2234,7 +3144,21 @@
       "bytes": 2617745,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2268,7 +3192,21 @@
       "bytes": 2801061,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "ECOTONE"
+        "family": "ECOTONE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2302,7 +3240,21 @@
       "bytes": 2583330,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "MONSTER_TERRITORY"
+        "family": "MONSTER_TERRITORY",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2336,7 +3288,21 @@
       "bytes": 2516453,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2371,7 +3337,21 @@
       "bytes": 2700538,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FLORA_SITE"
+        "family": "FLORA_SITE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2406,7 +3386,21 @@
       "bytes": 2726043,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "ECOTONE"
+        "family": "ECOTONE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2439,7 +3433,21 @@
       "bytes": 2897144,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FRESHWATER"
+        "family": "FRESHWATER",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2471,7 +3479,21 @@
       "bytes": 3004347,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "BASE_BIOME"
+        "family": "BASE_BIOME",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2505,7 +3527,21 @@
       "bytes": 3008645,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "RESOURCE_SITE"
+        "family": "RESOURCE_SITE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2538,7 +3574,21 @@
       "bytes": 3030262,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "RESOURCE_SITE"
+        "family": "RESOURCE_SITE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2571,7 +3621,21 @@
       "bytes": 2570363,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "KARST"
+        "family": "KARST",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2603,7 +3667,21 @@
       "bytes": 2922565,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "KARST"
+        "family": "KARST",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2637,7 +3715,21 @@
       "bytes": 3170349,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "GEOLOGICAL"
+        "family": "GEOLOGICAL",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2671,7 +3763,21 @@
       "bytes": 2637482,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "BASE_BIOME"
+        "family": "BASE_BIOME",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2704,7 +3810,21 @@
       "bytes": 2495171,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FRESHWATER"
+        "family": "FRESHWATER",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2738,7 +3858,21 @@
       "bytes": 2486646,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "MONSTER_TERRITORY"
+        "family": "MONSTER_TERRITORY",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2771,7 +3905,21 @@
       "bytes": 2771559,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "BASE_BIOME"
+        "family": "BASE_BIOME",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2804,7 +3952,21 @@
       "bytes": 2577875,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FLORA_SITE"
+        "family": "FLORA_SITE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2838,7 +4000,21 @@
       "bytes": 2893601,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "NATIVE_TERRITORY"
+        "family": "NATIVE_TERRITORY",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2874,7 +4050,21 @@
       "bytes": 2199913,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2910,7 +4100,21 @@
       "bytes": 2272844,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2943,7 +4147,21 @@
       "bytes": 2763739,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "GEOLOGICAL"
+        "family": "GEOLOGICAL",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -2978,7 +4196,21 @@
       "bytes": 3016047,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "RESOURCE_SITE"
+        "family": "RESOURCE_SITE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3012,7 +4244,21 @@
       "bytes": 2931787,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FLORA_SITE"
+        "family": "FLORA_SITE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3045,7 +4291,21 @@
       "bytes": 2437767,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FRESHWATER"
+        "family": "FRESHWATER",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3078,7 +4338,21 @@
       "bytes": 2023856,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "BASE_BIOME"
+        "family": "BASE_BIOME",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3112,7 +4386,21 @@
       "bytes": 2804926,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3145,7 +4433,21 @@
       "bytes": 2915079,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FRESHWATER"
+        "family": "FRESHWATER",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3178,7 +4480,21 @@
       "bytes": 2886698,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "RUIN"
+        "family": "RUIN",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3213,7 +4529,21 @@
       "bytes": 2667407,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "RESOURCE_SITE"
+        "family": "RESOURCE_SITE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3248,7 +4578,21 @@
       "bytes": 2673734,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "ECOTONE"
+        "family": "ECOTONE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3280,7 +4624,21 @@
       "bytes": 2574036,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "BASE_BIOME"
+        "family": "BASE_BIOME",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3315,7 +4673,21 @@
       "bytes": 2963517,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "GEOLOGICAL"
+        "family": "GEOLOGICAL",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3350,7 +4722,21 @@
       "bytes": 3090526,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "GEOLOGICAL"
+        "family": "GEOLOGICAL",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3382,7 +4768,21 @@
       "bytes": 3214891,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "GEOLOGICAL"
+        "family": "GEOLOGICAL",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3417,7 +4817,21 @@
       "bytes": 2613941,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3451,7 +4865,21 @@
       "bytes": 2374671,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3485,7 +4913,21 @@
       "bytes": 2683917,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FLORA_SITE"
+        "family": "FLORA_SITE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3520,7 +4962,21 @@
       "bytes": 2477348,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "NATIVE_TERRITORY"
+        "family": "NATIVE_TERRITORY",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3554,7 +5010,21 @@
       "bytes": 3218641,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "RESOURCE_SITE"
+        "family": "RESOURCE_SITE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3588,7 +5058,21 @@
       "bytes": 2666132,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3622,7 +5106,21 @@
       "bytes": 2476047,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3657,7 +5155,21 @@
       "bytes": 2731365,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "MONSTER_TERRITORY"
+        "family": "MONSTER_TERRITORY",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3690,7 +5202,21 @@
       "bytes": 2445117,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FRESHWATER"
+        "family": "FRESHWATER",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3723,7 +5249,21 @@
       "bytes": 2888309,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FRESHWATER"
+        "family": "FRESHWATER",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3758,7 +5298,21 @@
       "bytes": 3110589,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FRESHWATER"
+        "family": "FRESHWATER",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3792,7 +5346,21 @@
       "bytes": 2554851,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "MONSTER_TERRITORY"
+        "family": "MONSTER_TERRITORY",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3826,7 +5394,21 @@
       "bytes": 3311221,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "RESOURCE_SITE"
+        "family": "RESOURCE_SITE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3861,7 +5443,21 @@
       "bytes": 2741183,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "GEOLOGICAL"
+        "family": "GEOLOGICAL",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3894,7 +5490,21 @@
       "bytes": 2337622,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "RUIN"
+        "family": "RUIN",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3927,7 +5537,21 @@
       "bytes": 2938456,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "BASE_BIOME"
+        "family": "BASE_BIOME",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3961,7 +5585,21 @@
       "bytes": 3129235,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "GEOLOGICAL"
+        "family": "GEOLOGICAL",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -3995,7 +5633,21 @@
       "bytes": 2553273,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4028,7 +5680,21 @@
       "bytes": 2642711,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "COAST"
+        "family": "COAST",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4061,7 +5727,21 @@
       "bytes": 2916453,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FLORA_SITE"
+        "family": "FLORA_SITE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4096,7 +5776,21 @@
       "bytes": 2433609,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FRESHWATER"
+        "family": "FRESHWATER",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4131,7 +5825,21 @@
       "bytes": 2888210,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4165,7 +5873,21 @@
       "bytes": 3028981,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "RESOURCE_SITE"
+        "family": "RESOURCE_SITE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4198,7 +5920,21 @@
       "bytes": 3098094,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "GEOLOGICAL"
+        "family": "GEOLOGICAL",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4232,7 +5968,21 @@
       "bytes": 3388010,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4267,7 +6017,21 @@
       "bytes": 2582311,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FRESHWATER"
+        "family": "FRESHWATER",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4299,7 +6063,21 @@
       "bytes": 2893440,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FRESHWATER"
+        "family": "FRESHWATER",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4332,7 +6110,21 @@
       "bytes": 2734531,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "RESOURCE_SITE"
+        "family": "RESOURCE_SITE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4365,7 +6157,21 @@
       "bytes": 2380264,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "RUIN"
+        "family": "RUIN",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4398,7 +6204,21 @@
       "bytes": 2803530,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "MONSTER_TERRITORY"
+        "family": "MONSTER_TERRITORY",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4431,7 +6251,21 @@
       "bytes": 2356242,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "COAST"
+        "family": "COAST",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4464,7 +6298,21 @@
       "bytes": 2896301,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "RESOURCE_SITE"
+        "family": "RESOURCE_SITE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4498,7 +6346,21 @@
       "bytes": 2998597,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FRESHWATER"
+        "family": "FRESHWATER",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4533,7 +6395,21 @@
       "bytes": 3344331,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FRESHWATER"
+        "family": "FRESHWATER",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4566,7 +6442,21 @@
       "bytes": 2548616,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "KARST"
+        "family": "KARST",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4599,7 +6489,21 @@
       "bytes": 2576006,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4634,7 +6538,21 @@
       "bytes": 2775432,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FRESHWATER"
+        "family": "FRESHWATER",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4668,7 +6586,21 @@
       "bytes": 2937155,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4700,7 +6632,21 @@
       "bytes": 2611927,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "BASE_BIOME"
+        "family": "BASE_BIOME",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4734,7 +6680,21 @@
       "bytes": 2879117,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FLORA_SITE"
+        "family": "FLORA_SITE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4768,7 +6728,21 @@
       "bytes": 2709048,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FLORA_SITE"
+        "family": "FLORA_SITE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4804,7 +6778,21 @@
       "bytes": 3174655,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FLORA_SITE"
+        "family": "FLORA_SITE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4838,7 +6826,21 @@
       "bytes": 3263562,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FLORA_SITE"
+        "family": "FLORA_SITE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4873,7 +6875,21 @@
       "bytes": 2884551,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4908,7 +6924,21 @@
       "bytes": 3270466,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FLORA_SITE"
+        "family": "FLORA_SITE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4943,7 +6973,21 @@
       "bytes": 2500145,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -4977,7 +7021,21 @@
       "bytes": 2882855,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -5010,7 +7068,21 @@
       "bytes": 3165785,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FRESHWATER"
+        "family": "FRESHWATER",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -5044,7 +7116,21 @@
       "bytes": 2473577,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FAUNA_RANGE"
+        "family": "FAUNA_RANGE",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -5077,7 +7163,21 @@
       "bytes": 3110823,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "FRESHWATER"
+        "family": "FRESHWATER",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     },
     {
@@ -5110,7 +7210,21 @@
       "bytes": 2580161,
       "provenance": {
         "generator": "playthrough-backdrop-gen",
-        "family": "MONSTER_TERRITORY"
+        "family": "MONSTER_TERRITORY",
+        "supersedes": []
+      },
+      "review": {
+        "state": "LEGACY",
+        "checklist": {
+          "noLivingCreatures": false,
+          "onlyNonlivingHabitatEvidence": false,
+          "smoothModernRendering": false,
+          "noGridTilingOrPixelation": false,
+          "widescreenDimensions": false,
+          "uiSafeComposition": false
+        },
+        "reviewedBy": null,
+        "reviewedAt": null
       }
     }
   ]

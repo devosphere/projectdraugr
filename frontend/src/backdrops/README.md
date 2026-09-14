@@ -44,9 +44,22 @@ terminates at the single root (`forest`); and integrity metadata (`contentHash`,
 - **Every asset resolves to something.** Discovery-gated sites, ruins, and monster territory fall back
   through their base-biome anchor to the root, so the screen is never blank.
 
+- **Nothing goes live unreviewed (#241).** Every image passes the neutral-backdrop review contract in
+  [`docs/systems/backdrop-review-contract.md`](../../../docs/systems/backdrop-review-contract.md):
+  - A generated or replaced image enters `PENDING_REVIEW`.
+  - `ACTIVE` needs an `APPROVED` review (every checklist item true, with a reviewer and a date) and widescreen
+    dimensions.
+  - The 151 pre-contract images are `LEGACY`, frozen in `scripts/backdrops/legacy-unreviewed.json`. That list only
+    shrinks.
+- **Replacement never overwrites history.** Regenerating merges over the previous manifest. A changed image appends
+  its old `{version, contentHash}` to `provenance.supersedes` and returns to `PENDING_REVIEW`.
+
 ## Adding or changing an image
 
-1. Drop the `playthrough-<slug>-v<N>.png` into `src/assets/`.
+1. Generate it to the constraints in the review contract, and drop the `playthrough-<slug>-v<N>.png` into
+   `src/assets/`. Bump `N` when replacing an image.
 2. If the slug tokens don't classify it correctly, add a one-line entry to `OVERRIDES` in
    `build-manifest.mjs`.
-3. `npm run backdrops:generate` then `npm run backdrops:check`. Commit the image **and** the manifest.
+3. `npm run backdrops:generate`. The image enters `PENDING_REVIEW`.
+4. Review it against the checklist on the playthrough screen, then record the review in the manifest.
+5. `npm run backdrops:check`, then `npm run backdrops:test`. Commit the image **and** the manifest.
