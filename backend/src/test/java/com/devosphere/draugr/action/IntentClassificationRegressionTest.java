@@ -75,6 +75,16 @@ class IntentClassificationRegressionTest {
         assertEquals("MAINTAIN_CAMP", classify("tidy the camp"));
     }
 
+    /**
+     * #108 V330: a salt lick is built through the assembly matcher. "salt" with a gathering verb is GATHER_MINERAL's,
+     * so none of its build phrases may carry one — and the other half, gathering rock salt, must stay a gather.
+     */
+    @Test void aSaltLickIsBuiltNotGathered() throws Exception {
+        for (String phrase : new String[]{"set out a salt lick", "build a salt lick", "raise a salt lick", "work on the salt lick"})
+            assertEquals("UNKNOWN", classify(phrase), phrase);
+        assertEquals("GATHER_MINERAL", classify("gather rock salt"));
+    }
+
     @Test void processActionsAreNotStolenByGreedyIntents() throws Exception {
         // When the two-axis matcher claims the text, the ambiguous intent must yield,
         // so the dispatch falls through to PROCESS_MATERIAL (classify returns UNKNOWN).

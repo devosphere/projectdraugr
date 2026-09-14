@@ -885,6 +885,24 @@ public class WildlifeEncounterService {
             // Milk and eggs are perishable from the moment they are taken. A fleece is not food and is untracked.
             if (!"WOOL".equals(wanted)) food.registerFresh(id, at);
         }
+        // Salt (#108, V330). Grazing stock cannot get enough of it from grass, and a dam short of salt gives less
+        // milk. A salt lick where the herd is worked fills the pail further — half again, and at least one more —
+        // from the same animals. Not a gate: stock without salt still milk, as they always have. Milk only.
+        int salted = 0;
+        if ("MILK".equals(wanted) && Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+                "JOIN world_object keeper ON keeper.id=? " +
+                "JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
+                "WHERE ck.gives_salt AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
+                "  AND w.lifecycle_state='ACTIVE' AND w.current_location_id=keeper.current_location_id)",
+                Boolean.class, chronicle))) {
+            salted = Math.max(1, taken / 2);
+            for (int i = 0; i < salted; i++) {
+                UUID id = items.createCarriedItem(chronicle, itemKey, (String) ready.get("display"), at, "TAKEN_FROM_TAMED_ANIMAL");
+                food.registerFresh(id, at);
+            }
+        }
+        if (salted > 0) hurt = " They have had salt to lick and are in good milk, and there is more in the pail for it." + hurt;
         // This product's own clock. Upserted rather than assumed present: the catalogue may have gained a row
         // since this animal was tamed, and a beast that was tamed before it gave milk still gives milk.
         jdbc.update(
