@@ -880,13 +880,66 @@ public class PhysicalItemService {
      *  Set-based; runs in the tick. */
     @Transactional
     public void advanceDraftHunger(Instant now) {
+        // The weather's cost is added in both branches (#106, V325): a beast on good pasture still burns feed to keep
+        // warm in a frost, it just has more to burn.
+        String cold = coldOnStock();
         jdbc.update(
             "UPDATE wildlife_bond wb SET draft_hunger = CASE " +
             "  WHEN EXISTS (SELECT 1 FROM world_object cw JOIN world_chunk ch ON ch.id=cw.current_location_id " +
             "               WHERE cw.id=wb.chronicle_id AND ch.biome='GRASSLAND') " +
-            "  THEN GREATEST(0, draft_hunger - ?) ELSE LEAST(100, draft_hunger + ?) END " +
+            "  THEN LEAST(100, GREATEST(0, draft_hunger - ? + " + cold + ")) ELSE LEAST(100, draft_hunger + ? + " + cold + ") END " +
             "WHERE wb.bond_stage='TAMED' AND EXISTS (SELECT 1 FROM wildlife_population wp JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wp.id=wb.population_id)",
             DRAFT_GRAZE_RELIEF, DRAFT_HUNGER_PER_TURN);
+    }
+
+    /** At or below this, a grown beast is burning feed to keep its own heat. */
+    private static final int HARD_FROST_C = 0;
+    /** Rain under this chills a wet coat through. */
+    private static final int WET_CHILL_C = 8;
+    /** What a hard frost adds to a beast's hunger, on top of the ordinary turn. */
+    private static final int FROST_HUNGER = 4;
+    /** What cold rain adds — less than a frost, because a beast's own coat still does some of the work. */
+    private static final int WET_COLD_HUNGER = 2;
+
+    /**
+     * What the cold costs a grown beast (#106/#108, V325) — a SQL fragment over {@code wildlife_bond wb}, the hunger
+     * counterpart of {@link #heatOnStock()}.
+     *
+     * <p>Heat has cost stock water since V303 and cold cost them nothing: a horse stood through a January night on an
+     * open hill as fed as one in a byre, so a stock blanket had nothing to be for. A beast keeps warm by burning feed,
+     * so cold is paid in hunger.
+     *
+     * <p><b>The answers are not interchangeable.</b> An enclosed stock shelter keeps off frost and rain both; a roof
+     * that does not enclose keeps off only the rain. A winter blanket answers both; a rain sheet only the wet. What
+     * counts as a cover is {@code stock_cover}, and a cover is worn by one beast: a keeper with two blankets and three
+     * horses keeps two warm — the first two by bond, so the answer never depends on the order rows happen to arrive.
+     */
+    private static String coldOnStock() {
+        String weatherHere =
+            "SELECT 1 FROM world_object cw3 JOIN world_chunk ch3 ON ch3.id=cw3.current_location_id " +
+            "JOIN world_weather ww3 ON ww3.world_id=ch3.world_id WHERE cw3.id=wb.chronicle_id ";
+        String shelterHere =
+            "SELECT 1 FROM construction_project cp3 JOIN world_object sw3 ON sw3.id=cp3.object_id " +
+            "JOIN construction_kind ck3 ON ck3.project_kind=cp3.project_kind " +
+            "WHERE cp3.state='COMPLETED' AND cp3.integrity_percent>0 AND sw3.lifecycle_state='ACTIVE' " +
+            "AND sw3.current_location_id=ch3.id AND ck3.shelters_stock ";
+        return "(CASE WHEN EXISTS (" + weatherHere + "AND ww3.ambient_temperature_c <= " + HARD_FROST_C +
+               " AND NOT EXISTS (" + shelterHere + "AND ck3.encloses) AND NOT " + coveredBy("against_hard_cold") +
+               ") THEN " + FROST_HUNGER + " ELSE 0 END" +
+               " + CASE WHEN EXISTS (" + weatherHere + "AND ww3.weather_kind IN ('RAIN','STORM') AND ww3.ambient_temperature_c < " + WET_CHILL_C +
+               " AND NOT EXISTS (" + shelterHere + ") AND NOT " + coveredBy("against_wet_cold") +
+               ") THEN " + WET_COLD_HUNGER + " ELSE 0 END)";
+    }
+
+    /** Whether this beast is among the ones the keeper has a sound cover of this kind for — one cover, one beast. */
+    private static String coveredBy(String flag) {
+        return "((SELECT count(*) FROM item_instance ci3 JOIN world_object co3 ON co3.id=ci3.object_id " +
+               "  JOIN stock_cover sc3 ON sc3.item_key=ci3.item_key " +
+               "  WHERE co3.current_owner_id=wb.chronicle_id AND co3.lifecycle_state='ACTIVE' " +
+               "    AND ci3.condition_state <> 'BROKEN' AND sc3." + flag + ") " +
+               " >= (SELECT count(*) FROM wildlife_bond b3 JOIN wildlife_population p3 ON p3.id=b3.population_id " +
+               "  JOIN draft_species d3 ON d3.species_key=p3.species_key " +
+               "  WHERE b3.chronicle_id=wb.chronicle_id AND b3.bond_stage='TAMED' AND b3.id <= wb.id))";
     }
 
     /** Feed the keeper's draft beasts a bundle of cut fodder (#104): consumes one dry grass bundle to ease the hunger of
