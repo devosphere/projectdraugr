@@ -781,7 +781,7 @@ public class WildlifeEncounterService {
         // The clock is per product, so this joins tamed_production on the bond AND the item.
         java.util.Map<String,Object> ready = jdbc.query(
             "SELECT wb.id, wp.species_key, ty.item_key, ty.interval_hours, tp.last_yielded_at, d.display_name, " +
-            "       wp.population_count " +
+            "       wp.population_count, in_season(ty.available_months) " +
             "FROM wildlife_bond wb " +
             "JOIN wildlife_population wp ON wp.id = wb.population_id " +
             "JOIN tamed_yield ty ON ty.species_key = wp.species_key AND ty.yield_kind = ? " +
@@ -791,7 +791,8 @@ public class WildlifeEncounterService {
             // looked after, which is what makes mucking out a decision rather than housekeeping.
             "WHERE wb.chronicle_id = ? AND wb.bond_stage = 'TAMED' AND wp.population_count > 0 " +
             "  AND wb.sickness < " + com.devosphere.draugr.item.PhysicalItemService.TOO_SICK_TO_GIVE + " " +
-            "ORDER BY tp.last_yielded_at NULLS FIRST LIMIT 1 FOR UPDATE OF wb",
+            // An animal in season is gone to before one out of it (#161, V323) — a buffalo in milk before a goat dry.
+            "ORDER BY in_season(ty.available_months) DESC, tp.last_yielded_at NULLS FIRST LIMIT 1 FOR UPDATE OF wb",
             rs -> rs.next() ? java.util.Map.of(
                     "id", rs.getObject(1, UUID.class),
                     "species", rs.getString(2),
@@ -799,12 +800,21 @@ public class WildlifeEncounterService {
                     "interval", rs.getInt(4),
                     "last", rs.getTimestamp(5) == null ? "" : rs.getTimestamp(5).toInstant().toString(),
                     "display", rs.getString(6),
-                    "herd", rs.getInt(7)) : null, wanted, chronicle);
+                    "herd", rs.getInt(7),
+                    "inSeason", rs.getBoolean(8)) : null, wanted, chronicle);
 
         if (ready == null) return new EncounterResult("FAILED", switch (wanted) {
             case "MILK" -> "You have nothing tamed here that gives milk — a goat or a cow must be won over first, and won over properly.";
             case "WOOL" -> "There is no tamed fleece-bearer here to shear.";
             default     -> "You have no tamed fowl here to gather eggs from.";
+        });
+
+        // The animal is there and well, and it is simply not the time of year (#161, V323). Said as that, not as an
+        // empty nest or a milked-out dam, which would tell the keeper to wait a day for something a season away.
+        if (!Boolean.TRUE.equals(ready.get("inSeason"))) return new EncounterResult("FAILED", switch (wanted) {
+            case "MILK" -> "She has no milk to give. A dam comes into milk when she has young, and that is not this time of year.";
+            case "WOOL" -> "The fleece is holding fast. It loosens when the animal moults in late spring, and there is nothing to pluck before then.";
+            default     -> "The nests are bare, and not because anyone took from them. The birds have stopped laying for the season.";
         });
 
         String last = (String) ready.get("last");
@@ -1217,7 +1227,7 @@ public class WildlifeEncounterService {
 
     /** Take a species' catalogued yields from a carcass. Returns how many items came away. */
     private int takeSpeciesDrops(UUID chronicle, String species, Instant at) {
-        java.util.List<java.util.Map<String,Object>> drops = jdbc.queryForList("SELECT item_key,yield_min,yield_max,rarity FROM wildlife_drop WHERE species_key=? ORDER BY rarity DESC", species);
+        java.util.List<java.util.Map<String,Object>> drops = jdbc.queryForList("SELECT item_key,yield_min,yield_max,rarity FROM wildlife_drop WHERE species_key=? AND in_season(available_months) ORDER BY rarity DESC", species); // an egg only in the nesting season (#161, V323)
         int taken = 0;
         for (java.util.Map<String,Object> d : drops) {
             if (Math.random() > ((Number)d.get("rarity")).doubleValue()) continue;
@@ -1337,7 +1347,7 @@ public class WildlifeEncounterService {
                 : "You work the water patiently, and it gives up nothing this time.");
         String caught = species.get(Math.floorMod(action.hashCode(), species.size()));
         int got = 0;
-        for (java.util.Map<String,Object> d : jdbc.queryForList("SELECT item_key,yield_min,yield_max,rarity FROM wildlife_drop WHERE species_key=?", caught)) {
+        for (java.util.Map<String,Object> d : jdbc.queryForList("SELECT item_key,yield_min,yield_max,rarity FROM wildlife_drop WHERE species_key=? AND in_season(available_months)", caught)) { // seasonal yields keep their season (#161, V323)
             if (Math.random() > ((Number)d.get("rarity")).doubleValue()) continue;
             String itemKey=(String)d.get("item_key");
             int lo=((Number)d.get("yield_min")).intValue(), hi=((Number)d.get("yield_max")).intValue();
