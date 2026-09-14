@@ -3,6 +3,7 @@ import forestArt from './assets/playthrough-forest-v1.png';
 import streamArt from './assets/playthrough-stream-v1.png';
 import quarryArt from './assets/playthrough-quarry-v1.png';
 import clayDepositArt from './assets/playthrough-clay-deposit-v1.png';
+import { decodeArt, latestOnly } from './backdrops/latestScene';
 
 const previewBody = [
   ['Health', 'Healthy'], ['Condition', 'Unsteady'], ['Hunger', 'Satisfied'], ['Thirst', 'Hydrated'],
@@ -119,6 +120,38 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
   // Appending a resolved action sets it; loading older entries clears it so the
   // reader's scroll position is preserved instead of yanked to the bottom (#15).
   const pinToBottom = useRef(true);
+  // #237: the location and environment are asked for again after every action, and replies can land out of order.
+  // Each request takes a ticket and only the newest reply applies. Recreated on mount so StrictMode's rehearsal
+  // unmount cannot retire the counters the real mount goes on to use.
+  const locationTickets = useRef(latestOnly());
+  const environmentTickets = useRef(latestOnly());
+  useEffect(() => {
+    const place = latestOnly(), weather = latestOnly();
+    locationTickets.current = place; environmentTickets.current = weather;
+    return () => { place.retire(); weather.retire(); };
+  }, []);
+
+  function refreshLocation() {
+    if (!apiUrl) return;
+    const tickets = locationTickets.current, ticket = tickets.next();
+    fetch(`${apiUrl}/api/chronicles/active/location`).then(response => response.ok ? response.json() : null).then(async (snapshot: LocationSnapshot | null) => {
+      if (!snapshot || !tickets.current(ticket)) return;
+      const next = backdropByBiome[snapshot.presentationKey] ?? backdropByBiome[snapshot.biome] ?? backdropByBiome.TEMPERATE_FOREST;
+      // The last valid scene stays up until the new one can paint; one that cannot be decoded never replaces it.
+      try { await decodeArt(next.art); } catch { return; }
+      if (tickets.current(ticket)) setLocation(next);
+    }).catch(() => undefined);
+  }
+
+  function refreshEnvironment() {
+    if (!apiUrl) return;
+    const tickets = environmentTickets.current, ticket = tickets.next();
+    fetch(`${apiUrl}/api/chronicles/active/environment`).then(response => response.ok ? response.json() : null).then((snapshot: EnvironmentSnapshot | null) => {
+      if (!snapshot || !tickets.current(ticket)) return;
+      const hour = new Date(snapshot.simulatedAt).getUTCHours();
+      setEnvironment({ time: hour < 6 ? 'Before dawn' : hour < 12 ? 'Morning' : hour < 18 ? 'Afternoon' : 'Night', weather: snapshot.weatherKind.toLowerCase().replace(/^./, letter => letter.toUpperCase()), season: `${seasonAt(snapshot.simulatedAt)} · ${Math.round(snapshot.ambientTemperatureC ?? 18)}°C · ${snapshot.windSpeedKph ?? 0} kph wind` });
+    }).catch(() => undefined);
+  }
 
   useEffect(() => {
     if (!apiUrl) return;
@@ -127,14 +160,7 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
     }).catch(() => undefined);
   }, [apiUrl]);
 
-  useEffect(() => {
-    if (!apiUrl) return;
-    fetch(`${apiUrl}/api/chronicles/active/environment`).then(response => response.ok ? response.json() : null).then((snapshot: EnvironmentSnapshot | null) => {
-      if (!snapshot) return;
-      const hour = new Date(snapshot.simulatedAt).getUTCHours();
-      setEnvironment({ time: hour < 6 ? 'Before dawn' : hour < 12 ? 'Morning' : hour < 18 ? 'Afternoon' : 'Night', weather: snapshot.weatherKind.toLowerCase().replace(/^./, letter => letter.toUpperCase()), season: `${seasonAt(snapshot.simulatedAt)} · ${Math.round(snapshot.ambientTemperatureC ?? 18)}°C · ${snapshot.windSpeedKph ?? 0} kph wind` });
-    }).catch(() => undefined);
-  }, [apiUrl]);
+  useEffect(() => { refreshEnvironment(); }, [apiUrl]);
 
   useEffect(() => {
     if (!apiUrl) return;
@@ -178,12 +204,7 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
     window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key);
   }, []);
 
-  useEffect(() => {
-    if (!apiUrl) return;
-    fetch(`${apiUrl}/api/chronicles/active/location`).then(response => response.ok ? response.json() : null).then((snapshot: LocationSnapshot | null) => {
-      if (snapshot) setLocation(backdropByBiome[snapshot.presentationKey] ?? backdropByBiome[snapshot.biome] ?? backdropByBiome.TEMPERATE_FOREST);
-    }).catch(() => undefined);
-  }, [apiUrl]);
+  useEffect(() => { refreshLocation(); }, [apiUrl]);
 
   useEffect(() => {
     const field = actionField.current;
@@ -227,13 +248,11 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
       // The chronicle died this action: close the composer with a witnessed ending and
       // send the player back to the shore. Permanent death is the heart of the game.
       if (result.died) { setDeathNarration(result.perception); return; }
-      fetch(`${apiUrl}/api/chronicles/active/location`).then(response => response.ok ? response.json() : null).then((snapshot: LocationSnapshot | null) => {
-        if (snapshot) setLocation(backdropByBiome[snapshot.presentationKey] ?? backdropByBiome[snapshot.biome] ?? backdropByBiome.TEMPERATE_FOREST);
-      }).catch(() => undefined);
+      refreshLocation();
       fetch(`${apiUrl}/api/chronicles/active/discoveries`).then(response => response.ok ? response.json() : null).then((context: DiscoveryContext | null) => setDiscoveries(context)).catch(() => undefined);
       fetch(`${apiUrl}/api/items/state`).then(response => response.ok ? response.json() : null).then((snapshot: ItemState | null) => setItems(snapshot)).catch(() => setItems(null));
       fetch(`${apiUrl}/api/literature`).then(response => response.ok ? response.json() : null).then((docs: LiteratureDoc[] | null) => setDocuments(docs ?? [])).catch(() => undefined);
-      fetch(`${apiUrl}/api/chronicles/active/environment`).then(response => response.ok ? response.json() : null).then((snapshot: EnvironmentSnapshot | null) => { if (snapshot) { const hour=new Date(snapshot.simulatedAt).getUTCHours(); setEnvironment({ time: hour < 6 ? 'Before dawn' : hour < 12 ? 'Morning' : hour < 18 ? 'Afternoon' : 'Night', weather: snapshot.weatherKind.toLowerCase().replace(/^./, letter => letter.toUpperCase()), season: `${seasonAt(snapshot.simulatedAt)} · ${Math.round(snapshot.ambientTemperatureC ?? 18)}°C · ${snapshot.windSpeedKph ?? 0} kph wind` }); } }).catch(() => undefined);
+      refreshEnvironment();
       setAction('');
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'The simulation could not resolve that action.');
