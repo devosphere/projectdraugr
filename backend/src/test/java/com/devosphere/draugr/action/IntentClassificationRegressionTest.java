@@ -40,6 +40,10 @@ class IntentClassificationRegressionTest {
                     String v = t == null ? "" : t.toLowerCase(java.util.Locale.ROOT);
                     return v.contains("fire clay") || v.contains("limestone");
                 }
+                @Override public boolean namesAKeptAnimal(String t) {
+                    String v = t == null ? "" : t.toLowerCase(java.util.Locale.ROOT);
+                    return v.contains("yak") || v.contains("musk ox") || v.contains("llama");
+                }
             };
         ChronicleActionService svc = new ChronicleActionService(null, null, null, null, items, null, null, null, null, null, null, null, new com.devosphere.draugr.narration.ActionInputClassifier(), null, null, null, new com.devosphere.draugr.narration.NarrationEngine(), (com.devosphere.draugr.ai.RuntimeAuthoringService) null, (ExaminationService) null);
         return ((Enum<?>) m.invoke(svc, text)).name();

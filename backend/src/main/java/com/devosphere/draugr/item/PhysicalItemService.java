@@ -2390,6 +2390,24 @@ public class PhysicalItemService {
         return false;
     }
 
+    /**
+     * Whether the text names a species a keeper actually keeps (#79): anything that pulls ({@code draft_species}) or
+     * gives ({@code tamed_yield}). The feeding and tending intents named their animals as literals — ox, deer,
+     * reindeer, goat — so a species added to the catalogue, a yak, could be kept and never fed or tended by name.
+     * Asking the table is the same fix {@link #namesADugMineral} made for minerals.
+     */
+    @Transactional(readOnly = true)
+    public boolean namesAKeptAnimal(String actionText) {
+        if (actionText == null || actionText.isBlank()) return false;
+        String v = " " + actionText.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim() + " ";
+        for (String key : jdbc.queryForList(
+                "SELECT species_key FROM draft_species UNION SELECT species_key FROM tamed_yield", String.class)) {
+            String spoken = key.replace('_', ' ');
+            if (v.contains(" " + spoken + " ") || v.contains(" " + spoken + "s ")) return true;
+        }
+        return false;
+    }
+
     @Transactional
     public String[] gatherMineral(UUID chronicle, UUID location, String actionText, Instant occurredAt) {
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
