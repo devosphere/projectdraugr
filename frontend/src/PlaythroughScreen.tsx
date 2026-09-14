@@ -103,6 +103,18 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
   const overlayTimer = useRef<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [location, setLocation] = useState(backdropByBiome.TEMPERATE_FOREST);
+  // #239: the scene a new one fades in over. The new art has already decoded before setLocation (#237), so the
+  // fade never starts on a blank frame; the old scene stays as the ground underneath until it is fully covered.
+  // Someone who has asked for reduced motion gets the change at once, with no fade at all.
+  const [fadingFrom, setFadingFrom] = useState<string | null>(null);
+  const shownArt = useRef(location.art);
+  useEffect(() => {
+    if (shownArt.current === location.art) return;
+    const reduced = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    setFadingFrom(reduced ? null : shownArt.current);
+    shownArt.current = location.art;
+  }, [location.art]);
   const [environment, setEnvironment] = useState({ time: 'Early morning', weather: 'Light rain', season: 'Early spring' });
   const [panel, setPanel] = useState<Panel>('none');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -331,8 +343,12 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
 
   const menuItems = (prototypeMode ? [['chronicle','Chronicle'],['equipment','Equipment'],['load','Load'],['storage','Storage'],['crafting','Crafting'],['construction','Construction'],['knowledge','Knowledge'],['map','Chronicle Map'],['literature','Literature']] : [['chronicle','Chronicle'],['equipment','Equipment'],['load','Load'],...(items?.containers.length ? [['storage','Storage']] : []),...(discoveries?.discoveries.includes('WOVEN_BASKET') ? [['crafting','Crafting']] : []),...(discoveries?.constructions.length ? [['construction','Construction']] : []),...(discoveries?.discoveries.length ? [['knowledge','Knowledge']] : [])]) as [Panel,string][];
 
-  return <main className="playthrough" style={{ backgroundImage: `url(${location.art})` }}>
+  return <main className="playthrough" style={{ backgroundImage: `url(${fadingFrom ?? location.art})` }}>
+    {fadingFrom && <div key={location.art} className="scene-fade" aria-hidden="true" style={{ backgroundImage: `url(${location.art})` }} onAnimationEnd={() => setFadingFrom(null)} />}
     <div className="playthrough-vignette" />
+    {/* #239: what a sighted player reads off the picture, said for a screen reader. Built only from the general
+        place label, the time and the weather — never a site the Chronicle has not been told about. */}
+    <p className="sr-only" aria-live="polite">{`Your surroundings: ${location.label}, ${environment.time.toLowerCase()}, ${environment.weather.toLowerCase()}.`}</p>
     {showOverlay && (
       <div className="resolving-overlay" role="status" aria-live="polite" aria-label="The world is resolving your action">
         <div className="resolving-hourglass" aria-hidden="true">⏳</div>
