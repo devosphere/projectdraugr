@@ -131,6 +131,11 @@ class ADungedFieldIntegrationTest {
         assertEquals(fromBare, fromCaved, "a manure pit that has caved in feeds the field nothing");
         assertTrue(fromBare > 0, "worn ground still gives something — a thinner stand, not a failure");
 
+        // The caved-in pit was this test's own fixture; mend it before asking the Auditor, which rightly refuses a
+        // completed construction left standing at zero integrity.
+        jdbc.update("UPDATE construction_project cp SET integrity_percent=100 FROM world_object w " +
+                    "WHERE w.id=cp.object_id AND w.current_location_id=? AND cp.project_kind='MANURE_PIT'", caved);
+
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
 }
