@@ -82,7 +82,7 @@ class ASaltLickIntegrationTest {
         jdbc.update("INSERT INTO ecology_site (id,world_id,chunk_id,site_category,site_kind,baseline_abundance) VALUES (?,?,?,'WILDLIFE','Kept stock',30)", site, worldId, chunk);
         UUID pop = UUID.randomUUID();
         jdbc.update("INSERT INTO wildlife_population (id,site_id,species_key,ecological_role,activity_cycle,population_count,carrying_capacity,behavior_state,last_simulated_at) " +
-                "VALUES (?,?,?,'HERBIVORE','DIURNAL',?,8,'FORAGING',?)", pop, site, species, herd, ts);
+                "VALUES (?,?,?,'HERBIVORE','DIURNAL',?,?,'FORAGING',?)", pop, site, species, herd, herd, ts); // at capacity, so the herd cannot breed between takings
         jdbc.update("INSERT INTO wildlife_bond (id,chronicle_id,population_id,bond_stage,trust_level,interaction_count,last_interaction_at) " +
                 "VALUES (?,?,?,'TAMED',95,12,?)", UUID.randomUUID(), chronicle, pop, ts);
     }
@@ -111,7 +111,9 @@ class ASaltLickIntegrationTest {
         UUID chunk = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
         UUID worldId = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, chunk);
         jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
-        Timestamp ts = Timestamp.from(Instant.now());
+        // Stamped at the pinned simulation time, not the wall clock. Stamped at "now" the herd and the lick look five
+        // years old to the first tick: the herd breeds to capacity and the lick weathers to nothing before it is used.
+        Timestamp ts = Timestamp.from(Instant.parse("2031-06-10T08:00:00Z"));
         tame(chronicle, chunk, worldId, "mountain_goat", 2, ts);
         items.createCarriedItem(chronicle, "wooden_bowl", "Wooden bowl", Instant.now(), "TEST_FIXTURE");
 
@@ -129,8 +131,8 @@ class ASaltLickIntegrationTest {
         // Set out a salt lick where the herd is worked.
         UUID lick = UUID.randomUUID();
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,lifecycle_state,current_location_id) VALUES (?,'CONSTRUCTION','Salt lick','ACTIVE',?)", lick, chunk);
-        jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at,integrity_percent) VALUES (?,'SALT_LICK','COMPLETED',100,?,100)",
-            lick, Timestamp.from(Instant.now()));
+        jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at,integrity_percent,last_structural_update) VALUES (?,'SALT_LICK','COMPLETED',100,?,100,?)",
+            lick, ts, ts);
 
         rest(chronicle);
         int beforeSalted = carried(chronicle, "goat_milk");
