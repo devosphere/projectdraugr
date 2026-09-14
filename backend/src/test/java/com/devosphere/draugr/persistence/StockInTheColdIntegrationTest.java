@@ -162,7 +162,7 @@ class StockInTheColdIntegrationTest {
             assertEquals(mild, hunger(second), "and by a rain sheet");
 
             // An enclosed stock shelter keeps the frost off everything in it, blankets or not.
-            jdbc.update("DELETE FROM world_object WHERE id IN (SELECT object_id FROM item_instance WHERE item_key IN ('winter_stock_blanket','stock_rain_sheet')) AND current_owner_id=?", chronicle);
+            jdbc.update("UPDATE world_object w SET current_owner_id=NULL, current_location_id=? FROM item_instance i WHERE i.object_id=w.id AND i.item_key IN ('winter_stock_blanket','stock_rain_sheet') AND w.current_owner_id=?", chunk, chronicle);
             weather(worldId, "CLEAR", -6.0);
             build(chunk, "CATTLE_BYRE", "Cattle byre");
             zero(first, second);
