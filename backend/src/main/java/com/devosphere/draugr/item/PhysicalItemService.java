@@ -2067,6 +2067,15 @@ public class PhysicalItemService {
         if (soil == null) return 100; // never cropped — pristine
         long fallowDays = Math.max(0, java.time.Duration.between((Instant) soil.get("t"), at).toDays());
         int perDay = floodplainAt(chunk) ? FERTILITY_RECOVER_PER_DAY_ON_FLOODPLAIN : FERTILITY_RECOVER_PER_DAY;
+        // Dung and compost put back what a harvest took (#77, V332). A sound manure pit or compost bay on this ground
+        // renews the field faster than resting it; the faster rate applies, since a flood already spreads what a heap
+        // would. Read from construction_kind.fertilises_field, not named here.
+        Integer dunged = jdbc.queryForObject(
+            "SELECT COALESCE(MAX(ck.fertilises_field),0) FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
+            "WHERE w.current_location_id=? AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE'",
+            Integer.class, chunk);
+        if (dunged != null && dunged > perDay) perDay = dunged;
         return Math.min(100, (int) soil.get("f") + (int) (fallowDays * perDay));
     }
 

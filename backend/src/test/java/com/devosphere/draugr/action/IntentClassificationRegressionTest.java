@@ -98,6 +98,15 @@ class IntentClassificationRegressionTest {
         assertEquals("GATHER_MINERAL", classify("gather rock salt"));
     }
 
+    /**
+     * #77 V332: #77's compost_pit reaches the existing compost bay through the assembly matcher, so its phrases must
+     * not be taken by TILL_GROUND ("work the ground") or BUILD_LATRINE ("refuse pit") on the way.
+     */
+    @Test void aCompostPitReachesTheCompostBay() throws Exception {
+        for (String phrase : new String[]{"dig a compost pit", "build a compost pit", "build a compost bay", "dig a manure pit"})
+            assertEquals("UNKNOWN", classify(phrase), phrase);
+    }
+
     @Test void processActionsAreNotStolenByGreedyIntents() throws Exception {
         // When the two-axis matcher claims the text, the ambiguous intent must yield,
         // so the dispatch falls through to PROCESS_MATERIAL (classify returns UNKNOWN).
