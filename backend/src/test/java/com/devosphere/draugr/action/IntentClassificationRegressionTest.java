@@ -79,6 +79,18 @@ class IntentClassificationRegressionTest {
      * #108 V330: a salt lick is built through the assembly matcher. "salt" with a gathering verb is GATHER_MINERAL's,
      * so none of its build phrases may carry one — and the other half, gathering rock salt, must stay a gather.
      */
+    /**
+     * #108 V331: an offal pit is dug through the assembly matcher. HARVEST_CARCASS takes a butchering verb with
+     * "carcass", and BUILD_LATRINE takes "refuse pit"/"waste pit" — the pit's phrases carry neither, and butchering
+     * a carcass must stay butchering.
+     */
+    @Test void anOffalPitIsDugNotButchered() throws Exception {
+        for (String phrase : new String[]{"dig an offal pit", "dig a carcass pit", "carcass disposal site", "work on the offal pit"})
+            assertEquals("UNKNOWN", classify(phrase), phrase);
+        assertEquals("HARVEST_CARCASS", classify("butcher the carcass"));
+        assertEquals("BUILD_LATRINE", classify("dig a refuse pit"));
+    }
+
     @Test void aSaltLickIsBuiltNotGathered() throws Exception {
         for (String phrase : new String[]{"set out a salt lick", "build a salt lick", "raise a salt lick", "work on the salt lick"})
             assertEquals("UNKNOWN", classify(phrase), phrase);

@@ -629,6 +629,27 @@ public class WildlifeEncounterService {
      * own (both in {@link WildlifeSimulationService}'s tick). Mirrors {@link #recordDisturbance}; a no-op with no
      * chunk or no amount, so a camp only grows foul when it is actually fouled.
      */
+    /** Refuse one butchering leaves on the ground (#218). The heaviest single source there is. */
+    public static final int BUTCHERY_REFUSE = 15;
+    /** What still reaches the ground where an offal pit takes the rest (#108, V331): the blood and the trimmings. */
+    public static final int BUTCHERY_REFUSE_INTO_A_PIT = 3;
+
+    /**
+     * How much refuse butchering here leaves (#108, V331). Where a sound offal pit stands the guts and scraps go
+     * straight into it and are covered, so the camp ground takes a fifth of it. A latrine is not this: it drains
+     * refuse already on the ground over hours, and does not stop butchery fouling the camp in the first place.
+     */
+    @Transactional(readOnly = true)
+    public int butcheryRefuse(UUID chunk) {
+        if (chunk == null) return BUTCHERY_REFUSE;
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
+            "WHERE w.current_location_id=? AND ck.takes_offal AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
+            "  AND w.lifecycle_state='ACTIVE')", Boolean.class, chunk))
+            ? BUTCHERY_REFUSE_INTO_A_PIT : BUTCHERY_REFUSE;
+    }
+
     @Transactional
     public void recordRefuse(UUID chunk, int amount, Instant at) {
         if (chunk == null || amount <= 0) return;
