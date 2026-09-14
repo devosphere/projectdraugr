@@ -49,6 +49,19 @@ class IntentClassificationRegressionTest {
         return ((Enum<?>) m.invoke(svc, text)).name();
     }
 
+    /**
+     * #77 V329: the three water structures are built through the assembly matcher, which only runs when no Java
+     * intent claims the phrase first. "water" would be taken by FILTER_WATER/COLLECT_WATER, "a bed" by MAKE_BED.
+     */
+    @Test void waterStructureBuildPhrasesReachTheAssemblyMatcher() throws Exception {
+        for (String phrase : new String[]{
+                "build a settling basin", "dig a settling basin", "work on the settling basin",
+                "build a sand filter bed", "dig a sand filter bed", "lay a sand filter bed", "work on the sand filter bed",
+                "build a spring box", "wall the spring head", "protect the spring head", "cover the spring head", "work on the spring box"}) {
+            assertEquals("UNKNOWN", classify(phrase), phrase);
+        }
+    }
+
     // --- V57 alignment: a large batch of material processes exposed the intent
     // --- classifier's naive substring matching. "salt the fish" is not fishing,
     // --- "carve a spoon" is not marking, "meat" is not "eat", "knap" is not "nap".

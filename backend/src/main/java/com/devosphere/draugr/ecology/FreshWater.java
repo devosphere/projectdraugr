@@ -54,6 +54,15 @@ public final class FreshWater {
     public static String sites() { return sites(""); }
 
     /**
+     * Only a spring — water that rises from below rather than running in over the ground (#77, V329). A walled spring
+     * head keeps a fouled camp out of it; a stream carries what is thrown into it and no wall helps.
+     */
+    public static String springs(String alias) {
+        String prefix = alias == null || alias.isEmpty() ? "" : alias + ".";
+        return "(" + prefix + "site_kind ILIKE '%" + KINDS[0] + "%')";
+    }
+
+    /**
      * The fresh-water sites standing on one chunk ({@code ?} = chunk id), open water first: a stream, reach, pond or
      * lake is what a person drinks from or fishes, and a spring or a ford beside it is not the name they would use.
      * RESOURCE sites only — "River fishing run" is a wildlife site that happens to contain the word, not a water.
