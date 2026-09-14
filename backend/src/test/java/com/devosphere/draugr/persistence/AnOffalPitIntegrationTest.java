@@ -68,15 +68,23 @@ class AnOffalPitIntegrationTest {
         jdbc.update("DELETE FROM chunk_refuse WHERE chunk_id=?", chunk);
     }
 
-    /** A carcass lying here with meat enough for several butcherings, so it is never left spent and active. */
+    /**
+     * A red deer carcass lying here with meat enough for several butcherings, so it is never left spent and active.
+     * The herd it came from is made here too: a fresh world seeds only a handful of populations, and which ones is
+     * not something a test should lean on.
+     */
     private void carcassAt(UUID chunk, Timestamp at) {
-        Map<String, Object> pop = jdbc.queryForMap(
-            "SELECT wp.id, wp.species_key FROM wildlife_population wp JOIN wildlife_species ws ON ws.species_key=wp.species_key " +
-            "WHERE ws.kingdom_class <> 'MONSTRUM' AND ws.movement_class <> 'AQUATIC' AND NOT ws.toxic ORDER BY wp.species_key LIMIT 1");
+        UUID worldId = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, chunk);
+        UUID site = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE','Deer range',?)", site, chunk);
+        jdbc.update("INSERT INTO ecology_site (id,world_id,chunk_id,site_category,site_kind,baseline_abundance) VALUES (?,?,?,'WILDLIFE','Deer range',30)", site, worldId, chunk);
+        UUID pop = UUID.randomUUID();
+        jdbc.update("INSERT INTO wildlife_population (id,site_id,species_key,ecological_role,activity_cycle,population_count,carrying_capacity,behavior_state,last_simulated_at) " +
+                "VALUES (?,?,'red_deer','HERBIVORE','DIURNAL',4,4,'FORAGING',?)", pop, site, at);
         UUID carcass = UUID.randomUUID();
-        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CARCASS','Carcass',?)", carcass, chunk);
-        jdbc.update("INSERT INTO wildlife_carcass (object_id,source_population_id,species_key,remaining_meat_units,hide_available,killed_by_action_id,died_at) VALUES (?,?,?,6,true,?,?)",
-            carcass, pop.get("id"), pop.get("species_key"), UUID.randomUUID(), at);
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CARCASS','Red deer carcass',?)", carcass, chunk);
+        jdbc.update("INSERT INTO wildlife_carcass (object_id,source_population_id,species_key,remaining_meat_units,hide_available,killed_by_action_id,died_at) VALUES (?,?,'red_deer',6,true,?,?)",
+            carcass, pop, UUID.randomUUID(), at);
     }
 
     private UUID pitAt(UUID chunk, Timestamp at) {
