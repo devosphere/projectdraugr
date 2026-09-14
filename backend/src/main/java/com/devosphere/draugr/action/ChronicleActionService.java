@@ -2114,7 +2114,7 @@ public class ChronicleActionService {
     /** A spring on this ground, walled and covered by a standing structure that shields it (#77, V329). */
     private boolean springShielded(UUID location) {
         return Boolean.TRUE.equals(jdbc.queryForObject(
-            "SELECT EXISTS(SELECT 1 FROM ecology_site es WHERE es.chunk_id=? AND es.site_kind ILIKE '%spring%') " +
+            "SELECT EXISTS(SELECT 1 FROM ecology_site es WHERE es.chunk_id=? AND " + com.devosphere.draugr.ecology.FreshWater.springs("es") + ") " +
             "AND EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
             "JOIN construction_kind ck ON ck.project_kind=cp.project_kind WHERE w.current_location_id=? AND ck.shields_spring " +
             "AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')", Boolean.class, location, location));

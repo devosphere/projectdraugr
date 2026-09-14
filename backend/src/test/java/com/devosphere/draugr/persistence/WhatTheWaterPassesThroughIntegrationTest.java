@@ -141,6 +141,8 @@ class WhatTheWaterPassesThroughIntegrationTest {
         UUID world = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, chunk);
         jdbc.update("DELETE FROM ecology_site WHERE chunk_id=? AND " + com.devosphere.draugr.ecology.FreshWater.sites(), chunk);
         UUID spring = UUID.randomUUID();
+        // An ecology site is a world object first (ecology_site_id_fkey).
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE','Headwater spring',?)", spring, chunk);
         jdbc.update("INSERT INTO ecology_site (id,world_id,chunk_id,site_category,site_kind,baseline_abundance) VALUES (?,?,?,'RESOURCE','Headwater spring',50)", spring, world, chunk);
         standAt(chronicle, chunk);
         refuse(chunk, 85);
