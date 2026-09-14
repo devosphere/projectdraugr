@@ -59,7 +59,15 @@ public class FoodPreservationService {
             "safe_until = safe_until + make_interval(hours => (CASE " +
             "  WHEN EXISTS (SELECT 1 FROM world_object food JOIN world_object body ON body.id=food.current_owner_id " +
             "    JOIN chunk_refuse cr ON cr.chunk_id=body.current_location_id " +
-            "    WHERE food.id=f.object_id AND cr.refuse_level >= 50) " +
+            "    WHERE food.id=f.object_id AND cr.refuse_level >= 50 " +
+            // A mouser on the ground (#79, V327). The vermin a fouled camp draws are exactly what a kept cat or ferret
+            // hunts: a tamed pest hunter living where the keeper stands keeps them off the stores, so the food does not
+            // lose its span to them — the refuse still costs everything else it costs. What counts as one is
+            // pest_hunter, read here rather than named.
+            "      AND NOT EXISTS (SELECT 1 FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id=wb.population_id " +
+            "        JOIN ecology_site es ON es.id=wp.site_id JOIN pest_hunter ph ON ph.species_key=wp.species_key " +
+            "        WHERE wb.chronicle_id=body.id AND wb.bond_stage='TAMED' AND wp.population_count > 0 " +
+            "          AND es.chunk_id=body.current_location_id)) " +
             "  THEN -FLOOR(EXTRACT(EPOCH FROM (?::timestamptz - f.pest_checked_at))/3600.0 * 2)::int " +
             "  WHEN EXISTS (SELECT 1 FROM world_object food JOIN world_object body ON body.id=food.current_owner_id " +
             "    JOIN construction_project cp ON cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
