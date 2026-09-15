@@ -49,19 +49,64 @@ export const SITE_FAMILIES = [
 ] as const;
 export type SiteFamily = (typeof SITE_FAMILIES)[number];
 
-/** Registry lifecycle. TOPOLOGY_GATED entries are kept but only surface once their gate exists. */
-export const LIFECYCLE_STATES = ['ACTIVE', 'TOPOLOGY_GATED', 'DEPRECATED'] as const;
+/**
+ * Registry lifecycle. TOPOLOGY_GATED entries are kept but only surface once their gate exists. PENDING_REVIEW is
+ * where every newly generated or replaced image starts (#241): it cannot become ACTIVE until its review is done.
+ */
+export const LIFECYCLE_STATES = ['ACTIVE', 'TOPOLOGY_GATED', 'DEPRECATED', 'PENDING_REVIEW'] as const;
 export type LifecycleState = (typeof LIFECYCLE_STATES)[number];
+
+/**
+ * The neutral-backdrop review checklist (#241, docs/systems/backdrop-review-contract.md). Every item is a
+ * reviewer's statement about the image, and an APPROVED review has all of them true.
+ */
+export const REVIEW_CHECKLIST = [
+  'noLivingCreatures',            // no animal, person, monster or insect visible anywhere in the frame
+  'onlyNonlivingHabitatEvidence', // tracks, dens, nests, bones, droppings are allowed; the creature itself is not
+  'smoothModernRendering',        // painterly/photographic, not pixel art, not low-poly, no visible artefacts
+  'noGridTilingOrPixelation',     // no repeating tiles, grids, seams or upscaled pixels
+  'widescreenDimensions',         // ~16:9, at least WIDESCREEN.minWidth × WIDESCREEN.minHeight
+  'uiSafeComposition',            // the defining geography survives the header, Body HUD, narration and composer
+] as const;
+export type ReviewChecklistItem = (typeof REVIEW_CHECKLIST)[number];
+
+/**
+ * APPROVED: reviewed against the full checklist. PENDING: not yet reviewed. LEGACY: ACTIVE before this contract
+ * existed, on trust — allowed only for keys in scripts/backdrops/legacy-unreviewed.json, which may only shrink.
+ */
+export const REVIEW_STATES = ['PENDING', 'APPROVED', 'LEGACY'] as const;
+export type ReviewState = (typeof REVIEW_STATES)[number];
+
+export interface BackdropReview {
+  state: ReviewState;
+  checklist: Record<ReviewChecklistItem, boolean>;
+  /** Who completed the review. Required for APPROVED. */
+  reviewedBy: string | null;
+  /** ISO date the review was completed. Required for APPROVED. */
+  reviewedAt: string | null;
+}
+
+/** What an ACTIVE backdrop must measure to count as widescreen. */
+export const WIDESCREEN = { minAspect: 1.75, maxAspect: 1.8, minWidth: 1600, minHeight: 900 } as const;
 
 /** Time-of-day bands an image is genuinely tied to. Empty = eligible in every band. */
 export const TIME_BANDS = ['DAWN', 'DAY', 'DUSK', 'NIGHT'] as const;
 export type TimeBand = (typeof TIME_BANDS)[number];
+
+/** An earlier image this record replaced. Replacement appends; it never overwrites (#241). */
+export interface SupersededVersion {
+  version: number;
+  contentHash: string;
+  retiredAt: string;
+}
 
 export interface BackdropProvenance {
   /** Generator that produced the asset (kept for attribution / regeneration). */
   generator: string;
   /** The classification family the inventory pass placed it in (audit trail). */
   family: SiteFamily;
+  /** Every earlier image under this key, oldest first. A version above 1 must name the one before it. */
+  supersedes: SupersededVersion[];
 }
 
 export interface BackdropRecord {
@@ -106,6 +151,8 @@ export interface BackdropRecord {
   bytes: number;
 
   provenance: BackdropProvenance;
+  /** The neutral-backdrop review (#241). ACTIVE requires APPROVED, or LEGACY for a frozen pre-contract key. */
+  review: BackdropReview;
 }
 
 export interface BackdropManifest {

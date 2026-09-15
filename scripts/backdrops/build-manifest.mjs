@@ -27,8 +27,48 @@ const BASE_BIOMES = ['TEMPERATE_FOREST', 'WETLAND', 'GRASSLAND', 'HIGHLAND', 'MO
 const PROXIMITY_CLASSES = ['EXACT_SITE', 'ADJACENT_VISIBLE', 'ECOTONE', 'REGIONAL'];
 const SITE_FAMILIES = ['BASE_BIOME', 'ECOTONE', 'FRESHWATER', 'COAST', 'KARST', 'GEOLOGICAL',
   'RESOURCE_SITE', 'RUIN', 'FLORA_SITE', 'FAUNA_RANGE', 'MONSTER_TERRITORY', 'NATIVE_TERRITORY', 'DOMESTICATION'];
-const LIFECYCLE_STATES = ['ACTIVE', 'TOPOLOGY_GATED', 'DEPRECATED'];
+const LIFECYCLE_STATES = ['ACTIVE', 'TOPOLOGY_GATED', 'DEPRECATED', 'PENDING_REVIEW'];
 const PROXIMITY_WEIGHT = { EXACT_SITE: 40, ADJACENT_VISIBLE: 30, ECOTONE: 20, REGIONAL: 10 };
+
+// --- the neutral-backdrop review contract (#241, docs/systems/backdrop-review-contract.md) ---------------------
+// Kept in step with manifest.schema.ts. An image enters as PENDING_REVIEW and cannot become ACTIVE until every
+// checklist item is true and the review names who did it and when. The 151 images that were ACTIVE before the
+// contract existed are LEGACY: ACTIVE on trust, pending the #240 creature audit, and only while their key is in the
+// frozen legacy list — which a new image never joins.
+export const REVIEW_CHECKLIST = ['noLivingCreatures', 'onlyNonlivingHabitatEvidence', 'smoothModernRendering',
+  'noGridTilingOrPixelation', 'widescreenDimensions', 'uiSafeComposition'];
+const REVIEW_STATES = ['PENDING', 'APPROVED', 'LEGACY'];
+const WIDESCREEN = { minAspect: 1.75, maxAspect: 1.8, minWidth: 1600, minHeight: 900 };
+const LEGACY_PATH = join(HERE, 'legacy-unreviewed.json');
+
+/** The frozen set of pre-contract keys allowed to stay ACTIVE as LEGACY. */
+export function loadLegacyKeys() {
+  return new Set(JSON.parse(readFileSync(LEGACY_PATH, 'utf8')).keys);
+}
+
+function pendingReview() {
+  return { state: 'PENDING', checklist: Object.fromEntries(REVIEW_CHECKLIST.map(k => [k, false])), reviewedBy: null, reviewedAt: null };
+}
+
+/**
+ * Carry a record's history across a regeneration. The generator knows the image; only the prior manifest knows its
+ * review and what it replaced, so regenerating must merge, never overwrite (#241):
+ *   - a new image starts PENDING_REVIEW with a blank checklist;
+ *   - an unchanged image keeps its lifecycle, review, creature-free statement and supersedes history;
+ *   - a changed image appends the old version to supersedes and goes back to PENDING_REVIEW, because a review of
+ *     the old picture says nothing about the new one.
+ */
+export function mergeRecord(prior, fresh, today = new Date().toISOString().slice(0, 10)) {
+  if (!prior) return fresh;
+  const history = (prior.provenance && Array.isArray(prior.provenance.supersedes)) ? prior.provenance.supersedes : [];
+  if (prior.contentHash === fresh.contentHash) {
+    return { ...fresh, lifecycle: prior.lifecycle, creatureFree: prior.creatureFree, review: prior.review,
+      provenance: { ...fresh.provenance, supersedes: history } };
+  }
+  return { ...fresh, lifecycle: 'PENDING_REVIEW', creatureFree: false, review: pendingReview(),
+    provenance: { ...fresh.provenance,
+      supersedes: [...history, { version: prior.version, contentHash: prior.contentHash, retiredAt: today }] } };
+}
 
 // The base-biome anchor backdrop each biome falls back to. `forest` is the global root (fallback null).
 const ANCHOR = {
@@ -271,7 +311,8 @@ function buildRecords() {
       filename,
       version: Number(ver),
       label: titleCase(slug),
-      lifecycle: 'ACTIVE',
+      // Nothing enters ACTIVE by being generated (#241): a fresh image waits for its review.
+      lifecycle: 'PENDING_REVIEW',
       biomes,
       siteFamily: family,
       contextKeys: contextKeysFor(slug, family),
@@ -280,7 +321,8 @@ function buildRecords() {
       seasons: merged.seasons || [],
       weather: merged.weather || [],
       showBeforeDiscovery: merged.showBeforeDiscovery !== undefined ? merged.showBeforeDiscovery : base.showBeforeDiscovery,
-      creatureFree: true,
+      // A statement a reviewer makes, not one the generator can: false until the checklist says otherwise.
+      creatureFree: false,
       fallbackKey,
       precedenceWeight: PROXIMITY_WEIGHT[proximity],
       contentHash: createHash('sha256').update(buf).digest('hex'),
@@ -288,13 +330,17 @@ function buildRecords() {
       height: dim.height,
       aspectRatio: Math.round((dim.width / dim.height) * 1000) / 1000,
       bytes: buf.length,
-      provenance: { generator: 'playthrough-backdrop-gen', family },
+      provenance: { generator: 'playthrough-backdrop-gen', family, supersedes: [] },
+      review: pendingReview(),
     };
   });
 }
 
 function generate() {
-  const backdrops = buildRecords();
+  // Merge over the prior manifest so reviews and replacement history survive a regeneration (#241).
+  let prior = new Map();
+  try { prior = new Map(loadManifest().backdrops.map(b => [b.backdropKey, b])); } catch { /* first generation */ }
+  const backdrops = buildRecords().map(fresh => mergeRecord(prior.get(fresh.backdropKey), fresh));
   const manifest = { schemaVersion: SCHEMA_VERSION, assetRoot: ASSET_ROOT_REL, backdrops };
   writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2) + '\n');
   console.log(`Wrote ${backdrops.length} records -> ${relative(REPO, MANIFEST_PATH).replace(/\\/g, '/')}`);
@@ -306,8 +352,9 @@ function loadManifest() {
 
 // Pure structural validation — everything provable from the manifest plus the set of filenames on
 // disk, without reading image bytes. Exported so the negative-test harness can exercise it directly.
-export function validateManifest(manifest, onDiskFilenames) {
+export function validateManifest(manifest, onDiskFilenames, legacyKeys = loadLegacyKeys()) {
   const errors = [];
+  errors.push(...validateReviewPolicy(manifest, legacyKeys));
   if (manifest.schemaVersion !== SCHEMA_VERSION) errors.push(`schemaVersion ${manifest.schemaVersion} != ${SCHEMA_VERSION}`);
 
   const onDisk = [...onDiskFilenames].sort();
@@ -366,6 +413,65 @@ export function validateManifest(manifest, onDiskFilenames) {
     }
   }
 
+  return errors;
+}
+
+/**
+ * The #241 review and provenance policy, on its own so each rule can be read and tested in one place.
+ *   - every record carries a review with every checklist item stated;
+ *   - ACTIVE needs an APPROVED review (all items true, a reviewer and a date) or a LEGACY one on a frozen key;
+ *   - a creature-free claim needs the reviewer to have said so, unless the record is LEGACY;
+ *   - ACTIVE images are widescreen;
+ *   - a replaced image keeps a record of what it replaced, and a replaced image is never LEGACY.
+ */
+export function validateReviewPolicy(manifest, legacyKeys) {
+  const errors = [];
+  const keys = new Set(manifest.backdrops.map(b => b.backdropKey));
+  for (const k of legacyKeys) if (!keys.has(k)) errors.push(`legacy list names a backdrop that no longer exists: ${k}`);
+
+  for (const b of manifest.backdrops) {
+    const at = `[${b.backdropKey}]`;
+    const r = b.review;
+    if (!r || typeof r !== 'object') { errors.push(`${at} has no review`); continue; }
+    if (!REVIEW_STATES.includes(r.state)) errors.push(`${at} invalid review state: ${r.state}`);
+    const checklist = r.checklist || {};
+    for (const item of REVIEW_CHECKLIST) {
+      if (typeof checklist[item] !== 'boolean') errors.push(`${at} missing review checklist item: ${item}`);
+    }
+
+    if (r.state === 'APPROVED') {
+      for (const item of REVIEW_CHECKLIST) if (checklist[item] !== true) errors.push(`${at} APPROVED with an unchecked item: ${item}`);
+      if (!r.reviewedBy || !String(r.reviewedBy).trim()) errors.push(`${at} APPROVED without a reviewer`);
+      if (!/^\d{4}-\d{2}-\d{2}/.test(r.reviewedAt || '')) errors.push(`${at} APPROVED without a review date`);
+    }
+    if (r.state === 'LEGACY') {
+      if (!legacyKeys.has(b.backdropKey)) errors.push(`${at} LEGACY review on a key that is not in the frozen legacy list`);
+      if (b.version !== 1) errors.push(`${at} a replaced image cannot stay LEGACY — review the new one`);
+    }
+
+    if (b.lifecycle === 'ACTIVE' && r.state !== 'APPROVED' && r.state !== 'LEGACY') {
+      errors.push(`${at} ACTIVE without a completed review (${r.state})`);
+    }
+    if (b.creatureFree === true && r.state !== 'LEGACY' && checklist.noLivingCreatures !== true) {
+      errors.push(`${at} claims creatureFree but no reviewer checked noLivingCreatures`);
+    }
+
+    if (b.lifecycle === 'ACTIVE' && !(b.aspectRatio >= WIDESCREEN.minAspect && b.aspectRatio <= WIDESCREEN.maxAspect
+        && b.width >= WIDESCREEN.minWidth && b.height >= WIDESCREEN.minHeight)) {
+      errors.push(`${at} ACTIVE backdrop is not widescreen (${b.width}x${b.height}, ${b.aspectRatio})`);
+    }
+
+    const history = b.provenance && b.provenance.supersedes;
+    if (!Array.isArray(history)) { errors.push(`${at} provenance.supersedes must be a list`); continue; }
+    for (const h of history) {
+      if (!Number.isInteger(h.version) || h.version >= b.version) errors.push(`${at} supersedes entry version ${h.version} is not earlier than ${b.version}`);
+      if (!/^[0-9a-f]{64}$/.test(h.contentHash || '')) errors.push(`${at} supersedes entry has a bad contentHash`);
+      if (h.contentHash === b.contentHash) errors.push(`${at} supersedes entry is the current image`);
+    }
+    if (b.version > 1 && !history.some(h => h.version === b.version - 1)) {
+      errors.push(`${at} version ${b.version} replaced an image but keeps no record of version ${b.version - 1}`);
+    }
+  }
   return errors;
 }
 
