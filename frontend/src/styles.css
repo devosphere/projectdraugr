@@ -116,3 +116,8 @@ button:disabled { opacity: .6; cursor: wait; }.error { padding: 1rem; color: #ff
 .resolving-hourglass { font-size: 4rem; line-height: 1; filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.6)); animation: hourglass-turn 1.6s ease-in-out infinite; }
 @keyframes hourglass-turn { 0% { transform: rotate(0deg); } 50% { transform: rotate(180deg); } 100% { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .resolving-hourglass { animation: hourglass-fade 1.6s ease-in-out infinite; } @keyframes hourglass-fade { 0%, 100% { opacity: .5; } 50% { opacity: 1; } } }
+/* #239: a new scene fades in over the old one, beneath the vignette and every panel, and never catches a click. */
+.scene-fade { position: absolute; inset: 0; z-index: -2; pointer-events: none; background-position: center; background-size: cover; animation: scene-in .7s ease-out both; }
+@keyframes scene-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .scene-fade { animation: none; } }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
