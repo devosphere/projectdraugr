@@ -67,8 +67,9 @@ expect('schema version mismatch', m => { m.schemaVersion = 99; }, 'schemaVersion
 
 // 3. the #241 review and provenance contract — each isolates one way an image could go live unreviewed
 const approve = b => {
-  b.review = { state: 'APPROVED', checklist: Object.fromEntries(REVIEW_CHECKLIST.map(k => [k, true])),
+  b.review = { state: 'APPROVED', findings: [], checklist: Object.fromEntries(REVIEW_CHECKLIST.map(k => [k, true])),
     reviewedBy: 'reviewer', reviewedAt: '2026-09-14' };
+  if (b.lifecycle === 'QUARANTINED') b.lifecycle = 'ACTIVE';
   b.creatureFree = true;
   return b;
 };
@@ -91,7 +92,8 @@ expect('a new image claiming LEGACY', m => {
   for (const o of m.backdrops) if (o.fallbackKey === oldKey) o.fallbackKey = b.backdropKey;
 }, 'not in the frozen legacy list');
 expect('a replaced image staying LEGACY', m => {
-  const b = m.backdrops[6]; b.version = 2;
+  // The first LEGACY record, not a fixed index: the #240 audit quarantined some records out of LEGACY.
+  const b = m.backdrops.find(x => x.review.state === 'LEGACY'); b.version = 2;
   b.provenance.supersedes = [{ version: 1, contentHash: 'a'.repeat(64), retiredAt: '2026-09-14' }];
 }, 'cannot stay LEGACY');
 expect('creature-free claimed without the reviewer saying so', m => {
@@ -111,6 +113,38 @@ expect('legacy list naming a deleted backdrop', m => {
   m.backdrops.splice(gone, 1);
   return DISK.filter(f => m.backdrops.some(b => b.filename === f));
 }, 'no longer exists');
+
+// 3b. the #240 audit — a creature on screen, an audit that approves itself, and a quarantine a fallback walks around
+const creature = { issue: 'CREATURE', notes: 'a wolf in the clearing', disposition: 'QUARANTINE', source: 'AUTOMATED_VISION', recordedAt: '2026-09-15' };
+const firstQuarantined = m => m.backdrops.find(b => b.lifecycle === 'QUARANTINED');
+const firstShown = m => m.backdrops.find(b => b.lifecycle === 'ACTIVE' && b.review.state === 'LEGACY');
+expect('every audited creature is actually quarantined', m => {
+  const b = firstQuarantined(m); b.lifecycle = 'ACTIVE';
+}, 'must be QUARANTINED');
+expect('a creature finding on a shown image', m => {
+  const b = firstShown(m); b.review.findings.push({ ...creature });
+}, 'unresolved CREATURE finding');
+expect('an ambiguous finding on a shown image', m => {
+  const b = firstShown(m); b.review.findings.push({ ...creature, issue: 'AMBIGUOUS', disposition: 'CREATOR_REVIEW' });
+}, 'unresolved AMBIGUOUS finding');
+expect('automated vision approving', m => {
+  const b = approve(firstShown(m)); b.review.reviewedBy = 'AUTOMATED_VISION';
+}, 'only a person approves');
+expect('approved over an unresolved creature', m => {
+  const b = approve(firstShown(m)); b.review.findings = [{ ...creature }]; b.lifecycle = 'QUARANTINED';
+}, 'APPROVED over an unresolved CREATURE');
+expect('flagged with no reason', m => { const b = firstQuarantined(m); b.review.findings = []; }, 'FLAGGED with no finding');
+expect('findings that are not a list', m => { firstShown(m).review.findings = null; }, 'review.findings must be a list');
+expect('a finding with no notes', m => { firstShown(m).review.findings[0].notes = ''; }, 'finding has no notes');
+expect('a finding with an invented issue', m => { firstShown(m).review.findings[0].issue = 'LOOKS_OFF'; }, 'invalid issue');
+expect('a quarantined image kept in the legacy list', m => {
+  const b = firstQuarantined(m); LEGACY.add(b.backdropKey);
+}, 'still in the legacy list');
+LEGACY.clear(); for (const k of loadLegacyKeys()) LEGACY.add(k);
+expect('a quarantined image claiming creature-free', m => { firstQuarantined(m).creatureFree = true; }, 'yet claims creatureFree');
+expect('resolution falling back onto a quarantined image', m => {
+  const q = firstQuarantined(m), b = firstShown(m); b.fallbackKey = q.backdropKey;
+}, 'falls back to a QUARANTINED backdrop');
 
 // A properly reviewed replacement is accepted: the contract admits good work, it does not only refuse.
 {

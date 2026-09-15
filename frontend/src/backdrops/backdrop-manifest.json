@@ -38,6 +38,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "No animal visible. Rock faces and grass carry a faceted mosaic texture artefact across the whole frame, which reads as tiling/pixel noise at full size.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -85,6 +94,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "No animal visible. Boulders, scree and water carry the same faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -132,6 +150,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Ruined stone circle and arches under mountains; nothing alive, clean rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -179,6 +206,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Tidal shore with wooded islets; no birds or animals visible.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -228,6 +264,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Known corrected case: snow den mouth with a line of paw tracks, and no fox. Habitat evidence only.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -276,6 +321,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Dark rock overhang and worn path; no creature or silhouette visible.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -293,7 +347,7 @@
       "filename": "playthrough-aurochs-open-herd-range-v1.png",
       "version": 1,
       "label": "Aurochs Open Herd Range",
-      "lifecycle": "ACTIVE",
+      "lifecycle": "QUARANTINED",
       "biomes": [
         "GRASSLAND"
       ],
@@ -310,7 +364,7 @@
       "seasons": [],
       "weather": [],
       "showBeforeDiscovery": true,
-      "creatureFree": true,
+      "creatureFree": false,
       "fallbackKey": "plains",
       "precedenceWeight": 10,
       "contentHash": "fa56b3332be77b6cc391fcc1fb622fdbe60a00e43ed8cd97e05e45706b6f564b",
@@ -324,7 +378,16 @@
         "supersedes": []
       },
       "review": {
-        "state": "LEGACY",
+        "state": "FLAGGED",
+        "findings": [
+          {
+            "issue": "CREATURE",
+            "notes": "A line of dark grazing animals is visible in the far right distance at the forest edge. Also mild faceted texture on foreground stones.",
+            "disposition": "QUARANTINE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -372,6 +435,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "No animal visible; sett entrances only. Leaf litter and moss carry a heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -421,6 +493,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "No bats or insects visible. Every cave surface carries the faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -468,6 +549,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Den mouth under a fallen trunk, no bear. Bark, boulders and leaf litter carry heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -515,6 +605,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Lodge, dam and gnawed stumps in a misty pond; no beaver. Habitat evidence only.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -563,6 +662,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Bramble thicket with ripe fruit; nothing alive besides plants.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -610,6 +718,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Muddy wallow in a clearing, no boar. Mud and leaf litter carry the faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -627,7 +744,7 @@
       "filename": "playthrough-bog-amphibian-nursery-v1.png",
       "version": 1,
       "label": "Bog Amphibian Nursery",
-      "lifecycle": "ACTIVE",
+      "lifecycle": "QUARANTINED",
       "biomes": [
         "WETLAND"
       ],
@@ -643,7 +760,7 @@
       "seasons": [],
       "weather": [],
       "showBeforeDiscovery": true,
-      "creatureFree": true,
+      "creatureFree": false,
       "fallbackKey": "wetland",
       "precedenceWeight": 40,
       "contentHash": "70bf73118b01a7f8efab1a9d32cc9fa5463039a608896bdebde27dbc99d7c607",
@@ -657,7 +774,16 @@
         "supersedes": []
       },
       "review": {
-        "state": "LEGACY",
+        "state": "FLAGGED",
+        "findings": [
+          {
+            "issue": "AMBIGUOUS",
+            "notes": "Small dark squiggle shapes in the clear water (centre and centre-left) could read as tadpoles. Needs a human look at full resolution.",
+            "disposition": "CREATOR_REVIEW",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -707,6 +833,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Rust-streaked bog margin under rain; no animals. Cracked mud texture reads as natural.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -756,6 +891,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Misty bog with herbs and pools; nothing alive besides plants.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -804,6 +948,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Misty bog mound, no creature. Grass, moss and water are covered by a net-like faceted texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -851,6 +1004,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Collapsed stone aqueduct across a valley; nothing alive, clean rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -898,6 +1060,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Earth-roofed store rooms with storage jars and broken sherds; nothing alive.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -946,6 +1117,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Cave mouth with scattered bones (habitat evidence), no bear. Rock and ground carry heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -994,6 +1174,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Dark cave mouth among boulders, no creature. Every rock surface carries heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -1042,6 +1231,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Cave with huge footprints, rib bones and stone cairns (habitat evidence), no troll. Faceted mosaic texture on rock and mud.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -1090,6 +1288,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Empty hide-shelter camp with trough and gate; no people or centaurs. Stones, grass and hides carry faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -1137,6 +1344,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Red clay bank beside a forest stream; nothing alive. Painterly but clean.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -1186,6 +1402,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Quartz points in a rock cleft; nothing alive. The host rock walls carry the faceted mosaic texture artefact (distinct from the crystals themselves).",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -1232,6 +1457,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Rocky shore with sea stacks; no birds or animals visible. Foreground boulders carry the faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -1280,6 +1514,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Dune grass above a pebble beach; nothing alive. Boulders on the dune carry the faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -1327,6 +1570,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Broken stone causeway across a marsh towards a ruined hill-fort; nothing alive, clean rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -1374,6 +1626,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Green-stained copper outcrop on a mountainside; nothing alive. Rock surfaces carry the faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -1422,6 +1683,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Clear stony stream shallows; no crayfish or fish visible. Painterly, clean.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -1472,6 +1742,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Moonlit meadow at a forest edge; nothing alive visible.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -1489,7 +1768,7 @@
       "filename": "playthrough-crocodilian-river-ambush-bank-v1.png",
       "version": 1,
       "label": "Crocodilian River Ambush Bank",
-      "lifecycle": "ACTIVE",
+      "lifecycle": "QUARANTINED",
       "biomes": [
         "WETLAND"
       ],
@@ -1506,7 +1785,7 @@
       "seasons": [],
       "weather": [],
       "showBeforeDiscovery": true,
-      "creatureFree": true,
+      "creatureFree": false,
       "fallbackKey": "wetland",
       "precedenceWeight": 30,
       "contentHash": "25a2bcb1af9dcd8299ecda026e8fba8eeb1b2e2b77a56e2ae553a20fa40727bb",
@@ -1520,7 +1799,16 @@
         "supersedes": []
       },
       "review": {
-        "state": "LEGACY",
+        "state": "FLAGGED",
+        "findings": [
+          {
+            "issue": "AMBIGUOUS",
+            "notes": "A small ridged shape breaking the surface (lower centre-left) and the ridged log at the bank can each read as a crocodilian. Grass carries the faceted texture artefact too.",
+            "disposition": "CREATOR_REVIEW",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -1569,6 +1857,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Dark misty peat bog with hummocks and stumps; nothing alive visible.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -1618,6 +1915,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Green forest pool with fallen logs; no fish or animals visible.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -1666,6 +1972,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Open storm sea from a rock ledge, no creature. Rock and sea surface carry the faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -1713,6 +2028,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Forest edge over a valley with antler-stripped bark (habitat evidence), no deer. Ground, stones and foliage carry the faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -1760,6 +2084,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Old cedar forest with ferns, nothing alive. Leaf litter on the path carries a diamond-faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -1809,6 +2142,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Night forest path with a large skeleton (habitat evidence), no wolves. Heavy faceted mosaic texture on every surface.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -1855,6 +2197,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Empty wattle paddock and shelter, no livestock. Rock and trodden ground carry the faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -1902,6 +2253,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Sunlit juniper scrub, nothing alive. Foreground rocks carry heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -1950,6 +2310,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Dusk forest with claw-scored log (habitat evidence), no creature. Log bark and litter carry faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -1999,6 +2368,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Known corrected case: bare dark soil with fallen maple leaves, no earthworms visible. Clean rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -2047,6 +2425,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Root plants with exposed roots, nothing alive besides plants. Soil and rocks carry faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -2094,6 +2481,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Highland meadow valley, no elk. Grass and rocks carry faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -2141,6 +2537,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Tidal channels in salt grass, no birds visible. Water and mud carry faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -2189,6 +2594,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Overgrown ruined city avenue, nothing alive. Stones, vines and debris carry heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -2237,6 +2651,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Dark misty fen pool among reeds, no creature or figure visible. Mild painterly texture only.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -2284,6 +2707,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Sunlit seed-grass meadow with daisies; nothing alive besides plants. Clean rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -2332,6 +2764,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Stony upland field below peaks, nothing alive. The whole ground surface is covered by heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -2379,6 +2820,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Flooded ruin interior with shelving and fallen stone; ripples only, nothing alive. Clean rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -2428,6 +2878,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Needle mound between roots, no ants visible. Mound, rocks and bark carry faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -2476,6 +2935,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Sunlit forest edge opening onto meadow; nothing alive besides plants. Clean rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -2525,6 +2993,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Stepped rocky path up a wooded slope, nothing alive. Boulders and path carry faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -2572,6 +3049,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Misty lake through conifers, nothing alive. Leaf litter on the shore path carries the diamond-faceted texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -2621,6 +3107,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Forest floor with fallen branches, no rats or birds visible. Leaf litter carries heavy diamond-faceted texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -2638,7 +3133,7 @@
       "filename": "playthrough-forest-spider-den-v1.png",
       "version": 1,
       "label": "Forest Spider Den",
-      "lifecycle": "ACTIVE",
+      "lifecycle": "QUARANTINED",
       "biomes": [
         "TEMPERATE_FOREST"
       ],
@@ -2654,7 +3149,7 @@
       "seasons": [],
       "weather": [],
       "showBeforeDiscovery": true,
-      "creatureFree": true,
+      "creatureFree": false,
       "fallbackKey": "forest",
       "precedenceWeight": 40,
       "contentHash": "43cd906b168a65b5ee99385cf971b40cd9f51115c8df7664103e85a11901e56a",
@@ -2668,7 +3163,16 @@
         "supersedes": []
       },
       "review": {
-        "state": "LEGACY",
+        "state": "FLAGGED",
+        "findings": [
+          {
+            "issue": "AMBIGUOUS",
+            "notes": "Webbed hollow; two dark segmented shapes caught in the webs on the left (around mid-left and lower-left) read as insects or centipedes. Also heavy faceted texture artefact.",
+            "disposition": "CREATOR_REVIEW",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -2715,6 +3219,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Misty old forest with fallen log and stream; nothing alive besides plants. Clean rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -2763,6 +3276,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Mossy forest slope into a sedge swamp; nothing alive besides plants. Only faint texture on the water.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -2810,6 +3332,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Burrow entrances in a root mound, no fox. Foliage and ground carry faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -2827,7 +3358,7 @@
       "filename": "playthrough-giant-hornet-queen-nest-v1.png",
       "version": 1,
       "label": "Giant Hornet Queen Nest",
-      "lifecycle": "ACTIVE",
+      "lifecycle": "QUARANTINED",
       "biomes": [
         "TEMPERATE_FOREST"
       ],
@@ -2844,7 +3375,7 @@
       "seasons": [],
       "weather": [],
       "showBeforeDiscovery": true,
-      "creatureFree": true,
+      "creatureFree": false,
       "fallbackKey": "forest",
       "precedenceWeight": 40,
       "contentHash": "df45c3cc3b03d9762c2e9fe2e34a4757e157f254e7c89b45761fb72254d105c1",
@@ -2858,7 +3389,16 @@
         "supersedes": []
       },
       "review": {
-        "state": "LEGACY",
+        "state": "FLAGGED",
+        "findings": [
+          {
+            "issue": "CREATURE",
+            "notes": "Several hornets clearly visible: in flight upper-left and centre, and crawling on the nest. Also heavy faceted texture artefact.",
+            "disposition": "QUARANTINE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -2906,6 +3446,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Mountain cliff ledge with glassy shards, no creature. Every rock surface carries heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -2956,6 +3505,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Hollow log tunnel with hanging cocoons (habitat evidence), no moths visible. Clean rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -2973,7 +3531,7 @@
       "filename": "playthrough-golden-jackal-scrub-territory-v1.png",
       "version": 1,
       "label": "Golden Jackal Scrub Territory",
-      "lifecycle": "ACTIVE",
+      "lifecycle": "QUARANTINED",
       "biomes": [
         "GRASSLAND"
       ],
@@ -2990,7 +3548,7 @@
       "seasons": [],
       "weather": [],
       "showBeforeDiscovery": true,
-      "creatureFree": true,
+      "creatureFree": false,
       "fallbackKey": "plains",
       "precedenceWeight": 10,
       "contentHash": "9100bcedaea7034c4d881e506caade643af07e2609d9b76ac152ee15e63b8e56",
@@ -3004,7 +3562,16 @@
         "supersedes": []
       },
       "review": {
-        "state": "LEGACY",
+        "state": "FLAGGED",
+        "findings": [
+          {
+            "issue": "CREATURE",
+            "notes": "A jackal stands in the middle distance on the trail (centre), with further animals behind it. Faceted texture on scrub too.",
+            "disposition": "QUARANTINE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -3052,6 +3619,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Meadow pocked with burrow mounds (habitat evidence), no gophers. Mild texture on grass only.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -3101,6 +3677,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Grassy dunes along an empty beach under mountains; no birds or animals. Clean rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -3149,6 +3734,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Tall-grass path, no insects visible. The path and stones carry faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -3197,6 +3791,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Flooded grassland pools below snowy hills; nothing alive besides plants. Clean rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -3245,6 +3848,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Stick nest on a cliff ledge with scattered feathers (habitat evidence), no creature. Every rock surface carries heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -3293,6 +3905,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Broad grass valley towards a lake, no herd visible. Foreground boulders carry faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -3342,6 +3963,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Heath shrubs below peaks, nothing alive besides plants. Shrubs, rocks and slopes carry heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -3391,6 +4021,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Heather slope rising to snowy peaks; nothing alive besides plants. Clean rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -3438,6 +4077,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Mountain tarn in a rocky cirque, no fish or animals. Boulders, scree and slopes carry heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -3484,6 +4132,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Rocky pass looking to misty peaks, nothing alive. Boulders and scree carry faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -3532,6 +4189,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Pyrite-studded rock face on a mountain path, nothing alive. The rock face carries heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -3579,6 +4245,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Rust-stained vein across a mountainside, nothing alive. Every rock surface carries heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -3626,6 +4301,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Stalactite passage with a stream, no bats or creatures visible. Cave walls and floor carry faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -3672,6 +4356,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Cave mouth in a limestone cliff among ferns, nothing alive. The cliff face carries faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -3720,6 +4413,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Pale limestone blocks above a gorge, nothing alive. Blocks and scree carry faceted texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -3737,7 +4439,7 @@
       "filename": "playthrough-locust-damaged-grassland-v1.png",
       "version": 1,
       "label": "Locust Damaged Grassland",
-      "lifecycle": "ACTIVE",
+      "lifecycle": "QUARANTINED",
       "biomes": [
         "GRASSLAND"
       ],
@@ -3753,7 +4455,7 @@
       "seasons": [],
       "weather": [],
       "showBeforeDiscovery": true,
-      "creatureFree": true,
+      "creatureFree": false,
       "fallbackKey": "plains",
       "precedenceWeight": 10,
       "contentHash": "ecf23fbbe52f683847dcc790b164075677ec5e618842822d4fea93ef04d6424a",
@@ -3767,7 +4469,16 @@
         "supersedes": []
       },
       "review": {
-        "state": "LEGACY",
+        "state": "FLAGGED",
+        "findings": [
+          {
+            "issue": "AMBIGUOUS",
+            "notes": "Ground strewn with shed wings (habitat evidence), but small dark specks in the sky (upper centre-left, top centre) may read as flying locusts. Faceted texture on ground too.",
+            "disposition": "CREATOR_REVIEW",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -3815,6 +4526,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Willow islet in a misty pool, nothing alive besides plants. Water, moss and foliage carry heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -3863,6 +4583,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Flattened reed nest with water-filled hollows (habitat evidence), no creature. Every surface carries heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -3910,6 +4639,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Crag and cliff ledge over a valley, nothing alive. Boulders and scree carry faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -3957,6 +4695,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Fungi and bracket shelves around a fallen log in old forest; fungi are not animals, nothing else alive. Clean rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -4005,6 +4752,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Empty drying racks and stone walls at a cave mouth, no people. Every surface carries heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -4022,7 +4778,7 @@
       "filename": "playthrough-nocturnal-firefly-marsh-v1.png",
       "version": 1,
       "label": "Nocturnal Firefly Marsh",
-      "lifecycle": "ACTIVE",
+      "lifecycle": "QUARANTINED",
       "biomes": [
         "WETLAND"
       ],
@@ -4040,7 +4796,7 @@
       "seasons": [],
       "weather": [],
       "showBeforeDiscovery": true,
-      "creatureFree": true,
+      "creatureFree": false,
       "fallbackKey": "wetland",
       "precedenceWeight": 40,
       "contentHash": "c43c53fe84b37ee1061d790cb1609423229986351f6799484805b18caa2cdef2",
@@ -4054,7 +4810,16 @@
         "supersedes": []
       },
       "review": {
-        "state": "LEGACY",
+        "state": "FLAGGED",
+        "findings": [
+          {
+            "issue": "CREATURE",
+            "notes": "Dozens of glowing fireflies across the marsh, in the foreground and distance. Insects are living creatures.",
+            "disposition": "QUARANTINE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -4105,6 +4870,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Known corrected case: moonlit clearing framed by oaks with an empty trunk hollow, no owl. Clean rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -4152,6 +4926,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Glassy black obsidian slope below peaks, nothing alive. The mid-slope scree and far slopes carry the faceted mosaic texture artefact (separate from the natural conchoidal glass).",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -4201,6 +4984,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Red and yellow ochre bank above a stream, nothing alive. The bank, stones and cliff carry faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -4249,6 +5041,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Giant conifers with ferns and fallen logs, nothing alive besides plants. Leaf litter and log bark carry heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -4296,6 +5097,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Calm lake with reeds and a forested far shore, no birds or animals. Foreground boulders carry faceted mosaic texture artefact; the rest is clean.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -4343,6 +5153,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Open sea under cumulus sky; no birds, fish or animals. Clean rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -4360,7 +5179,7 @@
       "filename": "playthrough-ordinary-hornet-nest-v1.png",
       "version": 1,
       "label": "Ordinary Hornet Nest",
-      "lifecycle": "ACTIVE",
+      "lifecycle": "QUARANTINED",
       "biomes": [
         "TEMPERATE_FOREST"
       ],
@@ -4376,7 +5195,7 @@
       "seasons": [],
       "weather": [],
       "showBeforeDiscovery": true,
-      "creatureFree": true,
+      "creatureFree": false,
       "fallbackKey": "forest",
       "precedenceWeight": 40,
       "contentHash": "04ee4848922c97f735c20309c8f76c0c5709144e7e7d6b8a4b22d5d2a505105d",
@@ -4390,7 +5209,16 @@
         "supersedes": []
       },
       "review": {
-        "state": "LEGACY",
+        "state": "FLAGGED",
+        "findings": [
+          {
+            "issue": "AMBIGUOUS",
+            "notes": "Paper nest hanging from a branch over a forest path. A few small dark specks beside the nest (right of it, mid-air) may read as hornets in flight. Heavy faceted texture on boulders and litter too.",
+            "disposition": "CREATOR_REVIEW",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -4438,6 +5266,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Clear forest stream with a holt under a root, no otter. Water, banks and foliage carry heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -4485,6 +5322,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Ivy-clad ruined round tower in forest; nothing alive. Clean rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -4534,6 +5380,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Gravel bar with gold flecks beside a river, nothing alive. Stones and gravel carry faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -4583,6 +5438,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Grassy slope rising to a rocky hill, nothing alive besides plants. Rocks, grass and the hillside carry faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -4629,6 +5493,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Misty wildflower grassland towards a forest edge, nothing alive besides plants. Foreground rocks carry faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -4678,6 +5551,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Flint nodules eroding from a chalk bank below peaks; nothing alive. Conchoidal fracture is the stone itself, not an artefact.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -4727,6 +5609,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Vesicular pumice and basalt scree on a volcanic ridge, nothing alive. The large boulders carry faceted mosaic texture beyond the natural vesicles.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -4773,6 +5664,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Pale rock quarry basin with a green pool and pines; nothing alive. Clean painterly rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -4822,6 +5722,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Stick nest on a cliff ledge over a river valley, no raptor. Rock and path carry heavy faceted mosaic texture artefact; a tiny dark speck at the top edge (right of centre) could be a distant bird.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -4870,6 +5779,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Known corrected case: carcass skeleton and a bleached dead tree on an upland, no raven visible. Foreground boulders carry mild faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -4918,6 +5836,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Pulled reed roots and lily pads at a misty pool, nothing alive besides plants. Mud and water surface carry faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -4967,6 +5894,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Empty stilt huts, woven walkway and hung nets over reed water; no people or reedkin. Clean rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -5015,6 +5951,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Pale layered clay bank beside a forest stream; nothing alive. Painterly, clean.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -5032,7 +5977,7 @@
       "filename": "playthrough-reindeer-highland-range-v1.png",
       "version": 1,
       "label": "Reindeer Highland Range",
-      "lifecycle": "ACTIVE",
+      "lifecycle": "QUARANTINED",
       "biomes": [
         "HIGHLAND"
       ],
@@ -5048,7 +5993,7 @@
       "seasons": [],
       "weather": [],
       "showBeforeDiscovery": true,
-      "creatureFree": true,
+      "creatureFree": false,
       "fallbackKey": "highland",
       "precedenceWeight": 10,
       "contentHash": "05946f298f45c4bfeafa1a010bc9882616d6bdccaae423458c6b413ed0d10cce",
@@ -5062,7 +6007,16 @@
         "supersedes": []
       },
       "review": {
-        "state": "LEGACY",
+        "state": "FLAGGED",
+        "findings": [
+          {
+            "issue": "CREATURE",
+            "notes": "A herd of about fifteen reindeer walks across the middle distance, clearly visible. Rocks also carry heavy faceted texture artefact.",
+            "disposition": "QUARANTINE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -5111,6 +6065,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Heather heath with flat basking rocks and a path, no reptiles. Rocks and path carry heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -5160,6 +6123,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Misty ridge path with bark-stripped trunks (habitat evidence), no creature. Path and boulders carry faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -5207,6 +6179,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Braided river across a green floodplain, nothing alive besides plants. Foreground boulders and mud carry faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -5254,6 +6235,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Shallow forest river ford over gravel, nothing alive. Water and gravel carry heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -5271,7 +6261,7 @@
       "filename": "playthrough-river-turtle-basking-bank-v1.png",
       "version": 1,
       "label": "River Turtle Basking Bank",
-      "lifecycle": "ACTIVE",
+      "lifecycle": "QUARANTINED",
       "biomes": [
         "TEMPERATE_FOREST"
       ],
@@ -5288,7 +6278,7 @@
       "seasons": [],
       "weather": [],
       "showBeforeDiscovery": true,
-      "creatureFree": true,
+      "creatureFree": false,
       "fallbackKey": "forest",
       "precedenceWeight": 30,
       "contentHash": "0c0df3ba758daafdad02e228f311527d08578cbc502161402abbb6ec5ff26ff1",
@@ -5302,7 +6292,16 @@
         "supersedes": []
       },
       "review": {
-        "state": "LEGACY",
+        "state": "FLAGGED",
+        "findings": [
+          {
+            "issue": "CREATURE",
+            "notes": "Seven or more turtles clearly visible basking on the bank and on the log in the foreground. Faceted texture on bank too.",
+            "disposition": "QUARANTINE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -5320,7 +6319,7 @@
       "filename": "playthrough-roc-highland-eyrie-v1.png",
       "version": 1,
       "label": "Roc Highland Eyrie",
-      "lifecycle": "ACTIVE",
+      "lifecycle": "QUARANTINED",
       "biomes": [
         "MOUNTAIN"
       ],
@@ -5336,7 +6335,7 @@
       "seasons": [],
       "weather": [],
       "showBeforeDiscovery": false,
-      "creatureFree": true,
+      "creatureFree": false,
       "fallbackKey": "mountain-crag",
       "precedenceWeight": 40,
       "contentHash": "8e5a94f6f6aa14dc4a14a23bde1cf5d877cc9e4a3f1f33f88b90aedb662f371f",
@@ -5350,7 +6349,16 @@
         "supersedes": []
       },
       "review": {
-        "state": "LEGACY",
+        "state": "FLAGGED",
+        "findings": [
+          {
+            "issue": "AMBIGUOUS",
+            "notes": "Giant stick nest with shed feathers (habitat evidence), no roc. Two small winged silhouettes fly in the sky left of centre, above the peaks. Rock also carries heavy faceted texture artefact.",
+            "disposition": "CREATOR_REVIEW",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -5399,6 +6407,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Banded salt seam under a rock overhang, nothing alive. Rock faces and salt fall carry heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -5448,6 +6465,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "River cobble bar below mountains, nothing alive. Every cobble carries faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -5495,6 +6521,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Collapsed archive hall with empty shelves and vines, nothing alive. Every surface carries heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -5542,6 +6577,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Salt-crusted marsh pools under storm cloud, nothing alive besides plants. The salt crust and mud carry faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -5590,6 +6634,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Layered sandstone ledge beside clear water; nothing alive. Clean rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -5638,6 +6691,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Sea stacks streaked white with guano (habitat evidence), no birds visible. Clean rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -5685,6 +6747,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Grey beach with shells, wrack and driftwood, nothing alive. The sand surface carries faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -5732,6 +6803,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Dim conifer grove with a fallen trunk, nothing alive besides plants. Leaf litter and foliage carry heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -5781,6 +6861,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Clear reedy lake shallows in a forested valley; no fish or birds visible. Only faint texture on a few foreground stones.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -5798,7 +6887,7 @@
       "filename": "playthrough-silk-moth-woodland-colony-v1.png",
       "version": 1,
       "label": "Silk Moth Woodland Colony",
-      "lifecycle": "ACTIVE",
+      "lifecycle": "QUARANTINED",
       "biomes": [
         "TEMPERATE_FOREST"
       ],
@@ -5815,7 +6904,7 @@
       "seasons": [],
       "weather": [],
       "showBeforeDiscovery": true,
-      "creatureFree": true,
+      "creatureFree": false,
       "fallbackKey": "forest",
       "precedenceWeight": 40,
       "contentHash": "9c3a0faffb391817e77b77b8923e3fb6b9e8320d66a6326de36e3ff10641d711",
@@ -5829,7 +6918,16 @@
         "supersedes": []
       },
       "review": {
-        "state": "LEGACY",
+        "state": "FLAGGED",
+        "findings": [
+          {
+            "issue": "CREATURE",
+            "notes": "Two adult moths clearly visible: a large one on the tree at left, another on the trunk at right, among the cocoons.",
+            "disposition": "QUARANTINE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -5878,6 +6976,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Galena-bearing rock face with quartz veins, nothing alive. The rock wall at left carries faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -5925,6 +7032,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Green soapstone slabs on a mountain slope, nothing alive. Every rock surface carries heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -5973,6 +7089,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Tall conifer forest path, no squirrels visible. Bark and leaf litter carry heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -5990,7 +7115,7 @@
       "filename": "playthrough-stillwater-pike-weed-bed-v1.png",
       "version": 1,
       "label": "Stillwater Pike Weed Bed",
-      "lifecycle": "ACTIVE",
+      "lifecycle": "QUARANTINED",
       "biomes": [
         "TEMPERATE_FOREST"
       ],
@@ -6007,7 +7132,7 @@
       "seasons": [],
       "weather": [],
       "showBeforeDiscovery": true,
-      "creatureFree": true,
+      "creatureFree": false,
       "fallbackKey": "forest",
       "precedenceWeight": 10,
       "contentHash": "cf0e556f4f9ca9e58464efc4d6c8f34e1aacc30c56076f986ac3ed35846fd503",
@@ -6021,7 +7146,16 @@
         "supersedes": []
       },
       "review": {
-        "state": "LEGACY",
+        "state": "FLAGGED",
+        "findings": [
+          {
+            "issue": "AMBIGUOUS",
+            "notes": "Clear lake shallows over weed beds. A small dark elongated shape near the submerged branch (centre-right) may read as a fish. Needs a human look at full resolution.",
+            "disposition": "CREATOR_REVIEW",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -6068,6 +7202,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Painterly forest stream over mossy rocks; nothing alive besides plants. Clean rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -6115,6 +7258,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Steaming fumarole field with yellow sulphur crust below peaks, nothing alive. Every ground surface carries heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -6132,7 +7284,7 @@
       "filename": "playthrough-sunken-shrine-v1.png",
       "version": 1,
       "label": "Sunken Shrine",
-      "lifecycle": "ACTIVE",
+      "lifecycle": "QUARANTINED",
       "biomes": [
         "WETLAND"
       ],
@@ -6147,7 +7299,7 @@
       "seasons": [],
       "weather": [],
       "showBeforeDiscovery": false,
-      "creatureFree": true,
+      "creatureFree": false,
       "fallbackKey": "wetland",
       "precedenceWeight": 40,
       "contentHash": "afc2146b7c885c6cfbed1583e1c3aff74734f5d8b6c05deab6d664ba1a140087",
@@ -6161,7 +7313,16 @@
         "supersedes": []
       },
       "review": {
-        "state": "LEGACY",
+        "state": "FLAGGED",
+        "findings": [
+          {
+            "issue": "AMBIGUOUS",
+            "notes": "Flooded ruin with broken columns in misty woods, otherwise clean. A tiny dark shape on top of the tall left column (near the top edge) may read as a perched bird.",
+            "disposition": "CREATOR_REVIEW",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -6209,6 +7370,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Churned mud wallow with claw furrows and a scored trunk (habitat evidence), no creature. Every surface carries heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -6256,6 +7426,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Wet tidal flat with wrack and sea stacks under storm light; no birds or animals. Only faint texture in the foreground seaweed.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -6303,6 +7482,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Dark tin-bearing rock outcrop on a mountain slope, nothing alive. Every rock surface carries heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -6351,6 +7539,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Mountain stream riffles over boulders, no fish visible. Water and boulders carry heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -6400,6 +7597,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Known corrected case: undercut bank with exposed roots over dark water and a submerged log; no fish or eels visible. Clean rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -6447,6 +7653,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Cave river passage with stalactites, nothing alive. Cave walls and ledges carry faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -6494,6 +7709,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Burrow holes under a gorse mound in a misty meadow (habitat evidence), no rabbits. Only faint texture.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -6511,7 +7735,7 @@
       "filename": "playthrough-water-lily-bulrush-pond-v1.png",
       "version": 1,
       "label": "Water Lily Bulrush Pond",
-      "lifecycle": "ACTIVE",
+      "lifecycle": "QUARANTINED",
       "biomes": [
         "WETLAND"
       ],
@@ -6528,7 +7752,7 @@
       "seasons": [],
       "weather": [],
       "showBeforeDiscovery": true,
-      "creatureFree": true,
+      "creatureFree": false,
       "fallbackKey": "wetland",
       "precedenceWeight": 10,
       "contentHash": "7a211ef36fdfd278676f0a22f5fbcc4056e1ac7da19b219e41f1783ac24c7f5e",
@@ -6542,7 +7766,16 @@
         "supersedes": []
       },
       "review": {
-        "state": "LEGACY",
+        "state": "FLAGGED",
+        "findings": [
+          {
+            "issue": "CREATURE",
+            "notes": "A dragonfly is visible in flight over the reeds at left (about a fifth in from the left edge, just above the pond line). The pond surface also carries heavy faceted texture artefact.",
+            "disposition": "QUARANTINE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -6591,6 +7824,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Flattened reed nest platform at a misty pool (habitat evidence), no birds. Reeds, mud and water carry heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -6637,6 +7879,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Misty marsh pools with bulrushes and moss hummocks at dawn; nothing alive besides plants. Only faint texture.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -6685,6 +7936,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Flooded willow carr, nothing alive besides plants. Duckweed, water and roots carry heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -6733,6 +7993,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Flowering meadow of flax and nettles above a river valley; nothing alive besides plants. Clean rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -6783,6 +8052,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Golden seed-grass valley below limestone cliffs; nothing alive besides plants. Clean painterly rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -6831,6 +8109,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Forest understory of flowering herbs and ferns, nothing alive besides plants. Foliage, litter and boulders carry faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -6848,7 +8135,7 @@
       "filename": "playthrough-wild-honeybee-tree-hive-v1.png",
       "version": 1,
       "label": "Wild Honeybee Tree Hive",
-      "lifecycle": "ACTIVE",
+      "lifecycle": "QUARANTINED",
       "biomes": [
         "TEMPERATE_FOREST"
       ],
@@ -6865,7 +8152,7 @@
       "seasons": [],
       "weather": [],
       "showBeforeDiscovery": true,
-      "creatureFree": true,
+      "creatureFree": false,
       "fallbackKey": "forest",
       "precedenceWeight": 40,
       "contentHash": "5cadffbe3f1c23955aa41c28cf32b4fda046be37728dfc74fe1e8c474dfc4bbd",
@@ -6879,7 +8166,16 @@
         "supersedes": []
       },
       "review": {
-        "state": "LEGACY",
+        "state": "FLAGGED",
+        "findings": [
+          {
+            "issue": "CREATURE",
+            "notes": "Honeycomb in a hollow trunk with several bees visible in flight at the comb opening (left of centre). Bark and litter also carry faceted texture artefact.",
+            "disposition": "QUARANTINE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -6929,6 +8225,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Beech and chestnut forest floor with fallen nuts and husks, nothing alive besides plants. Litter, bark and boulders carry heavy faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -6978,6 +8283,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Hoof-churned mud trail through wet grassland towards karst peaks (habitat evidence), no buffalo. Clean rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -6995,7 +8309,7 @@
       "filename": "playthrough-wolverine-talus-territory-v1.png",
       "version": 1,
       "label": "Wolverine Talus Territory",
-      "lifecycle": "ACTIVE",
+      "lifecycle": "QUARANTINED",
       "biomes": [
         "MOUNTAIN"
       ],
@@ -7011,7 +8325,7 @@
       "seasons": [],
       "weather": [],
       "showBeforeDiscovery": true,
-      "creatureFree": true,
+      "creatureFree": false,
       "fallbackKey": "mountain-crag",
       "precedenceWeight": 10,
       "contentHash": "ddf133b33641d51e557710ccdec800d6b98160259f6e1267d0f0ddb549dbbfe9",
@@ -7025,7 +8339,16 @@
         "supersedes": []
       },
       "review": {
-        "state": "LEGACY",
+        "state": "FLAGGED",
+        "findings": [
+          {
+            "issue": "CREATURE",
+            "notes": "A four-legged animal stands silhouetted on a rock ridge in the middle distance (right of centre). Claw-scored boulder and bones are fine as evidence, but the animal is not. Heavy faceted texture throughout.",
+            "disposition": "QUARANTINE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -7073,6 +8396,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Misty conifer river with mossy boulders; nothing alive besides plants. Only faint texture on the water surface.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -7121,6 +8453,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Known corrected case: mossy old-growth path with a root hollow and fallen log, no animal. Clean rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -7168,6 +8509,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "RENDERING",
+            "notes": "Spring cascade into a pool among ferns, nothing alive besides plants. Water, pebbles and boulders carry faceted mosaic texture artefact.",
+            "disposition": "REPLACE",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
@@ -7215,6 +8565,15 @@
       },
       "review": {
         "state": "LEGACY",
+        "findings": [
+          {
+            "issue": "NONE",
+            "notes": "Overhung cliff ledge above a sea of cloud with a scraped nest hollow (habitat evidence), no creature. Clean rendering.",
+            "disposition": "HUMAN_APPROVAL",
+            "source": "AUTOMATED_VISION",
+            "recordedAt": "2026-09-15"
+          }
+        ],
         "checklist": {
           "noLivingCreatures": false,
           "onlyNonlivingHabitatEvidence": false,
