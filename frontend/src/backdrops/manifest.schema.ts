@@ -53,7 +53,7 @@ export type SiteFamily = (typeof SITE_FAMILIES)[number];
  * Registry lifecycle. TOPOLOGY_GATED entries are kept but only surface once their gate exists. PENDING_REVIEW is
  * where every newly generated or replaced image starts (#241): it cannot become ACTIVE until its review is done.
  */
-export const LIFECYCLE_STATES = ['ACTIVE', 'TOPOLOGY_GATED', 'DEPRECATED', 'PENDING_REVIEW'] as const;
+export const LIFECYCLE_STATES = ['ACTIVE', 'TOPOLOGY_GATED', 'DEPRECATED', 'PENDING_REVIEW', 'QUARANTINED'] as const;
 export type LifecycleState = (typeof LIFECYCLE_STATES)[number];
 
 /**
@@ -74,11 +74,32 @@ export type ReviewChecklistItem = (typeof REVIEW_CHECKLIST)[number];
  * APPROVED: reviewed against the full checklist. PENDING: not yet reviewed. LEGACY: ACTIVE before this contract
  * existed, on trust — allowed only for keys in scripts/backdrops/legacy-unreviewed.json, which may only shrink.
  */
-export const REVIEW_STATES = ['PENDING', 'APPROVED', 'LEGACY'] as const;
+export const REVIEW_STATES = ['PENDING', 'APPROVED', 'LEGACY', 'FLAGGED'] as const;
 export type ReviewState = (typeof REVIEW_STATES)[number];
+
+/**
+ * What an audit found (#240). CREATURE and AMBIGUOUS block showing the image at all: the record must be QUARANTINED
+ * until it is replaced and re-reviewed. RENDERING records an artefact that blocks approval but not display. NONE is a
+ * pre-check that found nothing — it still needs a human to approve. Automated vision may flag; it never approves.
+ */
+export const FINDING_ISSUES = ['CREATURE', 'AMBIGUOUS', 'RENDERING', 'NONE'] as const;
+export type FindingIssue = (typeof FINDING_ISSUES)[number];
+export const FINDING_SOURCES = ['AUTOMATED_VISION', 'HUMAN'] as const;
+export type FindingSource = (typeof FINDING_SOURCES)[number];
+
+export interface ReviewFinding {
+  issue: FindingIssue;
+  notes: string;
+  /** QUARANTINE, CREATOR_REVIEW, REPLACE or HUMAN_APPROVAL — what has to happen next. */
+  disposition: 'QUARANTINE' | 'CREATOR_REVIEW' | 'REPLACE' | 'HUMAN_APPROVAL';
+  source: FindingSource;
+  recordedAt: string;
+}
 
 export interface BackdropReview {
   state: ReviewState;
+  /** Audit findings against this image, oldest first. Replacement starts a fresh list. */
+  findings: ReviewFinding[];
   checklist: Record<ReviewChecklistItem, boolean>;
   /** Who completed the review. Required for APPROVED. */
   reviewedBy: string | null;

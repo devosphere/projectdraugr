@@ -27,7 +27,7 @@ const BASE_BIOMES = ['TEMPERATE_FOREST', 'WETLAND', 'GRASSLAND', 'HIGHLAND', 'MO
 const PROXIMITY_CLASSES = ['EXACT_SITE', 'ADJACENT_VISIBLE', 'ECOTONE', 'REGIONAL'];
 const SITE_FAMILIES = ['BASE_BIOME', 'ECOTONE', 'FRESHWATER', 'COAST', 'KARST', 'GEOLOGICAL',
   'RESOURCE_SITE', 'RUIN', 'FLORA_SITE', 'FAUNA_RANGE', 'MONSTER_TERRITORY', 'NATIVE_TERRITORY', 'DOMESTICATION'];
-const LIFECYCLE_STATES = ['ACTIVE', 'TOPOLOGY_GATED', 'DEPRECATED', 'PENDING_REVIEW'];
+const LIFECYCLE_STATES = ['ACTIVE', 'TOPOLOGY_GATED', 'DEPRECATED', 'PENDING_REVIEW', 'QUARANTINED'];
 const PROXIMITY_WEIGHT = { EXACT_SITE: 40, ADJACENT_VISIBLE: 30, ECOTONE: 20, REGIONAL: 10 };
 
 // --- the neutral-backdrop review contract (#241, docs/systems/backdrop-review-contract.md) ---------------------
@@ -37,7 +37,13 @@ const PROXIMITY_WEIGHT = { EXACT_SITE: 40, ADJACENT_VISIBLE: 30, ECOTONE: 20, RE
 // frozen legacy list — which a new image never joins.
 export const REVIEW_CHECKLIST = ['noLivingCreatures', 'onlyNonlivingHabitatEvidence', 'smoothModernRendering',
   'noGridTilingOrPixelation', 'widescreenDimensions', 'uiSafeComposition'];
-const REVIEW_STATES = ['PENDING', 'APPROVED', 'LEGACY'];
+const REVIEW_STATES = ['PENDING', 'APPROVED', 'LEGACY', 'FLAGGED'];
+// #240: what an audit found. CREATURE and AMBIGUOUS keep an image off screen until it is replaced and re-reviewed;
+// RENDERING blocks approval but not display; NONE found nothing and still needs a human. Automated vision flags only.
+const FINDING_ISSUES = ['CREATURE', 'AMBIGUOUS', 'RENDERING', 'NONE'];
+const BLOCKING_ISSUES = ['CREATURE', 'AMBIGUOUS'];
+const FINDING_SOURCES = ['AUTOMATED_VISION', 'HUMAN'];
+const DISPOSITIONS = ['QUARANTINE', 'CREATOR_REVIEW', 'REPLACE', 'HUMAN_APPROVAL'];
 const WIDESCREEN = { minAspect: 1.75, maxAspect: 1.8, minWidth: 1600, minHeight: 900 };
 const LEGACY_PATH = join(HERE, 'legacy-unreviewed.json');
 
@@ -47,7 +53,7 @@ export function loadLegacyKeys() {
 }
 
 function pendingReview() {
-  return { state: 'PENDING', checklist: Object.fromEntries(REVIEW_CHECKLIST.map(k => [k, false])), reviewedBy: null, reviewedAt: null };
+  return { state: 'PENDING', findings: [], checklist: Object.fromEntries(REVIEW_CHECKLIST.map(k => [k, false])), reviewedBy: null, reviewedAt: null };
 }
 
 /**
@@ -429,6 +435,14 @@ export function validateReviewPolicy(manifest, legacyKeys) {
   const keys = new Set(manifest.backdrops.map(b => b.backdropKey));
   for (const k of legacyKeys) if (!keys.has(k)) errors.push(`legacy list names a backdrop that no longer exists: ${k}`);
 
+  // A quarantined image must never be reached by falling back to it, or resolution would show it anyway (#240).
+  const quarantined = new Set(manifest.backdrops.filter(b => b.lifecycle === 'QUARANTINED').map(b => b.backdropKey));
+  for (const b of manifest.backdrops) {
+    if (b.lifecycle !== 'QUARANTINED' && quarantined.has(b.fallbackKey)) {
+      errors.push(`[${b.backdropKey}] falls back to a QUARANTINED backdrop: ${b.fallbackKey}`);
+    }
+  }
+
   for (const b of manifest.backdrops) {
     const at = `[${b.backdropKey}]`;
     const r = b.review;
@@ -448,6 +462,33 @@ export function validateReviewPolicy(manifest, legacyKeys) {
       if (!legacyKeys.has(b.backdropKey)) errors.push(`${at} LEGACY review on a key that is not in the frozen legacy list`);
       if (b.version !== 1) errors.push(`${at} a replaced image cannot stay LEGACY — review the new one`);
     }
+
+    // #240 audit findings.
+    const findings = r.findings;
+    if (!Array.isArray(findings)) { errors.push(`${at} review.findings must be a list`); }
+    else {
+      for (const f of findings) {
+        if (!FINDING_ISSUES.includes(f.issue)) errors.push(`${at} finding has an invalid issue: ${f.issue}`);
+        if (!FINDING_SOURCES.includes(f.source)) errors.push(`${at} finding has an invalid source: ${f.source}`);
+        if (!DISPOSITIONS.includes(f.disposition)) errors.push(`${at} finding has an invalid disposition: ${f.disposition}`);
+        if (!f.notes || !String(f.notes).trim()) errors.push(`${at} finding has no notes`);
+        if (!/^\d{4}-\d{2}-\d{2}/.test(f.recordedAt || '')) errors.push(`${at} finding has no date`);
+      }
+      const blocking = findings.filter(f => BLOCKING_ISSUES.includes(f.issue));
+      if (blocking.length && b.lifecycle !== 'QUARANTINED') {
+        errors.push(`${at} has an unresolved ${blocking[0].issue} finding and must be QUARANTINED, not ${b.lifecycle}`);
+      }
+      if (r.state === 'APPROVED' && blocking.length) errors.push(`${at} APPROVED over an unresolved ${blocking[0].issue} finding`);
+    }
+    // Automated vision may flag, never approve (#240).
+    if (r.state === 'APPROVED' && String(r.reviewedBy || '').toUpperCase().includes('AUTOMATED')) {
+      errors.push(`${at} APPROVED by automated vision — only a person approves`);
+    }
+    if (r.state === 'FLAGGED' && !(Array.isArray(findings) && findings.length)) errors.push(`${at} FLAGGED with no finding saying why`);
+    if (b.lifecycle === 'QUARANTINED' && legacyKeys.has(b.backdropKey)) {
+      errors.push(`${at} is QUARANTINED but still in the legacy list — a quarantined image is not ACTIVE on trust`);
+    }
+    if (b.lifecycle === 'QUARANTINED' && b.creatureFree === true) errors.push(`${at} is QUARANTINED yet claims creatureFree`);
 
     if (b.lifecycle === 'ACTIVE' && r.state !== 'APPROVED' && r.state !== 'LEGACY') {
       errors.push(`${at} ACTIVE without a completed review (${r.state})`);
