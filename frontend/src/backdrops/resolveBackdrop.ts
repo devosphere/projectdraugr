@@ -41,6 +41,8 @@ export const BIOME_ANCHOR: Record<string, string> = {
   CLAY_DEPOSIT: 'clay-deposit',
   SALT_DEPOSIT: 'rock-salt-exposure',
   CAVE_INTERIOR: 'karst-cave-interior',
+  // The ground at a cave's mouth is its own biome in the world (not a site), so it needs its own anchor too.
+  CAVE_MOUTH: 'karst-cave',
 };
 
 const MAX_FALLBACK_STEPS = 32;
