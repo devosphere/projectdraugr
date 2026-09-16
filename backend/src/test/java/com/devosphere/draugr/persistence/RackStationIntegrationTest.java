@@ -70,6 +70,17 @@ class RackStationIntegrationTest {
     @Autowired PersistentStateAuditor auditor;
     @Autowired JdbcTemplate jdbc;
 
+    /**
+     * How many times each cohort dries, and why it is this many.
+     *
+     * <p>The yield is a roll over 2..4: unassisted it is one roll (mean 3.0), at a station the better of two (mean
+     * 3.44). Forty rounds separated those means by only about two and a half standard deviations — roughly a one in
+     * two hundred failure, which duly happened twice in CI and read as a flake rather than as a test that was asking
+     * too little. A hundred and fifty rounds puts the separation past five, which is a margin a coin toss does not
+     * reach. Kept as a named constant because it is a statistical decision, not a magic number.
+     */
+    private static final int ROUNDS = 150;
+
     private int carried(UUID chronicle, String key) {
         Integer n = jdbc.queryForObject(
             "SELECT COUNT(*) FROM item_instance i JOIN world_object w ON w.id=i.object_id " +
@@ -77,16 +88,26 @@ class RackStationIntegrationTest {
         return n == null ? 0 : n;
     }
 
-    /** Dry the same mushrooms the same number of times, and count what comes off. */
-    private int dryRepeatedly(UUID chronicle, UUID chunk, Instant now, int rounds) {
-        int made = 0;
+    /**
+     * Dry the same mushrooms the same number of times, and count what comes off — and how many of the rounds
+     * actually dried anything. The yield per SUCCESSFUL round is the thing this test reasons about, so a round that
+     * failed for some unrelated reason must not be counted as a round that yielded nothing: that would drag both
+     * averages down and make the bands below lie about what the roll did.
+     */
+    private Drying dryRepeatedly(UUID chronicle, UUID chunk, Instant now, int rounds) {
+        int made = 0, dried = 0;
         for (int i = 0; i < rounds; i++) {
             for (int j = 0; j < 4; j++) items.createCarriedItem(chronicle, "oyster_mushroom", "Oyster mushroom", now, "TEST_SEED");
             int before = carried(chronicle, "dried_mushroom");
             String[] r = items.runProcess(chronicle, chunk, "dry the mushrooms", now);
-            if ("SUCCEEDED".equals(r[0])) made += carried(chronicle, "dried_mushroom") - before;
+            if ("SUCCEEDED".equals(r[0])) { made += carried(chronicle, "dried_mushroom") - before; dried++; }
         }
-        return made;
+        return new Drying(made, dried);
+    }
+
+    /** What a batch of drying produced, and over how many rounds that actually dried. */
+    private record Drying(int made, int rounds) {
+        double perRound() { return rounds == 0 ? 0 : made / (double) rounds; }
     }
 
     /** The data contract: both racks are named as stations, both are buildable, both exist in the registry. */
@@ -122,21 +143,48 @@ class RackStationIntegrationTest {
         // Bare ground, no rack standing.
         jdbc.update("DELETE FROM construction_project cp USING world_object w WHERE w.id=cp.object_id AND w.current_location_id=?", chunk);
 
+        // Control the OTHER thing that skews this same yield. A drying mat in reach biases `dry_mushrooms` exactly
+        // as a rack does (`atStation || toolAssist`), so one lying here — carried or set down — would give the bare
+        // ground the rack's own advantage and this test would compare two identical cohorts and pass or fail on a
+        // coin toss. Nothing in the fixture makes one; that is the point of saying so out loud and clearing it.
+        UUID elsewhere = jdbc.queryForObject(
+            "SELECT id FROM world_chunk WHERE id <> ? ORDER BY grid_y DESC, grid_x DESC LIMIT 1", UUID.class, chunk);
+        jdbc.update("UPDATE world_object w SET current_owner_id=NULL, current_location_id=? " +
+            "FROM item_instance i WHERE i.object_id=w.id AND i.item_key='drying_mat' " +
+            "  AND (w.current_owner_id=? OR w.current_location_id=?)", elsewhere, chronicle, chunk);
+
         // A station eases and never gates: drying on the ground must still succeed. This is the half that would
         // break if a station were ever allowed to become a requirement.
-        int withoutRack = dryRepeatedly(chronicle, chunk, now, 40);
+        Drying bareGround = dryRepeatedly(chronicle, chunk, now, ROUNDS);
+        int withoutRack = bareGround.made();
         assertTrue(withoutRack > 0, "drying without a rack must still work — a station eases, it never gates");
+        assertTrue(bareGround.rounds() >= ROUNDS * 9 / 10,
+            () -> "the bare-ground cohort must actually dry: only " + bareGround.rounds() + " of " + ROUNDS
+                + " rounds succeeded, so the averages below are measuring something other than the roll");
 
         // Raise a drying rack on the same ground and dry the same way again.
         UUID rack = UUID.randomUUID();
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,lifecycle_state,current_location_id) VALUES (?,'CONSTRUCTION','Drying rack','ACTIVE',?)", rack, chunk);
         jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at,integrity_percent) VALUES (?,'DRYING_RACK','COMPLETED',100,?,100)", rack, Timestamp.from(now));
 
-        int withRack = dryRepeatedly(chronicle, chunk, now, 40);
+        Drying onTheRack = dryRepeatedly(chronicle, chunk, now, ROUNDS);
+        int withRack = onTheRack.made();
 
-        assertTrue(withRack > withoutRack,
-            () -> "a drying rack must be worth raising — it skews the yield high, so forty rounds on it must beat "
-                + "forty on the bare ground (withRack=" + withRack + ", withoutRack=" + withoutRack + ")");
+        // Each cohort is also checked against the yield it should HAVE, not only against the other. A comparison
+        // alone cannot tell "the rack did nothing" from "both cohorts had the rack's advantage" — which is exactly
+        // how this test failed twice in CI with the two totals a hair apart, and it named neither cause. The bare
+        // ground rolls once over 2..4 (mean 3.0); at a station it takes the better of two rolls (mean 3.44).
+        double bare = bareGround.perRound(), racked = onTheRack.perRound();
+        assertTrue(bare < 3.25,
+            () -> "the bare ground is yielding as though a station stood on it (" + bare + " a round against an "
+                + "unassisted 3.0) — something else in reach is biasing this roll, and the comparison below proves "
+                + "nothing until it is found");
+        assertTrue(racked > 3.2,
+            () -> "a drying rack must actually bias the roll high (" + racked + " a round against an assisted 3.44)");
+        assertTrue(racked > bare,
+            () -> "a drying rack must be worth raising — it skews the yield high, so a round on it must out-yield a "
+                + "round on the bare ground (" + racked + " against " + bare + "; totals " + withRack + " and "
+                + withoutRack + " over " + onTheRack.rounds() + " and " + bareGround.rounds() + " rounds)");
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
