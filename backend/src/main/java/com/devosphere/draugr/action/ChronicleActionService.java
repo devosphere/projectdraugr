@@ -1207,7 +1207,29 @@ public class ChronicleActionService {
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'MOVED',jsonb_build_object('fromLocationId',?::text,'toLocationId',?::text,'direction',?))", chronicle.id(), occurredTs, chronicle.location().toString(), destination.toString(), direction.name());
         jdbc.update("INSERT INTO chronicle_event (chronicle_id,occurred_at,event_type,payload) VALUES (?,?,'CHRONICLE_MOVED',jsonb_build_object('fromLocationId',?::text,'toLocationId',?::text,'direction',?))", chronicle.id(), occurredTs, chronicle.location().toString(), destination.toString(), direction.name());
         recordVisit(chronicle.id(), destination, occurredAt);
-        return "You travel " + direction.description + ", the ground shifting under you as you go.";
+        return "You travel " + direction.description + wayItWalked(destination) + ".";
+    }
+    /**
+     * What the ground you have just walked into is like to walk on (#30).
+     *
+     * <p>Every step in the world answered with the same eleven words — "the ground shifting under you as you go" —
+     * whether the Chronicle had walked into a meadow, a fen or a cave. Repeated a hundred times in a playthrough it
+     * is the most-read sentence in the game and the emptiest, which is precisely the robotic narration this ticket
+     * is about.
+     *
+     * <p>The clause is not decoration invented per biome: it is {@code terrain_going.note}, the same row that
+     * decides what the country COSTS to cross (V335). One definition of what this ground is like to walk over,
+     * read by the clock and by the prose, so the sentence a player reads can never disagree with the time the
+     * journey took. Ground with no going recorded keeps the line it always had.
+     */
+    private String wayItWalked(UUID destination) {
+        String note = jdbc.query(
+            "SELECT g.note FROM world_chunk c JOIN terrain_going g ON g.biome = c.biome WHERE c.id = ?",
+            rs -> rs.next() ? rs.getString(1) : null, destination);
+        if (note == null || note.isBlank()) return ", the ground shifting under you as you go";
+        String clause = note.trim();
+        if (clause.endsWith(".")) clause = clause.substring(0, clause.length() - 1);
+        return " — " + Character.toLowerCase(clause.charAt(0)) + clause.substring(1);
     }
     /**
      * The rock has one way in (#158), or null when the step is not into a cave at all.
@@ -1399,7 +1421,14 @@ public class ChronicleActionService {
         jdbc.update("INSERT INTO chronicle_event (chronicle_id,occurred_at,event_type,payload) VALUES (?,?,'CHRONICLE_MOVED',jsonb_build_object('fromLocationId',?::text,'toLocationId',?::text,'wayfinding',?))", chronicle.id(), ts, chronicle.location().toString(), plan.destination().toString(), plan.reason());
         recordVisit(chronicle.id(), plan.destination(), at);
         String how = switch (plan.reason()) { case "map" -> "following the trails you sketched on your map"; case "routine" -> "along a way your feet have walked many times"; case "marker" -> "guided by the marker you once left"; default -> "holding the place firmly in memory"; };
-        return new String[]{"SUCCEEDED", "You set out, " + how + ", and come at last to the place you meant to reach."};
+        // What the journey was like is not invented for the sentence: it is the going the clock just charged the
+        // Chronicle for (#30/V335). A walk over open grass and a scramble over forty minutes of mountain a chunk
+        // arrived with the same nine words, which told a player nothing about the day they had just spent — and a
+        // laid way now shortens that number, so the line moves when the road does.
+        String country = plan.minutesPerChunk() <= 17 ? ", over ground that gave you no trouble,"
+            : plan.minutesPerChunk() >= 34 ? ", and the country between took everything you had,"
+            : plan.minutesPerChunk() >= 26 ? ", over ground that made you work for it," : ",";
+        return new String[]{"SUCCEEDED", "You set out, " + how + country + " and come at last to the place you meant to reach."};
     }
     /**
      * Leave a physical marker at the current place — a blaze carved on a tree, a
