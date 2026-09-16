@@ -119,6 +119,24 @@ class IntentClassificationRegressionTest {
             assertEquals("UNKNOWN", classify(phrase), phrase);
     }
 
+    /**
+     * #77 V333: a fen causeway is built through the assembly matcher. The word this structure most naturally wants
+     * — "trackway" — is unusable, because TRACK takes any phrase containing "track" and would send a builder off
+     * reading the ground for spoor; "trail" goes the same way to MARK. The phrases that survive that must also stay
+     * clear of TRAVEL's "walk to" and of REPAIR_STRUCTURE, which takes a repair verb with "bridge". And the other
+     * halves must be unharmed: tracking is still tracking, and repairing a bridge is still a repair.
+     */
+    @Test void aCausewayIsBuiltNotTracked() throws Exception {
+        // Every keyword the assembly declares, replayed bare as well as in a sentence: the integration guard
+        // (noJavaIntentShadowsAnAssemblysOwnKeywords) replays all of them, and it needs Docker and fifty minutes.
+        for (String phrase : new String[]{"build a causeway", "lay a causeway", "raise a causeway", "fen causeway",
+                                          "marsh causeway", "bog causeway", "causeway", "plank way", "plank road",
+                                          "log road", "corduroy road", "corduroy way", "boardwalk",
+                                          "work on the causeway", "build a fen causeway", "build a boardwalk"})
+            assertEquals("UNKNOWN", classify(phrase), phrase);
+        assertEquals("TRACK", classify("follow the trail"));
+    }
+
     @Test void processActionsAreNotStolenByGreedyIntents() throws Exception {
         // When the two-axis matcher claims the text, the ambiguous intent must yield,
         // so the dispatch falls through to PROCESS_MATERIAL (classify returns UNKNOWN).
