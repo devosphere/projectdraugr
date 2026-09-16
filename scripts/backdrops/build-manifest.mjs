@@ -44,6 +44,14 @@ const FINDING_ISSUES = ['CREATURE', 'AMBIGUOUS', 'RENDERING', 'NONE'];
 const BLOCKING_ISSUES = ['CREATURE', 'AMBIGUOUS'];
 const FINDING_SOURCES = ['AUTOMATED_VISION', 'HUMAN'];
 const DISPOSITIONS = ['QUARANTINE', 'CREATOR_REVIEW', 'REPLACE', 'HUMAN_APPROVAL'];
+
+// #235: every record declares the world contexts that reach it, or a gate saying why none does. Routing is by this
+// declaration — never by what the file is called — so a new image is unreachable until somebody says what it is for.
+const SETTINGS = ['edge-or-beside'];
+const NEW_IMAGE_GATE = {
+  reason: 'Newly generated: no world context has been declared for this image yet.',
+  activatedBy: '#235',
+};
 const WIDESCREEN = { minAspect: 1.75, maxAspect: 1.8, minWidth: 1600, minHeight: 900 };
 const LEGACY_PATH = join(HERE, 'legacy-unreviewed.json');
 
@@ -67,11 +75,14 @@ function pendingReview() {
 export function mergeRecord(prior, fresh, today = new Date().toISOString().slice(0, 10)) {
   if (!prior) return fresh;
   const history = (prior.provenance && Array.isArray(prior.provenance.supersedes)) ? prior.provenance.supersedes : [];
+  // Contexts and the gate describe the PLACE, not the picture, so a replacement of the same place keeps them (#235).
+  const contexts = Array.isArray(prior.contexts) ? prior.contexts : fresh.contexts;
+  const gate = contexts && contexts.length ? null : (prior.gate ?? fresh.gate);
   if (prior.contentHash === fresh.contentHash) {
     return { ...fresh, lifecycle: prior.lifecycle, creatureFree: prior.creatureFree, review: prior.review,
-      provenance: { ...fresh.provenance, supersedes: history } };
+      contexts, gate, provenance: { ...fresh.provenance, supersedes: history } };
   }
-  return { ...fresh, lifecycle: 'PENDING_REVIEW', creatureFree: false, review: pendingReview(),
+  return { ...fresh, lifecycle: 'PENDING_REVIEW', creatureFree: false, review: pendingReview(), contexts, gate,
     provenance: { ...fresh.provenance,
       supersedes: [...history, { version: prior.version, contentHash: prior.contentHash, retiredAt: today }] } };
 }
@@ -338,6 +349,9 @@ function buildRecords() {
       bytes: buf.length,
       provenance: { generator: 'playthrough-backdrop-gen', family, supersedes: [] },
       review: pendingReview(),
+      // Unreachable until somebody declares what world context this image is for (#235).
+      contexts: [],
+      gate: { ...NEW_IMAGE_GATE },
     };
   });
 }
@@ -361,6 +375,7 @@ function loadManifest() {
 export function validateManifest(manifest, onDiskFilenames, legacyKeys = loadLegacyKeys()) {
   const errors = [];
   errors.push(...validateReviewPolicy(manifest, legacyKeys));
+  errors.push(...validateContextPolicy(manifest));
   if (manifest.schemaVersion !== SCHEMA_VERSION) errors.push(`schemaVersion ${manifest.schemaVersion} != ${SCHEMA_VERSION}`);
 
   const onDisk = [...onDiskFilenames].sort();
@@ -516,6 +531,56 @@ export function validateReviewPolicy(manifest, legacyKeys) {
   return errors;
 }
 
+/**
+ * The #235 context policy: every record says which world contexts reach it, or carries a gate saying why none does.
+ * Neither is optional — a record with neither is an image nobody can explain, which is how 147 of them came to be
+ * unreachable while the registry looked complete. Two records may not answer to the same context either: the world
+ * would then have two right answers and no way to choose.
+ */
+export function validateContextPolicy(manifest) {
+  const errors = [];
+  const claimed = new Map();
+  const biome = b => BASE_BIOMES.includes(b);
+
+  for (const b of manifest.backdrops) {
+    const at = `[${b.backdropKey}]`;
+    const contexts = b.contexts;
+    if (!Array.isArray(contexts)) { errors.push(`${at} contexts must be a list`); continue; }
+
+    for (const c of contexts) {
+      if (c && typeof c.candidate === 'string' && c.candidate.trim()) {
+        if (!/^(world\.default|interior\.[a-z0-9.-]+|site\.[a-z0-9-]+|built\.[a-z0-9-]+|biome\.[a-z0-9.-]+|[A-Z][A-Z_]+)$/.test(c.candidate)) {
+          errors.push(`${at} context names something the world never sends: ${c.candidate}`);
+        }
+        if (c.whenBiome !== undefined && !biome(c.whenBiome)) errors.push(`${at} context whenBiome is not a base biome: ${c.whenBiome}`);
+      } else if (c && SETTINGS.includes(c.setting)) {
+        if (!Array.isArray(c.biomes) || c.biomes.length !== 2 || !c.biomes.every(biome)) {
+          errors.push(`${at} a ${c.setting} context must name exactly two base biomes: ${JSON.stringify(c.biomes)}`);
+        }
+      } else {
+        errors.push(`${at} context is neither a candidate nor a setting: ${JSON.stringify(c)}`);
+        continue;
+      }
+      const token = c.setting ? `${c.setting}:${[...(c.biomes || [])].sort().join('+')}`
+        : `${c.candidate}${c.whenBiome ? '@' + c.whenBiome : ''}`;
+      if (claimed.has(token)) errors.push(`${at} answers to the same context as [${claimed.get(token)}]: ${token}`);
+      else claimed.set(token, b.backdropKey);
+    }
+
+    const gate = b.gate;
+    if (contexts.length === 0) {
+      if (!gate) errors.push(`${at} is reachable by no context and says nothing about why`);
+      else {
+        if (!gate.reason || !String(gate.reason).trim()) errors.push(`${at} gate gives no reason`);
+        if (!/#\d+/.test(gate.activatedBy || '')) errors.push(`${at} gate names no issue that would activate it: ${gate.activatedBy}`);
+      }
+    } else if (gate) {
+      errors.push(`${at} is both reachable and gated — a gate is for an image nothing can reach`);
+    }
+  }
+  return errors;
+}
+
 function check() {
   const manifest = loadManifest();
   const onDisk = readdirSync(ASSET_DIR).filter(f => FILE_RE.test(f));
@@ -553,14 +618,41 @@ function report() {
   const biomeCount = {};
   for (const b of manifest.backdrops) for (const bi of b.biomes) biomeCount[bi] = (biomeCount[bi] || 0) + 1;
   lines.push(`## By base biome`, ``, ...BASE_BIOMES.map(bi => `- **${bi}**: ${biomeCount[bi] || 0}`), ``);
+
+  // #235: what the world can actually reach, and what the rest are waiting for. A registry that looks complete while
+  // most of it is unreachable is the thing this section exists to make impossible to miss.
+  const reachable = manifest.backdrops.filter(b => (b.contexts || []).length);
+  const gated = manifest.backdrops.filter(b => !(b.contexts || []).length);
+  lines.push(`## Reachability`, ``,
+    `**${reachable.length} of ${manifest.backdrops.length}** records are reachable by a declared world context; ` +
+    `**${gated.length}** are gated.`, ``);
+  const byIssue = new Map();
+  for (const b of gated) {
+    const issue = (b.gate && b.gate.activatedBy) || '(no issue named)';
+    if (!byIssue.has(issue)) byIssue.set(issue, []);
+    byIssue.get(issue).push(b);
+  }
+  lines.push(`| waiting on | count | reason |`, `|---|---|---|`);
+  for (const [issue, items] of [...byIssue.entries()].sort((a, b) => b[1].length - a[1].length)) {
+    lines.push(`| ${issue} | ${items.length} | ${(items[0].gate && items[0].gate.reason) || ''} |`);
+  }
+  lines.push(``);
+
   lines.push(`## By family`, ``);
   for (const fam of SITE_FAMILIES) {
     const items = (byFamily.get(fam) || []).sort((a, b) => a.backdropKey.localeCompare(b.backdropKey));
     if (!items.length) continue;
     lines.push(`### ${fam} (${items.length})`, ``);
     for (const b of items) {
+      const contexts = (b.contexts || []).map(c => c.setting
+        ? `${c.setting} ${c.biomes.join('/')}`
+        : `${c.candidate}${c.whenBiome ? ' in ' + c.whenBiome : ''}`);
+      const reach = contexts.length
+        ? ` · reached by ${contexts.map(c => '`' + c + '`').join(', ')}`
+        : ` · **gated**: ${(b.gate && b.gate.reason) || 'no reason given'} (${(b.gate && b.gate.activatedBy) || 'no issue named'})`;
       lines.push(`- \`${b.backdropKey}\` — ${b.biomes.join('+')} · ${b.proximity}` +
-        `${b.showBeforeDiscovery ? '' : ' · discovery-gated'}${b.timeBands.length ? ' · ' + b.timeBands.join('/') : ''}`);
+        `${b.showBeforeDiscovery ? '' : ' · discovery-gated'}${b.timeBands.length ? ' · ' + b.timeBands.join('/') : ''}` +
+        `${b.lifecycle === 'ACTIVE' ? '' : ' · ' + b.lifecycle}${reach}`);
     }
     lines.push(``);
   }

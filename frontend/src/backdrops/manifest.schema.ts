@@ -130,6 +130,28 @@ export interface BackdropProvenance {
   supersedes: SupersededVersion[];
 }
 
+/**
+ * What the world has to be for this image to be shown (#235). The backend hands the client a chain of candidate keys
+ * (`site.clay-beds`, `biome.wetland.deep`, `interior.cave.dark`, `world.default`, and the location endpoint's
+ * presentation keys), and a record declares which of them it answers to. Routing is by this declaration, never by
+ * what the file happens to be called.
+ *
+ *  - `{ candidate }` — this exact key.
+ *  - `{ candidate, whenBiome }` — this key, but only on that ground: a lake margin in forest is not a lake margin on
+ *    open grassland, and they are different pictures.
+ *  - `{ setting: 'edge-or-beside', biomes: [a, b] }` — the seam between two kinds of country, in either order.
+ */
+export type BackdropContext =
+  | { candidate: string; whenBiome?: BaseBiome }
+  | { setting: 'edge-or-beside'; biomes: [BaseBiome, BaseBiome] };
+
+/** Why an image cannot be reached yet, and what would change that. A record has contexts or a gate, never neither. */
+export interface BackdropGate {
+  reason: string;
+  /** The issue(s) whose delivery would give this image a context, e.g. "#232, #224". */
+  activatedBy: string;
+}
+
 export interface BackdropRecord {
   /** Stable identity, derived from the filename slug. Never reused for a different image. */
   backdropKey: string;
@@ -174,6 +196,10 @@ export interface BackdropRecord {
   provenance: BackdropProvenance;
   /** The neutral-backdrop review (#241). ACTIVE requires APPROVED, or LEGACY for a frozen pre-contract key. */
   review: BackdropReview;
+  /** The world contexts that select this image (#235). Empty only when `gate` says why. */
+  contexts: BackdropContext[];
+  /** Why this image is unreachable, or null when contexts reach it. */
+  gate: BackdropGate | null;
 }
 
 export interface BackdropManifest {
