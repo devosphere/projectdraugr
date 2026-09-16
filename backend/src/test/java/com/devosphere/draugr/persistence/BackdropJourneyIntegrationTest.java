@@ -126,6 +126,22 @@ class BackdropJourneyIntegrationTest {
                 }
             }
 
+            // Hidden knowledge, the other half (#233): what the place says about the country around it must be
+            // country that is actually there. A claim about ground two chunks away, or about a kind of country that
+            // is nowhere next door, would be the Overseer's map leaking through the horizon.
+            Set<String> neighbours = new HashSet<>(jdbc.queryForList(
+                "SELECT DISTINCT n.biome FROM world_chunk c JOIN world_chunk n ON n.world_id=c.world_id " +
+                "AND abs(n.grid_x-c.grid_x)+abs(n.grid_y-c.grid_y)=1 WHERE c.id=?", String.class, chunk));
+            for (String around : here.surroundings()) {
+                assertTrue(neighbours.contains(around),
+                    () -> where + ": the place claims " + around + " lies next door, and it does not: " + neighbours);
+            }
+            assertEquals(here.surroundings().stream().distinct().toList(), here.surroundings(),
+                () -> where + ": the same country must not be claimed twice: " + here.surroundings());
+            assertTrue(here.surroundings().size() <= 4, () -> where + ": a chunk has four neighbours: " + here.surroundings());
+            if (!here.lit()) assertTrue(here.surroundings().isEmpty(),
+                () -> where + ": nothing beyond this ground can be seen in the dark: " + here.surroundings());
+
             BackdropResolver.Choice direct = BackdropResolver.resolve(here);
             VisualContextController.Backdrop served = controller.backdrop();
             assertEquals(direct.key(), served.key(),
