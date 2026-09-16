@@ -50,12 +50,35 @@ public class FoodPreservationService {
         // ground — so passing through does not permanently ruin a well-kept larder. Whole hours only, like the
         // chunk_disturbance decay; the EXISTS references the target column in its WHERE (allowed), not a FROM join.
         // A signed adjustment to shelf life for each whole elapsed hour: fouled ground docks it (pests, #218), and —
-        // its counterpart (#77 cold store) — ground holding a COMPLETED root cellar / cool food pit CREDITS it, the
-        // cool, stable air holding a larder near-suspended. Fouled ground takes precedence over a cellar (pests get in
-        // even there). The credit equals the hour that passed, so stored food holds its remaining freshness steady
-        // while it stays by the store, and resumes its clock once carried away — it never gains freshness beyond what
-        // it had, and cannot un-spoil (guarded by spoiled_at IS NULL), so no matter is created.
-        jdbc.update("UPDATE food_preservation_state f SET " +
+        // its counterpart (#77 cold store) — ground holding a COMPLETED cold store CREDITS it, the cool, stable air
+        // holding a larder near-suspended. Fouled ground takes precedence over a cellar (pests get in even there).
+        // The credit equals the hour that passed, so stored food holds its remaining freshness steady while it stays
+        // by the store, and resumes its clock once carried away — it never gains freshness beyond what it had, and
+        // cannot un-spoil (guarded by spoiled_at IS NULL), so no matter is created.
+        //
+        // WHERE THE FOOD ACTUALLY IS (#77). The cellar clause used to ask for food owned by exactly one thing that
+        // itself stood on the cellar's ground, which left out the two most natural ways anybody has ever used a
+        // cellar: food SET DOWN in it (owned by nobody, so the join found nothing) and food in a sack inside a
+        // chest (owned by the sack, which has no ground of its own). A cellar you actually put your harvest in kept
+        // it no better than a hillside; only food a Chronicle stood there holding was kept. `resting` walks the
+        // ownership chain — container inside container, or a body — until it reaches whatever rests on the ground,
+        // so the answer is the chunk the food is physically on however it is stowed. Depth-bounded, so a cycle in
+        // ownership cannot spin here.
+        jdbc.update("WITH RECURSIVE resting(food_id, holder, location, depth) AS (" +
+            "  SELECT f.object_id, w.current_owner_id, w.current_location_id, 0 " +
+            "    FROM food_preservation_state f JOIN world_object w ON w.id=f.object_id WHERE f.spoiled_at IS NULL " +
+            "  UNION ALL " +
+            "  SELECT r.food_id, o.current_owner_id, o.current_location_id, r.depth+1 " +
+            "    FROM resting r JOIN world_object o ON o.id=r.holder WHERE r.location IS NULL AND r.depth < 8), " +
+            // The cold stores are read from the catalogue (V334) rather than named here: a third one built later
+            // keeps food the day it is added, without this query knowing its name.
+            "kept_cool AS (" +
+            "  SELECT DISTINCT r.food_id FROM resting r " +
+            "    JOIN world_object cw ON cw.current_location_id=r.location AND cw.lifecycle_state='ACTIVE' " +
+            "    JOIN construction_project cp ON cp.object_id=cw.id AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
+            "    JOIN construction_kind ck ON ck.project_kind=cp.project_kind AND ck.keeps_food_cool " +
+            "   WHERE r.location IS NOT NULL) " +
+            "UPDATE food_preservation_state f SET " +
             "safe_until = safe_until + make_interval(hours => (CASE " +
             "  WHEN EXISTS (SELECT 1 FROM world_object food JOIN world_object body ON body.id=food.current_owner_id " +
             "    JOIN chunk_refuse cr ON cr.chunk_id=body.current_location_id " +
@@ -69,12 +92,7 @@ public class FoodPreservationService {
             "        WHERE wb.chronicle_id=body.id AND wb.bond_stage='TAMED' AND wp.population_count > 0 " +
             "          AND es.chunk_id=body.current_location_id)) " +
             "  THEN -FLOOR(EXTRACT(EPOCH FROM (?::timestamptz - f.pest_checked_at))/3600.0 * 2)::int " +
-            "  WHEN EXISTS (SELECT 1 FROM world_object food JOIN world_object body ON body.id=food.current_owner_id " +
-            "    JOIN construction_project cp ON cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
-            "      AND cp.project_kind IN ('ROOT_CELLAR','COOL_FOOD_PIT') " +
-            "    JOIN world_object cw ON cw.id=cp.object_id AND cw.lifecycle_state='ACTIVE' " +
-            "      AND cw.current_location_id=body.current_location_id " +
-            "    WHERE food.id=f.object_id) " +
+            "  WHEN f.object_id IN (SELECT food_id FROM kept_cool) " +
             "  THEN FLOOR(EXTRACT(EPOCH FROM (?::timestamptz - f.pest_checked_at))/3600.0)::int " +
             "  ELSE 0 END)), " +
             "pest_checked_at = ? " +
