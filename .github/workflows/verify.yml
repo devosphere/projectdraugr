@@ -101,3 +101,8 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         run: npm run build
+      - name: Backdrop budgets — initial payload and lazy registry (#243)
+        working-directory: frontend
+        # Measures the built artifact: what a player downloads before anything paints. Fails if a backdrop image or
+        # the registry itself is bundled with the app, or if the initial payload grows past its budget.
+        run: npm run backdrops:budget

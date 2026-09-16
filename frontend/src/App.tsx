@@ -1,7 +1,10 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { OnboardingScreen } from './OnboardingScreen';
-import { OverseerMap } from './OverseerMap';
 import { PlaythroughScreen } from './PlaythroughScreen';
+
+// #243: the Overseer map is reached only through ?mode=overseer, and its atlas image is four megabytes. Imported
+// with everything else it rode in the initial payload of every player who will never open it.
+const OverseerMap = lazy(() => import('./OverseerMap').then(module => ({ default: module.OverseerMap })));
 
 export function App() {
   const [playing, setPlaying] = useState(false);
@@ -45,7 +48,9 @@ export function App() {
       setPlaying(true);
     } catch { setEntryError('The world could not be reached. Start Project Draugr, then try again.'); }
   }
-  if (new URLSearchParams(window.location.search).get('mode') === 'overseer') return <OverseerMap />;
+  if (new URLSearchParams(window.location.search).get('mode') === 'overseer') {
+    return <Suspense fallback={null}><OverseerMap /></Suspense>;
+  }
   // Returning to the shore — after a death or by choice — re-checks whether a chronicle
   // still lives, so the onboarding button reads "Awaken" for a fresh start rather than
   // "Soul Link" into a chronicle that is already gone.

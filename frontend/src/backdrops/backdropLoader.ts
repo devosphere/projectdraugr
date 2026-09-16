@@ -36,15 +36,29 @@ const ASSET_URLS = import.meta.glob('../assets/playthrough-*.png', { query: '?ur
 const assetPath = (filename: string) => `../assets/${filename}`;
 const available = (filename: string) => assetPath(filename) in ASSET_URLS;
 
+/**
+ * How many scenes the cache remembers (#243). A long journey passes through many places, and an unbounded cache
+ * would hold a reference to every image the browser ever decoded. Least-recently-used is evicted; an evicted URL is
+ * simply fetched again, and the browser's own HTTP cache usually answers that without touching the network.
+ */
+const MAX_CACHED_SCENES = 12;
 const urlCache = new Map<string, Promise<string>>();
 const rejected = new Set<string>();
 
 function urlFor(record: RuntimeRecord): Promise<string> {
   const cacheKey = `${record.filename}#${record.contentHash}`;
-  let url = urlCache.get(cacheKey);
-  if (!url) {
-    url = ASSET_URLS[assetPath(record.filename)]();
-    urlCache.set(cacheKey, url);
+  const cached = urlCache.get(cacheKey);
+  if (cached) {
+    urlCache.delete(cacheKey);       // re-insert so Map iteration order stays least-recently-used first
+    urlCache.set(cacheKey, cached);
+    return cached;
+  }
+  const url = ASSET_URLS[assetPath(record.filename)]();
+  urlCache.set(cacheKey, url);
+  while (urlCache.size > MAX_CACHED_SCENES) {
+    const oldest = urlCache.keys().next();
+    if (oldest.done) break;
+    urlCache.delete(oldest.value);
   }
   return url;
 }
