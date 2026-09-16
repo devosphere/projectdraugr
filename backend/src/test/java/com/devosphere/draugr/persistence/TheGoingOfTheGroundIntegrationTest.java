@@ -174,10 +174,14 @@ class TheGoingOfTheGroundIntegrationTest {
             assertEquals(overBareMeadow, overMeadow,
                 "open grass is already as quick as walking gets: a path over it must change nothing");
         } finally {
-            for (UUID path : paths) {
-                jdbc.update("DELETE FROM construction_project WHERE object_id=?", path);
-                jdbc.update("DELETE FROM world_object WHERE id=?", path);
-            }
+            // Take the paths up rather than deleting them. A completed construction writes its own history, and
+            // `object_transition` holds a foreign key to the object — history in this world is immutable, so a
+            // fixture must clean up the way the world does: the way is dismantled, and the record that it once
+            // stood remains. (CI caught the delete. The constraint was right and the fixture was wrong.)
+            for (UUID path : paths)
+                jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED', destroyed_at=?, " +
+                    "destroyed_location_id=current_location_id, destroyed_cause='DISMANTLED', current_location_id=NULL " +
+                    "WHERE id=?", Timestamp.from(ticks.current().simulatedAt()), path);
             for (Map<String,Object> chunk : line)
                 jdbc.update("UPDATE world_chunk SET biome=? WHERE id=?", chunk.get("biome"), chunk.get("id"));
         }
