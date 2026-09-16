@@ -237,6 +237,77 @@ class WaterMustBeCrossedIntegrationTest {
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
 
+    /**
+     * The causeway (#77, V333): the ford a Chronicle builds when the world laid none.
+     *
+     * <p>Until this, only a crossing the world happened to place could lift the marsh's refusal, so a camp on the
+     * wrong side of a fen either found one or carried nothing across for ever. The same load, the same marsh, and
+     * three answers: refused on bare bog, carried over a sound way, refused again once the timber has rotted out —
+     * because a way nobody repairs is a way that is no longer there.
+     */
+    @Test
+    void aCausewayIsTheFordYouBuildYourself() {
+        world();
+        Instant now = ticks.current().simulatedAt();
+        UUID chronicle = chronicle();
+        UUID marsh = standWestOf(chronicle, "WETLAND");
+        Assumptions.assumeTrue(marsh != null, "this world laid down no marsh with dry ground beside it");
+        jdbc.update("DELETE FROM ecology_site WHERE chunk_id=? AND site_kind ILIKE '%ford%'", marsh);
+
+        loadTo(chronicle, 95, now);
+        UUID before = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+        stepEast();
+        assertEquals(before, jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle),
+            "bare bog refuses this load — the baseline the causeway is measured against");
+
+        UUID way = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,lifecycle_state,current_location_id) " +
+            "VALUES (?,'CONSTRUCTION','Fen causeway','ACTIVE',?)", way, marsh);
+        jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at,integrity_percent,last_structural_update) " +
+            "VALUES (?,'FEN_CAUSEWAY','COMPLETED',100,?,80,?)", way, java.sql.Timestamp.from(now), java.sql.Timestamp.from(now));
+
+        standWestOf(chronicle, "WETLAND");
+        before = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+        stepEast();
+        assertTrue(!before.equals(jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle)),
+            "the same load crosses the same marsh over a laid way — if this fails the causeway is decoration");
+
+        // Rotted out. A fen track holds because the pegs hold; once they have gone, the bog is bog again.
+        jdbc.update("UPDATE construction_project SET integrity_percent=0 WHERE object_id=?", way);
+        standWestOf(chronicle, "WETLAND");
+        before = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+        stepEast();
+        assertEquals(before, jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle),
+            "a rotted way carries nothing, which is what happens to a fen track nobody repairs");
+
+        // Mend it before the Auditor looks: a COMPLETED structure standing ACTIVE at no integrity is a violation
+        // this fixture made, not one the world did.
+        jdbc.update("UPDATE construction_project SET integrity_percent=80 WHERE object_id=?", way);
+        assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
+
+    /** Open water is not a bog with a road: nothing laid on the shore carries a load into the sea. */
+    @Test
+    void noLaidWayCarriesALoadIntoTheSea() {
+        world();
+        Instant now = ticks.current().simulatedAt();
+        UUID chronicle = chronicle();
+        UUID sea = standWestOf(chronicle, "OCEAN");
+        Assumptions.assumeTrue(sea != null, "this world laid down no shore to step off");
+
+        UUID way = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,lifecycle_state,current_location_id) " +
+            "VALUES (?,'CONSTRUCTION','Fen causeway','ACTIVE',?)", way, sea);
+        jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at,integrity_percent,last_structural_update) " +
+            "VALUES (?,'FEN_CAUSEWAY','COMPLETED',100,?,100,?)", way, java.sql.Timestamp.from(now), java.sql.Timestamp.from(now));
+
+        loadTo(chronicle, 90, now);
+        UUID before = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+        stepEast();
+        assertEquals(before, jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle),
+            "a plank road pegged into peat is not a span over a channel — the sea still refuses the load");
+    }
+
     /** Dry land is untouched: no load makes a meadow refuse a step. */
     @Test
     void dryGroundIsUnchanged() {

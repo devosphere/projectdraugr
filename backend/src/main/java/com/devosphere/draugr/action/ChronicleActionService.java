@@ -1256,6 +1256,13 @@ public class ChronicleActionService {
         if (ford) return null; // a ford is where the water is crossed dryshod; that is the whole of what it is
         boolean sea = "OCEAN".equals(biome), marsh = "WETLAND".equals(biome);
         if (!sea && !marsh) return null;
+        // The built counterpart of a ford (#77, V333). Until now only a crossing the WORLD happened to place could
+        // lift the refusal, so a camp on the wrong side of a fen either found one or carried nothing across for
+        // ever. A laid timber way — pegs driven in crossed pairs, a rail in the crotch, planks pinned along it —
+        // makes the bog carry a full load, which is the whole reason such roads were ever built. Read from
+        // construction_kind rather than named here, and NOT offered to the sea: a plank road on peat is not a span
+        // over a channel. A rotted way carries nothing, which is what happens to a fen track nobody repairs.
+        if (marsh && laidCrossingAt(destination)) return null;
         var load = items.currentLoad(chronicle);
         int capacity = load.sustainedMassCapacityGrams();
         if (capacity <= 0) return null;
@@ -1265,7 +1272,16 @@ public class ChronicleActionService {
             ? "You wade out until the bottom falls away, and what you are carrying takes you straight down with it. "
             + "You struggle back to the shallows and stand there dripping. Not with this load."
             : "You start across the soft ground and sink to the knee, then the thigh. Loaded as you are there is no "
-            + "bottom to push off. You work your way back to firmer ground — this wants a ford, or a lighter back.";
+            + "bottom to push off. You work your way back to firmer ground — this wants a ford, a causeway, or a "
+            + "lighter back.";
+    }
+    /** A sound built way laid over the soft ground here, standing and whole enough to walk loaded (#77, V333). */
+    private boolean laidCrossingAt(UUID chunk) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
+            "JOIN world_object w ON w.id=cp.object_id " +
+            "WHERE w.current_location_id=? AND ck.crosses_soft_ground AND cp.state='COMPLETED' " +
+            "  AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')", Boolean.class, chunk));
     }
 
     /** Register the chronicle's presence in a chunk — the raw material of route memory and the decay clock on named places. */
