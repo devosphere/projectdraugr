@@ -58,6 +58,15 @@ A review is **APPROVED** only when every item is `true` and `reviewedBy` and `re
 | `ACTIVE` | Shown. Requires an **APPROVED** review, or **LEGACY** (below), and widescreen dimensions. |
 | `TOPOLOGY_GATED` | Kept but not shown until the world feature it depicts exists. |
 | `DEPRECATED` | Retired. Kept for history. |
+| `QUARANTINED` | An audit found a creature, or something that could be one (#240). Never shown, never a fallback target, never LEGACY. It leaves quarantine only by being replaced and re-reviewed. |
+
+**Audit findings (#240).** Each review carries `findings`: `{issue, notes, disposition, source, recordedAt}`.
+- `CREATURE` and `AMBIGUOUS` findings require `QUARANTINED`, with the review in the `FLAGGED` state.
+- `RENDERING` blocks approval but not display.
+- `NONE` means a pre-check found nothing.
+- `source` is `AUTOMATED_VISION` or `HUMAN`. Automated vision may flag but never approve, so the validator refuses an APPROVED review whose reviewer is automated.
+
+The 2026-09-15 audit results are in [`backdrop-audit-240.md`](backdrop-audit-240.md).
 
 `npm run backdrops:check` fails if any of these happens:
 
