@@ -56,6 +56,7 @@ class LabourSweatIntegrationTest {
     @Autowired WorldGenesisService worldGenesis;
     @Autowired ChronicleService chronicles;
     @Autowired ChroniclePhysiologyService physiology;
+    @Autowired com.devosphere.draugr.item.PhysicalItemService items;
     @Autowired PersistentStateAuditor auditor;
     @Autowired JdbcTemplate jdbc;
 
@@ -74,17 +75,17 @@ class LabourSweatIntegrationTest {
 
         // Heavy labour (the Labor(12,·) tier) leaves the body damp with sweat.
         jdbc.update("UPDATE chronicle_physiology SET wetness_level=20, energy_level=90, hygiene_level=90 WHERE chronicle_id=?", chronicle);
-        physiology.applyLabor(chronicle, 12, 8);
+        physiology.applyLabor(chronicle, items, 12, 8);
         assertEquals(23, wetness(chronicle), "heavy exertion must sweat the body damp (#217)");
 
         // Light acts (the Labor(2,·) tier — looking, marking, handling gear) do not meaningfully sweat.
         jdbc.update("UPDATE chronicle_physiology SET wetness_level=20, energy_level=90, hygiene_level=90 WHERE chronicle_id=?", chronicle);
-        physiology.applyLabor(chronicle, 2, 0);
+        physiology.applyLabor(chronicle, items, 2, 0);
         assertEquals(20, wetness(chronicle), "a light act must not sweat the body (#217)");
 
         // Sweat feeds the existing wetness→cold→illness path: it never falls below zero and honours the cap.
         jdbc.update("UPDATE chronicle_physiology SET wetness_level=99 WHERE chronicle_id=?", chronicle);
-        physiology.applyLabor(chronicle, 12, 8);
+        physiology.applyLabor(chronicle, items, 12, 8);
         assertTrue(wetness(chronicle) <= 100, "sweat must honour the wetness cap");
 
         assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());

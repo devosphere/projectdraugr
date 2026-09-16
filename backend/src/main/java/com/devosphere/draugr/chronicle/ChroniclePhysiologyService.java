@@ -193,8 +193,20 @@ public class ChroniclePhysiologyService {
      * answer for it with food, rest, and washing. No effect when both costs are zero.
      */
     @Transactional
-    public void applyLabor(UUID chronicleId, int energyCost, int hygieneCost) {
+    public void applyLabor(UUID chronicleId, PhysicalItemService items, int energyCost, int hygieneCost) {
         if (energyCost <= 0 && hygieneCost <= 0) return;
+        // #77 — the load on your back. Until now the pack was free: a Chronicle hauled ninety kilos of stone across
+        // a mountainside and tired exactly as much as one walking empty-handed, because nothing between the carry
+        // limit and the body ever asked what was being carried. The limit refused an impossible load and permitted
+        // everything under it at no cost, which is the one thing carrying is not.
+        //
+        // Work under a load costs up to twice the energy, in proportion to how near the body is to what it can
+        // shoulder. Measured against the capacity the world actually grants — so conditioning, a carry pole, a yoke
+        // or a pack frame all lighten the work they were made to lighten, and a TAMED beast dragging a travois
+        // lightens it most of all, because the capacity it adds is capacity the body is not bearing. The beast
+        // carries the load, so the body does not pay for it: that falls out of this rather than being written.
+        double laden = loadFraction(items, chronicleId);
+        energyCost = (int) Math.round(energyCost * (1 + laden));
         // #217 — heavy exertion taxes the body beyond the energy it spends. Hard work (the Labor(12,·) heavy tier;
         // a failed half-effort passes a smaller cost and does neither) sweats the body — it leaves it damp, and that
         // damp then chills through the SAME wetness→cold→illness path as rain does unless dried at a fire or shelter
@@ -206,6 +218,21 @@ public class ChroniclePhysiologyService {
         jdbc.update("UPDATE chronicle_physiology SET energy_level=GREATEST(0,energy_level-?), hygiene_level=GREATEST(0,hygiene_level-?), wetness_level=LEAST(100,wetness_level+?), hours_without_water=hours_without_water+? WHERE chronicle_id=?",
             Math.max(0, energyCost), Math.max(0, hygieneCost), sweat, exertionThirst, chronicleId);
         refreshBody(chronicleId);
+    }
+    /**
+     * How near this body is to what it can shoulder, 0 to 1 (#77).
+     *
+     * <p>Read from the same {@code currentLoad} the carry limit itself is judged by, rather than a second sum of
+     * masses here — one definition of "laden", so the number that refuses a load and the number that costs a body
+     * to carry one can never disagree. A body with no capacity recorded is treated as unladen rather than as
+     * infinitely burdened, because a missing row must not silently double every cost in the game.
+     */
+    private double loadFraction(PhysicalItemService items, UUID chronicleId) {
+        if (items == null) return 0;
+        var load = items.currentLoad(chronicleId);
+        int capacity = load.sustainedMassCapacityGrams();
+        if (capacity <= 0) return 0;
+        return Math.max(0, Math.min(1.0, load.massGrams() / (double) capacity));
     }
     @Transactional
     public void eat(UUID chronicleId) { eat(chronicleId, com.devosphere.draugr.quality.QualityGrade.SOUND); }
