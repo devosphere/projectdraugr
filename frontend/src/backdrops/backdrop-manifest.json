@@ -57,7 +57,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.goat-cliff-range"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "alpine-headwater",
@@ -113,7 +119,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.headwater-spring"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "ancient-observatory",
@@ -169,7 +181,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.ancient-observatory"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "archipelago-shoreline",
@@ -225,6 +243,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The world has no site kind or biome for this feature yet.",
+        "activatedBy": "#155"
       }
     },
     {
@@ -283,6 +306,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -340,7 +368,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.ash-hound-den"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "aurochs-open-herd-range",
@@ -398,6 +432,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -454,6 +493,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -512,7 +556,16 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.bat-roost"
+        },
+        {
+          "candidate": "site.deep-cave-roost"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "bear-den",
@@ -568,7 +621,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.bear-den"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "beaver-colony",
@@ -624,7 +683,16 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.beaver-pool"
+        },
+        {
+          "candidate": "site.beaver-lodge"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "blackberry-thorn-brush",
@@ -681,6 +749,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -737,7 +810,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.boar-range"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "bog-amphibian-nursery",
@@ -794,6 +873,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -852,7 +936,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.iron-sand-bar"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "bog-medicinal-toxic-flora",
@@ -910,6 +1000,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -967,7 +1062,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.bog-warden-lair"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "broken-aqueduct",
@@ -1023,7 +1124,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.broken-aqueduct"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "buried-granary",
@@ -1079,7 +1186,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.buried-granary"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "cave-bear-shelter",
@@ -1136,6 +1249,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The world has no site kind or biome for this feature yet.",
+        "activatedBy": "#155"
       }
     },
     {
@@ -1193,6 +1311,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The world has no site kind or biome for this feature yet.",
+        "activatedBy": "#155"
       }
     },
     {
@@ -1250,7 +1373,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.troll-shelter"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "centaur-territory-camp",
@@ -1307,6 +1436,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "Centaurs are a candidate native people, not yet placed.",
+        "activatedBy": "#154"
       }
     },
     {
@@ -1363,7 +1497,16 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.clay-beds"
+        },
+        {
+          "candidate": "CLAY_DEPOSIT"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "clear-quartz-crystal-pocket",
@@ -1421,7 +1564,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.crystal-pocket"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "coast",
@@ -1476,7 +1625,16 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "biome.coast"
+        },
+        {
+          "candidate": "COAST"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "coastal-cliff-dune",
@@ -1533,6 +1691,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The world has no site kind or biome for this feature yet.",
+        "activatedBy": "#155"
       }
     },
     {
@@ -1589,7 +1752,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.collapsed-causeway"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "copper-seam",
@@ -1645,7 +1814,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.copper-seam"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "crayfish-stony-shallows",
@@ -1702,6 +1877,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -1761,6 +1941,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "Night-only scenery needs night eligibility per asset, and a habitat feature in the visual context.",
+        "activatedBy": "#236, #232"
       }
     },
     {
@@ -1819,6 +2004,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -1876,7 +2066,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "biome.wetland.deep"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "deep-slow-river-pool",
@@ -1934,7 +2130,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.slow-river-reach"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "deepwater-maw-territory",
@@ -1991,7 +2193,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.deepwater-maw"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "deer-range",
@@ -2047,7 +2255,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.deer-range"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "dense-forest",
@@ -2103,7 +2317,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "biome.temperate-forest.deep"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "dire-wolf-pack-ground",
@@ -2161,7 +2381,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.wolf-pack-ground"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "domestication-paddock",
@@ -2216,7 +2442,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "built.animal-pen"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "dry-scrub",
@@ -2272,6 +2504,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The world has no site kind or biome for this feature yet.",
+        "activatedBy": "#155"
       }
     },
     {
@@ -2329,7 +2566,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.dusk-prowler-territory"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "earthworm-rich-forest-soil",
@@ -2387,6 +2630,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -2444,7 +2692,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.edible-root-patch"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "elk-range",
@@ -2500,7 +2754,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.elk-range"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "estuary",
@@ -2556,6 +2816,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The world has no site kind or biome for this feature yet.",
+        "activatedBy": "#155"
       }
     },
     {
@@ -2613,6 +2878,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The world has no site kind or biome for this feature yet.",
+        "activatedBy": "#155"
       }
     },
     {
@@ -2670,7 +2940,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.fen-siren-pool"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "fibre-grassland",
@@ -2726,7 +3002,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.fiber-grassland"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "flint-chert-field",
@@ -2783,7 +3065,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.flint-field"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "flooded-archive",
@@ -2839,7 +3127,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.flooded-archive"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "forest-ant-mound-colony",
@@ -2897,6 +3191,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -2954,7 +3253,17 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "setting": "edge-or-beside",
+          "biomes": [
+            "TEMPERATE_FOREST",
+            "GRASSLAND"
+          ]
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "forest-highland-foothill",
@@ -3012,7 +3321,17 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "setting": "edge-or-beside",
+          "biomes": [
+            "TEMPERATE_FOREST",
+            "HIGHLAND"
+          ]
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "forest-lakebank",
@@ -3068,7 +3387,14 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.lake-margin",
+          "whenBiome": "TEMPERATE_FOREST"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "forest-rat-groundbird-edge",
@@ -3126,6 +3452,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -3183,6 +3514,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -3238,7 +3574,19 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "world.default"
+        },
+        {
+          "candidate": "biome.temperate-forest"
+        },
+        {
+          "candidate": "TEMPERATE_FOREST"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "forest-wetland-ecotone",
@@ -3295,7 +3643,17 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "setting": "edge-or-beside",
+          "biomes": [
+            "TEMPERATE_FOREST",
+            "WETLAND"
+          ]
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "fox-earth",
@@ -3351,7 +3709,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.fox-earth"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "giant-hornet-queen-nest",
@@ -3409,6 +3773,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -3465,7 +3834,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.glasswing-roost"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "gloom-moth-colony",
@@ -3524,7 +3899,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.gloom-moth-colony"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "golden-jackal-scrub-territory",
@@ -3582,6 +3963,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -3638,6 +4024,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -3696,7 +4087,17 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "setting": "edge-or-beside",
+          "biomes": [
+            "GRASSLAND",
+            "OCEAN"
+          ]
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "grassland-insect-colony",
@@ -3753,6 +4154,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -3810,7 +4216,17 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "setting": "edge-or-beside",
+          "biomes": [
+            "GRASSLAND",
+            "WETLAND"
+          ]
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "harpy-cliff-territory",
@@ -3867,6 +4283,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "No world site places these creatures yet.",
+        "activatedBy": "#117, #120"
       }
     },
     {
@@ -3924,6 +4345,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -3982,6 +4408,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -4040,7 +4471,17 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "setting": "edge-or-beside",
+          "biomes": [
+            "HIGHLAND",
+            "MOUNTAIN"
+          ]
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "highland-tarn",
@@ -4096,7 +4537,14 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.still-pond",
+          "whenBiome": "HIGHLAND"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "highland",
@@ -4151,7 +4599,16 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "biome.highland"
+        },
+        {
+          "candidate": "HIGHLAND"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "iron-pyrite-exposure",
@@ -4208,7 +4665,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.pyrite-exposure"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "iron-vein",
@@ -4264,7 +4727,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.iron-vein"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "karst-cave-interior",
@@ -4320,7 +4789,19 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "interior.cave.lit"
+        },
+        {
+          "candidate": "interior.cave.dark"
+        },
+        {
+          "candidate": "CAVE_INTERIOR"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "karst-cave",
@@ -4375,7 +4856,16 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "biome.cave-mouth"
+        },
+        {
+          "candidate": "CAVE_MOUTH"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "limestone-lime-outcrop",
@@ -4432,7 +4922,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.limestone-quarry"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "locust-damaged-grassland",
@@ -4489,6 +4985,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "Needs a locust disturbance event on the ground.",
+        "activatedBy": "#207"
       }
     },
     {
@@ -4545,7 +5046,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.marsh-island"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "mire-hydra-nest",
@@ -4602,7 +5109,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.mire-hydra-nest"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "mountain-crag",
@@ -4658,7 +5171,16 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "biome.mountain"
+        },
+        {
+          "candidate": "MOUNTAIN"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "mushroom-hollow",
@@ -4714,7 +5236,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.mushroom-hollow"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "native-settlement-edge",
@@ -4771,6 +5299,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "No native settlement is placed in the world yet.",
+        "activatedBy": "#109, #115"
       }
     },
     {
@@ -4830,6 +5363,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "Night-only scenery needs night eligibility per asset, and a habitat feature in the visual context.",
+        "activatedBy": "#236, #232"
       }
     },
     {
@@ -4889,6 +5427,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "Night-only scenery needs night eligibility per asset, and a habitat feature in the visual context.",
+        "activatedBy": "#236, #232"
       }
     },
     {
@@ -4945,7 +5488,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.obsidian-field"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "ochre-pigment-earth-bank",
@@ -5003,7 +5552,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.ochre-earth-bank"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "old-growth-timber",
@@ -5060,7 +5615,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.old-growth-timber"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "open-lakeshore",
@@ -5116,7 +5677,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.lake-margin"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "open-ocean",
@@ -5172,7 +5739,16 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "biome.ocean"
+        },
+        {
+          "candidate": "OCEAN"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "ordinary-hornet-nest",
@@ -5229,6 +5805,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -5285,7 +5866,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.otter-waterway"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "overgrown-watchtower",
@@ -5341,7 +5928,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.overgrown-watchtower"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "placer-gold-gravel-bar",
@@ -5399,6 +5992,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "Gold and sulphur provinces were rejected until a consumer exists.",
+        "activatedBy": "#160"
       }
     },
     {
@@ -5457,7 +6055,17 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "setting": "edge-or-beside",
+          "biomes": [
+            "GRASSLAND",
+            "HIGHLAND"
+          ]
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "plains",
@@ -5512,7 +6120,16 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "biome.grassland"
+        },
+        {
+          "candidate": "GRASSLAND"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "precision-tool-stone-exposure",
@@ -5570,7 +6187,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.precision-tool-stone-exposure"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "pumice-basalt-volcanic-scree",
@@ -5628,7 +6251,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.volcanic-scree"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "quarry",
@@ -5683,6 +6312,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The world has no site kind or biome for this feature yet.",
+        "activatedBy": "#155"
       }
     },
     {
@@ -5741,6 +6375,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -5798,6 +6437,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -5855,7 +6499,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.reed-marsh"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "reedkin-river-isle-settlement",
@@ -5913,6 +6563,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "No native settlement is placed in the world yet.",
+        "activatedBy": "#109, #115"
       }
     },
     {
@@ -5970,7 +6625,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.refractory-clay-bed"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "reindeer-highland-range",
@@ -6027,6 +6688,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -6084,6 +6750,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -6142,7 +6813,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.ridge-stalker-lair"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "river-floodplain",
@@ -6198,7 +6875,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.floodplain"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "river-ford",
@@ -6254,7 +6937,16 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.river-ford"
+        },
+        {
+          "candidate": "site.shallow-ford"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "river-turtle-basking-bank",
@@ -6312,6 +7004,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -6369,6 +7066,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "No world site places these creatures yet.",
+        "activatedBy": "#117, #120"
       }
     },
     {
@@ -6426,7 +7128,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "SALT_DEPOSIT"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "rounded-hammerstone-cobble-bar",
@@ -6484,7 +7192,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.gravel-bar"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "ruin-archive-interior",
@@ -6540,6 +7254,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The world has no site kind or biome for this feature yet.",
+        "activatedBy": "#155"
       }
     },
     {
@@ -6596,7 +7315,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.salt-marsh"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "sandstone-abrasive-outcrop",
@@ -6653,7 +7378,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.stone-outcrop"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "seabird-island-colony",
@@ -6710,6 +7441,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -6766,7 +7502,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.shell-bed"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "shelter-grove",
@@ -6822,7 +7564,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.shelter-grove"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "sheltered-lake-reed-fishery",
@@ -6880,6 +7628,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -6938,6 +7691,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -6995,7 +7753,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.silver-lead-exposure"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "soapstone-outcrop",
@@ -7051,7 +7815,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.soapstone-outcrop"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "squirrel-canopy-range",
@@ -7108,6 +7878,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -7166,6 +7941,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -7221,7 +8001,19 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.fast-stream"
+        },
+        {
+          "candidate": "biome.river-bank"
+        },
+        {
+          "candidate": "RIVER_BANK"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "sulphur-deposit",
@@ -7277,6 +8069,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "Gold and sulphur provinces were rejected until a consumer exists.",
+        "activatedBy": "#160"
       }
     },
     {
@@ -7333,7 +8130,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.sunken-shrine"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "thornback-wallow",
@@ -7389,7 +8192,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.thornback-wallow"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "tidal-flat",
@@ -7445,6 +8254,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The world has no site kind or biome for this feature yet.",
+        "activatedBy": "#155"
       }
     },
     {
@@ -7501,7 +8315,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.tin-exposure"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "trout-spawning-run",
@@ -7558,7 +8378,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.river-fishing-run"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "undercut-riverbank-catfish-eel",
@@ -7616,6 +8442,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -7672,7 +8503,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.underground-stream"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "warren-ground",
@@ -7728,7 +8565,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.hare-warren"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "water-lily-bulrush-pond",
@@ -7786,7 +8629,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.still-pond"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "waterfowl-nesting-ground",
@@ -7843,7 +8692,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.marsh-fowl-nesting"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "wetland",
@@ -7898,7 +8753,16 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "biome.wetland"
+        },
+        {
+          "candidate": "WETLAND"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "wetland-willow-carr",
@@ -7955,6 +8819,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -8012,6 +8881,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -8071,6 +8945,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -8128,7 +9007,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.wild-herb-grove"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "wild-honeybee-tree-hive",
@@ -8186,6 +9071,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -8244,6 +9134,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -8302,6 +9197,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -8359,6 +9259,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -8415,7 +9320,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.riverside-withy-bed"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "woodland-mesopredator-territory",
@@ -8472,6 +9383,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
+        "activatedBy": "#232, #224"
       }
     },
     {
@@ -8528,7 +9444,13 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
-      }
+      },
+      "contexts": [
+        {
+          "candidate": "site.freshwater-spring"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "wyvern-roost",
@@ -8584,6 +9506,11 @@
         },
         "reviewedBy": null,
         "reviewedAt": null
+      },
+      "contexts": [],
+      "gate": {
+        "reason": "No world site places these creatures yet.",
+        "activatedBy": "#117, #120"
       }
     }
   ]

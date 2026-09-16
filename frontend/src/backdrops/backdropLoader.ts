@@ -23,7 +23,8 @@ function loadRecords(): Promise<RuntimeRecord[]> {
   if (!records) {
     records = import('./backdrop-manifest.json').then(module => (module.default as { backdrops: RuntimeRecord[] }).backdrops.map(b => ({
       backdropKey: b.backdropKey, filename: b.filename, contentHash: b.contentHash, label: b.label,
-      lifecycle: b.lifecycle, biomes: b.biomes, siteFamily: b.siteFamily, fallbackKey: b.fallbackKey,
+      lifecycle: b.lifecycle, fallbackKey: b.fallbackKey, precedenceWeight: b.precedenceWeight,
+      contexts: b.contexts ?? [],
     })));
     records.catch(() => { records = null; }); // a failed fetch is retried next time rather than remembered
   }

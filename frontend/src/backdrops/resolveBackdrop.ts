@@ -1,14 +1,19 @@
 /**
- * #238 — which manifest backdrop a place gets, as a pure function.
+ * #238/#235 — which manifest backdrop a place gets, as a pure function.
  *
  * The backend decides WHAT a place is and hands over a degrading chain of candidate keys (#225/#236):
- * `biome.temperate-forest.edge-grassland`, `biome.wetland.night`, `site.clay-deposit`, `interior.cave.dark`,
- * `world.default`. The manifest names images by slug: `forest`, `forest-grassland-ecotone`, `karst-cave-interior`.
- * This bridges the two without the browser learning anything about the world it was not told — it only ever reads
- * the candidates it was sent and the registry it was built with.
+ * `site.clay-beds`, `biome.temperate-forest.edge-grassland`, `biome.wetland.night`, `interior.cave.dark`,
+ * `world.default`. Each manifest record declares, in its `contexts`, which of those it answers to — so routing is by
+ * what a record says it is for, never by what its file is called (#235). A record with no context carries a `gate`
+ * saying why nothing reaches it yet, and is simply never chosen.
  *
- * It is kept free of Vite and the DOM on purpose, so it can be tested on its own. The loader supplies `available`.
+ * Kept free of Vite and the DOM on purpose, so it can be tested on its own. The loader supplies `available`.
  */
+
+/** What the world must be for a record to be chosen. Mirrors BackdropContext in manifest.schema.ts. */
+export type RuntimeContext =
+  | { candidate: string; whenBiome?: string }
+  | { setting: string; biomes: string[] };
 
 /** The part of a manifest record the runtime needs. */
 export interface RuntimeRecord {
@@ -17,9 +22,9 @@ export interface RuntimeRecord {
   contentHash: string;
   label: string;
   lifecycle: string;
-  biomes: string[];
-  siteFamily: string;
   fallbackKey: string | null;
+  precedenceWeight: number;
+  contexts: RuntimeContext[];
 }
 
 export interface Pick {
@@ -28,71 +33,46 @@ export interface Pick {
   via: string;
 }
 
-/** The ground's own backdrop for each base biome, and for the presentation keys the location endpoint still sends. */
-export const BIOME_ANCHOR: Record<string, string> = {
-  TEMPERATE_FOREST: 'forest',
-  WETLAND: 'wetland',
-  GRASSLAND: 'plains',
-  HIGHLAND: 'highland',
-  MOUNTAIN: 'mountain-crag',
-  OCEAN: 'open-ocean',
-  RIVER_BANK: 'stream',
-  COAST: 'coast',
-  CLAY_DEPOSIT: 'clay-deposit',
-  SALT_DEPOSIT: 'rock-salt-exposure',
-  CAVE_INTERIOR: 'karst-cave-interior',
-  // The ground at a cave's mouth is its own biome in the world (not a site), so it needs its own anchor too.
-  CAVE_MOUTH: 'karst-cave',
-};
-
 const MAX_FALLBACK_STEPS = 32;
 
-const toBiome = (slug: string) => slug.toUpperCase().replace(/-/g, '_');
+const slug = (biome: string) => biome.toLowerCase().replace(/_/g, '-');
 
 function rootOf(records: RuntimeRecord[]): RuntimeRecord | undefined {
   return records.find(r => r.fallbackKey === null);
 }
 
 /**
- * The manifest key a backend candidate names, or undefined when the registry has no image for exactly that. An
- * undefined answer is not a failure: the chain the backend sent degrades, and a later, plainer candidate answers.
+ * Whether one declared context is satisfied by this candidate, given the whole chain the backend sent.
+ *
+ * `whenBiome` reads the rest of the chain rather than the candidate itself: the ground's own biome is always in the
+ * chain, so "a lake margin, but only in forest" is answerable without the browser working anything out for itself.
  */
-export function candidateToKey(candidate: string, records: RuntimeRecord[]): string | undefined {
-  if (!candidate) return undefined;
-  const byKey = (k: string) => records.some(r => r.backdropKey === k) ? k : undefined;
-
-  if (candidate === 'world.default') return rootOf(records)?.backdropKey;
-  if (candidate.startsWith('interior.cave')) return byKey(BIOME_ANCHOR.CAVE_INTERIOR);
-  if (candidate.startsWith('site.')) return byKey(candidate.slice('site.'.length));
-  if (candidate.startsWith('built.')) return undefined; // nothing built has scenery of its own yet
-
-  if (candidate.startsWith('biome.')) {
-    const [, biomeSlug, ...qualifiers] = candidate.split('.');
-    const biome = toBiome(biomeSlug ?? '');
-    // Snow and night have no images of their own in the registry: those links are skipped so the chain falls to a
-    // plainer one, rather than showing a sunlit field at midnight under a daylight label.
-    if (qualifiers.includes('snow') || qualifiers.includes('night')) return undefined;
-    const setting = qualifiers[0];
-    if (setting && (setting.startsWith('edge-') || setting.startsWith('beside-'))) {
-      const other = toBiome(setting.replace(/^(edge|beside)-/, ''));
-      const pair = records.find(r => r.siteFamily === 'ECOTONE' && r.biomes.length === 2
-        && r.biomes.includes(biome) && r.biomes.includes(other));
-      return pair?.backdropKey;
-    }
-    if (setting && setting !== 'deep') return undefined;
-    const anchor = BIOME_ANCHOR[biome];
-    return anchor ? byKey(anchor) : undefined;
+export function contextMatches(context: RuntimeContext, candidate: string, chain: readonly string[]): boolean {
+  if ('candidate' in context) {
+    if (context.candidate !== candidate) return false;
+    if (!context.whenBiome) return true;
+    const wanted = `biome.${slug(context.whenBiome)}`;
+    return chain.some(c => c === wanted || c.startsWith(`${wanted}.`));
   }
+  if (context.setting === 'edge-or-beside' && context.biomes?.length === 2) {
+    const [a, b] = context.biomes.map(slug);
+    return candidate === `biome.${a}.edge-${b}` || candidate === `biome.${b}.edge-${a}`
+        || candidate === `biome.${a}.beside-${b}` || candidate === `biome.${b}.beside-${a}`;
+  }
+  return false;
+}
 
-  // A presentation key from the location endpoint (TEMPERATE_FOREST, CLAY_DEPOSIT), or a manifest key already.
-  const anchor = BIOME_ANCHOR[candidate];
-  return anchor ? byKey(anchor) : byKey(candidate);
+/** Every record that answers to this candidate, most specific first, ties broken by key so two never toss a coin. */
+export function recordsFor(candidate: string, records: RuntimeRecord[], chain: readonly string[]): RuntimeRecord[] {
+  return records
+    .filter(r => (r.contexts ?? []).some(c => contextMatches(c, candidate, chain)))
+    .sort((x, y) => (y.precedenceWeight - x.precedenceWeight) || x.backdropKey.localeCompare(y.backdropKey));
 }
 
 /**
- * The first backdrop a place can actually be shown with. Each candidate is tried in order; a candidate whose image
- * cannot be shown — not ACTIVE (quarantined, pending review, retired), not in this build, or already failed to load —
- * walks its own fallback chain before the next candidate is tried. The registry's root is the last resort, and null
+ * The first backdrop a place can actually be shown with. Each candidate is tried in order; a record that cannot be
+ * shown — not ACTIVE (quarantined, pending review, retired), not in this build, or already failed to load — walks its
+ * own fallback chain before the next record or candidate is tried. The registry's root is the last resort, and null
  * means not even that can be shown.
  */
 export function pickBackdrop(candidates: string[], records: RuntimeRecord[], available: (filename: string) => boolean,
@@ -115,9 +95,10 @@ export function pickBackdrop(candidates: string[], records: RuntimeRecord[], ava
   };
 
   for (const candidate of candidates) {
-    const key = candidateToKey(candidate, records);
-    const found = key ? walk(byKey.get(key)) : undefined;
-    if (found) return { record: found, via: candidate };
+    for (const declared of recordsFor(candidate, records, candidates)) {
+      const found = walk(declared);
+      if (found) return { record: found, via: candidate };
+    }
   }
   const root = rootOf(records);
   return root && servable(root) ? { record: root, via: 'root' } : null;

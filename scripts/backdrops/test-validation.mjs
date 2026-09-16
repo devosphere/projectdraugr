@@ -146,6 +146,37 @@ expect('resolution falling back onto a quarantined image', m => {
   const q = firstQuarantined(m), b = firstShown(m); b.fallbackKey = q.backdropKey;
 }, 'falls back to a QUARANTINED backdrop');
 
+// 3c. the #235 context policy — an image nobody can explain, and two images claiming one place
+const firstReachable = m => m.backdrops.find(b => b.contexts.length);
+expect('an image reachable by nothing, explaining nothing', m => {
+  const b = firstReachable(m); b.contexts = []; b.gate = null;
+}, 'reachable by no context and says nothing about why');
+expect('a gate with no reason', m => {
+  const b = firstReachable(m); b.contexts = []; b.gate = { reason: '', activatedBy: '#155' };
+}, 'gate gives no reason');
+expect('a gate naming no issue', m => {
+  const b = firstReachable(m); b.contexts = []; b.gate = { reason: 'nothing reaches it', activatedBy: 'one day' };
+}, 'names no issue that would activate it');
+expect('reachable and gated at once', m => {
+  firstReachable(m).gate = { reason: 'nothing reaches it', activatedBy: '#155' };
+}, 'both reachable and gated');
+expect('a context the world never sends', m => {
+  firstReachable(m).contexts = [{ candidate: 'whenever it feels right' }];
+}, 'names something the world never sends');
+expect('a context that is neither candidate nor setting', m => {
+  firstReachable(m).contexts = [{ mood: 'bleak' }];
+}, 'neither a candidate nor a setting');
+expect('a setting that does not name two biomes', m => {
+  firstReachable(m).contexts = [{ setting: 'edge-or-beside', biomes: ['WETLAND'] }];
+}, 'must name exactly two base biomes');
+expect('whenBiome that is not a biome', m => {
+  firstReachable(m).contexts = [{ candidate: 'site.lake-margin', whenBiome: 'SOMEWHERE_NICE' }];
+}, 'whenBiome is not a base biome');
+expect('two images claiming the same place', m => {
+  const [a, b] = m.backdrops.filter(x => x.contexts.some(c => c.candidate));
+  b.contexts = [{ ...a.contexts.find(c => c.candidate) }];
+}, 'answers to the same context as');
+
 // A properly reviewed replacement is accepted: the contract admits good work, it does not only refuse.
 {
   classes++;
