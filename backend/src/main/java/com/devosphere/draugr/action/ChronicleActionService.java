@@ -288,11 +288,16 @@ public class ChronicleActionService {
         // because walking is not a failure. Asked at the ORIGIN, which is where a rider mounts.
         UUID mount = (intent == Intent.TRAVEL && localZone == null && travel != null)
             ? items.beastToRide(chronicle.id(), chronicle.location()) : null;
+        // What the journey costs is the country it crosses (#77/#155, V335): the going of the ground on the line
+        // between here and there, rather than a flat eighteen minutes a chunk over meadow, fen and mountainside
+        // alike. A ridden beast keeps the same share of the walking time it always did, so hard country is hard
+        // for a rider too — it is faster, not level.
         int minutes = localZone != null ? 5
             : (intent == Intent.TRAVEL
                 ? (travel == null ? 20
-                    : mount != null ? Math.max(10, travel.distance() * RIDDEN_MINUTES_PER_DISTANCE)
-                                    : Math.max(15, travel.distance() * 18))
+                    : mount != null ? Math.max(10, (int) Math.round(travel.distance() * travel.minutesPerChunk()
+                                                                    * (RIDDEN_MINUTES_PER_DISTANCE / (double) FLAT_MINUTES_PER_DISTANCE)))
+                                    : Math.max(15, travel.distance() * travel.minutesPerChunk()))
                 : durationFor(text, intent));
         // A completed tool shed at the settlement keeps tools and made stock to hand and out of the weather, so a
         // Chronicle no longer opens each fabrication or repair by hunting for what they need — the setting-up is
@@ -1286,7 +1291,12 @@ public class ChronicleActionService {
             UUID chunk = (UUID) n.get("chunk_id");
             boolean memorized = Boolean.TRUE.equals(n.get("memorized"));
             java.sql.Timestamp last = (java.sql.Timestamp) n.get("last_visited_at");
-            boolean recent = last != null && last.toInstant().isAfter(java.time.Instant.now().minus(java.time.Duration.ofDays(4)));
+            // Measured on the world's clock, not this machine's. last_visited_at is stamped in simulated time by
+            // recordVisit, so comparing it to the wall clock asked whether the visit was recent in OUR days —
+            // meaningless in a world whose clock runs at its own rate and sits years from today's date, and it
+            // could make a place walked yesterday unfindable or one last seen a decade ago fresh in mind.
+            boolean recent = last != null
+                && last.toInstant().isAfter(ticks.current().simulatedAt().minus(java.time.Duration.ofDays(4)));
             boolean markerHere = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM location_marker WHERE chunk_id=?)", Boolean.class, chunk));
             boolean onMap = Boolean.TRUE.equals(jdbc.queryForObject("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT EXISTS(SELECT 1 FROM reachable x JOIN literature_document d ON d.object_id=x.id JOIN literature_revision rv ON rv.id=d.current_revision_id WHERE d.document_kind='MAP' AND rv.content ILIKE ?)", Boolean.class, chronicle.id(), "%"+name+"%"));
             Integer visits = jdbc.queryForObject("SELECT COALESCE((SELECT visit_count FROM chronicle_chunk_visit WHERE chronicle_id=? AND chunk_id=?),0)", Integer.class, chronicle.id(), chunk);
@@ -1296,9 +1306,32 @@ public class ChronicleActionService {
             int gx=(int)n.get("grid_x"), gy=(int)n.get("grid_y");
             int distance = Math.max(Math.abs(gx-cx), Math.abs(gy-cy));
             String reason = onMap ? "map" : routine ? "routine" : markerHere ? "marker" : "memory";
-            return new TravelPlan(chunk, distance, reason);
+            return new TravelPlan(chunk, distance, reason, goingBetween(chronicle.location(), cx, cy, gx, gy, distance));
         }
         return null;
+    }
+    /**
+     * How hard the country between here and there is to walk, in minutes per chunk (#77/#155, V335).
+     *
+     * <p>A journey used to cost eighteen minutes a chunk whatever it crossed, so a meadow, a fen and a mountainside
+     * were the same walk. The line between the two places is sampled at one point per chunk of distance and the
+     * going of the ground under each point averaged, so the cost is the country actually crossed rather than the
+     * two ends of it: a road round the head of a marsh is not the same journey as one straight through it.
+     *
+     * <p>Falls back to the historical flat rate when the ground has no going recorded, so a biome added to the
+     * generator before it is added to the table behaves exactly as it always did instead of faulting mid-journey.
+     */
+    private int goingBetween(UUID from, int cx, int cy, int gx, int gy, int distance) {
+        if (distance <= 0) return FLAT_MINUTES_PER_DISTANCE;
+        Double average = jdbc.query(
+            "SELECT AVG(g.minutes_per_chunk)::float8 FROM generate_series(0, ?) s " +
+            "  JOIN world_chunk c ON c.world_id=(SELECT world_id FROM world_chunk WHERE id=?) " +
+            "   AND c.grid_x = ROUND(?::numeric + (?::numeric - ?::numeric) * s / ?::numeric) " +
+            "   AND c.grid_y = ROUND(?::numeric + (?::numeric - ?::numeric) * s / ?::numeric) " +
+            "  JOIN terrain_going g ON g.biome = c.biome",
+            rs -> rs.next() ? (Double) rs.getObject(1) : null,
+            distance, from, cx, gx, cx, distance, cy, gy, cy, distance);
+        return average == null ? FLAT_MINUTES_PER_DISTANCE : Math.max(5, (int) Math.round(average));
     }
     private String[] travelTo(ActiveChronicle chronicle, TravelPlan plan, Instant at) {
         if (plan == null) return new String[]{"FAILED", "You try to fix the place in your mind and make for it, but you cannot call the way to mind clearly enough to set out. Some places, once, are not places you can find again."};
@@ -1939,8 +1972,10 @@ public class ChronicleActionService {
     }
     /** Minutes per chunk crossed on horseback — better than twice walking pace, which is 18. */
     private static final int RIDDEN_MINUTES_PER_DISTANCE = 8;
+    /** What a chunk cost to cross before the ground was asked (#77, V335): the fallback for country with no going. */
+    private static final int FLAT_MINUTES_PER_DISTANCE = 18;
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;} }
     /**
      * The structured perception frame — the seam every future Simulation Agent reads
