@@ -702,7 +702,7 @@ public class ChronicleActionService {
         // vector, and a failed half-effort attempt does not overexert. The read runs only for heavy labour.
         boolean heavyLabour = !failed && labor.energy() >= 12 && intent != Intent.CONFRONT_WILDLIFE;
         Integer energyEntering = heavyLabour ? jdbc.queryForObject("SELECT energy_level FROM chronicle_physiology WHERE chronicle_id=?", Integer.class, chronicle.id()) : null;
-        physiology.applyLabor(chronicle.id(), failed ? (labor.energy() + 1) / 2 : labor.energy(), failed ? labor.hygiene() / 2 : labor.hygiene());
+        physiology.applyLabor(chronicle.id(), items, failed ? (labor.energy() + 1) / 2 : labor.energy(), failed ? labor.hygiene() / 2 : labor.hygiene());
         if (energyEntering != null && energyEntering < 20) {
             physiology.applyStrain(chronicle.id(), 6, actionId, resolvedAt);
         }

@@ -57,6 +57,7 @@ class LabourDehydrationIntegrationTest {
     @Autowired WorldGenesisService worldGenesis;
     @Autowired ChronicleService chronicles;
     @Autowired ChroniclePhysiologyService physiology;
+    @Autowired com.devosphere.draugr.item.PhysicalItemService items;
     @Autowired PersistentStateAuditor auditor;
     @Autowired JdbcTemplate jdbc;
 
@@ -75,12 +76,12 @@ class LabourDehydrationIntegrationTest {
 
         // Heavy labour (the Labor(12,·) tier) dries the body from within — hours-without-water advances.
         jdbc.update("UPDATE chronicle_physiology SET hours_without_water=10, energy_level=90, hygiene_level=90, wetness_level=20 WHERE chronicle_id=?", chronicle);
-        physiology.applyLabor(chronicle, 12, 8);
+        physiology.applyLabor(chronicle, items, 12, 8);
         assertEquals(10.5, waterHours(chronicle), 0.001, "heavy exertion must dry the body from within (#217)");
 
         // Light acts (the Labor(2,·) tier) do not meaningfully dehydrate.
         jdbc.update("UPDATE chronicle_physiology SET hours_without_water=10, energy_level=90, hygiene_level=90, wetness_level=20 WHERE chronicle_id=?", chronicle);
-        physiology.applyLabor(chronicle, 2, 0);
+        physiology.applyLabor(chronicle, items, 2, 0);
         assertEquals(10.0, waterHours(chronicle), 0.001, "a light act must not dehydrate the body (#217)");
 
         assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
