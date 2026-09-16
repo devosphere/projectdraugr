@@ -1,0 +1,25 @@
+{
+  "_comment": "Budgets the backdrop registry and the app's first download must stay inside (#243). Raised only with a reason in the commit message: a budget nobody defends is a number that drifts. Measured by scripts/backdrops/check-budgets.mjs against the built artifact, so they are facts about what a player downloads, not intentions.",
+  "initialCode": {
+    "_comment": "Entry chunk plus CSS and anything statically imported with it — the script a browser must run before the app appears. Images are budgeted separately below, because gzip means nothing for a PNG.",
+    "maxBytes": 320000,
+    "maxGzipBytes": 82000
+  },
+  "initialImages": {
+    "_comment": "Images the browser must fetch before the app appears. One is legitimate: the title screen's own background. Anything else — an atlas, a backdrop, a map — belongs behind the screen that needs it.",
+    "maxCount": 1,
+    "maxBytes": 3145728,
+    "maxBackdropImages": 0,
+    "_maxBackdropImagesNote": "Hard zero. A backdrop is chosen from the world, so none may ride in before the world has been read."
+  },
+  "registryChunk": {
+    "_comment": "The manifest itself: must be a dynamic import, never part of the initial payload.",
+    "mustBeLazy": true,
+    "maxGzipBytes": 40000
+  },
+  "images": {
+    "_comment": "Per-image ceilings, read from the committed manifest so they hold even where the PNGs are deferred out of history.",
+    "maxBytesEach": 4194304,
+    "maxCount": 200
+  }
+}
