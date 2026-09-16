@@ -1284,6 +1284,39 @@ public class ChronicleActionService {
             "  AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')", Boolean.class, chunk));
     }
 
+    /**
+     * The first water on the way that this body, loaded as it is, cannot get across (#77).
+     *
+     * <p>A single step into a fen has been refused a laden Chronicle since #156/#157 — soft ground will not take a
+     * walker with a heavy pack — but a JOURNEY asked nothing at all. Naming a place on the far side of the same fen
+     * and setting out carried a Chronicle straight over it with a full load on their back, so the rule held for the
+     * step and not for the day's walk, which is the one place it matters most.
+     *
+     * <p>The line is sampled the way its cost is (V335): one point per chunk of distance, so what refuses passage is
+     * the country actually crossed. The ground the Chronicle is already standing on is skipped — they are on it, so
+     * it plainly took them. A ford or a laid causeway on the line lets the journey through exactly as it lets a step
+     * through, which is what makes building one across the fen worth the timber.
+     *
+     * @return the refusal to tell the player, or null when the way is passable for what they are carrying.
+     */
+    private String impassableOnTheWay(UUID chronicle, UUID from, UUID to) {
+        java.util.List<UUID> line = jdbc.queryForList(
+            "WITH a AS (SELECT world_id, grid_x, grid_y FROM world_chunk WHERE id=?), " +
+            "     b AS (SELECT grid_x, grid_y FROM world_chunk WHERE id=?), " +
+            "     d AS (SELECT GREATEST(ABS(b.grid_x-a.grid_x), ABS(b.grid_y-a.grid_y)) AS n FROM a, b) " +
+            "SELECT c.id FROM d, generate_series(1, d.n) s, a, b " +
+            "  JOIN world_chunk c ON TRUE " +
+            " WHERE c.world_id = a.world_id AND d.n > 0 " +
+            "   AND c.grid_x = ROUND(a.grid_x + (b.grid_x - a.grid_x)::numeric * s / d.n) " +
+            "   AND c.grid_y = ROUND(a.grid_y + (b.grid_y - a.grid_y)::numeric * s / d.n) " +
+            " ORDER BY s", UUID.class, from, to);
+        for (UUID step : line) {
+            String refusal = waterCrossing(chronicle, step);
+            if (refusal != null) return refusal;
+        }
+        return null;
+    }
+
     /** Register the chronicle's presence in a chunk — the raw material of route memory and the decay clock on named places. */
     private void recordVisit(UUID chronicle, UUID chunk, Instant at) {
         java.sql.Timestamp ts = java.sql.Timestamp.from(at);
@@ -1352,6 +1385,13 @@ public class ChronicleActionService {
     private String[] travelTo(ActiveChronicle chronicle, TravelPlan plan, Instant at) {
         if (plan == null) return new String[]{"FAILED", "You try to fix the place in your mind and make for it, but you cannot call the way to mind clearly enough to set out. Some places, once, are not places you can find again."};
         if (plan.destination().equals(chronicle.location())) return new String[]{"SUCCEEDED", "You are already at the place you meant to reach."};
+        // Water on the way stops a journey as surely as it stops a step (#77). Knowing where a place is has never
+        // been the same as being able to get to it with what you are carrying, and until now it was: the load rule
+        // held for one pace into a fen and not for a day's walk across one.
+        String barred = impassableOnTheWay(chronicle.id(), chronicle.location(), plan.destination());
+        if (barred != null) return new String[]{"FAILED",
+            "You set out, and the way brings you up against water. " + barred + " You come back the way you went, "
+            + "no nearer the place you meant to reach."};
         java.sql.Timestamp ts = java.sql.Timestamp.from(at);
         jdbc.update("UPDATE world_object SET current_location_id=?, updated_at=? WHERE id=?", plan.destination(), ts, chronicle.id());
         jdbc.update("UPDATE chronicle SET current_zone=NULL WHERE id=?", chronicle.id()); // arrived at a new place; old zones are behind

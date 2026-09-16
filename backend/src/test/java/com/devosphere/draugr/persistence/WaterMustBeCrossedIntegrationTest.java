@@ -308,6 +308,85 @@ class WaterMustBeCrossedIntegrationTest {
             "a plank road pegged into peat is not a span over a channel — the sea still refuses the load");
     }
 
+    /**
+     * A journey stops at the water it cannot cross (#77).
+     *
+     * <p>One step into a fen has been refused a laden Chronicle since #156/#157. A JOURNEY asked nothing: naming a
+     * place on the far side of the same fen and setting out carried a full load straight over it. The rule held for
+     * one pace and not for the day's walk, which is where it matters most — and it meant a causeway was worth
+     * building for a step and worth nothing for a route.
+     *
+     * <p>The same load, the same fen, three answers: barred, then carried over a causeway laid on the fen, then
+     * barred again once the timber has rotted.
+     */
+    @Test
+    void aJourneyStopsAtTheWaterItCannotCross() {
+        world();
+        Instant now = ticks.current().simulatedAt();
+        UUID chronicle = chronicle();
+
+        // Three chunks in a row: where the Chronicle stands, a fen in the middle, and the place they are making for.
+        java.util.Map<String,Object> here = jdbc.queryForMap(
+            "SELECT c.id, c.world_id, c.grid_x, c.grid_y FROM world_chunk c " +
+            "WHERE EXISTS (SELECT 1 FROM world_chunk e WHERE e.world_id=c.world_id AND e.grid_y=c.grid_y AND e.grid_x=c.grid_x+2) " +
+            "ORDER BY c.grid_y, c.grid_x LIMIT 1");
+        UUID origin = (UUID) here.get("id");
+        java.util.List<java.util.Map<String,Object>> line = jdbc.queryForList(
+            "SELECT id, biome FROM world_chunk WHERE world_id=? AND grid_y=? AND grid_x BETWEEN ? AND ? ORDER BY grid_x",
+            here.get("world_id"), here.get("grid_y"), here.get("grid_x"), (int) here.get("grid_x") + 2);
+        assertEquals(3, line.size(), "the fixture needs three chunks in a row");
+        UUID fen = (UUID) line.get(1).get("id");
+        UUID destination = (UUID) line.get(2).get("id");
+
+        UUID causeway = null;
+        try {
+            jdbc.update("UPDATE world_chunk SET biome='GRASSLAND' WHERE id IN (?,?)", origin, destination);
+            jdbc.update("UPDATE world_chunk SET biome='WETLAND' WHERE id=?", fen);
+            jdbc.update("DELETE FROM ecology_site WHERE chunk_id=? AND site_kind ILIKE '%ford%'", fen);
+            jdbc.update("INSERT INTO chronicle_named_location (chronicle_id,chunk_id,name,designated_at,memorized,last_visited_at) " +
+                "VALUES (?,?,'Farbank',?,TRUE,?) ON CONFLICT (chronicle_id,chunk_id,name) DO UPDATE " +
+                "SET memorized=TRUE, last_visited_at=EXCLUDED.last_visited_at",
+                chronicle, destination, java.sql.Timestamp.from(now), java.sql.Timestamp.from(now));
+
+            loadTo(chronicle, 95, now);
+            jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", origin, chronicle);
+            var barred = actions.resolve("travel to Farbank");
+            assertEquals("FAILED", barred.outcome(),
+                () -> "a full pack cannot be walked across a fen because the far side has a name: " + barred.perception());
+            assertEquals(origin, jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle),
+                "and the Chronicle must still be standing where they set out from");
+
+            // A causeway laid on the fen, and the same journey goes through — which is what makes building one
+            // across a fen worth the timber, rather than worth it only for a single step.
+            causeway = UUID.randomUUID();
+            jdbc.update("INSERT INTO world_object (id,object_type,display_name,lifecycle_state,current_location_id) " +
+                "VALUES (?,'CONSTRUCTION','Fen causeway','ACTIVE',?)", causeway, fen);
+            jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at,integrity_percent,last_structural_update) " +
+                "VALUES (?,'FEN_CAUSEWAY','COMPLETED',100,?,85,?)", causeway, java.sql.Timestamp.from(now), java.sql.Timestamp.from(now));
+
+            jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", origin, chronicle);
+            var carried = actions.resolve("travel to Farbank");
+            assertEquals("SUCCEEDED", carried.outcome(), () -> "over a laid causeway the same load goes: " + carried.perception());
+            assertEquals(destination, jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle),
+                "and it must end where it was aimed");
+
+            // Rotted out, and the fen is a fen again.
+            jdbc.update("UPDATE construction_project SET integrity_percent=0 WHERE object_id=?", causeway);
+            jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", origin, chronicle);
+            assertEquals("FAILED", actions.resolve("travel to Farbank").outcome(),
+                "a rotted causeway carries no journey either");
+        } finally {
+            if (causeway != null)
+                jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED', destroyed_at=?, " +
+                    "destroyed_location_id=current_location_id, destroyed_cause='DISMANTLED', current_location_id=NULL " +
+                    "WHERE id=?", java.sql.Timestamp.from(now), causeway);
+            for (java.util.Map<String,Object> chunk : line)
+                jdbc.update("UPDATE world_chunk SET biome=? WHERE id=?", chunk.get("biome"), chunk.get("id"));
+        }
+
+        assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
+
     /** Dry land is untouched: no load makes a meadow refuse a step. */
     @Test
     void dryGroundIsUnchanged() {
