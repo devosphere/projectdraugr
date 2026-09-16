@@ -1,9 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import forestArt from './assets/playthrough-forest-v1.png';
-import streamArt from './assets/playthrough-stream-v1.png';
-import quarryArt from './assets/playthrough-quarry-v1.png';
-import clayDepositArt from './assets/playthrough-clay-deposit-v1.png';
-import { decodeArt, latestOnly } from './backdrops/latestScene';
+import { latestOnly } from './backdrops/latestScene';
+import { loadScene } from './backdrops/backdropLoader';
 
 const previewBody = [
   ['Health', 'Healthy'], ['Condition', 'Unsteady'], ['Hunger', 'Satisfied'], ['Thirst', 'Hydrated'],
@@ -13,6 +10,7 @@ const previewBody = [
 type BodySnapshot = { health: string; condition: string; hunger: string; thirst: string; energy: string; temperature: string; wetness: string; bladder: string; bowel: string; hygiene: string };
 type ActionResult = { actionId: string; intent: string; outcome: string; durationMinutes: number; resolvedAt: string; perception: string; body: BodySnapshot | null; died?: boolean };
 type LocationSnapshot = { biome: string; presentationKey: string };
+type BackdropSnapshot = { key: string; candidates: string[]; fingerprint: string | null };
 type EnvironmentSnapshot = { simulatedAt: string; weatherKind: string; ambientTemperatureC: number | null; windSpeedKph: number | null };
 type ItemState = { carried: { id: string; displayName: string; itemKey: string; containerId: string | null }[]; equipped: { id: string; displayName: string; bodyPosition: string; layer: string }[]; load: { massGrams: number; bulkMl: number; heaviestObjectGrams: number; sustainedMassCapacityGrams: number; directBulkCapacityMl: number; maximumSingleLiftGrams: number }; containers: { id: string; displayName: string; maxMassGrams: number; maxVolumeMl: number; usedMassGrams: number; usedVolumeMl: number }[] };
 type Panel = 'none' | 'chronicle' | 'equipment' | 'load' | 'storage' | 'crafting' | 'construction' | 'knowledge' | 'map' | 'literature';
@@ -28,15 +26,6 @@ const olderNarrationPages = [[
   { id: 'arrival-1', text: 'Pain loosens its grip. Beneath an unfamiliar sky, the forest remains where it was.' },
 ]];
 
-const backdropByBiome: Record<string, { art: string; label: string }> = {
-  TEMPERATE_FOREST: { art: forestArt, label: 'Uncharted forest' },
-  WETLAND: { art: streamArt, label: 'Forest stream' },
-  RIVER_BANK: { art: streamArt, label: 'River bank' },
-  COAST: { art: streamArt, label: 'Open shore' },
-  MOUNTAIN: { art: quarryArt, label: 'Stone basin' },
-  HIGHLAND: { art: quarryArt, label: 'Highland quarry' },
-  CLAY_DEPOSIT: { art: clayDepositArt, label: 'Clay deposit' },
-};
 
 function toBodyRows(snapshot: BodySnapshot | null) {
   if (!snapshot) return [] as string[][];
@@ -102,7 +91,9 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
   const [showOverlay, setShowOverlay] = useState(false);
   const overlayTimer = useRef<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [location, setLocation] = useState(backdropByBiome.TEMPERATE_FOREST);
+  // #238: the scene comes from the manifest, loaded lazily. Until the first one has decoded there is no art, and the
+  // screen shows its own dark ground rather than a wrong picture.
+  const [location, setLocation] = useState<{ art: string | null; label: string }>({ art: null, label: 'Uncharted forest' });
   // #239: the scene a new one fades in over. The new art has already decoded before setLocation (#237), so the
   // fade never starts on a blank frame; the old scene stays as the ground underneath until it is fully covered.
   // Someone who has asked for reduced motion gets the change at once, with no fade at all.
@@ -112,7 +103,8 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
     if (shownArt.current === location.art) return;
     const reduced = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
       && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    setFadingFrom(reduced ? null : shownArt.current);
+    // Nothing to fade from before the first scene: it simply appears.
+    setFadingFrom(reduced || !shownArt.current ? null : shownArt.current);
     shownArt.current = location.art;
   }, [location.art]);
   const [environment, setEnvironment] = useState({ time: 'Early morning', weather: 'Light rain', season: 'Early spring' });
@@ -143,15 +135,32 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
     return () => { place.retire(); weather.retire(); };
   }, []);
 
+  /**
+   * #238: what the backend says this place is, as a degrading chain of candidates (#225/#236), and the first of them
+   * the registry can actually show. The browser only reads what it was sent — it never works out a place for itself.
+   * A backend without the backdrop endpoint still answers from the location's presentation key.
+   */
+  async function candidatesHere(): Promise<string[]> {
+    if (!apiUrl) return ['world.default'];
+    try {
+      const backdrop = await fetch(`${apiUrl}/api/visual-context/v1/backdrop`);
+      if (backdrop.ok) {
+        const snapshot = await backdrop.json() as BackdropSnapshot;
+        if (snapshot?.candidates?.length) return [...snapshot.candidates, 'world.default'];
+      }
+    } catch { /* fall through to the location endpoint */ }
+    const located = await fetch(`${apiUrl}/api/chronicles/active/location`);
+    const snapshot = located.ok ? await located.json() as LocationSnapshot | null : null;
+    return snapshot ? [snapshot.presentationKey, snapshot.biome, 'world.default'] : ['world.default'];
+  }
+
   function refreshLocation() {
-    if (!apiUrl) return;
     const tickets = locationTickets.current, ticket = tickets.next();
-    fetch(`${apiUrl}/api/chronicles/active/location`).then(response => response.ok ? response.json() : null).then(async (snapshot: LocationSnapshot | null) => {
-      if (!snapshot || !tickets.current(ticket)) return;
-      const next = backdropByBiome[snapshot.presentationKey] ?? backdropByBiome[snapshot.biome] ?? backdropByBiome.TEMPERATE_FOREST;
-      // The last valid scene stays up until the new one can paint; one that cannot be decoded never replaces it.
-      try { await decodeArt(next.art); } catch { return; }
-      if (tickets.current(ticket)) setLocation(next);
+    candidatesHere().then(async candidates => {
+      if (!tickets.current(ticket)) return;
+      // The last valid scene stays up until the new one has decoded; one that will not load is skipped for the next.
+      const scene = await loadScene(candidates);
+      if (scene && tickets.current(ticket)) setLocation({ art: scene.art, label: scene.label });
     }).catch(() => undefined);
   }
 
@@ -343,7 +352,8 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
 
   const menuItems = (prototypeMode ? [['chronicle','Chronicle'],['equipment','Equipment'],['load','Load'],['storage','Storage'],['crafting','Crafting'],['construction','Construction'],['knowledge','Knowledge'],['map','Chronicle Map'],['literature','Literature']] : [['chronicle','Chronicle'],['equipment','Equipment'],['load','Load'],...(items?.containers.length ? [['storage','Storage']] : []),...(discoveries?.discoveries.includes('WOVEN_BASKET') ? [['crafting','Crafting']] : []),...(discoveries?.constructions.length ? [['construction','Construction']] : []),...(discoveries?.discoveries.length ? [['knowledge','Knowledge']] : [])]) as [Panel,string][];
 
-  return <main className="playthrough" style={{ backgroundImage: `url(${fadingFrom ?? location.art})` }}>
+  const groundArt = fadingFrom ?? location.art;
+  return <main className="playthrough" style={groundArt ? { backgroundImage: `url(${groundArt})` } : undefined}>
     {fadingFrom && <div key={location.art} className="scene-fade" aria-hidden="true" style={{ backgroundImage: `url(${location.art})` }} onAnimationEnd={() => setFadingFrom(null)} />}
     <div className="playthrough-vignette" />
     {/* #239: what a sighted player reads off the picture, said for a screen reader. Built only from the general
