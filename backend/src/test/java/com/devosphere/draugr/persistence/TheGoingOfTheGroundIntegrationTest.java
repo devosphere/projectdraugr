@@ -121,6 +121,81 @@ class TheGoingOfTheGroundIntegrationTest {
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
 
+    /**
+     * A laid way is quicker to walk (#77, V336) — and never quicker than open grass.
+     *
+     * <p>The same three chunks of woodland, walked twice: once as the wood is, and once with a path laid along it.
+     * The labour of building a road is repaid every time anybody walks it, which is the only reason roads have ever
+     * been built; until this, nothing a Chronicle laid could make any journey shorter.
+     */
+    @Test
+    void aPathLaidAlongTheWayShortensIt() {
+        if (worldGenesis.current() == null) {
+            worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
+            ecology.seed();
+        }
+        ChronicleService.ChronicleSummary summary = chronicles.awaken();
+        assertNotNull(summary, "awakening must produce a living Chronicle");
+        UUID chronicle = summary.id();
+
+        Map<String,Object> here = jdbc.queryForMap(
+            "SELECT c.id, c.world_id, c.grid_x, c.grid_y FROM world_chunk c " +
+            "WHERE EXISTS (SELECT 1 FROM world_chunk e WHERE e.world_id=c.world_id AND e.grid_y=c.grid_y AND e.grid_x=c.grid_x+3) " +
+            "ORDER BY c.grid_y, c.grid_x LIMIT 1");
+        UUID origin = (UUID) here.get("id");
+        UUID world = (UUID) here.get("world_id");
+        int x = (int) here.get("grid_x"), y = (int) here.get("grid_y");
+        List<Map<String,Object>> line = jdbc.queryForList(
+            "SELECT id, biome FROM world_chunk WHERE world_id=? AND grid_y=? AND grid_x BETWEEN ? AND ? ORDER BY grid_x",
+            world, y, x, x + 3);
+        assertEquals(4, line.size(), "the fixture needs four chunks in a row to walk along");
+        UUID destination = (UUID) line.get(3).get("id");
+        jdbc.update("INSERT INTO chronicle_named_location (chronicle_id,chunk_id,name,designated_at,memorized,last_visited_at) " +
+            "VALUES (?,?,'Stonewell',?,TRUE,?) ON CONFLICT (chronicle_id,chunk_id,name) DO UPDATE " +
+            "SET memorized=TRUE, last_visited_at=EXCLUDED.last_visited_at",
+            chronicle, destination, Timestamp.from(ticks.current().simulatedAt()), Timestamp.from(ticks.current().simulatedAt()));
+
+        List<UUID> paths = new java.util.ArrayList<>();
+        try {
+            long throughTheWood = journey(chronicle, origin, destination, line, "TEMPERATE_FOREST");
+
+            for (Map<String,Object> chunk : line) paths.add(layPath((UUID) chunk.get("id")));
+            long alongThePath = journey(chronicle, origin, destination, line, "TEMPERATE_FOREST");
+
+            assertTrue(alongThePath < throughTheWood,
+                () -> "a path laid along the way must shorten the journey, or the labour of laying it buys nothing "
+                    + "(through the wood " + throughTheWood + " min, along the path " + alongThePath + " min)");
+
+            // And the floor holds: the same path over open grass changes nothing, because a laid way makes hard
+            // country walkable and never better than a meadow.
+            long overMeadow = journey(chronicle, origin, destination, line, "GRASSLAND");
+            for (UUID path : paths) jdbc.update("UPDATE construction_project SET integrity_percent=0 WHERE object_id=?", path);
+            long overBareMeadow = journey(chronicle, origin, destination, line, "GRASSLAND");
+            assertEquals(overBareMeadow, overMeadow,
+                "open grass is already as quick as walking gets: a path over it must change nothing");
+        } finally {
+            for (UUID path : paths) {
+                jdbc.update("DELETE FROM construction_project WHERE object_id=?", path);
+                jdbc.update("DELETE FROM world_object WHERE id=?", path);
+            }
+            for (Map<String,Object> chunk : line)
+                jdbc.update("UPDATE world_chunk SET biome=? WHERE id=?", chunk.get("biome"), chunk.get("id"));
+        }
+
+        assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
+
+    /** A sound laid path standing on this ground. */
+    private UUID layPath(UUID chunk) {
+        UUID path = UUID.randomUUID();
+        Timestamp at = Timestamp.from(ticks.current().simulatedAt());
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,lifecycle_state,current_location_id) " +
+            "VALUES (?,'CONSTRUCTION','Laid path','ACTIVE',?)", path, chunk);
+        jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at,integrity_percent,last_structural_update) " +
+            "VALUES (?,'LAID_PATH','COMPLETED',100,?,90,?)", path, at, at);
+        return path;
+    }
+
     /** Lay the whole line down as one kind of country, walk it, and answer how many simulated minutes it took. */
     private long journey(UUID chronicle, UUID origin, UUID destination, List<Map<String,Object>> line, String biome) {
         for (Map<String,Object> chunk : line) jdbc.update("UPDATE world_chunk SET biome=? WHERE id=?", biome, chunk.get("id"));

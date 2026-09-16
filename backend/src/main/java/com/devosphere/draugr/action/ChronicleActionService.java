@@ -1320,15 +1320,28 @@ public class ChronicleActionService {
      *
      * <p>Falls back to the historical flat rate when the ground has no going recorded, so a biome added to the
      * generator before it is added to the table behaves exactly as it always did instead of faulting mid-journey.
+     *
+     * <p>A WAY SOMEBODY LAID takes time off the ground it lies on (#77, V336), so the labour of building a road is
+     * repaid every time anybody walks it — which is the only reason roads have ever been built. Read per sampled
+     * chunk, so a path laid over the worst mile of a route improves that mile and no other; a sound way only, so a
+     * road nobody repairs stops being a road. It can never bring any ground below the going of open grass: a path
+     * through a wood makes the wood walkable, it does not make it a meadow.
      */
     private int goingBetween(UUID from, int cx, int cy, int gx, int gy, int distance) {
         if (distance <= 0) return FLAT_MINUTES_PER_DISTANCE;
         Double average = jdbc.query(
-            "SELECT AVG(g.minutes_per_chunk)::float8 FROM generate_series(0, ?) s " +
+            "SELECT AVG(GREATEST((SELECT MIN(minutes_per_chunk) FROM terrain_going), " +
+            "                    g.minutes_per_chunk - COALESCE(laid.eased, 0)))::float8 " +
+            "  FROM generate_series(0, ?) s " +
             "  JOIN world_chunk c ON c.world_id=(SELECT world_id FROM world_chunk WHERE id=?) " +
             "   AND c.grid_x = ROUND(?::numeric + (?::numeric - ?::numeric) * s / ?::numeric) " +
             "   AND c.grid_y = ROUND(?::numeric + (?::numeric - ?::numeric) * s / ?::numeric) " +
-            "  JOIN terrain_going g ON g.biome = c.biome",
+            "  JOIN terrain_going g ON g.biome = c.biome " +
+            "  LEFT JOIN LATERAL (SELECT MAX(ck.eases_going) AS eased FROM construction_project cp " +
+            "     JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
+            "     JOIN world_object o ON o.id = cp.object_id " +
+            "    WHERE o.current_location_id = c.id AND cp.state = 'COMPLETED' AND cp.integrity_percent > 0 " +
+            "      AND o.lifecycle_state = 'ACTIVE') laid ON TRUE",
             rs -> rs.next() ? (Double) rs.getObject(1) : null,
             distance, from, cx, gx, cx, distance, cy, gy, cy, distance);
         return average == null ? FLAT_MINUTES_PER_DISTANCE : Math.max(5, (int) Math.round(average));

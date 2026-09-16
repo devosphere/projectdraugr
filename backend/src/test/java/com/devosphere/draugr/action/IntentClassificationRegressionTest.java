@@ -119,6 +119,21 @@ class IntentClassificationRegressionTest {
             assertEquals("UNKNOWN", classify(phrase), phrase);
     }
 
+    /**
+     * #77 V336: a laid path is built through the assembly matcher. Every keyword it declares is replayed here, bare
+     * and in a sentence, because the integration guard that replays all of them needs Docker and fifty minutes. The
+     * words this structure cannot have are the same ones the causeway could not: "track" is TRACK's and "trail" is
+     * MARK's. The intents whose vocabulary it brushes against must be unharmed.
+     */
+    @Test void aLaidPathIsBuiltNotTracked() throws Exception {
+        for (String phrase : new String[]{"lay a path", "build a path", "make a path", "stone path", "gravel path",
+                                          "paved way", "paved path", "flagged path", "lay a road", "build a road",
+                                          "stone road", "work on the path", "build a stone path"})
+            assertEquals("UNKNOWN", classify(phrase), phrase);
+        assertEquals("TRACK", classify("read the ground for tracks"));
+        assertEquals("MARK", classify("leave a marker"));
+    }
+
     @Test void processActionsAreNotStolenByGreedyIntents() throws Exception {
         // When the two-axis matcher claims the text, the ambiguous intent must yield,
         // so the dispatch falls through to PROCESS_MATERIAL (classify returns UNKNOWN).
