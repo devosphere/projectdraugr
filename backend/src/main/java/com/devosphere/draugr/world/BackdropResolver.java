@@ -84,11 +84,24 @@ public final class BackdropResolver {
         //    another. The FULLEST stand decides, which is the one a person would actually see first; ties break by
         //    name so two stands never toss a coin. The feature list arrives ordered by quantity, so first is
         //    fullest.
+        //
+        //    Unlike a site or a build, a stand is on almost every piece of ground there is, so this tier is the
+        //    one that would be felt if it replaced the key outright and no image existed for that particular plant:
+        //    every meadow in the world would fall past its own ground to the registry root. This file already
+        //    settled that question for the setting tier — "a tier replaces the key, and the key is the one link a
+        //    caller is promised an image for" — so the stand REFINES rather than replaces: its chain is offered
+        //    first and then degrades to the ground it grows on, exactly as an edge degrades to its biome.
         Optional<String> growing = context.features().stream()
             .filter(f -> f.kind() != null && f.kind().startsWith("FLORA:"))
             .map(f -> slug(f.kind().substring("FLORA:".length())))
             .findFirst();
-        if (growing.isPresent()) return outdoors("flora." + growing.get(), "FLORA_HERE", context);
+        if (growing.isPresent() && context.biome() != null && !context.biome().isBlank()) {
+            Choice stand = outdoors("flora." + growing.get(), "FLORA_HERE", context);
+            Choice ground = outdoors("biome." + slug(context.biome()), "BIOME", context, setting(context));
+            java.util.List<String> chain = new java.util.ArrayList<>(stand.candidates());
+            chain.addAll(ground.candidates());
+            return new Choice(stand.key(), "FLORA_HERE", java.util.List.copyOf(chain));
+        }
 
         // 5. The ground itself — seen in its setting where the setting can be seen (#232/#234).
         if (context.biome() != null && !context.biome().isBlank())

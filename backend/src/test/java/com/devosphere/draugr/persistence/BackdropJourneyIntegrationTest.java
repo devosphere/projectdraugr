@@ -149,8 +149,17 @@ class BackdropJourneyIntegrationTest {
                     + ", served " + served.key() + ")");
             assertEquals(direct.candidates(), served.candidates(), () -> where + ": the eligibility chain drifted on the wire");
             assertEquals(here.fingerprint(), served.fingerprint(), () -> where + ": the served fingerprint is not this place's");
-            assertEquals(served.key(), served.candidates().get(served.candidates().size() - 1),
-                () -> where + ": the chain must end in its guaranteed key: " + served.candidates());
+            // The chain must END somewhere that always answers. That used to be the chosen key itself, because
+            // every tier replaced the key outright; since #224 a stand REFINES the ground rather than replacing it
+            // (a brake of blackberry with no image of its own must fall back to its own meadow, not to the
+            // registry root), so the last link is the ground's own key — or the world's default where there is no
+            // ground to name. The chosen key must still be the FIRST thing offered: the chain is a ladder down.
+            String last = served.candidates().get(served.candidates().size() - 1);
+            assertTrue(last.startsWith("biome.") || last.equals(BackdropResolver.FALLBACK_KEY)
+                       || last.equals(served.key()),
+                () -> where + ": the chain must end somewhere that always answers: " + served.candidates());
+            assertEquals(served.key(), served.candidates().get(0),
+                () -> where + ": the chain must offer the chosen key first: " + served.candidates());
 
             // A refresh — or a reload onto the same unchanged ground after save and resume — answers identically.
             VisualContextController.Backdrop again = controller.backdrop();

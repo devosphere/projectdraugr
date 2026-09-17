@@ -250,4 +250,39 @@ class BackdropResolverTest {
             "DAY", "SUMMER", "CLEAR", 14.0, true, List.of("MOUNTAIN"), "fp");
         assertEquals(List.of("site.still-pond"), BackdropResolver.resolve(onSite).candidates());
     }
+
+    private VisualContextService.Feature growing(String key) { return new VisualContextService.Feature("FLORA:" + key, key); }
+
+    /**
+     * A stand REFINES the ground; it does not replace it (#224).
+     *
+     * <p>Unlike a site or a build, something is growing on almost every piece of ground there is. If this tier
+     * replaced the key outright, every meadow whose particular plant has no image of its own would fall past its
+     * own ground to the registry root — the exact failure this file already settled for the setting tier. So the
+     * chain is offered stand-first and degrades to the biome underneath it.
+     */
+    @Test void aStandIsOfferedBeforeTheGroundAndFallsBackToIt() {
+        var brake = context("GRASSLAND", List.of(growing("blackberry")));
+        var choice = BackdropResolver.resolve(brake);
+
+        assertEquals("flora.blackberry", choice.key(), "the fullest stand is what this place looks like");
+        assertEquals("FLORA_HERE", choice.reason());
+        assertEquals("flora.blackberry", choice.candidates().get(0), "the stand is offered first");
+        assertEquals("biome.grassland", choice.candidates().get(choice.candidates().size() - 1),
+            "and the chain ends on the ground it grows on, which always answers: " + choice.candidates());
+    }
+
+    /** Ranked under the things it grows around: a hut on a heath is a hut. */
+    @Test void aSiteOrABuildOutranksWhatIsGrowingThere() {
+        assertEquals("site.clay-beds",
+            BackdropResolver.resolve(context("GRASSLAND", List.of(growing("nettle"), site("Clay beds")))).key());
+        assertEquals("built.pit-house",
+            BackdropResolver.resolve(context("GRASSLAND", List.of(growing("nettle"), built("PIT_HOUSE")))).key());
+    }
+
+    /** The fullest stand decides — the context reports them fullest first, and the resolver trusts that order. */
+    @Test void theFullestStandIsTheOneThatDecides() {
+        var many = context("TEMPERATE_FOREST", List.of(growing("bramble_berry"), growing("nettle")));
+        assertEquals("flora.bramble-berry", BackdropResolver.resolve(many).key());
+    }
 }
