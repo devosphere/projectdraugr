@@ -414,7 +414,22 @@ public class WorldGenesisService {
                 // sorted out of lighter quartz only where water slackens — the inside of a river bend, a beach face —
                 // so it is a deposit and not a quality of every bank. mineral_province (V320) binds iron_sand to it,
                 // and the bloomery smelts it: a second way to iron that asks for a river or a shore, not a mountain.
-                new MarkerSpec("RESOURCE", "Iron sand bar", "RIVER_BANK", "COAST"));
+                new MarkerSpec("RESOURCE", "Iron sand bar", "RIVER_BANK", "COAST"),
+                // Habitat evidence (#224), appended last for the same index-salt reason as everything above.
+                //
+                // A sett is the first piece of this the world can honestly carry, and the test it had to pass is
+                // the one every marker here has to pass: does anything change the day it exists? It does, three
+                // ways. It is a PHYSICAL, stationary thing — a worked bank of spoil and old holes — so the visual
+                // context may report it and a backdrop may show it, where a range or a territory may not:
+                // those are lines on the Overseer's map and reporting one would be the leak #233 exists to stop.
+                // profileFor now knows it, so it holds badgers rather than whatever the ground would otherwise
+                // have put there. And the badger is a complete chain already — it carries its own pelt and fat in
+                // wildlife_drop — so a Chronicle who works one has something to work.
+                //
+                // The gopher burrows this could obviously have been paired with are deliberately NOT placed: the
+                // gopher has no drops of its own, so it would be a creature that gives nothing but the generic
+                // carcass fallback. It wants its own chain before it wants a site.
+                new MarkerSpec("WILDLIFE", "Badger sett", "TEMPERATE_FOREST", "GRASSLAND"));
 
     /**
      * Ground that is richer for what it stands between (#159).

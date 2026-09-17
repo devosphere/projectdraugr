@@ -365,6 +365,11 @@ public class WildlifeSimulationService {
         // a cave mouth's other resident is a cave bear, so a roost would have stood an even chance of holding one.
         // Bats are TINY and roost in numbers, so the colony is large where a bear's den is one animal.
         if (kind.contains("bat")) return new Profile("common_bat", "OMNIVORE", "NOCTURNAL", 40, 90);
+        // A sett keeps badgers (#224). Named here for the same reason the roost is: a sett stands in forest and on
+        // open grass, and residentFor would otherwise have handed that ground to a deer or a hare — so the one
+        // piece of habitat evidence the world places would have held anything but the animal that dug it. A sett
+        // is a family group, not a herd: a handful of animals in a worked bank of old holes.
+        if (kind.contains("badger")) return new Profile("european_badger", "OMNIVORE", "NOCTURNAL", 4, 9);
         return null;
     }
 
