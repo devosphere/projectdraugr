@@ -152,6 +152,21 @@ class IntentClassificationRegressionTest {
         assertEquals("MARK", classify("leave a marker"));
     }
 
+    /**
+     * #77 V338: a bee skep is raised through the assembly matcher. RAID_HIVE takes a taking verb — raid, rob,
+     * harvest, smoke, take, collect, gather — beside hive/nest/honey/beeswax, so none of the skep's phrases may
+     * carry one, and "weave" is avoided so CRAFT_BASKET cannot reach for a thing made of coiled straw. Robbing a
+     * hive must stay robbing a hive.
+     */
+    @Test void aBeeSkepIsRaisedNotRobbed() throws Exception {
+        for (String phrase : new String[]{"build a bee skep", "make a bee skep", "raise a bee skep", "set up a bee skep",
+                                          "build a skep", "make a skep", "raise a skep", "bee skep", "skep",
+                                          "straw hive", "work on the skep"})
+            assertEquals("UNKNOWN", classify(phrase), phrase);
+        assertEquals("RAID_HIVE", classify("raid the hive"));
+        assertEquals("RAID_HIVE", classify("take the honey"));
+    }
+
     @Test void processActionsAreNotStolenByGreedyIntents() throws Exception {
         // When the two-axis matcher claims the text, the ambiguous intent must yield,
         // so the dispatch falls through to PROCESS_MATERIAL (classify returns UNKNOWN).

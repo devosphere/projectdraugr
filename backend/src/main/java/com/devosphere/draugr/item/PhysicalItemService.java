@@ -2695,12 +2695,24 @@ public class PhysicalItemService {
     private int pollinationBonusAt(UUID location, Instant at) {
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
         if (biome == null) return 0;
+        // A hive somebody KEEPS (#77, V338). The wild bees are where the world put them — forest, highland, open
+        // grass — and they do not work the river bank, the marsh margin or the shore, which is exactly where the
+        // best fields are: a floodplain wins its fertility back at 5 a day against a meadow's 2. So the ground a
+        // Chronicle most wants to farm had no pollinator on it and nothing they could do about that. Beekeeping is
+        // the oldest answer: you do not go to the bees, you bring them. Where a sound skep stands, a keepable
+        // colony counts on ground its own affinity never reached — but the SEASON still rules, because bees do not
+        // fly in winter and a straw dome does not change that.
+        boolean kept = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
+            "JOIN world_object w ON w.id=cp.object_id " +
+            "WHERE w.current_location_id=? AND ck.keeps_bees AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
+            "  AND w.lifecycle_state='ACTIVE')", Boolean.class, location));
         Integer best = jdbc.queryForObject(
             "SELECT COALESCE(MAX(ck.pollination_bonus),0) FROM insect_colony_kind ck " +
-            "WHERE ck.pollination_bonus > 0 AND ck.biome_affinity ILIKE ? " +
+            "WHERE ck.pollination_bonus > 0 AND (ck.biome_affinity ILIKE ? OR (?::boolean AND ck.can_be_kept)) " +
             "  AND (ck.season_active='ALL' OR ck.season_active ILIKE ?) " +
             "  AND NOT EXISTS (SELECT 1 FROM insect_colony ic WHERE ic.chunk_id=? AND ic.colony_kind=ck.colony_kind AND ic.health <= 0)",
-            Integer.class, "%" + biome + "%", "%" + seasonOf(at) + "%", location);
+            Integer.class, "%" + biome + "%", kept, "%" + seasonOf(at) + "%", location);
         return best == null ? 0 : best;
     }
 
