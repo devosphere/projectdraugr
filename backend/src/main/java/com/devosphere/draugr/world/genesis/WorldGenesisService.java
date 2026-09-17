@@ -435,7 +435,13 @@ public class WorldGenesisService {
                 // sticks a pair rebuilds on the same ledge for decades - the most permanent thing a bird makes -
                 // and an earth in the high ground is dug once and used by generations of foxes.
                 new MarkerSpec("WILDLIFE", "Eagle eyrie", "MOUNTAIN", "HIGHLAND"),
-                new MarkerSpec("WILDLIFE", "Arctic fox den", "MOUNTAIN", "HIGHLAND"));
+                new MarkerSpec("WILDLIFE", "Arctic fox den", "MOUNTAIN", "HIGHLAND"),
+                // A tree the bees have always used (#224/#157). Not a wildlife site: the colony is the existing
+                // insect_colony mechanic, and what the world places here is the PLACE - a hollow a swarm has held
+                // for years, which refills from a population that never left. insect_colony_kind.concentrated_at
+                // names this site, so a hive robbed here comes back in half the time, exactly as a mussel bed does
+                // on a shell bed. One rule, two animals.
+                new MarkerSpec("RESOURCE", "Wild bee tree", "TEMPERATE_FOREST", "HIGHLAND"));
 
     /**
      * Ground that is richer for what it stands between (#159).

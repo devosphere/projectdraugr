@@ -2054,10 +2054,11 @@ public class PhysicalItemService {
     private static final int FERTILITY_RECOVER_PER_DAY_ON_FLOODPLAIN = 5;
 
     /** A shell bed on this ground (#157) — dense enough to reseed itself, unlike a scatter over open shore. */
-    private boolean shellBedAt(UUID chunk) {
+    /** Is the place this colony concentrates in standing on this ground (V339)? Matched as a fragment of the kind. */
+    private boolean concentrationAt(UUID chunk, String siteKind) {
         return Boolean.TRUE.equals(jdbc.queryForObject(
-            "SELECT EXISTS(SELECT 1 FROM ecology_site WHERE chunk_id=? AND site_kind ILIKE '%shell bed%')",
-            Boolean.class, chunk));
+            "SELECT EXISTS(SELECT 1 FROM ecology_site WHERE chunk_id=? AND site_kind ILIKE ?)",
+            Boolean.class, chunk, "%" + siteKind + "%"));
     }
 
     /** Ground the river renews — a floodplain site, which the world places on a river bank or a marsh margin. */
@@ -2841,12 +2842,17 @@ public class PhysicalItemService {
         // fish stock and mineral seams use — so untouched ground carries no rows, and worked ground remembers.
         if (totalTaken > 0) {
             int regrowth = ((Number) kind.get("regrowth_days")).intValue();
-            // A bed comes back faster than a scatter (#157). A mussel bed is a dense mat cemented to itself and
-            // the rock, and that density is what lets it recover: spat settles on the shells already there, so
-            // the bed reseeds from its own population. Work a thin scatter as hard and you have taken the seed
-            // with the crop. Only shellfish, and only where the world has put a bed — everything else keeps the
-            // rate it always had, so nothing that worked before changes.
-            if (Boolean.TRUE.equals(kind.get("shellfish")) && shellBedAt(location))
+            // A concentration comes back faster than a scatter (#157/#224). A mussel bed is a dense mat cemented
+            // to itself and the rock, and that density is what lets it recover: spat settles on the shells already
+            // there, so the bed reseeds from its own population. A hollow tree a swarm has held for years is the
+            // same fact about a different animal. Work a thin scatter as hard and you have taken the seed with the
+            // crop.
+            //
+            // Which colony counts as concentrated WHERE is catalogue (V339 concentrated_at), not a boolean and a
+            // site name spelled out here: those were two ways of saying one thing, and a third animal could not be
+            // added without touching this file. A colony with no such site keeps the rate it always had.
+            String concentration = (String) kind.get("concentrated_at");
+            if (concentration != null && concentrationAt(location, concentration))
                 regrowth = Math.max(1, regrowth / 2);
             Timestamp readyAgain = Timestamp.from(occurredAt.plus(java.time.Duration.ofDays(Math.max(1, regrowth))));
             UUID colonyId = jdbc.query("SELECT object_id FROM insect_colony WHERE chunk_id=? AND colony_kind=?",

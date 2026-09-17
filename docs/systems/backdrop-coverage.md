@@ -13,11 +13,11 @@ Schema v1 · 151 backdrops · source `frontend/src/assets`
 
 ## Reachability
 
-**94 of 151** records are reachable by a declared world context; **57** are gated.
+**95 of 151** records are reachable by a declared world context; **56** are gated.
 
 | waiting on | count | reason |
 |---|---|---|
-| #232, #224 | 35 | The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. |
+| #232, #224 | 34 | The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. |
 | #155 | 10 | The world has no site kind or biome for this feature yet. |
 | #236, #232 | 3 | Night-only scenery needs night eligibility per asset, and a habitat feature in the visual context. |
 | #117, #120 | 3 | No world site places these creatures yet. |
@@ -186,7 +186,7 @@ Schema v1 · 151 backdrops · source `frontend/src/assets`
 - `squirrel-canopy-range` — TEMPERATE_FOREST · REGIONAL · **gated**: The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. (#232, #224)
 - `warren-ground` — GRASSLAND · REGIONAL · reached by `site.hare-warren`
 - `waterfowl-nesting-ground` — WETLAND · REGIONAL · reached by `site.marsh-fowl-nesting`
-- `wild-honeybee-tree-hive` — TEMPERATE_FOREST · EXACT_SITE · QUARANTINED · **gated**: The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. (#232, #224)
+- `wild-honeybee-tree-hive` — TEMPERATE_FOREST · EXACT_SITE · QUARANTINED · reached by `site.wild-bee-tree`
 - `wild-water-buffalo-range` — GRASSLAND · REGIONAL · **gated**: The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. (#232, #224)
 - `wolverine-talus-territory` — MOUNTAIN · REGIONAL · QUARANTINED · **gated**: The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. (#232, #224)
 - `woodland-mesopredator-territory` — TEMPERATE_FOREST · REGIONAL · **gated**: The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. (#232, #224)

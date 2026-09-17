@@ -9072,11 +9072,11 @@
         "reviewedBy": null,
         "reviewedAt": null
       },
-      "contexts": [],
-      "gate": {
-        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
-        "activatedBy": "#232, #224"
-      }
+      "contexts": [
+        {
+          "candidate": "site.wild-bee-tree"
+        }
+      ]
     },
     {
       "backdropKey": "wild-mast-nut-grove",
