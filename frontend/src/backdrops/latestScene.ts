@@ -22,6 +22,20 @@ export function latestOnly() {
 }
 
 /**
+ * Which scene a new one fades in over, or null when the new scene must simply appear (#239).
+ *
+ * The rule lived inside the screen's effect, where it could only be checked by opening a browser and watching —
+ * which is how a reduced-motion promise quietly stops being kept. It is three decisions and no state, so it is a
+ * function: nothing changed, no fade; someone who has asked for reduced motion gets the change at once; and there
+ * is nothing to fade FROM before the first scene, so that one appears too.
+ */
+export function sceneToFadeFrom(shown: string | null, next: string | null, reducedMotion: boolean): string | null {
+  if (shown === next) return null;
+  if (reducedMotion) return null;
+  return shown;
+}
+
+/**
  * Resolve once the image at {@code src} is decoded and ready to paint, so the old scene stays up until the new one
  * can replace it without a blank frame. Rejects if it cannot be decoded; the caller keeps the last valid scene.
  */
