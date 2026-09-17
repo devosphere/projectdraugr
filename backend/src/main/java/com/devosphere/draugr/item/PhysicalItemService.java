@@ -1191,16 +1191,25 @@ public class PhysicalItemService {
             "WHERE cf.chunk_id=? AND cf.quantity > 0 AND fd.organism_type <> 'TREE' " +
             "ORDER BY fd.flora_key", location);
 
-        if (candidates.isEmpty()) {
-            // No chunk_flora rows — fall back to biome affinity check
-            candidates = jdbc.queryForList(
-                "SELECT fd.flora_key, fd.organism_type, fd.tool_required, fd.is_poisonous, " +
-                "  (SELECT d.item_key FROM flora_drop d WHERE d.flora_key=fd.flora_key ORDER BY d.item_key LIMIT 1) AS drop_item, " +
-                "  (SELECT id.category FROM item_definition id JOIN flora_drop d ON d.item_key=id.item_key WHERE d.flora_key=fd.flora_key ORDER BY d.item_key LIMIT 1) AS drop_category " +
-                "FROM flora_definition fd " +
-                "WHERE fd.organism_type <> 'TREE' AND fd.biome_affinity ILIKE ? " +
-                "ORDER BY fd.flora_key", "%" + biome + "%");
-        }
+        // A recorded stand is a PATCH — a brake of blackberry, a bed of nettle — that a Chronicle works down and
+        // that grows back. It was never meant to be the whole of what grows on a piece of ground, and until genesis
+        // planted anything (#224) the distinction did not arise: a chunk had no stands at all, so this always fell
+        // through to the biome's general growth below. Now that every chunk carries three, taking the stands as the
+        // complete list would quietly narrow foraging from "what this country grows" to "these three things" — a
+        // change nobody asked for, made as a side effect of planting. So the stands are ADDED to the general growth
+        // rather than replacing it: the patch is depletable and visible, the rest of the country still grows what it
+        // grows, and gathering is exactly as broad as it was.
+        java.util.List<java.util.Map<String,Object>> general = jdbc.queryForList(
+            "SELECT fd.flora_key, fd.organism_type, fd.tool_required, fd.is_poisonous, " +
+            "  (SELECT d.item_key FROM flora_drop d WHERE d.flora_key=fd.flora_key ORDER BY d.item_key LIMIT 1) AS drop_item, " +
+            "  (SELECT id.category FROM item_definition id JOIN flora_drop d ON d.item_key=id.item_key WHERE d.flora_key=fd.flora_key ORDER BY d.item_key LIMIT 1) AS drop_category " +
+            "FROM flora_definition fd " +
+            "WHERE fd.organism_type <> 'TREE' AND fd.biome_affinity ILIKE ? " +
+            "  AND fd.flora_key NOT IN (SELECT cf.flora_key FROM chunk_flora cf WHERE cf.chunk_id=? AND cf.quantity > 0) " +
+            "ORDER BY fd.flora_key", "%" + biome + "%", location);
+        candidates = new java.util.ArrayList<>(candidates);
+        candidates.addAll(general);
+
         if (candidates.isEmpty()) return new String[]{"FAILED", "You search through the growth, but find nothing here worth taking."};
 
         // Choose what to take, in order of how specific the request is:
