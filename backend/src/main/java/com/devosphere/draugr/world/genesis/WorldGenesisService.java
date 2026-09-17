@@ -429,7 +429,13 @@ public class WorldGenesisService {
                 // The gopher burrows this could obviously have been paired with are deliberately NOT placed: the
                 // gopher has no drops of its own, so it would be a creature that gives nothing but the generic
                 // carcass fallback. It wants its own chain before it wants a site.
-                new MarkerSpec("WILDLIFE", "Badger sett", "TEMPERATE_FOREST", "GRASSLAND"));
+                new MarkerSpec("WILDLIFE", "Badger sett", "TEMPERATE_FOREST", "GRASSLAND"),
+                // Two more on the same terms: a physical, stationary structure, a species profileFor names so the
+                // site holds what it is called, and a creature whose chain is already whole. An eyrie is a heap of
+                // sticks a pair rebuilds on the same ledge for decades - the most permanent thing a bird makes -
+                // and an earth in the high ground is dug once and used by generations of foxes.
+                new MarkerSpec("WILDLIFE", "Eagle eyrie", "MOUNTAIN", "HIGHLAND"),
+                new MarkerSpec("WILDLIFE", "Arctic fox den", "MOUNTAIN", "HIGHLAND"));
 
     /**
      * Ground that is richer for what it stands between (#159).

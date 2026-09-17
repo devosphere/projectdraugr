@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * A sett keeps badgers (#224).
+ * The evidence a place carries (#224).
  *
  * <p>The first piece of habitat evidence the world places. Every marker in this catalogue has to pass the same
  * test — does anything change the day it exists? — and a sett passes it three ways:
@@ -40,7 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>Skips without Docker.
  */
 @SpringBootTest
-class ASettKeepsBadgersIntegrationTest {
+class HabitatEvidenceIntegrationTest {
 
     private static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
 
@@ -110,6 +110,56 @@ class ASettKeepsBadgersIntegrationTest {
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
 
+    /**
+     * The other two pieces of evidence, on the same terms (#224).
+     *
+     * <p>An eyrie is a heap of sticks a pair rebuilds on the same ledge for decades, and an earth in the high
+     * ground is dug once and used by generations — both are structures a place carries, not creatures passing
+     * through it, which is what makes them reportable where a range or a territory is not.
+     *
+     * <p>The arctic fox is the interesting one: its den contains the word "fox", so without being named ahead of
+     * the general fox rule it would have held a FOREST fox — a creature with no affinity for a mountain at all,
+     * in a den named for one that has. That is the same trap the bat roost fell into before it was named.
+     */
+    @Test
+    void theHighGroundCarriesAnEyrieAndAnEarthAndEachHoldsItsOwn() {
+        world();
+        ticks.advanceBy(java.time.Duration.ofMinutes(1));
+
+        holds("Eagle eyrie", "golden_eagle", List.of("MOUNTAIN", "HIGHLAND"), 8);
+        holds("Arctic fox den", "arctic_fox", List.of("MOUNTAIN", "HIGHLAND"), 12);
+
+        assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
+
+    /** A site of this kind stands on ground it names, holds the creature it is named for, and is a family not a herd. */
+    private void holds(String siteKind, String species, List<String> ground, int biggestGroup) {
+        List<String> where = jdbc.queryForList(
+            "SELECT c.biome FROM ecology_site es JOIN world_chunk c ON c.id=es.chunk_id WHERE es.site_kind=?",
+            String.class, siteKind);
+        assertTrue(!where.isEmpty(), () -> "the world must place a " + siteKind + " at all");
+        assertTrue(ground.containsAll(where),
+            () -> siteKind + " stands on ground it does not name: " + where + " (expected " + ground + ")");
+
+        List<String> occupants = jdbc.queryForList(
+            "SELECT wp.species_key FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id WHERE es.site_kind=?",
+            String.class, siteKind);
+        assertTrue(!occupants.isEmpty(), () -> siteKind + " must be occupied, or nothing made it");
+        assertTrue(occupants.stream().allMatch(species::equals),
+            () -> siteKind + " must hold " + species + ", not whatever the ground suggested: " + occupants);
+
+        Integer biggest = jdbc.queryForObject(
+            "SELECT MAX(wp.population_count) FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id WHERE es.site_kind=?",
+            Integer.class, siteKind);
+        assertTrue(biggest != null && biggest <= biggestGroup,
+            () -> siteKind + " keeps a family, not a flock: " + biggest);
+
+        Integer drops = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM wildlife_drop d JOIN item_definition i ON i.item_key=d.item_key WHERE d.species_key=?",
+            Integer.class, species);
+        assertTrue(drops != null && drops > 0,
+            () -> species + " must carry its own yields, or " + siteKind + " holds a creature nobody can work");
+    }
     /** Placing it again places nothing: the pinned world gains the sett once and keeps it. */
     @Test
     void theSettIsPlacedOnceAndNotAgain() {
