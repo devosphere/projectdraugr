@@ -189,6 +189,87 @@ class TheGoingOfTheGroundIntegrationTest {
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
 
+    /**
+     * The causeway is worth walking as well as worth crossing (#77, V337).
+     *
+     * <p>V333 gave it its first effect — a laden walker gets over soft ground that would otherwise turn them back.
+     * That is a question about whether you can go at all. This is the other one: a fen is a wade, and a pegged
+     * timber way through it is not. A Chronicle who could always have crossed the bog unladen still lost the day to
+     * it, and building the road bought them nothing at all.
+     *
+     * <p>Both effects are asserted together, because the risk with a second effect is that it quietly replaces the
+     * first: the crossing must still be the causeway's, and the pace must be new.
+     */
+    @Test
+    void aCausewayIsWorthWalkingAsWellAsWorthCrossing() {
+        if (worldGenesis.current() == null) {
+            worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
+            ecology.seed();
+        }
+        ChronicleService.ChronicleSummary summary = chronicles.awaken();
+        assertNotNull(summary, "awakening must produce a living Chronicle");
+        UUID chronicle = summary.id();
+        // Unladen enough that the fen never refuses the journey outright (#626): this is about the pace of the
+        // crossing, and a Chronicle turned back at the water would be testing the load rule instead.
+        jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, " +
+            "maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
+
+        Map<String,Object> here = jdbc.queryForMap(
+            "SELECT c.id, c.world_id, c.grid_x, c.grid_y FROM world_chunk c " +
+            "WHERE EXISTS (SELECT 1 FROM world_chunk e WHERE e.world_id=c.world_id AND e.grid_y=c.grid_y AND e.grid_x=c.grid_x+3) " +
+            "ORDER BY c.grid_y, c.grid_x LIMIT 1");
+        UUID origin = (UUID) here.get("id");
+        List<Map<String,Object>> line = jdbc.queryForList(
+            "SELECT id, biome FROM world_chunk WHERE world_id=? AND grid_y=? AND grid_x BETWEEN ? AND ? ORDER BY grid_x",
+            here.get("world_id"), here.get("grid_y"), here.get("grid_x"), (int) here.get("grid_x") + 3);
+        assertEquals(4, line.size(), "the fixture needs four chunks in a row to walk along");
+        UUID destination = (UUID) line.get(3).get("id");
+        jdbc.update("INSERT INTO chronicle_named_location (chronicle_id,chunk_id,name,designated_at,memorized,last_visited_at) " +
+            "VALUES (?,?,'Stonewell',?,TRUE,?) ON CONFLICT (chronicle_id,chunk_id,name) DO UPDATE " +
+            "SET memorized=TRUE, last_visited_at=EXCLUDED.last_visited_at",
+            chronicle, destination, Timestamp.from(ticks.current().simulatedAt()), Timestamp.from(ticks.current().simulatedAt()));
+
+        List<UUID> ways = new java.util.ArrayList<>();
+        try {
+            for (Map<String,Object> chunk : line)
+                jdbc.update("DELETE FROM ecology_site WHERE chunk_id=? AND site_kind ILIKE '%ford%'", chunk.get("id"));
+            long throughTheFen = journey(chronicle, origin, destination, line, "WETLAND");
+
+            for (Map<String,Object> chunk : line) ways.add(layCauseway((UUID) chunk.get("id")));
+            long overTheCauseway = journey(chronicle, origin, destination, line, "WETLAND");
+
+            assertTrue(overTheCauseway < throughTheFen,
+                () -> "a causeway through a fen must be quicker to walk than the fen, or its whole second worth is "
+                    + "missing (fen " + throughTheFen + " min, causeway " + overTheCauseway + " min)");
+            // 3 x 36 against 3 x (36 - 14). Bands, so tuning either number is not a failure, but far enough apart
+            // that an un-eased causeway cannot pass.
+            assertTrue(throughTheFen >= 95, () -> "a fen is a wade and must cost like one: " + throughTheFen);
+            assertTrue(overTheCauseway <= 80, () -> "over a laid way it must not still cost a wade: " + overTheCauseway);
+            assertTrue(overTheCauseway >= 45,
+                () -> "and never quicker than open grass — a plank road over peat is not a meadow: " + overTheCauseway);
+        } finally {
+            for (UUID way : ways)
+                jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED', destroyed_at=?, " +
+                    "destroyed_location_id=current_location_id, destroyed_cause='DISMANTLED', current_location_id=NULL " +
+                    "WHERE id=?", Timestamp.from(ticks.current().simulatedAt()), way);
+            for (Map<String,Object> chunk : line)
+                jdbc.update("UPDATE world_chunk SET biome=? WHERE id=?", chunk.get("biome"), chunk.get("id"));
+        }
+
+        assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
+
+    /** A sound fen causeway standing on this ground. */
+    private UUID layCauseway(UUID chunk) {
+        UUID way = UUID.randomUUID();
+        Timestamp at = Timestamp.from(ticks.current().simulatedAt());
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,lifecycle_state,current_location_id) " +
+            "VALUES (?,'CONSTRUCTION','Fen causeway','ACTIVE',?)", way, chunk);
+        jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at,integrity_percent,last_structural_update) " +
+            "VALUES (?,'FEN_CAUSEWAY','COMPLETED',100,?,90,?)", way, at, at);
+        return way;
+    }
+
     /** A sound laid path standing on this ground. */
     private UUID layPath(UUID chunk) {
         UUID path = UUID.randomUUID();
