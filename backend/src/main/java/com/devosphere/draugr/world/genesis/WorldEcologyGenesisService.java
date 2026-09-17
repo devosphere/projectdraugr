@@ -33,8 +33,48 @@ public class WorldEcologyGenesisService {
             jdbc.update("INSERT INTO ecology_site (id, world_id, chunk_id, site_category, site_kind, baseline_abundance) VALUES (?, ?, ?, ?, ?, ?)",
                     siteId, world.worldId(), chunkId, marker.category(), marker.label(), abundanceFor(marker.category()));
         }
+        seedFlora(world.worldId());
         jdbc.update("INSERT INTO world_event (occurred_at, event_type, aggregate_id, payload) VALUES (now(), 'WORLD_ECOLOGY_SEEDED', ?, jsonb_build_object('siteCount', ?, 'source', 'approved-overseer-atlas'))", world.worldId(), markers.size());
         return new EcologySummary(world.worldId(), markers.size());
+    }
+
+    /**
+     * The stands that were always supposed to be there (#224/#155).
+     *
+     * <p>{@code chunk_flora} is the finite-stand model: a patch of blackberry or nettle with a quantity that a
+     * Chronicle draws down and a regrowth clock that brings it back. Every consumer of it was already built —
+     * {@code ExaminationService} names what grows within reach, gathering reads the stand before falling back to a
+     * bare biome guess, {@code WildlifeSimulationService} regrows, depletes and recolonises it — and
+     * <b>genesis planted nothing at all</b>. Rows were only ever created lazily, the first time somebody felled or
+     * harvested on that ground, so a fresh world had no plants in it anywhere: looking closely at a meadow named
+     * nothing growing, and the whole stand model only began once a player had already taken something.
+     *
+     * <p>Three kinds a chunk, chosen from the catalogue's own {@code biome_affinity} so nothing grows where it
+     * could not, and deterministic by chunk coordinate: the same world seeded twice has the same plants in the
+     * same places, which is what makes the map worth learning. Stands are 3 to 6 — a patch you can work for a few
+     * days, not an inexhaustible field — and TREES are deliberately left out: felling has its own natural-stand
+     * rule and a seeded row would quietly override it.
+     *
+     * <p>Additive and idempotent: a stand already recorded on a chunk is left exactly as it is, including one a
+     * player has already worked down, so this can run on a world that has been lived in.
+     */
+    @Transactional
+    public int seedFlora(UUID worldId) {
+        return jdbc.update(
+            "INSERT INTO chunk_flora (chunk_id, flora_key, quantity, capacity, established_at) " +
+            "SELECT c.id, f.flora_key, f.stand, f.stand, now() " +
+            "  FROM world_chunk c " +
+            "  JOIN LATERAL (" +
+            "    SELECT fd.flora_key, " +
+            "           3 + (('x' || substr(md5(c.grid_x::text || ':' || c.grid_y::text || ':' || fd.flora_key), 1, 4))::bit(16)::int % 4) AS stand " +
+            "      FROM flora_definition fd " +
+            "     WHERE fd.organism_type <> 'TREE' " +
+            "       AND fd.biome_affinity ILIKE '%' || c.biome || '%' " +
+            "     ORDER BY md5(c.grid_x::text || ':' || c.grid_y::text || ':' || fd.flora_key) " +
+            "     LIMIT 3) f ON TRUE " +
+            " WHERE c.world_id = ? " +
+            "   AND NOT EXISTS (SELECT 1 FROM chunk_flora x WHERE x.chunk_id = c.id AND x.flora_key = f.flora_key)",
+            worldId);
     }
 
     /**
@@ -74,8 +114,12 @@ public class WorldEcologyGenesisService {
                     siteId, world.worldId(), chunkId, marker.category(), marker.label(), abundanceFor(marker.category()));
             placed++;
         }
-        if (placed > 0)
-            jdbc.update("INSERT INTO world_event (occurred_at, event_type, aggregate_id, payload) VALUES (now(), 'WORLD_ECOLOGY_RECONCILED', ?, jsonb_build_object('sitesAdded', ?, 'source', 'approved-overseer-atlas'))", world.worldId(), placed);
+        // The same argument as the markers above, for the plants: a world generated before genesis planted anything
+        // would otherwise stay bare for ever, and the only world anybody is playing is one of those. Additive, so a
+        // stand already there — including one worked half down — is left alone.
+        int stands = seedFlora(world.worldId());
+        if (placed > 0 || stands > 0)
+            jdbc.update("INSERT INTO world_event (occurred_at, event_type, aggregate_id, payload) VALUES (now(), 'WORLD_ECOLOGY_RECONCILED', ?, jsonb_build_object('sitesAdded', ?, 'standsAdded', ?, 'source', 'approved-overseer-atlas'))", world.worldId(), placed, stands);
         return new EcologySummary(world.worldId(), placed);
     }
 
