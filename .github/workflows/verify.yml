@@ -98,6 +98,12 @@ jobs:
         # 396 MB of backdrop PNGs are still deferred out of history. The full directory⇄manifest
         # bijection gate (npm run backdrops:check) is wired in once the assets land.
         run: npm run backdrops:test
+      - name: Frontend unit tests (#239/#242)
+        working-directory: frontend
+        # The rules a screenshot cannot see: which reply wins a race, whether a backdrop that will not decode is
+        # ever painted, and whether someone who asked for reduced motion gets a fade anyway. Sub-second, no
+        # browser — the browser-driven half of #242 is still owed and is not this.
+        run: npm test
       - name: Build frontend
         working-directory: frontend
         run: npm run build

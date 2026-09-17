@@ -11,7 +11,8 @@
     "backdrops:check": "node ../scripts/backdrops/build-manifest.mjs check",
     "backdrops:report": "node ../scripts/backdrops/build-manifest.mjs report",
     "backdrops:test": "node ../scripts/backdrops/test-validation.mjs",
-    "backdrops:budget": "node ../scripts/backdrops/check-budgets.mjs"
+    "backdrops:budget": "node ../scripts/backdrops/check-budgets.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
     "react": "18.3.1",
@@ -22,6 +23,7 @@
     "@types/react-dom": "18.3.5",
     "@vitejs/plugin-react": "4.3.4",
     "typescript": "5.7.3",
-    "vite": "5.4.14"
+    "vite": "5.4.14",
+    "vitest": "^2.1.8"
   }
 }

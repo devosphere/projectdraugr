@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { latestOnly } from './backdrops/latestScene';
+import { latestOnly, sceneToFadeFrom } from './backdrops/latestScene';
 import { loadScene } from './backdrops/backdropLoader';
 
 const previewBody = [
@@ -104,7 +104,7 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
     const reduced = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
       && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     // Nothing to fade from before the first scene: it simply appears.
-    setFadingFrom(reduced || !shownArt.current ? null : shownArt.current);
+    setFadingFrom(sceneToFadeFrom(shownArt.current, location.art, reduced));
     shownArt.current = location.art;
   }, [location.art]);
   const [environment, setEnvironment] = useState({ time: 'Early morning', weather: 'Light rain', season: 'Early spring' });
