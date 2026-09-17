@@ -588,8 +588,8 @@ public class ChronicleActionService {
             boolean landing = text.toLowerCase(Locale.ROOT).contains("landing") || text.toLowerCase(Locale.ROOT).contains("hoop") || text.toLowerCase(Locale.ROOT).contains("dip net");
             int need = landing ? 3 : 6;
             if (!items.hasCuttingTool(chronicle.id())) { outcome = "FAILED"; perception = "You gather the cordage to knot a net, but with no blade to cut and start it, the mesh will not begin."; }
-            else if (!items.hasAtLeast(chronicle.id(), "fiber_cordage", need)) { outcome = "FAILED"; perception = "A net wants far more cordage than you have twisted — the mesh needs " + need + " lengths of processed fibre cordage, knotted row on row. Twist more first."; }
-            else if (landing && !items.hasAtLeast(chronicle.id(), "dry_branch", 2)) { outcome = "FAILED"; perception = "You have the cordage for the mesh, but nothing to bend into a hoop for a landing net — you need a couple of green branches for the frame."; }
+            else if (!items.hasAtLeast(chronicle.id(), "fiber_cordage", need)) { outcome = "FAILED"; perception = "A net wants far more cordage than you have twisted. What you hold would not reach across a corner of the mesh, let alone the whole of it."; }
+            else if (landing && !items.hasAtLeast(chronicle.id(), "dry_branch", 2)) { outcome = "FAILED"; perception = "You have the cordage for the mesh, but nothing in reach will bend into a hoop for it: what you turn over in your hands is either too brittle to curve or too slight to hold a shape."; }
             else { items.craftFishingNet(landing, resolvedAt); perception = landing ? "You bend a branch into a hoop and knot the cordage across it, row by row, until a landing net hangs ready in your hand." : "You knot the cordage row on row, working the mesh even and true, until a fishing net lies finished across your knees."; }
         }
         else if (intent == Intent.CRAFT_BELT) {

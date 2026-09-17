@@ -1411,7 +1411,7 @@ public class PhysicalItemService {
         String logLower = logName.toLowerCase();
         return new String[]{"SUCCEEDED", "The " + treeName + " comes down with a crack that carries across the ground. " +
             count + " " + logLower + (count > 1 ? "s lie" : " lies") + " where " + (count > 1 ? "they" : "it") +
-            " fell — far too heavy to shoulder whole. You will need to buck and split the wood into pieces you can carry." +
+            " fell — far too heavy to shoulder whole, and nothing your arms can do will shift them from where they are." +
             (young ? " The trees here are young growth — thin poles, not the timber a grown wood gives; there is little to take from a stand not left to mature." : "")};
     }
 
