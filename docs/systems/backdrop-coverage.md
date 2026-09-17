@@ -13,11 +13,11 @@ Schema v1 · 151 backdrops · source `frontend/src/assets`
 
 ## Reachability
 
-**91 of 151** records are reachable by a declared world context; **60** are gated.
+**96 of 151** records are reachable by a declared world context; **55** are gated.
 
 | waiting on | count | reason |
 |---|---|---|
-| #232, #224 | 38 | The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. |
+| #232, #224 | 33 | The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. |
 | #155 | 10 | The world has no site kind or biome for this feature yet. |
 | #236, #232 | 3 | Night-only scenery needs night eligibility per asset, and a habitat feature in the visual context. |
 | #117, #120 | 3 | No world site places these creatures yet. |
@@ -68,7 +68,7 @@ Schema v1 · 151 backdrops · source `frontend/src/assets`
 - `river-floodplain` — WETLAND · REGIONAL · reached by `site.floodplain`
 - `river-ford` — TEMPERATE_FOREST · ADJACENT_VISIBLE · reached by `site.river-ford`, `site.shallow-ford`
 - `river-turtle-basking-bank` — TEMPERATE_FOREST · ADJACENT_VISIBLE · QUARANTINED · **gated**: The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. (#232, #224)
-- `sheltered-lake-reed-fishery` — WETLAND · REGIONAL · **gated**: The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. (#232, #224)
+- `sheltered-lake-reed-fishery` — WETLAND · REGIONAL · reached by `flora.reed-bed`
 - `stillwater-pike-weed-bed` — TEMPERATE_FOREST · REGIONAL · QUARANTINED · **gated**: The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. (#232, #224)
 - `stream` — TEMPERATE_FOREST · REGIONAL · reached by `site.fast-stream`, `biome.river-bank`, `RIVER_BANK`
 - `trout-spawning-run` — TEMPERATE_FOREST · REGIONAL · reached by `site.river-fishing-run`
@@ -136,18 +136,18 @@ Schema v1 · 151 backdrops · source `frontend/src/assets`
 
 ### FLORA_SITE (14)
 
-- `blackberry-thorn-brush` — TEMPERATE_FOREST · REGIONAL · **gated**: The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. (#232, #224)
+- `blackberry-thorn-brush` — TEMPERATE_FOREST · REGIONAL · reached by `flora.blackberry`, `flora.bramble-berry`
 - `bog-medicinal-toxic-flora` — WETLAND · EXACT_SITE · **gated**: The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. (#232, #224)
 - `edible-root-patch` — TEMPERATE_FOREST · REGIONAL · reached by `site.edible-root-patch`
 - `fibre-grassland` — GRASSLAND · REGIONAL · reached by `site.fiber-grassland`
-- `highland-bilberry-juniper-heath` — HIGHLAND · REGIONAL · **gated**: The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. (#232, #224)
+- `highland-bilberry-juniper-heath` — HIGHLAND · REGIONAL · reached by `flora.bilberry-bush`, `flora.bilberry-shrub`, `flora.juniper`, `flora.juniper-shrub`
 - `mushroom-hollow` — TEMPERATE_FOREST · EXACT_SITE · reached by `site.mushroom-hollow`
 - `old-growth-timber` — TEMPERATE_FOREST · REGIONAL · reached by `site.old-growth-timber`
 - `reed-root-marsh` — WETLAND · REGIONAL · reached by `site.reed-marsh`
 - `shelter-grove` — TEMPERATE_FOREST · REGIONAL · reached by `site.shelter-grove`
 - `wetland-willow-carr` — WETLAND · REGIONAL · **gated**: The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. (#232, #224)
-- `wild-fibre-meadow` — GRASSLAND · REGIONAL · **gated**: The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. (#232, #224)
-- `wild-grain-seed-grass-stand` — GRASSLAND · REGIONAL · **gated**: The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. (#232, #224)
+- `wild-fibre-meadow` — GRASSLAND · REGIONAL · reached by `flora.flax-plant`, `flora.nettle`
+- `wild-grain-seed-grass-stand` — GRASSLAND · REGIONAL · reached by `flora.wild-grass`, `flora.meadow-grass`
 - `wild-herb-grove` — TEMPERATE_FOREST · REGIONAL · reached by `site.wild-herb-grove`
 - `wild-mast-nut-grove` — TEMPERATE_FOREST · REGIONAL · **gated**: The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. (#232, #224)
 

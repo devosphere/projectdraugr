@@ -119,6 +119,18 @@ public class VisualContextService {
                    "ORDER BY cp.project_kind", rs -> {
             features.add(new Feature("BUILT:" + rs.getString(1), rs.getString(2)));
         }, chunk);
+        // What is growing on this ground (#224). A brake of blackberry, a bed of nettle, a stand of reed is a
+        // plainly visible fact about a place — the examination has named them within reach since it was written —
+        // and it is the thing that most distinguishes one piece of open country from another to look at. Reported
+        // only while a stand actually stands: one worked down to nothing is not scenery, it is bare ground, which
+        // is the same rule the fullest stand is chosen by.
+        //
+        // The ground the Chronicle is ON, like every other feature here. Nothing a neighbour grows is reported,
+        // because that would be the Overseer's map again (#233).
+        jdbc.query("SELECT cf.flora_key, cf.quantity FROM chunk_flora cf " +
+                   "WHERE cf.chunk_id=? AND cf.quantity > 0 ORDER BY cf.quantity DESC, cf.flora_key", rs -> {
+            features.add(new Feature("FLORA:" + rs.getString(1), rs.getString(1).replace('_', ' ')));
+        }, chunk);
 
         String timeOfDay = timeOfDay(at);
         String season = season(at);

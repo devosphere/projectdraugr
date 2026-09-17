@@ -132,8 +132,13 @@ class VisualContextIntegrationTest {
             () -> "the payload named '" + remoteSite + "', which stands on other ground — a player could learn "
                 + "from their own screen where a lair is, which the Chronicle has no way to know: " + seen.features());
 
-        assertTrue(seen.features().isEmpty(),
-            () -> "bare ground must report no features at all, or the payload is reading beyond the chunk: "
+        // Bare ground reports nothing STANDING on it. What grows on it is another matter and is reported (#224):
+        // a brake of blackberry is a fact about this chunk that anyone standing here can see, and it is the thing
+        // that most distinguishes one piece of open country from another. The rule being guarded is unchanged —
+        // nothing from beyond the chunk — so the check is narrowed to the features that could come from elsewhere,
+        // rather than loosened.
+        assertTrue(seen.features().stream().noneMatch(f -> f.kind() != null && !f.kind().startsWith("FLORA:")),
+            () -> "bare ground must report nothing built or sited, or the payload is reading beyond the chunk: "
                 + seen.features());
     }
 
@@ -218,11 +223,66 @@ class VisualContextIntegrationTest {
         var noon = visual.active(Instant.parse("2026-06-15T12:00:00Z"));
         assertTrue(noon.lit(), "open ground at noon is lit");
         assertEquals(neighbours, noon.surroundings(), "by day the kinds of the four neighbouring grounds are seen");
-        assertTrue(noon.features().isEmpty(), () -> "and nothing standing on them is reported here: " + noon.features());
+        assertTrue(noon.features().stream().noneMatch(f -> f.kind() != null && !f.kind().startsWith("FLORA:")),
+            () -> "and nothing standing on them is reported here — what grows on THIS ground is this ground's own "
+                + "(#224), but no neighbour's site or structure may appear: " + noon.features());
 
         var midnight = visual.active(Instant.parse("2026-06-15T00:30:00Z"));
         if (!midnight.lit())
             assertTrue(midnight.surroundings().isEmpty(), "in the dark nothing beyond this ground can be seen");
         assertNotEquals(noon.fingerprint(), midnight.fingerprint(), "what is seen changed, so the fingerprint moves");
+    }
+
+    /**
+     * What grows here is part of what this place looks like (#224).
+     *
+     * <p>A brake of blackberry, a bed of nettle, a stand of reed is the thing that most distinguishes one piece of
+     * open country from another to look at, and the examination has named such stands within reach since it was
+     * written. The visual context reported sites and finished builds and nothing else, so the scene for a meadow
+     * thick with bramble was the same scene as for bare grass — and thirty-eight backdrops were gated on exactly
+     * this, waiting for a place to be able to carry what grows on it.
+     *
+     * <p>A stand worked down to nothing stops counting: that is bare ground again, not scenery.
+     */
+    @Test
+    void whatGrowsHereIsPartOfWhatThePlaceLooksLike() {
+        world();
+
+        UUID ground = plainGround();
+        assertNotNull(ground);
+        chronicleOn(ground);
+        jdbc.update("DELETE FROM chunk_flora WHERE chunk_id=?", ground);
+
+        var bare = visual.active(ticks.current().simulatedAt());
+        String bareKey = com.devosphere.draugr.world.BackdropResolver.resolve(bare).key();
+        assertTrue(!bareKey.startsWith("flora."), () -> "ground with nothing growing must not resolve to a stand: " + bareKey);
+
+        // A stand of something the catalogue says grows on this ground.
+        String key = jdbc.queryForObject(
+            "SELECT fd.flora_key FROM flora_definition fd JOIN world_chunk c ON c.id=? " +
+            " WHERE fd.organism_type <> 'TREE' AND fd.biome_affinity ILIKE '%' || c.biome || '%' ORDER BY fd.flora_key LIMIT 1",
+            String.class, ground);
+        Assumptions.assumeTrue(key != null, "nothing in the catalogue grows on this kind of ground");
+        jdbc.update("INSERT INTO chunk_flora (chunk_id, flora_key, quantity, capacity, established_at) VALUES (?,?,5,5,now())", ground, key);
+
+        try {
+            var withStand = visual.active(ticks.current().simulatedAt());
+            assertTrue(withStand.features().stream().anyMatch(f -> ("FLORA:" + key).equals(f.kind())),
+                () -> "the place must report what is growing on it: " + withStand.features());
+            assertEquals("flora." + key.replace('_', '-'), com.devosphere.draugr.world.BackdropResolver.resolve(withStand).key(),
+                "the fullest stand decides the scene, ranked over the bare ground it grows on");
+            assertNotEquals(bare.fingerprint(), withStand.fingerprint(),
+                "what is seen changed, so the fingerprint must move with it");
+
+            // Worked down to nothing: bare ground again.
+            jdbc.update("UPDATE chunk_flora SET quantity=0 WHERE chunk_id=? AND flora_key=?", ground, key);
+            var cleared = visual.active(ticks.current().simulatedAt());
+            assertTrue(cleared.features().stream().noneMatch(f -> ("FLORA:" + key).equals(f.kind())),
+                () -> "a stand worked down to nothing is bare ground, not scenery: " + cleared.features());
+            assertEquals(bareKey, com.devosphere.draugr.world.BackdropResolver.resolve(cleared).key(),
+                "and the scene goes back to exactly what it was before anything grew there");
+        } finally {
+            jdbc.update("DELETE FROM chunk_flora WHERE chunk_id=? AND flora_key=?", ground, key);
+        }
     }
 }

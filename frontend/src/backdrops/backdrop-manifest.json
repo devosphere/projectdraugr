@@ -750,11 +750,14 @@
         "reviewedBy": null,
         "reviewedAt": null
       },
-      "contexts": [],
-      "gate": {
-        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
-        "activatedBy": "#232, #224"
-      }
+      "contexts": [
+        {
+          "candidate": "flora.blackberry"
+        },
+        {
+          "candidate": "flora.bramble-berry"
+        }
+      ]
     },
     {
       "backdropKey": "boar-wallow",
@@ -4409,11 +4412,20 @@
         "reviewedBy": null,
         "reviewedAt": null
       },
-      "contexts": [],
-      "gate": {
-        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
-        "activatedBy": "#232, #224"
-      }
+      "contexts": [
+        {
+          "candidate": "flora.bilberry-bush"
+        },
+        {
+          "candidate": "flora.bilberry-shrub"
+        },
+        {
+          "candidate": "flora.juniper"
+        },
+        {
+          "candidate": "flora.juniper-shrub"
+        }
+      ]
     },
     {
       "backdropKey": "highland-mountain-snowline",
@@ -7629,11 +7641,11 @@
         "reviewedBy": null,
         "reviewedAt": null
       },
-      "contexts": [],
-      "gate": {
-        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
-        "activatedBy": "#232, #224"
-      }
+      "contexts": [
+        {
+          "candidate": "flora.reed-bed"
+        }
+      ]
     },
     {
       "backdropKey": "silk-moth-woodland-colony",
@@ -8882,11 +8894,14 @@
         "reviewedBy": null,
         "reviewedAt": null
       },
-      "contexts": [],
-      "gate": {
-        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
-        "activatedBy": "#232, #224"
-      }
+      "contexts": [
+        {
+          "candidate": "flora.flax-plant"
+        },
+        {
+          "candidate": "flora.nettle"
+        }
+      ]
     },
     {
       "backdropKey": "wild-grain-seed-grass-stand",
@@ -8946,11 +8961,14 @@
         "reviewedBy": null,
         "reviewedAt": null
       },
-      "contexts": [],
-      "gate": {
-        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
-        "activatedBy": "#232, #224"
-      }
+      "contexts": [
+        {
+          "candidate": "flora.wild-grass"
+        },
+        {
+          "candidate": "flora.meadow-grass"
+        }
+      ]
     },
     {
       "backdropKey": "wild-herb-grove",

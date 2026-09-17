@@ -78,7 +78,19 @@ public final class BackdropResolver {
             .findFirst();
         if (built.isPresent()) return outdoors("built." + built.get(), "BUILT_HERE", context);
 
-        // 4. The ground itself — seen in its setting where the setting can be seen (#232/#234).
+        // 4. What is growing here (#224). Ranked under a site and under a build because both are the more
+        //    particular thing to be standing next to — a hut on a heath is a hut — but over the bare biome,
+        //    because a brake of blackberry or a bed of reed is what makes one piece of open country look unlike
+        //    another. The FULLEST stand decides, which is the one a person would actually see first; ties break by
+        //    name so two stands never toss a coin. The feature list arrives ordered by quantity, so first is
+        //    fullest.
+        Optional<String> growing = context.features().stream()
+            .filter(f -> f.kind() != null && f.kind().startsWith("FLORA:"))
+            .map(f -> slug(f.kind().substring("FLORA:".length())))
+            .findFirst();
+        if (growing.isPresent()) return outdoors("flora." + growing.get(), "FLORA_HERE", context);
+
+        // 5. The ground itself — seen in its setting where the setting can be seen (#232/#234).
         if (context.biome() != null && !context.biome().isBlank())
             return outdoors("biome." + slug(context.biome()), "BIOME", context, setting(context));
 
