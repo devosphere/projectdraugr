@@ -307,11 +307,11 @@
         "reviewedBy": null,
         "reviewedAt": null
       },
-      "contexts": [],
-      "gate": {
-        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
-        "activatedBy": "#232, #224"
-      }
+      "contexts": [
+        {
+          "candidate": "site.arctic-fox-den"
+        }
+      ]
     },
     {
       "backdropKey": "ash-hound-den",
@@ -494,11 +494,11 @@
         "reviewedBy": null,
         "reviewedAt": null
       },
-      "contexts": [],
-      "gate": {
-        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
-        "activatedBy": "#232, #224"
-      }
+      "contexts": [
+        {
+          "candidate": "site.badger-sett"
+        }
+      ]
     },
     {
       "backdropKey": "bat-cave-insect-roost",
@@ -6376,11 +6376,11 @@
         "reviewedBy": null,
         "reviewedAt": null
       },
-      "contexts": [],
-      "gate": {
-        "reason": "The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry.",
-        "activatedBy": "#232, #224"
-      }
+      "contexts": [
+        {
+          "candidate": "site.eagle-eyrie"
+        }
+      ]
     },
     {
       "backdropKey": "raven-scavenging-range",

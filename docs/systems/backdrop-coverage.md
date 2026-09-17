@@ -13,11 +13,11 @@ Schema v1 · 151 backdrops · source `frontend/src/assets`
 
 ## Reachability
 
-**91 of 151** records are reachable by a declared world context; **60** are gated.
+**94 of 151** records are reachable by a declared world context; **57** are gated.
 
 | waiting on | count | reason |
 |---|---|---|
-| #232, #224 | 38 | The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. |
+| #232, #224 | 35 | The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. |
 | #155 | 10 | The world has no site kind or biome for this feature yet. |
 | #236, #232 | 3 | Night-only scenery needs night eligibility per asset, and a habitat feature in the visual context. |
 | #117, #120 | 3 | No world site places these creatures yet. |
@@ -154,9 +154,9 @@ Schema v1 · 151 backdrops · source `frontend/src/assets`
 ### FAUNA_RANGE (37)
 
 - `alpine-goat-range` — HIGHLAND · REGIONAL · reached by `site.goat-cliff-range`
-- `arctic-fox-snowfield-den` — HIGHLAND · EXACT_SITE · **gated**: The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. (#232, #224)
+- `arctic-fox-snowfield-den` — HIGHLAND · EXACT_SITE · reached by `site.arctic-fox-den`
 - `aurochs-open-herd-range` — GRASSLAND · REGIONAL · QUARANTINED · **gated**: The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. (#232, #224)
-- `badger-sett` — TEMPERATE_FOREST · EXACT_SITE · **gated**: The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. (#232, #224)
+- `badger-sett` — TEMPERATE_FOREST · EXACT_SITE · reached by `site.badger-sett`
 - `bear-den` — TEMPERATE_FOREST · EXACT_SITE · reached by `site.bear-den`
 - `boar-wallow` — TEMPERATE_FOREST · EXACT_SITE · reached by `site.boar-range`
 - `bog-amphibian-nursery` — WETLAND · EXACT_SITE · QUARANTINED · **gated**: The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. (#232, #224)
@@ -177,7 +177,7 @@ Schema v1 · 151 backdrops · source `frontend/src/assets`
 - `nocturnal-firefly-marsh` — WETLAND · EXACT_SITE · NIGHT · QUARANTINED · **gated**: Night-only scenery needs night eligibility per asset, and a habitat feature in the visual context. (#236, #232)
 - `nocturnal-owl-woodland` — TEMPERATE_FOREST · REGIONAL · NIGHT · **gated**: Night-only scenery needs night eligibility per asset, and a habitat feature in the visual context. (#236, #232)
 - `ordinary-hornet-nest` — TEMPERATE_FOREST · EXACT_SITE · QUARANTINED · **gated**: The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. (#232, #224)
-- `raptor-cliff-nesting-range` — HIGHLAND · ADJACENT_VISIBLE · **gated**: The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. (#232, #224)
+- `raptor-cliff-nesting-range` — HIGHLAND · ADJACENT_VISIBLE · reached by `site.eagle-eyrie`
 - `raven-scavenging-range` — TEMPERATE_FOREST · REGIONAL · **gated**: The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. (#232, #224)
 - `reindeer-highland-range` — HIGHLAND · REGIONAL · QUARANTINED · **gated**: The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. (#232, #224)
 - `reptile-basking-heath` — HIGHLAND · ADJACENT_VISIBLE · **gated**: The visual context reports sites and completed builds only; species habitat and flora stands are not yet features a place can carry. (#232, #224)

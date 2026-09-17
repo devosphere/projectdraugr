@@ -358,9 +358,17 @@ public class WildlifeSimulationService {
         if (kind.contains("beaver")) return new Profile("beaver", "HERBIVORE", "CREPUSCULAR", 6, 14);
         if (kind.contains("otter")) return new Profile("river_otter", "CARNIVORE", "DIURNAL", 5, 12);
         if (kind.contains("fowl")) return new Profile("marsh_fowl", "OMNIVORE", "DIURNAL", 35, 85);
+        // An earth in the high ground keeps the fox that lives there (#224). Checked BEFORE the general fox rule
+        // below, and that order is the whole point: "Arctic fox den" contains "fox", so without this it would hold
+        // a forest fox — a creature with no affinity for a mountain at all, in a den named for one that has.
+        if (kind.contains("arctic")) return new Profile("arctic_fox", "OMNIVORE", "CREPUSCULAR", 3, 7);
         // A fox earth keeps a fox. This was the only named site relying on the old blanket default, so it is named
         // here rather than left to the ground — the rest of what that default caught was never meant to be a fox.
         if (kind.contains("fox")) return new Profile("forest_fox", "OMNIVORE", "CREPUSCULAR", 4, 10);
+        // An eyrie keeps eagles (#224): a heap of sticks a pair rebuilds on the same ledge for decades, which is
+        // why it is evidence a place carries rather than a creature passing through. A pair and their young, not a
+        // flock — an eyrie holding thirty birds would be a rookery, and a different thing entirely.
+        if (kind.contains("eyrie")) return new Profile("golden_eagle", "CARNIVORE", "DIURNAL", 2, 4);
         // A bat roost keeps bats (#158). Without this it would fall to residentFor, which chooses by ground — and
         // a cave mouth's other resident is a cave bear, so a roost would have stood an even chance of holding one.
         // Bats are TINY and roost in numbers, so the colony is large where a bear's den is one animal.
