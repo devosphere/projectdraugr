@@ -378,12 +378,20 @@ public class ChronicleActionService {
             perception = "You take a brief moment away from the immediate ground around you.";
         } else if (intent == Intent.REST) {
             physiology.rest(chronicle.id(), minutes); items.restDraftBeasts(chronicle.id());
-            perception = "You remain still while the forest continues around you.";
+            // #30 — this line said "while the forest continues around you" wherever the Chronicle happened to be:
+            // on open grassland, on a beach, on a mountainside, inside a cave. Narration must witness the world,
+            // and a wood that is not there is the plainest way of failing that. The span IS known — the player may
+            // have asked for two hours — and saying it is the difference between a pause and an afternoon.
+            perception = "You remain still for " + humanSpan(minutes) + ", and the place goes on around you without you.";
             perception += bittenWhileStill(chronicle, resolvedAt, minutes);
         }
         else if (intent == Intent.SLEEP) {
             boolean safe = physiology.sleep(chronicle.id(), minutes); items.restDraftBeasts(chronicle.id());
-            perception = safe ? "You lie down under cover and let sleep take you. You wake to a changed sky, the deep tiredness lifted from your limbs." : "You settle onto the bare ground and drift into a broken, shallow sleep, waking stiff and only half-rested as the light shifts.";
+            perception = safe
+                ? "You lie down under cover and let sleep take you for " + humanSpan(minutes)
+                  + ". You wake to a changed sky, the deep tiredness lifted from your limbs."
+                : "You settle onto the bare ground and drift through " + humanSpan(minutes)
+                  + " of broken, shallow sleep, waking stiff and only half-rested as the light shifts.";
             perception += bittenWhileStill(chronicle, resolvedAt, minutes);
             // Stock left loose overnight are what predators come for (#108). A sleep spans the dark hours, so this
             // is where an unpenned herd is thinned — and waking to a gap in the flock is how a keeper learns of it.
@@ -1208,6 +1216,20 @@ public class ChronicleActionService {
         jdbc.update("INSERT INTO chronicle_event (chronicle_id,occurred_at,event_type,payload) VALUES (?,?,'CHRONICLE_MOVED',jsonb_build_object('fromLocationId',?::text,'toLocationId',?::text,'direction',?))", chronicle.id(), occurredTs, chronicle.location().toString(), destination.toString(), direction.name());
         recordVisit(chronicle.id(), destination, occurredAt);
         return "You travel " + direction.description + wayItWalked(destination) + ".";
+    }
+    /**
+     * How long the act took, as a person would say it (#30).
+     *
+     * <p>Resting and sleeping already know their span exactly — the player may have asked for two hours, and
+     * {@code durationFor} settles it either way — and then said nothing about it, so a five-minute pause and an
+     * afternoon on your back read identically. Rounded the way speech rounds, because "fifty-three minutes" is a
+     * clock talking, not a body.
+     */
+    private String humanSpan(int minutes) {
+        if (minutes < 10) return "a few minutes";
+        if (minutes < 45) return minutes + " minutes";
+        if (minutes < 90) return "an hour";
+        return Math.round(minutes / 60.0) + " hours";
     }
     /**
      * What the ground you have just walked into is like to walk on (#30).
