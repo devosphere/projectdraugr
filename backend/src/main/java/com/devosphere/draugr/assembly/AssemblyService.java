@@ -45,19 +45,25 @@ public class AssemblyService {
      */
     @Transactional(readOnly = true)
     public String match(String text) {
+        String[] hit = matchWithKeyword(text);
+        return hit == null ? null : hit[0];
+    }
+
+    /** The assembly the text names and the keyword that named it — longest wins, as it always has. */
+    private String[] matchWithKeyword(String text) {
         String v = ActivityClassifier.normalise(text);
-        String best = null; int bestLen = -1;
+        String best = null, bestKeyword = null; int bestLen = -1;
         for (Map<String, Object> row : jdbc.queryForList(
                 "SELECT assembly_key, keywords FROM assembly_definition WHERE review_state='VERIFIED'")) {
             String key = (String) row.get("assembly_key");
             for (String kw : ((String) row.get("keywords")).split(",")) {
                 String k = kw.trim();
                 if (!k.isEmpty() && ActivityClassifier.containsTerm(v, k) && k.length() > bestLen) {
-                    best = key; bestLen = k.length();
+                    best = key; bestKeyword = k; bestLen = k.length();
                 }
             }
         }
-        return best;
+        return best == null ? null : new String[]{best, bestKeyword};
     }
 
     /**
@@ -71,13 +77,35 @@ public class AssemblyService {
      */
     @Transactional
     public String[] advance(UUID chronicle, UUID location, String text, Instant at) {
-        String key = match(text);
-        if (key == null) return null;
+        String[] hit = matchWithKeyword(text);
+        if (hit == null) return null;
+        String key = hit[0], matchedKeyword = hit[1];
 
         Map<String, Object> def = jdbc.queryForMap(
             "SELECT subject_kind, produces_item_key, construction_kind, display_name, narration " +
             "FROM assembly_definition WHERE assembly_key=?", key);
         String subjectKind = (String) def.get("subject_kind");
+
+        // Naming a thing that already stands is USING it, not building another (#77).
+        //
+        // An assembly's keywords include its bare name — "drying rack", "smoke rack", "causeway" — so that "work on
+        // the drying rack" advances one being built. But this matcher runs before the material processes, and once
+        // a structure is finished no stage is left in progress, so the next mention of it started a NEW one: "dry
+        // the fish on the drying rack", with a rack standing right there, began raising a second rack and the fish
+        // never dried. Every station named while it was being used had the same trap, and so did every way named
+        // while it was being walked.
+        //
+        // So a structure that already stands on this ground, named only by its bare name, is a reference and not a
+        // request: this returns null and the caller tries the material process the text names. What counts as a
+        // request is the assembly's OWN data — its keywords include the verb forms that build it ("make a drying
+        // rack", "raise a smoke rack"), and the longest keyword wins, so a text that says one of those matched one
+        // of those. A word list on the text would have misfired both ways: "make" and "lay" are how half the
+        // processes are phrased ("make cordage at the post", "lay out the hide"). Asking for "another", a
+        // "second" or a "new" one still builds, and one already under way is always advanced — "work on the drying
+        // rack" must reach a half-built second rack.
+        if ("STRUCTURE".equals(subjectKind) && !isBuildPhrase(matchedKeyword) && !asksForAnother(text)
+                && !underWay(chronicle, key) && standsHere(location, (String) def.get("construction_kind")))
+            return null;
 
         UUID instanceId = jdbc.query(
             "SELECT id FROM assembly_instance WHERE chronicle_id=? AND assembly_key=? AND state='IN_PROGRESS' LIMIT 1 FOR UPDATE",
@@ -309,5 +337,45 @@ public class AssemblyService {
             "SELECT EXISTS(SELECT 1 FROM fire_state fs JOIN world_object w ON w.id=fs.construction_id WHERE w.current_location_id=? AND fs.active=true)",
             Boolean.class, location);
         return Boolean.TRUE.equals(f);
+    }
+
+    /**
+     * The verbs an assembly's own keywords use to ask for it to be made. A keyword containing one — "build a
+     * drying rack", "work on the causeway" — is a build phrase; a keyword without one — "drying rack", "causeway" —
+     * is the thing's bare name, which a person says as readily while using it as while building it.
+     */
+    private static final java.util.List<String> BUILD_VERBS = java.util.List.of(
+        "build", "make", "raise", "erect", "construct", "set up", "put up", "lay", "dig", "lash", "work on",
+        "start", "begin", "wall", "cover", "set out");
+
+    /** Is this keyword a request to make the thing, rather than its bare name (#77)? */
+    static boolean isBuildPhrase(String keyword) {
+        if (keyword == null) return false;
+        String v = ActivityClassifier.normalise(keyword);
+        for (String w : BUILD_VERBS) if (ActivityClassifier.containsTerm(v, w)) return true;
+        return false;
+    }
+
+    /** "Another", "a second", "a new one": how a person asks for one more of a thing they already have. */
+    static boolean asksForAnother(String text) {
+        String v = ActivityClassifier.normalise(text);
+        return ActivityClassifier.containsTerm(v, "another") || ActivityClassifier.containsTerm(v, "second")
+            || ActivityClassifier.containsTerm(v, "new");
+    }
+
+    /** A finished, sound structure of this kind already standing on this ground. */
+    private boolean standsHere(UUID location, String constructionKind) {
+        if (location == null || constructionKind == null) return false;
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "WHERE w.current_location_id=? AND cp.project_kind=? AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE')",
+            Boolean.class, location, constructionKind));
+    }
+
+    /** This Chronicle has one of these already under way — whatever else stands here, that one is advanced. */
+    private boolean underWay(UUID chronicle, String assemblyKey) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM assembly_instance WHERE chronicle_id=? AND assembly_key=? AND state='IN_PROGRESS')",
+            Boolean.class, chronicle, assemblyKey));
     }
 }
