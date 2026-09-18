@@ -180,7 +180,7 @@ class MeetingAPeopleIntegrationTest {
         // All of it is history, in order, with the Chronicle as its subject.
         int evidence = jdbc.queryForObject("SELECT COUNT(*) FROM native_event WHERE community_id=? AND subject_id=? AND event_kind LIKE 'CONTACT_%'",
             Integer.class, community, chronicle);
-        assertTrue(evidence >= 20, () -> "every act of contact is kept: " + evidence);
+        assertEquals(15, evidence, "every act of contact is kept: the unseen question, the weapon, the lowering, first contact, the misunderstanding, four days of listening and watching, the question that lands, and the gift");
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
