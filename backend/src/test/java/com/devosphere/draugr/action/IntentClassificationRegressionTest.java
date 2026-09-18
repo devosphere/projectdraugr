@@ -641,6 +641,8 @@ class IntentClassificationRegressionTest {
         assertEquals("FILTER_WATER", classify("filter the water through the clay filter"));
         // Drinking is still DRINK; collecting is not gathering.
         assertEquals("DRINK", classify("drink from the stream"));
+        // The bare request, where there may be no stream to name (#30: the failure now says why there is none).
+        assertEquals("DRINK", classify("drink water"));
         assertEquals("DRINK", classify("take a drink of water"));
     }
 
