@@ -2941,7 +2941,7 @@ public class PhysicalItemService {
     @Transactional public ItemView craftFishingNet(boolean landing, Instant at) {
         UUID chronicle = activeChronicle();
         int cordage = landing ? 3 : 6;
-        if (!hasCuttingTool(chronicle)) throw new IllegalStateException("A blade is needed to cut and start the cordage.");
+        if (!hasCuttingTool(chronicle)) throw new IllegalStateException("Without an edge the cordage only frays where you try to part it, and the net cannot be started.");
         if (!hasAtLeast(chronicle, "fiber_cordage", cordage) || (landing && !hasAtLeast(chronicle, "dry_branch", 2)))
             throw new IllegalStateException("Insufficient physical material.");
         for (int i = 0; i < cordage; i++) if (!consumeOne(chronicle, "fiber_cordage", at)) throw new IllegalStateException("Material changed.");
@@ -2960,7 +2960,7 @@ public class PhysicalItemService {
      */
     @Transactional public ItemView craftUtilityBelt(Instant at) {
         UUID chronicle = activeChronicle();
-        if (!hasCuttingTool(chronicle)) throw new IllegalStateException("A blade is needed to cut and fit the strap.");
+        if (!hasCuttingTool(chronicle)) throw new IllegalStateException("Without an edge the cordage only frays where you try to part it, and the strap cannot be cut to length.");
         if (!hasAtLeast(chronicle, "fiber_cordage", 2) || !hasAtLeast(chronicle, "plant_fiber", 2))
             throw new IllegalStateException("Insufficient physical material.");
         for (int i = 0; i < 2; i++) if (!consumeOne(chronicle, "fiber_cordage", at)) throw new IllegalStateException("Material changed.");

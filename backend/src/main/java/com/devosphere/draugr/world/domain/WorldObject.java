@@ -30,5 +30,5 @@ public class WorldObject {
     public void transferTo(UUID ownerId) { ensureActive(); currentOwnerId = require(ownerId); currentLocationId = null; }
     public void destroy() { ensureActive(); lifecycleState = LifecycleState.DESTROYED; destroyedAt = Instant.now(); currentLocationId = null; currentOwnerId = null; }
     private void ensureActive() { if (lifecycleState != LifecycleState.ACTIVE) throw new IllegalStateException("Only active objects can change state"); }
-    private UUID require(UUID id) { if (id == null) throw new IllegalArgumentException("Location or owner is required"); return id; }
+    private UUID require(UUID id) { if (id == null) throw new IllegalArgumentException("A world object must have a location or an owner; this one was given neither"); return id; }
 }
