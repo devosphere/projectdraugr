@@ -214,6 +214,12 @@ public class WildlifeEncounterService {
     public HarvestResult harvest(UUID chronicle, UUID chunk, UUID action, Instant at) {
         Carcass carcass=jdbc.query("SELECT wc.object_id,wc.species_key,wc.remaining_meat_units,wc.hide_available FROM wildlife_carcass wc JOIN world_object w ON w.id=wc.object_id WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' ORDER BY wc.died_at LIMIT 1 FOR UPDATE",rs->rs.next()?new Carcass(rs.getObject(1,UUID.class),rs.getString(2),rs.getInt(3),rs.getBoolean(4)):null,chunk);
         if(carcass==null)return new HarvestResult("FAILED","You search the ground carefully, then leave it as you found it.");
+        // What a creature is decides what its body is (#110). A PEOPLE or SOVEREIGN being's remains are protected by
+        // its cognition profile: not meat, not a hide, not a drop table. Nothing is taken and the body is left as it lies,
+        // which is itself a thing the world will remember once #114 gives the living a memory of it.
+        if (Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM cognition_profile WHERE species_key=? AND remains_protected)", Boolean.class, carcass.species())))
+            return new HarvestResult("FAILED", "You kneel over the body and your hands stop. This was someone: there is a face, and work in the hands, and nothing here is yours to take.");
         boolean toxicFlesh=false;
         if(carcass.meat()>0) {
             // A toxic species (fire salamander, toad, newt — #V173) is stripped but its flesh is left: it is poison,
@@ -1001,6 +1007,7 @@ public class WildlifeEncounterService {
         java.util.List<java.util.Map<String,Object>> here = jdbc.queryForList(
             "SELECT species_key, tamability, activity_cycle, ecological_role FROM wildlife_species " +
             "WHERE tamability > 0 AND kingdom_class <> 'MONSTRUM' AND movement_class <> 'AQUATIC' " +
+            "  AND NOT EXISTS (SELECT 1 FROM cognition_profile cp WHERE cp.species_key=wildlife_species.species_key AND cp.domestication_prohibited) " +
             "  AND biome_affinity ILIKE ? AND wildlife_abroad(species_key) ORDER BY md5(species_key || ?::text)",
             "%" + biome + "%", chunk.toString());
         if (here.isEmpty()) return null;
@@ -1042,6 +1049,7 @@ public class WildlifeEncounterService {
             "SELECT wp.id,wp.species_key,ws.tamability,wp.behavior_state FROM wildlife_population wp " +
             "JOIN ecology_site es ON es.id=wp.site_id JOIN wildlife_species ws ON ws.species_key=wp.species_key " +
             "WHERE es.chunk_id=? AND wp.population_count>0 AND ws.tamability>0 AND wildlife_abroad(wp.species_key) " +
+            "AND NOT EXISTS (SELECT 1 FROM cognition_profile cp WHERE cp.species_key=wp.species_key AND cp.domestication_prohibited) " +
             "ORDER BY ws.tamability DESC LIMIT 1 FOR UPDATE OF wp",
             rs -> rs.next() ? new Tamable(rs.getObject(1,UUID.class), rs.getString(2), rs.getInt(3), rs.getString(4)) : null, chunk);
         // Nothing seeded here to approach — which, before this, was almost the whole map. Taming read only the
