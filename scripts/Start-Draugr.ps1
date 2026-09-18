@@ -210,12 +210,32 @@ try {
         Set-SplashStatus $splashState 'Starting the world database...'
         docker compose up -d postgres
         Set-SplashStatus $splashState 'Awakening the simulation...'
-        $backend = Start-Process -FilePath $maven -ArgumentList 'spring-boot:run' -WorkingDirectory (Join-Path $root 'backend') -WindowStyle Hidden -PassThru
+        # Stale migrations. Maven copies resources into target/ but never deletes one whose source was renamed or
+        # removed, and Flyway reads the copy: a migration renumbered on a branch left V123__digging_stick.sql beside
+        # V123__early_shields.sql, and every launch after it died two seconds in on "Found more than one migration
+        # with version 123" behind this splash. spring-boot:run re-copies the folder from source before it starts,
+        # so clearing it costs nothing and makes the compiled migrations exactly the ones this checkout ships.
+        $compiledMigrations = Join-Path $root 'backend\target\classes\db\migration'
+        if (Test-Path $compiledMigrations) { Remove-Item -LiteralPath $compiledMigrations -Recurse -Force }
+        # The backend's own output goes to a log beside the checkout. The launcher is windowless, so without this a
+        # backend that fails to start says nothing at all and the splash simply waits.
+        $backendLog = Join-Path $root '.draugr-backend.log'
+        $backend = Start-Process -FilePath $maven -ArgumentList 'spring-boot:run' -WorkingDirectory (Join-Path $root 'backend') -WindowStyle Hidden -PassThru -RedirectStandardOutput $backendLog -RedirectStandardError "$backendLog.err"
         $frontend = Start-Process -FilePath 'npm.cmd' -ArgumentList 'run', 'dev', '--', '--host', '127.0.0.1' -WorkingDirectory (Join-Path $root 'frontend') -WindowStyle Hidden -PassThru
         [pscustomobject]@{ backendProcessId = $backend.Id; frontendProcessId = $frontend.Id; startedAt = (Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json | Set-Content -Path $runtimeFile -Encoding utf8
         $backendReady = $false
         $frontendReady = $false
         for ($attempt = 1; $attempt -le 120; $attempt++) {
+            # A backend that has already exited will never become ready, and anything answering on 8080 after it
+            # died is not the one this launch started. Say why at once instead of waiting out the two minutes.
+            if ($backend.HasExited) {
+                # The deepest "Caused by" is the real reason; Maven's own [ERROR] lines only say the run failed.
+                $lines = Get-Content $backendLog -ErrorAction SilentlyContinue
+                $reason = $lines | Select-String -Pattern '^Caused by: ' | Select-Object -Last 1
+                if (-not $reason) { $reason = $lines | Select-String -Pattern '\[ERROR\] ' | Select-Object -First 1 }
+                $detail = if ($reason) { ($reason.Line -replace '^Caused by: (\S+?: )?', '').Trim() } else { 'no error was written' }
+                throw "The simulation stopped while starting. $detail (full log: $backendLog)"
+            }
             try { $backendReady = (Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:8080/api/health' -TimeoutSec 2).StatusCode -eq 200 } catch { }
             try { $frontendReady = (Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:5173' -TimeoutSec 2).StatusCode -eq 200 } catch { }
             if ($backendReady -and $frontendReady) { break }
