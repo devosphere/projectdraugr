@@ -6,8 +6,10 @@ import com.devosphere.draugr.chronicle.ChronicleService;
 import com.devosphere.draugr.world.genesis.WorldEcologyGenesisService;
 import com.devosphere.draugr.world.genesis.WorldGenesisService;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -17,6 +19,8 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -63,6 +67,24 @@ class TheStandsThatWereAlwaysThereIntegrationTest {
     @Autowired ChronicleActionService actions;
     @Autowired PersistentStateAuditor auditor;
     @Autowired JdbcTemplate jdbc;
+
+    /**
+     * Looking closely is sight work, and sight work fails after dark (#75). The simulated hour is whatever the suite
+     * before this one left it at, so this ran green at one hour and red at another. Pinned to a June midday, and
+     * put back afterwards so no later test inherits it.
+     */
+    private Timestamp clockBefore;
+
+    @BeforeEach
+    void inDaylight() {
+        clockBefore = jdbc.queryForObject("SELECT simulated_at FROM simulation_clock WHERE id=1", Timestamp.class);
+        jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", Timestamp.from(Instant.parse("2031-06-10T12:00:00Z")));
+    }
+
+    @AfterEach
+    void restoreClock() {
+        if (clockBefore != null) jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", clockBefore);
+    }
 
     private void world() {
         if (worldGenesis.current() == null) {
