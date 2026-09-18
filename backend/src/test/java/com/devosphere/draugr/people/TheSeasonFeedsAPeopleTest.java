@@ -15,9 +15,9 @@ class TheSeasonFeedsAPeopleTest {
 
     @Test
     void theSeasonDecidesWhatAWorkerBringsIn() {
-        assertEquals(0, NativeCommunityService.yieldPerWorker(Instant.parse("2031-01-15T12:00:00Z")), "deep winter gives nothing");
-        assertEquals(1, NativeCommunityService.yieldPerWorker(Instant.parse("2031-03-15T12:00:00Z")), "the shoulder of the year a little");
-        assertEquals(2, NativeCommunityService.yieldPerWorker(Instant.parse("2031-07-15T12:00:00Z")), "summer enough to share");
+        assertEquals(1, NativeCommunityService.yieldPerWorker(Instant.parse("2031-01-15T12:00:00Z")), "deep winter a little, through ice and from traps");
+        assertEquals(2, NativeCommunityService.yieldPerWorker(Instant.parse("2031-03-15T12:00:00Z")), "the shoulder of the year more");
+        assertEquals(3, NativeCommunityService.yieldPerWorker(Instant.parse("2031-07-15T12:00:00Z")), "summer enough to put by");
     }
 
     @Test

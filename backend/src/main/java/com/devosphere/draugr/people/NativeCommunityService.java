@@ -141,16 +141,19 @@ public class NativeCommunityService {
     }
 
     /**
-     * What one worker brings in a day, by season. Deep winter gives nothing to gather, the shoulders of the year
-     * a little, the growing months enough to put by. Northern-hemisphere months, as the rest of the world's
-     * seasons are.
+     * What one worker brings in a day, by season: the growing months enough to put by, the shoulders of the year
+     * less, and deep winter a little, won through ice and from traps. Never nothing — a people that has lived on
+     * this ground for generations is one that can get through its winters in an ordinary year — but never enough
+     * in winter to feed everyone either, so the store they built in summer is what carries them. Dried food keeps
+     * about six weeks, which is what makes a long winter a real danger rather than a formality.
+     * Northern-hemisphere months, as the rest of the world's seasons are.
      */
     static int yieldPerWorker(Instant day) {
         int month = day.atZone(ZoneOffset.UTC).getMonthValue();
         return switch (month) {
-            case 12, 1, 2 -> 0;
-            case 3, 11 -> 1;
-            default -> 2;
+            case 12, 1, 2 -> 1;
+            case 3, 11 -> 2;
+            default -> 3;
         };
     }
 

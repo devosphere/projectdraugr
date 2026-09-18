@@ -33,8 +33,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>No people exist in the world until #115's review places one, so this test declares the harpy a PEOPLE for its
  * own duration (every protective flag V344 requires) and founds a small community of four on real ground: two who
  * fish, an elder and a child, and a store that holds real food. Then it lives them through the year on the clock:
- * a summer in which two workers feed four, a store that is eaten down item by item, and a winter that nothing grows
- * in, which closes them to outsiders on the third hungry day and sends them looking for food on the fourteenth.
+ * a summer in which two workers feed four and put by the rest, and a winter in which two workers bring in half of
+ * what four eat. The store carries them until it is bare; then the third hungry day closes them to outsiders and
+ * the fourteenth sends them looking for food. Every number below is worked by hand in the comments beside it.
  * Their history can be added to and never edited. Skips without Docker.
  */
 @SpringBootTest
@@ -127,27 +128,33 @@ class APeopleThatPersistsIntegrationTest {
             member(community, kin, chunk, "Old Weir", "ELDER");
             member(community, kin, chunk, "Pip", "CHILD");
 
-            // Summer: two who fish bring in two each, and four eat one each. Fed, every day, and nothing put by.
+            // Summer: two who fish bring in three each, four eat one each, and two a day go into the store.
             natives.advanceTo(Instant.parse("2031-06-11T00:00:00Z"));
             assertEquals(0, ((Number) state(community).get("shortage_days")).intValue(), "two workers in summer feed four");
+            assertEquals(20, instore(store), "ten summer days put twenty by");
             assertTrue(history(community).isEmpty(), () -> "a fed community has nothing to remember yet: " + history(community));
 
-            // The store is physical: food put by is eaten down one item at a time, and each is gone for good.
+            // Into winter with ten in the store. The store is physical: each ration eaten is an item gone for good.
+            for (UUID summer : jdbc.queryForList("SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE'", UUID.class, store))
+                items.retire(summer, Instant.parse("2031-11-30T00:00:00Z"), "TEST_CLEARED", "dried_fish");
             for (int i = 0; i < 10; i++) items.createHeldItem(store, "dried_fish", "Dried fish", Instant.parse("2031-12-01T00:00:00Z"), "TEST_FIXTURE");
             setClock(community, "2031-12-01T00:00:00Z");
             natives.advanceTo(Instant.parse("2031-12-03T00:00:00Z"));
-            assertEquals(2, instore(store), "two winter days with nothing gathered eat eight of the ten put by");
+            // Each December day: two brought in, four eaten, the store down two. 10 -> 8 -> 6.
+            assertEquals(6, instore(store), "two winter days draw the store down by two each");
             Integer eatenAway = jdbc.queryForObject("SELECT COUNT(*) FROM world_object WHERE destroyed_cause='EATEN_BY_COMMUNITY' AND destroyed_at >= '2031-12-01'", Integer.class);
-            assertEquals(8, eatenAway, "each ration eaten is an item gone, with the cause on it");
+            assertEquals(8, eatenAway, "four eaten each day, each an item gone with the cause on it");
 
-            // Deep winter, with the store all but bare: short on the third day, closed to outsiders, then moving.
-            natives.advanceTo(Instant.parse("2031-12-06T00:00:00Z"));
+            // 6 -> 4 -> 2 -> 0 fed through the 6th; on the 7th two come in and four are needed: short. The third
+            // short day, the 9th, closes them.
+            natives.advanceTo(Instant.parse("2031-12-10T00:00:00Z"));
             assertEquals("CLOSED", state(community).get("trade_policy"), "three hungry days close the store to trade");
             assertEquals("GUARDED", state(community).get("security_posture"));
             assertEquals("CLOSED", jdbc.queryForObject("SELECT access_rule FROM native_settlement_site WHERE object_id=?", String.class, store),
                 "and the gates to visitors");
             assertEquals(4, (int) jdbc.queryForObject("SELECT COUNT(*) FROM native_individual WHERE community_id=? AND condition='HUNGRY'", Integer.class, community));
-            natives.advanceTo(Instant.parse("2031-12-20T00:00:00Z"));
+            // Short from the 7th, the fourteenth short day is the 20th.
+            natives.advanceTo(Instant.parse("2031-12-21T00:00:00Z"));
             assertEquals("MOVING", state(community).get("lifecycle"), "a fortnight hungry and they leave to find food");
             assertEquals(List.of("SHORTAGE_BEGAN", "CLOSED_TO_OUTSIDERS", "LEFT_TO_FIND_FOOD"), history(community));
 
