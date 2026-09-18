@@ -478,7 +478,7 @@ public class ChronicleActionService {
                 String drunkFrom = waterNamed(chronicle.location());
                 if (safeWaterSource(chronicle.location())) perception = "You drink from " + drunkFrom + " and let the cold settle in your throat.";
                 else { DrawTreatment through = drawTreatment(chronicle.location()); physiology.applyWaterborneRisk(chronicle.id(), Math.max(1, (silver ? 3 : ladle ? 4 : 6) - (through == null ? 0 : through.clarifies()))); perception = through != null ? "You draw the water off through the " + through.name() + " beside " + drunkFrom + " and drink; it comes clearer than the source itself, though it has not been boiled." : silver ? "You dip the silver cup into " + drunkFrom + " and drink; the bright metal keeps it from turning the gut as it otherwise would." : ladle ? "You dip the ladle into " + drunkFrom + " and draw from above the silt; it is still not clean, but the gut will fare better than from a careless gulp." : "You drink from " + drunkFrom + ". It eases the dryness, but it is not clean, and the gut will know it."; }
-            } else { outcome = "FAILED"; perception = "You look about, but there is no water here fit to drink — no stream, no spring, only dry ground that gives nothing back."; }
+            } else { outcome = "FAILED"; perception = noWaterToDrink(chronicle.location(), beforeWeather); }
         }
         else if (intent == Intent.COLLECT_WATER) {
             if (!waterInReach(chronicle.location())) { outcome = "FAILED"; perception = "There is no water here to fill from — no stream, spring, or standing water within reach."; }
@@ -2416,6 +2416,25 @@ public class ChronicleActionService {
             "WHERE nl.chunk_id=? AND dp.fouls_water)", Boolean.class, location));
     }
     /** What the water on this ground is called, read from the same sites that make it water (#37, FreshWater). */
+    /**
+     * Why there is nothing here to drink, said as what the Chronicle is looking at (#30).
+     *
+     * <p>This used to be one line for everywhere: "no stream, no spring, only dry ground that gives nothing back". On
+     * a shore that is false, because the whole horizon is water and the reason it cannot be drunk is that it is the
+     * sea's. In rain it is false as well, and a player standing in a downpour notices. The weather is the one read at
+     * the start of the action, so the line agrees with the sky the setting clause describes.
+     */
+    private String noWaterToDrink(UUID location, String weather) {
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
+        if ("COAST".equals(biome) || "OCEAN".equals(biome))
+            return "The only water here is the sea's. One mouthful is enough to know it would leave you thirstier than before.";
+        if ("RAIN".equals(weather) || "STORM".equals(weather))
+            return "Rain wets your face and runs off your hands, too little of it to drink, and there is no stream or spring here.";
+        if ("SNOW".equals(weather))
+            return "Snow lies about, but there is no running water here, and snow in the mouth numbs more than it quenches.";
+        return "You look about, but there is no water here fit to drink — no stream, no spring, only dry ground that gives nothing back.";
+    }
+
     private String waterNamed(UUID location) {
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
         return com.devosphere.draugr.ecology.FreshWater.name(
