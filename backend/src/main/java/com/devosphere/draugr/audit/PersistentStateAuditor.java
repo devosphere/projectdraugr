@@ -189,6 +189,20 @@ public class PersistentStateAuditor {
         if (lostChronicles != null && lostChronicles > 0)
             violations.add(lostChronicles + " living Chronicle(s) stand on ground that is not a place.");
 
+        // Native peoples (#111). A member counted among the living must have a body in the world, and a community
+        // must still be a people: the trigger checks this when a community is made, and this catches the day a
+        // later reclassification quietly turns one into a pack with a store.
+        Integer bodilessMembers = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM native_individual n JOIN world_object w ON w.id = n.object_id " +
+            "WHERE n.condition <> 'DEAD' AND w.lifecycle_state <> 'ACTIVE'", Integer.class);
+        if (bodilessMembers != null && bodilessMembers > 0)
+            violations.add(bodilessMembers + " native individual(s) are counted living but have no body in the world.");
+        Integer communitiesOfBeasts = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM native_community nc JOIN cognition_profile cp ON cp.species_key = nc.species_key " +
+            "WHERE nc.lifecycle <> 'DISPERSED' AND cp.cognition_class NOT IN ('PEOPLE','SOVEREIGN')", Integer.class);
+        if (communitiesOfBeasts != null && communitiesOfBeasts > 0)
+            violations.add(communitiesOfBeasts + " native community(ies) belong to a species that is not a people.");
+
         return new AuditReport(violations.isEmpty(), List.copyOf(violations));
     }
 
