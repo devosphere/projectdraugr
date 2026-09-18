@@ -948,4 +948,15 @@ class IntentClassificationRegressionTest {
         // And tilling itself still classifies, so the fix above was a wording change and not a loosening.
         assertEquals("TILL_GROUND", classify("break the earth for a seedbed"));
     }
+
+    /**
+     * #77 V341: a twisting post is built through the assembly matcher, so every keyword must reach it unclaimed by a
+     * Java intent. None of them is a way of asking to make cord, and making cord must still be making cord.
+     */
+    @Test void aTwistingPostIsBuiltNotTwisted() throws Exception {
+        for (String phrase : new String[]{"build a twisting post", "set a twisting post", "set up a twisting post",
+                                          "raise a twisting post", "make a twisting post", "twisting post", "rope post",
+                                          "build a rope post", "set a rope post", "work on the twisting post"})
+            assertEquals("UNKNOWN", classify(phrase), phrase);
+    }
 }
