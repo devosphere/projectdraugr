@@ -142,7 +142,7 @@ class PlaytestBugFixesIntegrationTest {
         items.createCarriedItem(chronicle, "field_stone", "Field stone", now(), "TEST_SEED");
         UUID basket = jdbc.queryForObject(
             "SELECT i.object_id FROM item_instance i JOIN world_object w ON w.id=i.object_id " +
-            "WHERE i.item_key='woven_basket' AND w.lifecycle_state='ACTIVE' LIMIT 1", UUID.class);
+            "WHERE i.item_key='woven_basket' AND w.lifecycle_state='ACTIVE' AND w.current_owner_id=? LIMIT 1", UUID.class, chronicle);
         UUID stone = jdbc.queryForObject(
             "SELECT i.object_id FROM item_instance i JOIN world_object w ON w.id=i.object_id " +
             "WHERE i.item_key='field_stone' AND w.lifecycle_state='ACTIVE' AND w.current_owner_id=? LIMIT 1", UUID.class, chronicle);
