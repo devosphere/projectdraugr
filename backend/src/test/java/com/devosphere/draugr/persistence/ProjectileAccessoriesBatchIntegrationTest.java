@@ -92,8 +92,11 @@ class ProjectileAccessoriesBatchIntegrationTest {
             "SELECT COUNT(*) FROM container_capacity_default WHERE item_key IN ('sling_stone_pouch','simple_quiver','back_quiver')", Integer.class));
         // The straightener and jig ease the shaft/arrow work (station_kind wired onto those recipes).
         assertEquals("arrow_straightener", jdbc.queryForObject("SELECT station_kind FROM material_process WHERE process_key='shave_arrow_shafts'", String.class));
-        assertEquals(3, (int) jdbc.queryForObject(
-            "SELECT COUNT(*) FROM material_process WHERE station_kind='arrow_fletching_jig'", Integer.class));
+        // At least: the jig was always meant for all arrow binding, and V342 gave it the four-shaft bundle as well.
+        // A registry that grows is the point, so this names a floor and not a census.
+        int jigged = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM material_process WHERE station_kind='arrow_fletching_jig'", Integer.class);
+        assertTrue(jigged >= 3, () -> "the fletching jig must ease the arrow recipes, found " + jigged);
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
