@@ -107,6 +107,24 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         run: npm run build
+      - name: Install the test browser (#239/#242)
+        working-directory: frontend
+        # Chromium only, with its system libraries. The other engines would triple the download for a screen that
+        # ships inside one browser (the Electron shell), so they are left out deliberately.
+        run: npx playwright install --with-deps chromium
+      - name: Screen framing in a real browser (#239/#242)
+        working-directory: frontend
+        # Serves the build above in prototype mode (no backend) and walks in as a player does, at phone, tablet,
+        # laptop and wide widths plus the one between phone and tablet. Asserts what a screenshot only shows if
+        # someone looks: no sideways scroll, the action field on screen and usable, nothing covering the narration.
+        run: npm run test:e2e
+      - name: Keep the browser report when framing fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report
+          retention-days: 7
       - name: Backdrop budgets — initial payload and lazy registry (#243)
         working-directory: frontend
         # Measures the built artifact: what a player downloads before anything paints. Fails if a backdrop image or

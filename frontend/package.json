@@ -12,13 +12,15 @@
     "backdrops:report": "node ../scripts/backdrops/build-manifest.mjs report",
     "backdrops:test": "node ../scripts/backdrops/test-validation.mjs",
     "backdrops:budget": "node ../scripts/backdrops/check-budgets.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.48.2",
     "@types/react": "18.3.18",
     "@types/react-dom": "18.3.5",
     "@vitejs/plugin-react": "4.3.4",
