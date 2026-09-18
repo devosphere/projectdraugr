@@ -482,7 +482,7 @@ public class ChronicleActionService {
         }
         else if (intent == Intent.COLLECT_WATER) {
             if (!waterInReach(chronicle.location())) { outcome = "FAILED"; perception = "There is no water here to fill from — no stream, spring, or standing water within reach."; }
-            else if (!items.hasWaterVessel(chronicle.id())) { outcome = "FAILED"; perception = "You have nothing that will carry water — a waterskin, bucket, or pot must come first."; }
+            else if (!items.hasWaterVessel(chronicle.id())) { outcome = "FAILED"; perception = "The water is here, but nothing you carry will hold it; what you scoop up runs out between your fingers."; }
             else {
                 // A sand filter bed (#77) is drawn off beneath the sand, so what fills the vessel is already filtered.
                 DrawTreatment bed = drawTreatment(chronicle.location());
@@ -491,7 +491,7 @@ public class ChronicleActionService {
                 outcome = n > 0 ? "SUCCEEDED" : "FAILED";
                 perception = n == 0 ? "Your vessels are already brimful; there is no room for more water."
                     : filtered ? "You fill your vessel at the draw below the " + bed.name() + "; the water comes through the sand clear — filtered, though not yet boiled."
-                    : "You fill your vessel with water from the source here — raw yet, and better boiled before you trust it.";
+                    : "You fill your vessel with water from the source here — raw, and carrying whatever the source carries.";
             }
         }
         else if (intent == Intent.BOIL_WATER) {

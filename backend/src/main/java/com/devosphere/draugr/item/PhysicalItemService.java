@@ -952,7 +952,7 @@ public class PhysicalItemService {
             Integer.class, chronicle);
         if (hungry == null || hungry == 0) return new String[]{"FAILED", "None of your draft beasts is hungry — there is nothing to feed, or nothing tamed that pulls."};
         if (!hasAtLeast(chronicle, "dry_grass_bundle", 1))
-            return new String[]{"FAILED", "You have no fodder to hand — a bundle of cut grass must come first before you can feed the beasts."};
+            return new String[]{"FAILED", "You have no fodder to hand, and your beasts stay as hungry as they were."};
         consumeOne(chronicle, "dry_grass_bundle", at);
         // A hay rack or a dry fodder store makes the same bundle go much further (#106): fodder shaken out on bare
         // ground is trampled and soiled, while a rack holds it at muzzle height and a store keeps it sweet. The
@@ -2941,7 +2941,7 @@ public class PhysicalItemService {
     @Transactional public ItemView craftFishingNet(boolean landing, Instant at) {
         UUID chronicle = activeChronicle();
         int cordage = landing ? 3 : 6;
-        if (!hasCuttingTool(chronicle)) throw new IllegalStateException("A blade is needed to cut and start the cordage.");
+        if (!hasCuttingTool(chronicle)) throw new IllegalStateException("Without an edge the cordage only frays where you try to part it, and the net cannot be started.");
         if (!hasAtLeast(chronicle, "fiber_cordage", cordage) || (landing && !hasAtLeast(chronicle, "dry_branch", 2)))
             throw new IllegalStateException("Insufficient physical material.");
         for (int i = 0; i < cordage; i++) if (!consumeOne(chronicle, "fiber_cordage", at)) throw new IllegalStateException("Material changed.");
@@ -2960,7 +2960,7 @@ public class PhysicalItemService {
      */
     @Transactional public ItemView craftUtilityBelt(Instant at) {
         UUID chronicle = activeChronicle();
-        if (!hasCuttingTool(chronicle)) throw new IllegalStateException("A blade is needed to cut and fit the strap.");
+        if (!hasCuttingTool(chronicle)) throw new IllegalStateException("Without an edge the cordage only frays where you try to part it, and the strap cannot be cut to length.");
         if (!hasAtLeast(chronicle, "fiber_cordage", 2) || !hasAtLeast(chronicle, "plant_fiber", 2))
             throw new IllegalStateException("Insufficient physical material.");
         for (int i = 0; i < 2; i++) if (!consumeOne(chronicle, "fiber_cordage", at)) throw new IllegalStateException("Material changed.");

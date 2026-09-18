@@ -42,8 +42,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class NarrationDoesNotInstructTest {
 
-    /** Sentence-shaped literals only: keys, SQL fragments and single words are not narration. */
-    private static final Pattern LITERAL = Pattern.compile("\"([^\"\\\\]|\\\\.){25,400}\"");
+    /**
+     * Sentence-shaped literals only: keys, SQL fragments and single words are not narration. A Java string literal
+     * cannot hold a raw line break, so neither can a match: without that, two quote marks in neighbouring comment
+     * lines were read as one "literal" spanning the prose between them.
+     */
+    private static final Pattern LITERAL = Pattern.compile("\"([^\"\\\\\\r\\n]|\\\\.){25,400}\"");
 
     /**
      * Instruction, not observation. Each of these tells the player what to obtain or what to do next, which is the
@@ -53,6 +57,12 @@ class NarrationDoesNotInstructTest {
         "\\byou (will |would )?need\\b"
         + "|\\bneeds \\d"
         + "|\\bmust first\\b"
+        // "— cordage or fibre must come first": the recipe as a list, then the order to fetch it. Missed by the
+        // first cut of this guard, which is how eighteen of them survived it; the scene library's own test already
+        // forbade the phrase, so the services now answer to the same rule.
+        + "|\\b(must|has to|have to) come first\\b"
+        // "A blade is needed to cut the cordage": the same list, said in the passive. NarrationEngineTest bans it.
+        + "|\\b(is|are) (needed|required)\\b"
         + "|\\b(twist|make|craft|build|gather|cut) more first\\b"
         + "|\\bfirst (make|craft|build|twist)\\b"
         + "|\\byou should (make|craft|build|try)\\b",
@@ -67,7 +77,11 @@ class NarrationDoesNotInstructTest {
         List<String> offences = new ArrayList<>();
         try (Stream<Path> tree = Files.walk(main)) {
             for (Path file : tree.filter(p -> p.toString().endsWith(".java")).toList()) {
-                String source = Files.readString(file, StandardCharsets.UTF_8);
+                // Comments are not narration, and they are where the old offending lines are kept as the record
+                // of why a line was rewritten; a player never reads them.
+                String source = Files.readString(file, StandardCharsets.UTF_8).lines()
+                    .filter(line -> { String t = line.strip(); return !(t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")); })
+                    .collect(java.util.stream.Collectors.joining("\n"));
                 Matcher literal = LITERAL.matcher(source);
                 while (literal.find()) {
                     String text = literal.group();
