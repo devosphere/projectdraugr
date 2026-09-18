@@ -44,6 +44,108 @@ public class NativeCommunityService {
         this.items = items;
     }
 
+    // ── Where the reedkin live (#115, DR-0024). ────────────────────────────────────────────────────────────────────
+
+    /** At most this many reedkin isles in a world: a people, not a population filling every marsh. */
+    static final int REEDKIN_COMMUNITY_CAP = 2;
+    /** Grid distance kept between two isles, so each has its own fishing water. */
+    static final int REEDKIN_SPACING = 4;
+    /** What an isle has put by when a Chronicle first comes to it: about three days for eight people. */
+    static final int REEDKIN_STARTING_STORE = 24;
+
+    private static final String[] ISLE_NAMES = {"Sedge Holm", "Weir Isle"};
+    private static final String[][] KIN = {{"Reed-bank kin", "Far-channel kin"}, {"Alder kin", "Low-water kin"}};
+    /** Two households each: who speaks for the isle, who keeps its memory, who fishes, gathers and makes. */
+    private static final String[][] HOUSEHOLDS = {
+        {"HEADSPERSON", "FISHER", "FISHER", "CHILD"},
+        {"ELDER", "FISHER", "FORAGER", "MAKER"}};
+    private static final String[] NAMES = {
+        "Ashreed", "Tamsin", "Keld", "Morrow", "Wren", "Fenna", "Lark", "Sedge",
+        "Brannoch", "Otterley", "Mere", "Rushe", "Tern", "Holm", "Weiran", "Carra"};
+
+    /**
+     * Place the reedkin's isles in a world that has none yet, or fewer than it should: freshwater marsh where it
+     * meets running water, never on a monster's ground, and never within {@link #REEDKIN_SPACING} of another isle.
+     * Deterministic by grid position, so the same world always has its isles in the same places. Additive and
+     * idempotent: run at genesis and on every boot through reconcile, it places only what is missing, and a world
+     * with its isles is left alone.
+     *
+     * @return how many isles were founded by this call
+     */
+    @Transactional
+    public int seedPeoples(UUID worldId) {
+        if (!Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM cognition_profile WHERE species_key='reedkin' AND cognition_class='PEOPLE')", Boolean.class)))
+            return 0;
+        List<Map<String, Object>> existing = jdbc.queryForList(
+            "SELECT c.grid_x, c.grid_y FROM native_community n JOIN world_chunk c ON c.id=n.home_chunk_id " +
+            "WHERE n.world_id=? AND n.species_key='reedkin'", worldId);
+        if (existing.size() >= REEDKIN_COMMUNITY_CAP) return 0;
+
+        // Marsh where it meets running water first; any freshwater marsh after that. WETLAND in this world is
+        // freshwater marsh with reeds and fish in it, so plain marsh is honest reedkin ground — and a world made
+        // before the generator had rivers (#156) has no river bank anywhere, so without the fallback the one world
+        // actually being played would never have a people in it.
+        List<Map<String, Object>> candidates = jdbc.queryForList(
+            "SELECT c.id, c.grid_x, c.grid_y FROM world_chunk c WHERE c.world_id=? AND c.biome='WETLAND' " +
+            "AND NOT EXISTS (SELECT 1 FROM ecology_site s WHERE s.chunk_id=c.id AND s.site_category='MONSTER') " +
+            "ORDER BY EXISTS (SELECT 1 FROM world_chunk r WHERE r.world_id=c.world_id AND r.biome='RIVER_BANK' " +
+            "                 AND abs(r.grid_x-c.grid_x)<=1 AND abs(r.grid_y-c.grid_y)<=1) DESC, " +
+            "         md5(c.grid_x || ',' || c.grid_y || ':reedkin'), c.grid_x, c.grid_y", worldId);
+
+        List<int[]> taken = new java.util.ArrayList<>();
+        for (Map<String, Object> e : existing) taken.add(new int[]{((Number) e.get("grid_x")).intValue(), ((Number) e.get("grid_y")).intValue()});
+        Instant now = jdbc.queryForObject("SELECT simulated_at FROM simulation_clock WHERE id=1", Timestamp.class).toInstant();
+        int founded = 0;
+        for (Map<String, Object> cand : candidates) {
+            if (taken.size() >= REEDKIN_COMMUNITY_CAP) break;
+            int x = ((Number) cand.get("grid_x")).intValue(), y = ((Number) cand.get("grid_y")).intValue();
+            boolean clear = taken.stream().allMatch(t -> Math.max(Math.abs(t[0] - x), Math.abs(t[1] - y)) >= REEDKIN_SPACING);
+            if (!clear) continue;
+            foundReedkinIsle(worldId, (UUID) cand.get("id"), taken.size(), now);
+            taken.add(new int[]{x, y});
+            founded++;
+        }
+        return founded;
+    }
+
+    private void foundReedkinIsle(UUID worldId, UUID chunk, int ordinal, Instant now) {
+        String isle = ISLE_NAMES[ordinal % ISLE_NAMES.length];
+        UUID community = UUID.randomUUID();
+        Timestamp ts = Timestamp.from(now);
+        jdbc.update("INSERT INTO native_community (id,world_id,species_key,name,home_chunk_id,territory_radius,governance," +
+            "base_trade_policy,trade_policy,base_security_posture,security_posture,staple_item_key,daily_ration,founded_at,last_simulated_at) " +
+            "VALUES (?,?,'reedkin',?,?,1,'ELDERS','SELECTIVE','SELECTIVE','WARY','WARY','dried_fish',1,?,?)",
+            community, worldId, isle, chunk, ts, ts);
+
+        UUID village = place("NATIVE_SITE", isle + " village", chunk);
+        jdbc.update("INSERT INTO native_settlement_site (object_id,community_id,site_kind,access_rule) VALUES (?,?,'VILLAGE','INVITED')", village, community);
+        UUID store = place("NATIVE_SITE", isle + " store house", chunk);
+        jdbc.update("INSERT INTO native_settlement_site (object_id,community_id,site_kind,access_rule,holds_stores) VALUES (?,?,'STORE_HOUSE','INVITED',TRUE)", store, community);
+
+        int named = ordinal * 8;
+        for (int h = 0; h < HOUSEHOLDS.length; h++) {
+            UUID kin = UUID.randomUUID();
+            jdbc.update("INSERT INTO native_kin_group (id,community_id,name,housing_site_id) VALUES (?,?,?,?)",
+                kin, community, KIN[ordinal % KIN.length][h], village);
+            for (String role : HOUSEHOLDS[h]) {
+                String name = NAMES[named++ % NAMES.length];
+                UUID body = place("NATIVE_PERSON", name + " of " + isle, chunk);
+                jdbc.update("INSERT INTO native_individual (object_id,community_id,kin_group_id,given_name,role) VALUES (?,?,?,?,?)",
+                    body, community, kin, name, role);
+            }
+        }
+        String fish = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key='dried_fish'", String.class);
+        for (int i = 0; i < REEDKIN_STARTING_STORE; i++) items.createHeldItem(store, "dried_fish", fish, now, "PUT_BY_COMMUNITY");
+        record(community, now, "FOUNDED", Map.of("people", 8, "isle", isle));
+    }
+
+    private UUID place(String type, String name, UUID chunk) {
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,?,?,?)", id, type, name, chunk);
+        return id;
+    }
+
     /** Bring every living community up to {@code now}, a whole day at a time. */
     @Transactional
     public void advanceTo(Instant now) {

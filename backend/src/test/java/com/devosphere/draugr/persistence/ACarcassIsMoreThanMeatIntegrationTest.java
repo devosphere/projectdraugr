@@ -123,7 +123,9 @@ class ACarcassIsMoreThanMeatIntegrationTest {
         // The data contract, for every animal this covers: a goat's size or more comes apart into more than meat.
         List<String> meatOnly = jdbc.queryForList(
             "SELECT species_key FROM wildlife_species s WHERE kingdom_class='MAMMALIA' AND size_tier IN ('MEDIUM','LARGE','HUGE') " +
-            "AND NOT EXISTS (SELECT 1 FROM wildlife_drop d WHERE d.species_key=s.species_key) ORDER BY 1", String.class);
+            "AND NOT EXISTS (SELECT 1 FROM wildlife_drop d WHERE d.species_key=s.species_key) " +
+            // A person's body is exactly what must NOT have a drop table (#110): the reedkin are the first.
+            "AND NOT EXISTS (SELECT 1 FROM cognition_profile c WHERE c.species_key=s.species_key AND c.remains_protected) ORDER BY 1", String.class);
         assertTrue(meatOnly.isEmpty(), () -> "these carcasses still give nothing but meat: " + meatOnly);
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
