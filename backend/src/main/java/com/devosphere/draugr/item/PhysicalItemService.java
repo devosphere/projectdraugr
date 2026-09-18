@@ -231,6 +231,24 @@ public class PhysicalItemService {
     public UUID createCarriedItem(UUID chronicle, String itemKey, String displayName, Instant occurredAt, String transitionType) {
         return createCarriedItem(chronicle, itemKey, displayName, occurredAt, transitionType, QualityGrade.SOUND);
     }
+    /**
+     * An item held by some other world object than the Chronicle — a native community's store (#111), for one. It is
+     * a real item with a transition on the ledger, and if it is food it keeps on the same clock food keeps on
+     * anywhere else, so a store's stock can spoil and run out rather than being a number that never changes.
+     */
+    @Transactional
+    public UUID createHeldItem(UUID holder, String itemKey, String displayName, Instant occurredAt, String transitionType) {
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM',?,?)", id, displayName, holder);
+        jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state,quality_grade) VALUES (?,?,'SOUND','SOUND')", id, itemKey);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,?,jsonb_build_object('itemKey',?))", id, Timestamp.from(occurredAt), transitionType, itemKey);
+        String keep = preservationKind(itemKey);
+        if (keep == null && "FOOD".equals(jdbc.query("SELECT category FROM item_definition WHERE item_key=?", rs -> rs.next() ? rs.getString(1) : null, itemKey)))
+            keep = foragedKeepKind(itemKey);
+        if (keep != null) registerPreserved(id, keep, occurredAt);
+        return id;
+    }
+
     /** As above, but with an explicit quality grade — used by processes and assemblies whose output grade flows from their inputs (M3b). */
     public UUID createCarriedItem(UUID chronicle, String itemKey, String displayName, Instant occurredAt, String transitionType, QualityGrade grade) {
         UUID id = UUID.randomUUID();
