@@ -3,6 +3,8 @@ world-exports/
 .env
 backups/
 .draugr-runtime.json
+.draugr-backend.log
+.draugr-backend.log.err
 .claude/settings.local.json
 .app-profile/
 Project Draugr — Materials & Recipes.md
