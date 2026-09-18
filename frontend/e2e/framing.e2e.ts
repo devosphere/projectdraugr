@@ -19,6 +19,7 @@ const VIEWPORTS = [
   { name: 'phone', width: 375, height: 812 },
   { name: 'between phone and tablet', width: 700, height: 900 },
   { name: 'tablet', width: 768, height: 1024 },
+  { name: 'landscape tablet', width: 1024, height: 768 },
   { name: 'laptop', width: 1280, height: 800 },
   { name: 'wide', width: 2560, height: 1440 },
 ];
@@ -79,10 +80,13 @@ for (const viewport of VIEWPORTS) {
 }
 
 test.describe('reduced motion', () => {
-  test.use({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' });
+  test.use({ viewport: { width: 1280, height: 800 } });
 
   test('a scene change is not animated for someone who asked for less motion', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     await enterTheWorld(page);
+    // Proves the emulation took, so a failure below is about the stylesheet and never about the harness.
+    expect(await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches)).toBe(true);
     // The fade is a class the screen puts on the incoming scene. Asked of the stylesheet directly, so it holds
     // whether or not this build has an image to fade to.
     const animation = await page.evaluate(() => {
