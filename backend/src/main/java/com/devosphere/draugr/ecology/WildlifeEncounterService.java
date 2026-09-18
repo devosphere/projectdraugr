@@ -796,7 +796,7 @@ public class WildlifeEncounterService {
         // Milk has to go into something (#52 milking_pail). Eggs travel in cupped hands and a fleece under the arm,
         // but milk drawn with nothing to catch it is milk on the ground.
         if ("MILK".equals(wanted) && !items.hasWaterVessel(chronicle))
-            return new EncounterResult("FAILED", "You have nothing to milk into. A pail, a pot, or any vessel that will hold liquid has to come first, or it goes straight onto the ground.");
+            return new EncounterResult("FAILED", "You have nothing to milk into, and what you draw would go straight onto the ground.");
 
         // The best animal to go to is the one whose product has rested longest — never taken at all, first of all.
         // The clock is per product, so this joins tamed_production on the bond AND the item.

@@ -53,6 +53,10 @@ class NarrationDoesNotInstructTest {
         "\\byou (will |would )?need\\b"
         + "|\\bneeds \\d"
         + "|\\bmust first\\b"
+        // "— cordage or fibre must come first": the recipe as a list, then the order to fetch it. Missed by the
+        // first cut of this guard, which is how eighteen of them survived it; the scene library's own test already
+        // forbade the phrase, so the services now answer to the same rule.
+        + "|\\b(must|has to|have to) come first\\b"
         + "|\\b(twist|make|craft|build|gather|cut) more first\\b"
         + "|\\bfirst (make|craft|build|twist)\\b"
         + "|\\byou should (make|craft|build|try)\\b",

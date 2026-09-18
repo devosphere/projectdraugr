@@ -120,7 +120,7 @@ public class ConstructionService {
             return new String[]{"SUCCEEDED", "You re-string the trip-line and re-hang the " + clabel + ", and it stands taut across the approach again."};
         }
         String line = null; for (String l : ALARM_LINE) if (items.hasAtLeast(chronicle, l, 1)) { line = l; break; }
-        if (line == null) return new String[]{"FAILED", "You have no line to string a trip-line with — a length of cordage, withy rope, or plant fibre must come first."};
+        if (line == null) return new String[]{"FAILED", "You have no line to string a trip-line with; nothing you carry will stretch taut between two stakes."};
         if (!items.consumeOne(chronicle, line, at)) throw new IllegalStateException("Reachable line changed during the action.");
         items.consumeOne(chronicle, clatter, at);
         UUID id = UUID.randomUUID();
@@ -183,7 +183,7 @@ public class ConstructionService {
         if (forceWattle) return new String[]{"FAILED", "A wattle wall wants cut withies — hazel or willow rods — and a blade to work them, and you are short of one or the other."};
         if (items.hasAtLeast(chronicle, "dry_branch", 4)) {
             String bind = null; for (String b : BRUSH_BIND) if (items.hasAtLeast(chronicle, b, 1)) { bind = b; break; }
-            if (bind == null) return new String[]{"FAILED", "You have branches enough, but nothing to lash them with — a length of cordage or fibre must come first."};
+            if (bind == null) return new String[]{"FAILED", "You have branches enough, but nothing to lash them with, and they will not hold together on their own."};
             for (int i = 0; i < 4; i++) items.consumeOne(chronicle, "dry_branch", at);
             items.consumeOne(chronicle, bind, at);
             UUID id = UUID.randomUUID();
@@ -211,7 +211,7 @@ public class ConstructionService {
         if (!items.hasAtLeast(chronicle, "dry_branch", 8))
             return new String[]{"FAILED", "A pen wants a ring of stout posts — eight sound branches at least — and you have not the wood to hand."};
         String bind = null; for (String b : BRUSH_BIND) if (items.hasAtLeast(chronicle, b, 2)) { bind = b; break; }
-        if (bind == null) return new String[]{"FAILED", "You have the posts, but nothing to lash the rails with — two lengths of cordage or fibre must come first."};
+        if (bind == null) return new String[]{"FAILED", "You have the posts, but nothing to lash the rails with; laid across, they roll off at a touch."};
         for (int i = 0; i < 8; i++) items.consumeOne(chronicle, "dry_branch", at);
         items.consumeOne(chronicle, bind, at); items.consumeOne(chronicle, bind, at);
         UUID id = UUID.randomUUID();
@@ -248,7 +248,7 @@ public class ConstructionService {
         if (pole == null) return new String[]{"FAILED", "A lookout wants tall, straight poles to raise a stand on — hazel or willow rods — and you have too few."};
         if (!items.hasCuttingTool(chronicle)) return new String[]{"FAILED", "You have the poles, but no blade to cut and trim them to a stand that will bear your weight."};
         String bind = null; for (String b : BRUSH_BIND) if (items.hasAtLeast(chronicle, b, 1)) { bind = b; break; }
-        if (bind == null) return new String[]{"FAILED", "You have poles enough, but nothing to lash them fast with — a length of cordage or fibre must come first."};
+        if (bind == null) return new String[]{"FAILED", "You have poles enough, but nothing to lash them fast with, and they will not stand on their own."};
         for (int i = 0; i < 4; i++) items.consumeOne(chronicle, pole, at);
         items.consumeOne(chronicle, bind, at);
         UUID id = UUID.randomUUID();
@@ -285,9 +285,9 @@ public class ConstructionService {
         if (pole == null) return new String[]{"FAILED", "A fuel rack wants poles to stand it on off the wet ground — hazel or willow rods — and you have too few."};
         if (!items.hasCuttingTool(chronicle)) return new String[]{"FAILED", "You have the poles, but no blade to cut and fit them into a frame that will stand."};
         String cover = null; for (String c : RACK_COVER) if (items.hasAtLeast(chronicle, c, 2)) { cover = c; break; }
-        if (cover == null) return new String[]{"FAILED", "You have the frame, but nothing to roof it with to keep the rain off — bark sheets, thatch, or reed must come first."};
+        if (cover == null) return new String[]{"FAILED", "You have the frame, but nothing to roof it with; the rain would come straight through."};
         String bind = null; for (String b : BRUSH_BIND) if (items.hasAtLeast(chronicle, b, 1)) { bind = b; break; }
-        if (bind == null) return new String[]{"FAILED", "You have poles and a cover, but nothing to lash them fast with — a length of cordage or fibre must come first."};
+        if (bind == null) return new String[]{"FAILED", "You have poles and a cover, but nothing to lash them fast with; the first wind would lift the cover away."};
         for (int i = 0; i < 3; i++) items.consumeOne(chronicle, pole, at);
         for (int i = 0; i < 2; i++) items.consumeOne(chronicle, cover, at);
         items.consumeOne(chronicle, bind, at);
@@ -322,9 +322,9 @@ public class ConstructionService {
             return new String[]{"SUCCEEDED", "You clear and re-screen the pit until it is decent and sound again."};
         }
         if (!items.hasAtLeast(chronicle, "digging_stick", 1) && !items.hasAtLeast(chronicle, "wooden_shovel", 1))
-            return new String[]{"FAILED", "A latrine wants a pit dug, and you have nothing to dig it with — a digging stick or a shovel must come first."};
+            return new String[]{"FAILED", "A latrine wants a pit dug, and your bare hands will not break this ground deep enough."};
         String screen = null; for (String s : LATRINE_SCREEN) if (items.hasAtLeast(chronicle, s, 2)) { screen = s; break; }
-        if (screen == null) return new String[]{"FAILED", "You can dig the pit, but have nothing to screen it with — reed, thatch, or dry grass must come first."};
+        if (screen == null) return new String[]{"FAILED", "You can dig the pit, but have nothing to screen it with; it would stand open to anyone passing."};
         for (int i = 0; i < 2; i++) items.consumeOne(chronicle, screen, at);
         UUID id = UUID.randomUUID();
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CONSTRUCTION','Camp latrine',?)", id, location);
@@ -359,7 +359,7 @@ public class ConstructionService {
             return new String[]{"SUCCEEDED", "You re-daub the vent's rim with fresh clay until it draws clean and sound again."};
         }
         if (!items.hasCuttingTool(chronicle)) return new String[]{"FAILED", "Cutting a smoke-hole through the roof wants a blade, and you have none to open one with."};
-        if (!items.hasAtLeast(chronicle, "clay_lump", 1)) return new String[]{"FAILED", "You can cut the hole, but have no clay to daub its rim so the sparks will not catch the thatch — clay must come first."};
+        if (!items.hasAtLeast(chronicle, "clay_lump", 1)) return new String[]{"FAILED", "You can cut the hole, but have nothing to daub its rim with, and bare thatch round a smoke hole takes the first spark."};
         items.consumeOne(chronicle, "clay_lump", at);
         UUID id = UUID.randomUUID();
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CONSTRUCTION','Roof smoke-vent',?)", id, location);
@@ -397,11 +397,11 @@ public class ConstructionService {
         if (pole == null) return new String[]{"FAILED", "A tool shed wants stout poles for its frame — hazel or willow rods — and you have too few."};
         if (!items.hasCuttingTool(chronicle)) return new String[]{"FAILED", "You have the poles, but no blade to cut and fit them into a frame that will stand."};
         String wall = null; for (String w : SHED_WALL) if (items.hasAtLeast(chronicle, w, 4)) { wall = w; break; }
-        if (wall == null) return new String[]{"FAILED", "You have the frame, but nothing to wall it in with — withies of hazel or willow must come first."};
+        if (wall == null) return new String[]{"FAILED", "You have the frame, but nothing to wall it in with; the wind goes straight through it."};
         String cover = null; for (String c : RACK_COVER) if (items.hasAtLeast(chronicle, c, 2)) { cover = c; break; }
-        if (cover == null) return new String[]{"FAILED", "You have the frame and walls, but nothing to roof it with to keep the weather off — bark sheets, thatch, or reed must come first."};
+        if (cover == null) return new String[]{"FAILED", "You have the frame and walls, but nothing to roof it with; it would keep off nothing that falls."};
         String bind = null; for (String b : BRUSH_BIND) if (items.hasAtLeast(chronicle, b, 2)) { bind = b; break; }
-        if (bind == null) return new String[]{"FAILED", "You have frame, walls, and roof, but nothing to lash it all fast with — cordage or fibre must come first."};
+        if (bind == null) return new String[]{"FAILED", "You have frame, walls, and roof, but nothing to lash it all fast with; it would not stand the first hard wind."};
         for (int i = 0; i < 4; i++) items.consumeOne(chronicle, pole, at);
         for (int i = 0; i < 4; i++) items.consumeOne(chronicle, wall, at);
         for (int i = 0; i < 2; i++) items.consumeOne(chronicle, cover, at);
@@ -438,9 +438,9 @@ public class ConstructionService {
         if (pole == null) return new String[]{"FAILED", "A store wants stout poles to raise it off the wet ground — hazel or willow rods — and you have too few."};
         if (!items.hasCuttingTool(chronicle)) return new String[]{"FAILED", "You have the poles, but no blade to cut and fit them into a frame that will stand."};
         String cover = null; for (String c : RACK_COVER) if (items.hasAtLeast(chronicle, c, 2)) { cover = c; break; }
-        if (cover == null) return new String[]{"FAILED", "You have the frame, but nothing to roof it with to keep the weather off the store — bark sheets, thatch, or reed must come first."};
+        if (cover == null) return new String[]{"FAILED", "You have the frame, but nothing to roof it with; whatever you stored beneath it would take the weather."};
         String bind = null; for (String b : BRUSH_BIND) if (items.hasAtLeast(chronicle, b, 2)) { bind = b; break; }
-        if (bind == null) return new String[]{"FAILED", "You have poles and a cover, but nothing to lash them fast with — cordage or fibre must come first."};
+        if (bind == null) return new String[]{"FAILED", "You have poles and a cover, but nothing to lash them fast with; the first wind would lift the cover away."};
         for (int i = 0; i < 4; i++) items.consumeOne(chronicle, pole, at);
         for (int i = 0; i < 2; i++) items.consumeOne(chronicle, cover, at);
         for (int i = 0; i < 2; i++) items.consumeOne(chronicle, bind, at);

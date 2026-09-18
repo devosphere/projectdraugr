@@ -952,7 +952,7 @@ public class PhysicalItemService {
             Integer.class, chronicle);
         if (hungry == null || hungry == 0) return new String[]{"FAILED", "None of your draft beasts is hungry — there is nothing to feed, or nothing tamed that pulls."};
         if (!hasAtLeast(chronicle, "dry_grass_bundle", 1))
-            return new String[]{"FAILED", "You have no fodder to hand — a bundle of cut grass must come first before you can feed the beasts."};
+            return new String[]{"FAILED", "You have no fodder to hand, and your beasts stay as hungry as they were."};
         consumeOne(chronicle, "dry_grass_bundle", at);
         // A hay rack or a dry fodder store makes the same bundle go much further (#106): fodder shaken out on bare
         // ground is trampled and soiled, while a rack holds it at muzzle height and a store keeps it sweet. The
