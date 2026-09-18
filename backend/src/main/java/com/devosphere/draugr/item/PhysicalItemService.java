@@ -2749,7 +2749,7 @@ public class PhysicalItemService {
 
         // Candidate colony kinds for this intent, present in this biome and season.
         java.util.List<java.util.Map<String,Object>> kinds = jdbc.queryForList(
-            "SELECT ck.colony_kind, ck.hazard_kind, ck.hazard_min, ck.hazard_max, ck.smoke_suppresses, ck.requires_tool_class, ck.regrowth_days, ck.shellfish, " +
+            "SELECT ck.colony_kind, ck.hazard_kind, ck.hazard_min, ck.hazard_max, ck.smoke_suppresses, ck.requires_tool_class, ck.regrowth_days, ck.shellfish, ck.concentrated_at, " +
             "  (SELECT ic.product_ready_at FROM insect_colony ic WHERE ic.chunk_id=? AND ic.colony_kind=ck.colony_kind) AS ready_at " +
             "FROM insect_colony_kind ck " +
             "WHERE ck.harvest_intent=? AND ck.biome_affinity ILIKE ? " +
