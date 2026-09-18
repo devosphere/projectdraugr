@@ -45,7 +45,7 @@ class IntentClassificationRegressionTest {
                     return v.contains("yak") || v.contains("musk ox") || v.contains("llama");
                 }
             };
-        ChronicleActionService svc = new ChronicleActionService(null, null, null, null, items, null, null, null, null, null, null, null, new com.devosphere.draugr.narration.ActionInputClassifier(), null, null, null, new com.devosphere.draugr.narration.NarrationEngine(), (com.devosphere.draugr.ai.RuntimeAuthoringService) null, (ExaminationService) null, (com.devosphere.draugr.people.ContactService) null);
+        ChronicleActionService svc = new ChronicleActionService(null, null, null, null, items, null, null, null, null, null, null, null, new com.devosphere.draugr.narration.ActionInputClassifier(), null, null, null, new com.devosphere.draugr.narration.NarrationEngine(), (com.devosphere.draugr.ai.RuntimeAuthoringService) null, (ExaminationService) null, (com.devosphere.draugr.people.ContactService) null, (com.devosphere.draugr.people.TradeService) null);
         return ((Enum<?>) m.invoke(svc, text)).name();
     }
 

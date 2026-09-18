@@ -357,7 +357,8 @@ public class ContactService {
             Boolean.class, community, chronicle, "CONTACT_" + act.name(), Timestamp.from(at.minus(Duration.ofDays(1)))));
     }
 
-    private boolean armed(UUID chronicle) {
+    /** A weapon in either hand: what a watcher on the landing sees first. */
+    public boolean armed(UUID chronicle) {
         return Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id " +
             "JOIN weapon_profile w ON w.item_key=i.item_key " +
