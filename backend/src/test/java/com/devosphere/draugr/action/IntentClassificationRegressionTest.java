@@ -167,6 +167,20 @@ class IntentClassificationRegressionTest {
         assertEquals("RAID_HIVE", classify("take the honey"));
     }
 
+    /**
+     * #77 V340: a hide frame is built through the assembly matcher. "rack" would go to CRAFT_SHELF; the natural
+     * name — a fleshing frame — carries a word the fleshing process answers to; and the other natural name, a
+     * stretching frame, went to STRETCH, which this test caught when it was written. Every keyword is replayed here,
+     * and a stretch must stay a stretch.
+     */
+    @Test void aHideFrameIsBuiltNotWorkedOrStretched() throws Exception {
+        for (String phrase : new String[]{"build a hide frame", "make a hide frame", "raise a hide frame",
+                                          "set up a hide frame", "hide frame", "lash a hide frame",
+                                          "work on the hide frame"})
+            assertEquals("UNKNOWN", classify(phrase), phrase);
+        assertEquals("STRETCH", classify("stretch my back"));
+    }
+
     @Test void processActionsAreNotStolenByGreedyIntents() throws Exception {
         // When the two-axis matcher claims the text, the ambiguous intent must yield,
         // so the dispatch falls through to PROCESS_MATERIAL (classify returns UNKNOWN).
