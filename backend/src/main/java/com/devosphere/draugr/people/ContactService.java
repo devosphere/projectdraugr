@@ -46,7 +46,8 @@ public class ContactService {
         DISPLAY_EMPTY_HANDS, LOWER_WEAPON,
         OFFER_GIFT, LEAVE_GIFT,
         ATTEMPT_GESTURE, ATTEMPT_SHARED_WORDS, ASK_QUESTION, STATE_INTENTION, TELL_TRUTH, SHOW_ITEM, SHOW_MAP, MAKE_PROMISE,
-        ASK_TO_LEAVE, RESPECT_BOUNDARY, WITHDRAW
+        ASK_TO_LEAVE, RESPECT_BOUNDARY, WITHDRAW,
+        ASK_ACCESS
     }
 
     /** Phrases that name each act. The longest phrase found in the text decides, so "show them my map" is a map. */
@@ -78,6 +79,10 @@ public class ContactService {
         Map.entry("ask for a parley", Act.REQUEST_PARLEY), Map.entry("ask to speak", Act.REQUEST_PARLEY), Map.entry("ask to talk", Act.REQUEST_PARLEY),
         Map.entry("ask permission", Act.ASK_PERMISSION), Map.entry("ask if i may", Act.ASK_PERMISSION),
         Map.entry("ask whether i may", Act.ASK_PERMISSION), Map.entry("ask to enter", Act.ASK_PERMISSION), Map.entry("ask to come", Act.ASK_PERMISSION),
+        Map.entry("ask leave to fish their waters", Act.ASK_ACCESS), Map.entry("ask to fish their waters", Act.ASK_ACCESS),
+        Map.entry("ask leave to work their ground", Act.ASK_ACCESS), Map.entry("ask to work their ground", Act.ASK_ACCESS),
+        Map.entry("ask leave to cut reeds", Act.ASK_ACCESS), Map.entry("ask for access", Act.ASK_ACCESS), Map.entry("ask to use their", Act.ASK_ACCESS),
+        Map.entry("ask leave to work here", Act.ASK_ACCESS), Map.entry("ask leave to gather here", Act.ASK_ACCESS),
         Map.entry("revisit the", Act.REVISIT), Map.entry("visit the reedkin", Act.REVISIT), Map.entry("visit the isle", Act.REVISIT),
         Map.entry("visit the village", Act.REVISIT), Map.entry("return to the isle", Act.REVISIT),
         Map.entry("show my empty hands", Act.DISPLAY_EMPTY_HANDS), Map.entry("show empty hands", Act.DISPLAY_EMPTY_HANDS),
@@ -325,6 +330,17 @@ public class ContactService {
                     default -> "It lands. They answer in kind, and for a moment you are simply talking.";
                 };
                 return record(community, chronicle, act, at, "UNDERSTOOD", 3, 3, "SUCCEEDED", seen);
+            }
+            // ── Leave to work their ground (#211): coexistence, earned. ───────────────────────────────────────
+            case ASK_ACCESS -> {
+                if (!met) return record(community, chronicle, act, at, "UNSEEN", 0, 0, "PARTIAL", "No one on the isle is looking your way to hear it.");
+                if (closed || standing <= -30) return record(community, chronicle, act, at, "WARNED_AWAY", 0, 0, "PARTIAL", "The watcher at the landing waves you back before you have finished.");
+                if (understanding < 35) return record(community, chronicle, act, at, "MISUNDERSTOOD", -1, 2, "PARTIAL",
+                    "You point at the water and the reed beds and at yourself. They look where you point and then at each other, and it is plain the question has not reached them.");
+                if (standing < 15) return record(community, chronicle, act, at, "ACCESS_REFUSED", 0, 1, "PARTIAL",
+                    "The one who speaks for them understands you well enough, and shakes their head: not yet, not you.");
+                return record(community, chronicle, act, at, "ACCESS_GRANTED", 1, 1, "SUCCEEDED",
+                    "The elder hears you out and, after a long look at the others, ties a twist of reed about your wrist. You may fish their water and cut their reeds this season.");
             }
             // ── Leaving well. ───────────────────────────────────────────────────────────────────────────────────
             default -> {

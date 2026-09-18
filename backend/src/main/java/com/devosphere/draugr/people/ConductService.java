@@ -174,6 +174,8 @@ public class ConductService {
                 jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'RESTITUTION_TO_COMMUNITY',jsonb_build_object('community',?::text))",
                     given.get("id"), Timestamp.from(at), community.toString());
                 boolean owed = outstanding(community, chronicle, at);
+                // Compensation demanded for work on their ground (#211) is paid, and the demand is lifted.
+                if (owed) jdbc.update("UPDATE community_relation SET obligation=NULL WHERE community_id=? AND chronicle_id=? AND obligation LIKE 'compensation%'", community, chronicle);
                 return record(community, chronicle, at, "RESTITUTION", Map.of("item", given.get("item_key")), owed ? 8 : 2, "SUCCEEDED",
                     "You set the " + ((String) given.get("display_name")).toLowerCase(Locale.ROOT) + " down at the landing as payment for what is owed. It is taken up, without thanks, but it is taken.");
             }
@@ -249,7 +251,7 @@ public class ConductService {
     private boolean outstanding(UUID community, UUID chronicle, Instant at) {
         return Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM native_event WHERE community_id=? AND subject_id=? AND occurred_at > ? " +
-            "AND event_kind IN ('BOUNDARY_TRESPASS','PROPERTY_THEFT','FOOD_THEFT','INSULT_OR_THREAT','HARM_TO_INDIVIDUAL','MURDER','RESTRAINT_ATTEMPT') " +
+            "AND event_kind IN ('BOUNDARY_TRESPASS','PROPERTY_THEFT','FOOD_THEFT','INSULT_OR_THREAT','HARM_TO_INDIVIDUAL','MURDER','RESTRAINT_ATTEMPT','COMPENSATION_DEMANDED','WATER_FOULED') " +
             "AND COALESCE((payload->>'witnessed')::boolean, TRUE))",
             Boolean.class, community, chronicle, Timestamp.from(at.minus(Duration.ofDays(30)))));
     }

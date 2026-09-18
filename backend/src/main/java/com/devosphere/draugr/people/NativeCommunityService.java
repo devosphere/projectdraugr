@@ -38,10 +38,12 @@ public class NativeCommunityService {
 
     private final JdbcTemplate jdbc;
     private final PhysicalItemService items;
+    private final TerritoryService territory;
 
-    public NativeCommunityService(JdbcTemplate jdbc, PhysicalItemService items) {
+    public NativeCommunityService(JdbcTemplate jdbc, PhysicalItemService items, TerritoryService territory) {
         this.jdbc = jdbc;
         this.items = items;
+        this.territory = territory;
     }
 
     // ── Where the reedkin live (#115, DR-0024). ────────────────────────────────────────────────────────────────────
@@ -237,6 +239,9 @@ public class NativeCommunityService {
         } else {
             eaten = Math.min(need, gathered);
         }
+
+        // Their ground (#211): what was done in their territory yesterday, and how they answer it.
+        territory.watch(community, day);
 
         boolean fed = eaten >= need;
         int nextShortage = fed ? 0 : shortage + 1;
