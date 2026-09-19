@@ -53,6 +53,11 @@ public class NativeCommunityService {
     /** What an isle has put by when a Chronicle first comes to it: about three days for eight people. */
     static final int REEDKIN_STARTING_STORE = 24;
 
+    /** What reedkin hands make from marsh and water, in the order they turn to it (DR-0024). */
+    static final String[] MADE_GOODS = {"reed_mat", "fiber_cordage", "woven_basket", "fish_trap"};
+    /** How many made things an isle keeps in its store before its makers turn to other work. */
+    static final int MADE_GOODS_KEPT = 8;
+
     private static final String[] ISLE_NAMES = {"Sedge Holm", "Weir Isle"};
     private static final String[][] KIN = {{"Reed-bank kin", "Far-channel kin"}, {"Alder kin", "Low-water kin"}};
     /** Two households each: who speaks for the isle, who keeps its memory, who fishes, gathers and makes. */
@@ -137,6 +142,11 @@ public class NativeCommunityService {
         }
         String fish = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key='dried_fish'", String.class);
         for (int i = 0; i < REEDKIN_STARTING_STORE; i++) items.createHeldItem(store, "dried_fish", fish, now, "PUT_BY_COMMUNITY");
+        // And what their hands have made, which is what they have to trade that is not food (#113).
+        for (String good : new String[]{"reed_mat", "reed_mat", "fiber_cordage", "fiber_cordage", "woven_basket", "fish_trap"}) {
+            String name = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, good);
+            items.createHeldItem(store, good, name, now, "MADE_BY_COMMUNITY");
+        }
         record(community, now, "FOUNDED", Map.of("people", 8, "isle", isle));
     }
 
@@ -189,6 +199,22 @@ public class NativeCommunityService {
         String stapleName = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, staple);
         if (store != null)
             for (int i = 0; i < gathered; i++) items.createHeldItem(store, staple, stapleName, day, "GATHERED_BY_COMMUNITY");
+
+        // Making (#113): those whose work is making add to the store every third day, in turn through the goods
+        // their material culture makes, until the store holds as many made things as a small isle keeps. This is
+        // what the isle has to trade that is not food, and it is finite: a mat traded away is a mat they no longer
+        // have, and makes are replaced only as fast as hands make them.
+        if (store != null && day.atZone(ZoneOffset.UTC).getDayOfYear() % 3 == 0) {
+            int made = count("SELECT COUNT(*) FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
+                "WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key <> ?", store, staple);
+            int makers = count("SELECT COUNT(*) FROM native_individual n JOIN world_object w ON w.id=n.object_id " +
+                "WHERE n.community_id=? AND n.role='MAKER' AND n.condition='WELL' AND w.lifecycle_state='ACTIVE'", community);
+            for (int m = 0; m < makers && made < MADE_GOODS_KEPT; m++, made++) {
+                String good = MADE_GOODS[(day.atZone(ZoneOffset.UTC).getDayOfYear() / 3 + m) % MADE_GOODS.length];
+                String name = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, good);
+                items.createHeldItem(store, good, name, day, "MADE_BY_COMMUNITY");
+            }
+        }
 
         // Eating: everyone living eats from the store, the soundest-oldest first. Food that has gone bad is not
         // eaten; it is thrown out, which is what a store-keeper does and what keeps the store honest.
