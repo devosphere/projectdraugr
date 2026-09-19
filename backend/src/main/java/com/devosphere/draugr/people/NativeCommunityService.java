@@ -42,9 +42,11 @@ public class NativeCommunityService {
     private final AgreementService agreements;
     private final CompanionService companions;
     private final AudienceService audience;
+    private final NewsService news;
 
     public NativeCommunityService(JdbcTemplate jdbc, PhysicalItemService items, TerritoryService territory, AgreementService agreements,
-                                  CompanionService companions, AudienceService audience) {
+                                  CompanionService companions, AudienceService audience, NewsService news) {
+        this.news = news;
         this.companions = companions;
         this.audience = audience;
         this.jdbc = jdbc;
@@ -254,6 +256,8 @@ public class NativeCommunityService {
         territory.watch(community, day);
         // Promises (#113): work owed past its date is a broken promise; a wage owed is paid when the store can.
         agreements.reckon(community, day);
+        // What their kin at the other isle saw a Chronicle do, told here once it has had time to travel (#114).
+        news.hear(community, day);
 
         boolean fed = eaten >= need;
         int nextShortage = fed ? 0 : shortage + 1;
