@@ -147,8 +147,10 @@ public class TradeService {
                 // Giving back what you had from them: the isle's goods go home, and it is noticed.
                 Map<String, Object> got = receivedNamed(chronicle, community, text);
                 if (got == null) return record(community, chronicle, act, at, "NOTHING_TO_RETURN", 0, "FAILED", "You carry nothing of theirs to give back.");
+                // Something stolen and brought back is restitution (#114), and counts for more than a traded thing returned.
+                boolean stolen = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM object_transition WHERE object_id=? AND transition_type='STOLEN_FROM_COMMUNITY')", Boolean.class, got.get("id")));
                 transfer((UUID) got.get("id"), store, "RETURNED_TO_COMMUNITY", (String) got.get("item_key"), at, community);
-                return record(community, chronicle, act, at, "RETURNED_PROPERTY", 2, "SUCCEEDED",
+                return record(community, chronicle, act, at, "RETURNED_PROPERTY", stolen ? 8 : 2, "SUCCEEDED",
                     "You carry the " + ((String) got.get("display_name")).toLowerCase(Locale.ROOT) + " back to the landing and set it down. Someone takes it up to the store, and looks back at you once.");
             }
         }
@@ -272,7 +274,8 @@ public class TradeService {
     private Map<String, Object> receivedNamed(UUID chronicle, UUID community, String text) {
         List<Map<String, Object>> theirs = jdbc.queryForList(
             "SELECT DISTINCT w.id, i.item_key, d.display_name, d.category FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
-            "JOIN item_definition d ON d.item_key=i.item_key JOIN object_transition t ON t.object_id=w.id AND t.transition_type='TRADED_FROM_COMMUNITY' " +
+            "JOIN item_definition d ON d.item_key=i.item_key JOIN object_transition t ON t.object_id=w.id " +
+            "AND t.transition_type IN ('TRADED_FROM_COMMUNITY','STOLEN_FROM_COMMUNITY') " +
             "AND t.payload->>'community' = ?::text WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE'", community.toString(), chronicle);
         return named(text.toLowerCase(Locale.ROOT), theirs);
     }
