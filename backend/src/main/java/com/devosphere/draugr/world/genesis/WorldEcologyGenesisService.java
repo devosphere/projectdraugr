@@ -13,7 +13,10 @@ public class WorldEcologyGenesisService {
     private final JdbcTemplate jdbc;
     private final WorldGenesisService worldGenesis;
 
-    public WorldEcologyGenesisService(JdbcTemplate jdbc, WorldGenesisService worldGenesis) {
+    private final com.devosphere.draugr.people.NativeCommunityService natives;
+
+    public WorldEcologyGenesisService(JdbcTemplate jdbc, WorldGenesisService worldGenesis, com.devosphere.draugr.people.NativeCommunityService natives) {
+        this.natives = natives;
         this.jdbc = jdbc;
         this.worldGenesis = worldGenesis;
     }
@@ -34,6 +37,8 @@ public class WorldEcologyGenesisService {
                     siteId, world.worldId(), chunkId, marker.category(), marker.label(), abundanceFor(marker.category()));
         }
         seedFlora(world.worldId());
+        // The first native people (#115, DR-0024): their isles are part of the world from the day it is made.
+        natives.seedPeoples(world.worldId());
         jdbc.update("INSERT INTO world_event (occurred_at, event_type, aggregate_id, payload) VALUES (now(), 'WORLD_ECOLOGY_SEEDED', ?, jsonb_build_object('siteCount', ?, 'source', 'approved-overseer-atlas'))", world.worldId(), markers.size());
         return new EcologySummary(world.worldId(), markers.size());
     }
@@ -118,6 +123,9 @@ public class WorldEcologyGenesisService {
         // would otherwise stay bare for ever, and the only world anybody is playing is one of those. Additive, so a
         // stand already there — including one worked half down — is left alone.
         int stands = seedFlora(world.worldId());
+        // And the same for the peoples: a world made before the reedkin were decided gains their isles on its next
+        // boot, at the places genesis would have chosen, and a world that has them is left alone.
+        natives.seedPeoples(world.worldId());
         if (placed > 0 || stands > 0)
             jdbc.update("INSERT INTO world_event (occurred_at, event_type, aggregate_id, payload) VALUES (now(), 'WORLD_ECOLOGY_RECONCILED', ?, jsonb_build_object('sitesAdded', ?, 'standsAdded', ?, 'source', 'approved-overseer-atlas'))", world.worldId(), placed, stands);
         return new EcologySummary(world.worldId(), placed);

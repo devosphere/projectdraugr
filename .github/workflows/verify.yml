@@ -60,7 +60,10 @@ jobs:
           psql -h localhost -U postgres -d draugr -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS pgcrypto;"
           for f in $(ls backend/src/main/resources/db/migration/V*.sql | sort -V); do
             echo "-- applying $f"
-            psql -h localhost -U postgres -d draugr -v ON_ERROR_STOP=1 -q -f "$f"
+            # -1: one transaction per file, as Flyway runs them. Without it every statement commits on its own,
+            # and a migration that adds a species and then declares what it is (V346; V344's deferred trigger
+            # checks at commit) fails here while booting cleanly for every player.
+            psql -h localhost -U postgres -d draugr -v ON_ERROR_STOP=1 -q -1 -f "$f"
           done
       - name: Reachability probe — every VERIFIED process must route, none may collide
         # routing-reachability-probe.sql RAISEs on any miss, so a process whose inputs
