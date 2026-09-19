@@ -123,7 +123,15 @@ public class ContactService {
 
     private final JdbcTemplate jdbc;
 
-    public ContactService(JdbcTemplate jdbc) { this.jdbc = jdbc; }
+    private final com.devosphere.draugr.item.PhysicalItemService items;
+    private final com.devosphere.draugr.literature.LiteratureService literature;
+
+    public ContactService(JdbcTemplate jdbc, com.devosphere.draugr.item.PhysicalItemService items,
+                          com.devosphere.draugr.literature.LiteratureService literature) {
+        this.jdbc = jdbc;
+        this.items = items;
+        this.literature = literature;
+    }
 
     /** The contact act a text names, or null. Pure: no world is consulted, so it can be tested on its own. */
     public static Act recognise(String text) {
@@ -188,6 +196,12 @@ public class ContactService {
      */
     @Transactional
     public String[] act(UUID chronicle, UUID chunk, UUID community, Act act, String text, Instant at) {
+        return act(chronicle, chunk, community, act, text, at, null);
+    }
+
+    /** As above, with the action the act belongs to, so a written record names the act that wrote it. */
+    @Transactional
+    public String[] act(UUID chronicle, UUID chunk, UUID community, Act act, String text, Instant at, UUID actionId) {
         Map<String, Object> c = jdbc.queryForMap(
             "SELECT home_chunk_id, trade_policy, security_posture, lifecycle, shortage_days FROM native_community WHERE id=?", community);
         Map<String, Object> r = relation(community, chronicle);
@@ -219,7 +233,7 @@ public class ContactService {
                         : "You catch words you have heard before: the one they call across the water to each other, the one they use for a stranger.";
                     case OBSERVE_BOUNDARY_MARKER -> "Bundles of reed tied to stakes mark the channel where the open water ends and theirs begins. Past them, nobody fishes but they do.";
                     case WATCH_CUSTOM, RECORD_CUSTOM -> "No one steps onto the raised ground from the water without first calling out and waiting to be answered; even a child coming back with a basket does it."
-                        + (act == Act.RECORD_CUSTOM ? " You set it down in your own words to remember it." : "");
+                        + (act == Act.RECORD_CUSTOM ? " " + writeDown(chronicle, community, understanding + learned, actionId, at) : "");
                     default -> "You watch the isle a while: who fishes and who mends, where the store stands, how they turn to look when anything moves at the reed edge.";
                 };
                 return record(community, chronicle, act, at, "WATCHED", 0, learned, "SUCCEEDED", seen);
@@ -340,6 +354,38 @@ public class ContactService {
         jdbc.update("UPDATE community_relation SET first_contact_at=COALESCE(first_contact_at, ?) WHERE community_id=? AND chronicle_id=?",
             Timestamp.from(at), community, chronicle);
         return record(community, chronicle, act, at, "FIRST_CONTACT", standing, 2, outcome, seen);
+    }
+
+    /**
+     * Recording a custom (#112): what the Chronicle has seen of this people, set down where it lasts. With charcoal and
+     * something to write on it becomes a real document, "Notes on" the isle, and each later visit adds to the same
+     * one; what is written is only what has been witnessed, and grows with understanding. Without the means to write,
+     * it is kept in memory, and the narration says so rather than pretending to a record that does not exist.
+     *
+     * @return the sentence that closes the narration of the act
+     */
+    private String writeDown(UUID chronicle, UUID community, int understanding, UUID actionId, Instant at) {
+        String isle = jdbc.queryForObject("SELECT name FROM native_community WHERE id=?", String.class, community);
+        String title = "Notes on " + isle;
+        String entry = understanding < 20
+            ? "They call out before stepping onto the isle, and wait to be answered, even the children. Their speech is clicks and low calls I cannot yet divide."
+            : understanding < 50
+            ? "No one steps onto the isle unannounced. The elder is heard before anything is decided. I begin to hear their words apart: one for a boat pushed off, one for a stranger."
+            : "Arrival is announced across the water and answered before the landing is crossed. The elders decide; the one who speaks for the isle carries it to outsiders. I know their words for water, for stranger, for leave to fish.";
+        if (!items.hasAtLeast(chronicle, "charcoal", 1))
+            return "Without anything to write with, you keep it in your head.";
+        List<UUID> kept = jdbc.queryForList(
+            "SELECT d.object_id FROM literature_document d JOIN world_object w ON w.id=d.object_id " +
+            "WHERE d.title=? AND w.current_owner_id=? AND w.lifecycle_state='ACTIVE' LIMIT 1", UUID.class, title, chronicle);
+        if (!kept.isEmpty()) {
+            literature.revise(kept.get(0), chronicle, actionId, at, com.devosphere.draugr.literature.LiteratureService.Edit.APPEND, "\n" + entry, null);
+            return "You add it in charcoal to your notes on " + isle + ".";
+        }
+        UUID surface = items.findReachable(chronicle, "bark_sheet");
+        if (surface == null) surface = items.findReachable(chronicle, "animal_hide");
+        if (surface == null) return "You have nothing to write on, so you keep it in your head.";
+        literature.createFromSurface(surface, chronicle, actionId, at, "LITERATURE", title, entry);
+        return "You set it down in charcoal, and the notes are the beginning of a record of " + isle + ".";
     }
 
     /** The relation with this Chronicle, made on first acquaintance. */
