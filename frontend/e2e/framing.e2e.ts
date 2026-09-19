@@ -63,6 +63,10 @@ for (const viewport of VIEWPORTS) {
       await page.locator('#action').fill('look around');
       await expect(page.locator('#action')).toHaveValue('look around');
 
+      // What a screen reader is told about where the Chronicle stands (#227): the same place the eye sees, announced
+      // as it changes. Present at every width, because it is the only telling a player who cannot see the picture gets.
+      await expect(page.locator('[aria-live="polite"]', { hasText: 'Your surroundings:' })).toHaveCount(1);
+
       const header = await boxOf(page, '.header-controls');
       if (header) expect(header.right, 'the header controls are reachable').toBeLessThanOrEqual(viewport.width);
 
