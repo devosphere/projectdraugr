@@ -41,10 +41,12 @@ public class NativeCommunityService {
     private final TerritoryService territory;
     private final AgreementService agreements;
     private final CompanionService companions;
+    private final AudienceService audience;
 
     public NativeCommunityService(JdbcTemplate jdbc, PhysicalItemService items, TerritoryService territory, AgreementService agreements,
-                                  CompanionService companions) {
+                                  CompanionService companions, AudienceService audience) {
         this.companions = companions;
+        this.audience = audience;
         this.jdbc = jdbc;
         this.items = items;
         this.territory = territory;
@@ -265,6 +267,8 @@ public class NativeCommunityService {
         lifeCourse(community, day, nextShortage);
         // Those away with a Chronicle (#113) live their own day: eat what they carry, and come home when they must.
         companions.liveADay(community, day);
+        // Who speaks for them (#121): a speaker who has died leaves the office empty, and after mourning it is filled.
+        audience.keepTheOffice(community, day);
 
         // How the community stands. Closing up is what hungry people do with a store they cannot spare and ground
         // they cannot share; moving on is what they do when the ground has stopped feeding them. Recovery returns

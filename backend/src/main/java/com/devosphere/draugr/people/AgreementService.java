@@ -135,7 +135,7 @@ public class AgreementService {
             : "MOVING".equals(c.get("lifecycle")) || store == null ? "There is no store here to pay a wage from, and no one to take you on."
             : standing < 0 ? "They look at you, and at each other, and no one steps forward. They do not want your hands on their work."
             : understanding < 30 ? "You mime hauling nets and point to their store. They watch politely, but what you mean does not reach them yet."
-            : null;
+            : AudienceService.withoutASpeaker(jdbc, community);
         if (refusal != null) { event(community, chronicle, at, "WORK_REFUSED", 0); return new String[]{"PARTIAL", refusal}; }
 
         String v = " " + text.toLowerCase(Locale.ROOT).replaceAll("[^a-z' ]", " ").replaceAll("\\s+", " ").trim() + " ";
