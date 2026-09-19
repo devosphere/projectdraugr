@@ -36,7 +36,7 @@ import java.util.UUID;
 @Service
 public class ConductService {
 
-    public enum Act { THEFT, THREAT, HARM, RESTRAINT, APOLOGY, RESTITUTION, SHARED_LABOUR }
+    public enum Act { THEFT, THREAT, HARM, RESTRAINT, APOLOGY, RESTITUTION, SHARED_LABOUR, DAMAGE }
 
     private static final Map<String, Act> PHRASES = Map.ofEntries(
         Map.entry("steal from their store", Act.THEFT), Map.entry("steal from the store", Act.THEFT), Map.entry("take from their store", Act.THEFT),
@@ -56,6 +56,10 @@ public class ConductService {
         Map.entry("make restitution", Act.RESTITUTION), Map.entry("pay them back", Act.RESTITUTION), Map.entry("make amends", Act.RESTITUTION),
         Map.entry("repay them", Act.RESTITUTION),
         Map.entry("help them fish", Act.SHARED_LABOUR), Map.entry("help them work", Act.SHARED_LABOUR), Map.entry("work alongside them", Act.SHARED_LABOUR),
+        Map.entry("burn their", Act.DAMAGE), Map.entry("burn the village", Act.DAMAGE), Map.entry("burn the store", Act.DAMAGE),
+        Map.entry("set fire to their", Act.DAMAGE), Map.entry("set fire to the village", Act.DAMAGE), Map.entry("set fire to the store", Act.DAMAGE), Map.entry("torch their", Act.DAMAGE),
+        Map.entry("wreck their", Act.DAMAGE), Map.entry("tear down their", Act.DAMAGE), Map.entry("damage their", Act.DAMAGE),
+        Map.entry("smash their", Act.DAMAGE),
         Map.entry("help them mend", Act.SHARED_LABOUR), Map.entry("help with their work", Act.SHARED_LABOUR), Map.entry("help them gather", Act.SHARED_LABOUR));
 
     /** Standing at or below which a community drives the Chronicle off by force rather than only warning them. */
@@ -150,6 +154,48 @@ public class ConductService {
                 offence(community, chronicle, at, "RESTRAINT_ATTEMPT", -60, "HOSTILE");
                 physiology.applyInjury(chronicle, 10, actionId, at, "NATIVE_DEFENCE");
                 return new String[]{"FAILED", "You lay hands on " + target.get("given_name") + ", who twists free and shrieks. The rest are on you at once, and you are driven off the isle bruised and bleeding. A person is not a thing to be bound and led."};
+            }
+            case DAMAGE -> {
+                if (!onIsle) return new String[]{"FAILED", "Their houses and store are on the isle, and you are not."};
+                String v = text.toLowerCase(java.util.Locale.ROOT);
+                boolean fire = v.contains("burn") || v.contains("fire") || v.contains("torch");
+                if (fire && !items.hasAtLeast(chronicle, "firebrand", 1) && !items.hasAtLeast(chronicle, "resin_torch", 1))
+                    return new String[]{"FAILED", "You have nothing burning to put to the reeds, and damp thatch does not catch from a wish."};
+                String kind = v.contains("store") ? "STORE_HOUSE" : "VILLAGE";
+                Map<String, Object> site = jdbc.queryForList(
+                    "SELECT s.object_id, w.display_name, s.condition_percent FROM native_settlement_site s JOIN world_object w ON w.id=s.object_id " +
+                    "WHERE s.community_id=? AND s.site_kind=? AND w.lifecycle_state='ACTIVE' LIMIT 1", community, kind).stream().findFirst().orElse(null);
+                if (site == null) return new String[]{"FAILED", "There is nothing of that standing to damage."};
+                UUID siteId = (UUID) site.get("object_id");
+                int left = Math.max(0, ((Number) site.get("condition_percent")).intValue() - (fire ? 60 : 30));
+                jdbc.update("UPDATE native_settlement_site SET condition_percent=? WHERE object_id=?", left, siteId);
+                UUID store = store(community);
+                if (fire && siteId.equals(store)) {
+                    // Fire takes half of what is kept inside; the rest is scorched but survives.
+                    List<UUID> held = jdbc.queryForList("SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' ORDER BY created_at", UUID.class, store);
+                    for (UUID item : held.subList(0, held.size() / 2))
+                        items.retire(item, at, "BURNED", jdbc.queryForObject("SELECT item_key FROM item_instance WHERE object_id=?", String.class, item));
+                }
+                if (left == 0) {
+                    // Burnt or wrecked to nothing: the building is gone, and whatever it held lies on the ground.
+                    jdbc.update("UPDATE world_object SET current_owner_id=NULL, current_location_id=?, updated_at=now() WHERE current_owner_id=? AND lifecycle_state='ACTIVE'",
+                        chunk, siteId);
+                    jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED', destroyed_at=?, destroyed_location_id=?, destroyed_cause=?, current_location_id=NULL WHERE id=?",
+                        Timestamp.from(at), chunk, fire ? "BURNED" : "WRECKED", siteId);
+                }
+                String offence = fire ? "FIRE_DAMAGE" : "DAMAGE_TO_SETTLEMENT";
+                if (!watched) {
+                    event(community, chronicle, at, offence, Map.of("witnessed", false));
+                    event(community, null, at, "SETTLEMENT_DAMAGED", Map.of("site", kind));
+                    jdbc.update("UPDATE native_community SET security_posture='GUARDED' WHERE id=? AND security_posture IN ('AT_EASE','WARY')", community);
+                    return new String[]{"SUCCEEDED", fire
+                        ? "The reeds catch and run up the wall faster than you thought they could. You are over the water before the first shout."
+                        : "You wreck what you can reach in the dark and are gone before anyone wakes to it."};
+                }
+                offence(community, chronicle, at, offence, fire ? -80 : -40, "HOSTILE");
+                return new String[]{"PARTIAL", fire
+                    ? "The thatch goes up with a roar. The whole isle comes running with water and with spears, and every face that turns to you knows what you did."
+                    : "You tear at the wall until it gives. They are on you before you have finished, and drive you off the isle."};
             }
             case APOLOGY -> {
                 if (!outstanding(community, chronicle, at))
@@ -251,7 +297,7 @@ public class ConductService {
     private boolean outstanding(UUID community, UUID chronicle, Instant at) {
         return Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM native_event WHERE community_id=? AND subject_id=? AND occurred_at > ? " +
-            "AND event_kind IN ('BOUNDARY_TRESPASS','PROPERTY_THEFT','FOOD_THEFT','INSULT_OR_THREAT','HARM_TO_INDIVIDUAL','MURDER','RESTRAINT_ATTEMPT','COMPENSATION_DEMANDED','WATER_FOULED') " +
+            "AND event_kind IN ('BOUNDARY_TRESPASS','PROPERTY_THEFT','FOOD_THEFT','INSULT_OR_THREAT','HARM_TO_INDIVIDUAL','MURDER','RESTRAINT_ATTEMPT','COMPENSATION_DEMANDED','WATER_FOULED','DAMAGE_TO_SETTLEMENT','FIRE_DAMAGE') " +
             "AND COALESCE((payload->>'witnessed')::boolean, TRUE))",
             Boolean.class, community, chronicle, Timestamp.from(at.minus(Duration.ofDays(30)))));
     }
