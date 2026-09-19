@@ -6564,11 +6564,12 @@
         "reviewedBy": null,
         "reviewedAt": null
       },
-      "contexts": [],
-      "gate": {
-        "reason": "No native settlement is placed in the world yet.",
-        "activatedBy": "#109, #115"
-      }
+      "contexts": [
+        {
+          "candidate": "settlement.reedkin"
+        }
+      ],
+      "gate": null
     },
     {
       "backdropKey": "refractory-clay-bed",
