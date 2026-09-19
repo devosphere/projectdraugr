@@ -39,11 +39,16 @@ public class NativeCommunityService {
     private final JdbcTemplate jdbc;
     private final PhysicalItemService items;
     private final TerritoryService territory;
+    private final AgreementService agreements;
+    private final CompanionService companions;
 
-    public NativeCommunityService(JdbcTemplate jdbc, PhysicalItemService items, TerritoryService territory) {
+    public NativeCommunityService(JdbcTemplate jdbc, PhysicalItemService items, TerritoryService territory, AgreementService agreements,
+                                  CompanionService companions) {
+        this.companions = companions;
         this.jdbc = jdbc;
         this.items = items;
         this.territory = territory;
+        this.agreements = agreements;
     }
 
     // ── Where the reedkin live (#115, DR-0024). ────────────────────────────────────────────────────────────────────
@@ -196,8 +201,11 @@ public class NativeCommunityService {
         // A community with no standing store has nowhere to keep a take, so it lives hand to mouth: what it
         // gathers is eaten, never kept.
         int workers = count("SELECT COUNT(*) FROM native_individual n JOIN world_object w ON w.id=n.object_id " +
-            "WHERE n.community_id=? AND n.role IN ('FORAGER','FISHER','HUNTER') AND n.life_stage <> 'ELDER' AND n.condition IN ('WELL','HUNGRY') AND w.lifecycle_state='ACTIVE'", community);
-        int gathered = workers * yieldPerWorker(day);
+            "WHERE n.community_id=? AND n.role IN ('FORAGER','FISHER','HUNTER') AND n.life_stage <> 'ELDER' AND n.condition IN ('WELL','HUNGRY') AND w.lifecycle_state='ACTIVE'" +
+            // Someone away with a Chronicle (#113) is not at the nets, and eats what they carry, not from the store.
+            " AND NOT EXISTS (SELECT 1 FROM native_companionship cp WHERE cp.individual_id=n.object_id AND cp.ended_at IS NULL)", community);
+        // New water, not yet fished (#111): a people who have just moved take more from it for the first month.
+        int gathered = workers * (yieldPerWorker(day) + (onFreshWater(community, day) ? 1 : 0));
         String stapleName = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, staple);
         if (store != null)
             for (int i = 0; i < gathered; i++) items.createHeldItem(store, staple, stapleName, day, "GATHERED_BY_COMMUNITY");
@@ -221,7 +229,7 @@ public class NativeCommunityService {
         // Eating: everyone living eats from the store, the soundest-oldest first. Food that has gone bad is not
         // eaten; it is thrown out, which is what a store-keeper does and what keeps the store honest.
         int eaters = count("SELECT COUNT(*) FROM native_individual n JOIN world_object w ON w.id=n.object_id " +
-            "WHERE n.community_id=? AND n.condition <> 'DEAD' AND w.lifecycle_state='ACTIVE'", community);
+            "WHERE n.community_id=? AND n.condition <> 'DEAD' AND w.lifecycle_state='ACTIVE' AND NOT EXISTS (SELECT 1 FROM native_companionship cp WHERE cp.individual_id=n.object_id AND cp.ended_at IS NULL)", community);
         int need = eaters * ration;
         int eaten = 0;
         if (store != null) {
@@ -242,17 +250,21 @@ public class NativeCommunityService {
 
         // Their ground (#211): what was done in their territory yesterday, and how they answer it.
         territory.watch(community, day);
+        // Promises (#113): work owed past its date is a broken promise; a wage owed is paid when the store can.
+        agreements.reckon(community, day);
 
         boolean fed = eaten >= need;
         int nextShortage = fed ? 0 : shortage + 1;
         if (!fed && shortage == 0) record(community, day, "SHORTAGE_BEGAN", Map.of("ate", eaten, "needed", need));
         if (fed && shortage > 0) record(community, day, "SHORTAGE_ENDED", Map.of("days", shortage));
-        jdbc.update("UPDATE native_individual SET condition = ? WHERE community_id=? AND condition = ?",
+        jdbc.update("UPDATE native_individual n SET condition = ? WHERE community_id=? AND condition = ? AND NOT EXISTS (SELECT 1 FROM native_companionship cp WHERE cp.individual_id=n.object_id AND cp.ended_at IS NULL)",
             fed ? "WELL" : "HUNGRY", community, fed ? "HUNGRY" : "WELL");
         jdbc.update("UPDATE native_community SET shortage_days=? WHERE id=?", nextShortage, community);
 
         // A life course (#121): growing up, growing old, being born, and dying, of age or of hunger.
         lifeCourse(community, day, nextShortage);
+        // Those away with a Chronicle (#113) live their own day: eat what they carry, and come home when they must.
+        companions.liveADay(community, day);
 
         // How the community stands. Closing up is what hungry people do with a store they cannot spare and ground
         // they cannot share; moving on is what they do when the ground has stopped feeding them. Recovery returns
@@ -274,6 +286,115 @@ public class NativeCommunityService {
             jdbc.update("UPDATE native_community SET lifecycle='SETTLED' WHERE id=?", community);
             record(community, day, "SETTLED_AGAIN", Map.of());
         }
+
+        // Home and hearth (#111): what is damaged is mended, what is lost is rebuilt, and a people on the move arrives.
+        mendAndRebuild(community, day);
+        relocateIfMoving(community, day);
+    }
+
+    // ── Home and hearth (#111, #114). ──────────────────────────────────────────────────────────────────────────────
+
+    /** Days after a building is lost before its replacement stands. */
+    static final int REBUILD_AFTER_DAYS = 3;
+    /** Days on the move before a people arrives on new ground. */
+    static final int ARRIVES_AFTER_DAYS = 3;
+    /** How far a people will go to find new ground, in chunks. */
+    static final int MOVES_AT_MOST = 8;
+    /** How long new water stays better fished than the old. */
+    static final Duration FRESH_WATER_LASTS = Duration.ofDays(30);
+    private static final String[] MENDING_GOODS = {"reed_mat", "reed_bundle", "fiber_cordage"};
+
+    /**
+     * Mend what is damaged and rebuild what is gone. Mending uses what the store holds: a day's work with a mat or a
+     * bundle of reed puts back far more than a day's work with bare hands. A building burnt or wrecked to nothing is
+     * raised again a few days later from the marsh's own reeds, and begins empty: what the fire spared lies where the old
+     * store stood, for whoever picks it up.
+     */
+    void mendAndRebuild(UUID community, Instant day) {
+        Map<String, Object> c = jdbc.queryForMap("SELECT home_chunk_id, lifecycle, name FROM native_community WHERE id=?", community);
+        if (!"SETTLED".equals(c.get("lifecycle"))) return;
+        int hands = count("SELECT COUNT(*) FROM native_individual n JOIN world_object w ON w.id=n.object_id " +
+            "WHERE n.community_id=? AND n.life_stage='ADULT' AND n.condition IN ('WELL','HUNGRY') AND w.lifecycle_state='ACTIVE'", community);
+        if (hands == 0) return;
+        UUID home = (UUID) c.get("home_chunk_id");
+        UUID store = jdbc.query("SELECT s.object_id FROM native_settlement_site s JOIN world_object w ON w.id=s.object_id " +
+            "WHERE s.community_id=? AND s.holds_stores AND w.lifecycle_state='ACTIVE'", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, community);
+
+        for (Map<String, Object> site : jdbc.queryForList(
+                "SELECT s.object_id, s.condition_percent FROM native_settlement_site s JOIN world_object w ON w.id=s.object_id " +
+                "WHERE s.community_id=? AND w.lifecycle_state='ACTIVE' AND s.condition_percent < 100", community)) {
+            UUID material = store == null ? null : jdbc.query(
+                "SELECT w.id FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' " +
+                "AND i.item_key IN (?,?,?) ORDER BY w.created_at LIMIT 1",
+                rs -> rs.next() ? rs.getObject(1, UUID.class) : null, store, MENDING_GOODS[0], MENDING_GOODS[1], MENDING_GOODS[2]);
+            if (material != null)
+                items.retire(material, day, "USED_IN_REPAIR", jdbc.queryForObject("SELECT item_key FROM item_instance WHERE object_id=?", String.class, material));
+            int mended = Math.min(100, ((Number) site.get("condition_percent")).intValue() + (material != null ? 15 : 5));
+            jdbc.update("UPDATE native_settlement_site SET condition_percent=? WHERE object_id=?", mended, site.get("object_id"));
+            if (mended == 100) record(community, day, "REPAIRED", Map.of("site", site.get("object_id").toString()));
+        }
+
+        // Rebuilding: a village or store lost for long enough is raised again on the same ground.
+        for (String kind : new String[]{"VILLAGE", "STORE_HOUSE"}) {
+            boolean standing = Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM native_settlement_site s JOIN world_object w ON w.id=s.object_id " +
+                "WHERE s.community_id=? AND s.site_kind=? AND w.lifecycle_state='ACTIVE')", Boolean.class, community, kind));
+            if (standing) continue;
+            Timestamp lost = jdbc.query(
+                "SELECT MAX(w.destroyed_at) FROM native_settlement_site s JOIN world_object w ON w.id=s.object_id WHERE s.community_id=? AND s.site_kind=?",
+                rs -> rs.next() ? rs.getTimestamp(1) : null, community, kind);
+            if (lost == null || lost.toInstant().isAfter(day.minus(Duration.ofDays(REBUILD_AFTER_DAYS)))) continue;
+            String name = c.get("name") + ("STORE_HOUSE".equals(kind) ? " store house" : " village");
+            UUID raised = place("NATIVE_SITE", name, home);
+            jdbc.update("INSERT INTO native_settlement_site (object_id,community_id,site_kind,access_rule,holds_stores,condition_percent) VALUES (?,?,?,'INVITED',?,60)",
+                raised, community, kind, "STORE_HOUSE".equals(kind));
+            record(community, day, "REBUILT", Map.of("site", kind));
+        }
+    }
+
+    /**
+     * A people on the move arrives on new ground: the nearest ground of the same kind as the home they left, within a
+     * few days' going, clear of monsters and of another community's water. They carry everything that walks and
+     * everything they built; their graves stay where they lie. New water has not been fished, and feeds them better
+     * for the first month.
+     */
+    void relocateIfMoving(UUID community, Instant day) {
+        Map<String, Object> c = jdbc.queryForMap(
+            "SELECT n.lifecycle, n.home_chunk_id, h.world_id, h.grid_x, h.grid_y, h.biome FROM native_community n JOIN world_chunk h ON h.id=n.home_chunk_id WHERE n.id=?", community);
+        if (!"MOVING".equals(c.get("lifecycle"))) return;
+        boolean setOut = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT (SELECT MAX(occurred_at) FROM native_event WHERE community_id=? AND event_kind='LEFT_TO_FIND_FOOD') <= ?",
+            Boolean.class, community, Timestamp.from(day.minus(Duration.ofDays(ARRIVES_AFTER_DAYS)))));
+        boolean movedLately = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM native_event WHERE community_id=? AND event_kind='RELOCATED' AND occurred_at > ?)",
+            Boolean.class, community, Timestamp.from(day.minus(Duration.ofDays(60)))));
+        if (!setOut || movedLately) return;
+        UUID from = (UUID) c.get("home_chunk_id");
+        UUID to = jdbc.query(
+            "SELECT k.id FROM world_chunk k WHERE k.world_id=? AND k.biome=? AND k.id <> ? " +
+            "AND greatest(abs(k.grid_x-?), abs(k.grid_y-?)) <= ? " +
+            "AND NOT EXISTS (SELECT 1 FROM ecology_site s WHERE s.chunk_id=k.id AND s.site_category='MONSTER') " +
+            "AND NOT EXISTS (SELECT 1 FROM native_community o JOIN world_chunk oh ON oh.id=o.home_chunk_id WHERE o.id <> ? AND o.lifecycle <> 'DISPERSED' " +
+            "                AND greatest(abs(oh.grid_x-k.grid_x), abs(oh.grid_y-k.grid_y)) < ?) " +
+            "ORDER BY greatest(abs(k.grid_x-?), abs(k.grid_y-?)), md5(k.grid_x || ',' || k.grid_y) LIMIT 1",
+            rs -> rs.next() ? rs.getObject(1, UUID.class) : null,
+            c.get("world_id"), c.get("biome"), from, c.get("grid_x"), c.get("grid_y"), MOVES_AT_MOST, community, REEDKIN_SPACING, c.get("grid_x"), c.get("grid_y"));
+        if (to == null) return;   // nowhere within reach: they stay on the move where they are
+        // Everyone living and everything they built goes with them; graves and the dead stay.
+        jdbc.update("UPDATE world_object w SET current_location_id=?, updated_at=now() FROM native_individual n " +
+            "WHERE n.object_id=w.id AND n.community_id=? AND n.condition <> 'DEAD' AND w.lifecycle_state='ACTIVE' AND NOT EXISTS (SELECT 1 FROM native_companionship cp WHERE cp.individual_id=n.object_id AND cp.ended_at IS NULL)", to, community);
+        jdbc.update("UPDATE world_object w SET current_location_id=?, updated_at=now() FROM native_settlement_site s " +
+            "WHERE s.object_id=w.id AND s.community_id=? AND w.lifecycle_state='ACTIVE'", to, community);
+        // Still hungry on arrival, and still closed to strangers, but the count toward moving on starts again here.
+        jdbc.update("UPDATE native_community SET home_chunk_id=?, lifecycle='SETTLED', shortage_days=LEAST(shortage_days, ?) WHERE id=?", to, SHORTAGE_CLOSES, community);
+        record(community, day, "RELOCATED", Map.of("from", from.toString(), "to", to.toString()));
+    }
+
+    /** Whether this community arrived on new, unfished water within the last month. */
+    private boolean onFreshWater(UUID community, Instant day) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM native_event WHERE community_id=? AND event_kind='RELOCATED' AND occurred_at > ?)",
+            Boolean.class, community, Timestamp.from(day.minus(FRESH_WATER_LASTS))));
     }
 
     // ── A life course (#121). ──────────────────────────────────────────────────────────────────────────────────────
