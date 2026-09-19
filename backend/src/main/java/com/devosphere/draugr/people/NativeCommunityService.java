@@ -39,11 +39,13 @@ public class NativeCommunityService {
     private final JdbcTemplate jdbc;
     private final PhysicalItemService items;
     private final TerritoryService territory;
+    private final AgreementService agreements;
 
-    public NativeCommunityService(JdbcTemplate jdbc, PhysicalItemService items, TerritoryService territory) {
+    public NativeCommunityService(JdbcTemplate jdbc, PhysicalItemService items, TerritoryService territory, AgreementService agreements) {
         this.jdbc = jdbc;
         this.items = items;
         this.territory = territory;
+        this.agreements = agreements;
     }
 
     // ── Where the reedkin live (#115, DR-0024). ────────────────────────────────────────────────────────────────────
@@ -243,6 +245,8 @@ public class NativeCommunityService {
 
         // Their ground (#211): what was done in their territory yesterday, and how they answer it.
         territory.watch(community, day);
+        // Promises (#113): work owed past its date is a broken promise; a wage owed is paid when the store can.
+        agreements.reckon(community, day);
 
         boolean fed = eaten >= need;
         int nextShortage = fed ? 0 : shortage + 1;
