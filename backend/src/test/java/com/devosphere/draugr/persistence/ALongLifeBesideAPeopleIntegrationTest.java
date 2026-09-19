@@ -175,6 +175,10 @@ class ALongLifeBesideAPeopleIntegrationTest {
         assertThrows(Exception.class, () -> jdbc.update("DELETE FROM native_event WHERE community_id=?", community));
 
         // The Chronicle's death: the next Chronicle is a stranger, and inherits none of it.
+        // Ended the way the game ends a life (ChroniclePhysiologyService.relocatePossessions): nothing stays worn by
+        // the dead, and what they carried lies where they fell.
+        jdbc.update("DELETE FROM equipment_attachment WHERE chronicle_id=?", chronicle);
+        jdbc.update("UPDATE world_object SET current_owner_id=NULL, current_location_id=? WHERE current_owner_id=? AND lifecycle_state='ACTIVE'", isle, chronicle);
         jdbc.update("UPDATE chronicle SET life_state='DEAD', died_at=?, death_cause='Test: a life ended' WHERE id=?",
             Timestamp.from(Instant.parse("2031-07-30T13:00:00Z")), chronicle);
         var next = chronicles.awaken();
