@@ -402,7 +402,7 @@ public class ChronicleActionService {
         else if (intent == Intent.COMPANION_PEOPLE) { String[] r = companions.act(chronicle.id(), chronicle.location(), contactWith, companionAct, text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.AGREE_WITH_PEOPLE || intent == Intent.WORK_FOR_PEOPLE) { String[] r = agreement.act(chronicle.id(), chronicle.location(), contactWith, agreementAct, text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.TRADE_WITH_PEOPLE) { String[] r = trade.act(chronicle.id(), contactWith, tradeAct, text, resolvedAt, contact.armed(chronicle.id())); outcome = r[0]; perception = r[1]; }
-        else if (intent == Intent.CONTACT_PEOPLE) { String[] r = contact.act(chronicle.id(), chronicle.location(), contactWith, contactAct, text, resolvedAt); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.CONTACT_PEOPLE) { String[] r = contact.act(chronicle.id(), chronicle.location(), contactWith, contactAct, text, resolvedAt, actionId); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.OBSERVE) perception = survey(chronicle, resolvedAt);
         else if (intent == Intent.MOVE) {
             perception = move(chronicle, text, actionId, resolvedAt); items.workDraftBeasts(chronicle.id());
