@@ -19,11 +19,14 @@ class ConductRecognitionTest {
         assertEquals(ConductService.Act.APOLOGY, ConductService.recognise("apologise to them"));
         assertEquals(ConductService.Act.RESTITUTION, ConductService.recognise("make restitution"));
         assertEquals(ConductService.Act.SHARED_LABOUR, ConductService.recognise("help them fish at the weirs"));
+        assertEquals(ConductService.Act.DAMAGE, ConductService.recognise("burn their village"));
+        assertEquals(ConductService.Act.DAMAGE, ConductService.recognise("set fire to their store"));
+        assertEquals(ConductService.Act.DAMAGE, ConductService.recognise("wreck their houses"));
     }
 
     @Test
     void ordinaryWorkIsNoOffence() {
-        for (String text : new String[]{"fish the channel", "gather reeds", "look around", "call out to them"})
+        for (String text : new String[]{"fish the channel", "gather reeds", "look around", "call out to them", "set fire to the kindling", "burn the driftwood"})
             assertNull(ConductService.recognise(text), text);
     }
 }
