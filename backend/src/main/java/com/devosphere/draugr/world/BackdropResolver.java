@@ -61,7 +61,16 @@ public final class BackdropResolver {
         if ("CAVE_INTERIOR".equals(context.biome()))
             return plain("interior.cave" + (context.lit() ? ".lit" : ".dark"), "INTERIOR");
 
-        // 2. A site on this ground. The most specific thing a standing person can actually see.
+        // 2. A people's village on this ground (#115). Houses, walkways and hung nets fill the view: the marsh they
+        //    stand in is their setting, not the other way round, so the village outranks the site beneath it.
+        Optional<String> settlement = context.features().stream()
+            .filter(f -> f.kind() != null && f.kind().startsWith("SETTLEMENT:"))
+            .map(f -> slug(f.kind().substring("SETTLEMENT:".length())))
+            .sorted()
+            .findFirst();
+        if (settlement.isPresent()) return outdoors("settlement." + settlement.get(), "SETTLEMENT_HERE", context);
+
+        // 3. A site on this ground. The most specific thing a standing person can actually see.
         Optional<String> site = context.features().stream()
             .filter(f -> f.kind() != null && f.kind().startsWith("SITE:"))
             .map(f -> slug(f.name()))
@@ -69,7 +78,7 @@ public final class BackdropResolver {
             .findFirst();
         if (site.isPresent()) return outdoors("site." + site.get(), "SITE_HERE", context);
 
-        // 3. Evidence of habitation: something a Chronicle has built and finished. Ranked under a natural site
+        // 4. Evidence of habitation: something a Chronicle has built and finished. Ranked under a natural site
         //    because a lean-to on a riverbank is still, mostly, a riverbank.
         Optional<String> built = context.features().stream()
             .filter(f -> f.kind() != null && f.kind().startsWith("BUILT:"))
@@ -78,7 +87,7 @@ public final class BackdropResolver {
             .findFirst();
         if (built.isPresent()) return outdoors("built." + built.get(), "BUILT_HERE", context);
 
-        // 4. The ground itself — seen in its setting where the setting can be seen (#232/#234).
+        // 5. The ground itself — seen in its setting where the setting can be seen (#232/#234).
         if (context.biome() != null && !context.biome().isBlank())
             return outdoors("biome." + slug(context.biome()), "BIOME", context, setting(context));
 

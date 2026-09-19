@@ -13,7 +13,7 @@ Schema v1 · 151 backdrops · source `frontend/src/assets`
 
 ## Reachability
 
-**95 of 151** records are reachable by a declared world context; **56** are gated.
+**96 of 151** records are reachable by a declared world context; **55** are gated.
 
 | waiting on | count | reason |
 |---|---|---|
@@ -21,10 +21,10 @@ Schema v1 · 151 backdrops · source `frontend/src/assets`
 | #155 | 10 | The world has no site kind or biome for this feature yet. |
 | #236, #232 | 3 | Night-only scenery needs night eligibility per asset, and a habitat feature in the visual context. |
 | #117, #120 | 3 | No world site places these creatures yet. |
-| #109, #115 | 2 | No native settlement is placed in the world yet. |
 | #160 | 2 | Gold and sulphur provinces were rejected until a consumer exists. |
 | #154 | 1 | Centaurs are a candidate native people, not yet placed. |
 | #207 | 1 | Needs a locust disturbance event on the ground. |
+| #109, #115 | 1 | No native settlement is placed in the world yet. |
 
 ## By family
 
@@ -212,7 +212,7 @@ Schema v1 · 151 backdrops · source `frontend/src/assets`
 ### NATIVE_TERRITORY (2)
 
 - `native-settlement-edge` — TEMPERATE_FOREST · ADJACENT_VISIBLE · **gated**: No native settlement is placed in the world yet. (#109, #115)
-- `reedkin-river-isle-settlement` — WETLAND · EXACT_SITE · discovery-gated · **gated**: No native settlement is placed in the world yet. (#109, #115)
+- `reedkin-river-isle-settlement` — WETLAND · EXACT_SITE · discovery-gated · reached by `settlement.reedkin`
 
 ### DOMESTICATION (1)
 

@@ -51,7 +51,7 @@ public class VisualContextService {
      *
      * @param version     the contract version this payload was built to
      * @param biome       the ground underfoot
-     * @param features    sites and completed structures ON this chunk — never anywhere else
+     * @param features    sites, completed structures and standing villages ON this chunk — never anywhere else
      * @param timeOfDay   DAWN / DAY / DUSK / NIGHT
      * @param season      SPRING / SUMMER / AUTUMN / WINTER
      * @param weather     the weather as FELT here, not the global sky
@@ -118,6 +118,15 @@ public class VisualContextService {
                    "WHERE w.current_location_id=? AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' " +
                    "ORDER BY cp.project_kind", rs -> {
             features.add(new Feature("BUILT:" + rs.getString(1), rs.getString(2)));
+        }, chunk);
+        // A people's village standing on this ground (#115, #224): houses, walkways and nets are as plain to see as a
+        // lean-to, and only while they stand — a village burnt to nothing (#111) is no longer scenery. The people
+        // themselves are not reported, any more than wildlife is: the payload says what the place looks like, not who
+        // is in it.
+        jdbc.query("SELECT DISTINCT n.species_key FROM native_settlement_site s JOIN world_object w ON w.id=s.object_id " +
+                   "JOIN native_community n ON n.id=s.community_id " +
+                   "WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' AND s.site_kind='VILLAGE' ORDER BY 1", rs -> {
+            features.add(new Feature("SETTLEMENT:" + rs.getString(1), "village"));
         }, chunk);
 
         String timeOfDay = timeOfDay(at);
