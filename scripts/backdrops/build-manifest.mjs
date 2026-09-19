@@ -549,7 +549,7 @@ export function validateContextPolicy(manifest) {
 
     for (const c of contexts) {
       if (c && typeof c.candidate === 'string' && c.candidate.trim()) {
-        if (!/^(world\.default|interior\.[a-z0-9.-]+|site\.[a-z0-9-]+|built\.[a-z0-9-]+|biome\.[a-z0-9.-]+|[A-Z][A-Z_]+)$/.test(c.candidate)) {
+        if (!/^(world\.default|interior\.[a-z0-9.-]+|site\.[a-z0-9-]+|settlement\.[a-z0-9-]+|built\.[a-z0-9-]+|biome\.[a-z0-9.-]+|[A-Z][A-Z_]+)$/.test(c.candidate)) {
           errors.push(`${at} context names something the world never sends: ${c.candidate}`);
         }
         if (c.whenBiome !== undefined && !biome(c.whenBiome)) errors.push(`${at} context whenBiome is not a base biome: ${c.whenBiome}`);
