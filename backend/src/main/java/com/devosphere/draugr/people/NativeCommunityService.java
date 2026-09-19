@@ -196,7 +196,7 @@ public class NativeCommunityService {
         // A community with no standing store has nowhere to keep a take, so it lives hand to mouth: what it
         // gathers is eaten, never kept.
         int workers = count("SELECT COUNT(*) FROM native_individual n JOIN world_object w ON w.id=n.object_id " +
-            "WHERE n.community_id=? AND n.role IN ('FORAGER','FISHER','HUNTER') AND n.condition IN ('WELL','HUNGRY') AND w.lifecycle_state='ACTIVE'", community);
+            "WHERE n.community_id=? AND n.role IN ('FORAGER','FISHER','HUNTER') AND n.life_stage <> 'ELDER' AND n.condition IN ('WELL','HUNGRY') AND w.lifecycle_state='ACTIVE'", community);
         int gathered = workers * yieldPerWorker(day);
         String stapleName = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, staple);
         if (store != null)
@@ -251,6 +251,9 @@ public class NativeCommunityService {
             fed ? "WELL" : "HUNGRY", community, fed ? "HUNGRY" : "WELL");
         jdbc.update("UPDATE native_community SET shortage_days=? WHERE id=?", nextShortage, community);
 
+        // A life course (#121): growing up, growing old, being born, and dying, of age or of hunger.
+        lifeCourse(community, day, nextShortage);
+
         // How the community stands. Closing up is what hungry people do with a store they cannot spare and ground
         // they cannot share; moving on is what they do when the ground has stopped feeding them. Recovery returns
         // them to what they are when fed, never past it.
@@ -271,6 +274,103 @@ public class NativeCommunityService {
             jdbc.update("UPDATE native_community SET lifecycle='SETTLED' WHERE id=?", community);
             record(community, day, "SETTLED_AGAIN", Map.of());
         }
+    }
+
+    // ── A life course (#121). ──────────────────────────────────────────────────────────────────────────────────────
+
+    /** Age at which a child takes up adult work. */
+    static final int COMES_OF_AGE = 14;
+    /** Age at which an adult becomes an elder: keeper of memory, no longer out on the water. */
+    static final int BECOMES_ELDER = 55;
+    /** Age from which an elder may die of age; the year is spread by who they are, so a people does not lose every elder at once. */
+    static final int DIES_OF_AGE_FROM = 70;
+    /** The most people a small isle holds before births stop. */
+    static final int ISLE_HOLDS = 12;
+    /** Days of hunger after which the weakest begin to die, and how often after that. */
+    static final int FAMINE_TAKES_FROM = 21, FAMINE_TAKES_EVERY = 7;
+
+    /**
+     * Growing up, growing old, being born and dying, as physical events on the community's own clock. Everything that
+     * happens here is in the history, and a death leaves a grave on the isle (a place, #211), never a vanished body.
+     */
+    void lifeCourse(UUID community, Instant day, int shortageDays) {
+        java.time.LocalDate today = day.atZone(ZoneOffset.UTC).toLocalDate();
+        UUID home = jdbc.queryForObject("SELECT home_chunk_id FROM native_community WHERE id=?", UUID.class, community);
+
+        // Coming of age: into the work the isle is shortest of.
+        for (Map<String, Object> child : jdbc.queryForList(
+                "SELECT n.object_id, n.given_name FROM native_individual n JOIN world_object w ON w.id=n.object_id " +
+                "WHERE n.community_id=? AND n.life_stage='CHILD' AND n.condition <> 'DEAD' AND w.lifecycle_state='ACTIVE' " +
+                "AND n.born_on <= ?", community, java.sql.Date.valueOf(today.minusYears(COMES_OF_AGE)))) {
+            String work = jdbc.queryForObject(
+                "SELECT r FROM unnest(ARRAY['FISHER','FORAGER','MAKER']) r " +
+                "ORDER BY (SELECT COUNT(*) FROM native_individual n WHERE n.community_id=? AND n.role=r AND n.condition <> 'DEAD'), r LIMIT 1",
+                String.class, community);
+            jdbc.update("UPDATE native_individual SET life_stage='ADULT', role=? WHERE object_id=?", work, child.get("object_id"));
+            record(community, day, "CAME_OF_AGE", Map.of("name", child.get("given_name"), "work", work));
+        }
+
+        // Growing old.
+        jdbc.update("UPDATE native_individual SET life_stage='ELDER' WHERE community_id=? AND life_stage='ADULT' AND condition <> 'DEAD' AND born_on <= ?",
+            community, java.sql.Date.valueOf(today.minusYears(BECOMES_ELDER)));
+
+        // Dying of age: each elder in their own year past the threshold.
+        for (Map<String, Object> elder : jdbc.queryForList(
+                "SELECT n.object_id, n.given_name, n.born_on FROM native_individual n JOIN world_object w ON w.id=n.object_id " +
+                "WHERE n.community_id=? AND n.life_stage='ELDER' AND n.condition <> 'DEAD' AND w.lifecycle_state='ACTIVE' AND n.born_on <= ?",
+                community, java.sql.Date.valueOf(today.minusYears(DIES_OF_AGE_FROM)))) {
+            java.time.LocalDate born = ((java.sql.Date) elder.get("born_on")).toLocalDate();
+            int span = DIES_OF_AGE_FROM + Math.floorMod(elder.get("object_id").hashCode(), 15);
+            if (!born.plusYears(span).isAfter(today)) die(community, home, (UUID) elder.get("object_id"), (String) elder.get("given_name"), day, "age");
+        }
+
+        // Famine takes the weakest first: the old, then the young, then anyone.
+        if (shortageDays >= FAMINE_TAKES_FROM && (shortageDays - FAMINE_TAKES_FROM) % FAMINE_TAKES_EVERY == 0) {
+            jdbc.queryForList(
+                "SELECT n.object_id, n.given_name FROM native_individual n JOIN world_object w ON w.id=n.object_id " +
+                "WHERE n.community_id=? AND n.condition <> 'DEAD' AND w.lifecycle_state='ACTIVE' " +
+                "ORDER BY CASE n.life_stage WHEN 'ELDER' THEN 0 WHEN 'CHILD' THEN 1 ELSE 2 END, n.born_on LIMIT 1", community)
+                .forEach(weakest -> die(community, home, (UUID) weakest.get("object_id"), (String) weakest.get("given_name"), day, "hunger"));
+        }
+
+        // A birth, once a spring, to a fed isle that has room and two adults to raise a child.
+        int living = count("SELECT COUNT(*) FROM native_individual n JOIN world_object w ON w.id=n.object_id " +
+            "WHERE n.community_id=? AND n.condition <> 'DEAD' AND w.lifecycle_state='ACTIVE'", community);
+        int adults = count("SELECT COUNT(*) FROM native_individual n JOIN world_object w ON w.id=n.object_id " +
+            "WHERE n.community_id=? AND n.life_stage='ADULT' AND n.condition <> 'DEAD' AND w.lifecycle_state='ACTIVE'", community);
+        boolean spring = today.getMonthValue() == 4 || today.getMonthValue() == 5;
+        boolean bornThisYear = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM native_event WHERE community_id=? AND event_kind='BORN' AND occurred_at > ?)",
+            Boolean.class, community, Timestamp.from(day.minus(Duration.ofDays(300)))));
+        if (spring && !bornThisYear && shortageDays == 0 && living < ISLE_HOLDS && adults >= 2) {
+            String isle = jdbc.queryForObject("SELECT name FROM native_community WHERE id=?", String.class, community);
+            int n = count("SELECT COUNT(*) FROM native_individual WHERE community_id=?", community);
+            String name = NAMES[(n * 5 + 3) % NAMES.length];
+            UUID kin = jdbc.queryForObject("SELECT k.id FROM native_kin_group k WHERE k.community_id=? " +
+                "ORDER BY (SELECT COUNT(*) FROM native_individual i WHERE i.kin_group_id=k.id AND i.life_stage='CHILD' AND i.condition <> 'DEAD'), k.name LIMIT 1",
+                UUID.class, community);
+            UUID body = place("NATIVE_PERSON", name + " of " + isle, home);
+            jdbc.update("INSERT INTO native_individual (object_id,community_id,kin_group_id,given_name,role,life_stage,born_on) VALUES (?,?,?,?,'CHILD','CHILD',?)",
+                body, community, kin, name, java.sql.Date.valueOf(today));
+            record(community, day, "BORN", Map.of("name", name));
+        }
+
+        // A community with no one left living has ended; what it built and who it buried stay where they are.
+        if (count("SELECT COUNT(*) FROM native_individual WHERE community_id=? AND condition <> 'DEAD'", community) == 0) {
+            jdbc.update("UPDATE native_community SET lifecycle='DISPERSED' WHERE id=?", community);
+            record(community, day, "NO_ONE_LEFT", Map.of());
+        }
+    }
+
+    /** A death in the community: the person is marked dead, laid in a grave on the isle, and the grave is a place. */
+    private void die(UUID community, UUID home, UUID body, String name, Instant day, String cause) {
+        jdbc.update("UPDATE native_individual SET condition='DEAD', available=FALSE WHERE object_id=?", body);
+        jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED', destroyed_at=?, destroyed_location_id=?, destroyed_cause='BURIED', " +
+            "current_location_id=NULL, current_owner_id=NULL WHERE id=?", Timestamp.from(day), home, body);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'BURIED',jsonb_build_object('cause',?::text))",
+            body, Timestamp.from(day), cause);
+        UUID grave = place("NATIVE_GRAVE", "The grave of " + name, home);
+        record(community, day, "hunger".equals(cause) ? "DIED_OF_HUNGER" : "DIED_OF_AGE", Map.of("name", name, "grave", grave.toString()));
     }
 
     /**
