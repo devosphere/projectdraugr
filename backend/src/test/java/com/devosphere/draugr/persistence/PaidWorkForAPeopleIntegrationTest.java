@@ -122,6 +122,10 @@ class PaidWorkForAPeopleIntegrationTest {
         UUID store = jdbc.queryForObject("SELECT s.object_id FROM native_settlement_site s JOIN world_object w ON w.id=s.object_id " +
             "WHERE s.community_id=? AND s.holds_stores AND w.lifecycle_state='ACTIVE'", UUID.class, community);
 
+        // The isle's own store, stocked fresh: what was put by at genesis has had a season to spoil, and a wage
+        // must be something they actually hold.
+        for (int i = 0; i < 12; i++) items.createHeldItem(store, "dried_fish", "Dried fish", Instant.parse("2031-06-10T06:00:00Z"), "GATHERED_BY_COMMUNITY");
+
         // Agreed: two dried fish are worth two days' work to a fed isle.
         var offer = actions.resolve("offer to work for them for two dried fish");
         assertEquals("AGREE_WITH_PEOPLE", offer.intent(), offer::perception);
