@@ -111,7 +111,10 @@ public class TradeService {
             : standing < ("OPEN".equals(c.get("base_trade_policy")) ? 0 : 10) ? "They watch you from the landing and make no move to bring anything down. They do not trust you enough for that yet."
             : understanding < 20 ? "They bring nothing down. Whatever you are asking, it has not yet reached them as a wish to trade."
             // No one decides for the isle while its speaker's office is empty (#121).
-            : AudienceService.withoutASpeaker(jdbc, community);
+            : Eligibility.firstOf(
+                Eligibility.refusal(jdbc, community, Eligibility.TRADE,
+                    "They will not barter. Goods pass among their own and not across to outsiders, and no gesture of yours changes that."),
+                AudienceService.withoutASpeaker(jdbc, community));
         if (refusal != null && act != Act.RETURN_GOODS) return record(community, chronicle, act, at, "REFUSED", 0, "PARTIAL", refusal);
 
         switch (act) {
@@ -276,7 +279,7 @@ public class TradeService {
         List<Map<String, Object>> theirs = jdbc.queryForList(
             "SELECT DISTINCT w.id, i.item_key, d.display_name, d.category FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
             "JOIN item_definition d ON d.item_key=i.item_key JOIN object_transition t ON t.object_id=w.id " +
-            "AND t.transition_type IN ('TRADED_FROM_COMMUNITY','STOLEN_FROM_COMMUNITY') " +
+            "AND t.transition_type IN ('TRADED_FROM_COMMUNITY','STOLEN_FROM_COMMUNITY','ROBBED_FROM_THE_DEAD') " +
             "AND t.payload->>'community' = ?::text WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE'", community.toString(), chronicle);
         return named(text.toLowerCase(Locale.ROOT), theirs);
     }

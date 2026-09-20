@@ -100,7 +100,8 @@ public class CompanionService {
             : !"SETTLED".equals(c.get("lifecycle")) || "CLOSED".equals(c.get("trade_policy")) || ((Number) c.get("shortage_days")).intValue() > 0
                 ? "The isle cannot spare anyone now; every pair of hands is at the nets."
             : store == null || held(store, staple).size() < PROVISIONS ? "No one can go: there is not food enough in the store for anyone to take on the way."
-            : null;
+            : Eligibility.refusal(jdbc, community, Eligibility.COMPANIONSHIP,
+                "They look at each other and then at you, and the answer is plain without a word of it being said: their own do not leave with strangers.");
         if (refusal != null) { event(community, chronicle, at, "COMPANIONSHIP_REFUSED", null); return new String[]{"PARTIAL", refusal}; }
 
         Map<String, Object> who = willing(community, text);

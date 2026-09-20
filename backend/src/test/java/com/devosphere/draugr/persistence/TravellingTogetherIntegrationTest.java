@@ -88,6 +88,11 @@ class TravellingTogetherIntegrationTest {
         return jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, object);
     }
 
+    private int stapleIn(UUID owner) {
+        return jdbc.queryForObject("SELECT COUNT(*) FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
+            "WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key='dried_fish'", Integer.class, owner);
+    }
+
     private int owned(UUID owner) {
         return jdbc.queryForObject("SELECT COUNT(*) FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE'", Integer.class, owner);
     }
@@ -162,13 +167,15 @@ class TravellingTogetherIntegrationTest {
         natives.advanceTo(Instant.parse("2031-06-16T00:00:00Z"));
         at("2031-06-16T09:00:00Z");
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", isle, chronicle);
-        stored = owned(store);
+        // Counted as food rather than as everything the store holds: a people also keeps its own dead's tools
+        // there now (#122), and what is being asked here is whether the provisions came back.
+        stored = stapleIn(store);
         var again = actions.resolve("ask them to travel with me");
         assertEquals("SUCCEEDED", again.outcome(), again::perception);
         var parted = actions.resolve("part ways");
         assertEquals("COMPANION_PEOPLE", parted.intent(), parted::perception);
         assertEquals("SUCCEEDED", parted.outcome(), parted::perception);
-        assertEquals(stored, owned(store), "what they did not eat goes back in the store");
+        assertEquals(stored, stapleIn(store), "what they did not eat goes back in the store");
         assertEquals(0, (int) jdbc.queryForObject("SELECT COUNT(*) FROM native_companionship WHERE chronicle_id=? AND ended_at IS NULL", Integer.class, chronicle));
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
