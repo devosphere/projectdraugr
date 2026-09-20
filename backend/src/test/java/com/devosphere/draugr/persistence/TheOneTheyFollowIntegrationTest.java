@@ -78,6 +78,12 @@ class TheOneTheyFollowIntegrationTest {
         return pop;
     }
 
+    /** Move the world clock, and the body with it, so the scheduled tick and the test agree on when it is. */
+    private void at(Instant when) {
+        jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", Timestamp.from(when));
+        jdbc.update("UPDATE chronicle_physiology SET last_metabolic_update=?, hours_without_food=0, hours_without_water=0, sleep_debt_hours=0", Timestamp.from(when));
+    }
+
     private String behaviour(UUID pop) {
         return jdbc.queryForObject("SELECT behavior_state FROM wildlife_population WHERE id=?", String.class, pop);
     }
@@ -109,7 +115,9 @@ class TheOneTheyFollowIntegrationTest {
         assertNotNull(jdbc.queryForObject("SELECT leader_lost_at FROM wildlife_population WHERE id=?", Timestamp.class, wolves));
         assertTrue(killed.narration().contains("not together"), killed::narration);
 
-        // The world's own day does not hand the hunt straight back.
+        // The world's own day does not hand the hunt straight back. The clock moves with it, because the scheduled
+        // tick runs on the world clock and would otherwise keep re-imposing the scatter from its own idea of "now".
+        at(now.plus(Duration.ofDays(1)));
         wildlife.advanceTo(now.plus(Duration.ofDays(1)));
         assertEquals("SCATTERED", behaviour(wolves), "a scattered pack is still scattered tomorrow");
 
@@ -118,6 +126,7 @@ class TheOneTheyFollowIntegrationTest {
             "a leaderless pack takes nothing: there is nothing leading it to the pen");
 
         // Ten days on, another comes to the front of it — and nobody was spawned to be that animal.
+        at(now.plus(Duration.ofDays(WildlifeSimulationService.LEADERLESS_DAYS + 1)));
         wildlife.advanceTo(now.plus(Duration.ofDays(WildlifeSimulationService.LEADERLESS_DAYS + 1)));
         assertNull(jdbc.queryForObject("SELECT leader_lost_at FROM wildlife_population WHERE id=?", Timestamp.class, wolves),
             "the mark clears when the group is a group again");
