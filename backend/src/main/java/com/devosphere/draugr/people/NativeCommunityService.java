@@ -40,8 +40,11 @@ public class NativeCommunityService {
     private final PhysicalItemService items;
     private final TerritoryService territory;
     private final AgreementService agreements;
+    private final CompanionService companions;
 
-    public NativeCommunityService(JdbcTemplate jdbc, PhysicalItemService items, TerritoryService territory, AgreementService agreements) {
+    public NativeCommunityService(JdbcTemplate jdbc, PhysicalItemService items, TerritoryService territory, AgreementService agreements,
+                                  CompanionService companions) {
+        this.companions = companions;
         this.jdbc = jdbc;
         this.items = items;
         this.territory = territory;
@@ -198,7 +201,9 @@ public class NativeCommunityService {
         // A community with no standing store has nowhere to keep a take, so it lives hand to mouth: what it
         // gathers is eaten, never kept.
         int workers = count("SELECT COUNT(*) FROM native_individual n JOIN world_object w ON w.id=n.object_id " +
-            "WHERE n.community_id=? AND n.role IN ('FORAGER','FISHER','HUNTER') AND n.life_stage <> 'ELDER' AND n.condition IN ('WELL','HUNGRY') AND w.lifecycle_state='ACTIVE'", community);
+            "WHERE n.community_id=? AND n.role IN ('FORAGER','FISHER','HUNTER') AND n.life_stage <> 'ELDER' AND n.condition IN ('WELL','HUNGRY') AND w.lifecycle_state='ACTIVE'" +
+            // Someone away with a Chronicle (#113) is not at the nets, and eats what they carry, not from the store.
+            " AND NOT EXISTS (SELECT 1 FROM native_companionship cp WHERE cp.individual_id=n.object_id AND cp.ended_at IS NULL)", community);
         // New water, not yet fished (#111): a people who have just moved take more from it for the first month.
         int gathered = workers * (yieldPerWorker(day) + (onFreshWater(community, day) ? 1 : 0));
         String stapleName = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, staple);
@@ -224,7 +229,7 @@ public class NativeCommunityService {
         // Eating: everyone living eats from the store, the soundest-oldest first. Food that has gone bad is not
         // eaten; it is thrown out, which is what a store-keeper does and what keeps the store honest.
         int eaters = count("SELECT COUNT(*) FROM native_individual n JOIN world_object w ON w.id=n.object_id " +
-            "WHERE n.community_id=? AND n.condition <> 'DEAD' AND w.lifecycle_state='ACTIVE'", community);
+            "WHERE n.community_id=? AND n.condition <> 'DEAD' AND w.lifecycle_state='ACTIVE' AND NOT EXISTS (SELECT 1 FROM native_companionship cp WHERE cp.individual_id=n.object_id AND cp.ended_at IS NULL)", community);
         int need = eaters * ration;
         int eaten = 0;
         if (store != null) {
@@ -252,12 +257,14 @@ public class NativeCommunityService {
         int nextShortage = fed ? 0 : shortage + 1;
         if (!fed && shortage == 0) record(community, day, "SHORTAGE_BEGAN", Map.of("ate", eaten, "needed", need));
         if (fed && shortage > 0) record(community, day, "SHORTAGE_ENDED", Map.of("days", shortage));
-        jdbc.update("UPDATE native_individual SET condition = ? WHERE community_id=? AND condition = ?",
+        jdbc.update("UPDATE native_individual n SET condition = ? WHERE community_id=? AND condition = ? AND NOT EXISTS (SELECT 1 FROM native_companionship cp WHERE cp.individual_id=n.object_id AND cp.ended_at IS NULL)",
             fed ? "WELL" : "HUNGRY", community, fed ? "HUNGRY" : "WELL");
         jdbc.update("UPDATE native_community SET shortage_days=? WHERE id=?", nextShortage, community);
 
         // A life course (#121): growing up, growing old, being born, and dying, of age or of hunger.
         lifeCourse(community, day, nextShortage);
+        // Those away with a Chronicle (#113) live their own day: eat what they carry, and come home when they must.
+        companions.liveADay(community, day);
 
         // How the community stands. Closing up is what hungry people do with a store they cannot spare and ground
         // they cannot share; moving on is what they do when the ground has stopped feeding them. Recovery returns
@@ -379,7 +386,7 @@ public class NativeCommunityService {
         if (to == null) return;   // nowhere within reach: they stay on the move where they are
         // Everyone living and everything they built goes with them; graves and the dead stay.
         jdbc.update("UPDATE world_object w SET current_location_id=?, updated_at=now() FROM native_individual n " +
-            "WHERE n.object_id=w.id AND n.community_id=? AND n.condition <> 'DEAD' AND w.lifecycle_state='ACTIVE'", to, community);
+            "WHERE n.object_id=w.id AND n.community_id=? AND n.condition <> 'DEAD' AND w.lifecycle_state='ACTIVE' AND NOT EXISTS (SELECT 1 FROM native_companionship cp WHERE cp.individual_id=n.object_id AND cp.ended_at IS NULL)", to, community);
         jdbc.update("UPDATE world_object w SET current_location_id=?, updated_at=now() FROM native_settlement_site s " +
             "WHERE s.object_id=w.id AND s.community_id=? AND w.lifecycle_state='ACTIVE'", to, community);
         // Still hungry on arrival, and still closed to strangers, but the count toward moving on starts again here.
