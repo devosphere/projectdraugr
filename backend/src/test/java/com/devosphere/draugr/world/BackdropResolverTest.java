@@ -39,6 +39,15 @@ class BackdropResolverTest {
         assertEquals("biome.grassland", BackdropResolver.resolve(context("GRASSLAND", List.of())).key());
     }
 
+    /** A people's village fills the view: the marsh it stands in is its setting, not the other way round (#115). */
+    @Test void aVillageOutranksTheMarshItStandsIn() {
+        var isle = context("WETLAND", List.of(site("Reed marsh"), new VisualContextService.Feature("SETTLEMENT:reedkin", "village")));
+        assertEquals("settlement.reedkin", BackdropResolver.resolve(isle).key());
+        assertEquals("SETTLEMENT_HERE", BackdropResolver.resolve(isle).reason());
+        // Burnt to nothing, it is no longer reported, and the marsh is what is seen again.
+        assertEquals("site.reed-marsh", BackdropResolver.resolve(context("WETLAND", List.of(site("Reed marsh")))).key());
+    }
+
     /** Being inside outranks everything about the country outside, because you cannot see the country. */
     @Test void beingInsideTheRockOutranksTheWeatherAndTheHour() {
         var dark = new VisualContextService.VisualContext(
