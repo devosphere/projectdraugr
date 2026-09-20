@@ -48,8 +48,27 @@ public class WildlifeSimulationService {
      * being asked to think. Each rule is a deterministic set-based update, applied
      * after every population has its base state. See docs/systems/11.2-Behavioral-FSM.md.
      */
+    /** Days a group goes without the one it followed before another comes to the front of it (#121). */
+    public static final int LEADERLESS_DAYS = 10;
+
     @Transactional
     void applyCascades(Instant now) {
+        // A group that has lost the one it followed (#121). The base pass above gives every population the state its
+        // role, hour and weather call for, which would hand a leaderless pack straight back its hunt; this holds it
+        // scattered instead. A scattered group is in none of the states the raid and ambush rules read, so for as
+        // long as it lasts the pack takes no stock and lies in wait for nobody — the loss is felt in the world and
+        // not only in a column. After LEADERLESS_DAYS another animal comes to the front of it and the mark is
+        // cleared: not a replacement spawned, just a group that is a group again.
+        // One statement, so a group cannot be scattered and re-formed by two passes racing each other: while the
+        // mark stands the group is scattered, and the moment it is old enough the mark goes and the group is ALERT
+        // again — wary, together, and back in the rules it was out of.
+        Timestamp longEnough = Timestamp.from(now.minus(Duration.ofDays(LEADERLESS_DAYS)));
+        jdbc.update("UPDATE wildlife_population SET " +
+            "  behavior_state = CASE WHEN leader_lost_at > ? THEN 'SCATTERED' ELSE 'ALERT' END, " +
+            "  leader_lost_at = CASE WHEN leader_lost_at > ? THEN leader_lost_at ELSE NULL END " +
+            "WHERE leader_lost_at IS NOT NULL AND population_count > 0", longEnough, longEnough);
+        jdbc.update("UPDATE wildlife_population SET leader_lost_at=NULL WHERE leader_lost_at IS NOT NULL AND population_count = 0");
+
         // A monster that never rests (#86). monster_profile.special_mechanic has carried ALWAYS_HUNTING since the
         // catalogue was written and nothing read it, so the dire wolf that is supposed to be a standing danger
         // slept through the day like a fox. It was doubly dead before lairs held anything at all. Applied before

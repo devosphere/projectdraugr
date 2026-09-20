@@ -132,12 +132,29 @@ public class WildlifeEncounterService {
         int roll = Math.floorMod(action.hashCode(), 100);
         if (capability + roll >= resistance + 40) {
             UUID carcass=UUID.randomUUID(); int meat=meatFor(candidate.species());
-            jdbc.update("UPDATE wildlife_population SET population_count=population_count-1,behavior_state='ALERT' WHERE id=?",candidate.populationId());
+            // The one that comes at you is the one that leads (#121). A social group that is hunting, standing its
+            // ground or holding a territory is doing it behind somebody, and killing that animal is not the same as
+            // killing one of the others: the group scatters, and a scattered group hunts nothing and raids nobody
+            // until another comes to the front of it. Nothing spawns a replacement — the pack simply stops being a
+            // pack for a while.
+            boolean ledFromTheFront = candidate.population() >= 2
+                && java.util.List.of("PACK_HUNT","HUNTING","TERRITORIAL","AGGRESSIVE","STALKING").contains(candidate.behavior())
+                && Boolean.TRUE.equals(jdbc.queryForObject(
+                    "SELECT EXISTS(SELECT 1 FROM cognition_profile cp JOIN wildlife_species ws ON ws.species_key=cp.species_key " +
+                    "WHERE cp.species_key=? AND (cp.cognition_class='SOCIAL' OR ws.pack_hunter))", Boolean.class, candidate.species()));
+            if (ledFromTheFront)
+                jdbc.update("UPDATE wildlife_population SET population_count=population_count-1, behavior_state='SCATTERED', leader_lost_at=? WHERE id=?",
+                    Timestamp.from(at), candidate.populationId());
+            else
+                jdbc.update("UPDATE wildlife_population SET population_count=population_count-1,behavior_state='ALERT' WHERE id=?",candidate.populationId());
             jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CARCASS',?,?)",carcass,display(candidate.species())+" carcass",chunk);
             Timestamp ts=Timestamp.from(at);
             jdbc.update("INSERT INTO wildlife_carcass (object_id,source_population_id,species_key,remaining_meat_units,hide_available,killed_by_action_id,died_at) VALUES (?,?,?,?,true,?,?)",carcass,candidate.populationId(),candidate.species(),meat,action,ts);
             jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'WILDLIFE_KILLED',jsonb_build_object('species',?,'sourcePopulationId',?::text))",carcass,ts,candidate.species(),candidate.populationId().toString());
-            return new EncounterResult("SUCCEEDED","The struggle ends in the wet earth. The still form remains where it fell.");
+            return new EncounterResult("SUCCEEDED", ledFromTheFront
+                ? "The struggle ends in the wet earth. The still form remains where it fell, and the others go — not far, and not together. "
+                  + "Whatever held them in one shape a moment ago is lying at your feet."
+                : "The struggle ends in the wet earth. The still form remains where it fell.");
         }
         if (capability + roll >= resistance) {
             jdbc.update("UPDATE wildlife_population SET behavior_state='FLEEING' WHERE id=?",candidate.populationId());
