@@ -35,7 +35,18 @@ public class ProcedureInterpreter {
         the list. If no ordered combination of the listed processes accomplishes the action, reply with
         the single word NONE.
 
+        End your reply with a confidence from 0 to 100 on its own, as "confidence=NN".
+
         Do not explain. Do not invent a key that is not in the list. Prefer the shortest correct chain.""";
+
+    /** What the interpreter proposes: existing keys in order, and how sure it is. Never prose, never a new key. */
+    public record Plan(List<String> keys, int confidence) {
+        public static final Plan NOTHING = new Plan(List.of(), 0);
+        public boolean isEmpty() { return keys.isEmpty(); }
+    }
+
+    /** Below this the resolver will not spend a Chronicle's time on the plan at all. */
+    public static final int SURE_ENOUGH = 40;
 
     private final LanguageModel model;
     private final AiProperties props;
@@ -55,16 +66,24 @@ public class ProcedureInterpreter {
      * @param inventory  the item keys the chronicle can reach (context for a viable chain)
      */
     @Transactional(readOnly = true)
-    public List<String> plan(String actionText, List<String> inventory) {
-        if (!props.isInterpreterActive() || actionText == null || actionText.isBlank()) return List.of();
+    public Plan plan(String actionText, List<String> inventory) {
+        if (!props.isInterpreterActive() || actionText == null || actionText.isBlank()) return Plan.NOTHING;
         List<Map<String, Object>> catalog = jdbc.queryForList(
             "SELECT process_key, display_name FROM material_process WHERE review_state='VERIFIED' ORDER BY process_key");
-        if (catalog.isEmpty()) return List.of();
+        if (catalog.isEmpty()) return Plan.NOTHING;
         Set<String> valid = catalog.stream().map(r -> (String) r.get("process_key")).collect(Collectors.toSet());
         String user = buildUser(actionText, inventory, catalog);
         return model.generate(props.getInterpreterModel(), SYSTEM, user)
-            .map(reply -> parse(reply, valid))
-            .orElse(List.of());
+            .map(reply -> new Plan(parse(reply, valid), confidence(reply)))
+            .filter(plan -> plan.confidence() >= SURE_ENOUGH)
+            .orElse(Plan.NOTHING);
+    }
+
+    /** The confidence the reply states, or an even fifty when it states none. */
+    static int confidence(String reply) {
+        if (reply == null) return 50;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("confidence\\s*=\\s*(\\d{1,3})").matcher(reply.toLowerCase(Locale.ROOT));
+        return m.find() ? Math.min(100, Integer.parseInt(m.group(1))) : 50;
     }
 
     /** Keep only tokens that are real verified process keys, in the model's order, de-duplicated. */

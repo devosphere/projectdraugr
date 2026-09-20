@@ -49,4 +49,13 @@ class ProcedureInterpreterTest {
         assertEquals(List.of(), i.parse("NONE", valid), "NONE means no composition");
         assertEquals(List.of(), i.parse("here is the plan: do stuff", valid), "prose with no real keys yields nothing");
     }
+
+    /** #37: a plan is typed — keys the world has, in order, and how sure the interpreter says it is. */
+    @Test
+    void aPlanCarriesTheConfidenceItWasGivenAndFiftyWhenItGivesNone() {
+        assertEquals(80, ProcedureInterpreter.confidence("knap_flake, haft_axe confidence=80"));
+        assertEquals(50, ProcedureInterpreter.confidence("knap_flake, haft_axe"), "no claim of confidence is an even fifty");
+        assertEquals(100, ProcedureInterpreter.confidence("knap_flake CONFIDENCE = 140"), "and it is never more than certain");
+        assertEquals(0, ProcedureInterpreter.confidence("NONE confidence=0"));
+    }
 }
