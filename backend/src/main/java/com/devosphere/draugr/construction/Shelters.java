@@ -30,6 +30,10 @@ public final class Shelters {
      * theirs keeps the rain off exactly as well as one you built — the difference is that it is not yours, and the
      * leave to be under it runs out.
      *
+     * <p>The welcome is measured against the world clock, not the wall clock: a night granted in the world is a
+     * night in the world, and comparing it to {@code now()} would have made every welcome run until the machine
+     * caught up with the simulation.
+     *
      * @param chronicleExpr SQL for the chronicle's id in the calling query (a bind '?' or a column)
      */
     public static String lentByAPeople(String chronicleExpr) {
@@ -38,7 +42,8 @@ public final class Shelters {
                "WHERE s.site_kind='VILLAGE' AND s.condition_percent > 0 AND house.lifecycle_state='ACTIVE' " +
                "AND house.current_location_id = guest.current_location_id " +
                "AND (EXISTS (SELECT 1 FROM native_membership m WHERE m.community_id=s.community_id AND m.chronicle_id=guest.id AND m.left_at IS NULL) " +
-               "  OR EXISTS (SELECT 1 FROM native_guest_right g WHERE g.community_id=s.community_id AND g.chronicle_id=guest.id AND g.welcome_until > now())))";
+               "  OR EXISTS (SELECT 1 FROM native_guest_right g WHERE g.community_id=s.community_id AND g.chronicle_id=guest.id " +
+               "                AND g.welcome_until > (SELECT simulated_at FROM simulation_clock WHERE id=1))))";
     }
 
     /** True for a build you can be inside. Requires {@code construction_project} to be in scope as {@code cp}. */
