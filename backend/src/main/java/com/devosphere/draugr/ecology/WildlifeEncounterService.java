@@ -718,6 +718,49 @@ public class WildlifeEncounterService {
      *
      * @return the species taken, or null if nothing was lost.
      */
+    /** The months a wild bird on this ground has eggs in the nest. Outside them a nest is an old cup of grass. */
+    private static final java.util.Set<Integer> LAYING_MONTHS = java.util.Set.of(4, 5, 6);
+    /** Days before a nest robbed of its clutch is worth looking at again — and before the birds breed again. */
+    public static final int CLUTCH_COSTS_DAYS = 30;
+
+    /**
+     * Rob a wild nest (#122). The catalogue has had a bird egg since the beginning and exactly one way to get one:
+     * kill the bird and find eggs among its drops, which is backwards. This is the non-lethal way, and it carries
+     * the non-lethal rules the ticket asks for — season, method and consequence.
+     *
+     * <p>A clutch is this year's young. Taking it does not reduce the count of birds standing on the ground today;
+     * it takes what would have been added, and the daily breeding pass skips this population for a month
+     * ({@link com.devosphere.draugr.ecology.WildlifeSimulationService}). The adults are roused and stay that way.
+     * Rob the same ground twice in a season and there is nothing there: a bird that has lost a clutch does not lay
+     * again for the asking.
+     */
+    @Transactional
+    public EncounterResult robNest(UUID chronicle, UUID chunk, Instant at, UUID action) {
+        int month = at.atZone(java.time.ZoneOffset.UTC).getMonthValue();
+        java.util.Map<String,Object> nesting = jdbc.query(
+            "SELECT wp.id, wp.species_key, wp.population_count, wp.clutch_taken_at FROM wildlife_population wp " +
+            "JOIN ecology_site es ON es.id = wp.site_id JOIN wildlife_species ws ON ws.species_key = wp.species_key " +
+            "WHERE es.chunk_id = ? AND ws.kingdom_class = 'AVES' AND wp.population_count >= 2 " +
+            "ORDER BY wp.clutch_taken_at NULLS FIRST, wp.population_count DESC LIMIT 1 FOR UPDATE OF wp",
+            rs -> rs.next() ? java.util.Map.of("id", rs.getObject(1, UUID.class), "species", rs.getString(2),
+                "count", rs.getInt(3), "taken", rs.getTimestamp(4) == null ? "" : rs.getTimestamp(4).toInstant().toString()) : null, chunk);
+        if (nesting == null)
+            return new EncounterResult("FAILED", "You go over the ground for nests and find nothing in it: old cups of grass from other years, and no bird that will own one.");
+        if (!LAYING_MONTHS.contains(month))
+            return new EncounterResult("FAILED", "The nests you find are cold and empty. Whatever was laid in them was laid in the spring and flew months ago.");
+        String taken = (String) nesting.get("taken");
+        if (!taken.isEmpty() && java.time.Duration.between(Instant.parse(taken), at).toDays() < CLUTCH_COSTS_DAYS)
+            return new EncounterResult("FAILED", "The nest is the one you emptied. It has not been sat on since, and nothing has been laid in it.");
+
+        int eggs = 2 + Math.floorMod(action.hashCode(), 3);
+        for (int i = 0; i < eggs; i++) items.createCarriedItem(chronicle, "bird_egg", "Bird Egg", at, "TAKEN_FROM_A_NEST");
+        jdbc.update("UPDATE wildlife_population SET clutch_taken_at=?, behavior_state='ALERT' WHERE id=?", Timestamp.from(at), nesting.get("id"));
+        String bird = display((String) nesting.get("species"));
+        return new EncounterResult("SUCCEEDED", "You find the nest low in the cover and lift " + eggs + " warm eggs out of it one at a time. "
+            + "The " + bird + " goes up off the water behind you and keeps calling, and goes on calling after you have walked away. "
+            + "There will be no young off this nest this year.");
+    }
+
     @Transactional
     public String raidUnprotectedStock(UUID chronicle, Instant at, boolean dark) {
         if (!dark) return null;

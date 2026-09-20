@@ -29,7 +29,13 @@ public class WildlifeSimulationService {
                 long intervals = Math.max(0, Duration.between(last, now).toHours() / intervalHours);
                 // Breed only from a living population (an extinct one does not spontaneously return — recolonisation
                 // is its own mechanic), and not on heavily disturbed ground (breeding sensitivity, #207/#209).
-                if (intervals > 0 && population > 0 && population < capacity && disturbance < 70) {
+                // A clutch taken is this year's young taken (#122): the birds stand where they stood, and what would
+                // have been added is not added. Read here rather than in the encounter, because the loss is a loss of
+                // breeding and this is where breeding happens.
+                boolean clutchTaken = Boolean.TRUE.equals(jdbc.queryForObject(
+                    "SELECT clutch_taken_at IS NOT NULL AND clutch_taken_at > ? FROM wildlife_population WHERE id=?",
+                    Boolean.class, Timestamp.from(now.minus(Duration.ofDays(WildlifeEncounterService.CLUTCH_COSTS_DAYS))), id));
+                if (intervals > 0 && population > 0 && population < capacity && disturbance < 70 && !clutchTaken) {
                     int next = Math.min(capacity, population + (int)Math.min(intervals, capacity - population));
                     jdbc.update("UPDATE wildlife_population SET population_count=?,last_simulated_at=? WHERE id=?", next, Timestamp.from(last.plus(Duration.ofHours(intervals * intervalHours))), id);
                 }
