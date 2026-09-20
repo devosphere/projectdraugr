@@ -63,7 +63,10 @@ public class RemainsService {
         for (Map<String, Object> person : jdbc.queryForList(
                 "SELECT n.object_id, n.role FROM native_individual n JOIN world_object w ON w.id=n.object_id " +
                 "WHERE n.community_id=? AND n.condition <> 'DEAD' AND n.life_stage <> 'CHILD' AND w.lifecycle_state='ACTIVE' " +
-                "AND NOT EXISTS (SELECT 1 FROM world_object o WHERE o.current_owner_id=n.object_id AND o.lifecycle_state='ACTIVE')", community)) {
+                "AND NOT EXISTS (SELECT 1 FROM world_object o WHERE o.current_owner_id=n.object_id AND o.lifecycle_state='ACTIVE') " +
+                // Someone away with a Chronicle (#113) is not at the isle to make one, and what they carry is their
+                // own business until they come home.
+                "AND NOT EXISTS (SELECT 1 FROM native_companionship c WHERE c.individual_id=n.object_id AND c.ended_at IS NULL)", community)) {
             String[] own = THEIR_OWN.getOrDefault((String) person.get("role"), new String[]{"bone_needle", "Bone needle"});
             items.createHeldItem((UUID) person.get("object_id"), own[0], own[1], day, "MADE_BY_THEIR_OWN_HANDS");
         }
