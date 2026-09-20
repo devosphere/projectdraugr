@@ -244,6 +244,40 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 
 #### Resume point
 
+> **▶ LATEST (2026-09-20): a people you can live beside.** Epic #109 went from a schema (V344/V345) to a
+> social world: the reedkin are placed, and everything a Chronicle can do with them is a physical act with a
+> record behind it.
+>
+> | slice | what it made possible |
+> |---|---|
+> | **V348** trade | Real objects both ways, valued as the isle values them. No currency, no refilling stock: a mat traded away is a mat they no longer have. |
+> | **#654** memory | Trespass, theft seen and unseen, threat, harm, murder, attempted restraint, and the four ways back: apology (once), restitution, returning goods, shared work. |
+> | **#662** fire and mending | A village can be burnt. They mend what is damaged with what the store holds, rebuild what is lost after three days, and a people on the move arrives on new ground of the same kind. |
+> | **V353** paid work | Days owed for a wage, the day's catch going into their store, the wage paid out of it — or owed until the store can pay. A promise broken is remembered. |
+> | **V354** companions | One of them walks with you, carries three days' food, eats it, goes home hungry or homesick. Each day together, you understand them one point better. |
+> | **V355** the candidate register | 28 candidates, six activation reviews each, and a trigger that refuses a community for any species whose candidacy is not ACTIVE. |
+> | **V356** who speaks | A tenure with a start and an end. A dead speaker leaves the office empty; after three days' mourning the eldest grown adult takes it; while it is empty, nothing is decided with outsiders. |
+> | **V357** a place among them | Membership is a share of a store that can run out, and one more mouth the isle has to feed. |
+> | **V358** what was theirs | Everyone grown owns the tool of their work, and still owns it when they are dead: their own bury them and gather it up, and taking it first is robbing the dead. |
+> | **V360** what they ask in return | A witnessed wrong is priced in goods. Paying it is the largest single step back there is; leaving it a month hardens it into a grievance. |
+> | **#669** news | What one isle saw, its kin isle is told, at half weight, once, and never enough to make them hostile — they were not the ones wronged. |
+>
+> **THE DEFECT CLASS THIS CYCLE KEPT FINDING IS STILL THE SAME ONE:** data declares a capability and code ignores
+> it. V344 gave every species `trade_eligible`, `agreement_eligible`, `companionship_eligible` and
+> `community_membership`, and being classified PEOPLE reached all four regardless. `Eligibility` now asks the
+> column at each door, and a test turns each off against a people who would otherwise say yes.
+>
+> **TWO TEST TRAPS WORTH KNOWING BEFORE WRITING ANOTHER ONE OF THESE:**
+> - **The isle's own day runs inside the action you are measuring.** They eat from the store and put the day's
+>   catch in it, so a before-and-after count of the store measures the day, not your act. Count what your act
+>   destroyed or moved (`destroyed_cause`, a transition type) instead.
+> - **What genesis put by has spoiled by the June these tests play in.** Dried fish keep 45 days. A fixture that
+>   needs edible food in a store must put fresh food there.
+>
+> **AND THE CI SHAPE:** the backend suite is most of an hour, several branches of a stacked chain are in flight
+> at once, and a rebase force-push used to leave its predecessor queued behind the new one. The workflow now
+> keeps one run per ref and cancels the superseded one.
+
 > **▶ LATEST (2026-09-12): the two systems husbandry was waiting on got built, and the biggest
 > declared-in-code seam yet — what every action does to the world — moved into data behind a gate.**
 >
