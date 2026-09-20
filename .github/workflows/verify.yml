@@ -105,7 +105,7 @@ jobs:
         working-directory: frontend
         # The rules a screenshot cannot see: which reply wins a race, whether a backdrop that will not decode is
         # ever painted, and whether someone who asked for reduced motion gets a fade anyway. Sub-second, no
-        # browser — the browser-driven half of #242 is still owed and is not this.
+        # browser — the browser-driven half of #242 is the journeys job below.
         run: npm test
       - name: Build frontend
         working-directory: frontend
@@ -133,3 +133,78 @@ jobs:
         # Measures the built artifact: what a player downloads before anything paints. Fails if a backdrop image or
         # the registry itself is bundled with the app, or if the initial payload grows past its budget.
         run: npm run backdrops:budget
+
+  journeys:
+    name: Journeys through the real stack (#242)
+    # The framing run above serves the build in prototype mode, with no backend at all. This job puts the whole stack
+    # together — PostgreSQL, the Spring backend booting and generating its world through Flyway, and the production
+    # build pointed at it — and walks through it in a browser: a player's step changes what the screen asks the server
+    # for, and a reload finds the same Chronicle on the same ground with the story so far.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: pw
+          POSTGRES_DB: draugr
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DRAUGR_DATABASE_URL: jdbc:postgresql://localhost:5432/draugr
+      DRAUGR_DATABASE_USERNAME: postgres
+      DRAUGR_DATABASE_PASSWORD: pw
+      # AI stays off: the master switch defaults off, and no key is present in CI. Said here so no one wonders.
+      DRAUGR_AI_ENABLED: 'false'
+      DRAUGR_E2E_API: http://localhost:8080
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Package the backend
+        working-directory: backend
+        run: mvn --batch-mode -DskipTests package
+      - name: Start the backend
+        working-directory: backend
+        # The preview origin is allowed by CORS through draugr.frontend-origin, exactly as the launcher allows the
+        # desktop shell's. Output goes to a file that is kept if the journey fails.
+        run: |
+          nohup java -Ddraugr.frontend-origin=http://localhost:4173 -jar target/draugr-server-*.jar > ../backend-journeys.log 2>&1 &
+          for i in $(seq 1 120); do
+            if curl -sf http://localhost:8080/api/health > /dev/null; then echo "backend up after ${i}x5s"; exit 0; fi
+            sleep 5
+          done
+          echo "backend did not come up"; tail -100 ../backend-journeys.log; exit 1
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Build the frontend against the backend
+        working-directory: frontend
+        run: VITE_DRAUGR_API_URL=http://localhost:8080 npm run build
+      - name: Install the test browser
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Walk, travel and resume in a real browser
+        working-directory: frontend
+        run: npx playwright test e2e/journeys.e2e.ts
+      - name: Keep the report and the backend log when a journey fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: journeys-report
+          path: |
+            frontend/playwright-report
+            backend-journeys.log
+          retention-days: 7
