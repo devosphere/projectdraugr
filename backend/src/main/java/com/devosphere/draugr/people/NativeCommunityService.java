@@ -44,10 +44,12 @@ public class NativeCommunityService {
     private final AudienceService audience;
     private final NewsService news;
     private final MembershipService members;
+    private final RemainsService remains;
 
     public NativeCommunityService(JdbcTemplate jdbc, PhysicalItemService items, TerritoryService territory, AgreementService agreements,
-                                  CompanionService companions, AudienceService audience, NewsService news, MembershipService members) {
+                                  CompanionService companions, AudienceService audience, NewsService news, MembershipService members, RemainsService remains) {
         this.news = news;
+        this.remains = remains;
         this.members = members;
         this.companions = companions;
         this.audience = audience;
@@ -263,6 +265,8 @@ public class NativeCommunityService {
         news.hear(community, day);
         // Who still has a place here (#113): a member they have stopped trusting is asked to go.
         members.keepOrAskToLeave(community, day);
+        // Their own: everyone grown keeps the tool of their work, their dead are buried, and what was theirs is gathered (#122).
+        remains.tendTheirOwn(community, day);
 
         boolean fed = eaten >= need;
         int nextShortage = fed ? 0 : shortage + 1;

@@ -36,7 +36,7 @@ import java.util.UUID;
 @Service
 public class ConductService {
 
-    public enum Act { THEFT, THREAT, HARM, RESTRAINT, APOLOGY, RESTITUTION, SHARED_LABOUR, DAMAGE }
+    public enum Act { THEFT, THREAT, HARM, RESTRAINT, APOLOGY, RESTITUTION, SHARED_LABOUR, DAMAGE, LOOT_THE_DEAD, BURY }
 
     private static final Map<String, Act> PHRASES = Map.ofEntries(
         Map.entry("steal from their store", Act.THEFT), Map.entry("steal from the store", Act.THEFT), Map.entry("take from their store", Act.THEFT),
@@ -60,6 +60,12 @@ public class ConductService {
         Map.entry("set fire to their", Act.DAMAGE), Map.entry("set fire to the village", Act.DAMAGE), Map.entry("set fire to the store", Act.DAMAGE), Map.entry("torch their", Act.DAMAGE),
         Map.entry("wreck their", Act.DAMAGE), Map.entry("tear down their", Act.DAMAGE), Map.entry("damage their", Act.DAMAGE),
         Map.entry("smash their", Act.DAMAGE),
+        Map.entry("take their belongings", Act.LOOT_THE_DEAD), Map.entry("loot the body", Act.LOOT_THE_DEAD),
+        Map.entry("strip the body", Act.LOOT_THE_DEAD), Map.entry("search the body", Act.LOOT_THE_DEAD),
+        Map.entry("rob the dead", Act.LOOT_THE_DEAD), Map.entry("take what the dead", Act.LOOT_THE_DEAD),
+        Map.entry("take their things", Act.LOOT_THE_DEAD), Map.entry("loot the dead", Act.LOOT_THE_DEAD),
+        Map.entry("bury them", Act.BURY), Map.entry("bury the body", Act.BURY), Map.entry("bury the dead", Act.BURY),
+        Map.entry("build a cairn", Act.BURY), Map.entry("raise a cairn", Act.BURY), Map.entry("lay them in the ground", Act.BURY),
         Map.entry("help them mend", Act.SHARED_LABOUR), Map.entry("help with their work", Act.SHARED_LABOUR), Map.entry("help them gather", Act.SHARED_LABOUR));
 
     /** Standing at or below which a community drives the Chronicle off by force rather than only warning them. */
@@ -199,6 +205,51 @@ public class ConductService {
                     ? "The thatch goes up with a roar. The whole isle comes running with water and with spears, and every face that turns to you knows what you did."
                     : "You tear at the wall until it gives. They are on you before you have finished, and drive you off the isle."};
             }
+            case LOOT_THE_DEAD -> {
+                // What a dead person owned is still theirs until their own people gather it (#122). Taking it is not
+                // a harvest and not a find: it is robbing the dead, and it is among the things a people never forgets.
+                List<Map<String, Object>> theirs = jdbc.queryForList(
+                    "SELECT o.id, o.display_name, n.given_name FROM world_object o JOIN native_individual n ON n.object_id=o.current_owner_id " +
+                    "WHERE n.community_id=? AND n.condition='DEAD' AND o.lifecycle_state='ACTIVE'", community);
+                if (theirs.isEmpty()) return new String[]{"FAILED", "There is nothing of their dead here to take. Whatever they owned, their own people have it."};
+                for (Map<String, Object> thing : theirs) {
+                    jdbc.update("UPDATE world_object SET current_owner_id=?, current_location_id=NULL, updated_at=now() WHERE id=?", chronicle, thing.get("id"));
+                    jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'ROBBED_FROM_THE_DEAD',jsonb_build_object('community',?::text))",
+                        thing.get("id"), Timestamp.from(at), community.toString());
+                }
+                String what = ((String) theirs.get(0).get("display_name")).toLowerCase(Locale.ROOT);
+                if (!watched) {
+                    event(community, chronicle, at, "GRAVE_ROBBING", Map.of("witnessed", false, "count", theirs.size()));
+                    event(community, null, at, "BELONGINGS_TAKEN", Map.of("count", theirs.size()));
+                    jdbc.update("UPDATE native_community SET security_posture='GUARDED' WHERE id=? AND security_posture IN ('AT_EASE','WARY')", community);
+                    return new String[]{"SUCCEEDED", "You take the " + what + " from where it lies with the dead, and no one sees you do it. It is still warm from nothing at all."};
+                }
+                offence(community, chronicle, at, "GRAVE_ROBBING", -60, "HOSTILE");
+                return new String[]{"PARTIAL", "You have the " + what + " in your hand when the first of them sees you. The sound they make is not a shout, "
+                    + "and the whole isle is coming, and none of them will ever look at you another way."};
+            }
+            case BURY -> {
+                Map<String, Object> lying = jdbc.queryForList(
+                    "SELECT n.object_id, n.given_name FROM native_individual n JOIN world_object w ON w.id=n.object_id " +
+                    "WHERE n.community_id=? AND n.condition='DEAD' AND w.lifecycle_state='ACTIVE' AND w.current_location_id=? LIMIT 1",
+                    community, chunk).stream().findFirst().orElse(null);
+                if (lying == null) return new String[]{"FAILED", "There is no one lying here to bury."};
+                jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED', destroyed_at=?, destroyed_location_id=?, destroyed_cause='BURIED', " +
+                    "current_location_id=NULL WHERE id=?", Timestamp.from(at), chunk, lying.get("object_id"));
+                jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'BURIED',jsonb_build_object('cause','by an outsider'))",
+                    lying.get("object_id"), Timestamp.from(at));
+                UUID grave = UUID.randomUUID();
+                jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'NATIVE_GRAVE',?,?)",
+                    grave, "The grave of " + lying.get("given_name"), chunk);
+                boolean killer = Boolean.TRUE.equals(jdbc.queryForObject(
+                    "SELECT EXISTS(SELECT 1 FROM native_event WHERE community_id=? AND subject_id=? AND event_kind='MURDER')", Boolean.class, community, chronicle));
+                jdbc.update("UPDATE community_relation SET standing=LEAST(100, standing + ?), last_event_kind='BURIED_BY_OUTSIDER', last_event_at=? " +
+                    "WHERE community_id=? AND chronicle_id=?", killer ? 10 : 5, Timestamp.from(at), community, chronicle);
+                event(community, chronicle, at, "BURIED_BY_OUTSIDER", Map.of("name", lying.get("given_name")));
+                return new String[]{"SUCCEEDED", "You open the ground and lay " + lying.get("given_name") + " in it, and put the earth back over them. "
+                    + (killer ? "It is not nothing. It is not much, either, and the ones watching from the water know exactly which it is."
+                              : "Someone watches from the water's edge the whole time and does not come nearer.")};
+            }
             case APOLOGY -> {
                 if (!outstanding(community, chronicle, at))
                     return record(community, chronicle, at, "APOLOGY", Map.of("accepted", false), 0, "PARTIAL",
@@ -300,7 +351,7 @@ public class ConductService {
     private boolean outstanding(UUID community, UUID chronicle, Instant at) {
         return Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM native_event WHERE community_id=? AND subject_id=? AND occurred_at > ? " +
-            "AND event_kind IN ('BOUNDARY_TRESPASS','PROPERTY_THEFT','FOOD_THEFT','INSULT_OR_THREAT','HARM_TO_INDIVIDUAL','MURDER','RESTRAINT_ATTEMPT','COMPENSATION_DEMANDED','WATER_FOULED','DAMAGE_TO_SETTLEMENT','FIRE_DAMAGE') " +
+            "AND event_kind IN ('BOUNDARY_TRESPASS','PROPERTY_THEFT','FOOD_THEFT','INSULT_OR_THREAT','HARM_TO_INDIVIDUAL','MURDER','RESTRAINT_ATTEMPT','COMPENSATION_DEMANDED','WATER_FOULED','DAMAGE_TO_SETTLEMENT','FIRE_DAMAGE','GRAVE_ROBBING') " +
             "AND COALESCE((payload->>'witnessed')::boolean, TRUE))",
             Boolean.class, community, chronicle, Timestamp.from(at.minus(Duration.ofDays(30)))));
     }
