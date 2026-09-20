@@ -130,6 +130,9 @@ class ACoatWorthKeepingIntegrationTest {
         assertEquals("FAILED", byHand.outcome(), byHand::perception);
         assertTrue(coat(sheep) <= matted, "nothing was put back by wishing");
 
+        // Clean ground from here on: the world's own turn adds to a beast standing in filth, and what is being
+        // measured below is what the comb did, not what the ground did.
+        jdbc.update("DELETE FROM chunk_refuse WHERE chunk_id=?", chunk);
         // With a comb it comes out, and the animal is better for it.
         items.createCarriedItem(chronicle, "bone_comb", "Bone comb", now, "TEST_FIXTURE");
         jdbc.update("UPDATE wildlife_bond SET sickness=20 WHERE id=?", sheep);
