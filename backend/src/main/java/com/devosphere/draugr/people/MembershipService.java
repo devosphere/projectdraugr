@@ -30,7 +30,7 @@ import java.util.UUID;
 @Service
 public class MembershipService {
 
-    public enum Act { ASK_TO_JOIN, TAKE_SHARE, LEAVE }
+    public enum Act { ASK_TO_JOIN, TAKE_SHARE, LEAVE, ASK_FOR_SHELTER }
 
     private static final Map<String, Act> PHRASES = Map.ofEntries(
         Map.entry("ask to join them", Act.ASK_TO_JOIN), Map.entry("ask to join the isle", Act.ASK_TO_JOIN),
@@ -39,11 +39,17 @@ public class MembershipService {
         Map.entry("ask for a place among them", Act.ASK_TO_JOIN), Map.entry("ask to join their people", Act.ASK_TO_JOIN),
         Map.entry("take my share", Act.TAKE_SHARE), Map.entry("take my share of the food", Act.TAKE_SHARE),
         Map.entry("draw my share", Act.TAKE_SHARE), Map.entry("eat with them", Act.TAKE_SHARE),
+        Map.entry("ask for shelter", Act.ASK_FOR_SHELTER), Map.entry("ask to stay the night", Act.ASK_FOR_SHELTER),
+        Map.entry("ask for a roof", Act.ASK_FOR_SHELTER), Map.entry("ask them for shelter", Act.ASK_FOR_SHELTER),
+        Map.entry("ask to shelter with them", Act.ASK_FOR_SHELTER), Map.entry("ask for a place to sleep", Act.ASK_FOR_SHELTER),
         Map.entry("ask to leave the settlement", Act.LEAVE), Map.entry("leave their settlement", Act.LEAVE),
         Map.entry("give up my place", Act.LEAVE), Map.entry("leave their people", Act.LEAVE));
 
     /** What it takes to be given a place: they must know you, trust you, and have known you a while. */
     static final int TRUST_TO_JOIN = 60, UNDERSTANDING_TO_JOIN = 70, KNOWN_FOR_DAYS = 20;
+    /** What a night under their roof takes, and how many nights a guest may have in ten days. */
+    static final int TRUST_FOR_A_ROOF = 10, UNDERSTOOD_FOR_A_ROOF = 20, NIGHTS_IN_TEN_DAYS = 3;
+
     /** Standing below which a member is asked to leave: what it took to join, halved. */
     static final int ASKED_TO_LEAVE_BELOW = 30;
 
@@ -75,6 +81,7 @@ public class MembershipService {
                 ? new String[]{"PARTIAL", "You have a place here already."}
                 : join(chronicle, chunk, community, at);
             case TAKE_SHARE -> share(chronicle, chunk, community, member, at);
+            case ASK_FOR_SHELTER -> shelter(chronicle, chunk, community, member, at);
             case LEAVE -> {
                 if (!member) yield new String[]{"FAILED", "You have no place here to give up."};
                 end(community, chronicle, at, "LEFT");
@@ -116,6 +123,38 @@ public class MembershipService {
         return new String[]{"SUCCEEDED", "The elders talk it over while you wait at the landing, and then the one who speaks for the isle comes down, "
             + "takes your hands and says the same word to you three times until you say it back. You have a place among the " + c.get("name")
             + " kin: their food is yours while there is food, and their work is yours while there is work."};
+    }
+
+    /**
+     * A night under their roof (#113). A people who know you and are not shut up will put you under cover until the
+     * next night — which is a real thing, because sleeping in the weather is a real cost. Three nights in ten is
+     * hospitality; more than that is living here, and living here is asked for differently.
+     */
+    private String[] shelter(UUID chronicle, UUID chunk, UUID community, boolean member, Instant at) {
+        if (member) return new String[]{"SUCCEEDED", "You have a place here. No one has to be asked."};
+        Map<String, Object> c = jdbc.queryForMap("SELECT home_chunk_id, lifecycle, trade_policy, name FROM native_community WHERE id=?", community);
+        Map<String, Object> r = jdbc.queryForList(
+            "SELECT standing, understanding, first_contact_at FROM community_relation WHERE community_id=? AND chronicle_id=?",
+            community, chronicle).stream().findFirst().orElse(Map.of("standing", 0, "understanding", 0));
+        int standing = ((Number) r.get("standing")).intValue(), understanding = ((Number) r.get("understanding")).intValue();
+        int nights = jdbc.queryForObject("SELECT COUNT(*) FROM native_guest_right WHERE community_id=? AND chronicle_id=? AND granted_at > ?",
+            Integer.class, community, chronicle, Timestamp.from(at.minus(Duration.ofDays(10))));
+        String refusal = !chunk.equals(c.get("home_chunk_id")) ? "Their houses are on the isle. You would have to be standing among them to ask."
+            : r.get("first_contact_at") == null ? "They do not know you. No one opens a door to that."
+            : understanding < UNDERSTOOD_FOR_A_ROOF ? "You point at the sky and at their houses. They watch you do it, and nothing comes of it."
+            : standing < TRUST_FOR_A_ROOF ? "They hear you, and they look at each other, and nobody moves toward a door."
+            : !"SETTLED".equals(c.get("lifecycle")) || "CLOSED".equals(c.get("trade_policy"))
+                ? "The isle is shut. Whatever they would do for you in another month, tonight there is no door open."
+            : nights >= NIGHTS_IN_TEN_DAYS ? "They have put a roof over you three times already this half-month. This time nobody stands aside from the doorway."
+            : AudienceService.withoutASpeaker(jdbc, community);
+        if (refusal != null) { event(community, chronicle, at, "SHELTER_REFUSED"); return new String[]{"PARTIAL", refusal}; }
+
+        Timestamp until = Timestamp.from(at.plus(Duration.ofHours(WELCOME_HOURS)));
+        jdbc.update("INSERT INTO native_guest_right (community_id, chronicle_id, granted_at, welcome_until) VALUES (?,?,?,?)",
+            community, chronicle, Timestamp.from(at), until);
+        event(community, chronicle, at, "SHELTERED_A_STRANGER");
+        return new String[]{"SUCCEEDED", "Someone stands out of a doorway and tilts their head at the dark inside. The floor is dry reed, the roof holds, "
+            + "and the smell is fish and smoke. It is theirs, and it is yours until tomorrow night."};
     }
 
     private String[] share(UUID chronicle, UUID chunk, UUID community, boolean member, Instant at) {
@@ -164,6 +203,9 @@ public class MembershipService {
             Timestamp.from(at), reason, community, chronicle);
         event(community, chronicle, at, reason);
     }
+
+    /** How long a night's welcome runs: this night and the day after it, and no longer. */
+    static final int WELCOME_HOURS = 30;
 
     private UUID store(UUID community) {
         return jdbc.query("SELECT s.object_id FROM native_settlement_site s JOIN world_object w ON w.id=s.object_id " +
