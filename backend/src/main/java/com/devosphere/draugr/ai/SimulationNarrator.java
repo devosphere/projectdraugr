@@ -4,6 +4,8 @@ import com.devosphere.draugr.action.ChronicleActionService.PerceptionFrame;
 import com.devosphere.draugr.action.ChronicleActionService.StateChange;
 import org.springframework.stereotype.Component;
 
+import java.util.Locale;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -36,10 +38,17 @@ public class SimulationNarrator {
 
     private final LanguageModel model;
     private final AiProperties props;
+    private final java.util.function.Supplier<Set<String>> worldNames;
 
-    public SimulationNarrator(LanguageModel model, AiProperties props) {
+    public SimulationNarrator(LanguageModel model, AiProperties props, WorldVocabulary vocabulary) {
+        this(model, props, vocabulary == null ? Set::<String>of : vocabulary::names);
+    }
+
+    /** For tests and for any caller that knows the world's names by other means. */
+    public SimulationNarrator(LanguageModel model, AiProperties props, java.util.function.Supplier<Set<String>> worldNames) {
         this.model = model;
         this.props = props;
+        this.worldNames = worldNames == null ? Set::of : worldNames;
     }
 
     /** The model id the narrator refines with — recorded on the narration overlay so a later review can judge quality per model. */
@@ -61,8 +70,29 @@ public class SimulationNarrator {
         return model.generate(props.getNarrationModel(), SYSTEM, user)
                 .map(String::trim)
                 .filter(extra -> !extra.isBlank())
+                .filter(extra -> !claimsWhatIsNotThere(extra, frame, backendNarration))
                 .map(extra -> backendNarration + " " + extra)
                 .orElse(backendNarration);
+    }
+
+    /**
+     * Whether the sentence names a thing of the world that this moment's receipt — the deterministic prose and the
+     * frame it was resolved from — does not contain (#37). The narrator's brief says not to invent objects; this is
+     * what holds it to that, because a sentence that puts a knife in a Chronicle's hand, or a wolf on the ridge,
+     * is a claim about the world state and not atmosphere. Anything the receipt does name may be named again.
+     */
+    boolean claimsWhatIsNotThere(String extra, PerceptionFrame frame, String backendNarration) {
+        Set<String> world = worldNames.get();
+        if (world.isEmpty()) return false;
+        String said = extra.toLowerCase(Locale.ROOT);
+        StringBuilder receipt = new StringBuilder(backendNarration.toLowerCase(Locale.ROOT));
+        if (frame.nearbyObjects() != null) frame.nearbyObjects().forEach(o -> receipt.append(' ').append(o.toLowerCase(Locale.ROOT)));
+        if (frame.location() != null && frame.location().biome() != null) receipt.append(' ').append(frame.location().biome().toLowerCase(Locale.ROOT));
+        if (frame.sinceLastFrame() != null) frame.sinceLastFrame().forEach(c -> receipt.append(' ').append(describeChange(c).toLowerCase(Locale.ROOT)));
+        String known = receipt.toString();
+        for (String name : world)
+            if (said.contains(name) && !known.contains(name)) return true;
+        return false;
     }
 
     private String buildUser(PerceptionFrame frame, String backendNarration) {

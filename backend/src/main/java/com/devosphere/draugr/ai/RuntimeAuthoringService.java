@@ -72,18 +72,37 @@ public class RuntimeAuthoringService {
         return physics.passed() ? gate.categoryAgreement(draft) : physics;
     }
 
-    /** Run an ordered plan of existing process keys; null if empty/first-step-fails, else the last result. */
-    private String[] runPlan(UUID chronicle, UUID location, List<String> plan, String text, Instant at) {
+    /**
+     * Run an ordered plan of existing process keys; null if empty/first-step-fails, else the last result.
+     *
+     * <p>Every candidate gets a verdict with a reason code, written to {@code ai_procedure_receipt} (#37): the
+     * boundary between what was proposed and what the world allowed is a record, not an inference from prose. The
+     * deterministic side decides; this only says what it decided, and why.
+     */
+    private String[] runPlan(UUID chronicle, UUID location, ProcedureInterpreter.Plan plan, String text, Instant at) {
         if (plan == null || plan.isEmpty()) return null;
         String[] last = null;
         boolean anySucceeded = false;
-        for (String key : plan) {
-            if (!items.processExists(key)) return anySucceeded ? last : null;
+        int step = 0;
+        for (String key : plan.keys()) {
+            step++;
+            if (!items.processExists(key)) {
+                receipt(chronicle, text, key, step, "REJECTED", "NO_SUCH_PROCESS", plan.confidence(), at);
+                return anySucceeded ? last : null;
+            }
             last = items.executeProcess(chronicle, location, key, text, at);
-            if ("SUCCEEDED".equals(last[0])) anySucceeded = true;
+            boolean ran = "SUCCEEDED".equals(last[0]);
+            receipt(chronicle, text, key, step, ran ? "ACCEPTED" : "REJECTED", ran ? "RAN" : "REFUSED_BY_THE_WORLD",
+                plan.confidence(), at);
+            if (ran) anySucceeded = true;
             else return anySucceeded ? last : null;
         }
         return last;
+    }
+
+    private void receipt(UUID chronicle, String text, String key, int step, String verdict, String reason, int confidence, Instant at) {
+        jdbc.update("INSERT INTO ai_procedure_receipt (chronicle_id, action_text, candidate_key, step_index, verdict, reason_code, confidence, occurred_at) " +
+            "VALUES (?,?,?,?,?,?,?,?)", chronicle, text, key, step, verdict, reason, confidence, java.sql.Timestamp.from(at));
     }
 
     private Optional<String[]> author(UUID chronicle, UUID location, String text, List<String> inventory, Instant at) {
