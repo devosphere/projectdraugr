@@ -825,7 +825,7 @@ public class WildlifeEncounterService {
         // The clock is per product, so this joins tamed_production on the bond AND the item.
         java.util.Map<String,Object> ready = jdbc.query(
             "SELECT wb.id, wp.species_key, ty.item_key, ty.interval_hours, tp.last_yielded_at, d.display_name, " +
-            "       wp.population_count, in_season(ty.available_months) " +
+            "       wp.population_count, in_season(ty.available_months), wb.coat_condition " +
             "FROM wildlife_bond wb " +
             "JOIN wildlife_population wp ON wp.id = wb.population_id " +
             "JOIN tamed_yield ty ON ty.species_key = wp.species_key AND ty.yield_kind = ? " +
@@ -845,7 +845,8 @@ public class WildlifeEncounterService {
                     "last", rs.getTimestamp(5) == null ? "" : rs.getTimestamp(5).toInstant().toString(),
                     "display", rs.getString(6),
                     "herd", rs.getInt(7),
-                    "inSeason", rs.getBoolean(8)) : null, wanted, chronicle);
+                    "inSeason", rs.getBoolean(8),
+                    "coat", rs.getInt(9)) : null, wanted, chronicle);
 
         if (ready == null) return new EncounterResult("FAILED", switch (wanted) {
             case "MILK" -> "You have nothing tamed here that gives milk — a goat or a cow must be won over first, and won over properly.";
@@ -860,6 +861,12 @@ public class WildlifeEncounterService {
             case "WOOL" -> "The fleece is holding fast. It loosens when the animal moults in late spring, and there is nothing to pluck before then.";
             default     -> "The nests are bare, and not because anyone took from them. The birds have stopped laying for the season.";
         });
+
+        // A fleece off a matted, verminous animal is not a fleece (#106): it comes away in filthy clumps, and
+        // what a keeper wants is the comb, not the shears.
+        if ("WOOL".equals(wanted) && (Integer) ready.get("coat") < com.devosphere.draugr.item.PhysicalItemService.COAT_IS_MATTED)
+            return new EncounterResult("FAILED", "The fleece is matted into the dirt and crawling with vermin. What came away in your hand is not wool, "
+                + "and nothing worth keeping will come off this animal until the coat has been combed out.");
 
         String last = (String) ready.get("last");
         if (!last.isEmpty()) {
