@@ -52,6 +52,7 @@ INSERT INTO native_candidate (candidate_key, display_name, proposed_tier, propos
 ('orc_clans',           'Orc clans',             'III', 'PEOPLE',    'GRASSLAND, HIGHLAND', 'clan holds', 'Defined in #119.'),
 ('goblin_bands',        'Goblin bands',          'IIb', 'PEOPLE',    'GRASSLAND, TEMPERATE_FOREST', 'band camps', 'Defined in #119.'),
 ('minotaur_homesteads', 'Minotaur homesteads',   'III', 'PEOPLE',    'GRASSLAND, ruin edge', 'homesteads with grazing, farming and storage', 'Large-bodied; no automatic maze or dungeon trope.'),
+('ogre_lineages',       'Ogre lineages',         'IIb', 'PEOPLE',    'TEMPERATE_FOREST and MOUNTAIN edge', 'a family homestead sized for the bodies that eat from it', 'Defined in #119. Solitary or family-based; an enormous appetite is why there is never a village of them. Never a pack animal and never a material source while living.'),
 ('griffin_prides',      'Griffin prides',        'II',  'SOCIAL',    'HIGHLAND, GRASSLAND', 'coordinated nesting grounds', 'Group hunters; no default trade or personhood.'),
 ('basilisk',            'Basilisk',              'I',   'PRIMAL',    'rocky scrub', 'ambush ground', 'Rare; sight, venom and territory physically bounded; no arbitrary petrification.'),
 -- Wetland, river, lake and warm slope.
