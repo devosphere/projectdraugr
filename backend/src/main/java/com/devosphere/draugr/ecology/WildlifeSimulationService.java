@@ -59,10 +59,15 @@ public class WildlifeSimulationService {
         // long as it lasts the pack takes no stock and lies in wait for nobody — the loss is felt in the world and
         // not only in a column. After LEADERLESS_DAYS another animal comes to the front of it and the mark is
         // cleared: not a replacement spawned, just a group that is a group again.
-        jdbc.update("UPDATE wildlife_population SET behavior_state='SCATTERED' WHERE leader_lost_at IS NOT NULL " +
-            "AND leader_lost_at > ? AND population_count > 0", Timestamp.from(now.minus(Duration.ofDays(LEADERLESS_DAYS))));
-        jdbc.update("UPDATE wildlife_population SET leader_lost_at=NULL WHERE leader_lost_at IS NOT NULL AND leader_lost_at <= ?",
-            Timestamp.from(now.minus(Duration.ofDays(LEADERLESS_DAYS))));
+        // One statement, so a group cannot be scattered and re-formed by two passes racing each other: while the
+        // mark stands the group is scattered, and the moment it is old enough the mark goes and the group is ALERT
+        // again — wary, together, and back in the rules it was out of.
+        Timestamp longEnough = Timestamp.from(now.minus(Duration.ofDays(LEADERLESS_DAYS)));
+        jdbc.update("UPDATE wildlife_population SET " +
+            "  behavior_state = CASE WHEN leader_lost_at > ? THEN 'SCATTERED' ELSE 'ALERT' END, " +
+            "  leader_lost_at = CASE WHEN leader_lost_at > ? THEN leader_lost_at ELSE NULL END " +
+            "WHERE leader_lost_at IS NOT NULL AND population_count > 0", longEnough, longEnough);
+        jdbc.update("UPDATE wildlife_population SET leader_lost_at=NULL WHERE leader_lost_at IS NOT NULL AND population_count = 0");
 
         // A monster that never rests (#86). monster_profile.special_mechanic has carried ALWAYS_HUNTING since the
         // catalogue was written and nothing read it, so the dire wolf that is supposed to be a standing danger
