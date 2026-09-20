@@ -135,7 +135,11 @@ public class AgreementService {
             : "MOVING".equals(c.get("lifecycle")) || store == null ? "There is no store here to pay a wage from, and no one to take you on."
             : standing < 0 ? "They look at you, and at each other, and no one steps forward. They do not want your hands on their work."
             : understanding < 30 ? "You mime hauling nets and point to their store. They watch politely, but what you mean does not reach them yet."
-            : AudienceService.withoutASpeaker(jdbc, community);
+            : Eligibility.firstOf(
+                Eligibility.refusal(jdbc, community, Eligibility.AGREEMENT,
+                    "They do not bind themselves to outsiders, nor outsiders to them. Whatever you are offering, it is not a thing they do."),
+                Eligibility.refusal(jdbc, community, Eligibility.WORKING, "They do not take anyone on to work beside them."),
+                AudienceService.withoutASpeaker(jdbc, community));
         if (refusal != null) { event(community, chronicle, at, "WORK_REFUSED", 0); return new String[]{"PARTIAL", refusal}; }
 
         String v = " " + text.toLowerCase(Locale.ROOT).replaceAll("[^a-z' ]", " ").replaceAll("\\s+", " ").trim() + " ";

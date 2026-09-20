@@ -111,7 +111,10 @@ public class TradeService {
             : standing < ("OPEN".equals(c.get("base_trade_policy")) ? 0 : 10) ? "They watch you from the landing and make no move to bring anything down. They do not trust you enough for that yet."
             : understanding < 20 ? "They bring nothing down. Whatever you are asking, it has not yet reached them as a wish to trade."
             // No one decides for the isle while its speaker's office is empty (#121).
-            : AudienceService.withoutASpeaker(jdbc, community);
+            : Eligibility.firstOf(
+                Eligibility.refusal(jdbc, community, Eligibility.TRADE,
+                    "They will not barter. Goods pass among their own and not across to outsiders, and no gesture of yours changes that."),
+                AudienceService.withoutASpeaker(jdbc, community));
         if (refusal != null && act != Act.RETURN_GOODS) return record(community, chronicle, act, at, "REFUSED", 0, "PARTIAL", refusal);
 
         switch (act) {

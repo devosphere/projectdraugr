@@ -98,7 +98,10 @@ public class MembershipService {
             "(SELECT staple_item_key FROM native_community WHERE id=?)", Integer.class, store, community);
         String refusal = !chunk.equals(c.get("home_chunk_id")) ? "This is a thing to ask on the isle, standing among them."
             : met == null ? "They have never spoken with you. There is nothing to ask yet."
-            : AudienceService.withoutASpeaker(jdbc, community);
+            : Eligibility.firstOf(
+                Eligibility.refusal(jdbc, community, Eligibility.MEMBERSHIP,
+                    "There is no place here to be given. What they are is a thing you are born into, and it has no door in it for anyone else."),
+                AudienceService.withoutASpeaker(jdbc, community));
         if (refusal == null)
             refusal = understanding < UNDERSTANDING_TO_JOIN ? "You ask as well as you can. They understand that you want something, and not what."
                 : Duration.between(met.toInstant(), at).toDays() < KNOWN_FOR_DAYS ? "They hear you out, and the elder shakes their head slowly. They have not known you long enough for this."
