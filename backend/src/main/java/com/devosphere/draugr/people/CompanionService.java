@@ -106,7 +106,7 @@ public class CompanionService {
         Map<String, Object> who = willing(community, text);
         if (who == null) {
             event(community, chronicle, at, "COMPANIONSHIP_REFUSED", null);
-            return new String[]{"PARTIAL", "Those you might ask are needed here: no one who can be spared steps forward."};
+            return new String[]{"PARTIAL", "Every hand on the isle is at the nets or the weirs. Nobody steps forward."};
         }
         UUID person = (UUID) who.get("object_id");
         for (UUID fish : held(store, staple).subList(0, PROVISIONS)) {
