@@ -12,6 +12,14 @@ on:
 permissions:
   contents: read
 
+# One run per branch at a time. Several branches of one stacked chain are usually in flight together, and every
+# force-push to a rebase left its predecessor queued behind the new one: the backend suite takes most of an hour,
+# so a superseded run is most of an hour of queue nobody will read. The newest push for a ref is the only one
+# whose answer is wanted.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     name: Backend and PostgreSQL persistence tests
