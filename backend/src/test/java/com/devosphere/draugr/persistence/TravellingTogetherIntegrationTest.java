@@ -3,6 +3,7 @@ package com.devosphere.draugr.persistence;
 import com.devosphere.draugr.action.ChronicleActionService;
 import com.devosphere.draugr.audit.PersistentStateAuditor;
 import com.devosphere.draugr.chronicle.ChronicleService;
+import com.devosphere.draugr.item.PhysicalItemService;
 import com.devosphere.draugr.people.NativeCommunityService;
 import com.devosphere.draugr.world.genesis.WorldEcologyGenesisService;
 import com.devosphere.draugr.world.genesis.WorldGenesisService;
@@ -65,6 +66,7 @@ class TravellingTogetherIntegrationTest {
     @Autowired ChronicleService chronicles;
     @Autowired ChronicleActionService actions;
     @Autowired NativeCommunityService natives;
+    @Autowired PhysicalItemService items;
     @Autowired PersistentStateAuditor auditor;
     @Autowired JdbcTemplate jdbc;
 
@@ -114,6 +116,10 @@ class TravellingTogetherIntegrationTest {
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", isle, chronicle);
         UUID store = jdbc.queryForObject("SELECT s.object_id FROM native_settlement_site s JOIN world_object w ON w.id=s.object_id " +
             "WHERE s.community_id=? AND s.holds_stores AND w.lifecycle_state='ACTIVE'", UUID.class, community);
+
+        // Fresh food in the store: what was put by at genesis has had a season to spoil, and provisions must be
+        // food someone can actually eat on the way.
+        for (int i = 0; i < 8; i++) items.createHeldItem(store, "dried_fish", "Dried fish", Instant.parse("2031-06-10T06:00:00Z"), "GATHERED_BY_COMMUNITY");
 
         // Not yet understood well enough to be asked.
         var early = actions.resolve("ask them to travel with me");
