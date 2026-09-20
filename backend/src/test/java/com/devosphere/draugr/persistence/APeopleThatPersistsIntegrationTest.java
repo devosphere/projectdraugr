@@ -113,6 +113,11 @@ class APeopleThatPersistsIntegrationTest {
             "tool_culture=TRUE, individual_identity=TRUE, kinship_model='KIN_GROUP', community_membership=TRUE, moral_agency=TRUE, " +
             "trade_eligible=TRUE, agreement_eligible=TRUE, settlement_capable=TRUE, restraint_prohibited=TRUE, " +
             "domestication_prohibited=TRUE, remains_protected=TRUE, social_risk_profile='COMMUNITY_RETALIATION' WHERE species_key=?", PEOPLE);
+        // And declares their candidacy passed for the same duration (#120): a community may only be founded for an
+        // ACTIVE candidate, which is the point of the register. Restored with the profile below.
+        jdbc.update("UPDATE native_candidate SET status='ACTIVE', species_key=?, activated_in='TEST', tier_and_interactions=TRUE, " +
+            "ecology=TRUE, body_and_materials=TRUE, home_and_footprint=TRUE, social_rules=TRUE, actions_and_tests=TRUE " +
+            "WHERE candidate_key='harpy_aerie_clans'", PEOPLE);
         UUID community = UUID.randomUUID();
         try {
             jdbc.update("INSERT INTO native_community (id,world_id,species_key,name,home_chunk_id,governance,base_trade_policy,trade_policy," +
@@ -169,6 +174,9 @@ class APeopleThatPersistsIntegrationTest {
                 "a community's history cannot be edited");
         } finally {
             jdbc.update("UPDATE native_community SET lifecycle='DISPERSED' WHERE id=?", community);
+            jdbc.update("UPDATE native_candidate SET status='CANDIDATE', species_key=NULL, activated_in=NULL, tier_and_interactions=FALSE, " +
+                "ecology=FALSE, body_and_materials=FALSE, home_and_footprint=FALSE, social_rules=FALSE, actions_and_tests=FALSE " +
+                "WHERE candidate_key='harpy_aerie_clans'");
             jdbc.update("UPDATE cognition_profile SET cognition_class=?, communication_mode=?, symbolic_language=?, tool_culture=?, " +
                 "individual_identity=?, kinship_model=?, community_membership=?, moral_agency=?, trade_eligible=?, agreement_eligible=?, " +
                 "settlement_capable=?, restraint_prohibited=?, domestication_prohibited=?, remains_protected=?, social_risk_profile=? WHERE species_key=?",
