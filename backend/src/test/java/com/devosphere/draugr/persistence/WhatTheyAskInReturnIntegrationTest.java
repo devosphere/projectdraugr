@@ -122,8 +122,8 @@ class WhatTheyAskInReturnIntegrationTest {
         assertEquals("SUCCEEDED", asked.outcome(), asked::perception);
         assertTrue(asked.perception().contains(String.valueOf(price)), asked::perception);
 
-        // Part payment is part paid: one thing of small worth, and the claim stands.
-        items.createCarriedItem(chronicle, "fiber_cordage", "Fibre cordage", Instant.parse("2031-06-10T12:00:00Z"), "TEST_FIXTURE");
+        // Part payment is part paid: what is in hand is the three fish just taken from them, and three fish do
+        // not answer a food theft.
         int before = standing(community, chronicle);
         var part = actions.resolve("pay compensation");
         assertEquals("PARTIAL", part.outcome(), part::perception);
