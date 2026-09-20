@@ -333,6 +333,10 @@ public class NativeCommunityService {
                 "SELECT MAX(w.destroyed_at) FROM native_settlement_site s JOIN world_object w ON w.id=s.object_id WHERE s.community_id=? AND s.site_kind=?",
                 rs -> rs.next() ? rs.getTimestamp(1) : null, community, kind);
             if (lost == null || lost.toInstant().isAfter(day.minus(Duration.ofDays(REBUILD_AFTER_DAYS)))) continue;
+            // The one that burned is no longer the store, whatever its row still says: the index that keeps one
+            // store to a community counts rows, not standing buildings.
+            jdbc.update("UPDATE native_settlement_site s SET holds_stores=FALSE FROM world_object w " +
+                "WHERE w.id=s.object_id AND s.community_id=? AND s.holds_stores AND w.lifecycle_state='DESTROYED'", community);
             String name = c.get("name") + ("STORE_HOUSE".equals(kind) ? " store house" : " village");
             UUID raised = place("NATIVE_SITE", name, home);
             jdbc.update("INSERT INTO native_settlement_site (object_id,community_id,site_kind,access_rule,holds_stores,condition_percent) VALUES (?,?,?,'INVITED',?,60)",
