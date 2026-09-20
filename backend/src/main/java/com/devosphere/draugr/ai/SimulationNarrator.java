@@ -40,6 +40,7 @@ public class SimulationNarrator {
     private final AiProperties props;
     private final java.util.function.Supplier<Set<String>> worldNames;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public SimulationNarrator(LanguageModel model, AiProperties props, WorldVocabulary vocabulary) {
         this(model, props, vocabulary == null ? Set::<String>of : vocabulary::names);
     }
