@@ -75,9 +75,11 @@ public class ConductService {
     private final ChroniclePhysiologyService physiology;
     private final com.devosphere.draugr.item.PhysicalItemService items;
     private final MembershipService members;
+    private final ClaimService claims;
 
-    public ConductService(JdbcTemplate jdbc, ChroniclePhysiologyService physiology, com.devosphere.draugr.item.PhysicalItemService items, MembershipService members) {
+    public ConductService(JdbcTemplate jdbc, ChroniclePhysiologyService physiology, com.devosphere.draugr.item.PhysicalItemService items, MembershipService members, ClaimService claims) {
         this.members = members;
+        this.claims = claims;
         this.jdbc = jdbc;
         this.physiology = physiology;
         this.items = items;
@@ -340,6 +342,8 @@ public class ConductService {
         jdbc.update("UPDATE community_relation SET standing=GREATEST(-100, LEAST(100, standing + ?)), last_event_kind=?, last_event_at=? " +
             "WHERE community_id=? AND chronicle_id=?", standingDelta, kind, Timestamp.from(at), community, chronicle);
         event(community, chronicle, at, kind, Map.of("witnessed", true));
+        // What would put it right, said at the time (#211): a wrong they saw is a wrong they price.
+        claims.demand(community, chronicle, kind, at);
         int standing = jdbc.queryForObject("SELECT standing FROM community_relation WHERE community_id=? AND chronicle_id=?", Integer.class, community, chronicle);
         String to = "HOSTILE".equals(posture) || standing <= -30 ? "HOSTILE" : "GUARDED";
         if ("HOSTILE_IF_LOW".equals(posture) && standing > -30) to = "GUARDED";
