@@ -68,8 +68,10 @@ public class ConductService {
     private final JdbcTemplate jdbc;
     private final ChroniclePhysiologyService physiology;
     private final com.devosphere.draugr.item.PhysicalItemService items;
+    private final MembershipService members;
 
-    public ConductService(JdbcTemplate jdbc, ChroniclePhysiologyService physiology, com.devosphere.draugr.item.PhysicalItemService items) {
+    public ConductService(JdbcTemplate jdbc, ChroniclePhysiologyService physiology, com.devosphere.draugr.item.PhysicalItemService items, MembershipService members) {
+        this.members = members;
         this.jdbc = jdbc;
         this.physiology = physiology;
         this.items = items;
@@ -269,7 +271,8 @@ public class ConductService {
         boolean permitted = Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM native_event WHERE community_id=? AND subject_id=? AND payload->>'response'='PERMITTED')",
             Boolean.class, community, chronicle));
-        if (permitted || dark) return null;
+        // Someone with a place among them is not a stranger walking in (#113).
+        if (permitted || dark || members.belongs(community, chronicle)) return null;
         offence(community, chronicle, at, "BOUNDARY_TRESPASS", -10, "GUARDED");
         return r.get("first_contact_at") == null
             ? "Figures rise from the work at the water's edge as you come up onto the raised ground, and a shout goes from house to house. You were not asked here."

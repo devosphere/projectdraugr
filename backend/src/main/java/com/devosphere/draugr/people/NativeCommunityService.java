@@ -43,10 +43,12 @@ public class NativeCommunityService {
     private final CompanionService companions;
     private final AudienceService audience;
     private final NewsService news;
+    private final MembershipService members;
 
     public NativeCommunityService(JdbcTemplate jdbc, PhysicalItemService items, TerritoryService territory, AgreementService agreements,
-                                  CompanionService companions, AudienceService audience, NewsService news) {
+                                  CompanionService companions, AudienceService audience, NewsService news, MembershipService members) {
         this.news = news;
+        this.members = members;
         this.companions = companions;
         this.audience = audience;
         this.jdbc = jdbc;
@@ -234,7 +236,8 @@ public class NativeCommunityService {
         // eaten; it is thrown out, which is what a store-keeper does and what keeps the store honest.
         int eaters = count("SELECT COUNT(*) FROM native_individual n JOIN world_object w ON w.id=n.object_id " +
             "WHERE n.community_id=? AND n.condition <> 'DEAD' AND w.lifecycle_state='ACTIVE' AND NOT EXISTS (SELECT 1 FROM native_companionship cp WHERE cp.individual_id=n.object_id AND cp.ended_at IS NULL)", community);
-        int need = eaters * ration;
+        // A Chronicle with a place here eats from this store too (#113), and only while they are on the isle.
+        int need = (eaters + members.mouthsAtHome(community)) * ration;
         int eaten = 0;
         if (store != null) {
             for (UUID spoiled : jdbc.queryForList(
@@ -258,6 +261,8 @@ public class NativeCommunityService {
         agreements.reckon(community, day);
         // What their kin at the other isle saw a Chronicle do, told here once it has had time to travel (#114).
         news.hear(community, day);
+        // Who still has a place here (#113): a member they have stopped trusting is asked to go.
+        members.keepOrAskToLeave(community, day);
 
         boolean fed = eaten >= need;
         int nextShortage = fed ? 0 : shortage + 1;
