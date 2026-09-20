@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.sql.Timestamp;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -552,6 +553,17 @@ public class PhysicalItemService {
         jdbc.update("DELETE FROM tamed_young WHERE matures_at <= ?", ts);
     }
 
+    /** What a day does to a coat nobody touches, and what it does to one standing in its own filth (#106). */
+    public static final int COAT_WEARS = 2, COAT_WEARS_IN_FILTH = 7;
+    /** Below this a coat is matted and verminous: it makes an animal ill, and its fleece is not worth taking. */
+    public static final int COAT_IS_MATTED = 40;
+    /** What one working-over with a comb puts back, and what it takes out of an animal's sickness. */
+    public static final int GROOMING_PUTS_BACK = 30, GROOMING_RELIEF = 2;
+    /** A coat already this good has nothing in it worth a Chronicle's half-hour. */
+    private static final int COAT_IS_CLEAN = 95;
+    /** What a comb is: anything in the catalogue that is made for combing out a coat. */
+    private static final String[] COMBS = {"bone_comb", "wooden_comb", "antler_comb"};
+
     /** What tending a beast with a herbal remedy takes out of its sickness. */
     private static final int TENDING_RELIEF = 35;
 
@@ -766,12 +778,16 @@ public class PhysicalItemService {
             "          AND sw.lifecycle_state='ACTIVE' AND sw.current_location_id = cw.current_location_id)";
 
         // Standing in filth makes an animal ill; clean ground lets it mend. One statement so a beast cannot both
-        // sicken and recover in the same turn.
+        // sicken and recover in the same turn. A matted coat is its own small illness and adds to it (#106).
         jdbc.update(
             "UPDATE wildlife_bond wb SET sickness = CASE WHEN " + groundIsFoul +
-            "    THEN LEAST(100, wb.sickness + ?) ELSE GREATEST(0, wb.sickness - ?) END " +
+            "    THEN LEAST(100, wb.sickness + ? + CASE WHEN wb.coat_condition < ? THEN ? ELSE 0 END) " +
+            "    ELSE GREATEST(0, wb.sickness - ? + CASE WHEN wb.coat_condition < ? THEN ? ELSE 0 END) END, " +
+            "  coat_condition = GREATEST(0, wb.coat_condition - CASE WHEN " + groundIsFoul + " THEN ? ELSE ? END) " +
             "FROM world_object cw WHERE cw.id = wb.chronicle_id AND wb.bond_stage = 'TAMED'",
-            FOUL_GROUND_SICKENS, SICKNESS_PER_TURN, SICKNESS_RECOVERY);
+            FOUL_GROUND_SICKENS, SICKNESS_PER_TURN, COAT_IS_MATTED, MATTED_COAT_SICKENS,
+            SICKNESS_RECOVERY, COAT_IS_MATTED, MATTED_COAT_SICKENS,
+            FOUL_GROUND_SICKENS, COAT_WEARS_IN_FILTH, COAT_WEARS);
 
         // And it runs through the rest of the keeper's stock of the same kind — unless there is somewhere to put
         // the sick one. The shelter does not cure what is already in it; it stops the next animal catching it.
@@ -787,10 +803,60 @@ public class PhysicalItemService {
             SICKNESS_SPREAD, TOO_SICK_TO_GIVE, TOO_SICK_TO_GIVE);
     }
 
+    /** What a verminous coat adds to an animal's illness each turn, or takes off its mending. */
+    private static final int MATTED_COAT_SICKENS = 2;
+
     /** Hard cold: at or below freezing, where a young animal without a roof cannot keep its own heat. */
     private static final double HARD_COLD_C = 0.0;
     /** Three days of unbroken hard cold with nothing over them takes the young (#52/#108). */
     private static final int COLD_HOURS_THAT_KILL = 72;
+
+    /**
+     * Combing out a coat (#106): the one thing the grooming tools were named for and could not do.
+     *
+     * <p>A kept animal's coat is a real state that a keeper keeps. Left alone it mats, and faster where the ground
+     * is foul; matted and verminous, the animal sickens more readily and its fleece is not worth the shearing.
+     * Working it over with a comb puts most of that back and takes a little of the sickness with it — which is why
+     * a comb in a keeper's pack is not an ornament.
+     *
+     * @return {outcome, narration}
+     */
+    @Transactional
+    public String[] groomAnimal(UUID chronicle, Instant at) {
+        UUID comb = null;
+        for (String key : COMBS) { comb = findReachable(chronicle, key); if (comb != null) break; }
+        if (comb == null)
+            return new String[]{"FAILED", "You run a hand down the animal's flank and feel the matted hair under it. Fingers will not do this; it wants a comb."};
+        Map<String, Object> worst = jdbc.query(
+            "SELECT wb.id, wp.species_key, wb.coat_condition FROM wildlife_bond wb " +
+            "JOIN wildlife_population wp ON wp.id = wb.population_id " +
+            "JOIN wildlife_species ws ON ws.species_key = wp.species_key " +
+            "WHERE wb.chronicle_id = ? AND wb.bond_stage = 'TAMED' AND ws.kingdom_class = 'MAMMALIA' " +
+            "ORDER BY wb.coat_condition LIMIT 1 FOR UPDATE OF wb",
+            rs -> rs.next() ? Map.of("id", rs.getObject(1, UUID.class), "species", rs.getString(2), "coat", rs.getInt(3)) : null, chronicle);
+        if (worst == null)
+            return new String[]{"FAILED", "You have nothing tamed here with a coat to comb out."};
+        String beast = ((String) worst.get("species")).replace('_', ' ');
+        int coat = (Integer) worst.get("coat");
+        if (coat >= COAT_IS_CLEAN)
+            return new String[]{"PARTIAL", "The " + beast + "'s coat is already clean and lying flat. You take a few passes down it anyway, and the comb comes away with almost nothing."};
+        jdbc.update("UPDATE wildlife_bond SET coat_condition = LEAST(100, coat_condition + ?), sickness = GREATEST(0, sickness - ?) WHERE id = ?",
+            GROOMING_PUTS_BACK, GROOMING_RELIEF, worst.get("id"));
+        // The comb wears like any other tool in a hand doing work with it.
+        Map<String, Object> tool = jdbc.queryForMap("SELECT i.item_key, i.use_count, i.condition_state FROM item_instance i WHERE i.object_id=?", comb);
+        int uses = ((Number) tool.get("use_count")).intValue() + 1;
+        int[] wears = toolWearThresholds((String) tool.get("item_key"));
+        String was = (String) tool.get("condition_state");
+        String now = uses >= wears[1] ? "BROKEN" : uses >= wears[0] ? "WORN" : was;
+        jdbc.update("UPDATE item_instance SET use_count=?, condition_state=? WHERE object_id=?", uses, now, comb);
+        if (!now.equals(was))
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'TOOL_WORN',jsonb_build_object('from',?,'to',?))",
+                comb, Timestamp.from(at), was, now);
+        return new String[]{"SUCCEEDED", coat < COAT_IS_MATTED
+            ? "You work the comb down through the matted hair a handful at a time, and what comes out of it is dirt, old shed coat and things that move. "
+              + "By the end the " + beast + " is leaning into it, and the skin underneath is no longer crawling."
+            : "You comb the " + beast + " over from neck to flank. The coat comes up clean and lies flat, and the animal stands for all of it."};
+    }
 
     /**
      * A hard winter takes the young (#52/#108).
