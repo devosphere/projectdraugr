@@ -72,8 +72,10 @@ class WhatANestCostsIntegrationTest {
         jdbc.update("UPDATE chronicle_physiology SET last_metabolic_update=?, hours_without_food=0, hours_without_water=0, sleep_debt_hours=0", Timestamp.from(when));
     }
 
-    private UUID birds(UUID chunk, String species, int count) {
-        Timestamp ts = Timestamp.from(Instant.now());
+    private UUID birds(UUID chunk, String species, int count, Instant when) {
+        // Simulated time, not wall time: a population last simulated in 2026 and woken in 2031 breeds to its
+        // capacity in one pass, which is the world working and not the test.
+        Timestamp ts = Timestamp.from(when);
         UUID worldId = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, chunk);
         UUID site = UUID.randomUUID(), pop = UUID.randomUUID();
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE','Nesting ground',?)", site, chunk);
@@ -108,7 +110,7 @@ class WhatANestCostsIntegrationTest {
         // Out of season first: in October the nests are old cups of grass.
         Instant autumn = Instant.parse("2031-10-12T10:00:00Z");
         at(autumn);
-        UUID fowl = birds(chunk, "marsh_fowl", 4);
+        UUID fowl = birds(chunk, "marsh_fowl", 4, autumn);
         var cold = actions.resolve("rob the nest for eggs");
         assertEquals("RAID_NEST", cold.intent(), cold::perception);
         assertEquals("FAILED", cold.outcome(), cold::perception);
@@ -117,11 +119,12 @@ class WhatANestCostsIntegrationTest {
         // In the laying season there is a clutch, and it comes away in the hand.
         Instant spring = Instant.parse("2031-05-12T10:00:00Z");
         at(spring);
+        int standing = flock(fowl);
         var robbed = actions.resolve("rob the nest for eggs");
         assertEquals("SUCCEEDED", robbed.outcome(), robbed::perception);
         int took = eggs(chronicle);
         assertTrue(took >= 2, () -> "a clutch is more than one egg: " + took);
-        assertEquals(4, flock(fowl), "the birds standing there are the birds that were standing there");
+        assertEquals(standing, flock(fowl), "the birds standing there are the birds that were standing there");
         assertNotNull(jdbc.queryForObject("SELECT clutch_taken_at FROM wildlife_population WHERE id=?", Timestamp.class, fowl));
 
         // The same nest again is the nest you emptied.
@@ -132,12 +135,12 @@ class WhatANestCostsIntegrationTest {
         // And what it costs: through the breeding season that follows, this flock does not grow.
         at(spring.plus(Duration.ofDays(20)));
         wildlife.advanceTo(spring.plus(Duration.ofDays(20)));
-        assertEquals(4, flock(fowl), "the young that would have come off that nest do not come");
+        assertEquals(standing, flock(fowl), "the young that would have come off that nest do not come");
 
         // A month on, they breed again — the loss was a year's young, not the end of them.
         at(spring.plus(Duration.ofDays(WildlifeEncounterService.CLUTCH_COSTS_DAYS + 5)));
         wildlife.advanceTo(spring.plus(Duration.ofDays(WildlifeEncounterService.CLUTCH_COSTS_DAYS + 5)));
-        assertTrue(flock(fowl) >= 4, "the flock is not diminished by it either");
+        assertTrue(flock(fowl) >= standing, "the flock is not diminished by it either");
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
