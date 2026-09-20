@@ -267,8 +267,6 @@ public class NativeCommunityService {
         news.hear(community, day);
         // Who still has a place here (#113): a member they have stopped trusting is asked to go.
         members.keepOrAskToLeave(community, day);
-        // Their own: everyone grown keeps the tool of their work, their dead are buried, and what was theirs is gathered (#122).
-        remains.tendTheirOwn(community, day);
         // A claim nobody answers hardens into a grievance (#211).
         claims.reckon(community, day);
 
@@ -286,6 +284,10 @@ public class NativeCommunityService {
         companions.liveADay(community, day);
         // Who speaks for them (#121): a speaker who has died leaves the office empty, and after mourning it is filled.
         audience.keepTheOffice(community, day);
+        // Their own (#122): everyone grown keeps the tool of their work, their dead are buried, and what was theirs
+        // is gathered. After the life course, so that whoever came of age today is a grown person today and not
+        // tomorrow — and after a death, so that what the dead owned is theirs from the day they died.
+        remains.tendTheirOwn(community, day);
 
         // How the community stands. Closing up is what hungry people do with a store they cannot spare and ground
         // they cannot share; moving on is what they do when the ground has stopped feeding them. Recovery returns
