@@ -96,6 +96,8 @@ class ACoatWorthKeepingIntegrationTest {
         UUID chunk = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
         Instant now = Instant.parse("2031-06-10T12:00:00Z");
         jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", Timestamp.from(now));
+        // The body keeps pace with the clock it is moved to, or the Chronicle starves between one line and the next.
+        jdbc.update("UPDATE chronicle_physiology SET last_metabolic_update=?, hours_without_food=0, hours_without_water=0, sleep_debt_hours=0", Timestamp.from(now));
 
         UUID sheep = tame(chronicle, chunk, "bighorn_sheep");
         assertEquals(100, coat(sheep), "a newly kept animal is in good coat");
