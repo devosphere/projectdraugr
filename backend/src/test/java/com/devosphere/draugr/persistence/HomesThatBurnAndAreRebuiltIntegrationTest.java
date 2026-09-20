@@ -172,7 +172,14 @@ class HomesThatBurnAndAreRebuiltIntegrationTest {
         assertEquals(isle, jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, raised));
 
         // On the move: hungry for long enough to leave, and more mouths than the water feeds.
-        jdbc.update("UPDATE native_community SET lifecycle='MOVING', shortage_days=15, daily_ration=6 WHERE id=?", community);
+        jdbc.update("UPDATE native_community SET lifecycle='MOVING', shortage_days=15 WHERE id=?", community);
+        // Nobody able to go out for food, so the day cannot feed them and they stay on the move: an isle whose
+        // gatherers are all laid up, rather than a ration nobody could eat.
+        jdbc.update("UPDATE native_individual SET condition='INJURED' WHERE community_id=? AND role IN ('FISHER','FORAGER','HUNTER') AND condition <> 'DEAD'", community);
+        // And a bare store, so the day has nothing to feed them from either.
+        jdbc.update("UPDATE world_object w SET lifecycle_state='DESTROYED', destroyed_at=now(), destroyed_location_id=?, destroyed_cause='ROTTED', " +
+            "current_owner_id=NULL FROM item_instance i, native_settlement_site s " +
+            "WHERE i.object_id=w.id AND s.object_id=w.current_owner_id AND s.community_id=? AND w.lifecycle_state='ACTIVE'", isle, community);
         jdbc.update("INSERT INTO native_event (community_id, occurred_at, event_kind) VALUES (?,?,'LEFT_TO_FIND_FOOD')",
             community, Timestamp.from(Instant.parse("2031-06-12T00:00:00Z")));
         UUID dead = jdbc.queryForObject("SELECT object_id FROM native_individual WHERE community_id=? ORDER BY given_name LIMIT 1", UUID.class, community);
