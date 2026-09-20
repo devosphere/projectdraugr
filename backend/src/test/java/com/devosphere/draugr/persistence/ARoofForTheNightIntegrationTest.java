@@ -109,7 +109,10 @@ class ARoofForTheNightIntegrationTest {
         assertTrue(physiology.sleep(chronicle, 60), "their roof keeps the weather off a guest exactly as one you built would");
 
         // The welcome is for a night, not for a season.
+        // A welcome that ran out: shortened to a second, and the world moved a day past it. Both halves matter —
+        // the welcome is measured against the world clock, so moving only one of them changes nothing.
         jdbc.update("UPDATE native_guest_right SET welcome_until=granted_at + interval '1 second' WHERE community_id=? AND chronicle_id=?", community, chronicle);
+        at("2031-06-11T20:00:00Z");
         assertFalse(physiology.sleep(chronicle, 60), "a welcome that has run out is not a roof");
 
         // Hospitality has a limit: three nights in ten days.
