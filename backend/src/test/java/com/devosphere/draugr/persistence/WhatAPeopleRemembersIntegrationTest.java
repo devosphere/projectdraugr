@@ -178,8 +178,10 @@ class WhatAPeopleRemembersIntegrationTest {
         jdbc.update("INSERT INTO equipment_attachment (item_id, chronicle_id, body_position, layer, attached_at) VALUES (?,?,'HAND_RIGHT','OUTER',now())", spear, chronicle);
         actions.resolve("attack the reedkin");
         assertTrue(happened(community, "MURDER"));
+        // The one killed here is the one whose body still lies on the ground; anyone the isle has buried since (#121)
+        // is DESTROYED and is not what this assertion is about.
         Map<String, Object> dead = jdbc.queryForMap("SELECT n.object_id, w.lifecycle_state, w.current_location_id, w.display_name FROM native_individual n " +
-            "JOIN world_object w ON w.id=n.object_id WHERE n.community_id=? AND n.condition='DEAD'", community);
+            "JOIN world_object w ON w.id=n.object_id WHERE n.community_id=? AND n.condition='DEAD' AND w.lifecycle_state='ACTIVE'", community);
         assertEquals("ACTIVE", dead.get("lifecycle_state"), "the body is not destroyed or looted");
         assertEquals(isle, dead.get("current_location_id"), "it lies where it fell");
         assertTrue(((String) dead.get("display_name")).startsWith("The body of"));
