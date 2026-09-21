@@ -97,6 +97,22 @@ class ASecondPeopleIntegrationTest {
             "a rooted people is one place, not a population");
         assertEquals(0, natives.seedPeoples(worldGenesis.current().worldId()), "a world that has its peoples gains no more on reconcile");
 
+        // The defect this shape exists to prevent (#115): a world that already has its isles must still be asked
+        // about the grove. While the grove was seeded inside the reedkin's own placement, a full set of isles
+        // returned early and the second people was never placed in any world already being played.
+        UUID worldId = worldGenesis.current().worldId();
+        jdbc.update("DELETE FROM native_event WHERE community_id=?", grove);
+        jdbc.update("DELETE FROM native_individual WHERE community_id=?", grove);
+        jdbc.update("DELETE FROM native_kin_group WHERE community_id=?", grove);
+        jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED', destroyed_at=now(), destroyed_location_id=current_location_id, " +
+            "destroyed_cause='TEST_FIXTURE', current_location_id=NULL, current_owner_id=NULL FROM native_settlement_site s " +
+            "WHERE s.object_id=world_object.id AND s.community_id=?", grove);
+        jdbc.update("DELETE FROM native_settlement_site WHERE community_id=?", grove);
+        jdbc.update("DELETE FROM native_community WHERE id=?", grove);
+        assertEquals(1, natives.seedPeoples(worldId), "a world with its isles is still asked about the grove");
+        grove = jdbc.queryForObject("SELECT id FROM native_community WHERE species_key='grovebound'", UUID.class);
+        assertNotNull(grove, "and the grove is placed into a world that already had its first people");
+
         UUID ground = jdbc.queryForObject("SELECT home_chunk_id FROM native_community WHERE id=?", UUID.class, grove);
         assertEquals("TEMPERATE_FOREST", jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, ground));
         assertEquals(0, (int) jdbc.queryForObject(
@@ -109,7 +125,8 @@ class ASecondPeopleIntegrationTest {
         assertEquals("dried_mushroom", jdbc.queryForObject("SELECT staple_item_key FROM native_community WHERE id=?", String.class, grove));
         assertEquals("CANOPY_LOSS", jdbc.queryForObject("SELECT grave_encroachment_kind FROM native_community WHERE id=?", String.class, grove),
             "a people of the old wood cannot forgive the taking of it");
-        assertTrue(natives.madeGoods(grove).contains("bark_sheet"), () -> "they work bark, not reed: " + natives.madeGoods(grove));
+        java.util.List<String> makings = natives.madeGoods(grove);
+        assertTrue(makings.contains("bark_sheet"), () -> "they work bark, not reed: " + makings);
         assertTrue(jdbc.queryForObject("SELECT COUNT(*) FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
             "JOIN native_settlement_site s ON s.object_id=w.current_owner_id WHERE s.community_id=? AND i.item_key='dried_mushroom'",
             Integer.class, grove) > 0, "their store holds what they eat");
