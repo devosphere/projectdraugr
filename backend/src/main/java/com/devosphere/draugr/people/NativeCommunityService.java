@@ -33,8 +33,10 @@ public class NativeCommunityService {
     static final int MAX_DAYS_PER_STEP = 60;
     /** Days short before the community closes its store and its gates to outsiders. */
     static final int SHORTAGE_CLOSES = 3;
-    /** Days short before the community leaves to find food elsewhere. */
-    static final int SHORTAGE_MOVES = 14;
+    /** Days short before the community puts to itself the question of leaving. */
+    public static final int SHORTAGE_MOVES = 14;
+    /** Days a people may argue about abandoning its home before the argument is over one way or the other. */
+    public static final int ARGUES_FOR = 4;
 
     private final JdbcTemplate jdbc;
     private final PhysicalItemService items;
@@ -418,10 +420,8 @@ public class NativeCommunityService {
             jdbc.update("UPDATE native_settlement_site SET access_rule='INVITED' WHERE community_id=? AND access_rule='CLOSED'", community);
             record(community, day, "REOPENED", Map.of());
         }
-        if (nextShortage >= SHORTAGE_MOVES && "SETTLED".equals(c.get("lifecycle"))) {
-            jdbc.update("UPDATE native_community SET lifecycle='MOVING' WHERE id=?", community);
-            record(community, day, "LEFT_TO_FIND_FOOD", Map.of("shortageDays", nextShortage));
-        } else if (nextShortage == 0 && "MOVING".equals(c.get("lifecycle"))) {
+        argueOrLeave(community, day, nextShortage, (String) c.get("lifecycle"));
+        if (nextShortage == 0 && "MOVING".equals(c.get("lifecycle"))) {
             jdbc.update("UPDATE native_community SET lifecycle='SETTLED' WHERE id=?", community);
             record(community, day, "SETTLED_AGAIN", Map.of());
         }
@@ -501,6 +501,80 @@ public class NativeCommunityService {
      * everything they built; their graves stay where they lie. New water has not been fished, and feeds them better
      * for the first month.
      */
+    /**
+     * Whether to leave (#121). This was one line: at {@link #SHORTAGE_MOVES} days short, `lifecycle` went from
+     * SETTLED to MOVING, and eight people abandoned the ground they were born on without a word passing between
+     * them. A people is not a state machine with a threshold; it is people, and they do not all want the same
+     * thing on the day the store runs out.
+     *
+     * <p>So the question is <b>put</b>, and it stands open. The elders hold to the ground — they have buried
+     * people in it — and everyone else grown and hungry wants to go; nobody asks a child. The count is read off
+     * who is actually alive there that day rather than invented.
+     *
+     * <p>While the argument stands <b>they do not leave</b>, and {@link AgreementService} will not let them put
+     * their name to anything new. Hunger goes on through all of it, which is what not deciding costs them.
+     *
+     * <p>It ends in one of two ways, and a Chronicle has a hand in both without needing a new verb:
+     * <ul>
+     *   <li><b>Fed</b> — the thing they were arguing about has stopped being true, so the argument is settled on
+     *       the spot in favour of staying. Feeding them is the whole lever, and it is one a Chronicle already has.</li>
+     *   <li><b>Still hungry after {@link #ARGUES_FOR} days</b> — the side that wanted to go was right, and they go.</li>
+     * </ul>
+     */
+    void argueOrLeave(UUID community, Instant day, int shortageDays, String lifecycle) {
+        Map<String, Object> open = jdbc.query(
+            "SELECT id, opened_at FROM native_disagreement WHERE community_id=? AND question='WHETHER_TO_LEAVE' AND settled_at IS NULL",
+            rs -> rs.next() ? Map.of("id", rs.getObject(1, UUID.class), "opened_at", rs.getTimestamp(2).toInstant()) : null,
+            community);
+
+        if (open != null) {
+            // Fed again: there is nothing left to argue about, whatever anybody said yesterday.
+            if (shortageDays == 0) {
+                settle(community, day, (UUID) open.get("id"), "STAYED");
+                record(community, day, "AGREED_TO_STAY", Map.of("question", "WHETHER_TO_LEAVE"));
+                return;
+            }
+            // Still hungry, and the argument has run its course. The ones who wanted to go were right.
+            if (!((Instant) open.get("opened_at")).plus(Duration.ofDays(ARGUES_FOR)).isAfter(day)) {
+                settle(community, day, (UUID) open.get("id"), "WENT");
+                jdbc.update("UPDATE native_community SET lifecycle='MOVING' WHERE id=?", community);
+                record(community, day, "LEFT_TO_FIND_FOOD", Map.of("shortageDays", shortageDays, "argued", ARGUES_FOR));
+            }
+            return;
+        }
+
+        if (shortageDays < SHORTAGE_MOVES || !"SETTLED".equals(lifecycle)) return;
+
+        // Who says what. An elder holds to the ground; everyone else grown wants to go. A community with no
+        // elders left has nobody arguing to stay, and goes as soon as the question is asked — which is true, and
+        // is the saddest line in this file.
+        Integer stay = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM native_individual WHERE community_id=? AND condition<>'DEAD' AND life_stage='ELDER'", Integer.class, community);
+        Integer go = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM native_individual WHERE community_id=? AND condition<>'DEAD' AND life_stage='ADULT'", Integer.class, community);
+        int toStay = stay == null ? 0 : stay, toGo = go == null ? 0 : go;
+        if (toStay + toGo == 0) {    // nobody grown is left to have an opinion; the question does not arise
+            jdbc.update("UPDATE native_community SET lifecycle='MOVING' WHERE id=?", community);
+            record(community, day, "LEFT_TO_FIND_FOOD", Map.of("shortageDays", shortageDays));
+            return;
+        }
+        jdbc.update("INSERT INTO native_disagreement (community_id, question, opened_at, voices_to_go, voices_to_stay) " +
+            "VALUES (?, 'WHETHER_TO_LEAVE', ?, ?, ?)", community, Timestamp.from(day), toGo, toStay);
+        record(community, day, "FELL_TO_ARGUING", Map.of("question", "WHETHER_TO_LEAVE", "toGo", toGo, "toStay", toStay));
+    }
+
+    /** Close an argument. The trigger refuses to touch it again afterwards, which is what settled means. */
+    private void settle(UUID community, Instant day, UUID argument, String outcome) {
+        jdbc.update("UPDATE native_disagreement SET settled_at=?, outcome=? WHERE id=?", Timestamp.from(day), outcome, argument);
+    }
+
+    /** Is this community arguing with itself about something right now (#121)? Read by trade, contact and agreements. */
+    @Transactional(readOnly = true)
+    public boolean isArguing(UUID community) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM native_disagreement WHERE community_id=? AND settled_at IS NULL)", Boolean.class, community));
+    }
+
     void relocateIfMoving(UUID community, Instant day) {
         Map<String, Object> c = jdbc.queryForMap(
             "SELECT n.lifecycle, n.home_chunk_id, h.world_id, h.grid_x, h.grid_y, h.biome FROM native_community n JOIN world_chunk h ON h.id=n.home_chunk_id WHERE n.id=?", community);

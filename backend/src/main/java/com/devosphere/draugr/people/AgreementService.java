@@ -135,6 +135,10 @@ public class AgreementService {
             : "MOVING".equals(c.get("lifecycle")) || store == null ? "There is no store here to pay a wage from, and no one to take you on."
             : standing < 0 ? "They look at you, and at each other, and no one steps forward. They do not want your hands on their work."
             : understanding < 30 ? "You mime hauling nets and point to their store. They watch politely, but what you mean does not reach them yet."
+            // A people arguing about whether to abandon its home does not take on a week's work (#121). Not a
+            // refusal of you — a refusal of the question, while a larger one of their own is still open.
+            : arguing(community) ? "They are in the middle of something among themselves, voices going back and forth across the fire, "
+                + "and what they settle will decide more than your week. Nobody will put their name to anything today."
             : Eligibility.firstOf(
                 Eligibility.refusal(jdbc, community, Eligibility.AGREEMENT,
                     "They do not bind themselves to outsiders, nor outsiders to them. Whatever you are offering, it is not a thing they do."),
@@ -280,6 +284,13 @@ public class AgreementService {
     private void event(UUID community, UUID chronicle, Instant at, String kind, int days) {
         jdbc.update("INSERT INTO native_event (community_id, occurred_at, event_kind, subject_id, payload) VALUES (?,?,?,?,jsonb_build_object('days', ?::int))",
             community, Timestamp.from(at), kind, chronicle, days);
+    }
+
+    /** Is this people in the middle of an argument of its own (#121)? Read here rather than injected, to keep
+     *  AgreementService out of NativeCommunityService's constructor — the two already point at each other. */
+    private boolean arguing(UUID community) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM native_disagreement WHERE community_id=? AND settled_at IS NULL)", Boolean.class, community));
     }
 
     private UUID store(UUID community) {
