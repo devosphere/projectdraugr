@@ -136,8 +136,11 @@ public class NativeCommunityService {
         UUID community = UUID.randomUUID();
         Timestamp ts = Timestamp.from(now);
         jdbc.update("INSERT INTO native_community (id,world_id,species_key,name,home_chunk_id,territory_radius,governance," +
-            "base_trade_policy,trade_policy,base_security_posture,security_posture,staple_item_key,daily_ration,founded_at,last_simulated_at) " +
-            "VALUES (?,?,'reedkin',?,?,1,'ELDERS','SELECTIVE','SELECTIVE','WARY','WARY','dried_fish',1,?,?)",
+            "base_trade_policy,trade_policy,base_security_posture,security_posture,staple_item_key,daily_ration,grave_encroachment_kind," +
+            "founded_at,last_simulated_at) " +
+            // The standing wood of the carr is the reedkin's withy, poles, fuel and cover: taking it off their ground
+            // is the loss they answer hardest (#211).
+            "VALUES (?,?,'reedkin',?,?,1,'ELDERS','SELECTIVE','SELECTIVE','WARY','WARY','dried_fish',1,'CANOPY_LOSS',?,?)",
             community, worldId, isle, chunk, ts, ts);
 
         UUID village = place("NATIVE_SITE", isle + " village", chunk);
