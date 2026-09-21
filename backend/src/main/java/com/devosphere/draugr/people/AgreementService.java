@@ -159,8 +159,12 @@ public class AgreementService {
             return new String[]{"PARTIAL", "At the word for food their faces close. They cannot promise food they do not have for themselves."};
         int count = Math.min(TradeService.count(want), countHeld(store, key));
         if (count == 0) return new String[]{"PARTIAL", "They have none of that to promise."};
+        // What THIS people makes, from its own row (#113, V366) — not the reed list every people used to share.
+        // Trade was taught this when the second people landed; a wage was not, so the grovebound would price a
+        // bark sheet as a thing brought in from somewhere else, and the same object was worth two amounts
+        // depending on which door a Chronicle came through.
         int worth = count * TradeService.worth(key, (String) wanted.get("category"),
-            java.util.Arrays.asList(NativeCommunityService.MADE_GOODS).contains(key), hungry, staple);
+            makes(community, key), hungry, staple);
         int days = Math.max(1, (worth + DAY_IS_WORTH - 1) / DAY_IS_WORTH);
         if (days > LONGEST_TERM_DAYS)
             return new String[]{"PARTIAL", "They count on their fingers, and then stop counting. That is more than they will bind anyone to."};
@@ -284,6 +288,16 @@ public class AgreementService {
     private void event(UUID community, UUID chronicle, Instant at, String kind, int days) {
         jdbc.update("INSERT INTO native_event (community_id, occurred_at, event_kind, subject_id, payload) VALUES (?,?,?,?,jsonb_build_object('days', ?::int))",
             community, Timestamp.from(at), kind, chronicle, days);
+    }
+
+    /**
+     * Does this people make this thing with its own hands (#113, V366)? Read from `made_goods` on the community
+     * row rather than through NativeCommunityService, which already depends on this class — the same reason
+     * {@code arguing} is a query here and not an injection.
+     */
+    private boolean makes(UUID community, Object itemKey) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT ?::varchar = ANY(made_goods) FROM native_community WHERE id=?", Boolean.class, itemKey, community));
     }
 
     /** Is this people in the middle of an argument of its own (#121)? Read here rather than injected, to keep

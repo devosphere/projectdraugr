@@ -116,8 +116,10 @@ public class ClaimService {
         List<String> handed = new ArrayList<>();
         for (Map<String, Object> thing : carried) {
             if (given >= owed) break;
+            // Valued by what THIS people makes (#113, V366), the same as trade and a wage — a bark sheet handed
+            // to the grovebound in settlement is a thing of theirs, and a reed mat handed to them is not.
             int worth = TradeService.worth((String) thing.get("item_key"), (String) thing.get("category"),
-                java.util.Arrays.asList(NativeCommunityService.MADE_GOODS).contains(thing.get("item_key")), hungry, staple);
+                makes(community, thing.get("item_key")), hungry, staple);
             jdbc.update("DELETE FROM item_containment WHERE item_id=?", thing.get("id"));
             jdbc.update("UPDATE world_object SET current_owner_id=?, current_location_id=NULL, updated_at=now() WHERE id=?", store, thing.get("id"));
             jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'PAID_IN_COMPENSATION',jsonb_build_object('community',?::text))",
@@ -157,6 +159,17 @@ public class ClaimService {
             jdbc.update("INSERT INTO native_event (community_id, occurred_at, event_kind, subject_id) VALUES (?,?,'CLAIM_UNANSWERED',?)",
                 community, Timestamp.from(day), stale.get("chronicle_id"));
         }
+    }
+
+    /**
+     * Does this people make this thing with its own hands (#113, V366)? Read from {@code made_goods} on the
+     * community row. It was a Java constant naming reed goods, so a bark sheet handed to the grovebound in
+     * settlement was priced as something brought in from elsewhere — while trade, taught when the second people
+     * landed, priced the same object as theirs. One object, two worths, depending on the door.
+     */
+    private boolean makes(UUID community, Object itemKey) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT ?::varchar = ANY(made_goods) FROM native_community WHERE id=?", Boolean.class, itemKey, community));
     }
 
     private Map<String, Object> openClaim(UUID community, UUID chronicle) {
