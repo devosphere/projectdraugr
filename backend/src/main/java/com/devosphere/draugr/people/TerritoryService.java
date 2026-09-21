@@ -39,6 +39,11 @@ public class TerritoryService {
     static final Duration LEAVE_LASTS = Duration.ofDays(30);
     /** Refuse on the water by the isle at which they hold it against whoever left it. */
     static final int FOULED = 50;
+    /** What taking the standing wood off a people's own ground costs, and how long they remember one. */
+    static final int TREES_TAKEN_COSTS = -12;
+    static final Duration REMEMBERS_A_FELLING = Duration.ofDays(30);
+    /** Fellings on their ground within that span after which the isle stops treating it as a grievance and treats it as an enemy. */
+    static final int FELLINGS_THAT_MAKE_AN_ENEMY = 3;
 
     private final JdbcTemplate jdbc;
 
@@ -49,7 +54,8 @@ public class TerritoryService {
         UUID chronicle = jdbc.query("SELECT id FROM chronicle WHERE life_state='LIVING' LIMIT 1", rs -> rs.next() ? rs.getObject(1, UUID.class) : null);
         if (chronicle == null) return;
         Map<String, Object> c = jdbc.queryForMap(
-            "SELECT n.home_chunk_id, n.territory_radius, h.world_id, h.grid_x, h.grid_y FROM native_community n JOIN world_chunk h ON h.id=n.home_chunk_id WHERE n.id=?", community);
+            "SELECT n.home_chunk_id, n.territory_radius, n.grave_encroachment_kind, h.world_id, h.grid_x, h.grid_y " +
+            "FROM native_community n JOIN world_chunk h ON h.id=n.home_chunk_id WHERE n.id=?", community);
         int radius = ((Number) c.get("territory_radius")).intValue();
         Timestamp since = Timestamp.from(day.minus(Duration.ofDays(1))), until = Timestamp.from(day);
 
@@ -70,7 +76,33 @@ public class TerritoryService {
             "ON CONFLICT (community_id, chronicle_id) WHERE chronicle_id IS NOT NULL DO NOTHING", community, chronicle);
         if (fouled && !happenedSince(community, chronicle, "WATER_FOULED", day.minus(Duration.ofDays(7))))
             grievance(community, chronicle, day, "WATER_FOULED", -5, Map.of());
-        if (worked == 0 || hasLeave(community, chronicle, day)) return;
+        boolean leave = hasLeave(community, chronicle, day);
+
+        // The one kind of work that is not a trespass but a loss (#211, #118). A people names the disturbance that
+        // takes the thing its life is made of — for a reed-isle people, the standing wood of the carr: their withies,
+        // their poles, their fuel and the cover their water sits in. Cutting it inside their ground is not "work
+        // somebody did nearby"; it is the ground itself going. Counted apart from ordinary encroachment, weighed far
+        // heavier, and not excused by leave to work the ground: leave to cut reeds is not leave to fell the alders.
+        String grave = (String) c.get("grave_encroachment_kind");
+        if (grave != null) {
+            Integer felled = jdbc.queryForObject(
+                "SELECT COALESCE(SUM(e.amount),0) FROM chunk_disturbance_event e JOIN world_chunk k ON k.id=e.chunk_id " +
+                "WHERE k.world_id=? AND greatest(abs(k.grid_x-?), abs(k.grid_y-?)) <= ? AND e.source_kind=? " +
+                "AND e.occurred_at > ? AND e.occurred_at <= ?",
+                Integer.class, c.get("world_id"), c.get("grid_x"), c.get("grid_y"), radius, grave, since, until);
+            if (felled != null && felled > 0) {
+                grievance(community, chronicle, day, "TREES_TAKEN", TREES_TAKEN_COSTS, Map.of("taken", felled));
+                int fellings = jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM native_event WHERE community_id=? AND subject_id=? AND event_kind='TREES_TAKEN' AND occurred_at > ?",
+                    Integer.class, community, chronicle, Timestamp.from(day.minus(REMEMBERS_A_FELLING)));
+                if (fellings >= FELLINGS_THAT_MAKE_AN_ENEMY) {
+                    jdbc.update("UPDATE native_community SET security_posture='HOSTILE' WHERE id=?", community);
+                    jdbc.update("UPDATE native_settlement_site SET access_rule='CLOSED' WHERE community_id=?", community);
+                }
+            }
+        }
+
+        if (worked == 0 || leave) return;
 
         grievance(community, chronicle, day, "ENCROACHMENT_NOTICED", -2, Map.of("disturbance", worked));
         int notices = jdbc.queryForObject("SELECT COUNT(*) FROM native_event WHERE community_id=? AND subject_id=? AND event_kind='ENCROACHMENT_NOTICED' AND occurred_at > ?",
