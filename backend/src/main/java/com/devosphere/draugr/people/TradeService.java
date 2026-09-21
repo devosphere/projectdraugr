@@ -53,8 +53,12 @@ public class TradeService {
     private static final String[] WORDS = {"none", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"};
 
     private final JdbcTemplate jdbc;
+    private final NativeCommunityService communities;
 
-    public TradeService(JdbcTemplate jdbc) { this.jdbc = jdbc; }
+    public TradeService(JdbcTemplate jdbc, NativeCommunityService communities) {
+        this.jdbc = jdbc;
+        this.communities = communities;
+    }
 
     /**
      * The trade act a text names, or null. An offer is anything shaped "offer / trade / swap / give ... my X for Y"
@@ -195,9 +199,10 @@ public class TradeService {
         List<UUID> mine = carried.stream().filter(k -> kind.get("item_key").equals(k.get("item_key")))
             .map(k -> (UUID) k.get("id")).limit(giveCount).toList();
 
-        boolean madeHere = java.util.Arrays.asList(NativeCommunityService.MADE_GOODS).contains(wantedKey);
+        List<String> ownMaking = communities.madeGoods(community);
+        boolean madeHere = ownMaking.contains(wantedKey);
         int given = mine.size() * worth((String) kind.get("item_key"), (String) kind.get("category"),
-            java.util.Arrays.asList(NativeCommunityService.MADE_GOODS).contains(kind.get("item_key")), hungry, staple);
+            ownMaking.contains(kind.get("item_key")), hungry, staple);
         int each = worth(wantedKey, (String) wanted.get("category"), madeHere, hungry, staple);
         jdbc.update("UPDATE native_trade SET status='WITHDRAWN', settled_at=? WHERE community_id=? AND chronicle_id=? AND status='COUNTERED'",
             Timestamp.from(at), community, chronicle);
