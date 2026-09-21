@@ -84,8 +84,11 @@ class AShelterHoldsWhatFitsIntegrationTest {
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE','Kept stock',?)", site, chunk);
         jdbc.update("INSERT INTO ecology_site (id,world_id,chunk_id,site_category,site_kind,baseline_abundance) VALUES (?,?,?,'WILDLIFE','Kept stock',30)", site, worldId, chunk);
         UUID pop = UUID.randomUUID();
+        // Room for what is born into it. The young mature back into the parent population, and a guinea fowl
+        // clutch is six to twelve — against a capacity of five, `population_count <= carrying_capacity` fails and
+        // takes the whole tick with it. Nothing here asserts a population count, so the headroom costs nothing.
         jdbc.update("INSERT INTO wildlife_population (id,site_id,species_key,ecological_role,activity_cycle,population_count,carrying_capacity,behavior_state,last_simulated_at) " +
-            "VALUES (?,?,?,'HERBIVORE','DIURNAL',1,5,'FORAGING',?)", pop, site, species, ts);
+            "VALUES (?,?,?,'HERBIVORE','DIURNAL',1,500,'FORAGING',?)", pop, site, species, ts);
         UUID bond = UUID.randomUUID();
         jdbc.update("INSERT INTO wildlife_bond (id,chronicle_id,population_id,bond_stage,trust_level,interaction_count,last_interaction_at," +
             "draft_hunger,draft_thirst,draft_fatigue) VALUES (?,?,?,'TAMED',95,12,?,0,0,0)", bond, chronicle, pop, ts);
@@ -163,7 +166,10 @@ class AShelterHoldsWhatFitsIntegrationTest {
 
         // And the calf lives, every time. A birthing house sets perinatal loss to zero, and before V369 the only
         // structures that could do that for an aurochs were a brooder box and a foaling stall.
-        Instant born = t0.plus(java.time.Duration.ofDays(400));
+        // Two days on, with the pregnancy's own due date brought forward — not a year-long jump. A long jump
+        // matures every young animal in the shared database at once, into whatever carrying capacity the test
+        // that made them chose, and the overflow fails the statement for everybody.
+        Instant born = t0.plus(java.time.Duration.ofDays(2));
         jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", Timestamp.from(born));
         jdbc.update("UPDATE tamed_gestation SET due_at=? WHERE species_key='aurochs'", Timestamp.from(born.minusSeconds(3600)));
         items.advanceBreeding(born);
