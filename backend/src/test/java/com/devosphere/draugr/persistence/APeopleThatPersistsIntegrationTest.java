@@ -158,10 +158,17 @@ class APeopleThatPersistsIntegrationTest {
             assertEquals("CLOSED", jdbc.queryForObject("SELECT access_rule FROM native_settlement_site WHERE object_id=?", String.class, store),
                 "and the gates to visitors");
             assertEquals(4, (int) jdbc.queryForObject("SELECT COUNT(*) FROM native_individual WHERE community_id=? AND condition='HUNGRY'", Integer.class, community));
-            // Short from the 7th, the fourteenth short day is the 20th.
+            // Short from the 7th, the fourteenth short day is the 20th — and on that day the question is PUT to
+            // them rather than decided for them (#121, V370). They argue about abandoning the ground they were
+            // born on, and while they argue they are still here.
             natives.advanceTo(Instant.parse("2031-12-21T00:00:00Z"));
-            assertEquals("MOVING", state(community).get("lifecycle"), "a fortnight hungry and they leave to find food");
-            assertEquals(List.of("SHORTAGE_BEGAN", "CLOSED_TO_OUTSIDERS", "LEFT_TO_FIND_FOOD"), history(community));
+            assertEquals("SETTLED", state(community).get("lifecycle"), "a fortnight hungry and they argue about leaving");
+            assertEquals(List.of("SHORTAGE_BEGAN", "CLOSED_TO_OUTSIDERS", "FELL_TO_ARGUING"), history(community));
+
+            // Nobody feeds them, so the argument runs its course and the ones who wanted to go were right.
+            natives.advanceTo(Instant.parse("2031-12-26T00:00:00Z"));
+            assertEquals("MOVING", state(community).get("lifecycle"), "and then they leave to find food");
+            assertEquals(List.of("SHORTAGE_BEGAN", "CLOSED_TO_OUTSIDERS", "FELL_TO_ARGUING", "LEFT_TO_FIND_FOOD"), history(community));
 
             // Spring gives again: fed, reopened to what they were, and settled.
             setClock(community, "2032-04-01T00:00:00Z");

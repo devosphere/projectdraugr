@@ -29,7 +29,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
+
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -110,11 +110,23 @@ class APeopleThatCannotAgreeIntegrationTest {
         return community;
     }
 
-    private Map<String, Object> argument(UUID community) {
+    /**
+     * The one argument standing open for this community, or null.
+     *
+     * <p>Deliberately not "the most recent by opened_at": these two methods play at clocks ten days apart and
+     * JUnit picks the order, so the newest row by date is routinely the OTHER method's. Every later read goes
+     * through {@link #byId} with the id this returned.
+     */
+    private Map<String, Object> openArgument(UUID community) {
         List<Map<String, Object>> rows = jdbc.queryForList(
-            "SELECT voices_to_go, voices_to_stay, settled_at, outcome FROM native_disagreement " +
-            "WHERE community_id=? ORDER BY opened_at DESC LIMIT 1", community);
+            "SELECT id, voices_to_go, voices_to_stay, settled_at, outcome FROM native_disagreement " +
+            "WHERE community_id=? AND settled_at IS NULL", community);
         return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    /** That same argument, read back by its own id — never by whichever is newest. */
+    private Map<String, Object> byId(UUID id) {
+        return jdbc.queryForMap("SELECT id, voices_to_go, voices_to_stay, settled_at, outcome FROM native_disagreement WHERE id=?", id);
     }
 
     @Test
@@ -130,9 +142,9 @@ class APeopleThatCannotAgreeIntegrationTest {
 
         // The day the store runs out for the fourteenth time, the question is put — and they do not leave on it.
         natives.advanceTo(day);
-        Map<String, Object> open = argument(community);
-        assertNotNull(open, "a people asked to abandon its home argues about it first");
-        assertNull(open.get("settled_at"), "and the argument stands open");
+        Map<String, Object> open = openArgument(community);
+        assertNotNull(open, "a people asked to abandon its home argues about it first, and that argument stands open");
+        UUID argument = (UUID) open.get("id");
         assertTrue(((Number) open.get("voices_to_go")).intValue() > 0, "somebody wants to go");
         assertTrue(((Number) open.get("voices_to_stay")).intValue() > 0,
             "and the elders, who have buried people in this ground, do not");
@@ -148,7 +160,7 @@ class APeopleThatCannotAgreeIntegrationTest {
         for (int i = 0; i < 40; i++) items.createHeldItem(store, "dried_fish", "Dried Fish", day, "GIVEN_TO_COMMUNITY");
         natives.advanceTo(day.plus(Duration.ofDays(1)));
 
-        Map<String, Object> settled = argument(community);
+        Map<String, Object> settled = byId(argument);
         assertNotNull(settled.get("settled_at"), "a full store settles it on the spot");
         assertEquals("STAYED", settled.get("outcome"), "because what they were arguing about has stopped being true");
         assertEquals("SETTLED", jdbc.queryForObject("SELECT lifecycle FROM native_community WHERE id=?", String.class, community));
@@ -181,12 +193,14 @@ class APeopleThatCannotAgreeIntegrationTest {
             Timestamp.from(day.minus(Duration.ofDays(1))), community);
 
         natives.advanceTo(day);
-        assertNull(argument(community).get("settled_at"), "the question is put again, because it is true again");
+        Map<String, Object> reopened = openArgument(community);
+        assertNotNull(reopened, "the question is put again, because it is true again");
+        UUID argument = (UUID) reopened.get("id");
         assertEquals("SETTLED", jdbc.queryForObject("SELECT lifecycle FROM native_community WHERE id=?", String.class, community));
 
         // Nobody feeds them. The argument runs the days it is allowed and the ones who wanted to go were right.
         natives.advanceTo(day.plus(Duration.ofDays(NativeCommunityService.ARGUES_FOR + 1)));
-        Map<String, Object> ended = argument(community);
+        Map<String, Object> ended = byId(argument);
         assertNotNull(ended.get("settled_at"), "an argument does not stay open forever");
         assertEquals("WENT", ended.get("outcome"));
         assertTrue(jdbc.queryForObject("SELECT COUNT(*) FROM native_event WHERE community_id=? AND event_kind='LEFT_TO_FIND_FOOD'",
