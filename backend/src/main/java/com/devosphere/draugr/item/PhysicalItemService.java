@@ -2787,6 +2787,13 @@ public class PhysicalItemService {
         }
     }
 
+    /** Does the action name this colony — by its own word, with the kind of place it is left off? */
+    private static boolean namedIn(String lower, java.util.Map<String,Object> kind) {
+        return lower.contains(((String) kind.get("colony_kind")).replace("_", " ")
+            .replace(" colony", "").replace(" swarm", "").replace(" patch", "").replace(" den", "")
+            .replace(" nest", "").replace(" bed", "").replace(" shallows", "").replace(" hive", ""));
+    }
+
     /** Has this colony been worked recently enough that there is nothing yet to take? */
     private static boolean workedOut(java.util.Map<String,Object> kind, Instant at) {
         Object ready = kind.get("ready_at");
@@ -2853,11 +2860,12 @@ public class PhysicalItemService {
         java.util.List<java.util.Map<String,Object>> kinds = jdbc.queryForList(
             "SELECT ck.colony_kind, ck.hazard_kind, ck.hazard_min, ck.hazard_max, ck.smoke_suppresses, ck.requires_tool_class, ck.regrowth_days, ck.shellfish, ck.concentrated_at, " +
             "  ck.has_a_queen, " +
-            "  (SELECT ic.product_ready_at FROM insect_colony ic WHERE ic.chunk_id=? AND ic.colony_kind=ck.colony_kind) AS ready_at " +
+            "  (SELECT ic.product_ready_at FROM insect_colony ic WHERE ic.chunk_id=? AND ic.colony_kind=ck.colony_kind) AS ready_at, " +
+            "  (SELECT ic.queen_taken_at FROM insect_colony ic WHERE ic.chunk_id=? AND ic.colony_kind=ck.colony_kind) AS queen_gone " +
             "FROM insect_colony_kind ck " +
             "WHERE ck.harvest_intent=? AND ck.biome_affinity ILIKE ? " +
             "AND (ck.season_active='ALL' OR ck.season_active ILIKE ?) " +
-            "ORDER BY ck.colony_kind", location, intent, "%" + biome + "%", "%" + season + "%");
+            "ORDER BY ck.colony_kind", location, location, intent, "%" + biome + "%", "%" + season + "%");
         if (kinds.isEmpty()) {
             return new InsectHarvest("FAILED", intent.equals("RAID_HIVE")
                 ? "You search for a hive or nest to raid, but find none here to work."
@@ -2868,6 +2876,21 @@ public class PhysicalItemService {
         // nothing anywhere created an insect_colony row, so the UPDATE recording disturbance matched nothing and a
         // single patch of ground yielded grubs, honey and silk forever. Colonies are a standing resource now — a
         // stretch of ground worked out has to be left alone to come back.
+        // A colony the action names is answered for by name, whether or not it has anything left. Matching the
+        // name against only the workable ones meant that naming the hive you emptied last week got you the
+        // hornets' nest across the clearing instead, reported as a success — the same quiet substitution the
+        // missing-tool branch below refuses to make.
+        java.util.Optional<java.util.Map<String,Object>> named = kinds.stream().filter(k -> namedIn(lower, k)).findFirst();
+        if (named.isPresent() && workedOut(named.get(), occurredAt)) {
+            java.util.Map<String,Object> gone = named.get();
+            String what = ((String) gone.get("colony_kind")).replace("_", " ");
+            return new InsectHarvest("FAILED", gone.get("queen_gone") != null
+                ? "You come back to the " + what + " and there is nothing there to come back to. What you left of it "
+                  + "has gone quiet and cold, and nothing has taken the ground over yet."
+                : "You find where you broke into the " + what + " before. It is still bare, and nowhere near ready to "
+                  + "be worked again.", 0, null);
+        }
+
         java.util.List<java.util.Map<String,Object>> ready = kinds.stream().filter(k -> !workedOut(k, occurredAt)).toList();
         if (ready.isEmpty()) {
             return new InsectHarvest("FAILED", intent.equals("RAID_HIVE")
@@ -2880,9 +2903,7 @@ public class PhysicalItemService {
         // Some colonies need a tool: a mussel prised off its stone without a blade is a mussel lost with the shell
         // (V270). A named colony is attempted whatever the player carries — they asked for that one, and being
         // told plainly why it will not open is more use than quietly working something else.
-        java.util.Map<String,Object> kind = workable.stream()
-            .filter(k -> lower.contains(((String)k.get("colony_kind")).replace("_"," ").replace(" colony","").replace(" swarm","").replace(" patch","").replace(" den","").replace(" nest","").replace(" bed","").replace(" shallows","").replace(" hive","")))
-            .findFirst()
+        java.util.Map<String,Object> kind = named
             .orElseGet(() -> workable.stream().filter(k -> canWorkColony(k, chronicle)).findFirst().orElse(workable.get(0)));
         if (!canWorkColony(kind, chronicle)) {
             String needed = (String) kind.get("requires_tool_class");
