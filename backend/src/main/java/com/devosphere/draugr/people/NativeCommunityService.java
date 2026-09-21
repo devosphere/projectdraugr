@@ -70,8 +70,16 @@ public class NativeCommunityService {
     /** What an isle has put by when a Chronicle first comes to it: about three days for eight people. */
     static final int REEDKIN_STARTING_STORE = 24;
 
-    /** What reedkin hands make from marsh and water, in the order they turn to it (DR-0024). */
+    /** What reedkin hands make from marsh and water, in the order they turn to it (DR-0024). The fallback for a
+     * community whose row does not say — no community in a migrated world is without one. */
     static final String[] MADE_GOODS = {"reed_mat", "fiber_cordage", "woven_basket", "fish_trap"};
+
+    /** What this people's own hands make (#113, V366): their row, which is what makes a second people possible. */
+    public List<String> madeGoods(UUID community) {
+        List<String> theirs = jdbc.query("SELECT made_goods FROM native_community WHERE id=?",
+            rs -> rs.next() && rs.getArray(1) != null ? List.of((String[]) rs.getArray(1).getArray()) : List.of(), community);
+        return theirs.isEmpty() ? List.of(MADE_GOODS) : theirs;
+    }
     /** How many made things an isle keeps in its store before its makers turn to other work. */
     static final int MADE_GOODS_KEPT = 8;
 
@@ -128,7 +136,94 @@ public class NativeCommunityService {
             taken.add(new int[]{x, y});
             founded++;
         }
-        return founded;
+        return founded + seedGrovebound(worldId, now);
+    }
+
+    // ── Where the grovebound live (#115, #118, V366). ─────────────────────────────────────────────────────────────
+
+    /** One grove in a world: a rooted people is a place, and two of them would be two places pretending to be one. */
+    static final int GROVE_CAP = 1;
+    /** How far a grove stands from any other people's home, so neither is working the other's ground. */
+    static final int GROVE_SPACING = 6;
+    /** What a grove has put by when a Chronicle first comes to it: about three days for eight of them. */
+    static final int GROVE_STARTING_STORE = 24;
+    /** What grovebound hands make from bark, resin and herb, in the order they turn to it. */
+    static final String[] GROVE_MADE_GOODS = {"bark_sheet", "pine_resin", "herbal_poultice", "fiber_cordage"};
+
+    private static final String[][] GROVE_HOUSEHOLDS = {
+        {"HEADSPERSON", "FORAGER", "FORAGER", "CHILD"},
+        {"ELDER", "FORAGER", "MAKER", "MAKER"}};
+    private static final String[] GROVE_KIN = {"Bark-marked kin", "Deep-root kin"};
+    private static final String[] GROVE_NAMES = {
+        "Hollowmark", "Sessile", "Aldern", "Mosshold", "Thornwake", "Rootfast", "Beechen", "Quietbough"};
+
+    /**
+     * Place the grovebound's one grove in a world that has none: old-growth forest, on ground the world has already
+     * called old timber where it can, never on a monster's ground, and well away from any other people's home.
+     * Deterministic by grid position, additive and idempotent, exactly as the isles are — it runs at genesis and on
+     * every boot through reconcile, so a world that has been lived in receives its grove without being regenerated.
+     */
+    private int seedGrovebound(UUID worldId, Instant now) {
+        if (!Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM native_candidate WHERE species_key='grovebound' AND status='ACTIVE')", Boolean.class)))
+            return 0;
+        if (count("SELECT COUNT(*) FROM native_community WHERE world_id=? AND species_key='grovebound'", worldId) >= GROVE_CAP) return 0;
+
+        UUID ground = jdbc.query(
+            "SELECT c.id FROM world_chunk c WHERE c.world_id=? AND c.biome='TEMPERATE_FOREST' " +
+            "AND NOT EXISTS (SELECT 1 FROM ecology_site s WHERE s.chunk_id=c.id AND s.site_category='MONSTER') " +
+            "AND NOT EXISTS (SELECT 1 FROM native_community o JOIN world_chunk oh ON oh.id=o.home_chunk_id " +
+            "                WHERE o.world_id=c.world_id AND greatest(abs(oh.grid_x-c.grid_x), abs(oh.grid_y-c.grid_y)) < ?) " +
+            // Old timber first: a people of the old wood belongs where the world already says the old wood stands.
+            "ORDER BY EXISTS (SELECT 1 FROM ecology_site t WHERE t.chunk_id=c.id AND t.site_kind ILIKE '%old-growth%') DESC, " +
+            "         md5(c.grid_x || ',' || c.grid_y || ':grovebound'), c.grid_x, c.grid_y LIMIT 1",
+            rs -> rs.next() ? rs.getObject(1, UUID.class) : null, worldId, GROVE_SPACING);
+        if (ground == null) return 0;
+        foundGrove(worldId, ground, now);
+        return 1;
+    }
+
+    private void foundGrove(UUID worldId, UUID chunk, Instant now) {
+        String grove = "Elderbough";
+        UUID community = UUID.randomUUID();
+        Timestamp ts = Timestamp.from(now);
+        jdbc.update("INSERT INTO native_community (id,world_id,species_key,name,home_chunk_id,territory_radius,governance," +
+            "base_trade_policy,trade_policy,base_security_posture,security_posture,staple_item_key,daily_ration," +
+            "grave_encroachment_kind,made_goods,founded_at,last_simulated_at) " +
+            // Two chunks of territory, because a grove is the trees and not the clearing; and what they cannot
+            // forgive is the taking of those trees (#211, V365).
+            "VALUES (?,?,'grovebound',?,?,2,'ELDERS','SELECTIVE','SELECTIVE','WARY','WARY','dried_mushroom',1," +
+            "'CANOPY_LOSS',?::varchar[],?,?)",
+            community, worldId, grove, chunk, toArray(GROVE_MADE_GOODS), ts, ts);
+
+        UUID houses = place("NATIVE_SITE", grove + " grove", chunk);
+        jdbc.update("INSERT INTO native_settlement_site (object_id,community_id,site_kind,access_rule) VALUES (?,?,'VILLAGE','INVITED')", houses, community);
+        UUID store = place("NATIVE_SITE", grove + " bark store", chunk);
+        jdbc.update("INSERT INTO native_settlement_site (object_id,community_id,site_kind,access_rule,holds_stores) VALUES (?,?,'STORE_HOUSE','INVITED',TRUE)", store, community);
+
+        int named = 0;
+        for (int h = 0; h < GROVE_HOUSEHOLDS.length; h++) {
+            UUID kin = UUID.randomUUID();
+            jdbc.update("INSERT INTO native_kin_group (id,community_id,name,housing_site_id) VALUES (?,?,?,?)",
+                kin, community, GROVE_KIN[h], houses);
+            for (String role : GROVE_HOUSEHOLDS[h]) {
+                String name = GROVE_NAMES[named++ % GROVE_NAMES.length];
+                UUID body = place("NATIVE_PERSON", name + " of " + grove, chunk);
+                jdbc.update("INSERT INTO native_individual (object_id,community_id,kin_group_id,given_name,role) VALUES (?,?,?,?,?)",
+                    body, community, kin, name, role);
+            }
+        }
+        String mushroom = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key='dried_mushroom'", String.class);
+        for (int i = 0; i < GROVE_STARTING_STORE; i++) items.createHeldItem(store, "dried_mushroom", mushroom, now, "PUT_BY_COMMUNITY");
+        for (String good : new String[]{"bark_sheet", "bark_sheet", "pine_resin", "herbal_poultice", "fiber_cordage"}) {
+            String name = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, good);
+            items.createHeldItem(store, good, name, now, "MADE_BY_COMMUNITY");
+        }
+        record(community, now, "FOUNDED", Map.of("people", 8, "grove", grove));
+    }
+
+    private java.sql.Array toArray(String[] values) {
+        return jdbc.execute((java.sql.Connection con) -> con.createArrayOf("varchar", values));
     }
 
     private void foundReedkinIsle(UUID worldId, UUID chunk, int ordinal, Instant now) {
@@ -232,8 +327,9 @@ public class NativeCommunityService {
                 "WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key <> ?", store, staple);
             int makers = count("SELECT COUNT(*) FROM native_individual n JOIN world_object w ON w.id=n.object_id " +
                 "WHERE n.community_id=? AND n.role='MAKER' AND n.condition='WELL' AND w.lifecycle_state='ACTIVE'", community);
+            List<String> theirs = madeGoods(community);
             for (int m = 0; m < makers && made < MADE_GOODS_KEPT; m++, made++) {
-                String good = MADE_GOODS[(day.atZone(ZoneOffset.UTC).getDayOfYear() / 3 + m) % MADE_GOODS.length];
+                String good = theirs.get((day.atZone(ZoneOffset.UTC).getDayOfYear() / 3 + m) % theirs.size());
                 String name = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, good);
                 items.createHeldItem(store, good, name, day, "MADE_BY_COMMUNITY");
             }
