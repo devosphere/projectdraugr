@@ -2769,6 +2769,24 @@ public class PhysicalItemService {
         return harvestColony(chronicle, location, actionText, occurredAt, "COLLECT_INSECTS");
     }
 
+    /** A year, because a queenless colony does not come back before one (#122). */
+    private static final int QUEENLESS_FOR_DAYS = 365;
+
+    /** End a colony by taking the one creature that holds it together: nothing stands here now, and nothing will. */
+    private void queenTaken(UUID location, String colonyKind, Instant at) {
+        Timestamp ts = Timestamp.from(at);
+        Timestamp comesBack = Timestamp.from(at.plus(java.time.Duration.ofDays(QUEENLESS_FOR_DAYS)));
+        int updated = jdbc.update("UPDATE insect_colony SET health=0, product_ready_at=?, last_disturbed_at=?, queen_taken_at=? " +
+            "WHERE chunk_id=? AND colony_kind=?", comesBack, ts, ts, location, colonyKind);
+        if (updated == 0) {
+            UUID object = UUID.randomUUID();
+            jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'INSECT_COLONY',?,?)",
+                object, capitalise(colonyKind.replace('_', ' ')), location);
+            jdbc.update("INSERT INTO insect_colony (object_id,colony_kind,chunk_id,health,product_ready_at,last_disturbed_at,queen_taken_at) " +
+                "VALUES (?,?,?,0,?,?,?)", object, colonyKind, location, comesBack, ts, ts);
+        }
+    }
+
     /** Has this colony been worked recently enough that there is nothing yet to take? */
     private static boolean workedOut(java.util.Map<String,Object> kind, Instant at) {
         Object ready = kind.get("ready_at");
@@ -2834,6 +2852,7 @@ public class PhysicalItemService {
         // Candidate colony kinds for this intent, present in this biome and season.
         java.util.List<java.util.Map<String,Object>> kinds = jdbc.queryForList(
             "SELECT ck.colony_kind, ck.hazard_kind, ck.hazard_min, ck.hazard_max, ck.smoke_suppresses, ck.requires_tool_class, ck.regrowth_days, ck.shellfish, ck.concentrated_at, " +
+            "  ck.has_a_queen, " +
             "  (SELECT ic.product_ready_at FROM insect_colony ic WHERE ic.chunk_id=? AND ic.colony_kind=ck.colony_kind) AS ready_at " +
             "FROM insect_colony_kind ck " +
             "WHERE ck.harvest_intent=? AND ck.biome_affinity ILIKE ? " +
@@ -2922,6 +2941,26 @@ public class PhysicalItemService {
             }
             totalTaken += take;
         }
+        // The queen (#122). Cutting her out is not robbing a colony, it is ending one: the brood comb comes away
+        // with her and what is left cannot make another. A colony that has lost its queen is health 0 with nothing
+        // ready for a year, which is the same state as one robbed flat — reached in a single act, on purpose, and
+        // recorded as its own thing so the world can tell the difference afterwards.
+        boolean wantsTheQueen = lower.contains("queen") || lower.contains("brood comb") || lower.contains("cut out the comb")
+            || lower.contains("take the comb") || lower.contains("whole nest") || lower.contains("destroy the");
+        boolean hasAQueen = Boolean.TRUE.equals(kind.get("has_a_queen"));
+        if (wantsTheQueen && hasAQueen) {
+            queenTaken(location, colonyKind, occurredAt);
+            return new InsectHarvest(totalTaken > 0 ? "SUCCEEDED" : "PARTIAL",
+                "You cut the brood comb out whole and the queen with it. What is left of the colony boils out over your hands and "
+                + "goes on working a thing that has already ended — there will be no more of them on this ground for a long while.",
+                hazardSeverity, hazardKind);
+        }
+        if (wantsTheQueen)
+            return new InsectHarvest(totalTaken > 0 ? "SUCCEEDED" : "PARTIAL",
+                "You go looking for one creature the rest of them answer to, and there is not one: this is a colony of equals, "
+                + "and taking it apart would only leave you with the parts." + (totalTaken > 0 ? " You take what the ground gives instead." : ""),
+                hazardSeverity, hazardKind);
+
         // Record the working. The colony is materialised here the first time it is touched — the same lazy pattern
         // fish stock and mineral seams use — so untouched ground carries no rows, and worked ground remembers.
         if (totalTaken > 0) {
