@@ -94,6 +94,24 @@ public class NativeCommunityService {
         "Brannoch", "Otterley", "Mere", "Rushe", "Tern", "Holm", "Weiran", "Carra"};
 
     /**
+     * Place every people this world should have and does not (#115). Each people is asked for separately and each
+     * answers for itself, because a world can be short of one and not the other — and it will be, every time a
+     * second people is added to a world that already has its first.
+     *
+     * <p>That is not hypothetical: it is the defect this shape exists to prevent. The reedkin's own placement ends
+     * early once their isles are all standing, and while the grove was seeded inside that method, a world with two
+     * isles returned before it was ever asked about the grove. Every world already being played would have gone on
+     * without the second people, silently, for as long as anybody looked only at a fresh world.
+     *
+     * @return how many communities were founded by this call, across all peoples
+     */
+    @Transactional
+    public int seedPeoples(UUID worldId) {
+        Instant now = jdbc.queryForObject("SELECT simulated_at FROM simulation_clock WHERE id=1", Timestamp.class).toInstant();
+        return seedReedkin(worldId) + seedGrovebound(worldId, now);
+    }
+
+    /**
      * Place the reedkin's isles in a world that has none yet, or fewer than it should: freshwater marsh where it
      * meets running water, never on a monster's ground, and never within {@link #REEDKIN_SPACING} of another isle.
      * Deterministic by grid position, so the same world always has its isles in the same places. Additive and
@@ -102,8 +120,7 @@ public class NativeCommunityService {
      *
      * @return how many isles were founded by this call
      */
-    @Transactional
-    public int seedPeoples(UUID worldId) {
+    private int seedReedkin(UUID worldId) {
         if (!Boolean.TRUE.equals(jdbc.queryForObject(
                 "SELECT EXISTS(SELECT 1 FROM cognition_profile WHERE species_key='reedkin' AND cognition_class='PEOPLE')", Boolean.class)))
             return 0;
@@ -136,7 +153,7 @@ public class NativeCommunityService {
             taken.add(new int[]{x, y});
             founded++;
         }
-        return founded + seedGrovebound(worldId, now);
+        return founded;
     }
 
     // ── Where the grovebound live (#115, #118, V366). ─────────────────────────────────────────────────────────────

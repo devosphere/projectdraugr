@@ -79,9 +79,27 @@ class ASecondPeopleIntegrationTest {
 
     @Test
     void theGroveStandsWithItsOwnLifeAndItsOwnRefusals() {
+        // The state the live world was actually in, and the reason this test exists (#115): its isles were placed
+        // by a build that had never heard of the grovebound. Reproduced by taking the candidacy back out of ACTIVE
+        // before the world is made, so the isles go in and the grove does not — exactly what a save from last week
+        // looks like on the day a second people ships.
+        boolean fresh = worldGenesis.current() == null;
+        if (fresh)
+            jdbc.update("UPDATE native_candidate SET status='CANDIDATE', species_key=NULL, activated_in=NULL WHERE candidate_key='grovebound'");
         if (worldGenesis.current() == null) {
             worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
             ecology.seed();
+        }
+        if (fresh) {
+            assertEquals(0, (int) jdbc.queryForObject("SELECT COUNT(*) FROM native_community WHERE species_key='grovebound'", Integer.class),
+                "a world made before the second people was activated has no grove in it");
+            assertEquals(2, (int) jdbc.queryForObject("SELECT COUNT(*) FROM native_community WHERE species_key='reedkin'", Integer.class),
+                "and its isles are all standing, which is what used to end the seeding early");
+            jdbc.update("UPDATE native_candidate SET status='ACTIVE', species_key='grovebound', activated_in='V366', " +
+                "tier_and_interactions=TRUE, ecology=TRUE, body_and_materials=TRUE, home_and_footprint=TRUE, " +
+                "social_rules=TRUE, actions_and_tests=TRUE WHERE candidate_key='grovebound'");
+            assertEquals(1, natives.seedPeoples(worldGenesis.current().worldId()),
+                "a world with its isles full is still asked about the grove, and places it");
         }
         var summary = chronicles.awaken();
         assertNotNull(summary, "awakening must produce a living Chronicle");
@@ -92,7 +110,7 @@ class ASecondPeopleIntegrationTest {
 
         // The world has both peoples, and only one grove.
         UUID grove = jdbc.queryForObject("SELECT id FROM native_community WHERE species_key='grovebound'", UUID.class);
-        assertNotNull(grove, "the second people is placed at genesis");
+        assertNotNull(grove, "the grove stands, whether the world was made with it or received it on reconcile");
         assertEquals(1, (int) jdbc.queryForObject("SELECT COUNT(*) FROM native_community WHERE species_key='grovebound'", Integer.class),
             "a rooted people is one place, not a population");
         assertEquals(0, natives.seedPeoples(worldGenesis.current().worldId()), "a world that has its peoples gains no more on reconcile");
@@ -109,7 +127,8 @@ class ASecondPeopleIntegrationTest {
         assertEquals("dried_mushroom", jdbc.queryForObject("SELECT staple_item_key FROM native_community WHERE id=?", String.class, grove));
         assertEquals("CANOPY_LOSS", jdbc.queryForObject("SELECT grave_encroachment_kind FROM native_community WHERE id=?", String.class, grove),
             "a people of the old wood cannot forgive the taking of it");
-        assertTrue(natives.madeGoods(grove).contains("bark_sheet"), () -> "they work bark, not reed: " + natives.madeGoods(grove));
+        java.util.List<String> makings = natives.madeGoods(grove);
+        assertTrue(makings.contains("bark_sheet"), () -> "they work bark, not reed: " + makings);
         assertTrue(jdbc.queryForObject("SELECT COUNT(*) FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
             "JOIN native_settlement_site s ON s.object_id=w.current_owner_id WHERE s.community_id=? AND i.item_key='dried_mushroom'",
             Integer.class, grove) > 0, "their store holds what they eat");
