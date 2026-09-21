@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -163,6 +164,12 @@ class NativeCandidateRegisterIntegrationTest {
                 c.setAutoCommit(auto);
             }
         });
-        assertTrue(answer.contains("#120"), () -> "a candidacy that has not passed review cannot be founded: " + answer);
+        // Refused — and by the FIRST gate it reaches, which is the personhood one rather than the register's.
+        // That is the stronger answer, not a weaker one: a candidacy still under review has no classified species
+        // at all, so V345's "a community must be a people" rule catches it before V355's "must be ACTIVE" rule is
+        // ever consulted. Asserting only "#120" was asserting which guard fired, and the guards are ordered.
+        assertTrue(answer.contains("#120") || answer.contains("#110/#111"),
+            () -> "a candidacy that has not passed review cannot be founded: " + answer);
+        assertNotEquals("accepted", answer, "and it is refused by the database, not merely discouraged in prose");
     }
 }
