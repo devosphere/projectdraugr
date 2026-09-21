@@ -2769,6 +2769,31 @@ public class PhysicalItemService {
         return harvestColony(chronicle, location, actionText, occurredAt, "COLLECT_INSECTS");
     }
 
+    /** A year, because a queenless colony does not come back before one (#122). */
+    private static final int QUEENLESS_FOR_DAYS = 365;
+
+    /** End a colony by taking the one creature that holds it together: nothing stands here now, and nothing will. */
+    private void queenTaken(UUID location, String colonyKind, Instant at) {
+        Timestamp ts = Timestamp.from(at);
+        Timestamp comesBack = Timestamp.from(at.plus(java.time.Duration.ofDays(QUEENLESS_FOR_DAYS)));
+        int updated = jdbc.update("UPDATE insect_colony SET health=0, product_ready_at=?, last_disturbed_at=?, queen_taken_at=? " +
+            "WHERE chunk_id=? AND colony_kind=?", comesBack, ts, ts, location, colonyKind);
+        if (updated == 0) {
+            UUID object = UUID.randomUUID();
+            jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'INSECT_COLONY',?,?)",
+                object, capitalise(colonyKind.replace('_', ' ')), location);
+            jdbc.update("INSERT INTO insect_colony (object_id,colony_kind,chunk_id,health,product_ready_at,last_disturbed_at,queen_taken_at) " +
+                "VALUES (?,?,?,0,?,?,?)", object, colonyKind, location, comesBack, ts, ts);
+        }
+    }
+
+    /** Does the action name this colony — by its own word, with the kind of place it is left off? */
+    private static boolean namedIn(String lower, java.util.Map<String,Object> kind) {
+        return lower.contains(((String) kind.get("colony_kind")).replace("_", " ")
+            .replace(" colony", "").replace(" swarm", "").replace(" patch", "").replace(" den", "")
+            .replace(" nest", "").replace(" bed", "").replace(" shallows", "").replace(" hive", ""));
+    }
+
     /** Has this colony been worked recently enough that there is nothing yet to take? */
     private static boolean workedOut(java.util.Map<String,Object> kind, Instant at) {
         Object ready = kind.get("ready_at");
@@ -2834,11 +2859,13 @@ public class PhysicalItemService {
         // Candidate colony kinds for this intent, present in this biome and season.
         java.util.List<java.util.Map<String,Object>> kinds = jdbc.queryForList(
             "SELECT ck.colony_kind, ck.hazard_kind, ck.hazard_min, ck.hazard_max, ck.smoke_suppresses, ck.requires_tool_class, ck.regrowth_days, ck.shellfish, ck.concentrated_at, " +
-            "  (SELECT ic.product_ready_at FROM insect_colony ic WHERE ic.chunk_id=? AND ic.colony_kind=ck.colony_kind) AS ready_at " +
+            "  ck.has_a_queen, " +
+            "  (SELECT ic.product_ready_at FROM insect_colony ic WHERE ic.chunk_id=? AND ic.colony_kind=ck.colony_kind) AS ready_at, " +
+            "  (SELECT ic.queen_taken_at FROM insect_colony ic WHERE ic.chunk_id=? AND ic.colony_kind=ck.colony_kind) AS queen_gone " +
             "FROM insect_colony_kind ck " +
             "WHERE ck.harvest_intent=? AND ck.biome_affinity ILIKE ? " +
             "AND (ck.season_active='ALL' OR ck.season_active ILIKE ?) " +
-            "ORDER BY ck.colony_kind", location, intent, "%" + biome + "%", "%" + season + "%");
+            "ORDER BY ck.colony_kind", location, location, intent, "%" + biome + "%", "%" + season + "%");
         if (kinds.isEmpty()) {
             return new InsectHarvest("FAILED", intent.equals("RAID_HIVE")
                 ? "You search for a hive or nest to raid, but find none here to work."
@@ -2849,6 +2876,21 @@ public class PhysicalItemService {
         // nothing anywhere created an insect_colony row, so the UPDATE recording disturbance matched nothing and a
         // single patch of ground yielded grubs, honey and silk forever. Colonies are a standing resource now — a
         // stretch of ground worked out has to be left alone to come back.
+        // A colony the action names is answered for by name, whether or not it has anything left. Matching the
+        // name against only the workable ones meant that naming the hive you emptied last week got you the
+        // hornets' nest across the clearing instead, reported as a success — the same quiet substitution the
+        // missing-tool branch below refuses to make.
+        java.util.Optional<java.util.Map<String,Object>> named = kinds.stream().filter(k -> namedIn(lower, k)).findFirst();
+        if (named.isPresent() && workedOut(named.get(), occurredAt)) {
+            java.util.Map<String,Object> gone = named.get();
+            String what = ((String) gone.get("colony_kind")).replace("_", " ");
+            return new InsectHarvest("FAILED", gone.get("queen_gone") != null
+                ? "You come back to the " + what + " and there is nothing there to come back to. What you left of it "
+                  + "has gone quiet and cold, and nothing has taken the ground over yet."
+                : "You find where you broke into the " + what + " before. It is still bare, and nowhere near ready to "
+                  + "be worked again.", 0, null);
+        }
+
         java.util.List<java.util.Map<String,Object>> ready = kinds.stream().filter(k -> !workedOut(k, occurredAt)).toList();
         if (ready.isEmpty()) {
             return new InsectHarvest("FAILED", intent.equals("RAID_HIVE")
@@ -2861,9 +2903,7 @@ public class PhysicalItemService {
         // Some colonies need a tool: a mussel prised off its stone without a blade is a mussel lost with the shell
         // (V270). A named colony is attempted whatever the player carries — they asked for that one, and being
         // told plainly why it will not open is more use than quietly working something else.
-        java.util.Map<String,Object> kind = workable.stream()
-            .filter(k -> lower.contains(((String)k.get("colony_kind")).replace("_"," ").replace(" colony","").replace(" swarm","").replace(" patch","").replace(" den","").replace(" nest","").replace(" bed","").replace(" shallows","").replace(" hive","")))
-            .findFirst()
+        java.util.Map<String,Object> kind = named
             .orElseGet(() -> workable.stream().filter(k -> canWorkColony(k, chronicle)).findFirst().orElse(workable.get(0)));
         if (!canWorkColony(kind, chronicle)) {
             String needed = (String) kind.get("requires_tool_class");
@@ -2922,6 +2962,26 @@ public class PhysicalItemService {
             }
             totalTaken += take;
         }
+        // The queen (#122). Cutting her out is not robbing a colony, it is ending one: the brood comb comes away
+        // with her and what is left cannot make another. A colony that has lost its queen is health 0 with nothing
+        // ready for a year, which is the same state as one robbed flat — reached in a single act, on purpose, and
+        // recorded as its own thing so the world can tell the difference afterwards.
+        boolean wantsTheQueen = lower.contains("queen") || lower.contains("brood comb") || lower.contains("cut out the comb")
+            || lower.contains("take the comb") || lower.contains("whole nest") || lower.contains("destroy the");
+        boolean hasAQueen = Boolean.TRUE.equals(kind.get("has_a_queen"));
+        if (wantsTheQueen && hasAQueen) {
+            queenTaken(location, colonyKind, occurredAt);
+            return new InsectHarvest(totalTaken > 0 ? "SUCCEEDED" : "PARTIAL",
+                "You cut the brood comb out whole and the queen with it. What is left of the colony boils out over your hands and "
+                + "goes on working a thing that has already ended — there will be no more of them on this ground for a long while.",
+                hazardSeverity, hazardKind);
+        }
+        if (wantsTheQueen)
+            return new InsectHarvest(totalTaken > 0 ? "SUCCEEDED" : "PARTIAL",
+                "You go looking for one creature the rest of them answer to, and there is not one: this is a colony of equals, "
+                + "and taking it apart would only leave you with the parts." + (totalTaken > 0 ? " You take what the ground gives instead." : ""),
+                hazardSeverity, hazardKind);
+
         // Record the working. The colony is materialised here the first time it is touched — the same lazy pattern
         // fish stock and mineral seams use — so untouched ground carries no rows, and worked ground remembers.
         if (totalTaken > 0) {

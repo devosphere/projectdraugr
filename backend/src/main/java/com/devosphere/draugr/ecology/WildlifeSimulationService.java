@@ -35,6 +35,13 @@ public class WildlifeSimulationService {
                 boolean clutchTaken = Boolean.TRUE.equals(jdbc.queryForObject(
                     "SELECT clutch_taken_at IS NOT NULL AND clutch_taken_at > ? FROM wildlife_population WHERE id=?",
                     Boolean.class, Timestamp.from(now.minus(Duration.ofDays(WildlifeEncounterService.CLUTCH_COSTS_DAYS))), id));
+                // And a group that has lost the one it followed does not breed while it is leaderless (#121): in a
+                // pack that is the breeding pair, in a herd the matriarch. The animals are all still standing; what
+                // is missing is the thing that makes them a group rather than a crowd.
+                boolean leaderless = Boolean.TRUE.equals(jdbc.queryForObject(
+                    "SELECT leader_lost_at IS NOT NULL AND leader_lost_at > ? FROM wildlife_population WHERE id=?",
+                    Boolean.class, Timestamp.from(now.minus(Duration.ofDays(LEADERLESS_DAYS))), id));
+                clutchTaken = clutchTaken || leaderless;
                 if (intervals > 0 && population > 0 && population < capacity && disturbance < 70 && !clutchTaken) {
                     int next = Math.min(capacity, population + (int)Math.min(intervals, capacity - population));
                     jdbc.update("UPDATE wildlife_population SET population_count=?,last_simulated_at=? WHERE id=?", next, Timestamp.from(last.plus(Duration.ofHours(intervals * intervalHours))), id);

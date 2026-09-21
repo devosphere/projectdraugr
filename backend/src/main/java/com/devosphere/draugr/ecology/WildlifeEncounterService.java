@@ -142,6 +142,14 @@ public class WildlifeEncounterService {
                 && Boolean.TRUE.equals(jdbc.queryForObject(
                     "SELECT EXISTS(SELECT 1 FROM cognition_profile cp JOIN wildlife_species ws ON ws.species_key=cp.species_key " +
                     "WHERE cp.species_key=? AND (cp.cognition_class='SOCIAL' OR ws.pack_hunter))", Boolean.class, candidate.species()));
+            // The matriarch (#121/#122). A herd does not hunt, so it is never in any of the states above; what it
+            // does when a Chronicle comes at it is stand, and the animal it stands behind is the old female who
+            // decides where it goes and when it runs. A herd of four or more, roused rather than grazing, loses her
+            // the same way a pack loses its leader — and neither group breeds again until another comes forward.
+            if (!ledFromTheFront && candidate.population() >= 4 && "ALERT".equals(candidate.behavior()))
+                ledFromTheFront = Boolean.TRUE.equals(jdbc.queryForObject(
+                    "SELECT EXISTS(SELECT 1 FROM cognition_profile cp WHERE cp.species_key=? AND cp.kinship_model='HERD')",
+                    Boolean.class, candidate.species()));
             if (ledFromTheFront)
                 jdbc.update("UPDATE wildlife_population SET population_count=population_count-1, behavior_state='SCATTERED', leader_lost_at=? WHERE id=?",
                     Timestamp.from(at), candidate.populationId());
