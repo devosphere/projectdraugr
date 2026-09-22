@@ -133,8 +133,10 @@ class TamedAnimalYieldIntegrationTest {
         var again = actions.resolve("milk the goat");
         assertEquals("FAILED", again.outcome(), () -> "a milked-out animal must be allowed to rest: " + again.perception());
 
-        // Tamed fowl lay eggs a Chronicle can gather.
-        tame(chronicle, chunk, worldId, "marsh_fowl", ts);
+        // Tamed fowl lay eggs a Chronicle can gather. A LAND fowl, deliberately: this assertion is about the
+        // general rule, and marsh_fowl needs open water to lay (#108, V373) — taming one on whatever ground the
+        // Chronicle woke on was always a little artificial, and is now a different test's subject.
+        tame(chronicle, chunk, worldId, "guinea_fowl", ts);
         var eggs = actions.resolve("collect the eggs");
         assertEquals("SUCCEEDED", eggs.outcome(), () -> "tamed fowl must give eggs: " + eggs.perception());
         assertTrue(items.hasAtLeast(chronicle, "fowl_egg", 1), "the eggs must be in hand");
@@ -239,6 +241,13 @@ class TamedAnimalYieldIntegrationTest {
 
         // This class shares its database, so the goat measured here is the only goat this Chronicle keeps, and
         // she has never been milked. Assuming a fixture you did not establish is how the last one went red.
+        //
+        // And she must stand on DRY ground. Since #694 the thirst tick runs for every kept animal, not only the
+        // eleven draft species, and it takes 40 off a beast standing on water — so a goat parched to 70 on a
+        // marsh is at 30 by the time the yield reads her, and gives milk. The ground is set here rather than
+        // inherited, because another test in this class leaves the chunk wet.
+        jdbc.update("UPDATE world_chunk SET biome='GRASSLAND' WHERE id=?", chunk);
+        jdbc.update("DELETE FROM ecology_site WHERE chunk_id=? AND " + com.devosphere.draugr.ecology.FreshWater.sites(), chunk);
         jdbc.update("DELETE FROM tamed_production WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
         jdbc.update("DELETE FROM tamed_young WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
         jdbc.update("DELETE FROM tamed_gestation WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
@@ -272,6 +281,80 @@ class TamedAnimalYieldIntegrationTest {
         jdbc.update("UPDATE wildlife_bond SET draft_hunger=0, draft_thirst=0 WHERE chronicle_id=?", chronicle);
         var again = actions.resolve("milk the goat");
         assertEquals("SUCCEEDED", again.outcome(), () -> "looked after, she gives again: " + again.perception());
+
+        assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
+
+    /**
+     * A duck kept from water does not lay (#108) — and a hen on the same ground still does.
+     *
+     * <p>#108 asks for a duck house that is "not a dry coop copy". The objection to building one was that the
+     * world had no idea what makes a duck different from a hen, so it would have been a coop with another name.
+     * This is the difference: waterfowl need OPEN water, and a trough is not that.
+     *
+     * <p>The second half of this test is the whole of its value. A rule that stopped every bird laying on dry
+     * ground would be a different bug wearing this fix's clothes, so the guinea fowl beside the ducks has to go
+     * on laying.
+     */
+    @Test
+    void aDuckKeptFromWaterDoesNotLayAndAHenBesideHerStillDoes() {
+        if (worldGenesis.current() == null) {
+            worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
+            ecology.seed();
+        }
+        ChronicleService.ChronicleSummary summary = chronicles.awaken();
+        assertNotNull(summary);
+        UUID chronicle = summary.id();
+        UUID chunk = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+        UUID worldId = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, chunk);
+        jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
+        Timestamp ts = Timestamp.from(Instant.now());
+
+        // The catalogue's own answer first: this is a fact about three species, not about poultry.
+        assertTrue(jdbc.queryForObject("SELECT needs_open_water FROM wildlife_species WHERE species_key='mallard_duck'", Boolean.class));
+        assertTrue(!jdbc.queryForObject("SELECT needs_open_water FROM wildlife_species WHERE species_key='guinea_fowl'", Boolean.class));
+
+        // Dry ground, and nothing of this Chronicle's from another test standing on it.
+        String groundWas = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, chunk);
+        jdbc.update("DELETE FROM tamed_production WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
+        jdbc.update("DELETE FROM tamed_young WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
+        jdbc.update("DELETE FROM tamed_gestation WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
+        jdbc.update("DELETE FROM wildlife_bond WHERE chronicle_id=?", chronicle);
+        jdbc.update("UPDATE world_chunk SET biome='GRASSLAND' WHERE id=?", chunk);
+        // Through FreshWater, never spelled out: there is one definition of what water is, and a kind added
+        // to the catalogue must be water here too (FreshWaterDefinitionTest enforces exactly this).
+        jdbc.update("DELETE FROM ecology_site WHERE chunk_id=? AND " + com.devosphere.draugr.ecology.FreshWater.sites(), chunk);
+
+        tame(chronicle, chunk, worldId, "mallard_duck", ts);
+        jdbc.update("UPDATE wildlife_bond SET draft_hunger=0, draft_thirst=0, sickness=0 WHERE chronicle_id=?", chronicle);
+        var dry = actions.resolve("gather eggs");
+        assertEquals("FAILED", dry.outcome(), () -> "ducks on dry grassland are off the lay: " + dry.perception());
+        assertTrue(dry.perception().contains("open water"),
+            () -> "and the refusal says what is missing, not merely that the nests are empty: " + dry.perception());
+
+        // The asymmetry, and the whole value of this test: a hen on exactly the same ground lays.
+        //
+        // One bird at a time, deliberately. takeTamedYield picks the animal whose product has rested longest and
+        // breaks a tie on `last_yielded_at NULLS FIRST` — with a duck and a hen both never milked, which one it
+        // reaches for is arbitrary, and an assertion resting on that would pass or fail by the order rows landed.
+        jdbc.update("DELETE FROM wildlife_bond WHERE chronicle_id=?", chronicle);
+        tame(chronicle, chunk, worldId, "guinea_fowl", ts);
+        jdbc.update("UPDATE wildlife_bond SET draft_hunger=0, draft_thirst=0, sickness=0 WHERE chronicle_id=?", chronicle);
+        var hen = actions.resolve("gather eggs");
+        assertEquals("SUCCEEDED", hen.outcome(), () -> "a hen needs no pond: " + hen.perception());
+
+        // And put the ducks on water: they lay. Nothing was taken away, only sited.
+        jdbc.update("DELETE FROM tamed_production WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
+        jdbc.update("DELETE FROM wildlife_bond WHERE chronicle_id=?", chronicle);
+        tame(chronicle, chunk, worldId, "mallard_duck", ts);
+        jdbc.update("UPDATE wildlife_bond SET draft_hunger=0, draft_thirst=0, sickness=0 WHERE chronicle_id=?", chronicle);
+        jdbc.update("UPDATE world_chunk SET biome='WETLAND' WHERE id=?", chunk);
+        var onWater = actions.resolve("gather eggs");
+        assertEquals("SUCCEEDED", onWater.outcome(), () -> "ducks kept on the marsh lay: " + onWater.perception());
+
+        // Put the ground back. A wet chunk left behind is not nothing now that the thirst tick runs for every
+        // kept animal (#694): it silently waters the next test's stock and undoes whatever condition it set.
+        jdbc.update("UPDATE world_chunk SET biome=? WHERE id=?", groundWas, chunk);
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
