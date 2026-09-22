@@ -267,7 +267,8 @@ public class PhysicalItemService {
     /** How much a draft beast tires from one bout of work (moving/travelling with a vehicle hitched), and how much a
      *  spell of rest gives back. Fatigue scales its haul in loadState (#100/#101). */
     private static final int DRAFT_FATIGUE_PER_WORK = 20;
-    private static final int DRAFT_FATIGUE_HARNESSED = 12; // proper harness/yoke spreads the load — the beast tires slower
+    // What geared work costs is now draft_gear.eases_fatigue_to, per piece of gear (#106, V371). The constant is
+    // gone rather than kept beside the table: two answers to one question is how the reed-goods list drifted.
     private static final int DRAFT_REST_RECOVERY = 40;
 
     /** Terrain the draft team crosses easily — open ground a vehicle rolls or drags over without a fight. Everything
@@ -285,9 +286,11 @@ public class PhysicalItemService {
     public void workDraftBeasts(UUID chronicle) {
         String biome = jdbc.query("SELECT ch.biome FROM world_object cw JOIN world_chunk ch ON ch.id=cw.current_location_id WHERE cw.id=?",
             rs -> rs.next() ? rs.getString(1) : null, chronicle);
-        // Rough going strains the team half again as hard, harnessed or not.
-        int hard = isEasyDraftGround(biome) ? DRAFT_FATIGUE_PER_WORK : DRAFT_FATIGUE_PER_WORK * 3 / 2;
-        int eased = isEasyDraftGround(biome) ? DRAFT_FATIGUE_HARNESSED : DRAFT_FATIGUE_HARNESSED * 3 / 2;
+        // Rough going strains the team half again as hard, geared or not. The numerator is the ungeared cost;
+        // what gear takes off it is `draft_gear.eases_fatigue_to` (#106, V371), read per beast in the statement
+        // below rather than baked into a constant here, so a heavier yoke can be worth more than a light one.
+        boolean easy = isEasyDraftGround(biome);
+        int hard = easy ? DRAFT_FATIGUE_PER_WORK : DRAFT_FATIGUE_PER_WORK * 3 / 2;
         jdbc.update(
             // A harness is worn by ONE beast (#106). This was a single EXISTS over the keeper's goods, so one
             // harness spread the load across a team of any size — buy one strap, and eight oxen pull easy for
@@ -297,27 +300,46 @@ public class PhysicalItemService {
             // And a BROKEN harness spread nothing, because a broken strap is a strap that parted: the draft
             // VEHICLE in the same statement was already checked for that, and the gear that hitches the beast
             // to it was not.
-            "UPDATE wildlife_bond wb SET draft_fatigue = LEAST(100, draft_fatigue + CASE WHEN " + harnessedBeast() +
-            "    THEN ? ELSE ? END), draft_conditioning = LEAST(100, draft_conditioning + 3) " +
+            "UPDATE wildlife_bond wb SET draft_fatigue = LEAST(100, draft_fatigue + " +
+            "  COALESCE(" + gearOnBeast(easy) + ", ?)), draft_conditioning = LEAST(100, draft_conditioning + 3) " +
             "WHERE wb.chronicle_id=? AND wb.bond_stage='TAMED' " +
             "AND EXISTS (SELECT 1 FROM wildlife_population wp JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wp.id=wb.population_id) " +
             "AND EXISTS (SELECT 1 FROM item_instance ti JOIN world_object tw ON tw.id=ti.object_id " +
             "  WHERE ti.item_key IN (SELECT item_key FROM draft_vehicle) AND ti.condition_state <> 'BROKEN' AND tw.current_owner_id=? AND tw.lifecycle_state='ACTIVE')",
-            eased, hard, chronicle, chronicle);
+            hard, chronicle, chronicle);
     }
 
     /**
-     * Whether there is a sound harness or yoke for THIS beast — one piece of gear to one animal, counted the way
-     * {@link #coveredBy} counts winter blankets: a keeper with two harnesses and three oxen harnesses two of them,
-     * decided by bond so the answer never depends on the order rows arrive in.
+     * What a bout costs THIS beast in the best gear it has that actually fits it (#106, V371), or NULL when it is
+     * working bare — the caller supplies the ungeared cost for that case.
+     *
+     * <p>Three rules, and each of them was missing something:
+     * <ul>
+     *   <li><b>One piece of gear to one animal</b>, counted the way {@link #coveredBy} counts winter blankets: a
+     *       keeper with two harnesses and three oxen harnesses two of them, decided by bond so the answer never
+     *       depends on the order rows arrive in. This was a single EXISTS, so one strap geared a team of any size.</li>
+     *   <li><b>Sound gear only.</b> A parted strap pulls nothing. The draft <i>vehicle</i> in the same statement
+     *       was always checked for this; the gear hitching the beast to it was not.</li>
+     *   <li><b>Gear that fits the body.</b> V369's ceiling, read with the same {@code body_size_rank()}: a collar
+     *       harness is not a thing you put on the neck of an ox.</li>
+     * </ul>
+     *
+     * @param easy whether this is easy draft ground; rough going strains a geared beast half again as hard too
      */
-    private static String harnessedBeast() {
-        return "((SELECT count(*) FROM item_instance hi JOIN world_object hw ON hw.id=hi.object_id " +
-               "  WHERE hi.item_key IN ('draft_harness','draft_yoke') AND hw.current_owner_id=wb.chronicle_id " +
-               "    AND hw.lifecycle_state='ACTIVE' AND hi.condition_state <> 'BROKEN') " +
-               " >= (SELECT count(*) FROM wildlife_bond h3 JOIN wildlife_population p3 ON p3.id=h3.population_id " +
-               "  JOIN draft_species d3 ON d3.species_key=p3.species_key " +
-               "  WHERE h3.chronicle_id=wb.chronicle_id AND h3.bond_stage='TAMED' AND h3.id <= wb.id))";
+    private static String gearOnBeast(boolean easy) {
+        String cost = easy ? "g.eases_fatigue_to" : "((g.eases_fatigue_to * 3) / 2)";
+        return "(SELECT MIN(" + cost + ") FROM draft_gear g " +
+               " WHERE body_size_rank(g.fits_up_to_size) >= body_size_rank(" +
+               "         (SELECT ws5.size_tier FROM wildlife_population wp5 JOIN wildlife_species ws5 ON ws5.species_key=wp5.species_key " +
+               "           WHERE wp5.id=wb.population_id)) " +
+               "   AND (SELECT count(*) FROM item_instance hi JOIN world_object hw ON hw.id=hi.object_id " +
+               "         WHERE hi.item_key=g.item_key AND hw.current_owner_id=wb.chronicle_id " +
+               "           AND hw.lifecycle_state='ACTIVE' AND hi.condition_state <> 'BROKEN') " +
+               "     >= (SELECT count(*) FROM wildlife_bond h3 JOIN wildlife_population p3 ON p3.id=h3.population_id " +
+               "          JOIN draft_species d3 ON d3.species_key=p3.species_key " +
+               "          WHERE h3.chronicle_id=wb.chronicle_id AND h3.bond_stage='TAMED' AND h3.id <= wb.id " +
+               "            AND body_size_rank(g.fits_up_to_size) >= body_size_rank(" +
+               "                  (SELECT ws6.size_tier FROM wildlife_species ws6 WHERE ws6.species_key=p3.species_key))))";
     }
 
     /** Rest the Chronicle's draft beasts (#101): a spell of rest or sleep lets every bonded beast recover some fatigue,
