@@ -877,9 +877,10 @@ public class WildlifeEncounterService {
         java.util.Map<String,Object> ready = jdbc.query(
             "SELECT wb.id, wp.species_key, ty.item_key, ty.interval_hours, tp.last_yielded_at, d.display_name, " +
             "       wp.population_count, in_season(ty.available_months), wb.coat_condition, " +
-            "       wb.draft_hunger, wb.draft_thirst " +
+            "       wb.draft_hunger, wb.draft_thirst, ws.needs_open_water " +
             "FROM wildlife_bond wb " +
             "JOIN wildlife_population wp ON wp.id = wb.population_id " +
+            "JOIN wildlife_species ws ON ws.species_key = wp.species_key " +
             "JOIN tamed_yield ty ON ty.species_key = wp.species_key AND ty.yield_kind = ? " +
             "JOIN item_definition d ON d.item_key = ty.item_key " +
             "LEFT JOIN tamed_production tp ON tp.bond_id = wb.id AND tp.item_key = ty.item_key " +
@@ -901,7 +902,8 @@ public class WildlifeEncounterService {
                     java.util.Map.entry("inSeason", rs.getBoolean(8)),
                     java.util.Map.entry("coat", rs.getInt(9)),
                     java.util.Map.entry("hunger", rs.getInt(10)),
-                    java.util.Map.entry("thirst", rs.getInt(11))) : null, wanted, chronicle);
+                    java.util.Map.entry("thirst", rs.getInt(11)),
+                    java.util.Map.entry("needsWater", rs.getBoolean(12))) : null, wanted, chronicle);
 
         if (ready == null) return new EncounterResult("FAILED", switch (wanted) {
             case "MILK" -> "You have nothing tamed here that gives milk — a goat or a cow must be won over first, and won over properly.";
@@ -940,6 +942,16 @@ public class WildlifeEncounterService {
                 : (dry ? "The birds are off their water and off their lay. Nothing has been dropped in the nests for a while."
                        : "The birds are off their feed and off their lay. They are picking at the ground and the nests are empty."));
         }
+
+        // A duck kept from water does not lay (#108). Waterfowl need OPEN water — to feed, to preen, to keep
+        // the plumage that keeps them alive — and a trough is not that. The thirst tick counts a watering
+        // station because a bird drinks from one; this deliberately does not, because what a mallard is missing
+        // on dry grassland is not a drink. A hen on the same ground is unaffected, which is what makes this a
+        // rule about ducks rather than a rule against poultry.
+        if (Boolean.TRUE.equals(ready.get("needsWater")) && !openWaterUnderTheKeeper(chronicle))
+            return new EncounterResult("FAILED", "They are off the lay, and it is not the season or the feed. "
+                + "There is no open water here for them — nowhere to get in, nowhere to feed properly, nowhere to "
+                + "put their feathers right — and birds kept like this stop laying before they stop living.");
 
         String last = (String) ready.get("last");
         if (!last.isEmpty()) {
@@ -1595,6 +1607,23 @@ public class WildlifeEncounterService {
                      : species.contains("deer") || species.contains("boar") ? 3 : 1;
         };
     }
+    /**
+     * Open water on the ground the keeper is standing on (#108) — water a bird can get into, not water it can
+     * drink from.
+     *
+     * <p>Deliberately NOT the thirst tick's predicate, which also counts a watering station and a rainwater
+     * catchment. A trough waters a duck and it does not make the ground a place a duck can be kept: what is
+     * missing on dry grassland is somewhere to swim, feed and preen. Keeping the two different is the reason
+     * this is written out rather than reusing the nearest thing to hand.
+     */
+    private boolean openWaterUnderTheKeeper(UUID chronicle) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM world_object cw JOIN world_chunk ch ON ch.id=cw.current_location_id " +
+            "  WHERE cw.id=? AND (ch.biome IN ('WETLAND','RIVER_BANK','COAST') " +
+            "    OR EXISTS(SELECT 1 FROM ecology_site es WHERE es.chunk_id=ch.id AND " +
+                 com.devosphere.draugr.ecology.FreshWater.sites("es") + ")))", Boolean.class, chronicle));
+    }
+
     private String display(String species) { return species.replace('_',' '); }
     private record Encounter(UUID populationId,String species,String role,String behavior,int population,String movementClass,Integer baseResistance,boolean ambushHunter){}
     private record Combatant(int energy,int injury,int pain,int handWeapon,int stones,int poison,int blunt,int sling,int javelin,int bow,int arrows,int hardened,int bronze,int iron,int steel,int protection,int atlatl){}
