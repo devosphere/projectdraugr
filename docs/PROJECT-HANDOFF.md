@@ -244,7 +244,63 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 
 #### Resume point
 
-> **▶ LATEST (2026-09-21): the second people stands in the live world, and three catalogues stopped being
+> **▶ LATEST (2026-09-22): the standing defect has three faces, and the third one nearly shipped.**
+>
+> Epic #109 is complete but for its last child. Merged: #687 (each people is seeded separately), #688 (the queen
+> and the matriarch, V367), #689 (`needs_first` on all thirty candidacies, V368), #692 (a shelter holds the
+> bodies that fit in it, V369), #691 (a people that cannot agree with itself, V370), #693 (one harness is one
+> beast). **Closed #115, #119, #121.**
+>
+> **Verified against the live saved world, not a fresh one.** All four migrations applied on boot —
+> `Successfully applied 4 migrations … now at v370`, `Launch audit clean` — and the new state is really there:
+> thirty candidacies each naming a blocker, zero unsized stock shelters, the HUGE birth shelter that did not
+> exist before, the ox shed buildable with its three stages, three peoples standing.
+>
+> ### The defect pattern, restated
+>
+> This project's main defect has always been recorded as *data declares a capability, code ignores it*. This
+> cycle found two more faces of the same bug, and they are harder to see:
+>
+> 1. **Declared but ignored.** The original. V344's eligibility columns, read by nothing.
+> 2. **Read but blind.** The column IS read — for every subject alike, so it decides nothing.
+>    `shelters_stock` meant *animals, any of them*: a poultry coop let an **aurochs** breed, and a brooder
+>    shelter — a warmed box for chicks — calved a **water buffalo** at zero perinatal loss. One generic
+>    `draft_harness` geared a team of any size, and a **broken** one geared it too, while the cart checked in
+>    the same statement was already excluded when broken.
+> 3. **Gated on a column nothing advances.** The trap that nearly shipped. #694's milk welfare rule was about to
+>    read `draft_hunger` — which only ever ROSE for the eleven rows of `draft_species`, while feeding relieved
+>    every tamed bond. Of the five milk species one is not draft; of the ten laying species **none** are. The
+>    rule would have been green on a hand-set fixture and dead in play.
+>    **Before gating on a column, grep for what UPDATEs it upward and check that set covers your subjects.**
+>
+> **And always assert the asymmetry.** A refusal that refuses everything is a different bug wearing the fix's
+> clothes: the coop that cannot house an aurochs must still house a guinea fowl, and the test must say so.
+>
+> ### Process, learned the hard way
+>
+> - **Retarget a stacked child to `development` BEFORE merging its parent.** Merging #689 with
+>   `--delete-branch` auto-closed #690, and that close cannot be undone — `gh pr reopen` and
+>   `gh pr edit --base` both refuse. #690 had to become #692, losing its number and thread. Doing it in the
+>   right order kept #695 alive later the same day.
+> - **An identical tree is evidence only when the run it points at is against the right base.** A `DIRTY` PR's
+>   pending run proves nothing however the trees compare. And a *failed* rebase still prints "identical tree" if
+>   you compare after it aborted — check the rebase's own exit code, not just the hashes.
+> - **The launcher cannot be driven headless, by design.** `.secrets/anthropic.key` line 1 is `PWD`, so
+>   `Read-DraugrPassword`'s WinForms dialog always appears and always blocks; there is no switch to skip it.
+>   Verify the world instead by `docker compose up -d postgres`, booting the backend (boot runs genesis
+>   reconcile), querying before and after, then `Stop-Draugr.ps1`. Never while the user's launcher is waiting.
+>
+> **In CI:** #694 (#122 milk and eggs read the animal's condition, and hunger and thirst now rise for every kept
+> animal), #695 (#106 draft gear as data with V369's size ceiling, V371), #696 (#37 the interpreter cites what it
+> read and is refused when it read nothing, V372).
+>
+> **Open after those:** #239, #229, #227, #224, #222 (the backdrop epic — its backend side is substantially done;
+> see the audit on #224, which found the resolver already handles every site category and the manifest already
+> carries the wildlife keys), #109 (closes with #122), #108 and #106 (breadth, each item needing a function
+> first), #99, #77 (breadth only — see the audit, which corrects that ticket's own diagnosis), #37 (per-object
+> target IDs, which need `executeProcess` to honour a preferred target).
+
+> **▶ 2026-09-21: the second people stands in the live world, and three catalogues stopped being
 > catalogues.** The cycle's theme was the project's own stated defect — data that declares a capability nothing
 > reads — found in four more places and closed in each.
 >
@@ -311,7 +367,7 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 > at once, and a rebase force-push used to leave its predecessor queued behind the new one. The workflow now
 > keeps one run per ref and cancels the superseded one.
 
-> **▶ LATEST (2026-09-12): the two systems husbandry was waiting on got built, and the biggest
+> **▶ 2026-09-12: the two systems husbandry was waiting on got built, and the biggest
 > declared-in-code seam yet — what every action does to the world — moved into data behind a gate.**
 >
 > | slice | what it made possible |
