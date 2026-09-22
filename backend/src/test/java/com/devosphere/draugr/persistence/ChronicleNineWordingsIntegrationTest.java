@@ -119,7 +119,11 @@ class ChronicleNineWordingsIntegrationTest {
         //
         // Asserted on the subject WORD rather than on a species, because which birds live on the ground a
         // Chronicle wakes on is the world's business — but that it answers about birds at all is not.
-        for (String[] asked : new String[][] { {"look for birds", "birds"}, {"look for insects", "insects"}, {"look for fish", "fish"} }) {
+        // "look for fish" is deliberately NOT in this list. It never reaches SEARCH: the classifier routes it to
+        // FISH, which answers about the water — "there is no water here that holds anything worth taking" — and
+        // that is the right answer to it. The rule added here is about a search naming its subject, and asserting
+        // it on a phrase that another intent owns was asserting the wrong thing about the wrong path.
+        for (String[] asked : new String[][] { {"look for birds", "birds"}, {"look for insects", "insects"} }) {
             var answer = actions.resolve(asked[0]);
             assertNotEquals("UNKNOWN", answer.intent(), answer::perception);
             assertTrue(answer.perception().toLowerCase(java.util.Locale.ROOT).contains(asked[1]),
