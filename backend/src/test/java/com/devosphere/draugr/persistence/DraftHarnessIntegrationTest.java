@@ -120,15 +120,18 @@ class DraftHarnessIntegrationTest {
     }
 
     /**
-     * One harness is one beast (#106) — and a parted strap harnesses nothing.
+     * One piece of gear is one beast (#106) — a parted strap gears nothing, and a collar harness is not an ox's.
      *
      * <p>Whether the team was harnessed was a single EXISTS over the keeper's goods, so one strap spread the load
      * across a team of any size: buy one, and eight oxen pull easy for ever. The winter blanket in this same class
      * already had the honest rule, counting covers against beasts by bond, and the draft VEHICLE in this same
      * statement was already checked for being broken while the gear hitching the beast to it was not.
+     *
+     * <p>And it fit everything: one `draft_yoke` sat as well on a donkey as on an ox. V371 makes the gear data
+     * with V369's size ceiling on it, so a collar harness — an equine thing — no longer goes on the neck of an ox.
      */
     @Test
-    void oneHarnessIsOneBeastAndAPartedStrapIsNone() {
+    void oneYokeIsOneBeastAndAHarnessIsNotAnOxsGear() {
         if (worldGenesis.current() == null) {
             worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
             ecology.seed();
@@ -149,33 +152,45 @@ class DraftHarnessIntegrationTest {
         items.createCarriedItem(chronicle, "travois", "Travois", now, "TEST");
         tameAnAurochs(chronicle, now);
         tameAnAurochs(chronicle, now);
-        UUID harness = items.createCarriedItem(chronicle, "draft_harness", "Draft harness", now, "TEST");
 
-        // Two beasts, one sound harness. One of them pulls in gear and the other pulls in nothing.
+        // A collar harness on the neck of an ox (#106, V371). It is made for a horse, and an aurochs is HUGE:
+        // carrying two of them gears neither beast, and the bout costs what bare work costs.
+        assertEquals("LARGE", jdbc.queryForObject("SELECT fits_up_to_size FROM draft_gear WHERE item_key='draft_harness'", String.class));
+        items.createCarriedItem(chronicle, "draft_harness", "Draft harness", now, "TEST");
+        items.createCarriedItem(chronicle, "draft_harness", "Draft harness", now, "TEST");
+        resetDraft(chronicle);
+        items.workDraftBeasts(chronicle);
+        assertEquals(java.util.List.of(20, 20), jdbc.queryForList(
+            "SELECT draft_fatigue FROM wildlife_bond WHERE chronicle_id=? ORDER BY draft_fatigue", Integer.class, chronicle),
+            "a collar harness is not a thing you put on the neck of an ox, however many you own");
+
+        // A yoke is. Two beasts, one sound yoke: one of them pulls in gear and the other pulls in nothing.
+        assertEquals("HUGE", jdbc.queryForObject("SELECT fits_up_to_size FROM draft_gear WHERE item_key='draft_yoke'", String.class));
+        UUID yoke = items.createCarriedItem(chronicle, "draft_yoke", "Draft yoke", now, "TEST");
         resetDraft(chronicle);
         items.workDraftBeasts(chronicle);
         java.util.List<Integer> tired = jdbc.queryForList(
             "SELECT draft_fatigue FROM wildlife_bond WHERE chronicle_id=? ORDER BY draft_fatigue", Integer.class, chronicle);
         assertEquals(java.util.List.of(12, 20), tired,
-            "one harness harnesses one beast: the geared one tires 12, the bare one 20");
+            "one yoke yokes one beast: the geared one tires 12, the bare one 20");
 
-        // A second harness, and the whole team is in gear.
-        items.createCarriedItem(chronicle, "draft_harness", "Draft harness", now, "TEST");
+        // A second yoke, and the whole team is in gear.
+        items.createCarriedItem(chronicle, "draft_yoke", "Draft yoke", now, "TEST");
         resetDraft(chronicle);
         items.workDraftBeasts(chronicle);
         assertEquals(java.util.List.of(12, 12), jdbc.queryForList(
             "SELECT draft_fatigue FROM wildlife_bond WHERE chronicle_id=? ORDER BY draft_fatigue", Integer.class, chronicle),
             "gear enough for the team, and the team is geared");
 
-        // Part both straps. A broken harness spreads nothing — the same rule the cart beside it already obeyed.
-        jdbc.update("UPDATE item_instance SET condition_state='BROKEN' WHERE item_key='draft_harness' " +
+        // Break both. Parted gear pulls nothing — the same rule the cart beside it already obeyed.
+        jdbc.update("UPDATE item_instance SET condition_state='BROKEN' WHERE item_key='draft_yoke' " +
             "AND object_id IN (SELECT id FROM world_object WHERE current_owner_id=?)", chronicle);
         resetDraft(chronicle);
         items.workDraftBeasts(chronicle);
         assertEquals(java.util.List.of(20, 20), jdbc.queryForList(
             "SELECT draft_fatigue FROM wildlife_bond WHERE chronicle_id=? ORDER BY draft_fatigue", Integer.class, chronicle),
-            "a parted strap is not gear, however many of them you carry");
-        assertNotNull(harness, "the harness is a real object with a history, not a flag");
+            "a parted yoke is not gear, however many of them you carry");
+        assertNotNull(yoke, "the yoke is a real object with a history, not a flag");
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
