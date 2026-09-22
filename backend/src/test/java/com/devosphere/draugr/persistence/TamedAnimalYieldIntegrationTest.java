@@ -332,17 +332,6 @@ class TamedAnimalYieldIntegrationTest {
         assertTrue(dry.perception().contains("open water"),
             () -> "and the refusal says what is missing, not merely that the nests are empty: " + dry.perception());
 
-        // The asymmetry, and the whole value of this test: a hen on exactly the same ground lays.
-        //
-        // One bird at a time, deliberately. takeTamedYield picks the animal whose product has rested longest and
-        // breaks a tie on `last_yielded_at NULLS FIRST` — with a duck and a hen both never milked, which one it
-        // reaches for is arbitrary, and an assertion resting on that would pass or fail by the order rows landed.
-        jdbc.update("DELETE FROM wildlife_bond WHERE chronicle_id=?", chronicle);
-        tame(chronicle, chunk, worldId, "guinea_fowl", ts);
-        jdbc.update("UPDATE wildlife_bond SET draft_hunger=0, draft_thirst=0, sickness=0 WHERE chronicle_id=?", chronicle);
-        var hen = actions.resolve("gather eggs");
-        assertEquals("SUCCEEDED", hen.outcome(), () -> "a hen needs no pond: " + hen.perception());
-
         // A pool the keeper DUG (#108, V374), on the same dry grassland. Before this the rule had one answer —
         // move — and "go somewhere else" is a poor mechanic to be the whole of a rule. This is the keeper's own
         // answer to it, and it is what makes V373 a decision rather than a wall.
@@ -361,6 +350,17 @@ class TamedAnimalYieldIntegrationTest {
         assertEquals("FAILED", silted.outcome(), () -> "a pool gone to nothing holds no water: " + silted.perception());
         jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED', destroyed_at=?, destroyed_cause='TEST_TEARDOWN', " +
             "destroyed_location_id=current_location_id, current_location_id=NULL WHERE id=?", ts, pool);
+
+        // The asymmetry, and the whole value of this test: a hen on exactly the same ground lays.
+        //
+        // One bird at a time, deliberately. takeTamedYield picks the animal whose product has rested longest and
+        // breaks a tie on `last_yielded_at NULLS FIRST` — with a duck and a hen both never milked, which one it
+        // reaches for is arbitrary, and an assertion resting on that would pass or fail by the order rows landed.
+        jdbc.update("DELETE FROM wildlife_bond WHERE chronicle_id=?", chronicle);
+        tame(chronicle, chunk, worldId, "guinea_fowl", ts);
+        jdbc.update("UPDATE wildlife_bond SET draft_hunger=0, draft_thirst=0, sickness=0 WHERE chronicle_id=?", chronicle);
+        var hen = actions.resolve("gather eggs");
+        assertEquals("SUCCEEDED", hen.outcome(), () -> "a hen needs no pond: " + hen.perception());
 
         // And put the ducks on water: they lay. Nothing was taken away, only sited.
         jdbc.update("DELETE FROM tamed_production WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
