@@ -35,14 +35,29 @@ public class ProcedureInterpreter {
         the list. If no ordered combination of the listed processes accomplishes the action, reply with
         the single word NONE.
 
+        Then name the carried things your plan is built on, as "context=<item>,<item>" — only items from the
+        Carrying list, and only the ones the steps actually consume or use. Write "context=none" if the plan
+        needs nothing carried.
+
         End your reply with a confidence from 0 to 100 on its own, as "confidence=NN".
 
-        Do not explain. Do not invent a key that is not in the list. Prefer the shortest correct chain.""";
+        Do not explain. Do not invent a key that is not in the list. Do not name a thing that is not being
+        carried. Prefer the shortest correct chain.""";
 
-    /** What the interpreter proposes: existing keys in order, and how sure it is. Never prose, never a new key. */
-    public record Plan(List<String> keys, int confidence) {
-        public static final Plan NOTHING = new Plan(List.of(), 0);
+    /**
+     * What the interpreter proposes: existing keys in order, how sure it is, and the carried things it says the
+     * plan rests on. Never prose, never a new key, and never a thing the Chronicle is not carrying.
+     *
+     * @param cited     item keys from the Carrying list that the reply named, kept only when they were offered
+     * @param imagined  item-shaped words it named that were NOT offered — the reason to throw the plan out (#37)
+     */
+    public record Plan(List<String> keys, int confidence, List<String> cited, List<String> imagined) {
+        public static final Plan NOTHING = new Plan(List.of(), 0, List.of(), List.of());
+        /** The shape before the reply cited its context (#37). */
+        public Plan(List<String> keys, int confidence) { this(keys, confidence, List.of(), List.of()); }
         public boolean isEmpty() { return keys.isEmpty(); }
+        /** Whether this plan was built on something that is not there, and so must not be run at all. */
+        public boolean restsOnNothing() { return !imagined.isEmpty(); }
     }
 
     /** Below this the resolver will not spend a Chronicle's time on the plan at all. */
@@ -73,10 +88,57 @@ public class ProcedureInterpreter {
         if (catalog.isEmpty()) return Plan.NOTHING;
         Set<String> valid = catalog.stream().map(r -> (String) r.get("process_key")).collect(Collectors.toSet());
         String user = buildUser(actionText, inventory, catalog);
+        Set<String> carried = carriedKeys(inventory);
         return model.generate(props.getInterpreterModel(), SYSTEM, user)
-            .map(reply -> new Plan(parse(reply, valid), confidence(reply)))
+            .map(reply -> new Plan(parse(reply, valid), confidence(reply),
+                                   cited(reply, carried, valid), imagined(reply, carried, valid)))
             .filter(plan -> plan.confidence() >= SURE_ENOUGH)
             .orElse(Plan.NOTHING);
+    }
+
+    /**
+     * The bare item keys behind a quantified inventory line — "dry_branch x5" is the key {@code dry_branch}.
+     * What the caller passes is written for the model to weigh; what a citation must match is the thing itself.
+     */
+    static Set<String> carriedKeys(List<String> inventory) {
+        if (inventory == null) return Set.of();
+        return inventory.stream()
+            .map(line -> line == null ? "" : line.trim().toLowerCase(Locale.ROOT).split("\\s+")[0])
+            .filter(k -> !k.isBlank())
+            .collect(Collectors.toSet());
+    }
+
+    /** The context clause of a reply, or "" when it named none. */
+    private static String contextClause(String reply) {
+        if (reply == null) return "";
+        java.util.regex.Matcher m = java.util.regex.Pattern
+            .compile("context\\s*=\\s*([^\\n]*)").matcher(reply.toLowerCase(Locale.ROOT));
+        return m.find() ? m.group(1) : "";
+    }
+
+    /** What the reply named that the Chronicle is actually carrying, in its order, de-duplicated. */
+    List<String> cited(String reply, Set<String> carried, Set<String> processKeys) {
+        List<String> out = new ArrayList<>();
+        for (String token : contextClause(reply).split("[^a-z0-9_]+"))
+            if (carried.contains(token) && !out.contains(token)) out.add(token);
+        return List.copyOf(out);
+    }
+
+    /**
+     * What the reply named that the Chronicle is NOT carrying (#37) — a model composing from materials that do
+     * not exist has not misjudged the catalogue, it has imagined the world, and the plan is thrown out.
+     *
+     * <p>Process keys are excluded: naming a step in the context clause is untidy, not a hallucination. So is
+     * "none", which the prompt asks for explicitly, and so is any word too short to be an item key.
+     */
+    List<String> imagined(String reply, Set<String> carried, Set<String> processKeys) {
+        List<String> out = new ArrayList<>();
+        for (String token : contextClause(reply).split("[^a-z0-9_]+")) {
+            if (token.length() < 4 || carried.contains(token) || processKeys.contains(token)) continue;
+            if ("none".equals(token) || "nothing".equals(token) || out.contains(token)) continue;
+            out.add(token);
+        }
+        return List.copyOf(out);
     }
 
     /** The confidence the reply states, or an even fifty when it states none. */

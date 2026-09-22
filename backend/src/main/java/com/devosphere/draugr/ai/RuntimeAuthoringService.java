@@ -81,28 +81,39 @@ public class RuntimeAuthoringService {
      */
     private String[] runPlan(UUID chronicle, UUID location, ProcedureInterpreter.Plan plan, String text, Instant at) {
         if (plan == null || plan.isEmpty()) return null;
+        // Built on something that is not there (#37). The deterministic gate would catch this at the moment of
+        // execution, but it would call it REFUSED_BY_THE_WORLD — the same thing it says when a Chronicle
+        // genuinely runs out halfway through a real chain. These are not the same event, and the record could
+        // not tell them apart. Nothing is run, and the receipt says what the model thought it had.
+        if (plan.restsOnNothing()) {
+            receipt(chronicle, text, plan.keys().get(0), 1, "REJECTED", "CITED_WHAT_IS_NOT_THERE",
+                plan.confidence(), plan.imagined(), at);
+            return null;
+        }
         String[] last = null;
         boolean anySucceeded = false;
         int step = 0;
         for (String key : plan.keys()) {
             step++;
             if (!items.processExists(key)) {
-                receipt(chronicle, text, key, step, "REJECTED", "NO_SUCH_PROCESS", plan.confidence(), at);
+                receipt(chronicle, text, key, step, "REJECTED", "NO_SUCH_PROCESS", plan.confidence(), plan.cited(), at);
                 return anySucceeded ? last : null;
             }
             last = items.executeProcess(chronicle, location, key, text, at);
             boolean ran = "SUCCEEDED".equals(last[0]);
             receipt(chronicle, text, key, step, ran ? "ACCEPTED" : "REJECTED", ran ? "RAN" : "REFUSED_BY_THE_WORLD",
-                plan.confidence(), at);
+                plan.confidence(), plan.cited(), at);
             if (ran) anySucceeded = true;
             else return anySucceeded ? last : null;
         }
         return last;
     }
 
-    private void receipt(UUID chronicle, String text, String key, int step, String verdict, String reason, int confidence, Instant at) {
-        jdbc.update("INSERT INTO ai_procedure_receipt (chronicle_id, action_text, candidate_key, step_index, verdict, reason_code, confidence, occurred_at) " +
-            "VALUES (?,?,?,?,?,?,?,?)", chronicle, text, key, step, verdict, reason, confidence, java.sql.Timestamp.from(at));
+    private void receipt(UUID chronicle, String text, String key, int step, String verdict, String reason,
+                         int confidence, java.util.List<String> cited, Instant at) {
+        jdbc.update("INSERT INTO ai_procedure_receipt (chronicle_id, action_text, candidate_key, step_index, verdict, reason_code, confidence, cited_context, occurred_at) " +
+            "VALUES (?,?,?,?,?,?,?,?,?)", chronicle, text, key, step, verdict, reason, confidence,
+            cited == null ? new String[0] : cited.toArray(new String[0]), java.sql.Timestamp.from(at));
     }
 
     private Optional<String[]> author(UUID chronicle, UUID location, String text, List<String> inventory, Instant at) {
