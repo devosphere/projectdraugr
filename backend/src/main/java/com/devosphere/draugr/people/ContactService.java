@@ -239,7 +239,10 @@ public class ContactService {
                     case OBSERVE_BOUNDARY_MARKER -> "Bundles of reed tied to stakes mark the channel where the open water ends and theirs begins. Past them, nobody fishes but they do.";
                     case WATCH_CUSTOM, RECORD_CUSTOM -> "No one steps onto the raised ground from the water without first calling out and waiting to be answered; even a child coming back with a basket does it."
                         + (act == Act.RECORD_CUSTOM ? " " + writeDown(chronicle, community, understanding + learned, actionId, at) : "");
-                    default -> "You watch the isle a while: who fishes and who mends, where the store stands, how they turn to look when anything moves at the reed edge.";
+                    default -> "You watch the isle a while: who fishes and who mends, where the store stands, how they turn to look when anything moves at the reed edge."
+                        // Reading is free and acting is not (DR-0026). An argument is the loudest thing a
+                        // settlement ever does, and a Chronicle standing there can see it without being told (#121).
+                        + arguing(community);
                 };
                 return record(community, chronicle, act, at, "WATCHED", 0, learned, "SUCCEEDED", seen);
             }
@@ -417,6 +420,25 @@ public class ContactService {
         return Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM native_event WHERE community_id=? AND subject_id=? AND event_kind=? AND occurred_at > ?)",
             Boolean.class, community, chronicle, "CONTACT_" + act.name(), Timestamp.from(at.minus(Duration.ofDays(1)))));
+    }
+
+    /**
+     * What an open argument looks like from the water (#121), or nothing at all when they are of one mind.
+     *
+     * <p>It says which way the voices run without saying what they are about, because that is what a stranger
+     * who cannot yet speak to them would get: a count of who is standing up, not a transcript.
+     */
+    private String arguing(UUID community) {
+        Map<String, Object> open = jdbc.query(
+            "SELECT voices_to_go, voices_to_stay FROM native_disagreement WHERE community_id=? AND settled_at IS NULL LIMIT 1",
+            rs -> rs.next() ? Map.<String, Object>of("go", rs.getInt(1), "stay", rs.getInt(2)) : null, community);
+        if (open == null) return "";
+        int go = (Integer) open.get("go"), stay = (Integer) open.get("stay");
+        return go > stay
+            ? " Today none of that is happening. They are gathered by the store and most of them are talking at once, and the few "
+            + "who are not talking are the old ones, standing apart and saying nothing anybody seems to want to hear."
+            : " Today none of that is happening. They are gathered by the store, arguing, and the old ones are doing most of it — "
+            + "one of them keeps pointing down at the ground they are standing on.";
     }
 
     /** A weapon in either hand: what a watcher on the landing sees first. */

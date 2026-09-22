@@ -135,6 +135,10 @@ public class AgreementService {
             : "MOVING".equals(c.get("lifecycle")) || store == null ? "There is no store here to pay a wage from, and no one to take you on."
             : standing < 0 ? "They look at you, and at each other, and no one steps forward. They do not want your hands on their work."
             : understanding < 30 ? "You mime hauling nets and point to their store. They watch politely, but what you mean does not reach them yet."
+            // A people arguing about whether to abandon its home does not take on a week's work (#121). Not a
+            // refusal of you — a refusal of the question, while a larger one of their own is still open.
+            : arguing(community) ? "They are in the middle of something among themselves, voices going back and forth across the fire, "
+                + "and what they settle will decide more than your week. Nobody will put their name to anything today."
             : Eligibility.firstOf(
                 Eligibility.refusal(jdbc, community, Eligibility.AGREEMENT,
                     "They do not bind themselves to outsiders, nor outsiders to them. Whatever you are offering, it is not a thing they do."),
@@ -155,8 +159,12 @@ public class AgreementService {
             return new String[]{"PARTIAL", "At the word for food their faces close. They cannot promise food they do not have for themselves."};
         int count = Math.min(TradeService.count(want), countHeld(store, key));
         if (count == 0) return new String[]{"PARTIAL", "They have none of that to promise."};
+        // What THIS people makes, from its own row (#113, V366) — not the reed list every people used to share.
+        // Trade was taught this when the second people landed; a wage was not, so the grovebound would price a
+        // bark sheet as a thing brought in from somewhere else, and the same object was worth two amounts
+        // depending on which door a Chronicle came through.
         int worth = count * TradeService.worth(key, (String) wanted.get("category"),
-            java.util.Arrays.asList(NativeCommunityService.MADE_GOODS).contains(key), hungry, staple);
+            makes(community, key), hungry, staple);
         int days = Math.max(1, (worth + DAY_IS_WORTH - 1) / DAY_IS_WORTH);
         if (days > LONGEST_TERM_DAYS)
             return new String[]{"PARTIAL", "They count on their fingers, and then stop counting. That is more than they will bind anyone to."};
@@ -280,6 +288,23 @@ public class AgreementService {
     private void event(UUID community, UUID chronicle, Instant at, String kind, int days) {
         jdbc.update("INSERT INTO native_event (community_id, occurred_at, event_kind, subject_id, payload) VALUES (?,?,?,?,jsonb_build_object('days', ?::int))",
             community, Timestamp.from(at), kind, chronicle, days);
+    }
+
+    /**
+     * Does this people make this thing with its own hands (#113, V366)? Read from `made_goods` on the community
+     * row rather than through NativeCommunityService, which already depends on this class — the same reason
+     * {@code arguing} is a query here and not an injection.
+     */
+    private boolean makes(UUID community, Object itemKey) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT ?::varchar = ANY(made_goods) FROM native_community WHERE id=?", Boolean.class, itemKey, community));
+    }
+
+    /** Is this people in the middle of an argument of its own (#121)? Read here rather than injected, to keep
+     *  AgreementService out of NativeCommunityService's constructor — the two already point at each other. */
+    private boolean arguing(UUID community) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM native_disagreement WHERE community_id=? AND settled_at IS NULL)", Boolean.class, community));
     }
 
     private UUID store(UUID community) {

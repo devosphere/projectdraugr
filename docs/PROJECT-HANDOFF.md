@@ -244,7 +244,40 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 
 #### Resume point
 
-> **▶ LATEST (2026-09-20): a people you can live beside.** Epic #109 went from a schema (V344/V345) to a
+> **▶ LATEST (2026-09-21): the second people stands in the live world, and three catalogues stopped being
+> catalogues.** The cycle's theme was the project's own stated defect — data that declares a capability nothing
+> reads — found in four more places and closed in each.
+>
+> - **The grove is placed (#115, PR #687).** `seedPeoples` seeded the grovebound *inside* the reedkin's own
+>   placement, which returns early once its isles are full: the grove appeared in a fresh world and in **no world
+>   already being played**, and the new-world test passed throughout. Each people is now asked for separately.
+>   Verified against the live database, which was at Flyway 366 with two isles and no grove, and had one after a
+>   single boot through reconcile. **A fresh world is not evidence for additive seeding.**
+> - **A colony you name is the colony you are answered about (#122, PR #688).** A named colony was matched only
+>   against the ones that still had something to give, so naming the hive you emptied last week fell through to
+>   the hornets' nest across the clearing — reported as a success, with venom in hand.
+> - **Every candidacy says what it is waiting on (#119, V368, PR #689).** Three of #119's four register rows read,
+>   in full, `"Defined in #119."` while their cards carried the whole argument, so choosing the next culture meant
+>   reading a design document rather than querying the table that gates it. `needs_first` is now NOT NULL with a
+>   length floor across all thirty rows.
+> - **A shelter holds the bodies that fit in it (#108, V369, PR #690).** `shelters_stock` meant "animals, any of
+>   them": a hen house let a keeper's **aurochs** breed, and a brooder shelter — a warmed box for chicks —
+>   delivered a **water buffalo** calf with perinatal loss set to zero. Five readers now compare a ceiling against
+>   `wildlife_species.size_tier`. The ox shed fills the one hole honest ceilings open.
+> - **A people that cannot agree with itself (#121, V370, PR #691).** Abandoning the ground they were born on was
+>   one line of Java. It is now a question they put to themselves, with voices counted off who is actually alive:
+>   while it stands they do not leave and will not take on new work, and feeding them settles it.
+>
+> **Verifying the live world without the launcher.** `Start-Draugr.ps1` opens a **WinForms password dialog** and
+> blocks on it, so it cannot be driven headless — that must be the user's own run. To check a fix against the
+> saved world: `docker compose up -d postgres`, query the before state, `mvn -o spring-boot:run` (boot runs
+> genesis reconcile), query the after state, stop it, `Stop-Draugr.ps1`. Never while the user's launcher waits.
+>
+> **Next:** merge #689 → #690 → #691 in that order (V368 before V369 before V370), then close #119, #121 and #122
+> and comment the remainder on #108. Open after that: #239, #229, #227, #224, #222 (backdrops), #109, #106, #99,
+> #77, #37 — #37's own remainder is cited context and target IDs in the interpreter's reply.
+
+> **▶ 2026-09-20: a people you can live beside.** Epic #109 went from a schema (V344/V345) to a
 > social world: the reedkin are placed, and everything a Chronicle can do with them is a physical act with a
 > record behind it.
 >
