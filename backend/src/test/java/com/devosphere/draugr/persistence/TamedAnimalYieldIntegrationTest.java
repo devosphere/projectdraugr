@@ -213,6 +213,69 @@ class TamedAnimalYieldIntegrationTest {
      * The catalogue must be able to answer every phrase the code can turn into a kind, or a keeper asks for
      * something no animal in the world gives and is told so forever.
      */
+    /**
+     * A dam off her feed gives nothing (#122).
+     *
+     * <p>{@code draft_hunger} and {@code draft_thirst} already decided whether a beast was in condition to
+     * <b>conceive</b>, and were read nowhere when it came to what she <b>gives</b>: a starving, parched cow filled
+     * the pail exactly as well as a fed one. Sickness was the only thing that ever stopped a yield.
+     *
+     * <p>Asserted in both directions, because a refusal that refused everything would be a different bug wearing
+     * this fix's clothes: fed and watered she gives, thirsty she does not, and fed again she does.
+     */
+    @Test
+    void aDamOffHerFeedGivesNothingAndAFedOneStillDoes() {
+        if (worldGenesis.current() == null) {
+            worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
+            ecology.seed();
+        }
+        ChronicleService.ChronicleSummary summary = chronicles.awaken();
+        assertNotNull(summary);
+        UUID chronicle = summary.id();
+        UUID chunk = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+        UUID worldId = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, chunk);
+        jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
+        Timestamp ts = Timestamp.from(Instant.now());
+
+        // This class shares its database, so the goat measured here is the only goat this Chronicle keeps, and
+        // she has never been milked. Assuming a fixture you did not establish is how the last one went red.
+        jdbc.update("DELETE FROM tamed_production WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
+        jdbc.update("DELETE FROM tamed_young WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
+        jdbc.update("DELETE FROM tamed_gestation WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
+        jdbc.update("DELETE FROM wildlife_bond WHERE chronicle_id=?", chronicle);
+        tame(chronicle, chunk, worldId, "mountain_goat", ts);
+        items.createCarriedItem(chronicle, "wooden_bowl", "Wooden bowl", Instant.now(), "TEST_FIXTURE");
+
+        // Fed and watered, she gives. This is the control: everything after it differs only in her condition.
+        jdbc.update("UPDATE wildlife_bond SET draft_hunger=0, draft_thirst=0, sickness=0 WHERE chronicle_id=?", chronicle);
+        var fed = actions.resolve("milk the goat");
+        assertEquals("SUCCEEDED", fed.outcome(), () -> "a goat in condition gives milk: " + fed.perception());
+
+        // Parched. She is standing, she is not sick, and the pail comes up empty — and the refusal says which.
+        jdbc.update("DELETE FROM tamed_production WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
+        jdbc.update("UPDATE wildlife_bond SET draft_thirst=? WHERE chronicle_id=?",
+            PhysicalItemService.NOT_IN_CONDITION + 10, chronicle);
+        var dry = actions.resolve("milk the goat");
+        assertEquals("FAILED", dry.outcome(), () -> "a goat kept from water has gone dry: " + dry.perception());
+        assertTrue(dry.perception().contains("water"),
+            () -> "and the refusal names what is wrong with her, not merely that there is no milk: " + dry.perception());
+
+        // Starved rather than parched: the same refusal, said the other way.
+        jdbc.update("UPDATE wildlife_bond SET draft_thirst=0, draft_hunger=? WHERE chronicle_id=?",
+            PhysicalItemService.NOT_IN_CONDITION + 10, chronicle);
+        var starved = actions.resolve("milk the goat");
+        assertEquals("FAILED", starved.outcome(), () -> "a goat off her feed has nothing to turn into milk: " + starved.perception());
+        assertTrue(starved.perception().contains("thin"),
+            () -> "and it is said as hunger rather than as thirst: " + starved.perception());
+
+        // Feed and water her, and she comes back to the pail. Nothing was taken away permanently.
+        jdbc.update("UPDATE wildlife_bond SET draft_hunger=0, draft_thirst=0 WHERE chronicle_id=?", chronicle);
+        var again = actions.resolve("milk the goat");
+        assertEquals("SUCCEEDED", again.outcome(), () -> "looked after, she gives again: " + again.perception());
+
+        assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
+
     @Test
     void everyKindThePhrasesMapToIsAnsweredBySomething() {
         for (String kind : java.util.List.of("EGG", "MILK", "WOOL"))

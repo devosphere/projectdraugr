@@ -376,7 +376,9 @@ public class PhysicalItemService {
             "               WHERE cp.project_kind IN ('WATERING_STATION','RAINWATER_CATCHMENT') AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
             "                 AND tw.lifecycle_state='ACTIVE' AND tw.current_location_id=ch.id))) " +
             "  THEN GREATEST(0, draft_thirst - ?) ELSE LEAST(100, draft_thirst + ? + " + heatOnStock() + ") END " +
-            "WHERE wb.bond_stage='TAMED' AND EXISTS (SELECT 1 FROM wildlife_population wp JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wp.id=wb.population_id)",
+            // Every kept animal (#122), for the same reason as hunger above: a beast that cannot be thirsty makes
+            // every trough, catchment and watering station beside it decoration for all but eleven species.
+            "WHERE wb.bond_stage='TAMED'",
             DRAFT_WATER_RELIEF, DRAFT_THIRST_PER_TURN);
     }
 
@@ -446,7 +448,8 @@ public class PhysicalItemService {
     }
 
     /** A beast in this state is not thriving, and stock that are not thriving do not breed. */
-    private static final int BREEDING_CONDITION_LIMIT = 60;
+    /** Above this in hunger, thirst or fatigue, a beast is not in condition — to conceive (#100) or to give (#122). */
+    public static final int NOT_IN_CONDITION = 60;
 
     /**
      * Turn of the world for breeding (#52/#79/#108): kept stock in good condition get in calf, carry, give birth,
@@ -507,7 +510,7 @@ public class PhysicalItemService {
             // let a keeper's aurochs settle to breed, because shelters_stock meant "animals, any of them".
             "                AND body_size_rank(ck.shelters_up_to_size) >= body_size_rank(ws.size_tier)) " +
             "ON CONFLICT (bond_id) DO NOTHING",
-            ts, ts, BREEDING_CONDITION_LIMIT, BREEDING_CONDITION_LIMIT, BREEDING_CONDITION_LIMIT, TOO_SICK_TO_GIVE, ts);
+            ts, ts, NOT_IN_CONDITION, NOT_IN_CONDITION, NOT_IN_CONDITION, TOO_SICK_TO_GIVE, ts);
 
         // 2. Give birth. The litter size is deterministic per pregnancy rather than random, so a save resumed
         //    twice does not produce two different herds — the bond id and the hour it was conceived decide it.
@@ -1010,7 +1013,11 @@ public class PhysicalItemService {
             "  WHEN EXISTS (SELECT 1 FROM world_object cw JOIN world_chunk ch ON ch.id=cw.current_location_id " +
             "               WHERE cw.id=wb.chronicle_id AND ch.biome='GRASSLAND') " +
             "  THEN LEAST(100, GREATEST(0, draft_hunger - ? + " + cold + ")) ELSE LEAST(100, draft_hunger + ? + " + cold + ") END " +
-            "WHERE wb.bond_stage='TAMED' AND EXISTS (SELECT 1 FROM wildlife_population wp JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wp.id=wb.population_id)",
+            // EVERY kept animal, not only the ones that pull (#122). Hunger rose only for a species in
+            // draft_species, while feedDraftBeasts below relieves every TAMED bond with no such filter — so a
+            // keeper could feed a hen that was constitutionally incapable of being hungry, and a milk goat went
+            // through her whole life at nought. The relief was already universal; this is the other half of it.
+            "WHERE wb.bond_stage='TAMED'",
             DRAFT_GRAZE_RELIEF, DRAFT_HUNGER_PER_TURN);
     }
 

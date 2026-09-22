@@ -876,7 +876,8 @@ public class WildlifeEncounterService {
         // The clock is per product, so this joins tamed_production on the bond AND the item.
         java.util.Map<String,Object> ready = jdbc.query(
             "SELECT wb.id, wp.species_key, ty.item_key, ty.interval_hours, tp.last_yielded_at, d.display_name, " +
-            "       wp.population_count, in_season(ty.available_months), wb.coat_condition " +
+            "       wp.population_count, in_season(ty.available_months), wb.coat_condition, " +
+            "       wb.draft_hunger, wb.draft_thirst " +
             "FROM wildlife_bond wb " +
             "JOIN wildlife_population wp ON wp.id = wb.population_id " +
             "JOIN tamed_yield ty ON ty.species_key = wp.species_key AND ty.yield_kind = ? " +
@@ -888,16 +889,19 @@ public class WildlifeEncounterService {
             "  AND wb.sickness < " + com.devosphere.draugr.item.PhysicalItemService.TOO_SICK_TO_GIVE + " " +
             // An animal in season is gone to before one out of it (#161, V323) — a buffalo in milk before a goat dry.
             "ORDER BY in_season(ty.available_months) DESC, tp.last_yielded_at NULLS FIRST LIMIT 1 FOR UPDATE OF wb",
-            rs -> rs.next() ? java.util.Map.of(
-                    "id", rs.getObject(1, UUID.class),
-                    "species", rs.getString(2),
-                    "item", rs.getString(3),
-                    "interval", rs.getInt(4),
-                    "last", rs.getTimestamp(5) == null ? "" : rs.getTimestamp(5).toInstant().toString(),
-                    "display", rs.getString(6),
-                    "herd", rs.getInt(7),
-                    "inSeason", rs.getBoolean(8),
-                    "coat", rs.getInt(9)) : null, wanted, chronicle);
+            // ofEntries rather than of: Map.of tops out at ten pairs, and the animal's condition is the eleventh.
+            rs -> rs.next() ? java.util.Map.<String, Object>ofEntries(
+                    java.util.Map.entry("id", rs.getObject(1, UUID.class)),
+                    java.util.Map.entry("species", rs.getString(2)),
+                    java.util.Map.entry("item", rs.getString(3)),
+                    java.util.Map.entry("interval", rs.getInt(4)),
+                    java.util.Map.entry("last", rs.getTimestamp(5) == null ? "" : rs.getTimestamp(5).toInstant().toString()),
+                    java.util.Map.entry("display", rs.getString(6)),
+                    java.util.Map.entry("herd", rs.getInt(7)),
+                    java.util.Map.entry("inSeason", rs.getBoolean(8)),
+                    java.util.Map.entry("coat", rs.getInt(9)),
+                    java.util.Map.entry("hunger", rs.getInt(10)),
+                    java.util.Map.entry("thirst", rs.getInt(11))) : null, wanted, chronicle);
 
         if (ready == null) return new EncounterResult("FAILED", switch (wanted) {
             case "MILK" -> "You have nothing tamed here that gives milk — a goat or a cow must be won over first, and won over properly.";
@@ -918,6 +922,24 @@ public class WildlifeEncounterService {
         if ("WOOL".equals(wanted) && (Integer) ready.get("coat") < com.devosphere.draugr.item.PhysicalItemService.COAT_IS_MATTED)
             return new EncounterResult("FAILED", "The fleece is matted into the dirt and crawling with vermin. What came away in your hand is not wool, "
                 + "and nothing worth keeping will come off this animal until the coat has been combed out.");
+
+        // A dam off her feed gives nothing (#122). draft_hunger and draft_thirst already decided whether a beast
+        // was in condition to CONCEIVE, and were read nowhere when it came to what she gives: a starving, parched
+        // cow filled the pail exactly as well as a fed one, and a hen kept from water went on laying. Sickness was
+        // the only thing that ever stopped a yield.
+        //
+        // Milk and eggs, and deliberately not wool: a fleece is eight months of growth, and what it is worth is
+        // decided by the coat it grew in rather than by whether the animal was watered this morning.
+        int hunger = (Integer) ready.get("hunger"), thirst = (Integer) ready.get("thirst");
+        if (!"WOOL".equals(wanted) && (hunger >= com.devosphere.draugr.item.PhysicalItemService.NOT_IN_CONDITION
+                                    || thirst >= com.devosphere.draugr.item.PhysicalItemService.NOT_IN_CONDITION)) {
+            boolean dry = thirst >= hunger;
+            return new EncounterResult("FAILED", "MILK".equals(wanted)
+                ? (dry ? "She has gone dry. An animal kept from water stops giving long before she stops standing, and the pail comes up with almost nothing in it."
+                       : "She has gone dry. There is nothing in her to turn into milk — what she has she is keeping, and she is thin enough that you can see why.")
+                : (dry ? "The birds are off their water and off their lay. Nothing has been dropped in the nests for a while."
+                       : "The birds are off their feed and off their lay. They are picking at the ground and the nests are empty."));
+        }
 
         String last = (String) ready.get("last");
         if (!last.isEmpty()) {
