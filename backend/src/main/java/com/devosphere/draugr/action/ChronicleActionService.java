@@ -632,7 +632,23 @@ public class ChronicleActionService {
         else if (intent == Intent.EXTINGUISH_FIRE) { if(fire.extinguish(chronicle.location(),resolvedAt)) perception="You smother the fire with earth and beat down the last of it until only cooling, dead ash remains."; else {outcome="FAILED"; perception="You move to put out a fire, but none is burning here.";} }
         else if (intent == Intent.BANK_FIRE) { if(fire.bank(chronicle.id(),chronicle.location(),resolvedAt)) perception=items.hasAtLeast(chronicle.id(),"fire_poker",1)?"You work the poker through the fire, rake the coals into a tight heap and cover them with ash. Banked like this the embers will hold low and long, and can be woken again later.":"You rake the coals into a tight heap and cover them with ash, so the embers will hold low and long and can be woken again later."; else {outcome="FAILED"; perception="There is no fire here to bank down.";} }
         else if (intent == Intent.START_LEAN_TO) { if (construction.startLeanTo(chronicle.id(), chronicle.location(), actionId, resolvedAt)) perception="You mark out a low shelter frame against the weather."; else { outcome="FAILED"; perception="The ground holds the same unfinished frame you found there."; } }
-        else if (intent == Intent.WORK_LEAN_TO) { if (construction.workLeanTo(chronicle.id(), chronicle.location(), resolvedAt)) perception="You bind the shelter frame a little further into place."; else { outcome="FAILED"; perception="The unfinished frame remains as it was."; } }
+        else if (intent == Intent.WORK_LEAN_TO) {
+            // "build a lean-to" is the most natural way to ask for one, and classifyLeanTo routes any "build" to
+            // WORK — so the first shelter a Chronicle ever asks for was answered with "The unfinished frame
+            // remains as it was", about a frame that did not exist. workLeanTo returns false for three unrelated
+            // reasons (no frame, no branches, no fibre) and all three read as that one sentence.
+            //
+            // So: if nothing stands here, they are starting one, whatever verb they used. If something does, the
+            // refusal names what the work actually wants.
+            if (!construction.unfinishedLeanToHere(chronicle.location())) {
+                if (construction.startLeanTo(chronicle.id(), chronicle.location(), actionId, resolvedAt))
+                    perception = "There is nothing here to work on yet, so you begin one: you mark out a low shelter frame against the weather.";
+                else { outcome = "FAILED"; perception = "The ground here already holds a frame you have not finished."; }
+            }
+            else if (construction.workLeanTo(chronicle.id(), chronicle.location(), resolvedAt))
+                perception = "You bind the shelter frame a little further into place.";
+            else { outcome = "FAILED"; perception = "The frame stands waiting, but binding another course into it takes branches and fibre, and you have not both to hand."; }
+        }
         else if (intent == Intent.ABANDON_LEAN_TO) { if (construction.abandonLeanTo(chronicle.location(),resolvedAt)) perception="You leave the unfinished frame where it stands."; else { outcome="FAILED"; perception="There is no unfinished frame here to leave behind."; } }
         else if (intent == Intent.RESUME_LEAN_TO) { if (construction.resumeLeanTo(chronicle.location(),resolvedAt)) perception="You return to the old frame and set your hands to it again."; else { outcome="FAILED"; perception="You find no abandoned frame here to take up again."; } }
         else if (intent == Intent.REPAIR_LEAN_TO) { if(construction.repairLeanTo(chronicle.id(),chronicle.location(),resolvedAt)) perception="You tighten the frame and replace the worst of its weathered bindings."; else {outcome="FAILED";perception="You work over the shelter for a while, then leave it unchanged.";} }
