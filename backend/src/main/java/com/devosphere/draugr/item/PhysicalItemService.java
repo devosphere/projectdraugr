@@ -469,6 +469,7 @@ public class PhysicalItemService {
             "FROM wildlife_bond wb " +
             "JOIN wildlife_population wp ON wp.id = wb.population_id " +
             "JOIN breeding_profile bp ON bp.species_key = wp.species_key " +
+            "JOIN wildlife_species ws ON ws.species_key = wp.species_key " +
             "JOIN world_object cw ON cw.id = wb.chronicle_id " +
             "WHERE wb.bond_stage = 'TAMED' " +
             // Condition, and health (V299). A sick animal does not get in calf — the same rule as hunger and
@@ -482,7 +483,10 @@ public class PhysicalItemService {
             "  AND EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
             "              JOIN construction_kind ck ON ck.project_kind = cp.project_kind AND ck.shelters_stock " +
             "              WHERE cp.state = 'COMPLETED' AND cp.integrity_percent > 0 " +
-            "                AND sw.lifecycle_state = 'ACTIVE' AND sw.current_location_id = cw.current_location_id) " +
+            "                AND sw.lifecycle_state = 'ACTIVE' AND sw.current_location_id = cw.current_location_id " +
+            // And it is a shelter these bodies fit in (#108, V369). A hen house standing on the ground was what
+            // let a keeper's aurochs settle to breed, because shelters_stock meant "animals, any of them".
+            "                AND body_size_rank(ck.shelters_up_to_size) >= body_size_rank(ws.size_tier)) " +
             "ON CONFLICT (bond_id) DO NOTHING",
             ts, ts, BREEDING_CONDITION_LIMIT, BREEDING_CONDITION_LIMIT, BREEDING_CONDITION_LIMIT, TOO_SICK_TO_GIVE, ts);
 
@@ -501,16 +505,23 @@ public class PhysicalItemService {
         //    Rolled per ANIMAL, from the pregnancy and its index in the litter, so a resumed save loses the same
         //    young. Per animal rather than per litter because a cow carries one, and a percentage of a litter of
         //    one rounds to nothing — a foaling stall that helped every species except horses would be absurd.
+        //    Each tier is sized to the animal being born (#108, V369). A brooder shelter is a warmed box for
+        //    day-old chicks, and it was reading as a birthing house for a water buffalo — perinatal loss zero,
+        //    from a structure the dam could not have got her head into.
+        String bodyBeingBorn =
+            "body_size_rank((SELECT ws2.size_tier FROM wildlife_species ws2 WHERE ws2.species_key = tg.species_key))";
         String birthingHouseHere =
             "EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
             "        JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
             "        WHERE ck.shelters_birth AND cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
-            "          AND sw.lifecycle_state='ACTIVE' AND sw.current_location_id = cw.current_location_id)";
+            "          AND sw.lifecycle_state='ACTIVE' AND sw.current_location_id = cw.current_location_id " +
+            "          AND body_size_rank(ck.shelters_up_to_size) >= " + bodyBeingBorn + ")";
         String roofOverStockHere =
             "EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
             "        JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
             "        WHERE ck.shelters_stock AND ck.encloses AND cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
-            "          AND sw.lifecycle_state='ACTIVE' AND sw.current_location_id = cw.current_location_id)";
+            "          AND sw.lifecycle_state='ACTIVE' AND sw.current_location_id = cw.current_location_id " +
+            "          AND body_size_rank(ck.shelters_up_to_size) >= " + bodyBeingBorn + ")";
         jdbc.update(
             "INSERT INTO tamed_young (bond_id, species_key, born_at, matures_at) " +
             "SELECT tg.bond_id, tg.species_key, tg.due_at, tg.due_at + make_interval(hours => bp.maturity_hours) " +
@@ -771,11 +782,15 @@ public class PhysicalItemService {
         // Fouled ground underfoot, and nowhere to put the sick apart from the rest.
         String groundIsFoul =
             "EXISTS (SELECT 1 FROM chunk_refuse cr WHERE cr.chunk_id = cw.current_location_id AND cr.refuse_level >= ?)";
+        // The isolation shelter is sized too (#108, V369): you cannot shut an ox in a brooder box and call the
+        // rest of the herd safe. Correlated on wp, which is in scope in the statement that spreads it.
         String isolationHere =
             "EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
             "        JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
             "        WHERE ck.isolates_sick AND cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
-            "          AND sw.lifecycle_state='ACTIVE' AND sw.current_location_id = cw.current_location_id)";
+            "          AND sw.lifecycle_state='ACTIVE' AND sw.current_location_id = cw.current_location_id " +
+            "          AND body_size_rank(ck.shelters_up_to_size) >= " +
+            "              body_size_rank((SELECT ws4.size_tier FROM wildlife_species ws4 WHERE ws4.species_key = wp.species_key)))";
 
         // Standing in filth makes an animal ill; clean ground lets it mend. One statement so a beast cannot both
         // sicken and recover in the same turn. A matted coat is its own small illness and adds to it (#106).
@@ -894,7 +909,11 @@ public class PhysicalItemService {
             "                  JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
             "                  WHERE ck.shelters_stock AND ck.encloses AND cp.state = 'COMPLETED' " +
             "                    AND cp.integrity_percent > 0 AND sw.lifecycle_state = 'ACTIVE' " +
-            "                    AND sw.current_location_id = ch.id)";
+            "                    AND sw.current_location_id = ch.id " +
+            // Sized to the kind it will grow into (#108, V369): a calf is small for an aurochs and is still not
+            // going to spend a frost inside a hen house.
+            "                    AND body_size_rank(ck.shelters_up_to_size) >= " +
+            "                        body_size_rank((SELECT ws.size_tier FROM wildlife_species ws WHERE ws.species_key = ty.species_key)))";
 
         jdbc.update("UPDATE tamed_young SET cold_since = ?::timestamptz " +
                     "WHERE cold_since IS NULL AND id IN (" + exposed + ")", ts, HARD_COLD_C);
@@ -1006,7 +1025,11 @@ public class PhysicalItemService {
             "SELECT 1 FROM construction_project cp3 JOIN world_object sw3 ON sw3.id=cp3.object_id " +
             "JOIN construction_kind ck3 ON ck3.project_kind=cp3.project_kind " +
             "WHERE cp3.state='COMPLETED' AND cp3.integrity_percent>0 AND sw3.lifecycle_state='ACTIVE' " +
-            "AND sw3.current_location_id=ch3.id AND ck3.shelters_stock ";
+            "AND sw3.current_location_id=ch3.id AND ck3.shelters_stock " +
+            // A roof is only a roof for a beast that fits under it (#108, V369).
+            "AND body_size_rank(ck3.shelters_up_to_size) >= body_size_rank(" +
+            "  (SELECT ws3.size_tier FROM wildlife_population wp3 JOIN wildlife_species ws3 ON ws3.species_key=wp3.species_key " +
+            "    WHERE wp3.id=wb.population_id)) ";
         return "(CASE WHEN EXISTS (" + weatherHere + "AND ww3.ambient_temperature_c <= " + HARD_FROST_C +
                " AND NOT EXISTS (" + shelterHere + "AND ck3.encloses) AND NOT " + coveredBy("against_hard_cold") +
                ") THEN " + FROST_HUNGER + " ELSE 0 END" +

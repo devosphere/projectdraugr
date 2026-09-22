@@ -263,6 +263,22 @@ Examples:
 - Animal Pen
 - Compost Area
 
+### A shelter holds the bodies that fit in it (#108, V369)
+
+`construction_kind.shelters_stock` is read in five places — whether stock settle to breed, whether a birth loses young, whether the young survive a frost, whether a grown beast burns feed to keep warm, and whether sickness runs through a herd. It was species-blind, so **a hen house on the ground was what let a keeper's aurochs breed**, and a brooder shelter — a warmed box for day-old chicks — counted as a birthing house for a water buffalo, with perinatal loss set to zero.
+
+Every structure that holds a body now declares `shelters_up_to_size`, the largest `wildlife_species.size_tier` it can actually hold, and it holds that body and every smaller one:
+
+| ceiling | structures |
+|---|---|
+| `SMALL` | brooder shelter, poultry coop |
+| `LARGE` | goat fold, farrowing shelter, foaling stall, pig sty |
+| `HUGE` | cattle byre, timber barn, animal pen, bull isolation yard, sick animal shelter, hitching post, tether line, **ox shed** |
+
+A **ceiling, not a list**, because that is what is physically true: a byre roofs a hen perfectly well, and a coop cannot roof an ox however many hens it was built for. `body_size_rank()` orders the tiers and ranks an unrecognised one above every shelter, so a species nobody sized is refused shelter rather than quietly given the best of it. The `sized_for_the_stock_it_holds` constraint requires the answer of any structure flagged `shelters_stock`, `shelters_birth` or `isolates_sick`.
+
+Honest ceilings left exactly one hole — nothing sheltered the **birth** of a HUGE animal, and aurochs and water buffalo are the world's two HUGE breeders — so the **ox shed** goes in with the same migration: wide enough to lead a yoked pair through, bedded to calve in, with `shelters_gear` for the yokes along the back wall. It is the only structure added, because a catalogue entry that changes nothing is the defect and not the fix.
+
 ---
 
 ## Defensive
