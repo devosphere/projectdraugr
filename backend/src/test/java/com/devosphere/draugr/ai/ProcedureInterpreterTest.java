@@ -58,4 +58,54 @@ class ProcedureInterpreterTest {
         assertEquals(100, ProcedureInterpreter.confidence("knap_flake CONFIDENCE = 140"), "and it is never more than certain");
         assertEquals(0, ProcedureInterpreter.confidence("NONE confidence=0"));
     }
+    // ── #37: the reply says what it was looking at, and is thrown out when it was looking at nothing. ──────────
+
+    private ProcedureInterpreter interpreter() {
+        return new ProcedureInterpreter((m, sys, u) -> Optional.empty(), disabled(), null);
+    }
+
+    @Test void citesOnlyWhatIsActuallyCarried() {
+        ProcedureInterpreter i = interpreter();
+        Set<String> carried = Set.of("dry_branch", "flint_flake", "plant_fiber");
+        String reply = "twist_cordage\ncontext=plant_fiber, flint_flake\nconfidence=80";
+        assertEquals(List.of("plant_fiber", "flint_flake"), i.cited(reply, carried, Set.of("twist_cordage")),
+            "the citation is kept in the model's order, and only what is really in hand");
+        assertTrue(i.imagined(reply, carried, Set.of("twist_cordage")).isEmpty(),
+            "nothing here was imagined");
+    }
+
+    @Test void aThingThatIsNotCarriedIsImaginedAndNotQuietlyDropped() {
+        ProcedureInterpreter i = interpreter();
+        Set<String> carried = Set.of("dry_branch");
+        String reply = "tan_hide\ncontext=deer_hide, oak_bark\nconfidence=90";
+        assertTrue(i.cited(reply, carried, Set.of("tan_hide")).isEmpty(), "none of it is in hand");
+        assertEquals(List.of("deer_hide", "oak_bark"), i.imagined(reply, carried, Set.of("tan_hide")),
+            "and what it thought it had is recorded rather than silently discarded — that is the finding");
+    }
+
+    @Test void namingTheStepOrNothingIsUntidyNotAHallucination() {
+        ProcedureInterpreter i = interpreter();
+        Set<String> carried = Set.of("dry_branch");
+        Set<String> keys = Set.of("split_planks");
+        assertTrue(i.imagined("split_planks\ncontext=none\nconfidence=70", carried, keys).isEmpty(),
+            "the prompt asks for \"none\" explicitly, so it cannot be evidence of imagining anything");
+        assertTrue(i.imagined("split_planks\ncontext=split_planks\nconfidence=70", carried, keys).isEmpty(),
+            "naming the step in the context clause is untidy, not a claim about the world");
+    }
+
+    @Test void aQuantifiedInventoryLineStillMatchesItsOwnKey() {
+        // reachableInventory hands the model "dry_branch x5" so it can weigh whether there is enough. A citation
+        // of dry_branch must match that, or every plan built on a quantified thing would read as imagined.
+        assertEquals(Set.of("dry_branch", "flint_flake"),
+            ProcedureInterpreter.carriedKeys(List.of("dry_branch x5", "flint_flake x1")));
+        assertTrue(ProcedureInterpreter.carriedKeys(null).isEmpty(), "no inventory is not a crash");
+    }
+
+    @Test void aPlanRestsOnNothingOnlyWhenSomethingWasImagined() {
+        assertTrue(new ProcedureInterpreter.Plan(List.of("tan_hide"), 90, List.of(), List.of("deer_hide")).restsOnNothing());
+        assertTrue(!new ProcedureInterpreter.Plan(List.of("tan_hide"), 90, List.of("deer_hide"), List.of()).restsOnNothing());
+        assertTrue(!ProcedureInterpreter.Plan.NOTHING.restsOnNothing());
+        assertTrue(new ProcedureInterpreter.Plan(List.of("tan_hide"), 90).cited().isEmpty(),
+            "the old two-argument shape still works, and cites nothing");
+    }
 }
