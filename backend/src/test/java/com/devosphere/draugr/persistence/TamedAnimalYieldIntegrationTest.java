@@ -133,8 +133,10 @@ class TamedAnimalYieldIntegrationTest {
         var again = actions.resolve("milk the goat");
         assertEquals("FAILED", again.outcome(), () -> "a milked-out animal must be allowed to rest: " + again.perception());
 
-        // Tamed fowl lay eggs a Chronicle can gather.
-        tame(chronicle, chunk, worldId, "marsh_fowl", ts);
+        // Tamed fowl lay eggs a Chronicle can gather. A LAND fowl, deliberately: this assertion is about the
+        // general rule, and marsh_fowl needs open water to lay (#108, V373) — taming one on whatever ground the
+        // Chronicle woke on was always a little artificial, and is now a different test's subject.
+        tame(chronicle, chunk, worldId, "guinea_fowl", ts);
         var eggs = actions.resolve("collect the eggs");
         assertEquals("SUCCEEDED", eggs.outcome(), () -> "tamed fowl must give eggs: " + eggs.perception());
         assertTrue(items.hasAtLeast(chronicle, "fowl_egg", 1), "the eggs must be in hand");
@@ -239,6 +241,13 @@ class TamedAnimalYieldIntegrationTest {
 
         // This class shares its database, so the goat measured here is the only goat this Chronicle keeps, and
         // she has never been milked. Assuming a fixture you did not establish is how the last one went red.
+        //
+        // And she must stand on DRY ground. Since #694 the thirst tick runs for every kept animal, not only the
+        // eleven draft species, and it takes 40 off a beast standing on water — so a goat parched to 70 on a
+        // marsh is at 30 by the time the yield reads her, and gives milk. The ground is set here rather than
+        // inherited, because another test in this class leaves the chunk wet.
+        jdbc.update("UPDATE world_chunk SET biome='GRASSLAND' WHERE id=?", chunk);
+        jdbc.update("DELETE FROM ecology_site WHERE chunk_id=? AND " + com.devosphere.draugr.ecology.FreshWater.sites(), chunk);
         jdbc.update("DELETE FROM tamed_production WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
         jdbc.update("DELETE FROM tamed_young WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
         jdbc.update("DELETE FROM tamed_gestation WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
@@ -306,6 +315,7 @@ class TamedAnimalYieldIntegrationTest {
         assertTrue(!jdbc.queryForObject("SELECT needs_open_water FROM wildlife_species WHERE species_key='guinea_fowl'", Boolean.class));
 
         // Dry ground, and nothing of this Chronicle's from another test standing on it.
+        String groundWas = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, chunk);
         jdbc.update("DELETE FROM tamed_production WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
         jdbc.update("DELETE FROM tamed_young WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
         jdbc.update("DELETE FROM tamed_gestation WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
@@ -341,6 +351,10 @@ class TamedAnimalYieldIntegrationTest {
         jdbc.update("UPDATE world_chunk SET biome='WETLAND' WHERE id=?", chunk);
         var onWater = actions.resolve("gather eggs");
         assertEquals("SUCCEEDED", onWater.outcome(), () -> "ducks kept on the marsh lay: " + onWater.perception());
+
+        // Put the ground back. A wet chunk left behind is not nothing now that the thirst tick runs for every
+        // kept animal (#694): it silently waters the next test's stock and undoes whatever condition it set.
+        jdbc.update("UPDATE world_chunk SET biome=? WHERE id=?", groundWas, chunk);
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
