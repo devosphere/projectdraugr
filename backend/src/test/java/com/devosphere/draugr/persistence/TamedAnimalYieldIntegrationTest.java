@@ -332,6 +332,30 @@ class TamedAnimalYieldIntegrationTest {
         assertTrue(dry.perception().contains("open water"),
             () -> "and the refusal says what is missing, not merely that the nests are empty: " + dry.perception());
 
+        // A pool the keeper DUG (#108, V374), on the same dry grassland. Before this the rule had one answer —
+        // move — and "go somewhere else" is a poor mechanic to be the whole of a rule. This is the keeper's own
+        // answer to it, and it is what makes V373 a decision rather than a wall.
+        jdbc.update("DELETE FROM tamed_production WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
+        // Stamped with the SIMULATED clock, not the wall clock. last_structural_update defaults to now(), and
+        // this class pins the world to June 2031 — so a pool stamped with the real date is five years old the
+        // moment anything ticks, and the decay pass (integrity minus days-since times the weather rate) silts it
+        // flat before the ducks ever see it. That is how this assertion failed the first time it measured ducks.
+        Timestamp worldNow = jdbc.queryForObject("SELECT simulated_at FROM simulation_clock WHERE id=1", Timestamp.class);
+        UUID pool = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'STRUCTURE','Waterfowl pool',?)", pool, chunk);
+        jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at,integrity_percent,last_structural_update) " +
+            "VALUES (?,'WATERFOWL_POOL','COMPLETED',100,?,100,?)", pool, worldNow, worldNow);
+        var dug = actions.resolve("gather eggs");
+        assertEquals("SUCCEEDED", dug.outcome(), () -> "a pool dug and puddled tight is open water: " + dug.perception());
+
+        // And it is a thing that can fail. A pool silted up and gone is not water any more.
+        jdbc.update("DELETE FROM tamed_production WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
+        jdbc.update("UPDATE construction_project SET integrity_percent=0 WHERE object_id=?", pool);
+        var silted = actions.resolve("gather eggs");
+        assertEquals("FAILED", silted.outcome(), () -> "a pool gone to nothing holds no water: " + silted.perception());
+        jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED', destroyed_at=?, destroyed_cause='TEST_TEARDOWN', " +
+            "destroyed_location_id=current_location_id, current_location_id=NULL WHERE id=?", ts, pool);
+
         // The asymmetry, and the whole value of this test: a hen on exactly the same ground lays.
         //
         // One bird at a time, deliberately. takeTamedYield picks the animal whose product has rested longest and

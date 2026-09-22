@@ -1615,13 +1615,23 @@ public class WildlifeEncounterService {
      * catchment. A trough waters a duck and it does not make the ground a place a duck can be kept: what is
      * missing on dry grassland is somewhere to swim, feed and preen. Keeping the two different is the reason
      * this is written out rather than reusing the nearest thing to hand.
+     *
+     * <p>Three ways the ground answers, and the third is the keeper's own doing (#108, V374): the wet biomes,
+     * a freshwater site, or a <b>waterfowl pool</b> they dug and puddled tight. Without that third the rule had
+     * exactly one answer — move — and "go somewhere else" is a poor mechanic to be the whole of a rule. A pool
+     * wears like anything built, so it stays a thing a keeper looks after rather than a thing they placed once.
      */
     private boolean openWaterUnderTheKeeper(UUID chronicle) {
         return Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM world_object cw JOIN world_chunk ch ON ch.id=cw.current_location_id " +
             "  WHERE cw.id=? AND (ch.biome IN ('WETLAND','RIVER_BANK','COAST') " +
             "    OR EXISTS(SELECT 1 FROM ecology_site es WHERE es.chunk_id=ch.id AND " +
-                 com.devosphere.draugr.ecology.FreshWater.sites("es") + ")))", Boolean.class, chronicle));
+                 com.devosphere.draugr.ecology.FreshWater.sites("es") + ") " +
+            "    OR EXISTS(SELECT 1 FROM construction_project cp JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
+            "              JOIN world_object pw ON pw.id=cp.object_id " +
+            "              WHERE ck.holds_open_water AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
+            "                AND pw.lifecycle_state='ACTIVE' AND pw.current_location_id=ch.id)))",
+            Boolean.class, chronicle));
     }
 
     private String display(String species) { return species.replace('_',' '); }
