@@ -146,10 +146,29 @@ public class PhysicalItemService {
     }
 
     /** Consume one reachable such item — what is carried first, then the nearest in reach — or false if none. */
+    /**
+     * The order a kind is spent in: <b>the poorest first</b>, then what is in hand before what is in a store,
+     * then by id so it is never a coin toss.
+     *
+     * <p>This used to be carried-first and then id — an arbitrary instance — while {@link #worstGradeAmong},
+     * which caps what the work can come out as, read the <b>worst</b> reachable one. The two disagreed, and a
+     * Chronicle carrying a fine fibre and a poor one paid for it twice: the cap was taken from the poor fibre and
+     * the fine one was what got consumed. They lost the good stock <em>and</em> got the poor result, and the poor
+     * stock was still sitting there afterwards.
+     *
+     * <p>Spending the poorest first makes the two agree by construction — the thing whose grade decided the
+     * outcome is the thing that was used up — and it is what a person does anyway: work off the rough stock, keep
+     * the good for when it matters. It reads the same for food and fuel, where eating or burning the worst first
+     * is the ordinary thrift.
+     */
+    static final String POOREST_FIRST =
+        "ORDER BY CASE i.quality_grade WHEN 'DEFECTIVE' THEN 0 WHEN 'POOR' THEN 1 WHEN 'SOUND' THEN 2 ELSE 3 END, " +
+        "CASE WHEN w.current_owner_id=? THEN 0 ELSE 1 END, r.id ";
+
     private boolean consumeFromReach(UUID chronicle, UUID location, String itemKey, Instant occurredAt) {
         UUID item = jdbc.query(REACHABLE_CTE +
             "SELECT r.id FROM reachable r JOIN item_instance i ON i.object_id=r.id JOIN world_object w ON w.id=r.id " +
-            "WHERE i.item_key=? ORDER BY CASE WHEN w.current_owner_id=? THEN 0 ELSE 1 END, r.id FOR UPDATE OF i LIMIT 1",
+            "WHERE i.item_key=? " + POOREST_FIRST + "FOR UPDATE OF i LIMIT 1",
             rs -> rs.next() ? rs.getObject(1, UUID.class) : null, chronicle, location, itemKey, chronicle);
         if (item == null) return false;
         retire(item, occurredAt, "CONSUMED", itemKey);
@@ -166,9 +185,10 @@ public class PhysicalItemService {
     @Transactional(readOnly = true)
     public QualityGrade gradeOfNextConsumed(UUID chronicle, String itemKey) {
         UUID location = chronicleLocation(chronicle);
+        // The same order consumeFromReach spends in, or this describes an object other than the one taken.
         String g = jdbc.query(REACHABLE_CTE +
             "SELECT i.quality_grade FROM reachable r JOIN item_instance i ON i.object_id=r.id JOIN world_object w ON w.id=r.id " +
-            "WHERE i.item_key=? ORDER BY CASE WHEN w.current_owner_id=? THEN 0 ELSE 1 END, r.id LIMIT 1",
+            "WHERE i.item_key=? " + POOREST_FIRST + "LIMIT 1",
             rs -> rs.next() ? rs.getString(1) : null, chronicle, location, itemKey, chronicle);
         return QualityGrade.of(g);
     }
