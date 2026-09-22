@@ -118,4 +118,65 @@ class DraftHarnessIntegrationTest {
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
+
+    /**
+     * One harness is one beast (#106) — and a parted strap harnesses nothing.
+     *
+     * <p>Whether the team was harnessed was a single EXISTS over the keeper's goods, so one strap spread the load
+     * across a team of any size: buy one, and eight oxen pull easy for ever. The winter blanket in this same class
+     * already had the honest rule, counting covers against beasts by bond, and the draft VEHICLE in this same
+     * statement was already checked for being broken while the gear hitching the beast to it was not.
+     */
+    @Test
+    void oneHarnessIsOneBeastAndAPartedStrapIsNone() {
+        if (worldGenesis.current() == null) {
+            worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
+            ecology.seed();
+        }
+        ChronicleService.ChronicleSummary summary = chronicles.awaken();
+        assertNotNull(summary, "awakening must produce a living Chronicle");
+        UUID chronicle = summary.id();
+        jdbc.update("UPDATE world_chunk SET biome='GRASSLAND' WHERE id=(SELECT current_location_id FROM world_object WHERE id=?)", chronicle);
+        Instant now = ticks.current().simulatedAt();
+
+        // Clean ground: this measures fatigue per beast, so it must own every beast it counts.
+        jdbc.update("DELETE FROM tamed_young WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
+        jdbc.update("DELETE FROM tamed_gestation WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
+        jdbc.update("DELETE FROM wildlife_bond WHERE chronicle_id=?", chronicle);
+        jdbc.update("UPDATE item_instance SET condition_state='BROKEN' WHERE item_key IN ('draft_harness','draft_yoke') " +
+            "AND object_id IN (SELECT id FROM world_object WHERE current_owner_id=?)", chronicle);
+
+        items.createCarriedItem(chronicle, "travois", "Travois", now, "TEST");
+        tameAnAurochs(chronicle, now);
+        tameAnAurochs(chronicle, now);
+        UUID harness = items.createCarriedItem(chronicle, "draft_harness", "Draft harness", now, "TEST");
+
+        // Two beasts, one sound harness. One of them pulls in gear and the other pulls in nothing.
+        resetDraft(chronicle);
+        items.workDraftBeasts(chronicle);
+        java.util.List<Integer> tired = jdbc.queryForList(
+            "SELECT draft_fatigue FROM wildlife_bond WHERE chronicle_id=? ORDER BY draft_fatigue", Integer.class, chronicle);
+        assertEquals(java.util.List.of(12, 20), tired,
+            "one harness harnesses one beast: the geared one tires 12, the bare one 20");
+
+        // A second harness, and the whole team is in gear.
+        items.createCarriedItem(chronicle, "draft_harness", "Draft harness", now, "TEST");
+        resetDraft(chronicle);
+        items.workDraftBeasts(chronicle);
+        assertEquals(java.util.List.of(12, 12), jdbc.queryForList(
+            "SELECT draft_fatigue FROM wildlife_bond WHERE chronicle_id=? ORDER BY draft_fatigue", Integer.class, chronicle),
+            "gear enough for the team, and the team is geared");
+
+        // Part both straps. A broken harness spreads nothing — the same rule the cart beside it already obeyed.
+        jdbc.update("UPDATE item_instance SET condition_state='BROKEN' WHERE item_key='draft_harness' " +
+            "AND object_id IN (SELECT id FROM world_object WHERE current_owner_id=?)", chronicle);
+        resetDraft(chronicle);
+        items.workDraftBeasts(chronicle);
+        assertEquals(java.util.List.of(20, 20), jdbc.queryForList(
+            "SELECT draft_fatigue FROM wildlife_bond WHERE chronicle_id=? ORDER BY draft_fatigue", Integer.class, chronicle),
+            "a parted strap is not gear, however many of them you carry");
+        assertNotNull(harness, "the harness is a real object with a history, not a flag");
+
+        assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
 }

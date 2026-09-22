@@ -283,22 +283,41 @@ public class PhysicalItemService {
      *  Rough ground (#103) tires it half again as hard — the reason a loaded team is routed over open country. */
     @Transactional
     public void workDraftBeasts(UUID chronicle) {
-        boolean harnessed = Boolean.TRUE.equals(jdbc.queryForObject(
-            "SELECT EXISTS(SELECT 1 FROM item_instance ti JOIN world_object tw ON tw.id=ti.object_id " +
-            "WHERE ti.item_key IN ('draft_harness','draft_yoke') AND tw.current_owner_id=? AND tw.lifecycle_state='ACTIVE')",
-            Boolean.class, chronicle));
         String biome = jdbc.query("SELECT ch.biome FROM world_object cw JOIN world_chunk ch ON ch.id=cw.current_location_id WHERE cw.id=?",
             rs -> rs.next() ? rs.getString(1) : null, chronicle);
-        int perWork = harnessed ? DRAFT_FATIGUE_HARNESSED : DRAFT_FATIGUE_PER_WORK;
-        if (!isEasyDraftGround(biome)) perWork = perWork * 3 / 2; // rough going strains the team half again as hard
-        final int fatiguePerWork = perWork;
+        // Rough going strains the team half again as hard, harnessed or not.
+        int hard = isEasyDraftGround(biome) ? DRAFT_FATIGUE_PER_WORK : DRAFT_FATIGUE_PER_WORK * 3 / 2;
+        int eased = isEasyDraftGround(biome) ? DRAFT_FATIGUE_HARNESSED : DRAFT_FATIGUE_HARNESSED * 3 / 2;
         jdbc.update(
-            "UPDATE wildlife_bond wb SET draft_fatigue = LEAST(100, draft_fatigue + ?), draft_conditioning = LEAST(100, draft_conditioning + 3) " +
+            // A harness is worn by ONE beast (#106). This was a single EXISTS over the keeper's goods, so one
+            // harness spread the load across a team of any size — buy one strap, and eight oxen pull easy for
+            // ever. The winter blanket three lines of this class away already had the honest rule, counting
+            // covers against beasts by bond, and this is the same rule in the same shape.
+            //
+            // And a BROKEN harness spread nothing, because a broken strap is a strap that parted: the draft
+            // VEHICLE in the same statement was already checked for that, and the gear that hitches the beast
+            // to it was not.
+            "UPDATE wildlife_bond wb SET draft_fatigue = LEAST(100, draft_fatigue + CASE WHEN " + harnessedBeast() +
+            "    THEN ? ELSE ? END), draft_conditioning = LEAST(100, draft_conditioning + 3) " +
             "WHERE wb.chronicle_id=? AND wb.bond_stage='TAMED' " +
             "AND EXISTS (SELECT 1 FROM wildlife_population wp JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wp.id=wb.population_id) " +
             "AND EXISTS (SELECT 1 FROM item_instance ti JOIN world_object tw ON tw.id=ti.object_id " +
             "  WHERE ti.item_key IN (SELECT item_key FROM draft_vehicle) AND ti.condition_state <> 'BROKEN' AND tw.current_owner_id=? AND tw.lifecycle_state='ACTIVE')",
-            fatiguePerWork, chronicle, chronicle);
+            eased, hard, chronicle, chronicle);
+    }
+
+    /**
+     * Whether there is a sound harness or yoke for THIS beast — one piece of gear to one animal, counted the way
+     * {@link #coveredBy} counts winter blankets: a keeper with two harnesses and three oxen harnesses two of them,
+     * decided by bond so the answer never depends on the order rows arrive in.
+     */
+    private static String harnessedBeast() {
+        return "((SELECT count(*) FROM item_instance hi JOIN world_object hw ON hw.id=hi.object_id " +
+               "  WHERE hi.item_key IN ('draft_harness','draft_yoke') AND hw.current_owner_id=wb.chronicle_id " +
+               "    AND hw.lifecycle_state='ACTIVE' AND hi.condition_state <> 'BROKEN') " +
+               " >= (SELECT count(*) FROM wildlife_bond h3 JOIN wildlife_population p3 ON p3.id=h3.population_id " +
+               "  JOIN draft_species d3 ON d3.species_key=p3.species_key " +
+               "  WHERE h3.chronicle_id=wb.chronicle_id AND h3.bond_stage='TAMED' AND h3.id <= wb.id))";
     }
 
     /** Rest the Chronicle's draft beasts (#101): a spell of rest or sleep lets every bonded beast recover some fatigue,
