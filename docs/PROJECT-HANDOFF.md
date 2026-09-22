@@ -290,15 +290,27 @@ The question "should an AI layer help the ActivityClassifier work out what the p
 >   Verify the world instead by `docker compose up -d postgres`, booting the backend (boot runs genesis
 >   reconcile), querying before and after, then `Stop-Draugr.ps1`. Never while the user's launcher is waiting.
 >
-> **In CI:** #694 (#122 milk and eggs read the animal's condition, and hunger and thirst now rise for every kept
-> animal), #695 (#106 draft gear as data with V369's size ceiling, V371), #696 (#37 the interpreter cites what it
-> read and is refused when it read nothing, V372).
+> **Also merged this cycle:** #694 (#122 milk and eggs read the animal's condition — **and hunger and thirst now
+> rise for every kept animal**, not only the eleven draft species, which is what stopped that rule being a
+> token), #695 (#106 draft gear as data with V369's size ceiling, V371), #696 (#37 the interpreter cites what it
+> read and is refused when it read nothing, V372). **#122 and epic #109 are closed.**
 >
-> **Open after those:** #239, #229, #227, #224, #222 (the backdrop epic — its backend side is substantially done;
-> see the audit on #224, which found the resolver already handles every site category and the manifest already
-> carries the wildlife keys), #109 (closes with #122), #108 and #106 (breadth, each item needing a function
-> first), #99, #77 (breadth only — see the audit, which corrects that ticket's own diagnosis), #37 (per-object
-> target IDs, which need `executeProcess` to honour a preferred target).
+> The live world was verified again after each pair landed: `now at version v372`, `Launch audit clean`, three
+> peoples standing, and `draft species with no gear that fits = 0` — the claim #695 rested on, checked against
+> the real database rather than left as an argument.
+>
+> **Still in CI:** #698 (#108 a duck kept from water does not lay, V373).
+>
+> **Open after that:**
+>
+> | issue | what is actually left |
+> |---|---|
+> | #37 | per-object target IDs, which need `executeProcess` to honour a preferred target — the cited-context half is done |
+> | #77 | breadth only. Its own note blamed `CRAFT_DESK` for shadowing the workshop tables; `CRAFT_WORKSTATION` claims those words two lines earlier and builds the right bench. All six "unbuildable" structures have working item equivalents. **Trap: `stationStructureFor` has no `sewing_table` case**, so the day one becomes buildable, 53 processes silently will not see it |
+> | #99 | an epic; closes when its children do |
+> | #106 | catalogue breadth, now addable as DATA rather than blocked on code. Nothing tells a keeper their gear will not fit — the honest place to say it is the crafting or hauling boundary, not a tick |
+> | #108 | the waterfowl STRUCTURES (V373 supplies the fact they would rest on), draft-gear infrastructure, grazing gates — each still needs a function of its own |
+> | #222, #224, #227, #229, #239 | the backdrop epic. Its backend side is substantially done: `BackdropResolver` already handles every site category, the manifest already carries 76 `site.*` keys including the wildlife habitats, and the bee tree is genuinely generated. The one unreported source of standing evidence is `insect_colony`, which needs a manifest key and an image as well as a query |
 
 > **▶ 2026-09-21: the second people stands in the live world, and three catalogues stopped being
 > catalogues.** The cycle's theme was the project's own stated defect — data that declares a capability nothing
