@@ -76,6 +76,58 @@ public class ExaminationService {
      * or avoid. A keener eye sees more kinds and reads the shy ones out of their sign. Deterministic and
      * read-only; the AI narrator may later enrich the deepest tier without becoming load-bearing.
      */
+    /**
+     * The kingdom a search names, or null when it names no particular kind (#37).
+     *
+     * <p>Keyed on {@code wildlife_species.kingdom_class} rather than on a hand-kept list of creatures, so a
+     * species added to the catalogue is searchable the day it lands. Monsters are deliberately unreachable here:
+     * MONSTRUM is its own kingdom and no word maps to it, because a search must never hand a player the one hint
+     * the sign channel exists to ration.
+     */
+    static String kindNamed(String text) {
+        String v = " " + text.replaceAll("[^a-z]", " ").replaceAll("\\s+", " ").trim() + " ";
+        if (v.contains(" bird ") || v.contains(" birds ") || v.contains(" fowl ") || v.contains(" nests ")) return "AVES";
+        if (v.contains(" insect ") || v.contains(" insects ") || v.contains(" bug ") || v.contains(" bugs ")
+            || v.contains(" grubs ") || v.contains(" beetles ")) return "INSECTA";
+        if (v.contains(" fish ") || v.contains(" fishes ")) return "PISCES";
+        if (v.contains(" snake ") || v.contains(" snakes ") || v.contains(" lizard ") || v.contains(" lizards ")
+            || v.contains(" reptiles ")) return "REPTILIA";
+        if (v.contains(" frog ") || v.contains(" frogs ") || v.contains(" toads ") || v.contains(" newts ")) return "AMPHIBIA";
+        return null;
+    }
+
+    /**
+     * What this ground holds of one kingdom, named — or plainly that it holds none (#37).
+     *
+     * <p>Read from the species registry by <b>biome affinity</b>, exactly as {@link #presentLife} reads it, and
+     * NOT from materialised {@code wildlife_population} rows. That distinction is the whole correctness of this
+     * method: only a dozen populations exist in a world, and perception has always worked off the registry, so a
+     * query over populations would have answered "none here" on ground whose own sweep names a monitor lizard in
+     * the next breath. A rule that reads a table nobody fills is a rule that never fires.
+     *
+     * <p>Monsters cannot be reached: MONSTRUM is excluded here as it is there, and no word in {@link #kindNamed}
+     * maps to it. Aquatic life is excluded for the land kingdoms for the same reason presentLife excludes it —
+     * the fish line is its own channel — but kept when fish are what was asked for.
+     */
+    @Transactional(readOnly = true)
+    public String lifeOfKind(UUID chunk, String kingdom, double acuity) {
+        int cap = acuity >= 0.6 ? 3 : acuity >= 0.3 ? 2 : 1;
+        String biome = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : null, chunk);
+        if (biome == null) return "";
+        List<String> found = orEmpty(jdbc.query(
+            "SELECT species_key FROM wildlife_species " +
+            "WHERE kingdom_class=? AND kingdom_class <> 'MONSTRUM' AND biome_affinity ILIKE ? " +
+            "  AND (?::boolean OR movement_class <> 'AQUATIC') AND wildlife_abroad(species_key) " +
+            "ORDER BY md5(species_key || ?::text) LIMIT " + cap,
+            (rs, i) -> humanize(rs.getString(1)), kingdom, "%" + biome + "%", "PISCES".equals(kingdom), chunk.toString()));
+        String plural = switch (kingdom) {
+            case "AVES" -> "birds"; case "INSECTA" -> "insects"; case "PISCES" -> "fish";
+            case "REPTILIA" -> "snakes or lizards"; default -> "frogs or newts"; };
+        if (found.isEmpty())
+            return "You look for " + plural + ", and this ground offers none that are abroad now. ";
+        return "Looking for " + plural + ", you make out " + joinAnd(found) + ". ";
+    }
+
     @Transactional(readOnly = true)
     public String presentLife(UUID chunk, double acuity) {
         if (chunk == null) return "";
@@ -328,6 +380,18 @@ public class ExaminationService {
                 }
             }
             case SEARCH -> {
+                // What were they looking FOR (#37)? A search used to ignore its own subject entirely: "look for
+                // birds", "look for insects" and "look for clay" all returned the same sentence about whatever
+                // happened to be underfoot. The ticket's complaint is exactly this — "aerial species, insects are
+                // not returned by the Narrator even if the chronicle intently look for them on sensible
+                // locations" — and a player who asks after one thing and is told about another cannot tell an
+                // empty place from a deaf one.
+                //
+                // So a named kind is answered about first, and answered either way: what is here of that kind, or
+                // plainly that there is none. The general sweep still follows, because looking for one thing is
+                // how a person notices another.
+                String looksFor = kindNamed(actionText == null ? "" : actionText.toLowerCase(Locale.ROOT));
+                if (looksFor != null) b.append(lifeOfKind(location, looksFor, acuity));
                 b.append("You go over the ground with care. ");
                 List<String> ground = orEmpty(jdbc.query(
                     "SELECT w.display_name FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
