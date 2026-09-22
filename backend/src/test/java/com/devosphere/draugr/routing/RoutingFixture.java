@@ -38,8 +38,10 @@ final class RoutingFixture {
         add(t, "HUNT", 2, "ambush", "trap", "spear", "shoot", "skin", "lure", "track", "kill", "gut");
         add(t, "HUNT", 1, "angle");
 
+        // "cook" is PROCESS in the live category_term table; the fixture lacked it, so every cooking sentence
+        // classified to nothing here and matched nothing regardless of keywords or subjects.
         add(t, "PROCESS", 3, "tan", "ret", "knap", "leach", "hew", "brine", "fillet", "debark",
-                             "foundation stone", "bake", "kiln");
+                             "foundation stone", "bake", "kiln", "cook", "simmer");
         add(t, "PROCESS", 2, "split", "shape", "render", "twist", "smoke", "dry", "cure",
                              "grind", "soak", "boil", "temper", "flesh", "scrape", "plane", "saw",
                              "salt", "process", "refine", "extract", "strip", "pound", "crush", "sift",
@@ -87,6 +89,18 @@ final class RoutingFixture {
      * terms, exactly as a migrated database reports them.
      */
     static final List<ProcessMatcher.Candidate> PROCESSES = List.of(
+        ProcessMatcher.Candidate.of("cook_greens", "PROCESS",
+            "cooked greens,cook the greens,boil the greens,wilt the greens,cook greens,cook",
+            "greens,food,meal,supper"),
+        ProcessMatcher.Candidate.of("cook_mushrooms", "PROCESS",
+            "cooked mushrooms,fry mushrooms,roast mushrooms,cook mushrooms,cook",
+            "mushroom,mushrooms,food,meal,supper"),
+        ProcessMatcher.Candidate.of("cook_porridge", "PROCESS",
+            "porridge,gruel,boil porridge,cook porridge,make porridge,cook",
+            "porridge,gruel,food,meal,supper"),
+        ProcessMatcher.Candidate.of("cook_root_stew", "PROCESS",
+            "root stew,pottage,simmer a stew,cook a stew,make a stew,cook",
+            "stew,pottage,food,meal,supper"),
         ProcessMatcher.Candidate.of("carve_needle", "CRAFT",
             "needle,awl,bone needle,carve bone,carve,whittle",
             "animal,antler,bone,fish,needle"),

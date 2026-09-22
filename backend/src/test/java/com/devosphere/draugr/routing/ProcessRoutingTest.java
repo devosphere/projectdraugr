@@ -6,6 +6,9 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.devosphere.draugr.routing.ProcessMatcher;
 
 /**
  * The routing regression fixture: every collision that has ever been recorded stays
@@ -74,6 +77,38 @@ class ProcessRoutingTest {
         assertEquals("fire_vessel",        RoutingFixture.resolve("fire the clay pot in the kiln"));
         assertEquals("weave_large_basket", RoutingFixture.resolve("weave a large basket from plant fiber"));
         assertEquals("haft_stone_axe",     RoutingFixture.resolve("haft the stone axe head onto a wooden handle"));
+        // Naming the food still reaches one way of cooking it, even though all four answer to the bare verb.
+        assertEquals("cook_greens",        RoutingFixture.resolve("cook the greens"));
+        assertEquals("cook_mushrooms",     RoutingFixture.resolve("cook mushrooms over the fire"));
+        assertEquals("cook_porridge",      RoutingFixture.resolve("boil porridge for the morning"));
+        assertEquals("cook_root_stew",     RoutingFixture.resolve("simmer a stew of roots"));
+    }
+
+    /**
+     * "cook some food" is a thing a person says, and the world had no answer to it (#37, V375).
+     *
+     * <p>Every cooking keyword named its own food — "cook greens", "make porridge" — so a Chronicle who said
+     * "food" matched none of them and was told the world did not know how. It knows four ways.
+     *
+     * <p>The fix is the bare verb as a keyword plus generic subjects, and the load-bearing half is the SECOND
+     * assertion: naming a food must still reach one way of cooking it. A change that made every cooking sentence
+     * ambiguous would be worse than the dead end it replaced.
+     */
+    @Test
+    @DisplayName("a vague request to cook is asked about; a specific one is acted on")
+    void cookingSomethingUnnamedTies() {
+        ProcessMatcher.Result vague = RoutingFixture.diagnose("cook some food");
+        // ambiguous(), not a null key: the matcher is documented to hand back the lexically first of the tied set
+        // so a read-only caller is deterministic, and it is the PLAY path that turns a tie into a question rather
+        // than a guess. What matters here is that the tie exists and names every way of cooking supper.
+        assertTrue(vague.ambiguous(),
+            () -> "a request that names no food fits more than one way of cooking: " + vague.tied());
+        assertEquals(4, vague.tied().size(),
+            () -> "the question names the real options rather than refusing: " + vague.tied());
+
+        // And the discrimination that makes the above safe: a named food is not a question.
+        assertEquals("cook_greens", RoutingFixture.resolve("cook the greens"));
+        assertEquals("cook_mushrooms", RoutingFixture.resolve("cook mushrooms"));
     }
 
     /**
