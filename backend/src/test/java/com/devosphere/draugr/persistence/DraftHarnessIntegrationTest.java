@@ -194,4 +194,60 @@ class DraftHarnessIntegrationTest {
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
+    /**
+     * A keeper is told, once, at the one moment they would want to know (#106).
+     *
+     * <p>V371 sized the gear to the body and said nothing to anybody about it. `workDraftBeasts` runs in the
+     * tick and has no narration — gear has always been silent — so a Chronicle whose only beasts are oxen could
+     * make a collar harness, get no benefit from it for ever, and never be told why. Making it is the only
+     * boundary where a person is stood over the thing with it in their hands.
+     *
+     * <p>It reports; it does not refuse. The harness is real and it is theirs, and the test asserts that the
+     * making still SUCCEEDED — a keeper may make gear ahead of the animal.
+     */
+    @Test
+    void makingGearThatFitsNothingYouKeepSaysSoWithoutRefusingIt() {
+        if (worldGenesis.current() == null) {
+            worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
+            ecology.seed();
+        }
+        ChronicleService.ChronicleSummary summary = chronicles.awaken();
+        assertNotNull(summary, "awakening must produce a living Chronicle");
+        UUID chronicle = summary.id();
+        jdbc.update("UPDATE world_chunk SET biome='GRASSLAND' WHERE id=(SELECT current_location_id FROM world_object WHERE id=?)", chronicle);
+        Instant now = ticks.current().simulatedAt();
+        UUID chunk = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+
+        // Nothing kept: with no beasts there is nothing for it not to fit, and the making says nothing extra.
+        jdbc.update("DELETE FROM tamed_young WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
+        jdbc.update("DELETE FROM tamed_gestation WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
+        jdbc.update("DELETE FROM wildlife_bond WHERE chronicle_id=?", chronicle);
+        for (int i = 0; i < 2; i++) items.createCarriedItem(chronicle, "wooden_component", "Wooden component", now, "TEST");
+        for (int i = 0; i < 4; i++) items.createCarriedItem(chronicle, "fiber_cordage", "Fiber cordage", now, "TEST");
+        String[] withNoBeasts = items.executeProcess(chronicle, chunk, "make_draft_harness", "make a draught harness", now);
+        // Asserted, not guarded on: a making that quietly failed would make every check below vacuous, and a
+        // check that could not have failed proves nothing.
+        assertEquals("SUCCEEDED", withNoBeasts[0], () -> "the harness must actually be made: " + withNoBeasts[1]);
+        assertTrue(!withNoBeasts[1].contains("too small for any of them"),
+            () -> "with nothing kept there is nothing for it not to fit: " + withNoBeasts[1]);
+
+        // An ox, and a collar harness. LARGE gear, a HUGE beast: it is made, and they are told.
+        tameAnAurochs(chronicle, now);
+        for (int i = 0; i < 2; i++) items.createCarriedItem(chronicle, "wooden_component", "Wooden component", now, "TEST");
+        for (int i = 0; i < 4; i++) items.createCarriedItem(chronicle, "fiber_cordage", "Fiber cordage", now, "TEST");
+        String[] harness = items.executeProcess(chronicle, chunk, "make_draft_harness", "make a draught harness", now);
+        assertEquals("SUCCEEDED", harness[0], () -> "it is made -- this reports, it does not refuse: " + harness[1]);
+        assertTrue(harness[1].contains("too small for any of them"),
+            () -> "a collar harness beside an ox is told on, not silently useless: " + harness[1]);
+
+        // And a yoke, which does fit, says nothing extra. The asymmetry, as ever.
+        for (int i = 0; i < 4; i++) items.createCarriedItem(chronicle, "wooden_component", "Wooden component", now, "TEST");
+        for (int i = 0; i < 4; i++) items.createCarriedItem(chronicle, "fiber_cordage", "Fiber cordage", now, "TEST");
+        String[] yoke = items.executeProcess(chronicle, chunk, "make_draft_yoke", "make an ox-yoke", now);
+        assertEquals("SUCCEEDED", yoke[0], () -> "the yoke must actually be made: " + yoke[1]);
+        assertTrue(!yoke[1].contains("too small for any of them"),
+            () -> "a yoke is exactly what an ox wears, and nothing is said: " + yoke[1]);
+
+        assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
 }

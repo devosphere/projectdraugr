@@ -2037,7 +2037,37 @@ public class PhysicalItemService {
             if (!nc.equals(tc))
                 jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'TOOL_WORN',jsonb_build_object('from',?,'to',?))", tid, Timestamp.from(at), tc, nc);
         }
-        return new String[]{"SUCCEEDED", (String) match.get("narration")};
+        return new String[]{"SUCCEEDED", (String) match.get("narration") + gearThatFitsNothingKept(chronicle, outKey)};
+    }
+
+    /**
+     * A word at the one moment a keeper would want it (#106): they have just made a piece of draft gear that
+     * will not go on any beast they keep.
+     *
+     * <p>V371 sized the gear to the body, and said nothing to anybody about it. {@code workDraftBeasts} runs in
+     * the tick and has no narration — gear has always been silent — so a Chronicle whose only beasts are oxen
+     * could make a collar harness, get no benefit from it for ever, and never be told why. Making it is the only
+     * boundary where a person is stood over the thing with it in their hands, so this is where it is said.
+     *
+     * <p>It reports rather than refuses. The harness is real, it is theirs, and it will fit the horse they have
+     * not tamed yet: a keeper may make gear ahead of the animal, and this is not the place to argue about it.
+     * Silent for anything that is not draft gear, and for a keeper who keeps nothing at all — with no beasts,
+     * there is nothing for it not to fit.
+     */
+    private String gearThatFitsNothingKept(UUID chronicle, String outKey) {
+        if (outKey == null) return "";
+        Integer ceiling = jdbc.query("SELECT body_size_rank(fits_up_to_size) FROM draft_gear WHERE item_key=?",
+            rs -> rs.next() ? rs.getInt(1) : null, outKey);
+        if (ceiling == null) return "";
+        Integer biggest = jdbc.queryForObject(
+            "SELECT COALESCE(MAX(body_size_rank(ws.size_tier)), 0) FROM wildlife_bond wb " +
+            "JOIN wildlife_population wp ON wp.id=wb.population_id " +
+            "JOIN wildlife_species ws ON ws.species_key=wp.species_key " +
+            "JOIN draft_species ds ON ds.species_key=wp.species_key " +
+            "WHERE wb.chronicle_id=? AND wb.bond_stage='TAMED'", Integer.class, chronicle);
+        if (biggest == null || biggest == 0 || biggest <= ceiling) return "";
+        return " You hold it up against the beasts you keep, and it is plainly too small for any of them — "
+             + "made for something lighter-necked than anything standing here.";
     }
 
     /** Use-based wear thresholds {WORN-at, BROKEN-at} for a tool, scaled by its metal: harder metal holds its edge
