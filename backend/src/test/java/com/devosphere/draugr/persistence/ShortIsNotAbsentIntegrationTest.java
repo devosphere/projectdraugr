@@ -63,6 +63,14 @@ class ShortIsNotAbsentIntegrationTest {
     @Autowired PersistentStateAuditor auditor;
     @Autowired JdbcTemplate jdbc;
 
+    private java.sql.Timestamp clockBefore;
+
+    @org.junit.jupiter.api.BeforeEach
+    void saveClock() { clockBefore = jdbc.queryForObject("SELECT simulated_at FROM simulation_clock WHERE id=1", java.sql.Timestamp.class); }
+
+    @org.junit.jupiter.api.AfterEach
+    void restoreClock() { if (clockBefore != null) jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", clockBefore); }
+
     @Test
     void beingShortOfAThingIsSaidAsBeingShortOfIt() {
         if (worldGenesis.current() == null) {
@@ -80,11 +88,14 @@ class ShortIsNotAbsentIntegrationTest {
             "SELECT quantity FROM material_process_input WHERE process_key='twist_cordage' AND item_key='plant_fiber'", Integer.class);
         assertTrue(wants >= 2, "this test only says anything if the recipe takes more than one");
 
-        // Clear ground: the count in the prose must be this test's count.
+        // Clear ground: the count in the prose must be this test's count. Scoped to what THIS Chronicle can
+        // reach — carried or lying on its own chunk — because the first form took every plant fibre in the
+        // world, including stock another test had seeded for itself.
         jdbc.update("UPDATE world_object w SET lifecycle_state='DESTROYED', destroyed_at=?, destroyed_cause='TEST_TEARDOWN', " +
             "destroyed_location_id=w.current_location_id, current_owner_id=NULL, current_location_id=NULL " +
-            "FROM item_instance i WHERE i.object_id=w.id AND i.item_key='plant_fiber' AND w.lifecycle_state='ACTIVE'",
-            java.sql.Timestamp.from(now));
+            "FROM item_instance i WHERE i.object_id=w.id AND i.item_key='plant_fiber' AND w.lifecycle_state='ACTIVE' " +
+            "  AND (w.current_owner_id=? OR w.current_location_id=?)",
+            java.sql.Timestamp.from(now), chronicle, chunk);
 
         // None at all: the old sentence is right, and stays.
         String[] none = items.executeProcess(chronicle, chunk, "twist_cordage", "twist the fibre into cordage", now);
