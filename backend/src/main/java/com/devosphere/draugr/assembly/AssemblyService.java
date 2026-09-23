@@ -157,17 +157,30 @@ public class AssemblyService {
             // A cure is only waiting; it carries the grade of the work it set.
             recordStage(instanceId, stageKey, at, prereqKey != null ? doneGrade.getOrDefault(prereqKey, QualityGrade.SOUND) : QualityGrade.SOUND);
         } else {
+            // Name the tool, not "a tool" (#37). The stage knows which class it wants, and a Chronicle told
+            // only that something is missing has to guess which of their tools it meant — or which to go and make.
             String tool = (String) next.get("tool_class");
             if (tool != null && !hasTool(chronicle, tool))
-                return new String[]{"FAILED", "The work needs a tool you are not carrying."};
+                return new String[]{"FAILED", "The work wants " + toolPhrase(tool) + ", and you are not carrying one."};
             if (Boolean.TRUE.equals(next.get("requires_fire")) && !fireHere(location))
                 return new String[]{"FAILED", "It needs heat, and there is no fire burning here."};
 
             List<Map<String, Object>> reqs = jdbc.queryForList(
                 "SELECT item_key, quantity FROM assembly_stage_requirement WHERE stage_key=?", stageKey);
-            for (Map<String, Object> r : reqs)
-                if (!items.hasAtLeast(chronicle, (String) r.get("item_key"), ((Number) r.get("quantity")).intValue()))
-                    return new String[]{"FAILED", "You have not got enough to hand for that step."};
+            // Say what, and how much (#37). "You have not got enough to hand for that step" told a Chronicle
+            // standing in the rain that something was missing and left them to work out what — which is the
+            // same defect as the cordage refusal that blamed misplacement for a shortfall.
+            for (Map<String, Object> r : reqs) {
+                String itemKey = (String) r.get("item_key");
+                int wants = ((Number) r.get("quantity")).intValue();
+                if (!items.hasAtLeast(chronicle, itemKey, wants)) {
+                    String what = itemKey.replace('_', ' ');
+                    int have = items.reachCountAt(chronicle, location, itemKey);
+                    return new String[]{"FAILED", have > 0
+                        ? "That step wants " + wants + " " + what + ", and you have " + have + " to hand."
+                        : "That step wants " + wants + " " + what + ", and you have none to hand."};
+                }
+            }
 
             // A defective material is gated, not silently built in: it must be replaced
             // or reworked before it can be consumed.
@@ -325,6 +338,16 @@ public class AssemblyService {
      * invisible here, four STRIKING ones, and every metal AXE — so a Chronicle could smelt an iron axe and still be
      * refused a stage a stone axe could do. Every key the old lists named is in the registry, so this only widens.
      */
+    /** What to call a missing tool class, so a refusal names a thing rather than a class name (#37). */
+    private static String toolPhrase(String toolClass) {
+        return switch (toolClass == null ? "" : toolClass) {
+            case "CUTTING" -> "a cutting edge";
+            case "STRIKING" -> "something to strike with";
+            case "AXE" -> "an axe";
+            default -> "a tool you are not carrying";
+        };
+    }
+
     private boolean hasTool(UUID chronicle, String toolClass) {
         return switch (toolClass) {
             case "CUTTING", "STRIKING", "AXE" -> items.hasToolOfClass(chronicle, toolClass);
