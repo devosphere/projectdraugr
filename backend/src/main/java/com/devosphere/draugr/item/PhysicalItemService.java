@@ -1922,7 +1922,15 @@ public class PhysicalItemService {
             if (!hasAtLeastHere(chronicle, location, (String) in.get("item_key"), ((Number) in.get("quantity")).intValue())) {
                 String need = ((String) in.get("item_key")).replace('_', ' ');
                 String where = knownLocationOf(chronicle, (String) in.get("item_key"), location);
-                return new String[]{"FAILED", where != null
+                // Three situations, and there used to be two sentences (#37). A Chronicle holding two bundles of
+                // fibre for a three-bundle job was told "it lies wherever you last set it down, and you have not
+                // brought it" — about fibre that was in their hands. Short is not the same as absent, and telling
+                // a player to go and fetch what they are already carrying is worse than saying nothing.
+                int have = reachCount(chronicle, location, (String) in.get("item_key"));
+                int wants = ((Number) in.get("quantity")).intValue();
+                return new String[]{"FAILED", have > 0
+                    ? "You lay out what you have — " + have + " " + need + " — and it is not enough: this takes " + wants + "."
+                    : where != null
                     ? "You have not got enough " + need + " within reach. What there is of it sits at " + where + ", not here."
                     : "You have not got enough " + need + " within reach. What is missing is not here — it lies wherever you last set it down, and you have not brought it."};
             }
