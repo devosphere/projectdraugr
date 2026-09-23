@@ -961,4 +961,49 @@ class IntentClassificationRegressionTest {
                                           "build a rope post", "set a rope post", "work on the twisting post"})
             assertEquals("UNKNOWN", classify(phrase), phrase);
     }
+
+    /**
+     * #37 act three: the garment nouns had drifted from what {@code craftGarment} actually makes. The maker
+     * already dispatched on "shoe" and "trouser" — a Chronicle asking for either was told they could not think
+     * how, about a thing the code knew how to make. The asymmetry matters as much as the routes: a build verb
+     * on a garment noun is still a build, so the widening cannot have swallowed one.
+     */
+    @Test void theGarmentWordsMatchWhatTheMakerCanActuallyMake() throws Exception {
+        for (String phrase : new String[]{"sew a pair of shoes", "make a shoe", "stitch hide boots", "make a boot",
+                                          "sew trousers", "make a trouser", "make a tunic", "sew a hide coat",
+                                          "make a fur cloak", "craft leggings"})
+            assertEquals("CRAFT_GARMENT", classify(phrase), phrase);
+    }
+
+    /**
+     * #37 act three: "store the food" — the plainest way anybody says it — reached nothing, because STORE wanted
+     * either a container noun with "in"/"into" or the word "away". Raising a store is not filling one, so the
+     * build phrasings must still build.
+     */
+    @Test void aBareStorageVerbStoresAndABuildVerbStillBuilds() throws Exception {
+        for (String phrase : new String[]{"store the food", "store the meat", "stow the tools", "stash the berries",
+                                          "store the dried fish", "put the meat away", "cache the meat"})
+            assertEquals("STORE", classify(phrase), phrase);
+        // The other half of the rule. Without these, a widening that ate BUILD_STORAGE_AREA would pass.
+        for (String phrase : new String[]{"build a store house", "build a storehouse", "make a storage area",
+                                          "raise a store house", "set up a storage platform"})
+            assertEquals("BUILD_STORAGE_AREA", classify(phrase), phrase);
+    }
+
+    /**
+     * #37 act three: a question about the season or the cold fell through to UNKNOWN and came back with a
+     * crafting miss — prose about failing to make something, in answer to a question about the sky. The world
+     * computes the felt temperature of the exact ground the Chronicle stands on and shows it on the Body HUD;
+     * it simply never said it. FEEL takes the reading.
+     */
+    @Test void theSkyCanBeAskedAbout() throws Exception {
+        for (String phrase : new String[]{"what season is it", "which season is it", "what time of year is it",
+                                          "how cold is it", "how warm is it", "how hot is it",
+                                          "what is the temperature", "what is the weather", "what's the weather",
+                                          "how is the weather", "feel the air"})
+            assertEquals("FEEL", classify(phrase), phrase);
+        // Warming the body is an act, not a question, and must not have been swallowed by "how warm".
+        assertEquals("WARM_BODY", classify("warm myself by the fire"));
+        assertEquals("MEASURE", classify("weigh the stone"));
+    }
 }

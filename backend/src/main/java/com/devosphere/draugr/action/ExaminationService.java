@@ -328,7 +328,12 @@ public class ExaminationService {
     public String[] sense(UUID chronicle, UUID location, String actionText, Sense sense) {
         if (location == null) return new String[]{"SUCCEEDED", "Your senses find nothing here to fix on."};
         String biome = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : "unknown", location);
-        String weather = jdbc.query("SELECT ww.weather_kind FROM world_weather ww JOIN world_chunk c ON c.world_id=ww.world_id WHERE c.id=?", rs -> rs.next() ? rs.getString(1) : null, location);
+        // What the sky is doing HERE (#28), not what the world's single weather row says it is doing
+        // somewhere. The front that rains in the valley falls as snow on the peak, and a Chronicle standing in
+        // that snow was being told rain hissed across the leaf litter — the raw global kind was read straight,
+        // while narration and the Body HUD had long since been modulated through BiomeClimate. Found by the new
+        // air reading below contradicting the sentence right after it in one breath.
+        String weather = localClimate(location).kind();
         boolean fire = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM fire_state fs JOIN world_object w ON w.id=fs.construction_id WHERE w.current_location_id=? AND fs.active=true)", Boolean.class, location));
         boolean water = "WETLAND".equals(biome) || "RIVER_BANK".equals(biome) || Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM ecology_site WHERE chunk_id=? AND (" + com.devosphere.draugr.ecology.FreshWater.sites() + "))", Boolean.class, location));
@@ -368,6 +373,13 @@ public class ExaminationService {
                 Map<String, Object> item = resolveItem(chronicle, actionText == null ? "" : actionText.toLowerCase(Locale.ROOT));
                 if (item != null) { b.append("You run your hands over it. ").append(inspectItem(item, tier(capability.familiarity(chronicle, "ATTENTION")))); }
                 else {
+                    // The air first, then the ground (#37). A Chronicle who asked how cold it was, or what season
+                    // it had got to, was told nothing at all: the world computes the felt temperature of the exact
+                    // ground they stand on — altitude, latitude, aspect, the wind over it — shows it on the Body
+                    // HUD, and never once said it in prose. Standing in weather you cannot read is the whole of
+                    // the complaint. Same figure as the HUD, from the same BiomeClimate call, so the two cannot
+                    // drift apart.
+                    b.append(airReading(location)).append(" ");
                     b.append("You set your hand to the ground. ");
                     b.append(switch (biome == null ? "" : biome) {
                         case "TEMPERATE_FOREST" -> "It is soft with damp leaf litter. ";
@@ -404,6 +416,58 @@ public class ExaminationService {
             }
         }
         return new String[]{"SUCCEEDED", b.toString().trim()};
+    }
+
+    /**
+     * What the air is doing, as a body standing in it would read it: the season it has got to, the felt
+     * temperature of THIS ground, the wind on it, and the sky. The temperature comes from
+     * {@link com.devosphere.draugr.simulation.BiomeClimate}, the same call the Body HUD makes — a peak is colder
+     * than the valley under the one sky, and the prose must not disagree with the HUD about which.
+     */
+    com.devosphere.draugr.simulation.BiomeClimate.Local localClimate(UUID location) {
+        Map<String, Object> env = jdbc.queryForMap(
+            "SELECT wc.biome, COALESCE(wc.elevation,0) AS elevation, COALESCE(wc.moisture,500) AS moisture, " +
+            "COALESCE(wc.grid_y,0) AS grid_y, COALESCE(wg.height_chunks,1) AS height_chunks, " +
+            "COALESCE(ww.weather_kind,'CLEAR') AS weather_kind, COALESCE(ww.ambient_temperature_c,18.0) AS t, " +
+            "COALESCE(ww.wind_speed_kph,6) AS w, " +
+            "COALESCE((SELECT TRUE FROM world_chunk n WHERE n.world_id=wc.world_id AND n.grid_x=wc.grid_x " +
+            "          AND n.grid_y=wc.grid_y-1 AND n.elevation > wc.elevation + 40 LIMIT 1), FALSE) AS sun_warmed " +
+            "FROM world_chunk wc LEFT JOIN world_genesis wg ON wg.world_id=wc.world_id " +
+            "LEFT JOIN world_weather ww ON ww.world_id=wc.world_id WHERE wc.id=?", location);
+        return com.devosphere.draugr.simulation.BiomeClimate.at(
+            (String) env.get("biome"), ((Number) env.get("elevation")).intValue(), ((Number) env.get("moisture")).intValue(),
+            ((Number) env.get("grid_y")).intValue(), ((Number) env.get("height_chunks")).intValue(),
+            (String) env.get("weather_kind"), ((Number) env.get("t")).doubleValue(), ((Number) env.get("w")).intValue(),
+            Boolean.TRUE.equals(env.get("sun_warmed")));
+    }
+
+    String airReading(UUID location) {
+        com.devosphere.draugr.simulation.BiomeClimate.Local local = localClimate(location);
+        java.time.Instant at = jdbc.queryForObject("SELECT simulated_at FROM simulation_clock WHERE id=1", java.sql.Timestamp.class).toInstant();
+        int month = at.atZone(java.time.ZoneOffset.UTC).getMonthValue();
+        String season = switch (month) {
+            case 3, 4, 5 -> "spring"; case 6, 7, 8 -> "summer"; case 9, 10, 11 -> "autumn"; default -> "winter"; };
+        // Early/deep/late, so the answer is the year's position and not just its quarter — the difference
+        // between early autumn and late autumn is the difference between gathering and being too late to.
+        String part = switch (month) {
+            case 3, 6, 9, 12 -> "early "; case 5, 8, 11, 2 -> "late "; default -> ""; };
+        long c = Math.round(local.temperatureC());
+        String felt = c <= -10 ? "cold enough to take skin off metal"
+                    : c <= 0   ? "below freezing and biting"
+                    : c <= 6   ? "cold enough that standing still costs you"
+                    : c <= 14  ? "cool, the kind that works into you slowly"
+                    : c <= 22  ? "mild and easy to be out in"
+                    : c <= 30  ? "warm enough that the work will find your water"
+                    :            "hot enough to be dangerous to labour in";
+        int w = local.windKph();
+        String wind = w >= 45 ? " The wind is hard enough to lean on."
+                    : w >= 25 ? " A steady wind runs over the ground and takes the warmth with it."
+                    : w >= 10 ? " There is a light wind." : " The air is nearly still.";
+        String sky = switch (local.kind() == null ? "CLEAR" : local.kind()) {
+            case "RAIN" -> " Rain is falling."; case "STORM" -> " It is storming.";
+            case "SNOW" -> " Snow is coming down."; case "OVERCAST" -> " The sky is shut over with cloud.";
+            default -> " The sky is open."; };
+        return "It is " + part + season + ", and the air is " + felt + " — about " + c + "\u00B0C." + wind + sky;
     }
 
     /** Estimation (#65 measure): weigh/heft or count a named reachable item, sound a water depth, or pace out a
