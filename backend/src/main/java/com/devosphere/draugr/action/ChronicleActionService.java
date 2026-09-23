@@ -1691,10 +1691,17 @@ public class ChronicleActionService {
         if((value.contains(" in ")||value.contains(" into ")||value.contains(" inside "))&&(value.contains("put")||value.contains("place")||value.contains("store")||value.contains("stow")||value.contains("stash")||value.contains("load")||value.contains("pack")||value.contains("drop"))&&containerNoun) return Intent.STORE;
         if((value.contains("put")&&value.contains("away"))||value.contains("cache")||value.contains("stockpile")||value.contains("put in storage")||value.contains("stow away")||value.contains("stash away")) return Intent.STORE;
         // "store the food" with no container named (#37). The rules above want a container noun or the words
-        // "away"; a bare storage verb — the most ordinary way to say it — reached nothing. Excluded from the
-        // build verbs, because "build a store house" is raising the store, not filling it, and is classified
-        // further down as BUILD_STORAGE_AREA.
-        if((word(value,"store")||word(value,"stow")||word(value,"stash"))
+        // "away"; a bare storage verb — the most ordinary way to say it — reached nothing.
+        //
+        // Anchored on store/stow/stash as a VERB, because as a NOUN the same word is a building: a wood store, a
+        // log store, a fodder store, a hay store are all assemblies with their own keywords, and "designate this
+        // the store ground" is a DESIGNATE. A first cut of this rule used word(value,"store") and took all five
+        // of them — caught by noJavaIntentShadowsAnAssemblysOwnKeywords, which is exactly the #513 trap it is
+        // there to catch. No assembly keyword begins with the bare verb, so the phrase must.
+        String storeVerb = value.trim();
+        if((storeVerb.startsWith("store ")||storeVerb.startsWith("stow ")||storeVerb.startsWith("stash ")
+            ||value.contains(" store the ")||value.contains(" stow the ")||value.contains(" stash the ")
+            ||value.contains(" store my ")||value.contains(" stow my ")||value.contains(" stash my "))
            &&!value.contains("build")&&!value.contains("construct")&&!value.contains("make")&&!value.contains("raise")
            &&!value.contains("set up")&&!value.contains("put up")&&!value.contains("erect")&&!value.contains("dig")) return Intent.STORE;
         // PICK_UP (#67 take/retrieve/unpack): explicit retrieval verbs, or "take/get/remove/unpack X out of/from

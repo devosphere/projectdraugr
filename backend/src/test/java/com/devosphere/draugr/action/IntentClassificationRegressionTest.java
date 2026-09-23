@@ -988,6 +988,13 @@ class IntentClassificationRegressionTest {
         for (String phrase : new String[]{"build a store house", "build a storehouse", "make a storage area",
                                           "raise a store house", "set up a storage platform"})
             assertEquals("BUILD_STORAGE_AREA", classify(phrase), phrase);
+        // And the half a first cut of this rule actually broke, which cost a 68-minute CI round: as a NOUN the
+        // same word is a BUILDING. These are assembly keywords and a DESIGNATE, and every one of them was taken
+        // by STORE until the rule was anchored on the bare verb.
+        for (String phrase : new String[]{"wood store", "log store", "fodder store", "hay store",
+                                          "work on the wood store", "build a fodder store", "raise a wood store"})
+            assertEquals("UNKNOWN", classify(phrase), phrase);
+        assertEquals("DESIGNATE", classify("designate this the store ground"));
     }
 
     /**
