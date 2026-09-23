@@ -112,6 +112,26 @@ class ChronicleNineWordingsIntegrationTest {
                 "hours_without_food=0, hours_without_water=0, sleep_debt_hours=0 WHERE chronicle_id=?", chronicle);
         }
 
+        // A search that NAMES a kind is answered about that kind (#37). The ticket's words: "aerial species,
+        // insects are not returned by the Narrator even if the chronicle intently look for them on sensible
+        // locations." Before this, "look for birds", "look for insects" and "look for clay" returned the same
+        // sentence about whatever was underfoot, and a player could not tell an empty place from a deaf one.
+        //
+        // Asserted on the subject WORD rather than on a species, because which birds live on the ground a
+        // Chronicle wakes on is the world's business — but that it answers about birds at all is not.
+        // "look for fish" is deliberately NOT in this list. It never reaches SEARCH: the classifier routes it to
+        // FISH, which answers about the water — "there is no water here that holds anything worth taking" — and
+        // that is the right answer to it. The rule added here is about a search naming its subject, and asserting
+        // it on a phrase that another intent owns was asserting the wrong thing about the wrong path.
+        for (String[] asked : new String[][] { {"look for birds", "birds"}, {"look for insects", "insects"} }) {
+            var answer = actions.resolve(asked[0]);
+            assertNotEquals("UNKNOWN", answer.intent(), answer::perception);
+            assertTrue(answer.perception().toLowerCase(java.util.Locale.ROOT).contains(asked[1]),
+                () -> "\"" + asked[0] + "\" must answer about " + asked[1] + ", found: " + answer.perception());
+            jdbc.update("UPDATE chronicle_physiology SET last_metabolic_update=(SELECT simulated_at FROM simulation_clock WHERE id=1), " +
+                "hours_without_food=0, hours_without_water=0, sleep_debt_hours=0 WHERE chronicle_id=?", chronicle);
+        }
+
         // And the ticket's other half: an action the world cannot settle asks rather than guessing, and changes
         // nothing while it asks. "carve a bowl" is the recorded example — two processes answer to it (#593).
         int thingsBefore = jdbc.queryForObject("SELECT COUNT(*) FROM world_object", Integer.class);
