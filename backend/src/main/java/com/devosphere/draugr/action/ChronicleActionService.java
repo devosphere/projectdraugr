@@ -289,6 +289,13 @@ public class ChronicleActionService {
         // wolf into someone to parley with, because the community must be a PEOPLE (V344) to be in reach at all.
         // Moving, travelling and fighting keep their meaning even beside an isle.
         com.devosphere.draugr.people.ContactService.Act contactAct = null; UUID contactWith = null;
+        // Whether the words were MEANT for people who are not there (#37). Every gate below recognises the act
+        // first and then looks for a community in reach; when there is none it quietly drops the act and lets the
+        // phrase fall through to UNKNOWN, where a Chronicle who said "greet the strangers" was answered with
+        // "It does not come to anything. You stand a moment with the intention still on you and nothing to put it
+        // into" — a crafting miss, in reply to speech. The game heard them perfectly well; it just had nobody
+        // to carry it to, and would not say so.
+        boolean meantForPeople = false;
         com.devosphere.draugr.people.TradeService.Act tradeAct = null;
         com.devosphere.draugr.people.AgreementService.Act agreementAct = null;
         com.devosphere.draugr.people.AudienceService.Act audienceAct = null;
@@ -300,7 +307,7 @@ public class ChronicleActionService {
         com.devosphere.draugr.people.ConductService.Act conductAct = null;
         if (conduct != null && intent != Intent.MOVE && intent != Intent.TRAVEL) {
             conductAct = com.devosphere.draugr.people.ConductService.recognise(text);
-            if (conductAct != null) { contactWith = contact.communityInReach(chronicle.location()); if (contactWith != null) intent = Intent.CONDUCT_TOWARD_PEOPLE; else conductAct = null; }
+            if (conductAct != null) { contactWith = contact.communityInReach(chronicle.location()); if (contactWith != null) intent = Intent.CONDUCT_TOWARD_PEOPLE; else { conductAct = null; meantForPeople = true; } }
         }
         // Travelling together (#113). Asking is done on the isle, face to face; parting can be done anywhere the two
         // of you stand. Recognised even over MOVE/TRAVEL, because "travel with me" is a question, not a journey.
@@ -325,7 +332,11 @@ public class ChronicleActionService {
             tradeAct = agreementAct != null || audienceAct != null || membershipAct != null || claimAct != null ? null : com.devosphere.draugr.people.TradeService.recognise(text);
             contactAct = tradeAct == null && agreementAct == null && audienceAct == null && membershipAct == null && claimAct == null ? com.devosphere.draugr.people.ContactService.recognise(text) : null;
             if (claimAct != null || membershipAct != null || audienceAct != null || agreementAct != null || tradeAct != null || contactAct != null) contactWith = contact.communityInReach(chronicle.location());
-            if (contactWith == null) { claimAct = null; membershipAct = null; audienceAct = null; agreementAct = null; tradeAct = null; contactAct = null; }
+            if (contactWith == null) {
+                meantForPeople = meantForPeople || claimAct != null || membershipAct != null || audienceAct != null
+                    || agreementAct != null || tradeAct != null || contactAct != null;
+                claimAct = null; membershipAct = null; audienceAct = null; agreementAct = null; tradeAct = null; contactAct = null;
+            }
             else intent = claimAct != null ? Intent.SETTLE_CLAIM
                 : membershipAct != null ? Intent.JOIN_PEOPLE
                 : audienceAct != null ? Intent.ADDRESS_PEOPLE
@@ -414,6 +425,13 @@ public class ChronicleActionService {
         else if (intent == Intent.COMPANION_PEOPLE) { String[] r = companions.act(chronicle.id(), chronicle.location(), contactWith, companionAct, text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.AGREE_WITH_PEOPLE || intent == Intent.WORK_FOR_PEOPLE) { String[] r = agreement.act(chronicle.id(), chronicle.location(), contactWith, agreementAct, text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.TRADE_WITH_PEOPLE) { String[] r = trade.act(chronicle.id(), contactWith, tradeAct, text, resolvedAt, contact.armed(chronicle.id())); outcome = r[0]; perception = r[1]; }
+        // Said to people who are not there (#37). Not a failure to understand — the act was recognised and
+        // there was simply no one to receive it — so the refusal says that, and says what would answer it.
+        else if (intent == Intent.UNKNOWN && meantForPeople) {
+            outcome = "FAILED";
+            perception = "You put that to people, and there are none within reach of this ground — no isle on it "
+                + "or on any beside it, and nobody within hail. The words go out over empty country.";
+        }
         else if (intent == Intent.CONTACT_PEOPLE) { String[] r = contact.act(chronicle.id(), chronicle.location(), contactWith, contactAct, text, resolvedAt, actionId); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.OBSERVE) perception = survey(chronicle, resolvedAt);
         else if (intent == Intent.MOVE) {
