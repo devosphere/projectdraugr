@@ -78,12 +78,16 @@ class IntentClassificationRegressionTest {
         // The two it must not take.
         assertEquals("WEED_CROP", classify("tend the crop"));
         assertEquals("WEED_CROP", classify("tend the row"));
-        // Wound care is routed only from classifyLegacy, whose verbs are bind/bandage/dress. So "bind the wound"
-        // reaches TREAT_WOUND and must keep doing so, while "treat the wound" was ALREADY unrouted before this
-        // rule existed — "treat" is in none of the wound verbs. Both are asserted as they actually behave, which
-        // is the point: the risk was this rule swallowing them, and it takes neither.
+        // Wound care is routed only from classifyLegacy. Its verbs were bind/bandage/dress, so "treat the wound"
+        // and "clean the wound" reached nothing at all — recorded here as UNKNOWN until #37 act four found a
+        // Chronicle bleeding and unable to say so in the plainest words for it. The verbs now include
+        // clean/tend/treat/see to/wash, and the assertion that matters is unchanged: TEND_ANIMAL must still not
+        // swallow any of them, because a wound is not a beast.
         assertEquals("TREAT_WOUND", classify("bind the wound"));
-        assertEquals("UNKNOWN", classify("treat the wound"));
+        assertEquals("TREAT_WOUND", classify("treat the wound"));
+        assertEquals("TREAT_WOUND", classify("clean the wound"));
+        assertEquals("TREAT_WOUND", classify("tend my wound"));
+        assertEquals("TREAT_WOUND", classify("see to the gash"));
         // And a tending verb with nothing to tend is not an animal action.
         assertEquals("MAINTAIN_CAMP", classify("tidy the camp"));
     }
@@ -1012,5 +1016,25 @@ class IntentClassificationRegressionTest {
         // Warming the body is an act, not a question, and must not have been swallowed by "how warm".
         assertEquals("WARM_BODY", classify("warm myself by the fire"));
         assertEquals("MEASURE", classify("weigh the stone"));
+    }
+
+    /**
+     * #37 act four. Both of these sit in classifyLegacy, which runs after the whole classify chain, so they can
+     * only catch what would otherwise have reached UNKNOWN. Asking where you are is answered by the survey that
+     * OBSERVE already writes; a write verb with nothing to set down is a failure to WRITE, not a failure to make
+     * something, and writeOrDraw already refuses it in its own words.
+     */
+    @Test void askingWhereYouAreAndWritingWithoutWordsBothReachSomething() throws Exception {
+        for (String phrase : new String[]{"where am i", "where do i stand"})
+            assertEquals("OBSERVE", classify(phrase), phrase);
+        // "what is this place" was already claimed by EXAMINE earlier in the chain, which answers it properly —
+        // classifyLegacy never sees it. Asserted as it behaves, so the rule above is not credited with it.
+        assertEquals("EXAMINE", classify("what is this place"));
+        for (String phrase : new String[]{"write down what happened today", "write in my journal", "inscribe it on the stone"})
+            assertEquals("WRITE", classify(phrase), phrase);
+        // Sketching a map is its own act and must not have been taken by the bare write rule.
+        assertEquals("SKETCH_MAP", classify("make a map of this place"));
+        // And writing WITH content keeps the colon route it always had.
+        assertEquals("WRITE", classify("write: the river runs east"));
     }
 }
