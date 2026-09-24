@@ -1743,7 +1743,12 @@ public class ChronicleActionService {
         if(value.contains("lean-to") || value.contains("lean to")) return classifyLeanTo(value);
         // Garment work before the generic craft rules, so "sew a hide coat" is not
         // swallowed by the furniture or tool branches.
-        if((value.contains("sew")||value.contains("stitch")||value.contains("craft")||value.contains("make")||value.contains("weave"))&&(value.contains("coat")||value.contains("cloak")||value.contains("legging")||value.contains("trouser")||value.contains("tunic")||value.contains("boot")||value.contains("shoe")||value.contains("garment")||value.contains("clothing")||(value.contains("hide")&&value.contains("wear")))) return Intent.CRAFT_GARMENT;
+        if((value.contains("sew")||value.contains("stitch")||value.contains("craft")||value.contains("make")||value.contains("weave"))&&(value.contains("coat")||value.contains("cloak")||value.contains("legging")||value.contains("trouser")||value.contains("tunic")||value.contains("boot")||value.contains("shoe")||value.contains("garment")||value.contains("clothing")||(value.contains("hide")&&value.contains("wear")))
+           // A snowshoe is not a shoe (#37). Adding "shoe" in #708 so that "sew a pair of shoes" would reach the
+           // maker also handed it "snowshoes", which CONTAINS it -- so asking for snowshoes made a pair of hide
+           // boots, silently and successfully, which is the worst way for an answer to be wrong. They are their
+           // own two processes (make_snowshoe_left/right) and belong to the material matcher, not to garments.
+           &&!value.contains("snowshoe")) return Intent.CRAFT_GARMENT;
         // Making a piece of ignition kit must be heard before the rule that treats
         // naming a technique as asking for fire — "carve a fire bow" is preparation,
         // not an attempt to light something.

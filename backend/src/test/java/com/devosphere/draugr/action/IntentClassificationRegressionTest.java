@@ -977,6 +977,11 @@ class IntentClassificationRegressionTest {
                                           "sew trousers", "make a trouser", "make a tunic", "sew a hide coat",
                                           "make a fur cloak", "craft leggings"})
             assertEquals("CRAFT_GARMENT", classify(phrase), phrase);
+        // A snowshoe is not a shoe (#37). "shoe" was added here so "sew a pair of shoes" would reach the maker,
+        // and it also caught "snowshoes", which contains it -- so asking for snowshoes made hide boots, silently
+        // and successfully. They are their own two processes and belong to the material matcher.
+        for (String phrase : new String[]{"make snowshoes", "lash snowshoes", "lash a left snowshoe"})
+            assertEquals("UNKNOWN", classify(phrase), phrase);
     }
 
     /**
