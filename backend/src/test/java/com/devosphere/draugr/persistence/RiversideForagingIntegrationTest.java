@@ -87,8 +87,13 @@ class RiversideForagingIntegrationTest {
         assertEquals("COLLECT_INSECTS", barehanded.intent(),
             "\"collect mussels\" is foraging the water's edge, not fishing — shellfish must not be swallowed by the FISH route");
         assertEquals("FAILED", barehanded.outcome(), "a mussel prised off its stone by hand is lost with the shell");
-        assertTrue(barehanded.perception().toLowerCase(java.util.Locale.ROOT).contains("blade")
-                || barehanded.perception().toLowerCase(java.util.Locale.ROOT).contains("pry"),
+        // What the refusal must do is NAME the missing tool rather than shrug. The words it names it with
+        // moved in #37: the colony refusal said "a blade or a pry", an assembly stage said "a cutting edge", and
+        // the material processes said neither and shrugged — three copies of one vocabulary, drifted. They now
+        // share PhysicalItemService.toolPhrase, settled on the assembly wording, so a hive and a stage cannot
+        // come to describe the same missing tool differently. The assertion is unchanged in substance.
+        String refusal = barehanded.perception().toLowerCase(java.util.Locale.ROOT);
+        assertTrue(refusal.contains("blade") || refusal.contains("pry") || refusal.contains("cutting edge"),
             "the refusal must name what is missing — got: " + barehanded.perception());
         assertFalse(items.hasAtLeast(chronicle, "freshwater_mussel", 1), "nothing is taken from a bed you cannot open");
 

@@ -1899,7 +1899,11 @@ public class PhysicalItemService {
         if (toolClass != null && (toolClass.equals("CUTTING") || toolClass.equals("STRIKING") || toolClass.equals("AXE"))) {
             toolUsed = soundestToolOfClass(chronicle, location, toolClass);
             if (toolUsed == null)
-                return new String[]{"FAILED", "This work turns on a tool you have not got in reach — an edge, a hammer, an axe, whatever it needs. Bare hands only bruise the material."};
+                // Name the work and name the tool (#37). "an edge, a hammer, an axe, whatever it needs" is a
+                // shrug, and the process is not vague about it — tool_class is right there in the row that was
+                // just read. #706 fixed the same shrug on assembly stages; this is the material-process half.
+                return new String[]{"FAILED", capitalise(((String) match.get("display_name")).toLowerCase(java.util.Locale.ROOT))
+                    + " turns on " + toolPhrase(toolClass) + ", and there is none within reach. Bare hands only bruise the material."};
             if ("BROKEN".equals(toolUsed.get("cond")) || "DESTROYED".equals(toolUsed.get("cond")))
                 return new String[]{"FAILED", "The tool this work turns on is past biting — its edge gone or its head loose. Mend it against a whetstone or with cordage before it will serve."};
         }
@@ -2971,12 +2975,18 @@ public class PhysicalItemService {
     }
 
     /** What to call the missing tool in the refusal, so it names a thing rather than a class name. */
-    private static String toolPhrase(String toolClass) {
+    /**
+     * What a tool class is called when a refusal has to name it. THE list: the colony refusal, the material
+     * process refusal and the assembly stage refusal all come here, because three copies of this vocabulary had
+     * already grown apart — a stage wanted "a cutting edge" while a hive wanted "a blade or a pry", and the
+     * material processes had none of it and shrugged instead. Settled on the assembly wording from #706.
+     */
+    public static String toolPhrase(String toolClass) {
         return switch (toolClass == null ? "" : toolClass) {
-            case "CUTTING" -> "a blade or a pry";
+            case "CUTTING" -> "a cutting edge";
             case "STRIKING" -> "something to strike with";
             case "AXE" -> "an axe";
-            default -> "a tool you do not carry";
+            default -> "a tool";
         };
     }
 
