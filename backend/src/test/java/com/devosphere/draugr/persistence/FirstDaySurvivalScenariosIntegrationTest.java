@@ -78,6 +78,40 @@ class FirstDaySurvivalScenariosIntegrationTest {
     @Autowired JdbcTemplate jdbc;
 
     /**
+     * A settled early-summer day, pinned for every scenario.
+     *
+     * <p>These eight scenarios each assert that a Chronicle who does the sensible thing comes through alive, and
+     * until now not one of them controlled the weather it was asserting about: the class pinned neither the
+     * clock nor the sky, so "does a well-played week keep you alive" was really "does it keep you alive in
+     * whatever season the previously-run test happened to leave behind". Proven fragile on a booted backend —
+     * the same week survives or kills on the SAME build depending only on the conditions it inherits.
+     *
+     * <p>Surfaced by #37 making the body feel the weather where it stands, which shifted the inherited
+     * conditions enough to tip scenario 8 over. The fragility is older than that change and is fixed here at its
+     * source, in the shared placement helper, so all seven scenarios that use it begin from a defined day.
+     */
+    private static final Instant SETTLED_SUMMER_DAY = Instant.parse("2031-06-15T09:00:00Z");
+
+    private Timestamp clockBefore;
+    private java.util.List<java.util.Map<String, Object>> weatherBefore;
+
+    @org.junit.jupiter.api.BeforeEach
+    void rememberTheWorldsOwnTime() {
+        clockBefore = jdbc.queryForObject("SELECT simulated_at FROM simulation_clock WHERE id=1", Timestamp.class);
+        weatherBefore = jdbc.queryForList("SELECT world_id, weather_kind, intensity, ambient_temperature_c, wind_speed_kph FROM world_weather");
+    }
+
+    /** Put the clock and the sky back: this class shares one database with the rest of the suite. */
+    @org.junit.jupiter.api.AfterEach
+    void giveTheWorldItsTimeBack() {
+        if (clockBefore != null) jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", clockBefore);
+        if (weatherBefore != null)
+            for (java.util.Map<String, Object> w : weatherBefore)
+                jdbc.update("UPDATE world_weather SET weather_kind=?, intensity=?, ambient_temperature_c=?, wind_speed_kph=? WHERE world_id=?",
+                    w.get("weather_kind"), w.get("intensity"), w.get("ambient_temperature_c"), w.get("wind_speed_kph"), w.get("world_id"));
+    }
+
+    /**
      * #129 scenario 1 — Forest rain start beside a hostile predator boundary.
      * A careful Chronicle observes its surroundings, builds the first-day survival kit (fire, a woven
      * carrier), marks an escape route, and — crucially — is never FORCED to fight the seeded predator
@@ -403,6 +437,15 @@ class FirstDaySurvivalScenariosIntegrationTest {
                 "SELECT id FROM world_chunk WHERE biome=? ORDER BY grid_y, grid_x LIMIT 1", UUID.class, biome);
         assertNotNull(chunk, "the approved world must contain a " + biome + " chunk");
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", chunk, summary.id());
+
+        // Start every scenario on the same settled early-summer day, with the fresh body's metabolic baseline at
+        // that same moment so no span is counted twice or counted backwards. Without this the scenarios inherit
+        // an arbitrary season and an arbitrary sky, and a survival assertion that depends on what ran before it
+        // is not testing survival.
+        Timestamp start = Timestamp.from(SETTLED_SUMMER_DAY);
+        jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", start);
+        jdbc.update("UPDATE chronicle_physiology SET last_metabolic_update=? WHERE chronicle_id=?", start, summary.id());
+        jdbc.update("UPDATE world_weather SET weather_kind='CLEAR', intensity=0, ambient_temperature_c=16, wind_speed_kph=8, observed_at=?", start);
         return chunk;
     }
 
