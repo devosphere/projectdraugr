@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -49,21 +50,77 @@ public class AssemblyService {
         return hit == null ? null : hit[0];
     }
 
-    /** The assembly the text names and the keyword that named it — longest wins, as it always has. */
+    /**
+     * The assembly the text names and the keyword that named it — longest wins, as it always has.
+     *
+     * <p>And every assembly TIED at that length, because "longest wins" says nothing about what to do when two
+     * win. The old form took the strictly-longer keyword only, so a tie kept whichever row the database handed
+     * back first, from a query with no ORDER BY — an arbitrary pick presented to the player as a decision. No two
+     * verified assemblies shared a keyword when this was written, so nothing was being silently mis-built: the
+     * flaw was latent, and giving four huts the word "hut" is what would have woken it. Same defect the material
+     * processes had before #593, and it gets the same answer: ask.
+     */
     private String[] matchWithKeyword(String text) {
+        List<String> tied = new ArrayList<>();
         String v = ActivityClassifier.normalise(text);
-        String best = null, bestKeyword = null; int bestLen = -1;
+        String bestKeyword = null; int bestLen = -1;
         for (Map<String, Object> row : jdbc.queryForList(
-                "SELECT assembly_key, keywords FROM assembly_definition WHERE review_state='VERIFIED'")) {
+                "SELECT assembly_key, keywords FROM assembly_definition WHERE review_state='VERIFIED' ORDER BY assembly_key")) {
             String key = (String) row.get("assembly_key");
             for (String kw : ((String) row.get("keywords")).split(",")) {
                 String k = kw.trim();
-                if (!k.isEmpty() && ActivityClassifier.containsTerm(v, k) && k.length() > bestLen) {
-                    best = key; bestKeyword = k; bestLen = k.length();
-                }
+                if (k.isEmpty() || !ActivityClassifier.containsTerm(v, k)) continue;
+                if (k.length() > bestLen) { bestLen = k.length(); bestKeyword = k; tied.clear(); tied.add(key); }
+                else if (k.length() == bestLen && !tied.contains(key)) tied.add(key);
             }
         }
-        return best == null ? null : new String[]{best, bestKeyword};
+        return tied.isEmpty() ? null : new String[]{tied.get(0), bestKeyword, String.join(",", tied)};
+    }
+
+    /** Every assembly the words fit equally, in catalogue order. One entry means the words named one thing. */
+    private List<String> tiedIn(String[] hit) {
+        return hit == null || hit.length < 3 ? List.of() : new ArrayList<>(List.of(hit[2].split(",")));
+    }
+
+    /**
+     * Narrow a tie the way the world already has. One already under way settles it — carrying on with the
+     * half-built hut in front of you is not ambiguous — and otherwise the ones whose first stage could actually
+     * be begun here, because a choice between four huts you have no materials for is not a choice.
+     */
+    private List<String> narrow(UUID chronicle, UUID location, List<String> tied) {
+        List<String> started = new ArrayList<>();
+        for (String k : tied) if (underWay(chronicle, k)) started.add(k);
+        if (!started.isEmpty()) return started;
+        List<String> canBegin = new ArrayList<>();
+        for (String k : tied) if (firstStageIsWithinReach(chronicle, k)) canBegin.add(k);
+        return canBegin.isEmpty() ? tied : canBegin;
+    }
+
+    /**
+     * The question put to a Chronicle whose words named more than one thing to build (#37), mirroring the one
+     * the material processes ask. Changes nothing while it asks.
+     */
+    private String[] whichOfThese(List<String> offer, boolean noneInReach) {
+        List<String> names = new ArrayList<>();
+        for (String k : offer)
+            names.add(jdbc.queryForObject("SELECT lower(display_name) FROM assembly_definition WHERE assembly_key=?", String.class, k));
+        String choices = names.size() == 2 ? names.get(0) + ", or " + names.get(1)
+            : String.join(", ", names.subList(0, names.size() - 1)) + ", or " + names.get(names.size() - 1);
+        return new String[]{"FAILED", noneInReach
+            ? "Those words fit more than one thing you could build — " + choices + " — and you have the makings of none of them here. Say which you mean."
+            : "Those words fit more than one thing you could build here — " + choices + ". Say which you mean, and your hands will know where to begin."};
+    }
+
+    /** Whether the first stage of this assembly could be begun — its inputs, not its tools. */
+    private boolean firstStageIsWithinReach(UUID chronicle, String assemblyKey) {
+        String firstStage = jdbc.query(
+            "SELECT stage_key FROM assembly_stage WHERE assembly_key=? ORDER BY stage_order LIMIT 1",
+            rs -> rs.next() ? rs.getString(1) : null, assemblyKey);
+        if (firstStage == null) return false;
+        for (Map<String, Object> r : jdbc.queryForList(
+                "SELECT item_key, quantity FROM assembly_stage_requirement WHERE stage_key=?", firstStage))
+            if (!items.hasAtLeast(chronicle, (String) r.get("item_key"), ((Number) r.get("quantity")).intValue())) return false;
+        return true;
     }
 
     /**
@@ -79,7 +136,16 @@ public class AssemblyService {
     public String[] advance(UUID chronicle, UUID location, String text, Instant at) {
         String[] hit = matchWithKeyword(text);
         if (hit == null) return null;
-        String key = hit[0], matchedKeyword = hit[1];
+        // More than one thing answers to these words equally well (#37). Narrow it by what is already under way
+        // and what could be begun here; ask only if a real choice is left, and build nothing while asking.
+        List<String> tied = tiedIn(hit);
+        if (tied.size() > 1) {
+            List<String> offer = narrow(chronicle, location, tied);
+            if (offer.size() > 1) return whichOfThese(offer, offer.size() == tied.size() && !firstStageIsWithinReach(chronicle, offer.get(0)));
+            tied = offer;
+        }
+        String key = tied.isEmpty() ? hit[0] : tied.get(0);
+        String matchedKeyword = hit[1];
 
         Map<String, Object> def = jdbc.queryForMap(
             "SELECT subject_kind, produces_item_key, construction_kind, display_name, narration " +
