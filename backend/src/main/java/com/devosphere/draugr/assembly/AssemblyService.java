@@ -338,14 +338,10 @@ public class AssemblyService {
      * invisible here, four STRIKING ones, and every metal AXE — so a Chronicle could smelt an iron axe and still be
      * refused a stage a stone axe could do. Every key the old lists named is in the registry, so this only widens.
      */
-    /** What to call a missing tool class, so a refusal names a thing rather than a class name (#37). */
+    /** What to call a missing tool class, so a refusal names a thing rather than a class name (#37). Deferred to
+     *  the one list, so a stage and a material process cannot drift into different words for the same tool. */
     private static String toolPhrase(String toolClass) {
-        return switch (toolClass == null ? "" : toolClass) {
-            case "CUTTING" -> "a cutting edge";
-            case "STRIKING" -> "something to strike with";
-            case "AXE" -> "an axe";
-            default -> "a tool you are not carrying";
-        };
+        return com.devosphere.draugr.item.PhysicalItemService.toolPhrase(toolClass);
     }
 
     private boolean hasTool(UUID chronicle, String toolClass) {

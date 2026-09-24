@@ -289,6 +289,13 @@ public class ChronicleActionService {
         // wolf into someone to parley with, because the community must be a PEOPLE (V344) to be in reach at all.
         // Moving, travelling and fighting keep their meaning even beside an isle.
         com.devosphere.draugr.people.ContactService.Act contactAct = null; UUID contactWith = null;
+        // Whether the words were MEANT for people who are not there (#37). Every gate below recognises the act
+        // first and then looks for a community in reach; when there is none it quietly drops the act and lets the
+        // phrase fall through to UNKNOWN, where a Chronicle who said "greet the strangers" was answered with
+        // "It does not come to anything. You stand a moment with the intention still on you and nothing to put it
+        // into" — a crafting miss, in reply to speech. The game heard them perfectly well; it just had nobody
+        // to carry it to, and would not say so.
+        boolean meantForPeople = false;
         com.devosphere.draugr.people.TradeService.Act tradeAct = null;
         com.devosphere.draugr.people.AgreementService.Act agreementAct = null;
         com.devosphere.draugr.people.AudienceService.Act audienceAct = null;
@@ -300,7 +307,7 @@ public class ChronicleActionService {
         com.devosphere.draugr.people.ConductService.Act conductAct = null;
         if (conduct != null && intent != Intent.MOVE && intent != Intent.TRAVEL) {
             conductAct = com.devosphere.draugr.people.ConductService.recognise(text);
-            if (conductAct != null) { contactWith = contact.communityInReach(chronicle.location()); if (contactWith != null) intent = Intent.CONDUCT_TOWARD_PEOPLE; else conductAct = null; }
+            if (conductAct != null) { contactWith = contact.communityInReach(chronicle.location()); if (contactWith != null) intent = Intent.CONDUCT_TOWARD_PEOPLE; else { conductAct = null; meantForPeople = true; } }
         }
         // Travelling together (#113). Asking is done on the isle, face to face; parting can be done anywhere the two
         // of you stand. Recognised even over MOVE/TRAVEL, because "travel with me" is a question, not a journey.
@@ -325,7 +332,11 @@ public class ChronicleActionService {
             tradeAct = agreementAct != null || audienceAct != null || membershipAct != null || claimAct != null ? null : com.devosphere.draugr.people.TradeService.recognise(text);
             contactAct = tradeAct == null && agreementAct == null && audienceAct == null && membershipAct == null && claimAct == null ? com.devosphere.draugr.people.ContactService.recognise(text) : null;
             if (claimAct != null || membershipAct != null || audienceAct != null || agreementAct != null || tradeAct != null || contactAct != null) contactWith = contact.communityInReach(chronicle.location());
-            if (contactWith == null) { claimAct = null; membershipAct = null; audienceAct = null; agreementAct = null; tradeAct = null; contactAct = null; }
+            if (contactWith == null) {
+                meantForPeople = meantForPeople || claimAct != null || membershipAct != null || audienceAct != null
+                    || agreementAct != null || tradeAct != null || contactAct != null;
+                claimAct = null; membershipAct = null; audienceAct = null; agreementAct = null; tradeAct = null; contactAct = null;
+            }
             else intent = claimAct != null ? Intent.SETTLE_CLAIM
                 : membershipAct != null ? Intent.JOIN_PEOPLE
                 : audienceAct != null ? Intent.ADDRESS_PEOPLE
@@ -414,6 +425,13 @@ public class ChronicleActionService {
         else if (intent == Intent.COMPANION_PEOPLE) { String[] r = companions.act(chronicle.id(), chronicle.location(), contactWith, companionAct, text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.AGREE_WITH_PEOPLE || intent == Intent.WORK_FOR_PEOPLE) { String[] r = agreement.act(chronicle.id(), chronicle.location(), contactWith, agreementAct, text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.TRADE_WITH_PEOPLE) { String[] r = trade.act(chronicle.id(), contactWith, tradeAct, text, resolvedAt, contact.armed(chronicle.id())); outcome = r[0]; perception = r[1]; }
+        // Said to people who are not there (#37). Not a failure to understand — the act was recognised and
+        // there was simply no one to receive it — so the refusal says that, and says what would answer it.
+        else if (intent == Intent.UNKNOWN && meantForPeople) {
+            outcome = "FAILED";
+            perception = "You put that to people, and there are none within reach of this ground — no isle on it "
+                + "or on any beside it, and nobody within hail. The words go out over empty country.";
+        }
         else if (intent == Intent.CONTACT_PEOPLE) { String[] r = contact.act(chronicle.id(), chronicle.location(), contactWith, contactAct, text, resolvedAt, actionId); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.OBSERVE) perception = survey(chronicle, resolvedAt);
         else if (intent == Intent.MOVE) {
@@ -1691,6 +1709,20 @@ public class ChronicleActionService {
         // storage verbs that imply the settlement's store ("put it away", "cache the meat", "stockpile the wood").
         if((value.contains(" in ")||value.contains(" into ")||value.contains(" inside "))&&(value.contains("put")||value.contains("place")||value.contains("store")||value.contains("stow")||value.contains("stash")||value.contains("load")||value.contains("pack")||value.contains("drop"))&&containerNoun) return Intent.STORE;
         if((value.contains("put")&&value.contains("away"))||value.contains("cache")||value.contains("stockpile")||value.contains("put in storage")||value.contains("stow away")||value.contains("stash away")) return Intent.STORE;
+        // "store the food" with no container named (#37). The rules above want a container noun or the words
+        // "away"; a bare storage verb — the most ordinary way to say it — reached nothing.
+        //
+        // Anchored on store/stow/stash as a VERB, because as a NOUN the same word is a building: a wood store, a
+        // log store, a fodder store, a hay store are all assemblies with their own keywords, and "designate this
+        // the store ground" is a DESIGNATE. A first cut of this rule used word(value,"store") and took all five
+        // of them — caught by noJavaIntentShadowsAnAssemblysOwnKeywords, which is exactly the #513 trap it is
+        // there to catch. No assembly keyword begins with the bare verb, so the phrase must.
+        String storeVerb = value.trim();
+        if((storeVerb.startsWith("store ")||storeVerb.startsWith("stow ")||storeVerb.startsWith("stash ")
+            ||value.contains(" store the ")||value.contains(" stow the ")||value.contains(" stash the ")
+            ||value.contains(" store my ")||value.contains(" stow my ")||value.contains(" stash my "))
+           &&!value.contains("build")&&!value.contains("construct")&&!value.contains("make")&&!value.contains("raise")
+           &&!value.contains("set up")&&!value.contains("put up")&&!value.contains("erect")&&!value.contains("dig")) return Intent.STORE;
         // PICK_UP (#67 take/retrieve/unpack): explicit retrieval verbs, or "take/get/remove/unpack X out of/from
         // the <container/storage/ground>" — distinct from gathering raw growth from the world.
         if(value.contains("pick up")||value.contains("pick it up")||value.contains("pick them up")||value.contains("pick it back")||value.contains("picked up")||value.contains("grab")||value.contains("retrieve")||value.contains("recover")||value.contains("take back")||value.contains("take it back")||(value.contains("fetch")&&!value.contains("water"))||value.contains("lift the")||value.contains("lift it")||value.contains("lift up")
@@ -1705,7 +1737,7 @@ public class ChronicleActionService {
         if(value.contains("lean-to") || value.contains("lean to")) return classifyLeanTo(value);
         // Garment work before the generic craft rules, so "sew a hide coat" is not
         // swallowed by the furniture or tool branches.
-        if((value.contains("sew")||value.contains("stitch")||value.contains("craft")||value.contains("make")||value.contains("weave"))&&(value.contains("coat")||value.contains("cloak")||value.contains("legging")||value.contains("tunic")||value.contains("boots")||value.contains("garment")||value.contains("clothing")||(value.contains("hide")&&value.contains("wear")))) return Intent.CRAFT_GARMENT;
+        if((value.contains("sew")||value.contains("stitch")||value.contains("craft")||value.contains("make")||value.contains("weave"))&&(value.contains("coat")||value.contains("cloak")||value.contains("legging")||value.contains("trouser")||value.contains("tunic")||value.contains("boot")||value.contains("shoe")||value.contains("garment")||value.contains("clothing")||(value.contains("hide")&&value.contains("wear")))) return Intent.CRAFT_GARMENT;
         // Making a piece of ignition kit must be heard before the rule that treats
         // naming a technique as asking for fire — "carve a fire bow" is preparation,
         // not an attempt to light something.
@@ -1967,6 +1999,11 @@ public class ChronicleActionService {
         if(value.contains("listen")) return Intent.LISTEN;
         if(value.contains("smell")||value.contains("sniff")) return Intent.SMELL;
         if(value.contains("feel the")||value.contains("feel around")||value.contains("feel it")||value.contains("touch the")||value.contains("touch it")||value.contains("run my hand")||value.contains("test the surface")||value.contains("by touch")) return Intent.FEEL;
+        // Asking after the weather IS an act of the body — you read the air by standing in it (#37). None of
+        // these reached anything at all before: "what season is it" and "how cold is it" both fell through to
+        // UNKNOWN and came back with a crafting miss, which is prose about failing to make something in answer
+        // to a question about the sky. FEEL answers them because FEEL is the sense that takes the reading.
+        if(value.contains("how cold")||value.contains("how warm")||value.contains("how hot")||value.contains("what season")||value.contains("which season")||value.contains("season is it")||value.contains("time of year")||value.contains("the temperature")||value.contains("how is the air")||value.contains("what is the weather")||value.contains("what's the weather")||value.contains("how is the weather")||value.contains("what is the sky")) return Intent.FEEL;
         if(value.contains("search")||value.contains("look for")||value.contains("hunt for")||value.contains("check beneath")||value.contains("check under")||value.contains("look under")||value.contains("turn over")||value.contains("comb through")||value.contains("rummage")||value.contains("forage through")||value.contains("sift through the")) return Intent.SEARCH;
         // Reading a written document (#65 read/review_record). Word-boundary "read" so "bread" doesn't match;
         // "read the ground/tracks" already resolved to TRACK above.
