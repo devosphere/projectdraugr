@@ -47,9 +47,14 @@ public class ActionInputClassifier {
 
     // Sexual or predatory-sexual contact terms. On their own these are ambiguous;
     // paired with an animal noun they read as aggression toward wildlife.
+    // "breed the" is NOT here, and its absence is the point (#37). It was, and it caught "breed the goats" —
+    // the plainest thing a keeper says about their own stock — and answered a request to put two animals
+    // together with prose about an assault on one. Husbandry is not this, and being told it is, is worse than
+    // not being understood. "breed with" stays, because that IS the phrasing this list exists for: the
+    // preposition is the whole difference between breeding animals and breeding with one.
     private static final List<String> SEXUAL_CONTACT = List.of(
         "sex with", "have sex", "fuck the", "fuck that", "fuck a ", "fuck an ",
-        "rape", "mount the", "mount a", "hump the", "hump a", "breed the", "breed with");
+        "rape", "mount the", "mount a", "hump the", "hump a", "breed with");
 
     private static final List<String> ANIMAL_NOUNS = List.of(
         "wolf", "boar", "bear", "deer", "elk", "hare", "rabbit", "goat", "beaver",

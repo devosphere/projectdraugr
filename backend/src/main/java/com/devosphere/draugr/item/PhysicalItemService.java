@@ -2877,6 +2877,69 @@ public class PhysicalItemService {
         return new String[]{"SUCCEEDED", "You work the material to shape and stitch it closed. The " + p.name().toLowerCase() + " is finished, and it is warm in the hand."};
     }
 
+    /**
+     * Why the stock is not in calf (#37). Breeding is simulated and automatic — {@link #advanceBreeding} puts
+     * tamed animals in kind and in condition together on the tick — and every one of its five gates was
+     * invisible. A keeper whose goats would not settle had no way to learn that the reason was a shelter too
+     * small for them, and no amount of waiting was going to tell them.
+     *
+     * <p>Read-only: it reports the same conditions the tick enforces, and changes nothing. Kept beside
+     * advanceBreeding deliberately, so the two are edited together.
+     */
+    @Transactional(readOnly = true)
+    public String[] breedingProspects(UUID chronicle, UUID location, String actionText) {
+        String v = actionText == null ? "" : actionText.toLowerCase(java.util.Locale.ROOT);
+        java.util.List<java.util.Map<String,Object>> kinds = jdbc.queryForList(
+            "SELECT wp.species_key, COUNT(*) AS kept, " +
+            "       MAX(wb.draft_hunger) AS hunger, MAX(wb.draft_thirst) AS thirst, " +
+            "       MAX(wb.draft_fatigue) AS fatigue, MAX(wb.sickness) AS sickness, " +
+            "       BOOL_OR(bp.species_key IS NOT NULL) AS can_breed, " +
+            "       MAX(body_size_rank(ws.size_tier)) AS body_rank " +
+            "FROM wildlife_bond wb " +
+            "JOIN wildlife_population wp ON wp.id = wb.population_id " +
+            "JOIN wildlife_species ws ON ws.species_key = wp.species_key " +
+            "LEFT JOIN breeding_profile bp ON bp.species_key = wp.species_key " +
+            "WHERE wb.chronicle_id = ? AND wb.bond_stage = 'TAMED' " +
+            "GROUP BY wp.species_key ORDER BY wp.species_key", chronicle);
+        if (kinds.isEmpty())
+            return new String[]{"FAILED", "You keep no tamed animals, and nothing of yours is going to be in calf."};
+
+        // If they named a kind, answer about that kind. Otherwise answer about all of them.
+        java.util.List<java.util.Map<String,Object>> asked = new java.util.ArrayList<>();
+        for (java.util.Map<String,Object> k : kinds) {
+            String spoken = ((String) k.get("species_key")).replace('_', ' ');
+            if (v.contains(spoken) || v.contains(spoken + "s")) asked.add(k);
+        }
+        if (asked.isEmpty()) asked = kinds;
+
+        StringBuilder b = new StringBuilder();
+        for (java.util.Map<String,Object> k : asked) {
+            String name = ((String) k.get("species_key")).replace('_', ' ');
+            int kept = ((Number) k.get("kept")).intValue();
+            if (!Boolean.TRUE.equals(k.get("can_breed"))) {
+                b.append("The ").append(name).append(" will not breed in your keeping at all. ");
+                continue;
+            }
+            if (kept < 2) { b.append("You keep one ").append(name).append(", and one is not a pair. "); continue; }
+            java.util.List<String> wanting = new java.util.ArrayList<>();
+            if (((Number) k.get("hunger")).intValue() >= NOT_IN_CONDITION) wanting.add("they are too hungry");
+            if (((Number) k.get("thirst")).intValue() >= NOT_IN_CONDITION) wanting.add("they are short of water");
+            if (((Number) k.get("fatigue")).intValue() >= NOT_IN_CONDITION) wanting.add("they are worked too hard");
+            if (((Number) k.get("sickness")).intValue() >= TOO_SICK_TO_GIVE) wanting.add("there is sickness among them");
+            boolean housed = Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
+                "JOIN construction_kind ck ON ck.project_kind = cp.project_kind AND ck.shelters_stock " +
+                "WHERE cp.state = 'COMPLETED' AND cp.integrity_percent > 0 AND sw.lifecycle_state = 'ACTIVE' " +
+                "  AND sw.current_location_id = ? AND body_size_rank(ck.shelters_up_to_size) >= ?)",
+                Boolean.class, location, ((Number) k.get("body_rank")).intValue()));
+            if (!housed) wanting.add("there is nothing standing here that would house stock their size");
+            b.append("You keep ").append(kept).append(" ").append(name).append(kept == 1 ? "" : "s").append(": ");
+            if (wanting.isEmpty()) b.append("nothing stands in the way, and they will settle to it in their own time. ");
+            else b.append(String.join(", and ", wanting)).append(". ");
+        }
+        return new String[]{"SUCCEEDED", b.toString().trim()};
+    }
+
     /** The outcome of an insect harvest: what happened, how it read, and any hazard the body took. */
     public record InsectHarvest(String outcome, String narration, int hazardSeverity, String hazardKind) { }
 
