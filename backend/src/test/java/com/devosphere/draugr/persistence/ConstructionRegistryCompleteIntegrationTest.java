@@ -76,19 +76,49 @@ class ConstructionRegistryCompleteIntegrationTest {
           + "be mended or catch fire, and nothing fails loudly because there is no foreign key: " + orphans);
     }
 
-    /** Two assemblies answering to the same phrase means the one a Chronicle gets is arbitrary. */
+    /**
+     * Two assemblies answering to the same phrase used to mean the one a Chronicle got was ARBITRARY: the
+     * matcher kept the strictly-longer keyword, so an exact tie fell to whichever row the database returned
+     * first, from a query with no ORDER BY. That is why this forbade ties outright.
+     *
+     * <p>Since #37 the matcher keeps everything tied at the winning length and ASKS which was meant, narrowing
+     * first by what is already under way and whose first stage is in reach. So a shared phrase is no longer a
+     * silent mis-build, and forbidding it outright would forbid the thing that fixed a real defect: four huts
+     * exist — debris, earth-sheltered, reed, wattle and daub — and "build a hut" reached none of them.
+     *
+     * <p>What is still a defect is a shared phrase that leaves a Chronicle NO WAY to say which one they meant.
+     * A deliberate family word is fine because naming the kind still settles it outright — "build a reed hut"
+     * beats "hut" on length. An accidental collision between two assemblies that have no more specific phrase
+     * of their own is not fine, and is what this now catches. That is a narrower rule than "no ties", and it is
+     * the rule the matcher actually needs.
+     */
     @Test
-    void noTwoAssembliesAnswerToTheSamePhrase() {
+    void everySharedPhraseLeavesAWayToSayWhichOneYouMeant() {
         world();
-        List<String> clashes = jdbc.queryForList(
-            "SELECT a.assembly_key || ' and ' || b.assembly_key || ' both answer to \"' || ka.kw || '\"' " +
+        List<String> trapped = jdbc.queryForList(
+            "SELECT a.assembly_key || ' and ' || b.assembly_key || ' both answer to \"' || ka.kw || '\", and " +
+            "       ' || (CASE WHEN NOT EXISTS (SELECT 1 FROM unnest(string_to_array(a.keywords, ',')) x " +
+            "                                   WHERE length(trim(x)) > length(ka.kw)) " +
+            "             THEN a.assembly_key ELSE b.assembly_key END) || ' has no longer phrase of its own' " +
             "FROM assembly_definition a " +
             "JOIN LATERAL (SELECT trim(x) kw FROM unnest(string_to_array(a.keywords, ',')) x) ka ON true " +
             "JOIN assembly_definition b ON b.assembly_key > a.assembly_key " +
             "JOIN LATERAL (SELECT trim(y) kw FROM unnest(string_to_array(b.keywords, ',')) y) kb ON kb.kw = ka.kw " +
+            // The tie is only a trap when one of the two cannot be named more precisely than the shared phrase.
+            "WHERE NOT EXISTS (SELECT 1 FROM unnest(string_to_array(a.keywords, ',')) x WHERE length(trim(x)) > length(ka.kw)) " +
+            "   OR NOT EXISTS (SELECT 1 FROM unnest(string_to_array(b.keywords, ',')) y WHERE length(trim(y)) > length(ka.kw)) " +
             "ORDER BY 1", String.class);
-        assertTrue(clashes.isEmpty(),
-            "assembly routing takes the longest keyword, so an exact tie is resolved arbitrarily: " + clashes);
+        assertTrue(trapped.isEmpty(),
+            "a shared phrase is answerable only while each assembly can also be named more precisely; these "
+          + "cannot, so the Chronicle is asked a question they have no words to answer: " + trapped);
+
+        // And the other half, which is what makes the rule above safe to relax: the huts DO share a phrase, on
+        // purpose, and every one of them keeps a longer phrase of its own. If that ever stops being true the
+        // assertion above fails rather than this one passing vacuously.
+        Integer huts = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM assembly_definition WHERE ',' || keywords || ',' LIKE '%,hut,%'", Integer.class);
+        assertTrue(huts != null && huts > 1,
+            "this test is about a deliberately shared family word, and there is no longer one to test");
     }
 
     /**
