@@ -620,7 +620,13 @@ public class ChronicleActionService {
         else if (intent == Intent.MAINTAIN_CAMP) { String[] r = construction.maintainCamp(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; if ("SUCCEEDED".equals(outcome)) physiology.settleCamp(chronicle.id()); }
         else if (intent == Intent.PLACE_WINDBREAK) { String[] r = construction.placeWindbreak(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.PLACE_COVER) { String[] r = construction.placeCover(chronicle.id(), chronicle.location(), resolvedAt, coverKindOf(text.toLowerCase(Locale.ROOT))); outcome = r[0]; perception = r[1]; }
-        else if (intent == Intent.TREAT_WOUND) { if (physiology.bindWound(chronicle.id(), items, actionId, resolvedAt)) perception="You press and bind the wounded place until the immediate bleeding eases."; else { outcome="FAILED"; perception="You work at yourself for a moment, then stop without changing the wound."; } }
+        else if (intent == Intent.TREAT_WOUND) { if (physiology.bindWound(chronicle.id(), items, actionId, resolvedAt)) perception="You press and bind the wounded place until the immediate bleeding eases."; else { outcome="FAILED";
+            // Say which of the two it was (#37). bindWound returns false for a body with nothing open AND for a
+            // body with nothing to bind it with, and the one sentence covered both — so a Chronicle bleeding for
+            // want of a strip of fibre was told the same thing as one who was not hurt at all.
+            perception = physiology.hasOpenWound(chronicle.id())
+                ? "You have nothing to bind it with — no poultice, no roll of bandage, not so much as a length of plant fibre. The blood keeps its own time."
+                : "You go over yourself and find nothing open and nothing bleeding."; } }
         else if (intent == Intent.EDIT_DOCUMENT) { try { reviseDocument(chronicle.id(), actionId, resolvedAt, text); perception="Your marks remain on the physical page."; } catch (IllegalArgumentException | IllegalStateException ignored) { outcome="FAILED"; perception="You handle the page for a while, then set it aside unchanged."; } }
         else if (intent == Intent.CONFRONT_WILDLIFE) { double spec=SuccessModel.specificity(text,HUNT_SIGNALS); double fam=capability.familiarity(chronicle.id(),"AIM"); int tactic=(int)Math.round(spec*30 + Math.min(0.20,fam*3.0)*100); WildlifeEncounterService.EncounterResult result=wildlife.confront(chronicle.id(),chronicle.location(),actionId,resolvedAt,tactic); outcome=result.outcome(); perception=result.narration(); wildlife.recordEmissionDrift(chronicle.location(),"PREDATION",40,resolvedAt); }
         else if (intent == Intent.HARVEST_CARCASS) { WildlifeEncounterService.HarvestResult result=wildlife.harvest(chronicle.id(),chronicle.location(),actionId,resolvedAt); outcome=result.outcome(); perception=result.narration(); if("SUCCEEDED".equals(outcome)) wildlife.recordRefuse(chronicle.location(),wildlife.butcheryRefuse(chronicle.location()),resolvedAt); }
@@ -758,6 +764,7 @@ public class ChronicleActionService {
         else if (intent == Intent.INVESTIGATE) { String[] r = examination.examine(chronicle.id(), chronicle.location(), text, ExaminationService.Mode.INVESTIGATE); outcome = r[0]; perception = r[1]; }
         // The non-visual senses (#65): grounded in the actual weather, water, fire, life, and ground here.
         else if (intent == Intent.SEARCH) { String[] r = examination.sense(chronicle.id(), chronicle.location(), text, ExaminationService.Sense.SEARCH); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.SENSE_BODY) { perception = bodyReading(beforeBody); }
         else if (intent == Intent.BREEDING_PROSPECTS) { String[] r = items.breedingProspects(chronicle.id(), chronicle.location(), text); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.LISTEN) { String[] r = examination.sense(chronicle.id(), chronicle.location(), text, ExaminationService.Sense.LISTEN); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.SMELL)  { String[] r = examination.sense(chronicle.id(), chronicle.location(), text, ExaminationService.Sense.SMELL);  outcome = r[0]; perception = r[1]; }
@@ -1986,6 +1993,16 @@ public class ChronicleActionService {
         // The non-visual senses (#65). LISTEN/SMELL/FEEL own their verbs; SEARCH is a careful going-over of the
         // ground — placed after the mineral-prospecting (GATHER_MINERAL) and tracking (TRACK) rules above, which
         // claim their specific searches ("search the rocks for flint", "look for tracks") first.
+        // Asking after your own body (#37). The Body HUD had every word of this — Injured, Hypothermic, Soaked,
+        // Exhausted — and a Chronicle who asked got prose about the reeds ("examine myself" resolved to OBSERVE
+        // and described the ground) or "it is too dark to see the fine of it". The thing that kills you was the
+        // one thing you could not ask about.
+        if(value.contains("how am i")||value.contains("how do i feel")||value.contains("how is my health")
+           ||value.contains("check my injur")||value.contains("check my wound")||value.contains("check my body")||value.contains("check myself")
+           ||value.contains("examine my body")||value.contains("inspect my body")||value.contains("examine myself")||value.contains("look at myself")
+           ||value.contains("take stock of myself")||value.contains("assess myself")||value.contains("assess my condition")
+           ||value.contains("am i hurt")||value.contains("am i injured")||value.contains("am i sick")||value.contains("am i ill")
+           ||value.contains("what shape am i")||value.contains("how bad is it")&&value.contains("wound")) return Intent.SENSE_BODY;
         // Whether the stock will get in calf (#37). Not an act — breeding is simulated and happens on its own
         // when the conditions are right — but a question with five real answers behind it, none of which the
         // keeper could see. Before this, "breed the goats" was caught by the bestiality filter and answered as
@@ -2029,7 +2046,7 @@ public class ChronicleActionService {
         if(value.contains("resume")||value.contains("return to")) return Intent.RESUME_LEAN_TO;
         return (value.contains("work") || value.contains("continue") || value.contains("build") || value.contains("weave") || value.contains("bind")) ? Intent.WORK_LEAN_TO : Intent.START_LEAN_TO;
     }
-    private Intent classifyLegacy(String action) { String value = action.toLowerCase(Locale.ROOT); if ((value.contains("cook") || value.contains("roast") || value.contains("grill") || value.contains("bake") || value.contains("broil") || value.contains("simmer") || value.contains("stew") || value.contains("braise")) && (value.contains("meat") || value.contains("game") || value.contains("flesh") || value.contains("carcass"))) return Intent.COOK_MEAT; if ((value.contains("harvest") || value.contains("butcher") || value.contains("skin")) && (value.contains("carcass") || value.contains("remains") || value.contains("animal"))) return Intent.HARVEST_CARCASS; if ((value.contains("bind") || value.contains("bandage") || value.contains("dress")) && (value.contains("wound") || value.contains("injury") || value.contains("bleeding"))) return Intent.TREAT_WOUND; if ((value.contains("feed") || value.contains("stoke") || value.contains("add wood")) && value.contains("fire")) return Intent.FEED_FIRE; if ((value.contains("light")||value.contains("ignite")) && value.contains("fire")) return Intent.LIGHT_FIRE; if (value.contains("fire pit") || value.contains("firepit")) return Intent.BUILD_FIRE_PIT; if ((value.contains("fight")||value.contains("attack")||value.contains("strike")||value.contains("spear ")||value.contains("shoot")||value.contains("hurl")||value.contains("throw the")||value.contains("throw my")||word(value,"kill")||word(value,"hunt")) && (value.contains("animal")||value.contains("wildlife")||value.contains("creature")||value.contains("beast")||word(value,"deer")||word(value,"boar")||word(value,"wolf")||word(value,"hare")||word(value,"rabbit")||word(value,"fox")||word(value,"elk")||word(value,"aurochs")||word(value,"bear")||word(value,"goat")||word(value,"bird"))) return Intent.CONFRONT_WILDLIFE; if ((value.contains("weave") || value.contains("craft") || value.contains("make")) && value.contains("basket") && !value.contains("burden") && !value.contains("pack") && !value.contains("large") && !value.contains("big") && !value.contains("pannier") && !value.contains("carrying") && !value.contains("back basket") && !value.contains("shoulder")) return Intent.CRAFT_BASKET; if ((value.contains("gather")||value.contains("collect")) && value.contains("fiber")) return Intent.GATHER_FIBER; if ((value.contains("gather")||value.contains("collect")) && (value.contains("branch")||value.contains("stick"))) return Intent.GATHER_BRANCHES; if ((value.contains("gather")||value.contains("collect")) && (value.contains("berry")||value.contains("berries"))) return Intent.GATHER_BERRIES; if ((value.contains("gather")||value.contains("collect")) && (value.contains("stone")||value.contains("rock"))) return Intent.GATHER_STONE; if (word(value,"eat")||value.contains("consume")) return Intent.EAT; if (value.contains("drink")) return Intent.DRINK; if (Direction.from(value) != null && (value.contains("walk") || value.contains("travel") || value.contains("go ") || value.contains("move"))) return Intent.MOVE; if (value.contains("observe") || value.contains("look") || value.contains("inspect") || value.contains("survey") || value.contains("scout") || value.contains("scan") || value.contains("explore") || value.contains("examine") || value.contains("study the") || value.contains("take in")) return Intent.OBSERVE; if ((value.contains("sleep") && !value.contains("platform") && !value.contains("sleeping bench")) || word(value,"nap") || value.contains("lie down to sleep") || value.contains("bed down") || value.contains("go to sleep")) return Intent.SLEEP; if (value.contains("rest") || value.contains("wait")) return Intent.REST; if (value.contains("urinate") || value.contains("pee")) return Intent.URINATE; if (value.contains("defecate") || value.contains("poop")) return Intent.DEFECATE; return Intent.UNKNOWN; }
+    private Intent classifyLegacy(String action) { String value = action.toLowerCase(Locale.ROOT); if ((value.contains("cook") || value.contains("roast") || value.contains("grill") || value.contains("bake") || value.contains("broil") || value.contains("simmer") || value.contains("stew") || value.contains("braise")) && (value.contains("meat") || value.contains("game") || value.contains("flesh") || value.contains("carcass"))) return Intent.COOK_MEAT; if ((value.contains("harvest") || value.contains("butcher") || value.contains("skin")) && (value.contains("carcass") || value.contains("remains") || value.contains("animal"))) return Intent.HARVEST_CARCASS; if ((value.contains("bind") || value.contains("bandage") || value.contains("dress") || value.contains("clean") || value.contains("tend") || value.contains("treat") || value.contains("see to") || value.contains("wash")) && (value.contains("wound") || value.contains("injury") || value.contains("bleeding") || value.contains("the cut") || value.contains("my cut") || value.contains("gash"))) return Intent.TREAT_WOUND; if ((value.contains("feed") || value.contains("stoke") || value.contains("add wood")) && value.contains("fire")) return Intent.FEED_FIRE; if ((value.contains("light")||value.contains("ignite")) && value.contains("fire")) return Intent.LIGHT_FIRE; if (value.contains("fire pit") || value.contains("firepit")) return Intent.BUILD_FIRE_PIT; if ((value.contains("fight")||value.contains("attack")||value.contains("strike")||value.contains("spear ")||value.contains("shoot")||value.contains("hurl")||value.contains("throw the")||value.contains("throw my")||word(value,"kill")||word(value,"hunt")) && (value.contains("animal")||value.contains("wildlife")||value.contains("creature")||value.contains("beast")||word(value,"deer")||word(value,"boar")||word(value,"wolf")||word(value,"hare")||word(value,"rabbit")||word(value,"fox")||word(value,"elk")||word(value,"aurochs")||word(value,"bear")||word(value,"goat")||word(value,"bird"))) return Intent.CONFRONT_WILDLIFE; if ((value.contains("weave") || value.contains("craft") || value.contains("make")) && value.contains("basket") && !value.contains("burden") && !value.contains("pack") && !value.contains("large") && !value.contains("big") && !value.contains("pannier") && !value.contains("carrying") && !value.contains("back basket") && !value.contains("shoulder")) return Intent.CRAFT_BASKET; if ((value.contains("gather")||value.contains("collect")) && value.contains("fiber")) return Intent.GATHER_FIBER; if ((value.contains("gather")||value.contains("collect")) && (value.contains("branch")||value.contains("stick"))) return Intent.GATHER_BRANCHES; if ((value.contains("gather")||value.contains("collect")) && (value.contains("berry")||value.contains("berries"))) return Intent.GATHER_BERRIES; if ((value.contains("gather")||value.contains("collect")) && (value.contains("stone")||value.contains("rock"))) return Intent.GATHER_STONE; if (word(value,"eat")||value.contains("consume")) return Intent.EAT; if (value.contains("drink")) return Intent.DRINK; if (Direction.from(value) != null && (value.contains("walk") || value.contains("travel") || value.contains("go ") || value.contains("move"))) return Intent.MOVE; if (value.contains("observe") || value.contains("look") || value.contains("inspect") || value.contains("survey") || value.contains("scout") || value.contains("scan") || value.contains("explore") || value.contains("examine") || value.contains("study the") || value.contains("take in")) return Intent.OBSERVE; if ((value.contains("sleep") && !value.contains("platform") && !value.contains("sleeping bench")) || word(value,"nap") || value.contains("lie down to sleep") || value.contains("bed down") || value.contains("go to sleep")) return Intent.SLEEP; if (value.contains("rest") || value.contains("wait")) return Intent.REST; if (value.contains("where am i") || value.contains("what is this place") || value.contains("what place is this") || value.contains("where do i stand")) return Intent.OBSERVE; if ((value.contains("write") || value.contains("inscribe") || value.contains("jot")) && !value.contains("map")) return Intent.WRITE; if (value.contains("urinate") || value.contains("pee")) return Intent.URINATE; if (value.contains("defecate") || value.contains("poop")) return Intent.DEFECATE; return Intent.UNKNOWN; }
     /**
      * Eat whatever food is to hand. A food the player explicitly names wins ("eat the oyster
      * mushroom"); otherwise cooked meat, then raw meat — both spoilage-tracked through the food
@@ -2283,7 +2300,7 @@ public class ChronicleActionService {
         return line == null ? perception : perception + " " + line;
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;} }    /**     * The structured perception frame — the seam every future Simulation Agent reads
      * from. Where {@code perception} is the finished player-facing prose, this frame
      * is the machine-legible truth behind it: the raw intent and outcome, where the
@@ -2322,6 +2339,86 @@ public class ChronicleActionService {
             Boolean.TRUE.equals(env.get("sun_warmed")));
         boolean weatherChanged = beforeWeather != null && globalKind != null && !beforeWeather.equals(globalKind);
         return narrationEngine.ground(core, biome, timeOfDayLabel(at), local.kind(), attention, weatherChanged);
+    }
+    /**
+     * The body, said in words (#37). Built from the SAME snapshot the Body HUD is built from, so the two cannot
+     * disagree about whether a Chronicle is freezing.
+     *
+     * <p>It reports what PRESSES — the aspects that are not in their contented state — in the order a body
+     * would force them on you, because a body does not announce that it is hydrated. When nothing presses it says
+     * so, which is itself an answer and not a failure.
+     */
+    private String bodyReading(ChroniclePhysiologyService.BodyHudSnapshot b) {
+        if (b == null) return "You take stock of yourself, and find nothing you can put a name to.";
+        List<String> said = new java.util.ArrayList<>();
+        switch (b.health()) {
+            case "Critical" -> said.add("something in you is badly wrong and will not wait");
+            case "Injured" -> said.add("there is a hurt in you that has not closed");
+            default -> { }
+        }
+        switch (b.temperature()) {
+            case "Hypothermic" -> said.add("the cold has got past shivering and into the middle of you");
+            case "Cold" -> said.add("the chill has worked in under your skin");
+            case "Warm" -> said.add("the heat sits on you and will not lift");
+            case "Hot" -> said.add("the heat has you sweating even at rest");
+            case "Hyperthermic" -> said.add("you are burning, and the sweat has stopped coming");
+            default -> { }
+        }
+        switch (b.thirst()) {
+            case "Critical Dehydration" -> said.add("your mouth is past dry and your head is splitting with it");
+            case "Dehydrated" -> said.add("your tongue is thick and your lips have cracked");
+            case "Thirsty" -> said.add("your mouth has gone dry");
+            default -> { }
+        }
+        switch (b.hunger()) {
+            case "Critical Starvation" -> said.add("there is nothing left on you and the body has started on itself");
+            case "Starving" -> said.add("the hollow in you has stopped aching and gone quiet, which is worse");
+            case "Very Hungry" -> said.add("hunger has settled into a steady ache");
+            case "Hungry" -> said.add("your stomach is hollow");
+            default -> { }
+        }
+        switch (b.energy()) {
+            case "Collapsing" -> said.add("your legs are going out from under you");
+            case "Exhausted" -> said.add("your limbs are heavy and slow to answer");
+            case "Fatigued" -> said.add("the work costs more than it did this morning");
+            default -> { }
+        }
+        switch (b.condition()) {
+            case "In pain" -> said.add("the pain of it is hard to think past");
+            case "Distressed" -> said.add("your nerves are drawn thin and will not settle");
+            case "Sleep deprived" -> said.add("the want of sleep is behind your eyes");
+            default -> { }
+        }
+        switch (b.wetness()) {
+            case "Soaked" -> said.add("you are wet to the skin and the wind finds every inch of it");
+            case "Wet" -> said.add("the wet has got through your clothes");
+            default -> { }
+        }
+        switch (b.bladder()) {
+            case "Critical" -> said.add("there is a hard pressure low in you that has become pain");
+            case "Urgent" -> said.add("there is a pressure low in you");
+            default -> { }
+        }
+        switch (b.bowel()) {
+            case "Critical" -> said.add("your gut is cramping and will not hold much longer");
+            case "Urgent" -> said.add("your gut is pressing to be emptied");
+            default -> { }
+        }
+        switch (b.hygiene()) {
+            case "Hazardous" -> said.add("you are filthy enough that the filth is itself a danger");
+            case "Filthy" -> said.add("you are filthy enough to smell yourself");
+            default -> { }
+        }
+        if (said.isEmpty())
+            return "You take stock of yourself. Nothing presses: fed, watered, warm enough, dry enough, and whole. "
+                 + "It will not stay so on its own, but it is so now.";
+        StringBuilder sb = new StringBuilder("You take stock of yourself. ");
+        for (int i = 0; i < said.size(); i++) {
+            String part = said.get(i);
+            sb.append(i == 0 ? Character.toUpperCase(part.charAt(0)) + part.substring(1) : part);
+            sb.append(i == said.size() - 1 ? "." : i == said.size() - 2 ? ", and " : ", ");
+        }
+        return sb.toString();
     }
     private PerceptionFrame buildFrame(ActiveChronicle chronicle, Intent intent, String outcome, String perception, Instant at, ChroniclePhysiologyService.BodyHudSnapshot before, ChroniclePhysiologyService.BodyHudSnapshot after, String beforeWeather, String attention) {
         UUID loc = chronicle.location();
