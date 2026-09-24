@@ -1037,4 +1037,28 @@ class IntentClassificationRegressionTest {
         // And writing WITH content keeps the colon route it always had.
         assertEquals("WRITE", classify("write: the river runs east"));
     }
+
+    /**
+     * #37 act five. Reaping answered to "reap", "the crop" and "the field", and to nothing a person would call
+     * the thing standing in the field. The article does the work: "the wild grain" does not contain "the grain",
+     * so foraging keeps its phrase. Taking it would have broken foraging in order to fix farming.
+     */
+    @Test void youCanReapWhatYouSowedWithoutBreakingForaging() throws Exception {
+        for (String phrase : new String[]{"harvest the grain", "harvest my grain", "bring in the grain", "reap the grain", "harvest the crop"})
+            assertEquals("HARVEST_CROP", classify(phrase), phrase);
+        // The half that must not move: foraging wild grain off the ground is not reaping a sown stand.
+        assertEquals("GATHER_PLANT", classify("harvest the wild grain"));
+        assertEquals("GATHER_PLANT", classify("gather wild grain"));
+    }
+
+    /**
+     * #37 act five: the tree nouns had "a tree" and "trees" but nothing for "an apple tree", which contains
+     * neither. plantTree grows oak and pine only, and says so -- a better answer than a crafting miss, because
+     * it names what can actually be put in the ground. Felling must still be felling.
+     */
+    @Test void aTreeNamedInTheSingularIsStillATree() throws Exception {
+        for (String phrase : new String[]{"plant an apple tree", "plant a tree", "plant an oak", "replant the tree"})
+            assertEquals("PLANT_TREE", classify(phrase), phrase);
+        assertEquals("FELL_TREE", classify("fell the tree"));
+    }
 }
