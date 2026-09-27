@@ -151,7 +151,8 @@ public class WildlifeSimulationService {
         jdbc.update("UPDATE chunk_refuse cr SET " +
             "refuse_level = GREATEST(0, refuse_level - FLOOR(EXTRACT(EPOCH FROM (?::timestamptz - cr.last_updated_at))/3600.0 * " +
             "  (CASE WHEN EXISTS (SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
-            "     WHERE w.current_location_id=cr.chunk_id AND cp.project_kind='LATRINE' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE') " +
+            "     JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
+            "     WHERE w.current_location_id=cr.chunk_id AND ck.takes_relief AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE') " +
             "   THEN 4 ELSE 1 END))::int), " +
             "last_updated_at = ? " +
             "WHERE cr.refuse_level > 0 AND EXTRACT(EPOCH FROM (?::timestamptz - cr.last_updated_at)) >= 3600", nowTs, nowTs, nowTs);

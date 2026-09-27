@@ -44,9 +44,12 @@ public class ChroniclePhysiologyService {
             // grubbiness gathers more slowly — the passive hygiene loss is halved while one stands at the site.
             // This feeds the existing low-hygiene illness pressure below, so a clean camp is a healthier one.
             boolean latrine = Boolean.TRUE.equals(jdbc.queryForObject(
+                // Asked of the data (#77, V388), not of the string 'LATRINE' that three readers each held their
+                // own copy of — the drift shelters_stock had before V293.
                 "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object lt ON lt.id=cp.object_id " +
+                "JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
                 "JOIN world_object body ON body.current_location_id=lt.current_location_id " +
-                "WHERE body.id=? AND cp.project_kind='LATRINE' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND lt.lifecycle_state='ACTIVE')",
+                "WHERE body.id=? AND ck.takes_relief AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND lt.lifecycle_state='ACTIVE')",
                 Boolean.class, id));
             int hygiene = clamp((int) Math.round(rs.getInt(10) - hours * (latrine ? .125 : .25)));
             double sleepDebt = Math.min(72, rs.getBigDecimal(13).doubleValue() + hours);
