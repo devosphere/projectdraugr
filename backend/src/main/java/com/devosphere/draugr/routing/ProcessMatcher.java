@@ -191,7 +191,29 @@ public class ProcessMatcher {
     /** As {@link #matchAndRecord}, keeping the whole result so the play path can see a tie (#38). */
     public Result resolveAndRecord(String actionText, java.util.UUID chronicle) {
         String category = classifier.classify(actionText);
-        Result r = resolve(actionText, category, candidates(chronicle));
+        List<Candidate> candidates = candidates(chronicle);
+        Result r = resolve(actionText, category, candidates);
+
+        // The category is a HINT, not a gate (#37). It is guessed from the verb, and the verb a process is
+        // NAMED for is not always the verb its own category is keyed to: "weave" is a PROCESS term while
+        // weave_quiver is a CRAFT process, so "weave a quiver" — a phrase the quiver itself declares it answers
+        // to — classified PROCESS, never saw the quiver, and reached nothing at all.
+        //
+        // Measured across the catalogue rather than guessed at: 183 declared keywords lead with a verb
+        // belonging to a different category than their own process, and a sampled twelve of those phrases found
+        // six genuinely dead — "shape a pot", "make flatbread", "make pigment", "grind a point", "weave a grass
+        // cap", "weave a grass shawl". Every one of them is a phrase the catalogue itself promises an answer to.
+        //
+        // So when nothing in the guessed category answers these words, ask the rest of the catalogue. The bar
+        // stays high — keyword AND subject must still both agree, which is what keeps this from becoming a
+        // free-for-all — and the hint still goes FIRST, so a phrase its own category can answer resolves
+        // exactly as it did before and every existing tie is settled the same way. This can only ever turn a
+        // refusal into an answer; it cannot change one answer into another.
+        if (!r.matched() && category != null) {
+            Result anywhere = resolve(actionText, null, candidates);
+            if (anywhere.matched()) r = anywhere;
+        }
+
         if (!r.matched()) misses.record(actionText, category, r);
         return r;
     }
