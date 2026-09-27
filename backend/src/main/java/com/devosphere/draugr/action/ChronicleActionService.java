@@ -468,7 +468,16 @@ public class ChronicleActionService {
             physiology.applyRelief(chronicle.id(), bowel);
             UUID waste = UUID.randomUUID();
             jdbc.update("INSERT INTO world_object (id, object_type, display_name, current_location_id) VALUES (?, 'WASTE', ?, ?)", waste, bowel ? "Human waste" : "Urine-soaked ground", chronicle.location());
-            perception = "You take a brief moment away from the immediate ground around you.";
+            // The WASTE object above has existed since the beginning and nothing has ever read one, while
+            // butchering, kept livestock and a monster's lair all foul the ground they are on (#77/#218). A pit
+            // dug for the purpose takes it; on bare ground it stays where it is left.
+            boolean pit = wildlife.somethingTakesReliefAt(chronicle.location());
+            wildlife.recordRefuse(chronicle.location(), wildlife.reliefRefuse(chronicle.location(), bowel), resolvedAt);
+            perception = "You take a brief moment away from the immediate ground around you."
+                + (pit ? " The pit takes it, and covered over it goes no further than that."
+                       : campIsGettingFoul(chronicle.location())
+                         ? " The ground hereabouts is beginning to smell of use, and there is no pit dug to take any of it."
+                         : "");
         } else if (intent == Intent.REST) {
             physiology.rest(chronicle.id(), minutes); items.restDraftBeasts(chronicle.id());
             // #30 — this line said "while the forest continues around you" wherever the Chronicle happened to be:
@@ -2344,6 +2353,13 @@ public class ChronicleActionService {
         UUID now = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
         String line = companions.follow(chronicle, now, at);
         return line == null ? perception : perception + " " + line;
+    }
+
+    /** Whether this ground has taken enough refuse to be noticed standing on it (#218). Half the level at which
+     *  a foul camp starts drawing hungry animals in — so it is said before it bites, not after. */
+    private boolean campIsGettingFoul(UUID location) {
+        Integer refuse = jdbc.queryForObject("SELECT COALESCE((SELECT refuse_level FROM chunk_refuse WHERE chunk_id=?),0)", Integer.class, location);
+        return refuse != null && refuse >= 25;
     }
 
     private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, UNKNOWN }

@@ -662,6 +662,10 @@ public class WildlifeEncounterService {
      */
     /** Refuse one butchering leaves on the ground (#218). The heaviest single source there is. */
     public static final int BUTCHERY_REFUSE = 15;
+    /** What relieving your bowels on the camp ground leaves behind (#77/#218) — a day of an ox's fouling. */
+    public static final int RELIEF_REFUSE_BOWEL = 4;
+    /** And what passing water leaves: a quarter of it, which is about what the difference smells like. */
+    public static final int RELIEF_REFUSE_BLADDER = 1;
     /** What still reaches the ground where an offal pit takes the rest (#108, V331): the blood and the trimmings. */
     public static final int BUTCHERY_REFUSE_INTO_A_PIT = 3;
 
@@ -670,6 +674,44 @@ public class WildlifeEncounterService {
      * straight into it and are covered, so the camp ground takes a fifth of it. A latrine is not this: it drains
      * refuse already on the ground over hours, and does not stop butchery fouling the camp in the first place.
      */
+    /**
+     * How much refuse relieving yourself here leaves (#77/#218), or 0 where something stands that takes it.
+     *
+     * <p><b>The ox's dung fouled the camp and the keeper's did not.</b> Butchering fouls the ground, kept
+     * livestock foul the ground, a monster's lair fouls the ground — and a Chronicle relieving themselves on the
+     * same chunk twice a day for a season left it as clean as the day they arrived. All the act ever did was
+     * create a WASTE {@code world_object} at their feet, and nothing in this build has ever read one of those.
+     *
+     * <p>It is also what made the latrine's own purpose hard to see. A latrine halves the passive hygiene loss and
+     * drains refuse at four an hour, but nothing a person did without one ever put refuse on the ground to drain.
+     * Now the pit takes what is left in it, which is what a pit is for.
+     *
+     * <p>Asked of {@code construction_kind.takes_relief} rather than the string 'LATRINE', which had been written
+     * out in three separate readers — the same drift {@code shelters_stock} had before V293 made it data.
+     */
+    @Transactional(readOnly = true)
+    public int reliefRefuse(UUID chunk, boolean bowel) {
+        int left = bowel ? RELIEF_REFUSE_BOWEL : RELIEF_REFUSE_BLADDER;
+        if (chunk == null) return left;
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
+            "WHERE w.current_location_id=? AND ck.takes_relief AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
+            "  AND w.lifecycle_state='ACTIVE')", Boolean.class, chunk))
+            ? 0 : left;
+    }
+
+    /** Whether something stands here that takes a person's own waste (#77) — the latrine, and whatever else the
+     *  data later says does. Public so the act of relief can say which of the two things just happened. */
+    @Transactional(readOnly = true)
+    public boolean somethingTakesReliefAt(UUID chunk) {
+        return chunk != null && Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
+            "WHERE w.current_location_id=? AND ck.takes_relief AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
+            "  AND w.lifecycle_state='ACTIVE')", Boolean.class, chunk));
+    }
+
     @Transactional(readOnly = true)
     public int butcheryRefuse(UUID chunk) {
         if (chunk == null) return BUTCHERY_REFUSE;
