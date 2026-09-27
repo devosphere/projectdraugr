@@ -1103,4 +1103,47 @@ class IntentClassificationRegressionTest {
         // "look for water" belongs to SEARCH, which answers about what it finds, and must keep it.
         assertEquals("SEARCH", classify("look for water"));
     }
+
+    /**
+     * #37 act eight — hunting, trapping and the monsters, in the words a hunter would use.
+     *
+     * <p>Butchering answered only to the word "carcass". A Chronicle standing over what they had just killed and
+     * naming it — "gut the deer" — reached nothing, the same way naming the crop missed HARVEST_CROP. The risk
+     * in widening it is the fish: {@code gut_fish} carries a bare "gut" keyword, so fish must keep their own
+     * process, and the animal nouns here are deliberately mammals only.
+     */
+    @Test void aHunterCanNameWhatTheyKilled() throws Exception {
+        for (String phrase : new String[]{"gut the deer", "dress the boar", "quarter the elk", "skin the hare",
+                                          "butcher the carcass", "harvest the animal"})
+            assertEquals("HARVEST_CARCASS", classify(phrase), phrase);
+        // Stalking is hunting, and reached nothing before.
+        assertEquals("CONFRONT_WILDLIFE", classify("stalk the deer"));
+        assertEquals("CONFRONT_WILDLIFE", classify("hunt the boar"));
+    }
+
+    /**
+     * #37 act eight — keeping away from a monster's lair is the choice a sensible Chronicle makes about it, and
+     * DISENGAGE knew retreat, flee and hide but none of the words for it. Watching one from cover is scouting,
+     * which is the act that exists for exactly that.
+     */
+    @Test void aLairCanBeAvoidedAndWatched() throws Exception {
+        for (String phrase : new String[]{"avoid the lair", "steer clear of the lair", "keep away from the den",
+                                          "give it a wide berth"})
+            assertEquals("DISENGAGE", classify(phrase), phrase);
+        for (String phrase : new String[]{"watch the lair from cover", "observe the den", "study the lair from cover"})
+            assertEquals("SCOUT", classify(phrase), phrase);
+        // The halves that must not move: retreating is still retreating, and scouting a boundary is still that.
+        assertEquals("DISENGAGE", classify("back away slowly"));
+        assertEquals("SCOUT", classify("scout the escape route"));
+    }
+
+    /**
+     * #37 act eight — bait is worms, and digging for it is what COLLECT_INSECTS does. "bait the trap" belongs to
+     * LURE and must keep it, which it does because none of the gathering verbs appear in it.
+     */
+    @Test void diggingForBaitIsDiggingForWorms() throws Exception {
+        assertEquals("COLLECT_INSECTS", classify("dig for bait"));
+        assertEquals("COLLECT_INSECTS", classify("dig for worms"));
+        assertEquals("LURE", classify("bait the trap"), "baiting a trap is not a dig");
+    }
 }
