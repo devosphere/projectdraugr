@@ -44,7 +44,15 @@ CREATE OR REPLACE FUNCTION resolve_in(t text, only_cat text) RETURNS text LANGUA
     WHERE mp.review_state='VERIFIED' AND (only_cat IS NULL OR mp.category_key=only_cat) GROUP BY mp.process_key),
   passed AS (SELECT cand.process_key, cand.best_kw FROM cand WHERE cand.best_kw IS NOT NULL
     AND EXISTS (SELECT 1 FROM process_subject s WHERE s.process_key=cand.process_key AND whole((SELECT v FROM n), s.subject_term)))
-  SELECT process_key FROM passed ORDER BY best_kw DESC, process_key ASC LIMIT 1; $$;
+  SELECT process_key FROM passed
+   ORDER BY best_kw DESC,
+            -- then how many of the process's own subjects the sentence names (see ProcessMatcher.resolve):
+            -- nine poultices share the bare "poultice" keyword and one herbal_poultice output, so the subject
+            -- is the only evidence left when the herb is named away from the noun.
+            (SELECT count(*) FROM process_subject s2 WHERE s2.process_key = passed.process_key
+              AND whole((SELECT v FROM n), s2.subject_term)) DESC,
+            process_key ASC
+   LIMIT 1; $$;
 
 -- The hint first, then the whole catalogue -- exactly the two steps resolveAndRecord takes.
 CREATE OR REPLACE FUNCTION resolve(t text) RETURNS text LANGUAGE sql STABLE AS $$

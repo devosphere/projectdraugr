@@ -134,15 +134,37 @@ public class ProcessMatcher {
         }
         if (best.isEmpty()) return new Result(null, gate, nearKey);
 
-        // Equal words: the text's own naming of what it makes decides, where it names anything.
-        int mostNamed = -1; List<String> tied = new ArrayList<>();
+        // Equal words: the text's own naming of what it makes decides, where it names anything — and then, where
+        // that is equal too, how much of the WORK the text names.
+        //
+        // The second half is what a family word needs (#37). V377 gave all nine poultices the bare keyword
+        // "poultice" so that "make a poultice" would be answered at all. But "pound the yarrow into a poultice"
+        // names its herb NOT adjacent to the noun, so "yarrow poultice" does not match as a phrase, every one of
+        // the nine matches the bare word at the same length, and they all produce the same herbal_poultice — so
+        // the output-naming step could not separate them either and the tie fell to whichever sorted first.
+        // Agrimony, to a Chronicle who had said yarrow.
+        //
+        // The subject terms are what still distinguishes them: poultice_yarrow answers to "yarrow" and no other
+        // poultice does. So a candidate whose own subjects the text names MORE of wins. That is the same kind of
+        // evidence as the output-key step and strictly more of it, and it only ever fires on a tie the earlier
+        // steps could not settle.
+        int mostNamed = -1, mostSubjects = -1; List<String> tied = new ArrayList<>();
         for (Candidate c : best) {
             int named = namedOutputWords(v, c.outputKey());
-            if (named > mostNamed) { mostNamed = named; tied.clear(); tied.add(c.processKey()); }
-            else if (named == mostNamed) tied.add(c.processKey());
+            int subjects = namedSubjects(v, c);
+            if (named > mostNamed || (named == mostNamed && subjects > mostSubjects)) {
+                mostNamed = named; mostSubjects = subjects; tied.clear(); tied.add(c.processKey());
+            } else if (named == mostNamed && subjects == mostSubjects) tied.add(c.processKey());
         }
         java.util.Collections.sort(tied);
         return new Result(tied.get(0), gate, nearKey, tied.size() > 1 ? List.copyOf(tied) : List.of());
+    }
+
+    /** How many of a process's OWN subject terms the text names — the evidence that separates nine poultices. */
+    private static int namedSubjects(String normalised, Candidate c) {
+        int n = 0;
+        for (String s : c.subjects()) if (ActivityClassifier.containsSubject(normalised, s)) n++;
+        return n;
     }
 
     /** How many words of an output item's key the text names ("retted_flax" in "ret the flax": one). */
