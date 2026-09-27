@@ -24,6 +24,8 @@ import java.time.Instant;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -194,6 +196,83 @@ class DraftHarnessIntegrationTest {
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
+    /**
+     * And told again on the road, where the gear is doing its work or failing to (#106).
+     *
+     * <p>The crafting boundary above catches the keeper who makes the wrong strap. It says nothing to the keeper
+     * who <b>already owns</b> it: {@code workDraftBeasts} tired the team inside an UPDATE with no prose attached,
+     * so a harness that fits nothing they keep was exactly as visible as owning no harness at all. Every haul of
+     * the game was the same sentence whether the team pulled in gear or on bare rope.
+     *
+     * <p>Asserted as an ASYMMETRY. A report that merely said something would pass while saying the same thing in
+     * both cases, which is the defect: the bare team's line must name the beast that has nothing on it, and the
+     * geared team's line must not.
+     */
+    @Test
+    void haulingOnBareRopeSaysSoAndHaulingInGearThatFitsDoesNot() {
+        if (worldGenesis.current() == null) {
+            worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
+            ecology.seed();
+        }
+        ChronicleService.ChronicleSummary summary = chronicles.awaken();
+        assertNotNull(summary, "awakening must produce a living Chronicle");
+        UUID chronicle = summary.id();
+        jdbc.update("UPDATE world_chunk SET biome='GRASSLAND' WHERE id=(SELECT current_location_id FROM world_object WHERE id=?)", chronicle);
+        Instant now = ticks.current().simulatedAt();
+
+        jdbc.update("DELETE FROM tamed_young WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
+        jdbc.update("DELETE FROM tamed_gestation WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
+        jdbc.update("DELETE FROM wildlife_bond WHERE chronicle_id=?", chronicle);
+        jdbc.update("UPDATE item_instance SET condition_state='BROKEN' WHERE item_key IN ('draft_harness','draft_yoke','travois','handcart') " +
+            "AND object_id IN (SELECT id FROM world_object WHERE current_owner_id=?)", chronicle);
+        tameAnAurochs(chronicle, now);
+
+        // Nothing to pull is not work, and there is nothing to report about it.
+        resetDraft(chronicle);
+        assertEquals("", items.workDraftBeasts(chronicle),
+            "a beast with no vehicle to pull did no work, so the haul has nothing to say");
+
+        // A travois and no gear. The ox pulls bare, and the report must NAME it.
+        items.createCarriedItem(chronicle, "travois", "Travois", now, "TEST");
+        resetDraft(chronicle);
+        String bare = items.workDraftBeasts(chronicle);
+        assertTrue(bare.contains("aurochs"), () -> "a bare haul must name the beast that has nothing on it: " + bare);
+        assertTrue(bare.contains("bare rope"), () -> "a bare haul must say what it is pulling against: " + bare);
+
+        // A yoke that fits an aurochs. Same journey, same team — and now the line is a different line.
+        items.createCarriedItem(chronicle, "draft_yoke", "Draft yoke", now, "TEST");
+        resetDraft(chronicle);
+        String geared = items.workDraftBeasts(chronicle);
+        assertTrue(geared.contains("gear that fits"), () -> "a geared haul must say the gear fits: " + geared);
+        assertFalse(geared.contains("bare rope"), () -> "a geared team is not pulling on bare rope: " + geared);
+        assertNotEquals(bare, geared, "gear that fits and gear that does not must not read alike — that was the defect");
+
+        // A collar harness is a horse's, and owning one changes nothing about an ox's haul. The one case a keeper
+        // could never see from inside the game: the gear is in their pack and does nothing whatever.
+        jdbc.update("UPDATE item_instance SET condition_state='BROKEN' WHERE item_key='draft_yoke' " +
+            "AND object_id IN (SELECT id FROM world_object WHERE current_owner_id=?)", chronicle);
+        items.createCarriedItem(chronicle, "draft_harness", "Draft harness", now, "TEST");
+        resetDraft(chronicle);
+        assertEquals(bare, items.workDraftBeasts(chronicle),
+            "a collar harness is not an ox's gear, so the haul reads exactly as it did with nothing at all");
+
+        // Rough ground is the other thing the keeper pays for, and it is said separately.
+        jdbc.update("UPDATE world_chunk SET biome='MOUNTAIN' WHERE id=(SELECT current_location_id FROM world_object WHERE id=?)", chronicle);
+        resetDraft(chronicle);
+        String rough = items.workDraftBeasts(chronicle);
+        assertTrue(rough.contains("broken going"), () -> "rough ground must be named as well as charged for: " + rough);
+
+        // A blown beast is told plainly, and every line of this is said the way a body is described rather than
+        // the way a number is reported.
+        jdbc.update("UPDATE world_chunk SET biome='GRASSLAND' WHERE id=(SELECT current_location_id FROM world_object WHERE id=?)", chronicle);
+        jdbc.update("UPDATE wildlife_bond SET draft_fatigue=95 WHERE chronicle_id=?", chronicle);
+        String blown = items.workDraftBeasts(chronicle);
+        assertTrue(blown.contains("blown"), () -> "a spent beast must be said, not merely gated on: " + blown);
+        for (String line : java.util.List.of(bare, geared, rough, blown)) new com.devosphere.draugr.narration.NarrationPolicy().validate(line);
+
+        assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
+
     /**
      * A keeper is told, once, at the one moment they would want to know (#106).
      *
