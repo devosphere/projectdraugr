@@ -1193,7 +1193,7 @@ public class PhysicalItemService {
         if (sites != null && sites > 0) return true;
         return Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
-            "WHERE w.current_location_id=? AND cp.project_kind IN ('RAINWATER_CATCHMENT','WATERING_STATION') " +
+            "WHERE w.current_location_id=? AND cp.project_kind IN ('RAINWATER_CATCHMENT','WATERING_STATION','WELL') " +
             "AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')", Boolean.class, location));
     }
     /** Vessels that can sit on the flame without charring or melting — fired clay or soapstone (#125). Only these

@@ -571,7 +571,13 @@ public class ChronicleActionService {
                 // Named for the water actually drunk from (#37): it said "the standing water" at a fast stream.
                 String drunkFrom = waterNamed(chronicle.location());
                 if (safeWaterSource(chronicle.location())) perception = "You drink from " + drunkFrom + " and let the cold settle in your throat.";
-                else { DrawTreatment through = drawTreatment(chronicle.location()); physiology.applyWaterborneRisk(chronicle.id(), Math.max(1, (silver ? 3 : ladle ? 4 : 6) - (through == null ? 0 : through.clarifies()))); perception = through != null ? "You draw the water off through the " + through.name() + " beside " + drunkFrom + " and drink; it comes clearer than the source itself, though it has not been boiled." : silver ? "You dip the silver cup into " + drunkFrom + " and drink; the bright metal keeps it from turning the gut as it otherwise would." : ladle ? "You dip the ladle into " + drunkFrom + " and draw from above the silt; it is still not clean, but the gut will fare better than from a careless gulp." : "You drink from " + drunkFrom + ". It eases the dryness, but it is not clean, and the gut will know it."; }
+                else { DrawTreatment through = drawTreatment(chronicle.location()); physiology.applyWaterborneRisk(chronicle.id(), Math.max(1, (silver ? 3 : ladle ? 4 : 6) - (through == null ? 0 : through.clarifies()))); perception = through != null ? (naturalWaterHere(chronicle.location())
+                        // The usual case: a stream or a spring is the water, and the structure is what it is drawn
+                        // through on the way to the mouth.
+                        ? "You draw the water off through the " + through.name() + " beside " + drunkFrom + " and drink; it comes clearer than the source itself, though it has not been boiled."
+                        // A well or a catchment on dry ground IS the water, so it cannot be beside it (#77). This
+                        // read "through the well beside the water here", which invents a second source.
+                        : "You draw water from the " + through.name() + " and drink; it comes up clearer than any standing pool would, though it has not been boiled.") : silver ? "You dip the silver cup into " + drunkFrom + " and drink; the bright metal keeps it from turning the gut as it otherwise would." : ladle ? "You dip the ladle into " + drunkFrom + " and draw from above the silt; it is still not clean, but the gut will fare better than from a careless gulp." : "You drink from " + drunkFrom + ". It eases the dryness, but it is not clean, and the gut will know it."; }
             } else { outcome = "FAILED"; perception = noWaterToDrink(chronicle.location(), beforeWeather); }
         }
         else if (intent == Intent.COLLECT_WATER) {
@@ -2585,9 +2591,23 @@ public class ChronicleActionService {
         // rainwater is raw and better boiled, exactly what COLLECT_WATER yields.
         return catchmentInReach(location);
     }
-    /** A completed rainwater catchment standing here, holding caught rain to fill a vessel from (#77). */
+    /** Whether this ground has water of its OWN — a wet biome or a freshwater site — as against water that only
+     *  stands here because something was built to hold it. The prose turns on the difference: a structure is what
+     *  a stream is drawn THROUGH, but on dry ground the structure is the source itself. */
+    private boolean naturalWaterHere(UUID location) {
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
+        if ("WETLAND".equals(biome) || "RIVER_BANK".equals(biome)) return true;
+        Integer sites = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM ecology_site WHERE chunk_id=? AND (" + com.devosphere.draugr.ecology.FreshWater.sites() + ")",
+            Integer.class, location);
+        return sites != null && sites > 0;
+    }
+
+    /** A completed rainwater catchment OR well standing here, to fill a vessel from (#77). A well is the same
+     *  thought as the catchment pointed downward: ground with no stream has its own water once one is sunk. Both
+     *  give RAW water — a well is not a safeWaterSource either, and what it yields is better boiled. */
     private boolean catchmentInReach(UUID location) {
-        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='RAINWATER_CATCHMENT' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')", Boolean.class, location));
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind IN ('RAINWATER_CATCHMENT','WELL') AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')", Boolean.class, location));
     }
     /** The best standing structure here that the water is drawn through (#77, V329): its name, how much of a raw draw's risk it clears, and whether it fills vessels filtered. */
     private record DrawTreatment(String name, int clarifies, boolean filtered) {}

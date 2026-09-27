@@ -111,6 +111,39 @@ public class AssemblyService {
             : "Those words fit more than one thing you could build here — " + choices + ". Say which you mean, and your hands will know where to begin."};
     }
 
+    /**
+     * Why a shaft here would find nothing, or null when it would find water.
+     *
+     * <p>Two things decide it, and both are already on the chunk: how damp the ground is, and how high it stands
+     * above the land that drains into it. High ground drains and dry ground has nothing to give, so a well is
+     * possible in the lowlands and the woods, occasional in the highlands, and never on the mountain — which is
+     * the geography making the decision rather than a rule invented for it. Across the canonical world: all 141
+     * temperate-forest chunks, 34 of 85 grassland, 12 of 100 highland, none of the mountain or cave ground.
+     */
+    private String groundTooDryToSink(UUID location) {
+        Map<String, Object> g = jdbc.queryForMap(
+            "SELECT COALESCE(moisture, 500) AS moisture, COALESCE(elevation, 0) AS elevation, biome " +
+            "FROM world_chunk WHERE id=?", location);
+        int moisture = ((Number) g.get("moisture")).intValue();
+        int elevation = ((Number) g.get("elevation")).intValue();
+        boolean dry = moisture < DAMP_ENOUGH_TO_SINK_A_WELL;
+        boolean high = elevation > LOW_ENOUGH_TO_SINK_A_WELL;
+        if (!dry && !high) return null;
+        if (dry && high) return "You break the ground and it comes up dry and loose, and the land falls away on "
+            + "every side. Water does not stand this high, and there is none in this ground to find. You fill the "
+            + "hole back in.";
+        if (high) return "The ground is damp enough, but it stands too high: whatever water it holds runs off to "
+            + "the low country instead of gathering under your feet. A shaft here would follow it down and never "
+            + "catch it.";
+        return "A spade's depth down it is still dry gravel, and drier below that. There is no water under this "
+            + "ground to reach.";
+    }
+
+    /** Damp enough that a hand-dug shaft reaches the water table. Moisture runs 0..1000, averaging 500. */
+    private static final int DAMP_ENOUGH_TO_SINK_A_WELL = 450;
+    /** And low enough that the water gathers rather than draining away. */
+    private static final int LOW_ENOUGH_TO_SINK_A_WELL = 700;
+
     /** Whether the first stage of this assembly could be begun — its inputs, not its tools. */
     private boolean firstStageIsWithinReach(UUID chronicle, String assemblyKey) {
         String firstStage = jdbc.query(
@@ -151,6 +184,19 @@ public class AssemblyService {
             "SELECT subject_kind, produces_item_key, construction_kind, display_name, narration " +
             "FROM assembly_definition WHERE assembly_key=?", key);
         String subjectKind = (String) def.get("subject_kind");
+
+        // Some ground will not take what is asked of it (#37/#77). A well is the first assembly with a condition
+        // on the PLACE rather than on what is carried, so this is a switch on the construction_kind rather than a
+        // new column: the second such assembly is the one that should promote it to data.
+        //
+        // A hand-dug shaft reaches the water table or it reaches dry gravel, and which of those it is depends on
+        // the ground. Refused at the first stage rather than allowed to finish dry, because a well that yields
+        // nothing is the catalogue token this project exists to avoid — and because a refusal that names the
+        // reason is how a Chronicle learns where to dig.
+        if ("WELL".equals(def.get("construction_kind")) && !underWay(chronicle, key)) {
+            String dry = groundTooDryToSink(location);
+            if (dry != null) return new String[]{"FAILED", dry};
+        }
 
         // Naming a thing that already stands is USING it, not building another (#77).
         //
