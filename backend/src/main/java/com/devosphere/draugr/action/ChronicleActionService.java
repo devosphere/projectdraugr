@@ -435,7 +435,12 @@ public class ChronicleActionService {
         else if (intent == Intent.CONTACT_PEOPLE) { String[] r = contact.act(chronicle.id(), chronicle.location(), contactWith, contactAct, text, resolvedAt, actionId); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.OBSERVE) perception = survey(chronicle, resolvedAt);
         else if (intent == Intent.MOVE) {
-            perception = move(chronicle, text, actionId, resolvedAt); items.workDraftBeasts(chronicle.id());
+            // A haul tired the team in silence, which made draft gear that does not fit the animal
+            // indistinguishable from gear that does (#106). This is the commoner of the two hauling boundaries:
+            // "travel north" is a MOVE, so a keeper who never says the word "journey" arrives here every time.
+            perception = move(chronicle, text, actionId, resolvedAt);
+            String hauledOn = items.workDraftBeasts(chronicle.id());
+            if (!hauledOn.isEmpty()) perception = perception + hauledOn;
             // Onto a people's isle (#114): uninvited is trespass, and a people who hate you do not wait to be spoken to.
             if (conduct != null) {
                 UUID arrived = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle.id());
@@ -448,7 +453,10 @@ public class ChronicleActionService {
             if (localZone != null) { jdbc.update("UPDATE chronicle SET current_zone=? WHERE id=?", localZone, chronicle.id()); perception = "You cross the settlement to " + localZone + ", a short walk over ground you know by heart."; }
             else {
                 String[] r = travelTo(chronicle, travel, resolvedAt); outcome = r[0]; perception = r[1];
-                items.workDraftBeasts(chronicle.id());
+                // A haul used to tire the team in silence, which made draft gear that does not fit the animal
+                // indistinguishable from gear that does (#106). Only on a journey that happened.
+                String hauled = items.workDraftBeasts(chronicle.id());
+                if ("SUCCEEDED".equals(outcome) && !hauled.isEmpty()) perception = perception + hauled;
                 // The journey's cost is moved, not removed: a ridden beast takes it. Draft fatigue already gates
                 // haulage, so a keeper who rides everywhere finds their draft team useless when they need it.
                 if (mount != null && "SUCCEEDED".equals(outcome)) {

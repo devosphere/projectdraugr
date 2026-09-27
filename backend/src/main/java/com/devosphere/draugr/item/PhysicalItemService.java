@@ -303,7 +303,7 @@ public class PhysicalItemService {
      *  draft gear — a harness or a yoke (#102) — spreads the load, so a harnessed beast tires slower for the same work.
      *  Rough ground (#103) tires it half again as hard — the reason a loaded team is routed over open country. */
     @Transactional
-    public void workDraftBeasts(UUID chronicle) {
+    public String workDraftBeasts(UUID chronicle) {
         String biome = jdbc.query("SELECT ch.biome FROM world_object cw JOIN world_chunk ch ON ch.id=cw.current_location_id WHERE cw.id=?",
             rs -> rs.next() ? rs.getString(1) : null, chronicle);
         // Rough going strains the team half again as hard, geared or not. The numerator is the ungeared cost;
@@ -322,11 +322,73 @@ public class PhysicalItemService {
             // to it was not.
             "UPDATE wildlife_bond wb SET draft_fatigue = LEAST(100, draft_fatigue + " +
             "  COALESCE(" + gearOnBeast(easy) + ", ?)), draft_conditioning = LEAST(100, draft_conditioning + 3) " +
-            "WHERE wb.chronicle_id=? AND wb.bond_stage='TAMED' " +
+            beastsAtWork(),
+            hard, chronicle, chronicle);
+        return haulageReport(chronicle, easy);
+    }
+
+    /**
+     * Which of a keeper's bonded beasts are actually at work when they travel: tamed, of a draft species, and with
+     * a sound draft vehicle of the keeper's to pull. A beast with nothing to pull is not worked.
+     *
+     * <p>Shared by the two statements that must never disagree about it — the one that tires the team, and the one
+     * that tells the keeper what the pull cost them. Takes the chronicle twice.
+     */
+    private static String beastsAtWork() {
+        return "WHERE wb.chronicle_id=? AND wb.bond_stage='TAMED' " +
             "AND EXISTS (SELECT 1 FROM wildlife_population wp JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wp.id=wb.population_id) " +
             "AND EXISTS (SELECT 1 FROM item_instance ti JOIN world_object tw ON tw.id=ti.object_id " +
-            "  WHERE ti.item_key IN (SELECT item_key FROM draft_vehicle) AND ti.condition_state <> 'BROKEN' AND tw.current_owner_id=? AND tw.lifecycle_state='ACTIVE')",
-            hard, chronicle, chronicle);
+            "  WHERE ti.item_key IN (SELECT item_key FROM draft_vehicle) AND ti.condition_state <> 'BROKEN' AND tw.current_owner_id=? AND tw.lifecycle_state='ACTIVE')";
+    }
+
+    /**
+     * What a keeper sees of their own team after a haul (#106), or "" when nothing of theirs pulled.
+     *
+     * <p><b>The gear was silent.</b> V371 sized draft gear to the body, so a collar harness eases a goat and does
+     * nothing whatever for an ox, and {@link #gearThatFitsNothingKept} says so at the moment such gear is MADE.
+     * But a keeper who already owns the wrong strap hauls with it for ever and is told nothing, because the tiring
+     * happens inside an UPDATE with no prose attached to it: the gear is exactly as invisible as having no gear.
+     * This is the hauling half of that same sentence, and it names the one thing the keeper cannot otherwise see —
+     * how many of the team were in gear that fitted them, and how many pulled bare.
+     *
+     * <p>Read with the SAME clauses as the statement above and the same {@link #gearOnBeast} expression, so the
+     * report can never claim a beast worked that the update did not tire, nor call a beast geared that the update
+     * charged the full ungeared price. That is why the clause is a method rather than a second copy.
+     */
+    private String haulageReport(UUID chronicle, boolean easy) {
+        java.util.List<java.util.Map<String, Object>> team = jdbc.queryForList(
+            "SELECT (SELECT wp2.species_key FROM wildlife_population wp2 WHERE wp2.id=wb.population_id) AS species, " +
+            "  (" + gearOnBeast(easy) + ") IS NOT NULL AS geared, wb.draft_fatigue AS spentness " +
+            "FROM wildlife_bond wb " + beastsAtWork() + " ORDER BY geared, species", chronicle, chronicle);
+        if (team.isEmpty()) return "";
+
+        int geared = 0;
+        String bare = null, blown = null;
+        for (java.util.Map<String, Object> beast : team) {
+            String name = String.valueOf(beast.get("species")).replace('_', ' ');
+            if (Boolean.TRUE.equals(beast.get("geared"))) geared++;
+            else if (bare == null) bare = name;
+            if (((Number) beast.get("spentness")).intValue() >= UNFIT_TO_CARRY && blown == null) blown = name;
+        }
+
+        StringBuilder said = new StringBuilder();
+        if (geared == team.size()) {
+            said.append(" The load comes on behind you steadily, the weight of it spread over gear that fits.");
+        } else if (geared == 0) {
+            said.append(team.size() == 1
+                ? " The " + bare + " hauls against bare rope: you have nothing that will go on an animal that size, "
+                  + "and the whole of the load hangs off the one strap and its shoulders."
+                : " The team hauls against bare rope. Nothing you keep fits any of them, and each mile takes more "
+                  + "out of them than it needs to.");
+        } else {
+            said.append(" Some of the team are in gear that fits them and lean into it easily. The " + bare
+                + " is not: you keep nothing that will go on it, so it pulls bare alongside and pays for the "
+                + "difference.");
+        }
+        if (!easy) said.append(" The ground is broken going, and they labour harder for it than they would on open country.");
+        if (blown != null) said.append(" The " + blown + " is blown, head down and blowing hard. It will haul nothing "
+            + "more until it has stood a long while.");
+        return said.toString();
     }
 
     /**
