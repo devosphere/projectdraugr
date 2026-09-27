@@ -3798,6 +3798,37 @@ public class PhysicalItemService {
     /** What the Chronicle is carrying and what they can carry — public so movement can ask before deep water (#156/#157). */
     public LoadState currentLoad(UUID chronicle) { return loadState(chronicle); }
 
+    /**
+     * The biggest load-bed among the sound draft vehicles this keeper owns, in {@code max_mass_grams} or
+     * {@code max_volume_ml} — and 0 when they own no vehicle at all, which is what makes a team with nothing to
+     * pull add nothing.
+     *
+     * <p><b>Four vehicles were one vehicle.</b> The haul was gated on {@code EXISTS(... draft_vehicle ...)} — a
+     * yes-or-no — and then took the whole of the team's pull, so a travois, a sledge, a cart and a pack-saddle were
+     * interchangeable. Two of the tests in this suite said so outright, asserting {@code before + 250000} for a
+     * sledge and {@code before + 250000} for a pack-saddle: the same number, because the vehicle never entered the
+     * sum. A 2 kg pack-saddle hauled exactly what an 8 kg cart hauled, and the cart cost two turned wheels and
+     * two hours more to build for nothing. That is the generic equipment class this ticket's acceptance criterion
+     * forbids, in the one place nobody had looked.
+     *
+     * <p>Nothing here is invented: the world already declares all four beds, and has since V187–V194 —
+     * pack-saddle 120 kg, travois 250 kg, sledge 400 kg, cart 600 kg. The code simply never read them. A keeper's
+     * team can bring home what the team can pull or what the bed can hold, whichever runs out first, which is why
+     * a cart is worth its wheels the moment there is more than one ox in the yoke.
+     *
+     * <p>Read per OBJECT first ({@code container_properties}, set when the vehicle was made) and only then from
+     * the item's declared default, so a particular cart answers for itself. A vehicle with neither limits nothing
+     * rather than hauling nothing — an undeclared bed must not silently become a bed of zero.
+     */
+    private static String bestBed(String column) {
+        return "COALESCE((SELECT MAX(COALESCE(cp." + column + ", ccd." + column + ", 2147483647)) " +
+               " FROM item_instance ti JOIN world_object tw ON tw.id=ti.object_id " +
+               " JOIN draft_vehicle dv ON dv.item_key=ti.item_key " +
+               " LEFT JOIN container_properties cp ON cp.object_id=tw.id " +
+               " LEFT JOIN container_capacity_default ccd ON ccd.item_key=ti.item_key " +
+               " WHERE ti.condition_state <> 'BROKEN' AND tw.current_owner_id=c.chronicle_id AND tw.lifecycle_state='ACTIVE'), 0)";
+    }
+
     private LoadState loadState(UUID chronicle) {
         // A carrying aid (pole/yoke/harness/pack frame) worn or held adds its bonus to sustained mass / bulk
         // capacity while equipped (#57 carry_aid_bonus). The single-object lift limit is unchanged — an aid
@@ -3808,10 +3839,10 @@ public class PhysicalItemService {
         Capacity cap=jdbc.query("SELECT c.sustained_mass_grams, c.direct_bulk_ml, c.maximum_single_lift_grams, COALESCE(a.load_conditioning,0), COALESCE(a.recovery_readiness,.5), " +
             "COALESCE((SELECT SUM(b.mass_bonus_grams) FROM equipment_attachment e JOIN item_instance ii ON ii.object_id=e.item_id JOIN carry_aid_bonus b ON b.item_key=ii.item_key WHERE e.chronicle_id=c.chronicle_id),0), " +
             "COALESCE((SELECT SUM(b.bulk_bonus_ml)    FROM equipment_attachment e JOIN item_instance ii ON ii.object_id=e.item_id JOIN carry_aid_bonus b ON b.item_key=ii.item_key WHERE e.chronicle_id=c.chronicle_id),0), " +
-            "CASE WHEN EXISTS(SELECT 1 FROM item_instance ti JOIN world_object tw ON tw.id=ti.object_id WHERE ti.item_key IN (SELECT item_key FROM draft_vehicle) AND ti.condition_state <> 'BROKEN' AND tw.current_owner_id=c.chronicle_id AND tw.lifecycle_state='ACTIVE') " +
-            " THEN COALESCE((SELECT SUM(ds.haul_bonus_grams * (100 - GREATEST(wb.draft_fatigue, wb.draft_hunger, wb.draft_thirst) * (200 - wb.draft_conditioning) / 200) / 100) FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id=wb.population_id JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wb.chronicle_id=c.chronicle_id AND wb.bond_stage='TAMED'),0) ELSE 0 END, " +
-            "CASE WHEN EXISTS(SELECT 1 FROM item_instance ti JOIN world_object tw ON tw.id=ti.object_id WHERE ti.item_key IN (SELECT item_key FROM draft_vehicle) AND ti.condition_state <> 'BROKEN' AND tw.current_owner_id=c.chronicle_id AND tw.lifecycle_state='ACTIVE') " +
-            " THEN COALESCE((SELECT SUM(ds.bulk_bonus_ml * (100 - GREATEST(wb.draft_fatigue, wb.draft_hunger, wb.draft_thirst) * (200 - wb.draft_conditioning) / 200) / 100)    FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id=wb.population_id JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wb.chronicle_id=c.chronicle_id AND wb.bond_stage='TAMED'),0) ELSE 0 END " +
+            // What the TEAM can pull, capped by what the thing they are pulling can hold (#106). The cap was
+            // missing, so a pack-saddle hauled what a cart hauled: see bestBed below.
+            "LEAST(COALESCE((SELECT SUM(ds.haul_bonus_grams * (100 - GREATEST(wb.draft_fatigue, wb.draft_hunger, wb.draft_thirst) * (200 - wb.draft_conditioning) / 200) / 100) FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id=wb.population_id JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wb.chronicle_id=c.chronicle_id AND wb.bond_stage='TAMED'),0), " + bestBed("max_mass_grams") + "), " +
+            "LEAST(COALESCE((SELECT SUM(ds.bulk_bonus_ml * (100 - GREATEST(wb.draft_fatigue, wb.draft_hunger, wb.draft_thirst) * (200 - wb.draft_conditioning) / 200) / 100)    FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id=wb.population_id JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wb.chronicle_id=c.chronicle_id AND wb.bond_stage='TAMED'),0), " + bestBed("max_volume_ml") + ") " +
             "FROM chronicle_carry_capacity c LEFT JOIN chronicle_capability_adaptation a ON a.chronicle_id=c.chronicle_id WHERE c.chronicle_id=?",rs->rs.next()?new Capacity((int)(rs.getInt(1)*(1+rs.getDouble(4)*.12*rs.getDouble(5)))+rs.getInt(6)+rs.getInt(8),rs.getInt(2)+rs.getInt(7)+rs.getInt(9),(int)(rs.getInt(3)*(1+rs.getDouble(4)*.08*rs.getDouble(5)))):new Capacity(0,0,0),chronicle);
         Load load=jdbc.query("WITH RECURSIVE carried(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN carried c ON ic.container_id=c.id) SELECT COALESCE(SUM(d.unit_mass_grams),0),COALESCE(SUM(d.unit_volume_ml),0),COALESCE(MAX(d.unit_mass_grams),0) FROM carried JOIN item_instance i ON i.object_id=carried.id JOIN item_definition d ON d.item_key=i.item_key",rs->rs.next()?new Load(rs.getInt(1),rs.getInt(2),rs.getInt(3)):new Load(0,0,0),chronicle);
         return new LoadState(load.mass(),load.volume(),load.largest(),cap.mass(),cap.volume(),cap.singleLift());
