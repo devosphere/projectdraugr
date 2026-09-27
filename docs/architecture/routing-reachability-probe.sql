@@ -18,6 +18,13 @@
 --      one (or classification is NULL, dropping that condition), one keyword
 --      matches whole-word, and one subject term matches whole-word. Longest
 --      keyword wins; ties fall to the lexically first process_key.
+--   4. and when NOTHING in the classified category answers the words, the whole
+--      catalogue is asked instead (#37). The category is a hint, not a gate: it is
+--      guessed from the verb, and the verb a process is named for need not belong to
+--      its own category -- "weave" is a PROCESS term while weave_quiver is CRAFT, so
+--      "weave a quiver", a phrase the quiver itself declares, reached nothing at all.
+--      Keyword and subject still both gate, so this only turns a refusal into an
+--      answer. Mirrors ProcessMatcher.resolveAndRecord; keep the two in step.
 --
 -- Extend the probes list whenever a migration adds processes: one representative
 -- sentence per new process, plus anything that shares a verb with it.
@@ -30,14 +37,19 @@ CREATE OR REPLACE FUNCTION classify(t text) RETURNS text LANGUAGE sql STABLE AS 
   WITH n AS (SELECT norm(t) AS v),
   scored AS (SELECT ct.category_key, SUM(ct.weight) AS s FROM category_term ct, n WHERE whole(n.v, ct.term) GROUP BY ct.category_key)
   SELECT s.category_key FROM scored s JOIN activity_category ac ON ac.category_key=s.category_key ORDER BY s.s DESC, ac.precedence ASC LIMIT 1; $$;
-CREATE OR REPLACE FUNCTION resolve(t text) RETURNS text LANGUAGE sql STABLE AS $$
-  WITH n AS (SELECT norm(t) AS v), c AS (SELECT classify(t) AS cat),
+CREATE OR REPLACE FUNCTION resolve_in(t text, only_cat text) RETURNS text LANGUAGE sql STABLE AS $$
+  WITH n AS (SELECT norm(t) AS v),
   cand AS (SELECT mp.process_key, MAX(length(k.kw)) FILTER (WHERE whole((SELECT v FROM n), k.kw)) AS best_kw
-    FROM material_process mp, c CROSS JOIN LATERAL unnest(string_to_array(mp.keywords, ',')) AS k(kw)
-    WHERE mp.review_state='VERIFIED' AND (c.cat IS NULL OR mp.category_key=c.cat) GROUP BY mp.process_key),
+    FROM material_process mp CROSS JOIN LATERAL unnest(string_to_array(mp.keywords, ',')) AS k(kw)
+    WHERE mp.review_state='VERIFIED' AND (only_cat IS NULL OR mp.category_key=only_cat) GROUP BY mp.process_key),
   passed AS (SELECT cand.process_key, cand.best_kw FROM cand WHERE cand.best_kw IS NOT NULL
     AND EXISTS (SELECT 1 FROM process_subject s WHERE s.process_key=cand.process_key AND whole((SELECT v FROM n), s.subject_term)))
   SELECT process_key FROM passed ORDER BY best_kw DESC, process_key ASC LIMIT 1; $$;
+
+-- The hint first, then the whole catalogue -- exactly the two steps resolveAndRecord takes.
+CREATE OR REPLACE FUNCTION resolve(t text) RETURNS text LANGUAGE sql STABLE AS $$
+  SELECT COALESCE(resolve_in(t, classify(t)),
+                  CASE WHEN classify(t) IS NULL THEN NULL ELSE resolve_in(t, NULL) END); $$;
 
 CREATE TEMP TABLE probes(txt text, want text);
 INSERT INTO probes VALUES
