@@ -1066,4 +1066,41 @@ class IntentClassificationRegressionTest {
             assertEquals("PLANT_TREE", classify(phrase), phrase);
         assertEquals("FELL_TREE", classify("fell the tree"));
     }
+
+    /**
+     * #37 act seven, played in the words somebody would type without having read anything.
+     *
+     * <p>"go to sleep" was the worst of them: TRAVEL claims any "go to", and SLEEP declares that exact phrase in
+     * classifyLegacy, which runs after the whole chain and so never got a look. Asking to lie down was answered
+     * with "you cannot call the way to mind" — a travel failure, in reply to sleep.
+     */
+    @Test void theWordsForOrdinaryActsReachThem() throws Exception {
+        // The wrong answer, and the phrase SLEEP always declared.
+        assertEquals("SLEEP", classify("go to sleep"));
+        assertEquals("SLEEP", classify("go to bed"));
+        // Travelling must still travel — that is the half this could have broken.
+        assertEquals("TRAVEL", classify("go to the river"));
+        assertEquals("TRAVEL", classify("go to the high ground"));
+        assertEquals("TRAVEL", classify("head back to camp"));
+
+        // Asking after the weather in the other plain phrasing. #708 routed "what is the weather".
+        assertEquals("FEEL", classify("check the weather"));
+        assertEquals("FEEL", classify("check the sky"));
+
+        // Getting out of the weather, said the shortest way.
+        for (String phrase : new String[]{"go inside", "get inside", "go indoors", "get under a roof"})
+            assertEquals("SHELTER_BODY", classify(phrase), phrase);
+        assertEquals("SHELTER_BODY", classify("take shelter from the rain"));
+
+        // Breathing a banked fire back up, which is how a fire is kept overnight.
+        for (String phrase : new String[]{"blow on the embers", "fan the embers", "coax the embers back"})
+            assertEquals("LIGHT_FIRE", classify(phrase), phrase);
+        assertEquals("BANK_FIRE", classify("bank the fire for the night"), "banking is still banking");
+
+        // Looking for water and drawing it are one act once there is water to draw.
+        for (String phrase : new String[]{"find water", "find some water", "find a stream"})
+            assertEquals("COLLECT_WATER", classify(phrase), phrase);
+        // "look for water" belongs to SEARCH, which answers about what it finds, and must keep it.
+        assertEquals("SEARCH", classify("look for water"));
+    }
 }
