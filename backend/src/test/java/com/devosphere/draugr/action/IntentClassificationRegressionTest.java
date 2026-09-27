@@ -1103,4 +1103,88 @@ class IntentClassificationRegressionTest {
         // "look for water" belongs to SEARCH, which answers about what it finds, and must keep it.
         assertEquals("SEARCH", classify("look for water"));
     }
+
+    /**
+     * #37 act eight — hunting, trapping and the monsters, in the words a hunter would use.
+     *
+     * <p>Butchering answered only to the word "carcass". A Chronicle standing over what they had just killed and
+     * naming it — "gut the deer" — reached nothing, the same way naming the crop missed HARVEST_CROP. The risk
+     * in widening it is the fish: {@code gut_fish} carries a bare "gut" keyword, so fish must keep their own
+     * process, and the animal nouns here are deliberately mammals only.
+     */
+    @Test void aHunterCanNameWhatTheyKilled() throws Exception {
+        for (String phrase : new String[]{"gut the deer", "dress the boar", "quarter the elk", "skin the hare",
+                                          "butcher the carcass", "harvest the animal"})
+            assertEquals("HARVEST_CARCASS", classify(phrase), phrase);
+        // Stalking is hunting, and reached nothing before.
+        assertEquals("CONFRONT_WILDLIFE", classify("stalk the deer"));
+        assertEquals("CONFRONT_WILDLIFE", classify("hunt the boar"));
+    }
+
+    /**
+     * #37 act eight — keeping away from a monster's lair is the choice a sensible Chronicle makes about it, and
+     * DISENGAGE knew retreat, flee and hide but none of the words for it. Watching one from cover is scouting,
+     * which is the act that exists for exactly that.
+     */
+    @Test void aLairCanBeAvoidedAndWatched() throws Exception {
+        for (String phrase : new String[]{"avoid the lair", "steer clear of the lair", "keep away from the den",
+                                          "give it a wide berth"})
+            assertEquals("DISENGAGE", classify(phrase), phrase);
+        for (String phrase : new String[]{"watch the lair from cover", "observe the den", "study the lair from cover"})
+            assertEquals("SCOUT", classify(phrase), phrase);
+        // The halves that must not move: retreating is still retreating, and scouting a boundary is still that.
+        assertEquals("DISENGAGE", classify("back away slowly"));
+        assertEquals("SCOUT", classify("scout the escape route"));
+    }
+
+    /**
+     * #37 act eight — bait is worms, and digging for it is what COLLECT_INSECTS does. "bait the trap" belongs to
+     * LURE and must keep it, which it does because none of the gathering verbs appear in it.
+     */
+    @Test void diggingForBaitIsDiggingForWorms() throws Exception {
+        assertEquals("COLLECT_INSECTS", classify("dig for bait"));
+        assertEquals("COLLECT_INSECTS", classify("dig for worms"));
+        assertEquals("LURE", classify("bait the trap"), "baiting a trap is not a dig");
+    }
+
+    /**
+     * #37 — a Java intent must not steal a material process's own keyword by matching a SUBSTRING of it.
+     *
+     * <p>There is a guard for Java-shadows-assembly and now one for a process being reachable inside the
+     * matcher, but nothing guarded this. An audit of all 2,080 substantial process keywords found 66 claimed by
+     * a Java intent before the matcher ever saw them, and the worst were pure substring accidents:
+     *
+     * <ul>
+     *   <li>{@code "pee"} inside <b>peel</b> — "peel the rushes" made the Chronicle urinate. Eight keywords.</li>
+     *   <li>a bare {@code "lid"} inside the NAME of the lidded basket — making one closed a container.</li>
+     *   <li>{@code "sleep"} inside <b>sleeping mat</b> — weaving one went to sleep.</li>
+     *   <li>{@code "stretch"} — stretching a HIDE is leatherwork, not a body loosening its limbs.</li>
+     *   <li>{@code "wound"} inside <b>woundwort</b> — making the poultice bound a wound instead.</li>
+     *   <li>and the costliest: "build a bloomery furnace" went to CRAFT_WORKSTATION, which answered with a
+     *       workbench's branches and fibre when a furnace wants clay. Both smelt_copper and alloy_bronze name
+     *       that station, so nothing metal was reachable by the phrase the furnace itself declares.</li>
+     * </ul>
+     *
+     * <p>Nineteen recovered, 66 down to 47. The remainder is mostly EQUIP claiming an item's bare name, which is
+     * defensible, and is left for a follow-up rather than swept in here.
+     */
+    @Test void aJavaIntentDoesNotStealAProcessBySubstring() throws Exception {
+        // Every one of these is a keyword some process declares, and must now fall through to the matcher.
+        // UNKNOWN from classify() IS that fall-through: PROCESS_MATERIAL is assigned later, in the dispatch,
+        // once the matcher has actually resolved the phrase. A Java intent name here would mean it was stolen.
+        for (String phrase : new String[]{"peel the rushes", "sleeping mat", "stretch the hide",
+                                          "woundwort dressing", "build a bloomery furnace", "basket with a lid",
+                                          "make a lidded basket"})
+            assertEquals("UNKNOWN", classify(phrase, true), phrase);
+
+        // And the acts those intents exist for must still be those acts. This is the half that matters.
+        assertEquals("URINATE", classify("urinate"));
+        assertEquals("URINATE", classify("go and pee"));
+        assertEquals("SLEEP", classify("go to sleep"));
+        assertEquals("STRETCH", classify("stretch my legs"));
+        assertEquals("TREAT_WOUND", classify("bind the wound"));
+        assertEquals("CRAFT_WORKSTATION", classify("build a workbench"));
+        assertEquals("CRAFT_BASKET", classify("weave a basket"));
+        assertEquals("CLOSE_CONTAINER", classify("put the lid on the pot"));
+    }
 }

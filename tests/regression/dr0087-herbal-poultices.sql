@@ -54,6 +54,12 @@ BEGIN
                       WHERE ps.process_key = mp.process_key AND (' ' || c[1] || ' ') LIKE ('% ' || ps.subject_term || ' %'))
         ORDER BY (SELECT max(length(trim(kw))) FROM regexp_split_to_table(mp.keywords, ',') kw
                   WHERE (' ' || c[1] || ' ') LIKE ('% ' || trim(kw) || ' %')) DESC,
+                 -- Then how many of the process's OWN subjects the sentence names. "pound the yarrow into a
+                 -- poultice" names the herb away from the noun, so every poultice matches the bare "poultice"
+                 -- keyword at equal length and they all make the same herbal_poultice; the subject "yarrow" is
+                 -- the only thing left that tells them apart. Mirrors ProcessMatcher.resolve.
+                 (SELECT count(*) FROM process_subject ps2 WHERE ps2.process_key = mp.process_key
+                   AND (' ' || c[1] || ' ') LIKE ('% ' || ps2.subject_term || ' %')) DESC,
                  mp.process_key ASC
         LIMIT 1;
         IF winner IS DISTINCT FROM c[2] THEN
