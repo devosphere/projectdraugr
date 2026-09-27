@@ -1146,4 +1146,45 @@ class IntentClassificationRegressionTest {
         assertEquals("COLLECT_INSECTS", classify("dig for worms"));
         assertEquals("LURE", classify("bait the trap"), "baiting a trap is not a dig");
     }
+
+    /**
+     * #37 — a Java intent must not steal a material process's own keyword by matching a SUBSTRING of it.
+     *
+     * <p>There is a guard for Java-shadows-assembly and now one for a process being reachable inside the
+     * matcher, but nothing guarded this. An audit of all 2,080 substantial process keywords found 66 claimed by
+     * a Java intent before the matcher ever saw them, and the worst were pure substring accidents:
+     *
+     * <ul>
+     *   <li>{@code "pee"} inside <b>peel</b> — "peel the rushes" made the Chronicle urinate. Eight keywords.</li>
+     *   <li>a bare {@code "lid"} inside the NAME of the lidded basket — making one closed a container.</li>
+     *   <li>{@code "sleep"} inside <b>sleeping mat</b> — weaving one went to sleep.</li>
+     *   <li>{@code "stretch"} — stretching a HIDE is leatherwork, not a body loosening its limbs.</li>
+     *   <li>{@code "wound"} inside <b>woundwort</b> — making the poultice bound a wound instead.</li>
+     *   <li>and the costliest: "build a bloomery furnace" went to CRAFT_WORKSTATION, which answered with a
+     *       workbench's branches and fibre when a furnace wants clay. Both smelt_copper and alloy_bronze name
+     *       that station, so nothing metal was reachable by the phrase the furnace itself declares.</li>
+     * </ul>
+     *
+     * <p>Nineteen recovered, 66 down to 47. The remainder is mostly EQUIP claiming an item's bare name, which is
+     * defensible, and is left for a follow-up rather than swept in here.
+     */
+    @Test void aJavaIntentDoesNotStealAProcessBySubstring() throws Exception {
+        // Every one of these is a keyword some process declares, and must now fall through to the matcher.
+        // UNKNOWN from classify() IS that fall-through: PROCESS_MATERIAL is assigned later, in the dispatch,
+        // once the matcher has actually resolved the phrase. A Java intent name here would mean it was stolen.
+        for (String phrase : new String[]{"peel the rushes", "sleeping mat", "stretch the hide",
+                                          "woundwort dressing", "build a bloomery furnace", "basket with a lid",
+                                          "make a lidded basket"})
+            assertEquals("UNKNOWN", classify(phrase, true), phrase);
+
+        // And the acts those intents exist for must still be those acts. This is the half that matters.
+        assertEquals("URINATE", classify("urinate"));
+        assertEquals("URINATE", classify("go and pee"));
+        assertEquals("SLEEP", classify("go to sleep"));
+        assertEquals("STRETCH", classify("stretch my legs"));
+        assertEquals("TREAT_WOUND", classify("bind the wound"));
+        assertEquals("CRAFT_WORKSTATION", classify("build a workbench"));
+        assertEquals("CRAFT_BASKET", classify("weave a basket"));
+        assertEquals("CLOSE_CONTAINER", classify("put the lid on the pot"));
+    }
 }
