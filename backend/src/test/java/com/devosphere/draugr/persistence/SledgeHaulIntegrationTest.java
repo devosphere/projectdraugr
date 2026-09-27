@@ -103,7 +103,9 @@ class SledgeHaulIntegrationTest {
         Integer maxMass = jdbc.queryForObject("SELECT max_mass_grams FROM container_properties WHERE object_id=?", Integer.class, sledge);
         assertEquals(400000, maxMass, "the sledge bed holds more than a travois");
 
-        // Being a registered draft_vehicle, a sledge + a tamed beast adds the beast's haul, exactly as the travois does.
+        // Being a registered draft_vehicle, a sledge + a tamed beast adds the beast's haul. One aurochs pulls 250 kg
+        // and the sledge bed holds 400, so the beast is the limit here and this number is unchanged by #106 — the
+        // bed starts deciding when there is more than one animal in front of it (DraftVehicleBedIntegrationTest).
         int before = items.sustainedMassCapacity(chronicle);
         tameAnAurochs(chronicle, now);
         int after = items.sustainedMassCapacity(chronicle);

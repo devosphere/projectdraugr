@@ -29,9 +29,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The pack-saddle (EPIC #100 / #102). A beast can carry as well as drag: a pack-saddle is a registered draft vehicle
- * with panniers. Proven through the public make path — craft a pack-saddle, and it comes out a container that, hitched
- * to a tamed beast, adds the beast's haul like the dragged vehicles do (with the smallest bed of them). Skips without
- * Docker.
+ * with panniers. Proven through the public make path — craft a pack-saddle, and it comes out a container that, loaded
+ * onto a tamed beast, brings home what its own bed holds: the smallest of the four, and since #106 that is a real
+ * difference rather than a decorative one. Skips without Docker.
  */
 @SpringBootTest
 class PackSaddleIntegrationTest {
@@ -101,11 +101,15 @@ class PackSaddleIntegrationTest {
         Integer maxMass = jdbc.queryForObject("SELECT max_mass_grams FROM container_properties WHERE object_id=?", Integer.class, saddle);
         assertEquals(120000, maxMass, "the pack-saddle carries a back's worth — the smallest bed");
 
-        // Hitched to a tamed beast, the pack-saddle adds the beast's haul like the dragged vehicles do.
+        // Loaded onto a tamed beast, the pack-saddle brings home what a pack-saddle holds (#106). This asserted
+        // `before + 250000` — the aurochs' whole pull, identical to the number the sledge test asserted — because
+        // the haul was gated on merely OWNING a draft vehicle and then took the team's pull entire. Two lines
+        // above, this same test reads the 120 kg bed the world has declared for a pack-saddle since V194. It is
+        // the same object in the same test: what it holds is what can be strapped to it.
         int before = items.sustainedMassCapacity(chronicle);
         tameAnAurochs(chronicle, now);
         int after = items.sustainedMassCapacity(chronicle);
-        assertEquals(before + 250000, after, "a pack-saddle on a tamed aurochs adds the aurochs' haul");
+        assertEquals(before + 120000, after, "a pack-saddle on a tamed aurochs brings home a pack-saddle's worth, not an ox's");
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
