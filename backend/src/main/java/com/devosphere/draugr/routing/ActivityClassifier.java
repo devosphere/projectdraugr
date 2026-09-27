@@ -58,7 +58,19 @@ public class ActivityClassifier {
 
     /** Whether a term appears as a whole word (or whole phrase) in already-normalised text. */
     public static boolean containsTerm(String normalised, String term) {
-        return normalised.contains(" " + term + " ");
+        // The TERM is normalised too, and that is not symmetry for its own sake (#37). The text has already had
+        // every run of punctuation collapsed to a space, so a hyphen in a keyword could never be found in it:
+        // "fire-hardened spear" was compared against "fire hardened spear" and missed, every time, for every
+        // Chronicle who typed it exactly as the catalogue spells it.
+        //
+        // Found by an audit that walked all 2,157 keywords carrying their own subject and asked which of them
+        // the matcher could actually reach. Five could not, and all five were hyphenated: "fire-hardened
+        // spear", "stone-headed club", "case-harden the breastplate", "venom-tipped spear" and "make
+        // grass-lined sandals".
+        //
+        // For a term with no punctuation normalise() returns exactly " term ", so this is the same comparison
+        // it always was; it only stops the two sides being spelled differently.
+        return normalised.contains(normalise(term));
     }
 
     /**
