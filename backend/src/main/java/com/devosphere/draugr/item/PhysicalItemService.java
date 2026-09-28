@@ -1412,6 +1412,61 @@ public class PhysicalItemService {
      * unrecognised, the first matching flora in the chunk's biome is used.
      * Season gates and tool requirements are enforced. Returns [outcome, narration].
      */
+    /** Things that grow, by every name the catalogue has for them. Kept for an hour: the flora catalogue does
+     *  not change during a sitting, and this is asked of every action a Chronicle takes. */
+    private volatile java.util.Set<String> growingThings = java.util.Set.of();
+    private volatile Instant growingThingsRead = Instant.EPOCH;
+
+    /**
+     * Words a foraging intent must never take, because another intent already does the work properly: GRAIN is
+     * the crop (HARVEST_CROP reaps it) and BARK is stripped from a standing tree (STRIP_BARK, with its tool gate).
+     * A phrase containing one of these is left alone entirely, so "gather willow bark" still reaches the act that
+     * knows how bark comes off a tree rather than becoming a handful of something else.
+     */
+    private static final java.util.Set<String> OWNED_ELSEWHERE = java.util.Set.of("grain", "bark");
+
+    /**
+     * Whether these words name something that grows (#37) — asked of the catalogue rather than of a list somebody
+     * wrote out. The classifier's forage rule carried thirty nouns, and "gather some grass" was UNKNOWN because
+     * grass was not among them, though the world grows meadow grass and it drops four different things.
+     *
+     * <p>The same shape as {@link #namesAKeptAnimal}, and for the same reason: the catalogue is the authority on
+     * what the world contains, and a hand-list beside it is a second answer that drifts.
+     */
+    public boolean namesSomethingThatGrows(String text) {
+        if (text == null || text.isBlank()) return false;
+        if (java.time.Duration.between(growingThingsRead, Instant.now()).compareTo(java.time.Duration.ofHours(1)) >= 0 || growingThings.isEmpty()) {
+            try {
+                growingThings = java.util.Set.copyOf(jdbc.queryForList(
+                    "SELECT DISTINCT phrase FROM (" +
+                    "  SELECT replace(flora_key,'_',' ') AS phrase FROM flora_definition WHERE organism_type <> 'TREE' " +
+                    "  UNION ALL SELECT regexp_replace(replace(d.item_key,'_',' '), ' (bundle|tuft|head|piece|strip|sprig|handful)$', '') FROM flora_drop d JOIN flora_definition f ON f.flora_key=d.flora_key AND f.organism_type <> 'TREE' " +
+                    "  UNION ALL SELECT lower(i.display_name) FROM flora_drop d JOIN item_definition i ON i.item_key=d.item_key JOIN flora_definition f2 ON f2.flora_key=d.flora_key AND f2.organism_type <> 'TREE'" +
+                    ") named WHERE length(phrase) >= 4", String.class));
+                growingThingsRead = Instant.now();
+            } catch (RuntimeException couldNotRead) {
+                return false; // A classifier that cannot read the catalogue holds nothing against the words.
+            }
+        }
+        String said = " " + text.toLowerCase(java.util.Locale.ROOT) + " ";
+        // Said the word at all, and the intent that owns it may have it: "gather willow bark" is bark-stripping,
+        // even though the world does grow a willow.
+        for (String owned : OWNED_ELSEWHERE) if (said.contains(" " + owned + " ") || said.contains(" " + owned + "s ")) return false;
+        for (String phrase : growingThings) {
+            if (OWNED_ELSEWHERE.stream().anyMatch(owned -> (" " + phrase + " ").contains(" " + owned + " "))) continue;
+            if (said.contains(" " + phrase + " ") || said.contains(" " + phrase + "s ")) return true;
+            // And the plain family word at the end of it (#37): the catalogue grows MEADOW grass and drops DRY
+            // grass, and a person asks for grass. A head noun is only held to be a plant when it is long enough
+            // to be unmistakable and is not a word another intent owns.
+            int space = phrase.lastIndexOf(' ');
+            if (space < 0) continue;
+            String head = phrase.substring(space + 1);
+            if (head.length() < 4 || OWNED_ELSEWHERE.contains(head)) continue;
+            if (said.contains(" " + head + " ") || said.contains(" " + head + "s ")) return true;
+        }
+        return false;
+    }
+
     @Transactional
     public String[] gatherPlant(UUID chronicle, UUID location, String actionText, Instant occurredAt) {
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
@@ -1473,10 +1528,73 @@ public class PhysicalItemService {
                 "juniper","hazel","willow","flax","hemp","withy","thatch","tuber"})
             if (lower.contains(s)) { namedTarget = s; break; }
 
+        // What the catalogue itself calls the things that grow (#37). The list above is thirty words somebody
+        // wrote out, and it is exactly why "gather dry grass" came back with six beech mast: grass is not on it,
+        // so nothing was "named", and the request fell through to best-available-food. Three faults compounded —
+        // the hand-list has no grass, the flora is called meadow_grass rather than grass, and the drop is
+        // dry_grass_bundle rather than dry grass, so neither the plant nor its yield matched the words a person
+        // would use for either.
+        //
+        // The world knows all of this: 102 plants and 126 distinct drops, each with a key and a display name. So
+        // the question is asked of the catalogue, and the hand-list is kept only as a fallback for the words it
+        // carries that the catalogue does not (bark, root, sap, tuber and the like are qualities of plants rather
+        // than names of them).
+        java.util.List<java.util.Map<String,Object>> vocabulary = jdbc.queryForList(
+            // Trees are not foraged -- gatherPlant excludes them from its candidates above -- so naming one must not
+            // produce the "none grows within reach" refusal on ground where an oak plainly stands.
+            "SELECT fd.flora_key AS flora_key, replace(fd.flora_key,'_',' ') AS phrase, CAST(NULL AS varchar) AS drop_key FROM flora_definition fd " +
+            "UNION ALL " +
+            // The unit word is how the catalogue COUNTS a thing, not what anybody calls it: "dry grass bundle"
+            // is a bundle of dry grass, and a person asks for dry grass.
+            "SELECT d.flora_key, regexp_replace(replace(d.item_key,'_',' '), ' (bundle|tuft|head|piece|strip|sprig|handful)$', ''), d.item_key FROM flora_drop d " +
+            "UNION ALL " +
+            "SELECT d.flora_key, lower(i.display_name), d.item_key FROM flora_drop d JOIN item_definition i ON i.item_key=d.item_key");
+
+        java.util.Map<String,Object> spoken = null;
+        int longest = 0;
+        for (java.util.Map<String,Object> word : vocabulary) {
+            String phrase = (String) word.get("phrase");
+            if (phrase == null || phrase.length() < 4 || phrase.length() <= longest) continue;
+            if ((" " + lower + " ").contains(" " + phrase + " ") || (" " + lower + " ").contains(" " + phrase + "s ")) {
+                spoken = word;
+                longest = phrase.length();
+            }
+        }
+        final String wantedDrop = spoken == null ? null : (String) spoken.get("drop_key");
+        final String spokenFlora = spoken == null ? null : (String) spoken.get("flora_key");
+        final String spokenPhrase = spoken == null ? null : (String) spoken.get("phrase");
+
         java.util.Optional<java.util.Map<String,Object>> named = pool.stream()
-            .filter(c -> lower.contains(((String)c.get("flora_key")).replace("_"," "))
-                || (c.get("drop_item") != null && lower.contains(((String)c.get("drop_item")).replace("_"," "))))
-            .findFirst();
+            .filter(c -> c.get("flora_key").equals(spokenFlora))
+            .findFirst()
+            // A TREE that the Chronicle named and that actually stands here. Trees are kept out of the general
+            // pool on purpose — felling and coppicing are their own acts, and "forage for plants" should never
+            // come back with acorns — but gathering fallen mast under an oak is an ordinary thing to do, and
+            // "gather acorns" was answering with an arrowhead tuber because nothing could ever match it.
+            .or(() -> java.util.Optional.ofNullable(spokenFlora).flatMap(key -> jdbc.query(
+                "SELECT fd.flora_key, fd.organism_type, fd.tool_required, fd.is_poisonous, " +
+                "  (SELECT d.item_key FROM flora_drop d WHERE d.flora_key=fd.flora_key ORDER BY d.item_key LIMIT 1) AS drop_item, " +
+                "  (SELECT i.category FROM item_definition i JOIN flora_drop d ON d.item_key=i.item_key WHERE d.flora_key=fd.flora_key ORDER BY d.item_key LIMIT 1) AS drop_category " +
+                "FROM flora_definition fd JOIN chunk_flora cf ON cf.flora_key=fd.flora_key " +
+                "WHERE fd.flora_key=? AND fd.organism_type='TREE' AND cf.chunk_id=? AND cf.quantity > 0 LIMIT 1",
+                rs -> {
+                    if (!rs.next()) return java.util.Optional.empty();
+                    java.util.Map<String,Object> row = new java.util.HashMap<>();
+                    row.put("flora_key", rs.getString(1)); row.put("organism_type", rs.getString(2));
+                    row.put("tool_required", rs.getString(3)); row.put("is_poisonous", rs.getBoolean(4));
+                    row.put("drop_item", rs.getString(5)); row.put("drop_category", rs.getString(6));
+                    return java.util.Optional.of(row);
+                }, key, location)))
+            .or(() -> pool.stream()
+                .filter(c -> lower.contains(((String)c.get("flora_key")).replace("_"," "))
+                    || (c.get("drop_item") != null && lower.contains(((String)c.get("drop_item")).replace("_"," "))))
+                .findFirst());
+
+        // Named something the world grows somewhere, but not here. That is a different answer from "nothing here
+        // is worth taking", and the Chronicle is owed the difference.
+        if (named.isEmpty() && spokenPhrase != null)
+            return new String[]{"FAILED", "You look for " + spokenPhrase + " here, but none grows within reach — "
+                + "this is the wrong ground for it."};
         if (named.isEmpty() && namedTarget != null && !wantsMushroom && !wantsBerry) {
             return new String[]{"FAILED", "You look for " + namedTarget + " here, but none grows within reach — this is the wrong ground for it. It wants damper cover, or the trees you would find it under."};
         }
@@ -1506,8 +1624,11 @@ public class PhysicalItemService {
             return new String[]{"FAILED", "You find the plant but nothing here is ready to take — wrong season or nothing ripe."};
         }
 
-        // Pick first available drop (simplest — can expand to multi-drop later)
-        java.util.Map<String,Object> drop = drops.get(0);
+        // The drop the Chronicle NAMED, where they named one (#37). Meadow grass yields dry grass, green grass,
+        // straw and thatch, and this took whichever sorted first — so asking for thatch got you dry grass, and
+        // the four drops the catalogue carefully distinguishes were one drop with three spare names.
+        java.util.Map<String,Object> drop = drops.stream()
+            .filter(d -> d.get("item_key").equals(wantedDrop)).findFirst().orElse(drops.get(0));
         String itemKey = (String) drop.get("item_key");
         int yieldMin = ((Number) drop.get("yield_min")).intValue();
         int yieldMax = ((Number) drop.get("yield_max")).intValue();
