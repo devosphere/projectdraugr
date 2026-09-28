@@ -542,6 +542,7 @@ public class ChronicleActionService {
         else if (intent == Intent.TILL_GROUND) { String[] r=items.tillGround(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.SOW) { String[] r=items.sowCrop(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.HARVEST_CROP) { String[] r=items.harvestCrop(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
+        else if (intent == Intent.JUDGE_WATER) { String[] r = judgeWater(chronicle.location()); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.LINE_GARMENT) { String[] r = items.lineGarment(chronicle.id(), text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.WATER_CROP) { String[] r = items.waterCrop(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.SCARE_BIRDS) { String[] r = items.scareBirdsFromCrop(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
@@ -2060,6 +2061,15 @@ public class ChronicleActionService {
         // churned earth and replant so the land grows quiet, and the wildlife return, sooner. A restore/replant
         // verb tied to the land, or a distinctive heal-the-land phrase.
         if(((value.contains("restore")||value.contains("replant")||value.contains("rehabilitat")||value.contains("make good"))&&(value.contains("land")||value.contains("ground")||value.contains("habitat")||value.contains("wild")||value.contains("forest")||value.contains("range")||value.contains("earth")||value.contains("here")||value.contains("this place")))||value.contains("let the land heal")||value.contains("let the ground recover")||value.contains("heal the land")||value.contains("mend the ground")||value.contains("mend the land")) return Intent.RESTORE_HABITAT;
+        // Asking WHETHER the water is safe is a question, not a drink (#37). It reached DRINK and was answered
+        // by drinking the marsh water, which is the one outcome the asker was trying to avoid. Gated on a
+        // question shape AND water, and placed before anything that drinks.
+        if((value.contains("safe to drink")||value.contains("safe water")||value.contains("clean enough")
+            ||((value.startsWith("is ")||value.startsWith("can i")||value.startsWith("will ")||value.contains("should i drink")
+                ||value.contains("how is the")||value.contains("what is the"))
+               &&(value.contains("water")||value.contains("stream")||value.contains("pool")||value.contains("spring"))
+               &&(value.contains("safe")||value.contains("clean")||value.contains("drink")||value.contains("foul")||value.contains("ill"))))
+           &&!value.contains("boil")) return Intent.JUDGE_WATER;
         // Stuff or line a garment already being worn (#37). Gated on a lining VERB plus a garment word, so
         // "gather dry grass" still gathers and "make a fur cloak" still makes one — the difference is that this
         // one is done TO something you have on.
@@ -2467,7 +2477,7 @@ public class ChronicleActionService {
         return refuse != null && refuse >= 25;
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;} }    /**     * The structured perception frame — the seam every future Simulation Agent reads
      * from. Where {@code perception} is the finished player-facing prose, this frame
      * is the machine-legible truth behind it: the raw intent and outcome, where the
@@ -2861,6 +2871,47 @@ public class ChronicleActionService {
      * <p>Neither is a punishment invented for the occasion. MAINTAIN_CAMP clears refuse and a latrine contains
      * it, so a fouled camp is always recoverable — and the water comes back with it.
      */
+    /**
+     * What can be told about this water by looking at it (#37) — and nothing more than that.
+     *
+     * <p>"is the water safe to drink" reached DRINK and was answered by drinking it: <i>"You drink from the marsh
+     * water. It eases the dryness, but it is not clean, and the gut will know it."</i> The Chronicle asked WHETHER,
+     * and the world took the risk on their behalf. Every part of the honest answer already existed —
+     * {@link #safeWaterSource} reads whether the water moves and whether the ground above it is fouled or was
+     * designated for waste, {@link #drawTreatment} reads a structure that clears a raw draw, {@link #waterNamed}
+     * says what the water is called — and none of it could be asked for without swallowing a mouthful first.
+     *
+     * <p>It judges what is <b>visible</b>: moving or standing, the state of the camp above it, and what is to hand
+     * to treat it with. It never returns a verdict on what is not visible, because a person looking at a stream
+     * cannot see what is in it — so the answer ends where certainty ends, which is at boiling.
+     */
+    private String[] judgeWater(UUID location) {
+        if (!waterInReach(location))
+            return new String[]{"FAILED", "There is no water here to judge — nothing running, nothing standing, "
+                + "and nothing built to hold any."};
+
+        String named = waterNamed(location);
+        boolean clean = safeWaterSource(location);
+        DrawTreatment through = drawTreatment(location);
+        Integer refuse = jdbc.queryForObject("SELECT COALESCE((SELECT refuse_level FROM chunk_refuse WHERE chunk_id=?),0)", Integer.class, location);
+        boolean foul = refuse != null && refuse >= FOULED_DRAW_REFUSE;
+
+        StringBuilder said = new StringBuilder("You crouch at " + named + " and look at it properly. ");
+        if (clean) said.append("It runs, and running water carries its own filth away — it is as good a draw as "
+            + "this ground offers. ");
+        else if (foul) said.append("The camp above it is in a state, and what is on that ground goes into this "
+            + "water. You would not want it as it stands. ");
+        else said.append("It lies still, with the look of water that has been sitting where it is: no current to "
+            + "carry anything off, and whatever the ground has given it is still in it. ");
+
+        if (through != null) said.append("The " + through.name() + " standing here takes the worst of it out on "
+            + "the way to the pot. ");
+        said.append(clean
+            ? "Boiled it would be beyond question; raw, it is a risk worth taking if you must."
+            : "Boiled, it would be safe enough. Raw, it is a bet against your own gut, and the odds are poor.");
+        return new String[]{"SUCCEEDED", said.toString()};
+    }
+
     private boolean safeWaterSource(UUID location) {
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
         boolean water = "RIVER_BANK".equals(biome);
