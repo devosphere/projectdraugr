@@ -90,6 +90,11 @@ class TheVerbSaysWhatWasMeantIntegrationTest {
     void pinTheClock() {
         clockWas = jdbc.queryForObject("SELECT simulated_at FROM simulation_clock WHERE id=1", Timestamp.class);
         jdbc.update("UPDATE simulation_clock SET simulated_at = TIMESTAMPTZ '2031-06-10T12:00:00Z' WHERE id=1");
+        // The body keeps pace with the clock it is moved to, or the Chronicle starves between one line and the
+        // next -- last_metabolic_update is left wherever the previous class put it, and this class resolves a
+        // dozen sentences in a row. The same reset ACoatWorthKeepingIntegrationTest has used since #128.
+        jdbc.update("UPDATE chronicle_physiology SET last_metabolic_update = (SELECT simulated_at FROM simulation_clock WHERE id=1), " +
+            "hours_without_food=0, hours_without_water=0, sleep_debt_hours=0");
     }
 
     @AfterEach
