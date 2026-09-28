@@ -475,6 +475,31 @@ public class ExaminationService {
     @Transactional(readOnly = true)
     public String[] measure(UUID chronicle, UUID location, String text) {
         String lower = text == null ? "" : text.toLowerCase(Locale.ROOT);
+
+        // How long they have been here (#37). "count the days since I woke" reached the item counter, found no
+        // item by that name, and answered "You look over what you carry, but nothing by that name is here to
+        // count." — SUCCEEDED, about the wrong question entirely. The world has known the answer since the first
+        // second of the game: the Chronicle's own CHRONICLE_AWAKENED event, against the simulation clock. A
+        // person keeping no tally still knows roughly how long they have been somewhere.
+        if ((lower.contains("day") || lower.contains("long") || lower.contains("week"))
+            && (lower.contains("woke") || lower.contains("awoke") || lower.contains("waking") || lower.contains("arrived")
+                || lower.contains("been here") || lower.contains("i have been") || lower.contains("ive been")
+                || lower.contains("since i") || lower.contains("so far"))) {
+            Double hours = jdbc.query(
+                "SELECT EXTRACT(EPOCH FROM ((SELECT simulated_at FROM simulation_clock WHERE id=1) - " +
+                "  COALESCE((SELECT MIN(ce.occurred_at) FROM chronicle_event ce WHERE ce.chronicle_id=c.id AND ce.event_type='CHRONICLE_AWAKENED'), c.arrived_at))) / 3600.0 " +
+                "FROM chronicle c WHERE c.id=?", rs -> rs.next() ? rs.getDouble(1) : null, chronicle);
+            if (hours == null) return new String[]{"FAILED", "You try to reckon it up and cannot find the beginning of it."};
+            long h = Math.max(0, Math.round(hours));
+            long days = h / 24, rest = h % 24;
+            String counted = h < 24
+                ? "It has not yet been a full day — " + (h <= 1 ? "barely an hour" : h + " hours or so") + " since you came to yourself here."
+                : "By your own reckoning it is " + days + (days == 1 ? " day" : " days")
+                  + (rest >= 1 ? " and " + rest + (rest == 1 ? " hour" : " hours") : "")
+                  + " since you came to yourself here.";
+            return new String[]{"SUCCEEDED", counted + " You keep no tally cut anywhere, so it is the count you carry in your head."};
+        }
+
         if (lower.contains("weigh") || lower.contains("heavy") || lower.contains("heft") || lower.contains("how much does") || lower.contains("mass of")) {
             Map<String, Object> item = resolveItem(chronicle, lower);
             if (item == null) return new String[]{"SUCCEEDED", "You have nothing by that name in hand to weigh."};

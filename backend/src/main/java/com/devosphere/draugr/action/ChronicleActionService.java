@@ -433,7 +433,20 @@ public class ChronicleActionService {
                 + "or on any beside it, and nobody within hail. The words go out over empty country.";
         }
         else if (intent == Intent.CONTACT_PEOPLE) { String[] r = contact.act(chronicle.id(), chronicle.location(), contactWith, contactAct, text, resolvedAt, actionId); outcome = r[0]; perception = r[1]; }
-        else if (intent == Intent.OBSERVE) perception = survey(chronicle, resolvedAt);
+        else if (intent == Intent.OBSERVE) {
+            // Said plainly, this names a thing to climb (#37). It reached the ordinary ground-level survey and
+            // reported SUCCEEDED on open grass running flat to every horizon — the Chronicle was told what they
+            // saw from up a tree that is not there. Where one does stand, the act is real and the survey is what
+            // they see from it.
+            String climbing = climbsSomething(text) ? (standingTreesHere(chronicle.location())
+                ? "You get a boot into the crook of a trunk and haul yourself up until the branches thin. "
+                : null) : "";
+            if (climbing == null) {
+                outcome = "FAILED";
+                perception = "You look for something to climb and there is nothing here that will take your weight — "
+                    + "no trunk, no standing timber, nothing above the height of your own head.";
+            } else perception = climbing + survey(chronicle, resolvedAt);
+        }
         else if (intent == Intent.MOVE) {
             // A haul tired the team in silence, which made draft gear that does not fit the animal
             // indistinguishable from gear that does (#106). This is the commoner of the two hauling boundaries:
@@ -518,7 +531,7 @@ public class ChronicleActionService {
             int quarry = metalPick ? 3 : stonePick ? 1 : 0;
             int stones=items.gatherFieldStones(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())+quarry); outcome=stones>0?"SUCCEEDED":"FAILED"; perception=stones>0?(metalPick?"You drive the pick into the ground and lever out a good load of stone, far more than bare hands could win.":"You work loose a few stones from the ground and carry them with you.")+tally(stones,"stone","stones"):"You turn over the ground for a while, then leave it undisturbed."; gatherEffectType="FIELD_STONE_GATHERED"; gatherPayloadKey="stones"; gatherCount=stones; }
         else if (intent == Intent.GATHER_BERRIES) { int berries=items.gatherWildBerries(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())); outcome=berries>0?"SUCCEEDED":"FAILED"; perception=berries>0?"You gather ripe berries from the living growth."+tally(berries,"berry","berries"):"You search the low growth carefully, then let it settle back into place."; gatherEffectType="WILD_BERRIES_GATHERED"; gatherPayloadKey="berries"; gatherCount=berries; }
-        else if (intent == Intent.GATHER_BRANCHES) { int branches=items.gatherDryBranches(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())); outcome=branches>0?"SUCCEEDED":"FAILED"; perception=branches>0?"You gather dry branches from beneath the trees."+tally(branches,"branch","branches"):"You search the leaf litter for dry wood, then leave with empty hands."; gatherEffectType="DRY_BRANCH_GATHERED"; gatherPayloadKey="branches"; gatherCount=branches; }
+        else if (intent == Intent.GATHER_BRANCHES) { int branches=items.gatherDryBranches(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())); outcome=branches>0?"SUCCEEDED":"FAILED"; perception=branches>0?(standingTreesHere(chronicle.location())?"You gather dry branches from beneath the trees.":"You work along the low scrub and the wind-broken ground, and gather what dry wood it has to give.")+tally(branches,"branch","branches"):"You search the leaf litter for dry wood, then leave with empty hands."; gatherEffectType="DRY_BRANCH_GATHERED"; gatherPayloadKey="branches"; gatherCount=branches; }
         else if (intent == Intent.GATHER_CLAY) { boolean shovel=items.hasAtLeast(chronicle.id(),"wooden_shovel",1); boolean stick=!shovel&&items.hasAtLeast(chronicle.id(),"digging_stick",1); int dig=shovel?2:(stick?1:0); int lumps=items.gatherClay(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())+dig); outcome=lumps>0?"SUCCEEDED":"FAILED"; perception=lumps>0?(shovel?"You bite the shovel deep into the bank and turn out heavy lumps of wet clay by the load.":stick?"You lever the earth open with the digging stick and prise free dense lumps of wet clay.":"You work the earth with your hands and pull free dense lumps of wet clay.")+tally(lumps,"lump","lumps"):"You search the ground for workable clay, but the earth here holds nothing useful."; gatherEffectType="CLAY_GATHERED"; gatherPayloadKey="lumps"; gatherCount=lumps; }
         else if (intent == Intent.GATHER_STONE_SLAB) { int slabs=items.gatherStoneSlab(chronicle.id(),chronicle.location(),resolvedAt); outcome=slabs>0?"SUCCEEDED":"FAILED"; perception=slabs>0?"You work broad, flat slabs of stone free from the rock and take up their considerable weight."+tally(slabs,"slab","slabs"):"You search the rock for a slab flat enough to work, but nothing here breaks away clean."; gatherEffectType="STONE_SLAB_GATHERED"; gatherPayloadKey="slabs"; gatherCount=slabs; }
         else if (intent == Intent.GATHER_PLANT) { String[] r=items.gatherPlant(chronicle.id(),chronicle.location(),text,resolvedAt); outcome=r[0]; perception=r[1]; }
@@ -1348,6 +1361,22 @@ public class ChronicleActionService {
             : " But you leave no marker and do not commit the way to memory; unless you return often, this name may fade from you.";
         return new String[]{"SUCCEEDED", "You fix a name to this place: " + name + "." + tail};
     }
+    /**
+     * Words that are the SENTENCE's furniture rather than anybody's name for anywhere (#37).
+     *
+     * <p>"name this place" contains no name at all. The fallback pattern's optional demonstrative group makes
+     * "this place" match, leaves nothing for the required tail, backtracks to "this", and captures the word
+     * "place" — so the world answered "You fix a name to this place: place." and wrote that into
+     * chronicle_named_location and the Chronicle's current zone. A confidently wrong answer, and a durable one:
+     * the place is now called place.
+     *
+     * <p>Held as a set rather than another alternative in the regex, because the regex must keep capturing these
+     * words when a real name follows them ("name this place the Long Meadow" is still the Long Meadow).
+     */
+    private static final java.util.Set<String> NOT_A_NAME = java.util.Set.of(
+        "place", "area", "spot", "ground", "here", "this", "that", "it", "them", "thing",
+        "this place", "this area", "this spot", "this ground", "the place", "the area", "the spot");
+
     private String extractDesignatedName(String text) {
         String raw = null;
         Matcher a = DESIGNATE_NAME.matcher(text);
@@ -1355,6 +1384,9 @@ public class ChronicleActionService {
         else { Matcher b = DESIGNATE_FALLBACK.matcher(text); if (b.find()) raw = b.group(1); }
         if (raw == null) return null;
         raw = raw.trim().replaceAll("[\\.\\!\\?\"']+$", "").trim();
+        // A request to name somewhere is not itself a name (#37). Refused rather than accepted, so the Chronicle
+        // is told no name formed instead of being left with a place called "place".
+        if (NOT_A_NAME.contains(raw.toLowerCase(Locale.ROOT))) return null;
         return raw.length() > 60 ? raw.substring(0, 60).trim() : raw;
     }
     private String move(ActiveChronicle chronicle, String action, UUID actionId, Instant occurredAt) {
@@ -1418,6 +1450,35 @@ public class ChronicleActionService {
      * read by the clock and by the prose, so the sentence a player reads can never disagree with the time the
      * journey took. Ground with no going recorded keeps the line it always had.
      */
+    /**
+     * Whether a tree actually stands on this ground (#37) — the same question {@code ResourceEcologyService}
+     * already asks to decide how much deadfall a chunk sheds, asked of the same rows, so the prose and the yield
+     * can never disagree about whether there is a wood here.
+     *
+     * <p>Gathering firewood said "from beneath the trees" on open grassland running flat to every horizon, which
+     * is the defect #30 named: narration must witness the world, and a wood that is not there is the plainest way
+     * of failing that. Wooded biomes carry an unrecorded natural stand, matching the deadfall rule and fellTree's
+     * lazy seeding — so a forest with no chunk_flora row yet still has trees in it, exactly as it does for yield.
+     */
+    /** Whether the words name getting UP something rather than merely looking about (#37). A bare "look around"
+     *  is not a climb; "climb a tree to look around" is, and on bare ground it is a claim the world must refuse. */
+    private static boolean climbsSomething(String text) {
+        String v = text.toLowerCase(Locale.ROOT);
+        return (v.contains("climb") || v.contains("shin up") || v.contains("get up into"))
+            && (word(v, "tree") || word(v, "trees") || v.contains("trunk") || v.contains("branches"));
+    }
+
+    private boolean standingTreesHere(UUID location) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM chunk_flora cf JOIN flora_definition fd ON fd.flora_key=cf.flora_key " +
+            "  WHERE cf.chunk_id=? AND fd.organism_type='TREE' AND cf.quantity > 0) " +
+            " OR (NOT EXISTS(SELECT 1 FROM chunk_flora cf2 JOIN flora_definition fd2 ON fd2.flora_key=cf2.flora_key " +
+            "                 WHERE cf2.chunk_id=? AND fd2.organism_type='TREE') " +
+            "     AND EXISTS(SELECT 1 FROM world_chunk wc WHERE wc.id=? AND wc.biome IN " +
+            "                ('FOREST','TEMPERATE_FOREST','MOUNTAIN','HIGHLAND','WETLAND','RIVER_BANK')))",
+            Boolean.class, location, location, location));
+    }
+
     private String wayItWalked(UUID destination) {
         String note = jdbc.query(
             "SELECT g.note FROM world_chunk c JOIN terrain_going g ON g.biome = c.biome WHERE c.id = ?",
