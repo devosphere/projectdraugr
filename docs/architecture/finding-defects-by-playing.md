@@ -86,6 +86,21 @@ Every defect this project has found is the same defect: **the world knows someth
   untested.
 - **The suite shares one `simulation_clock`.** Anything touching sight passes at noon and fails at one in the
   morning. Pin the clock (and the weather) and restore both in a `finally`.
+- **Pinning the clock is one of THREE things, and doing only the first breaks the other two.** In one session I
+  walked all three in order, each costing a CI round:
+  1. **Pin it** — or your class drifts the world and starves somebody else's fixture. (A people's elders died,
+     and a test nobody touched failed on `voices_to_stay`.)
+  2. **Date every fixture from it** — `construction_project.last_structural_update` defaults to `now()`, the
+     *wall* clock, so a structure inserted into a world pinned to 2031 arrives five years old and is worn to
+     nothing before anything looks at it.
+  3. **Let the body keep pace with it** — `chronicle_physiology.last_metabolic_update` is left wherever the
+     previous class put it, so the next action charges the Chronicle for every hour in between and it dies
+     mid-test. Surfaces as `IllegalState No living Chronicle exists`, several resolves into a test about words.
+
+  ```sql
+  UPDATE chronicle_physiology SET last_metabolic_update = (SELECT simulated_at FROM simulation_clock WHERE id=1),
+         hours_without_food=0, hours_without_water=0, sleep_debt_hours=0
+  ```
 - **A multi-day clock jump kills the Chronicle of thirst** — ask the other questions first.
 - **`chronicle_event` is immutable**; a trigger refuses to rewrite when a Chronicle woke. Move the clock instead.
 - **An annotation belongs to the method under it.** Inserting a field or a helper between `@Transactional` and
