@@ -386,7 +386,12 @@ public class WildlifeEncounterService {
         // STORAGE_AREA) is a larder to set the kill down in — home ground with a store is somewhere a carcass can
         // be brought back to without turning it into an ambush, so the draw does not follow you there.
         boolean freshKill = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM world_object w JOIN item_instance i ON i.object_id=w.id WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key IN (SELECT item_key FROM carcass_scent))", Boolean.class, chronicle));
-        if (freshKill && !hasStorageArea(chunk)) chance += 10;
+        // Unless the trail behind you has been brushed out (#37, V393). A hunter carrying a carcass home is the
+        // bait, and until now there was nothing to be done about it OUT in the country -- cooking, storing and
+        // caching all need a camp, and the risk is on the walk back. Covering the trail takes most of the draw
+        // off for a few hours; it never takes it all, because blood carries and a predator that has the scent
+        // does not need the footprints.
+        if (freshKill && !hasStorageArea(chunk)) chance += trailRecentlyHidden(chronicle, at) ? 3 : 10;
         // A camp choked with refuse (#218) carries the scent of rot on the wind and draws hungry animals in the
         // way a fresh kill does — scavengers and opportunists both, come to see what a filthy ground offers. A
         // latrine/refuse pit that keeps the camp clean takes the draw away with the filth (it drains the refuse in
@@ -710,6 +715,48 @@ public class WildlifeEncounterService {
             "JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
             "WHERE w.current_location_id=? AND ck.takes_relief AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
             "  AND w.lifecycle_state='ACTIVE')", Boolean.class, chunk));
+    }
+
+    /** How long brushing out a trail keeps a carcass quiet on the walk home — long enough to get it there. */
+    private static final int TRAIL_STAYS_HIDDEN_HOURS = 4;
+
+    /** Whether this Chronicle covered their trail recently enough for it still to be covered (#37, V393). */
+    @Transactional(readOnly = true)
+    public boolean trailRecentlyHidden(UUID chronicle, Instant at) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM chronicle c WHERE c.id=? AND c.trail_hidden_at IS NOT NULL " +
+            "  AND c.trail_hidden_at > ?::timestamptz - make_interval(hours => ?))",
+            Boolean.class, chronicle, Timestamp.from(at), TRAIL_STAYS_HIDDEN_HOURS));
+    }
+
+    /**
+     * Brush out the trail behind you (#37, V393). "cover my tracks" reached TRACK and READ tracks instead —
+     * reporting success at finding prints, when the whole point of the act is to leave fewer.
+     *
+     * <p>It is work, and it is only worth doing where there is something to hide: on open water there is no
+     * ground to work, and with nothing on you worth following the effort goes nowhere a predator cares about.
+     * Both are said rather than silently allowed, because a Chronicle who spends half an hour on this deserves to
+     * know whether it bought them anything.
+     */
+    @Transactional
+    public String[] hideTrail(UUID chronicle, UUID chunk, Instant at) {
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, chunk);
+        if ("OCEAN".equals(biome))
+            return new String[]{"FAILED", "There is no ground here to work over — only water, which keeps nothing "
+                + "and tells nothing."};
+        jdbc.update("UPDATE chronicle SET trail_hidden_at=? WHERE id=?", Timestamp.from(at), chronicle);
+        boolean carryingBlood = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
+            "JOIN item_definition d ON d.item_key=i.item_key WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' " +
+            "  AND d.category='FOOD' AND EXISTS (SELECT 1 FROM food_preservation_state f " +
+            "      WHERE f.object_id=w.id AND f.preparation_kind='RAW'))", Boolean.class, chronicle));
+        return new String[]{"SUCCEEDED", carryingBlood
+            ? "You work back along your own line, brushing the prints out with a bough and scattering the turned "
+              + "leaf litter over itself, and take to the harder ground where you can. What you are carrying still "
+              + "smells of what it was, but nothing will read your road off the ground now."
+            : "You work back along your own line, brushing the prints out with a bough and scattering the turned "
+              + "leaf litter over itself. The ground gives up less of where you went than it did — though with "
+              + "nothing on you worth following, it is a habit rather than a need."};
     }
 
     @Transactional(readOnly = true)
