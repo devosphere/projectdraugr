@@ -1070,6 +1070,11 @@ The full mechanism is built and inert-until-keyed; see [architecture/ai-integrat
 9. World remembers everything — ledgers + chronicle_discovery + chronicle_chunk_visit + location_marker + death snapshot.
 10. A definition is not canon until it is reviewed — `material_process.review_state='VERIFIED'` gates execution.
 11. Every item must have an acquisition path — `item_source`, or an explicit `item_unreachable_known` row saying why not.
+12. **A wrong answer is worse than a missing one** — and both are the same defect: the world knows something and
+    the code does not ask. The working method, the six faces it takes, the verification order, and the traps that
+    have each cost a CI round are written down in
+    [finding-defects-by-playing.md](architecture/finding-defects-by-playing.md). **Read it before a defect-hunting
+    cycle** rather than re-deriving it.
 
 ---
 
