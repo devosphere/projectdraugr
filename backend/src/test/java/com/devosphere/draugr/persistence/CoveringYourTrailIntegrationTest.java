@@ -99,7 +99,11 @@ class CoveringYourTrailIntegrationTest {
         // makes the next action charge for every hour in between. CI found it as "No living Chronicle exists"
         // four resolves into a test about words.
         jdbc.update("UPDATE chronicle_physiology SET last_metabolic_update = (SELECT simulated_at FROM simulation_clock WHERE id=1), " +
-            "hours_without_food=0, hours_without_water=0, sleep_debt_hours=0");
+            "hours_without_food=0, hours_without_water=0, sleep_debt_hours=0, " +
+            // And whole. The other method in this class runs 320 ambush rolls against a HUNTING wolf pack, and
+            // every one that lands is a real injury on a real body -- awaken() hands back the SAME Chronicle, so
+            // the routing test then died a few sentences in. A test about words should not inherit a mauling.
+            "injury_severity=0, illness_severity=0, pain_level=0, blood_loss_ml=0, energy_level=100");
     }
 
     @AfterEach
