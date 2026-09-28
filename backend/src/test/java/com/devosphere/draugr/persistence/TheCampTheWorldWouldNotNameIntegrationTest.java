@@ -64,6 +64,27 @@ class TheCampTheWorldWouldNotNameIntegrationTest {
         registry.add("spring.datasource.password", postgres::getPassword);
     }
 
+    /**
+     * The clock this class leaves behind.
+     *
+     * <p>Every action resolved here moves simulated time, and the suite shares one clock. A people whose store is
+     * empty argue about leaving and their ELDERS are the voices to stay — so a class that quietly pushes the world
+     * forward can starve the elders out of a community another class is about to ask a question of, and the
+     * failure surfaces over there, in a test nobody touched. This class pins the clock and puts it back.
+     */
+    private java.sql.Timestamp clockWas;
+
+    @org.junit.jupiter.api.BeforeEach
+    void pinTheClock() {
+        clockWas = jdbc.queryForObject("SELECT simulated_at FROM simulation_clock WHERE id=1", java.sql.Timestamp.class);
+        jdbc.update("UPDATE simulation_clock SET simulated_at = TIMESTAMPTZ '2031-06-10T12:00:00Z' WHERE id=1");
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void unpinTheClock() {
+        if (clockWas != null) jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", clockWas);
+    }
+
     @Autowired WorldGenesisService worldGenesis;
     @Autowired WorldEcologyGenesisService ecology;
     @Autowired ChronicleService chronicles;
