@@ -542,6 +542,7 @@ public class ChronicleActionService {
         else if (intent == Intent.TILL_GROUND) { String[] r=items.tillGround(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.SOW) { String[] r=items.sowCrop(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.HARVEST_CROP) { String[] r=items.harvestCrop(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
+        else if (intent == Intent.TAKE_STOCK_OF_CAMP) perception = campStocktake(chronicle.location());
         else if (intent == Intent.JUDGE_WATER) { String[] r = judgeWater(chronicle.location()); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.LINE_GARMENT) { String[] r = items.lineGarment(chronicle.id(), text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.WATER_CROP) { String[] r = items.waterCrop(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
@@ -1010,10 +1011,16 @@ public class ChronicleActionService {
         if (isle != null) s.append(isle).append(" ");
         // What stands on this ground.
         Integer sites = jdbc.queryForObject("SELECT COUNT(*) FROM ecology_site WHERE chunk_id=? AND site_category='WILDLIFE'", Integer.class, loc);
+        // NOT counted here any more: see standingHere below. Kept for the marker/site sentences that follow.
         Integer builds = jdbc.queryForObject("SELECT COUNT(*) FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE'", Integer.class, loc);
         Integer markers = jdbc.queryForObject("SELECT COUNT(*) FROM location_marker WHERE chunk_id=?", Integer.class, loc);
         Integer carcasses = jdbc.queryForObject("SELECT COUNT(*) FROM world_object WHERE current_location_id=? AND object_type='CARCASS' AND lifecycle_state='ACTIVE'", Integer.class, loc);
-        if (builds != null && builds > 0) s.append("Structures you raised stand here. ");
+        // What stands here, BY NAME (#37). This said "Structures you raised stand here." — one sentence for a
+        // windbreak and for a byre, a well, a latrine and a drying rack together, while construction_kind has
+        // carried every one of their names all along. It also counted a ruin as standing, because it asked for
+        // state='COMPLETED' and never for integrity: a collapsed hut read exactly like a sound one.
+        String standing = standingHere(loc);
+        if (!standing.isEmpty()) s.append(standing).append(" ");
         if (markers != null && markers > 0) s.append("A marker you left catches your eye, quietly confirming this is a place you have been. ");
         if (sites != null && sites > 0) s.append("The ground shows signs of living things that pass through or feed here. ");
         // Name what this ground plainly shows (#37). A spring, a clay bed, a flint field, a standing ruin are all
@@ -2061,6 +2068,17 @@ public class ChronicleActionService {
         // churned earth and replant so the land grows quiet, and the wildlife return, sooner. A restore/replant
         // verb tied to the land, or a distinctive heal-the-land phrase.
         if(((value.contains("restore")||value.contains("replant")||value.contains("rehabilitat")||value.contains("make good"))&&(value.contains("land")||value.contains("ground")||value.contains("habitat")||value.contains("wild")||value.contains("forest")||value.contains("range")||value.contains("earth")||value.contains("here")||value.contains("this place")))||value.contains("let the land heal")||value.contains("let the ground recover")||value.contains("heal the land")||value.contains("mend the ground")||value.contains("mend the land")) return Intent.RESTORE_HABITAT;
+        // Go round the camp and account for it (#37). Perception, not work. Placed before MAINTAIN_CAMP, which
+        // claims the camp with a tidying verb — taking stock is not tidying, and must not be answered by sweeping.
+        // "stock" is also the word for animals, so this needs the stocktaking PHRASE rather than the bare noun:
+        // "water the stock" and "feed the stock" are somebody else's rule and stay that way.
+        if((value.contains("take stock")||value.contains("taking stock")||value.contains("stocktake")
+            ||value.contains("what have i built")||value.contains("what have i made here")
+            ||value.contains("what stands here")||value.contains("what is standing here")
+            ||((value.contains("look over")||value.contains("go round")||value.contains("account for")||value.contains("survey"))
+               &&(value.contains("camp")||value.contains("what i have built")||value.contains("my work"))))
+           &&!value.contains("animal")&&!value.contains("beast")&&!value.contains("the herd")&&!value.contains("the flock")
+           &&!items.namesAKeptAnimal(value)) return Intent.TAKE_STOCK_OF_CAMP;
         // Asking WHETHER the water is safe is a question, not a drink (#37). It reached DRINK and was answered
         // by drinking the marsh water, which is the one outcome the asker was trying to avoid. Gated on a
         // question shape AND water, and placed before anything that drinks.
@@ -2477,7 +2495,7 @@ public class ChronicleActionService {
         return refuse != null && refuse >= 25;
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, TAKE_STOCK_OF_CAMP, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;} }    /**     * The structured perception frame — the seam every future Simulation Agent reads
      * from. Where {@code perception} is the finished player-facing prose, this frame
      * is the machine-legible truth behind it: the raw intent and outcome, where the
@@ -2734,6 +2752,72 @@ public class ChronicleActionService {
     private boolean catchmentInReach(UUID location) {
         return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind IN ('RAINWATER_CATCHMENT','WELL') AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')", Boolean.class, location));
     }
+    /**
+     * What stands on this ground, by name, with a word for anything that is failing (#37).
+     *
+     * <p>Sound work is named and left at that. Work that is coming apart is named with its state, because that is
+     * the thing a person standing in their own camp actually notices — and because the integrity that decides
+     * whether a shelter still shelters, a pen still holds and a latrine still takes anything was invisible from
+     * inside the game. A ruin (integrity 0) does not stand at all and is not listed; {@code campStocktake} names
+     * those, since going round the camp deliberately is when you would find them.
+     */
+    private String standingHere(UUID location) {
+        java.util.List<String> named = jdbc.query(
+            "SELECT lower(ck.display_name), cp.integrity_percent FROM construction_project cp " +
+            "JOIN world_object w ON w.id=cp.object_id JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
+            "WHERE w.current_location_id=? AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE' " +
+            "ORDER BY cp.integrity_percent, ck.display_name LIMIT 6",
+            (rs, row) -> {
+                int integrity = rs.getInt(2);
+                String name = rs.getString(1);
+                return integrity < 35 ? "a " + name + " that is coming apart"
+                     : integrity < 70 ? "a weathered " + name
+                     : "a " + name;
+            }, location);
+        if (named.isEmpty()) return "";
+        return "Your own work stands here: " + joinAnd(named) + ".";
+    }
+
+    /**
+     * Go round the camp and account for it (#37). "take stock of the camp" reached nothing at all, and the survey
+     * would say only that structures stood here — so a Chronicle could not find out what they had built, what state
+     * it was in, or what they had left half-finished, without reading the database.
+     *
+     * <p>Read-only, and deliberately fuller than the survey: it carries the state of each standing thing and the
+     * work still under way with how far along it is. Nothing here is new information the world did not have; it
+     * is the world's own record, said out loud.
+     *
+     * <p>It does NOT list ruins, and that is a deliberate omission rather than an oversight: the Auditor treats a
+     * completed construction at zero integrity while still active as an inconsistency, and the tick takes such a
+     * thing down in the same pass that wears it out. A "past mending" list would be prose for a state the world
+     * is not allowed to be in.
+     */
+    private String campStocktake(UUID location) {
+        java.util.List<String> sound = jdbc.query(
+            // Parenthesised, not comma'd: in a joined list "drying rack, coming apart, well, weathered, and the
+            // latrine" reads as five things rather than three.
+            "SELECT lower(ck.display_name) || CASE WHEN cp.integrity_percent < 35 THEN ' (coming apart)' " +
+            "       WHEN cp.integrity_percent < 70 THEN ' (weathered)' ELSE '' END " +
+            "FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
+            "WHERE w.current_location_id=? AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE' " +
+            "ORDER BY cp.integrity_percent, ck.display_name", (rs, row) -> rs.getString(1), location);
+        java.util.List<String> started = jdbc.query(
+            "SELECT lower(ck.display_name) || ' (' || cp.progress_percent || ' in the hundred)' " +
+            "FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
+            "WHERE w.current_location_id=? AND cp.state <> 'COMPLETED' AND w.lifecycle_state='ACTIVE' " +
+            "ORDER BY cp.progress_percent DESC, ck.display_name", (rs, row) -> rs.getString(1), location);
+
+        if (sound.isEmpty() && started.isEmpty())
+            return "You walk the ground over and there is nothing of yours on it — no shelter, no pit, no pen, "
+                 + "nothing begun. Whatever you make of this place, none of it is made yet.";
+        StringBuilder s = new StringBuilder();
+        if (!sound.isEmpty()) s.append("You go round what you have raised here: ").append(joinAnd(sound)).append(". ");
+        if (!started.isEmpty()) s.append("Still unfinished: ").append(joinAnd(started)).append(". ");
+        return s.toString().trim();
+    }
+
     /** The best standing structure here that the water is drawn through (#77, V329): its name, how much of a raw draw's risk it clears, and whether it fills vessels filtered. */
     private record DrawTreatment(String name, int clarifies, boolean filtered) {}
     private DrawTreatment drawTreatment(UUID location) {
