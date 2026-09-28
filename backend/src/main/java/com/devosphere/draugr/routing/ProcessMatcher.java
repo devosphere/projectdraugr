@@ -108,10 +108,24 @@ public class ProcessMatcher {
      *
      * @param category the classified category, or null to drop the category condition
      */
+    /**
+     * How much of a word this candidate shares with the text — the longest word of four letters or more that
+     * appears in both its keywords and the sentence. Four, because "the" and "a" are shared by everything and
+     * prove nothing about nearness.
+     */
+    private static int sharedWordLength(String normalised, Candidate c) {
+        int longest = 0;
+        for (String kw : c.keywords())
+            for (String word : kw.split("[^a-z]+"))
+                if (word.length() >= 4 && word.length() > longest
+                    && normalised.contains(" " + word) ) longest = word.length();
+        return longest;
+    }
+
     public static Result resolve(String text, String category, List<Candidate> candidates) {
         String v = ActivityClassifier.normalise(text);
         int bestLen = -1; List<Candidate> best = new ArrayList<>();
-        String nearKey = null; String gate = "NONE";
+        String nearKey = null; String gate = "NONE"; int nearShared = 0;
         for (Candidate c : candidates) {
             if (category != null && !category.equals(c.categoryKey())) continue;
             int len = -1;
@@ -119,14 +133,28 @@ public class ProcessMatcher {
                 if (ActivityClassifier.containsTerm(v, kw) && kw.length() > len) len = kw.length();
             if (len < 0) {
                 // Shares the category but answers to none of these words.
-                if ("NONE".equals(gate)) { gate = "CATEGORY"; nearKey = c.processKey(); }
+                //
+                // Which of them to record as "near" was THE FIRST ONE ITERATED, and the backlog shows what that
+                // is worth: of 51 category-gate misses recorded while playing, 44 named timber_from_log —
+                // "empty the pot", "am I freezing", "check my food stores" and "crack the bones for marrow" all
+                // pointed at making timber. A cycle reading that backlog learns nothing from it, and may be led
+                // somewhere wrong, which is worse than being told nothing.
+                //
+                // Nearest now means what it says: the candidate sharing the most letters of a word with the
+                // text. Where nothing shares a word, nothing is recorded — an honest null, which reads as "the
+                // category had things in it and none of them was about this".
+                if ("NONE".equals(gate)) gate = "CATEGORY";
+                if (!"KEYWORD".equals(gate)) {
+                    int shared = sharedWordLength(v, c);
+                    if (shared > nearShared) { nearShared = shared; nearKey = shared > 0 ? c.processKey() : null; }
+                }
                 continue;
             }
             boolean subject = false;
             for (String s : c.subjects()) if (ActivityClassifier.containsSubject(v, s)) { subject = true; break; }
             if (!subject) {
                 // Right work, right verb, wrong material — the closest kind of miss.
-                if (!"KEYWORD".equals(gate)) { gate = "KEYWORD"; nearKey = c.processKey(); }
+                if (!"KEYWORD".equals(gate)) { gate = "KEYWORD"; nearKey = c.processKey(); nearShared = Integer.MAX_VALUE; }
                 continue;
             }
             if (len > bestLen) { bestLen = len; best.clear(); best.add(c); }

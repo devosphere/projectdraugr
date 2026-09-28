@@ -157,9 +157,20 @@ class ProcessRoutingTest {
 
         // A construction process exists and the category is right, but it answers to
         // none of these words. That is a keyword gap, and cheap to close.
+        //
+        // And NOTHING is reported as near it, which is the honest answer: the category had things in it and not
+        // one of them was about this. This used to name whichever candidate iterated first, and the played
+        // backlog showed what that was worth -- 44 of 51 category-gate misses pointed at timber_from_log,
+        // including "empty the pot", "am I freezing" and "check my food stores". A backlog that points somewhere
+        // wrong is worse than one that says nothing.
         ProcessMatcher.Result keyword = RoutingFixture.diagnose("weatherproof the shell with cladding");
         assertEquals("CATEGORY", keyword.furthestGate());
-        assertEquals("reinforce_timber", keyword.nearProcessKey());
+        assertNull(keyword.nearProcessKey(), "nothing in CONSTRUCT shares a word with those words");
+
+        // But where something DOES share a word, it is named -- that is the whole point of the column.
+        ProcessMatcher.Result shared = RoutingFixture.diagnose("raise the planks into a wall");
+        assertEquals("CATEGORY", shared.furthestGate());
+        assertEquals("reinforce_timber", shared.nearProcessKey(), "the timber work is the one whose words include planks");
 
         // The right process was reached by the right verb and turned the material down.
         // Either a subject term is missing or the player meant something else entirely.
