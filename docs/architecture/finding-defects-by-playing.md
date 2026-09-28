@@ -98,6 +98,35 @@ Every defect this project has found is the same defect: **the world knows someth
   where somebody had gathered firewood, because it claimed every object called "Dry branch".
 - **Grep truncation hides call sites.** `items.workDraftBeasts` sat past column 140 on the MOVE line, so a fix
   wired only to TRAVEL was correct and invisible in play.
+- **A `queryForObject` that assumes one row** fails the first time the suite runs in a different order. Ask by the
+  object id the fixture created, not by item key and owner — by then the Chronicle owns two of them.
+- **An assertion that assumes time stands still.** "Asking must not slake thirst" compared `hours_without_water`
+  for equality; an action takes simulated minutes and a body goes on drying out, so it crept 5.0000 → 5.0500.
+  Assert the **direction**, and put the body in a known state first or the assertion is vacuous.
+- **`chunk_refuse` is drained against SIMULATED time**, so a fixture row stamped `now()` is drained to nothing the
+  moment the world turns. Date it from `simulation_clock`. Same family as `construction_project.last_structural_update`.
+- **A rebase can be the reason CI never ran.** Two branches took a push, showed the new head, and produced no
+  workflow run at all; rebasing them onto `development` and force-pushing started one immediately. If `gh pr
+  checks` says "no checks" for more than a few minutes, rebase rather than wait.
+
+---
+
+## Two rules of the world that a fixture must obey
+
+Both are enforced by `PersistentStateAuditor`, and nearly every integration test asserts `auditor.consistent()`,
+so breaking one fails far more than your own test.
+
+- **A destroyed object holds no live location or owner**, and records how it ended. Setting
+  `lifecycle_state='DESTROYED'` alone fails with *"N destroyed object(s) still have an active location or owner"*.
+  Mirror `retire()`: set `destroyed_at`, `destroyed_location_id`, `destroyed_cause`, and NULL both live columns.
+- **A completed construction at zero integrity while ACTIVE is an inconsistency** — no exemption. The tick takes
+  such a thing down in the same pass that wears it out, and the only kinds excluded from that sweep (workstations)
+  never weather either, so the state is unreachable in play.
+
+The second one cost more than a fixture. I had written a *"Past mending"* branch into the camp stocktake and a
+test that manufactured a ruin to prove it, and the Auditor was right: **it was prose for a state the world is not
+allowed to be in**, which is the catalogue token in another form. Both were deleted. Before writing a sentence
+about a state, check that the world can be in it.
 
 ---
 
