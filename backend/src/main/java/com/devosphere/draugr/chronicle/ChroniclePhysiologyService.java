@@ -98,7 +98,9 @@ public class ChroniclePhysiologyService {
             // garments is capped at 80%, so no stack of rags makes a body invulnerable —
             // clothing buys time against the cold, it does not repeal it.
             Integer worn = jdbc.queryForObject(
-                "SELECT COALESCE(SUM(d.insulation_value),0) FROM equipment_attachment e " +
+                // Plus whatever THIS garment has been stuffed or lined with (#37, V391). A property of the
+                // object, not of its kind: these boots are packed with dry grass and those ones are not.
+                "SELECT COALESCE(SUM(d.insulation_value + COALESCE(i.lining_bonus,0)),0) FROM equipment_attachment e " +
                 "JOIN item_instance i ON i.object_id=e.item_id " +
                 "JOIN item_definition d ON d.item_key=i.item_key " +
                 "JOIN world_object w ON w.id=e.item_id AND w.lifecycle_state='ACTIVE' " +
