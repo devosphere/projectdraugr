@@ -1956,11 +1956,79 @@ public class PhysicalItemService {
                 return new String[]{"FAILED", whichOfThese(workable.isEmpty() ? resolved.tied() : workable, workable.isEmpty())};
             }
         }
+        // The words must have asked for WORK, not merely named a thing the world can make (#37).
+        //
+        // "wash the bowl" reached "carve a wooden bowl"; "break the ice on the trough" reached "carve a wooden
+        // trough"; "shield the fire from the wind" reached "build a war shield". The matcher agrees on category,
+        // keyword and subject — and none of those three is the VERB. 1,317 of the catalogue's 2,552 verified
+        // keywords are bare nouns, so any sentence containing one of those nouns can reach the making of it,
+        // whatever the sentence was doing to it. Measured: six of sixteen such sentences did.
+        // Returned as the ordinary MISS, not as a process failure: ChronicleActionService reads this exact
+        // opening to tell "a process ran and could not" from "no process was meant", and falls the action through
+        // to the witness line for the second. Washing a bowl is not a failed carving; it is a thing the world does
+        // not know how to do.
+        if (key != null && sentenceMeantSomethingElse(actionText, key)) key = null;
         if (key != null) return executeProcess(chronicle, location, key, actionText, at);
         // A deterministic miss. The AI Procedure Interpreter may compose this from existing processes
         // (DR-0021), but that orchestration lives in ChronicleActionService where the AI seam is; here
         // the world simply does not yet know how, and says so.
         return new String[]{"FAILED", "You turn the material over in your hands, but no way to work it into what you meant comes to you here. Whatever that would take, it is not a thing your hands find on their own."};
+    }
+
+    /** The verbs that mean MAKING. A sentence carrying one of these is asking for work, whatever else it says. */
+    private static final java.util.Set<String> MAKING_VERBS = java.util.Set.of(
+        "make", "craft", "build", "carve", "knap", "weave", "sew", "shape", "cut", "split", "dry", "smoke",
+        "salt", "boil", "grind", "render", "tan", "fire", "forge", "smelt", "cast", "haft", "lash", "twist",
+        "braid", "press", "brew", "bake", "cook", "assemble", "work", "prepare", "dress", "scrape", "flesh",
+        "char", "burn", "melt", "mix", "pour", "raise", "dig", "plait", "spin", "stitch", "roll", "fold",
+        "temper", "quench", "polish", "sharpen", "hollow", "bore", "drill", "peel", "strip", "pound", "crush",
+        "mill", "sift", "knead", "churn", "ferment", "steep", "infuse", "distil", "wind", "coil", "trim",
+        "fit", "join", "pin", "bind", "rive", "whittle", "turn", "fashion", "construct", "put together");
+
+    /**
+     * Whether these words asked for something OTHER than making the thing they name (#37).
+     *
+     * <p>The matcher settles category, keyword and subject, and not one of those is the verb — so a bare-noun
+     * keyword is reachable from any sentence containing the noun. "wash the bowl" reached <i>carve a wooden
+     * bowl</i>; "break the ice on the trough" reached <i>carve a wooden trough</i>.
+     *
+     * <p>The test is deliberately conservative, and mostly asks the DATA rather than a list:
+     * <ul>
+     *   <li>a sentence with no leading verb at all is left alone, because that is how the plain family word
+     *       reaches its family — "a poultice", "a bowl" — which is a thing this project worked to get;</li>
+     *   <li>a sentence whose verb is a MAKING verb is left alone;</li>
+     *   <li>a sentence whose verb appears in the matched process's OWN keywords is left alone, which is what
+     *       keeps "break the flint" reaching the knapping that declares "break";</li>
+     *   <li>only a sentence whose verb is none of those, against a keyword that carries no verb of its own, is
+     *       refused — and it is refused honestly rather than answered with the wrong act.</li>
+     * </ul>
+     */
+    private boolean sentenceMeantSomethingElse(String actionText, String processKey) {
+        String said = actionText == null ? "" : actionText.toLowerCase(java.util.Locale.ROOT).trim();
+        if (said.isEmpty()) return false;
+        String verb = said.split("[^a-z]+")[0];
+        if (verb.isEmpty() || MAKING_VERBS.contains(verb)) return false;
+
+        // What this process calls itself. If the verb is anywhere in its own vocabulary, the words fit it.
+        java.util.List<String> keywords = jdbc.queryForList(
+            "SELECT lower(keywords) FROM material_process WHERE process_key=?", String.class, processKey);
+        String vocabulary = keywords.isEmpty() ? "" : keywords.get(0);
+        if ((" " + vocabulary.replace(',', ' ') + " ").contains(" " + verb + " ")) return false;
+
+        // What is left is a sentence that opens with an ordinary verb this process has never heard of, against a
+        // thing the process happens to name. That is a sentence about the object, not a request to make one.
+        return isAPlainVerb(verb);
+    }
+
+    /** Whether a word is a verb a person would use for an ordinary act — as against a noun or an article. Kept
+     *  short deliberately: a word that is not clearly a verb leaves the sentence alone. */
+    private static boolean isAPlainVerb(String word) {
+        return java.util.Set.of("wash", "clean", "rinse", "break", "smash", "shield", "protect", "cover",
+            "clear", "carry", "bring", "hang", "move", "shift", "empty", "fill", "open", "close", "throw",
+            "put", "lift", "drop", "sit", "look", "smell", "listen", "count", "wear", "ride", "feed", "water",
+            "check", "test", "find", "search", "follow", "read", "eat", "drink", "sleep", "rest", "walk",
+            "climb", "swim", "wait", "watch", "guard", "hide", "bury", "mourn", "thank", "sing", "shout")
+            .contains(word);
     }
 
     /**
