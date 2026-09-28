@@ -403,7 +403,7 @@ public class ChronicleActionService {
         // Light (#75): fine sight-work — reading, writing, sketching, close examination, measuring — cannot be
         // done in the dark by feel alone. A fire in reach lights it for free; otherwise a portable light (a
         // rushlight, a tallow candle, or an oil lamp burning fish oil) is lit and spent to see the work.
-        if (isSightWork(intent) && tooDarkForFineWork(chronicle.location(), resolvedAt) && !fireInReach(chronicle.location()) && !items.consumePortableLight(chronicle.id(), resolvedAt)) {
+        if (isSightWork(intent, text) && tooDarkForFineWork(chronicle.location(), resolvedAt) && !fireInReach(chronicle.location()) && !items.consumePortableLight(chronicle.id(), resolvedAt)) {
             outcome = "FAILED";
             // Say which of the two it was. A Chronicle standing in a gale with a pouch full of candles is not
             // short of light — the weather is taking it — and being told so is what points at the lantern cover.
@@ -2152,6 +2152,10 @@ public class ChronicleActionService {
         // "read the ground/tracks" already resolved to TRACK above.
         if(word(value,"read")||word(value,"reread")||word(value,"peruse")||word(value,"consult")||value.contains("study the writing")||value.contains("study the tablet")||value.contains("study the page")||value.contains("study the journal")||value.contains("unfold and read")||value.contains("check the contents")||((value.contains("review")||value.contains("study"))&&(value.contains("tablet")||value.contains("journal")||value.contains("page")||value.contains("record")||value.contains("writing")||value.contains("document")||value.contains("note")||value.contains("inscription")))) return Intent.READ;
         // Estimation (#65 measure): weigh/count/pace-out/depth. Word-boundary the short verbs so "account"⊅count.
+        // "how long have I been here" is the plainest way to ask it and reached nothing at all: the rule below
+        // wants a measuring word, and that sentence has none (#37). Gated on the same elapsed-time shape the
+        // answer itself reads, so it takes nothing that was not already about time.
+        if(reckonsElapsedTime(value)) return Intent.MEASURE;
         if(value.contains("measure")||value.contains("pace out")||value.contains("pace off")||word(value,"weigh")||value.contains("how heavy")||word(value,"heft")||value.contains("how many")||word(value,"count")||word(value,"tally")||value.contains("how far")||value.contains("how deep")||value.contains("test the depth")||value.contains("estimate the distance")||value.contains("gauge")) return Intent.MEASURE;
         if(value.contains("refine")||value.contains("improve")||value.contains("upgrade")||value.contains("revise")||value.contains("enhance")||(value.contains("add")&&value.contains("holder"))) return Intent.REFINE;
         if(value.contains("designate")||value.contains("christen")||((value.contains("name")||value.contains("call")||value.contains("establish")||value.contains("found")||value.contains("mark"))&&(value.contains("this place")||value.contains("this area")||value.contains("this spot")||value.contains("this location")||value.contains("here as")||value.contains("this as")||value.contains("this the")))) return Intent.DESIGNATE;
@@ -2791,11 +2795,27 @@ public class ChronicleActionService {
             Boolean.class, location));
     }
     /** Intents that are fine, close, sight-dependent work — impossible in the dark without a light (#75). */
-    private static boolean isSightWork(Intent intent) {
+    private static boolean isSightWork(Intent intent, String text) {
+        // Reckoning up how long you have been somewhere is not sight work (#37). MEASURE covers weighing, counting
+        // and sounding a depth, which all want light -- and, since act nine, the question "how long have I been
+        // here", which wants only the count a person carries in their head. Gated on the intent alone, that
+        // question was refused in the dark with "it is too dark to see the fine of it", which is nonsense: you do
+        // not need a candle to know it has been about a week.
+        if (intent == Intent.MEASURE && reckonsElapsedTime(text)) return false;
         return switch (intent) {
             case WRITE, EDIT_DOCUMENT, READ, EXAMINE, ANALYZE, INVESTIGATE, MEASURE, SKETCH_MAP -> true;
             default -> false;
         };
+    }
+
+    /** Whether these words ask how long, rather than how many or how heavy. Mirrors the branch in
+     *  {@link ExaminationService#measure} that answers it, so the gate and the answer agree about which it is. */
+    private static boolean reckonsElapsedTime(String text) {
+        String v = text == null ? "" : text.toLowerCase(Locale.ROOT);
+        return (v.contains("day") || v.contains("long") || v.contains("week"))
+            && (v.contains("woke") || v.contains("awoke") || v.contains("waking") || v.contains("arrived")
+                || v.contains("been here") || v.contains("i have been") || v.contains("ive been")
+                || v.contains("since i") || v.contains("so far"));
     }
     /** The refuse level at which a camp is visibly choked and its water is no longer worth calling clean. */
     private static final int FOULED_DRAW_REFUSE = 40;

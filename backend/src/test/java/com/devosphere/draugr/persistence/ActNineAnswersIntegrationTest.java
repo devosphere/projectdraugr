@@ -185,6 +185,16 @@ class ActNineAnswersIntegrationTest {
                 () -> "and the answer is the count the world has been keeping: " + days.perception());
             assertFalse(days.perception().contains("nothing by that name"),
                 () -> "not a report about carried items, which is what it used to say: " + days.perception());
+
+            // And in the dark. MEASURE is sight work — weighing, counting, sounding a depth all want light — but
+            // reckoning up how long you have been somewhere wants only the count you carry in your head. CI found
+            // this by running at two in the morning and being told "it is too dark to see the fine of it", which
+            // is nonsense: you do not need a candle to know it has been about a week.
+            jdbc.update("UPDATE simulation_clock SET simulated_at = date_trunc('day', simulated_at) + interval '2 hours' WHERE id=1");
+            ChronicleActionService.ActionResult atNight = actions.resolve("how long have I been here");
+            assertEquals("SUCCEEDED", atNight.outcome(), () -> "the dark does not stop you counting days: " + atNight.perception());
+            assertTrue(atNight.perception().contains("came to yourself"),
+                () -> "and the answer is the same answer: " + atNight.perception());
         } finally {
             jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", wasAt);
             jdbc.update("UPDATE world_weather SET weather_kind=?", wasWeather);
