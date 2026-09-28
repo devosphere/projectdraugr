@@ -2491,8 +2491,22 @@ public class PhysicalItemService {
     @Transactional
     public String[] harvestCrop(UUID chronicle, UUID location, Instant at) {
         java.util.Map<String,Object> crop = jdbc.query(
-            "SELECT id, sown_at, maturity_days, tilled, grazed, (weeded_at IS NOT NULL) AS weeded FROM crop_stand WHERE chunk_id=? AND harvested=false ORDER BY sown_at LIMIT 1 FOR UPDATE",
-            rs -> rs.next() ? java.util.Map.of("id", rs.getObject(1, UUID.class), "sown", rs.getTimestamp(2).toInstant(), "days", rs.getInt(3), "tilled", rs.getBoolean(4), "grazed", rs.getBoolean(5), "weeded", rs.getBoolean(6)) : null, location);
+            "SELECT id, sown_at, maturity_days, tilled, grazed, (weeded_at IS NOT NULL) AS weeded, (watered_at IS NOT NULL) AS watered, birds_scared_at FROM crop_stand WHERE chunk_id=? AND harvested=false ORDER BY sown_at LIMIT 1 FOR UPDATE",
+            rs -> {
+                if (!rs.next()) return null;
+                java.util.Map<String,Object> row = new java.util.HashMap<>();
+                row.put("id", rs.getObject(1, UUID.class));
+                row.put("sown", rs.getTimestamp(2).toInstant());
+                row.put("days", rs.getInt(3));
+                row.put("tilled", rs.getBoolean(4));
+                row.put("grazed", rs.getBoolean(5));
+                row.put("weeded", rs.getBoolean(6));
+                row.put("watered", rs.getBoolean(7));
+                // Map.of refuses a null value, and a stand nobody scared birds off has none — which is exactly the
+                // case this reads, so the row is a HashMap.
+                row.put("birdsScaredAt", rs.getTimestamp(8) == null ? null : rs.getTimestamp(8).toInstant());
+                return row;
+            }, location);
         if (crop == null) return new String[]{"FAILED", "There is no crop growing here to reap."};
         Instant ripe = ((Instant) crop.get("sown")).plus(java.time.Duration.ofDays((int) crop.get("days")));
         if (at.isBefore(ripe))
@@ -2511,13 +2525,25 @@ public class PhysicalItemService {
         // extra head over one left to itself. The reward for returning to the field to work it across the season.
         boolean weeded = (boolean) crop.get("weeded");
         if (weeded) base += 1;
+        // A stand grown on dry ground and never watered fills out thinner (#37/#165). The same moisture that decides
+        // how warm the body is here and whether a well reaches the table decides whether the roots got enough; the
+        // answer to it is carrying water, which is why the penalty lifts for a stand that was watered. On damp
+        // ground it never applies, and waterCrop refuses there rather than banking a bonus nobody earned.
+        Integer moisture = jdbc.queryForObject("SELECT COALESCE(moisture, 500) FROM world_chunk WHERE id=?", Integer.class, location);
+        boolean thirsted = moisture != null && moisture < GROUND_DRY_ENOUGH_TO_WANT_WATERING && !((boolean) crop.get("watered"));
+        if (thirsted) base = Math.max(2, base - 2);
         // The small life working this ground fills the stand out (#162/#74). Bees carry the pollen a flowering crop
         // needs to set; worms open and enrich the soil it stands in. Declared on every colony kind and read by
         // nothing, so keeping bees beside a plot did exactly as much for the harvest as keeping none.
         int pollination = pollinationBonusAt(location, at);
         if (pollination >= 20) base += 2; else if (pollination >= 10) base += 1;
         long daysLate = java.time.Duration.between(ripe, at).toDays();
-        boolean shattering = daysLate > CROP_FULL_YIELD_DAYS;
+        // Keeping the birds off buys back part of the clean window (#37/#165) — the shattering rule already blamed
+        // them, and there was no way to do anything about it. It buys TIME, not grain: the window widens while
+        // somebody keeps walking the plot, and grain already shattered onto the ground is gone whatever is shouted.
+        Instant scared = (Instant) crop.get("birdsScaredAt");
+        boolean kept = scared != null && !scared.isBefore(ripe) && java.time.Duration.between(scared, at).toDays() <= BIRDS_STAY_OFF_DAYS;
+        boolean shattering = daysLate > CROP_FULL_YIELD_DAYS + (kept ? BIRDS_STAY_OFF_DAYS : 0);
         int heads = shattering ? Math.max(2, base / 2) : base;
         // The harvest takes from the soil — the field's fertility falls, to be won back only by fallow rest.
         depleteFertility(location, at);
@@ -2549,6 +2575,81 @@ public class PhysicalItemService {
             ? "You work down the rows again, pulling the weeds that have crept back in. The stand stands clean, the grain with room to fill."
             : "You work down the rows, pulling the weeds crowding the young grain and loosening the soil around the stems. The stand stands clean, given the room to fill out its heads."};
     }
+
+    /**
+     * Below this, the ground is dry enough that a stand wants water carried to it — the same moisture scale that
+     * decides how warm the body is where it stands (#709) and whether a well reaches the table (#726).
+     *
+     * <p>MEASURED, not chosen. At 450 this caught <b>50 of the world's 86 grassland chunks</b> — more than half of
+     * all ordinary farmland would carry a permanent penalty unless somebody hauled water to it, which is a silent
+     * rebalancing of every field in the game rather than a drought. CI found it the honest way: it erased the
+     * difference an existing test asserts between a dunged field and a bare one, because two penalties of two and
+     * a floor of two leave nothing to tell them apart. Those three fields sit at 394, 405 and 441.
+     *
+     * <p>At 350 it catches 16 of 86 grassland, 8 of 100 highland, 4 of 51 wetland and 1 of 141 forest: dry
+     * COUNTRY, where carrying water is the difference, and ordinary fields left alone. The well keeps 450 because
+     * it asks a different question — how deep the water table is, not how dry the topsoil is.
+     */
+    private static final int GROUND_DRY_ENOUGH_TO_WANT_WATERING = 350;
+
+    /**
+     * Carry water to a growing stand (#37/#165). The field reckoned six things — the tilled seedbed, the soil's
+     * fertility, whether the animals got in, whether it was weeded, what the bees did for it, how late it was cut —
+     * and not this one, though it is where most of a dry season's work goes. "water the seedlings" reached nothing
+     * at all.
+     *
+     * <p>It matters where it would matter. On ground that is damp of itself there is nothing for a bucket to add,
+     * and the refusal says so rather than quietly banking a bonus. On dry ground it is the difference between a
+     * thin stand and a full one, which is read at the harvest.
+     *
+     * <p>Wants water within reach of the plot — this is hauling water, not wishing it. A well counts (#726),
+     * which is the whole point of sinking one on dry ground: it is what makes a dry plot workable at all.
+     */
+    @Transactional
+    public String[] waterCrop(UUID chronicle, UUID location, Instant at) {
+        java.util.Map<String,Object> crop = jdbc.query(
+            "SELECT id, (watered_at IS NOT NULL) AS watered FROM crop_stand WHERE chunk_id=? AND harvested=false ORDER BY sown_at LIMIT 1 FOR UPDATE",
+            rs -> rs.next() ? java.util.Map.of("id", rs.getObject(1, UUID.class), "watered", rs.getBoolean(2)) : null, location);
+        if (crop == null) return new String[]{"FAILED", "There is no crop growing here to water."};
+        Integer moisture = jdbc.queryForObject("SELECT COALESCE(moisture, 500) FROM world_chunk WHERE id=?", Integer.class, location);
+        if (moisture != null && moisture >= GROUND_DRY_ENOUGH_TO_WANT_WATERING)
+            return new String[]{"FAILED", "You stoop to the rows and find the soil already dark and damp between the "
+                + "stems. This ground holds its own water; carrying more to it would only tire you."};
+        if (!waterToWorkWith(location))
+            return new String[]{"FAILED", "The rows want water and there is none to give them: no stream, no spring, "
+                + "no standing water and no well within reach of this ground to carry any from."};
+        jdbc.update("UPDATE crop_stand SET watered_at=? WHERE id=?", java.sql.Timestamp.from(at), crop.get("id"));
+        return new String[]{"SUCCEEDED", ((boolean) crop.get("watered"))
+            ? "You carry water down the rows again and pour it in at the stems, where it will reach the roots rather than stand on the surface and go."
+            : "You carry water to the plot and work along the rows, pouring it in close at the stems. The dry soil takes it slowly, then darkens."};
+    }
+
+    /**
+     * Drive the birds off a standing crop (#37/#165). The harvest prose has always said "the birds have been at
+     * it" about a stand cut late — and there was no way to do anything about the birds. "scare the birds off the
+     * crop" reached nothing.
+     *
+     * <p>What it buys is time, not grain: keeping them off extends the clean window, and grain that has already
+     * shattered onto the ground is gone whatever anybody shouts. A stand still green has nothing on it they want.
+     */
+    @Transactional
+    public String[] scareBirdsFromCrop(UUID chronicle, UUID location, Instant at) {
+        java.util.Map<String,Object> crop = jdbc.query(
+            "SELECT id, sown_at, maturity_days FROM crop_stand WHERE chunk_id=? AND harvested=false ORDER BY sown_at LIMIT 1 FOR UPDATE",
+            rs -> rs.next() ? java.util.Map.of("id", rs.getObject(1, UUID.class), "sown", rs.getTimestamp(2).toInstant(), "days", rs.getInt(3)) : null, location);
+        if (crop == null) return new String[]{"FAILED", "There is no crop standing here for anything to be at."};
+        Instant ripe = ((Instant) crop.get("sown")).plus(java.time.Duration.ofDays((int) crop.get("days")));
+        if (at.isBefore(ripe.minus(java.time.Duration.ofDays(7))))
+            return new String[]{"FAILED", "The stand is still green, and there is nothing in it yet that a bird "
+                + "would cross a field for. They are working the open ground instead."};
+        jdbc.update("UPDATE crop_stand SET birds_scared_at=? WHERE id=?", java.sql.Timestamp.from(at), crop.get("id"));
+        return new String[]{"SUCCEEDED", "You walk the plot shouting and clapping, and they go up off the heads in a "
+            + "loose cloud and settle in the trees to wait you out. While you keep coming back, they take less."};
+    }
+
+    /** How long the birds stay off a stand after being driven from it — and so how much of the clean window
+     *  walking the plot buys back. Shorter than the window itself: it delays the loss, it does not cancel it. */
+    private static final int BIRDS_STAY_OFF_DAYS = 5;
 
     /** How long a ripe stand holds before it goes over — three weeks past its season, then the heads shatter and the birds have it. */
     private static final int CROP_SPOIL_WINDOW_DAYS = 21;

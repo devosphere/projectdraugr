@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Method;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 /**
  * Regression cover for intent classification, driven by defects found in live E2E.
@@ -70,6 +71,43 @@ class IntentClassificationRegressionTest {
      * rule needs BOTH a tending verb and an animal — and the danger is not that it fails to match, it is that it
      * quietly steals the two phrases that were already spoken for. Both directions asserted.
      */
+    /**
+     * #37/#165 watering a crop and driving birds off it. Both were UNKNOWN in act nine — a camp in its second
+     * week, where a farmer spends most of the season on exactly these two things.
+     *
+     * <p>The danger is not that they fail to match. FEED_ANIMAL has claimed "water the" since #100, and it claims
+     * it together with an animal noun; the crop rule claims it together with a crop noun. Both directions are
+     * asserted, because a rule widened to catch one phrase reliably steals another.
+     */
+    @Test void wateringACropDoesNotStealWateringTheStock() throws Exception {
+        assertEquals("WATER_CROP", classify("water the seedlings"));
+        assertEquals("WATER_CROP", classify("water the crop"));
+        assertEquals("WATER_CROP", classify("water the plot"));
+        assertEquals("WATER_CROP", classify("water the rows"));
+        assertEquals("WATER_CROP", classify("irrigate the field"));
+        assertEquals("WATER_CROP", classify("carry water to the barley"));
+        // The ones it must not take: watering stock is FEED_ANIMAL and has been since #100.
+        assertEquals("FEED_ANIMAL", classify("water the animals"));
+        assertEquals("FEED_ANIMAL", classify("water the beasts"));
+        assertEquals("FEED_ANIMAL", classify("water the stock"));
+        assertEquals("FEED_ANIMAL", classify("water the herd"));
+        // Nor the water a person handles for themselves.
+        assertEquals("COLLECT_WATER", classify("collect water"));
+        assertEquals("BOIL_WATER", classify("boil some water"));
+        assertEquals("WEED_CROP", classify("tend the crop"));
+    }
+
+    /** #37/#165 the birds. The harvest prose has always blamed them for a stand cut late; this is the answer to
+     *  it, and it must not take the wildlife a Chronicle drives off for other reasons. */
+    @Test void drivingBirdsOffACropIsNotDrivingOffWildlife() throws Exception {
+        assertEquals("SCARE_BIRDS", classify("scare the birds off the crop"));
+        assertEquals("SCARE_BIRDS", classify("chase the crows off the field"));
+        assertEquals("SCARE_BIRDS", classify("keep the rooks off the grain"));
+        assertEquals("SCARE_BIRDS", classify("shoo the sparrows off the seedlings"));
+        // Not a crop, so not this: a bird driven off elsewhere is somebody else's rule or nobody's.
+        assertNotEquals("SCARE_BIRDS", classify("scare the wolf off"));
+        assertNotEquals("SCARE_BIRDS", classify("hunt the birds"));
+    }
     @Test void tendingAnAnimalDoesNotStealTendingACropOrTreatingAWound() throws Exception {
         assertEquals("TEND_ANIMAL", classify("tend the sick goat"));
         assertEquals("TEND_ANIMAL", classify("treat the sick animal"));

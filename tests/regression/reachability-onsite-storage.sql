@@ -26,15 +26,18 @@ INSERT INTO item_instance (object_id,item_key,condition_state) VALUES
 INSERT INTO container_properties (object_id,max_mass_grams,max_volume_ml) VALUES
  ('00000000-0000-0000-0000-0000000000b0',500000,500000),
  ('00000000-0000-0000-0000-0000000000d0',500000,500000);
--- 5 dry_branch inside the bin (contents are owned BY the bin — how the game models containment)
+-- 5 dry_branch inside the bin. Scoped to THESE five ids: this read `WHERE display_name='Dry branch'`,
+-- which sweeps every branch in the world, so the fixture broke on any database where somebody had
+-- gathered firewood (gatherDryBranches names them the same thing) -- a guard that only holds on a
+-- world nobody has played in is a guard with a hole in it. (contents are owned BY the bin — how the game models containment)
 INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES
  ('00000000-0000-0000-0000-0000000000b1','ITEM','Dry branch','00000000-0000-0000-0000-0000000000b0'),
  ('00000000-0000-0000-0000-0000000000b2','ITEM','Dry branch','00000000-0000-0000-0000-0000000000b0'),
  ('00000000-0000-0000-0000-0000000000b3','ITEM','Dry branch','00000000-0000-0000-0000-0000000000b0'),
  ('00000000-0000-0000-0000-0000000000b4','ITEM','Dry branch','00000000-0000-0000-0000-0000000000b0'),
  ('00000000-0000-0000-0000-0000000000b5','ITEM','Dry branch','00000000-0000-0000-0000-0000000000b0');
-INSERT INTO item_instance (object_id,item_key,condition_state) SELECT id,'dry_branch','SOUND' FROM world_object WHERE display_name='Dry branch';
-INSERT INTO item_containment (item_id,container_id) SELECT id,'00000000-0000-0000-0000-0000000000b0' FROM world_object WHERE display_name='Dry branch';
+INSERT INTO item_instance (object_id,item_key,condition_state) SELECT id,'dry_branch','SOUND' FROM world_object WHERE id IN ('00000000-0000-0000-0000-0000000000b1','00000000-0000-0000-0000-0000000000b2','00000000-0000-0000-0000-0000000000b3','00000000-0000-0000-0000-0000000000b4','00000000-0000-0000-0000-0000000000b5');
+INSERT INTO item_containment (item_id,container_id) SELECT id,'00000000-0000-0000-0000-0000000000b0' FROM world_object WHERE id IN ('00000000-0000-0000-0000-0000000000b1','00000000-0000-0000-0000-0000000000b2','00000000-0000-0000-0000-0000000000b3','00000000-0000-0000-0000-0000000000b4','00000000-0000-0000-0000-0000000000b5');
 -- a stone_knife on the rack
 INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES ('00000000-0000-0000-0000-0000000000e0','ITEM','Stone knife','00000000-0000-0000-0000-0000000000d0');
 INSERT INTO item_instance (object_id,item_key,condition_state) VALUES ('00000000-0000-0000-0000-0000000000e0','stone_knife','SOUND');
