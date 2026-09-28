@@ -121,14 +121,25 @@ class TheCampTheWorldWouldNotNameIntegrationTest {
             "WHERE current_location_id=? AND object_type='CONSTRUCTION'", where(chronicle));
     }
 
+    /**
+     * Raise a structure here, dated by the SIMULATED clock.
+     *
+     * <p>{@code construction_project.last_structural_update} defaults to {@code now()} — the wall clock — and the
+     * decay pass wears a structure down by the days between that and simulated time. This class pins the world to
+     * June 2031, so a fixture stamped with the wall clock arrives FIVE YEARS OLD and is driven straight to zero
+     * integrity before it is ever looked at: the survey then correctly reports nothing standing, and the test
+     * fails on its own assertions. Which is what it did, the moment the clock pin was added.
+     */
     private void raise(UUID chronicle, String kind, String name, String state, int progress, int integrity) {
         UUID id = UUID.randomUUID();
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CONSTRUCTION',?,?)", id, name, where(chronicle));
         if ("COMPLETED".equals(state))
-            jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,integrity_percent,completed_at) VALUES (?,?,?,?,?,now())",
+            jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,integrity_percent,completed_at,last_structural_update) " +
+                "SELECT ?,?,?,?,?,simulated_at,simulated_at FROM simulation_clock WHERE id=1",
                 id, kind, state, progress, integrity);
         else
-            jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,integrity_percent) VALUES (?,?,?,?,?)",
+            jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,integrity_percent,last_structural_update) " +
+                "SELECT ?,?,?,?,?,simulated_at FROM simulation_clock WHERE id=1",
                 id, kind, state, progress, integrity);
     }
 
