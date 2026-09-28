@@ -102,16 +102,25 @@ class AQuestionIsNotAnActIntegrationTest {
         jdbc.update("UPDATE world_chunk SET biome='WETLAND' WHERE id=?", where(chronicle));
         jdbc.update("DELETE FROM chunk_refuse WHERE chunk_id=?", where(chronicle));
 
+        // Made properly thirsty first, or the assertion below is vacuous: a Chronicle who has just woken is
+        // already at nothing, and "it did not go down" is true whether they drank or not.
+        jdbc.update("UPDATE chronicle_physiology SET hours_without_water=5 WHERE chronicle_id=?", chronicle);
         BigDecimal dryBefore = dryness(chronicle);
         int illBefore = illness(chronicle);
+        assertTrue(dryBefore.compareTo(BigDecimal.ZERO) > 0, "the body must be thirsty for this to prove anything");
 
         ChronicleActionService.ActionResult asked = actions.resolve("is the water safe to drink");
         assertEquals("JUDGE_WATER", asked.intent(), () -> "asking is its own act: " + asked.perception());
         assertEquals("SUCCEEDED", asked.outcome(), () -> "and it has an answer: " + asked.perception());
 
         // THE point. Before this, asking drank the marsh water and took the waterborne risk with it.
-        assertEquals(0, dryness(chronicle).compareTo(dryBefore),
-            "asking whether water is safe must not slake thirst — it drank it before");
+        //
+        // Asserted as "did not SLAKE", not "did not change": the act takes three minutes of simulated time and
+        // a body goes on drying out while it stands there, so hours_without_water creeps UP. Drinking is the
+        // thing that sets it to zero, and that is what must not have happened.
+        assertTrue(dryness(chronicle).compareTo(dryBefore) >= 0,
+            () -> "asking whether water is safe must not slake thirst — it drank it before (was " + dryBefore
+                + ", now " + dryness(chronicle) + ")");
         assertEquals(illBefore, illness(chronicle),
             "and must not take the risk the asker was trying to avoid");
 
@@ -146,7 +155,10 @@ class AQuestionIsNotAnActIntegrationTest {
 
         // And where there is no water, it says that rather than judging nothing.
         jdbc.update("UPDATE world_chunk SET biome='GRASSLAND' WHERE id=?", chunk);
-        jdbc.update("DELETE FROM ecology_site WHERE chunk_id=?", chunk);
+        // Only the WATER sites, and only those nothing lives on: a wildlife population holds a foreign key to
+        // its range, so clearing every site on a chunk fails outright wherever the world put animals.
+        jdbc.update("DELETE FROM ecology_site WHERE chunk_id=? AND site_category='RESOURCE' " +
+            "AND NOT EXISTS (SELECT 1 FROM wildlife_population wp WHERE wp.site_id=ecology_site.id)", chunk);
         jdbc.update("UPDATE construction_project SET integrity_percent=0 WHERE object_id IN " +
             "(SELECT id FROM world_object WHERE current_location_id=?)", chunk);
         ChronicleActionService.ActionResult dry = actions.resolve("is the water safe to drink");
