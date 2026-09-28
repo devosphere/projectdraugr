@@ -174,6 +174,18 @@ class ActNineAnswersIntegrationTest {
             assertFalse(stones.perception().contains("came to yourself"),
                 () -> "and is not answered with the calendar: " + stones.perception());
 
+            // In the dark, before anything fatal happens. MEASURE is sight work — weighing, counting, sounding
+            // a depth all want light — but reckoning up how long you have been somewhere wants only the count you
+            // carry in your head. CI found that by running at two in the morning and being told "it is too dark to
+            // see the fine of it", which is nonsense: you do not need a candle to know it has been about a week.
+            jdbc.update("UPDATE simulation_clock SET simulated_at = date_trunc('day', simulated_at) + interval '2 hours' WHERE id=1");
+            ChronicleActionService.ActionResult atNight = actions.resolve("how long have I been here");
+            assertEquals("SUCCEEDED", atNight.outcome(), () -> "the dark does not stop you counting days: " + atNight.perception());
+            assertTrue(atNight.perception().contains("came to yourself"),
+                () -> "and the answer is the same answer: " + atNight.perception());
+
+            // LAST, because it is fatal: six days of thirst arriving at once kills the Chronicle, and the next
+            // action in this method would find none living. CI caught exactly that.
             // Six days and three hours after this Chronicle woke, whenever that was.
             jdbc.update("UPDATE simulation_clock SET simulated_at = " +
                 "(SELECT MIN(ce.occurred_at) FROM chronicle_event ce WHERE ce.chronicle_id=? AND ce.event_type='CHRONICLE_AWAKENED') " +
@@ -186,15 +198,6 @@ class ActNineAnswersIntegrationTest {
             assertFalse(days.perception().contains("nothing by that name"),
                 () -> "not a report about carried items, which is what it used to say: " + days.perception());
 
-            // And in the dark. MEASURE is sight work — weighing, counting, sounding a depth all want light — but
-            // reckoning up how long you have been somewhere wants only the count you carry in your head. CI found
-            // this by running at two in the morning and being told "it is too dark to see the fine of it", which
-            // is nonsense: you do not need a candle to know it has been about a week.
-            jdbc.update("UPDATE simulation_clock SET simulated_at = date_trunc('day', simulated_at) + interval '2 hours' WHERE id=1");
-            ChronicleActionService.ActionResult atNight = actions.resolve("how long have I been here");
-            assertEquals("SUCCEEDED", atNight.outcome(), () -> "the dark does not stop you counting days: " + atNight.perception());
-            assertTrue(atNight.perception().contains("came to yourself"),
-                () -> "and the answer is the same answer: " + atNight.perception());
         } finally {
             jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", wasAt);
             jdbc.update("UPDATE world_weather SET weather_kind=?", wasWeather);
