@@ -2772,6 +2772,91 @@ public class PhysicalItemService {
      *  walking the plot buys back. Shorter than the window itself: it delays the loss, it does not cancel it. */
     private static final int BIRDS_STAY_OFF_DAYS = 5;
 
+
+    /** The plain noun in a garment's display name: "fur boot (left)" is a boot, "grass rain cape" is a cape.
+     *  A player names the thing, not the catalogue row, and a side is not part of what they call it. */
+    private static String garmentNoun(String displayName) {
+        String plain = displayName.replaceAll("\\(.*?\\)", " ").replaceAll("[^a-z ]", " ").trim();
+        int space = plain.lastIndexOf(' ');
+        return space < 0 ? plain : plain.substring(space + 1);
+    }
+
+    /**
+     * Stuff or line a worn garment with soft material (#37). "stuff my boots with dry grass" reached nothing at
+     * all, and the five things anybody would use for it sat in the catalogue declaring an insulation value of
+     * zero — correctly, because loose grass is not a garment; it is what you put INSIDE one.
+     *
+     * <p>Worth doing only since #709. The body used to be warmed as though it stood in the lowlands wherever it
+     * really was, so a few points of insulation bought almost nothing; now that altitude, biome and shelter all
+     * reach the skin, the difference between bare boots and boots packed with grass is time on a mountain.
+     *
+     * <p>Lines the garment the Chronicle NAMES. It does not guess: with nothing named it says what is being worn
+     * and leaves the choice, because stuffing the wrong thing wastes material that was gathered by hand.
+     */
+    @Transactional
+    public String[] lineGarment(UUID chronicle, String text, Instant at) {
+        String said = text == null ? "" : text.toLowerCase(java.util.Locale.ROOT);
+
+        java.util.List<java.util.Map<String,Object>> worn = jdbc.queryForList(
+            "SELECT e.item_id, lower(w.display_name) AS name, i.item_key, i.lining_bonus, d.insulation_value " +
+            "FROM equipment_attachment e JOIN world_object w ON w.id=e.item_id " +
+            "JOIN item_instance i ON i.object_id=e.item_id JOIN item_definition d ON d.item_key=i.item_key " +
+            "WHERE e.chronicle_id=? AND w.lifecycle_state='ACTIVE' ORDER BY length(w.display_name) DESC", chronicle);
+        if (worn.isEmpty())
+            return new String[]{"FAILED", "You have nothing on you to line — what you would stuff has to be "
+                + "something you are wearing."};
+
+        // Matched on the word a person would actually use. The display name is "fur boot (left)" and nobody has
+        // ever typed that: they say "my boots". So the full name matches, and so does the noun at the end of it
+        // once the side is stripped — which is the same defect, in my own code, that #720 found in the catalogue.
+        java.util.Map<String,Object> garment = worn.stream()
+            .filter(g -> said.contains((String) g.get("name")) || said.contains(garmentNoun((String) g.get("name"))))
+            .findFirst().orElse(null);
+        if (garment == null) {
+            java.util.List<String> names = worn.stream().map(g -> (String) g.get("name")).distinct().limit(6).toList();
+            return new String[]{"FAILED", "You would have to say which — you are wearing " + String.join(", ", names)
+                + ", and stuffing the wrong one wastes what you gathered."};
+        }
+
+        java.util.List<java.util.Map<String,Object>> stuffings = jdbc.queryForList(
+            "SELECT lm.item_key, lm.adds_insulation FROM lining_material lm " +
+            "WHERE EXISTS (SELECT 1 FROM item_instance i JOIN world_object w ON w.id=i.object_id " +
+            "              WHERE i.item_key=lm.item_key AND w.current_owner_id=? AND w.lifecycle_state='ACTIVE') " +
+            "ORDER BY lm.adds_insulation DESC", chronicle);
+        if (stuffings.isEmpty())
+            return new String[]{"FAILED", "You have nothing soft and dry to pack in — no grass, no moss, no wool "
+                + "or shed fur in hand to do it with."};
+        // The best of what is carried, unless the Chronicle named something else they are holding.
+        java.util.Map<String,Object> stuffing = stuffings.stream()
+            .filter(m -> said.contains(((String) m.get("item_key")).replace('_', ' '))
+                      || said.contains(((String) m.get("item_key")).split("_")[0]))
+            .findFirst().orElse(stuffings.get(0));
+
+        int already = ((Number) garment.get("lining_bonus")).intValue();
+        int adds = ((Number) stuffing.get("adds_insulation")).intValue();
+        // "dry grass bundle" and "shed fur tuft" are how the catalogue counts the stuff; "dry grass" and "shed
+        // fur" are what it is. The unit word is dropped so the prose reads as a person handling a material.
+        String material = ((String) stuffing.get("item_key")).replace('_', ' ')
+            .replaceAll("\\s+(bundle|tuft|handful|wad)$", "");
+        String garmentName = garmentNoun((String) garment.get("name")).isEmpty()
+            ? (String) garment.get("name")
+            : ((String) garment.get("name")).replaceAll("\\(.*?\\)", "").trim();
+        if (already >= adds)
+            return new String[]{"FAILED", "The " + garmentName + " is already packed out with as much as "
+                + material + " would add to it. More would only make it tight."};
+
+        consumeOne(chronicle, (String) stuffing.get("item_key"), at);
+        jdbc.update("UPDATE item_instance SET lining_bonus=? WHERE object_id=?", adds, garment.get("item_id"));
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) " +
+            "VALUES (?,?,'LINED',jsonb_build_object('material',?,'addsInsulation',?))",
+            garment.get("item_id"), java.sql.Timestamp.from(at), stuffing.get("item_key"), adds);
+        return new String[]{"SUCCEEDED", already > 0
+            ? "You pull the old packing out of the " + garmentName + " and work " + material
+              + " in its place, pressing it down into every corner. It sits warmer than it did."
+            : "You work " + material + " into the " + garmentName + ", pressing it well down and packing "
+              + "it out to the seams. It is close and warm against you where it was only cloth before."};
+    }
+
     /** How long a ripe stand holds before it goes over — three weeks past its season, then the heads shatter and the birds have it. */
     private static final int CROP_SPOIL_WINDOW_DAYS = 21;
 
