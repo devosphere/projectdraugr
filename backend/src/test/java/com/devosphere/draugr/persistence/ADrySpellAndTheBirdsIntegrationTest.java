@@ -132,7 +132,10 @@ class ADrySpellAndTheBirdsIntegrationTest {
             () -> "and is told why, not merely refused: " + damp.perception());
 
         // Dry ground with nothing to carry water from. This is hauling water, not wishing it.
-        jdbc.update("DELETE FROM ecology_site WHERE chunk_id=?", chunk);
+        // Only the WATER sites, and only those nothing lives on: a wildlife population holds a foreign key to
+        // its range, so clearing every site on a chunk fails outright wherever the world put animals.
+        jdbc.update("DELETE FROM ecology_site WHERE chunk_id=? AND site_category='RESOURCE' " +
+            "AND NOT EXISTS (SELECT 1 FROM wildlife_population wp WHERE wp.site_id=ecology_site.id)", chunk);
         sow(chronicle, 250, 25, null, null);
         ChronicleActionService.ActionResult nothing = actions.resolve("water the seedlings");
         assertEquals("FAILED", nothing.outcome(), () -> "with no water in reach there is none to give: " + nothing.perception());

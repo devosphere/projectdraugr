@@ -20,9 +20,10 @@ ALTER TABLE crop_stand ADD COLUMN watered_at      TIMESTAMPTZ;
 ALTER TABLE crop_stand ADD COLUMN birds_scared_at TIMESTAMPTZ;
 
 COMMENT ON COLUMN crop_stand.watered_at IS
- 'When this stand was last watered by hand (#37/#165). A stand on dry ground (world_chunk.moisture below the dry '
- 'threshold) yields less unless it was watered during its season; on ground that is damp of itself, watering '
- 'changes nothing and the refusal says so.';
+ 'When this stand was last watered by hand (#37/#165). A stand on DRY COUNTRY (world_chunk.moisture below 350, '
+ 'which is 16 of the world''s 86 grassland chunks rather than the 50 that a 450 line would have caught) yields '
+ 'less unless it was watered during its season; on ground that is damp of itself, watering changes nothing and '
+ 'the refusal says so.';
 
 COMMENT ON COLUMN crop_stand.birds_scared_at IS
  'When the birds were last driven off this stand (#37/#165). Extends the clean-harvest window, because the '

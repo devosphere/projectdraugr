@@ -2576,9 +2576,21 @@ public class PhysicalItemService {
             : "You work down the rows, pulling the weeds crowding the young grain and loosening the soil around the stems. The stand stands clean, given the room to fill out its heads."};
     }
 
-    /** Below this, the ground is dry enough that a stand wants water carried to it. The same moisture scale that
-     *  decides how warm the body is where it stands (#709) and whether a well reaches the table (#726). */
-    private static final int GROUND_DRY_ENOUGH_TO_WANT_WATERING = 450;
+    /**
+     * Below this, the ground is dry enough that a stand wants water carried to it — the same moisture scale that
+     * decides how warm the body is where it stands (#709) and whether a well reaches the table (#726).
+     *
+     * <p>MEASURED, not chosen. At 450 this caught <b>50 of the world's 86 grassland chunks</b> — more than half of
+     * all ordinary farmland would carry a permanent penalty unless somebody hauled water to it, which is a silent
+     * rebalancing of every field in the game rather than a drought. CI found it the honest way: it erased the
+     * difference an existing test asserts between a dunged field and a bare one, because two penalties of two and
+     * a floor of two leave nothing to tell them apart. Those three fields sit at 394, 405 and 441.
+     *
+     * <p>At 350 it catches 16 of 86 grassland, 8 of 100 highland, 4 of 51 wetland and 1 of 141 forest: dry
+     * COUNTRY, where carrying water is the difference, and ordinary fields left alone. The well keeps 450 because
+     * it asks a different question — how deep the water table is, not how dry the topsoil is.
+     */
+    private static final int GROUND_DRY_ENOUGH_TO_WANT_WATERING = 350;
 
     /**
      * Carry water to a growing stand (#37/#165). The field reckoned six things — the tilled seedbed, the soil's
