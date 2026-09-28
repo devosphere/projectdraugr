@@ -108,6 +108,10 @@ class CoveringYourTrailIntegrationTest {
         }
         ChronicleService.ChronicleSummary summary = chronicles.awaken();
         assertNotNull(summary, "awakening must produce a living Chronicle");
+        // awaken() hands back the SAME Chronicle within a class, so the other method in here had already covered
+        // its trail by the time this one asserted nobody had. The precondition belongs where the Chronicle is
+        // got, not in whichever test happens to run first.
+        jdbc.update("UPDATE chronicle SET trail_hidden_at=NULL WHERE id=?", summary.id());
         return summary.id();
     }
 
