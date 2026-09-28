@@ -145,7 +145,7 @@ class WhatYouStuffYourBootsWithIntegrationTest {
     void itLinesWhatYouNameAndAsksWhenYouNameNothing() {
         UUID chronicle = awaken();
         Instant now = ticks.current().simulatedAt();
-        wear(chronicle, "fur_boot_left", "Fur boot (left)", "FOOT_LEFT", "OUTER", now);
+        UUID boot = wear(chronicle, "fur_boot_left", "Fur boot (left)", "FOOT_LEFT", "OUTER", now);
         wear(chronicle, "fur_cap", "Fur cap", "HEAD", "OUTER", now);
         items.createCarriedItem(chronicle, "moss_bundle", "Moss bundle", now, "TEST");
 
@@ -156,9 +156,11 @@ class WhatYouStuffYourBootsWithIntegrationTest {
 
         ChronicleActionService.ActionResult named = actions.resolve("line my cap with moss");
         assertEquals("SUCCEEDED", named.outcome(), () -> "named, it lines that one: " + named.perception());
+        // Asked of THIS boot by its id. By key and owner it found two, because the test above left the Chronicle
+        // a boot of their own and the class shares one world — a query that assumes one of something is a query
+        // that fails the first time the suite runs in a different order.
         assertEquals(0, (int) jdbc.queryForObject(
-            "SELECT lining_bonus FROM item_instance i JOIN world_object w ON w.id=i.object_id " +
-            "WHERE i.item_key='fur_boot_left' AND w.current_owner_id=?", Integer.class, chronicle),
+            "SELECT lining_bonus FROM item_instance WHERE object_id=?", Integer.class, boot),
             "the boot it did not name is untouched");
     }
 
