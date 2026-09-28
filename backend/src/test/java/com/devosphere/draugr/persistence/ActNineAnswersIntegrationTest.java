@@ -152,20 +152,32 @@ class ActNineAnswersIntegrationTest {
     void theWorldKnowsHowLongYouHaveBeenHereAndWillSayIt() {
         UUID chronicle = awaken();
 
-        // Six days on from waking. Moved on the CLOCK, not on the record: chronicle_event is an immutable personal
-        // archive and a trigger refuses to let anything rewrite when a Chronicle woke — which is the right rule,
-        // and the reason this reads the archive rather than a mutable column. The clock is shared by the whole
-        // suite, so it is put back where it was.
-        // The item counter is untouched: a real counting question still counts things. Asked BEFORE the clock is
-        // moved, because six days of simulated thirst arriving at once is quite properly fatal.
-        ChronicleActionService.ActionResult stones = actions.resolve("how many stones do I have");
-        assertEquals("SUCCEEDED", stones.outcome(), () -> "counting goods still works: " + stones.perception());
-        assertFalse(stones.perception().contains("came to yourself"),
-            () -> "and is not answered with the calendar: " + stones.perception());
-
+        // Both halves are pinned in time, and the clock is shared by the whole suite, so it is put back.
+        //
+        // Counting what you carry is FINE work and the world refuses it in the dark — "It is too dark to see the
+        // fine of it" — which is correct, and which failed this test in CI at one in the morning while passing
+        // here at noon. Pinned to midday for that question.
+        //
+        // The days question is not sight work, but it needs a known elapsed time, and the six days are measured
+        // from the Chronicle's own CHRONICLE_AWAKENED record: an immutable personal archive that a trigger will
+        // not let anything rewrite (which is the right rule, and the reason the answer reads the archive rather
+        // than a mutable column). So the CLOCK is moved to a fixed distance from that record instead.
         java.sql.Timestamp wasAt = jdbc.queryForObject("SELECT simulated_at FROM simulation_clock WHERE id=1", java.sql.Timestamp.class);
+        String wasWeather = jdbc.queryForObject("SELECT weather_kind FROM world_weather LIMIT 1", String.class);
         try {
-            jdbc.update("UPDATE simulation_clock SET simulated_at = simulated_at + interval '6 days 3 hours' WHERE id=1");
+            jdbc.update("UPDATE simulation_clock SET simulated_at = date_trunc('day', simulated_at) + interval '12 hours' WHERE id=1");
+            jdbc.update("UPDATE world_weather SET weather_kind='CLEAR', intensity=0");
+
+            // The item counter is untouched: a real counting question still counts things.
+            ChronicleActionService.ActionResult stones = actions.resolve("how many stones do I have");
+            assertEquals("SUCCEEDED", stones.outcome(), () -> "counting goods still works: " + stones.perception());
+            assertFalse(stones.perception().contains("came to yourself"),
+                () -> "and is not answered with the calendar: " + stones.perception());
+
+            // Six days and three hours after this Chronicle woke, whenever that was.
+            jdbc.update("UPDATE simulation_clock SET simulated_at = " +
+                "(SELECT MIN(ce.occurred_at) FROM chronicle_event ce WHERE ce.chronicle_id=? AND ce.event_type='CHRONICLE_AWAKENED') " +
+                "+ interval '6 days 3 hours' WHERE id=1", chronicle);
 
             ChronicleActionService.ActionResult days = actions.resolve("count the days since I woke");
             assertEquals("SUCCEEDED", days.outcome(), () -> "the question has an answer: " + days.perception());
@@ -175,6 +187,7 @@ class ActNineAnswersIntegrationTest {
                 () -> "not a report about carried items, which is what it used to say: " + days.perception());
         } finally {
             jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", wasAt);
+            jdbc.update("UPDATE world_weather SET weather_kind=?", wasWeather);
         }
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
