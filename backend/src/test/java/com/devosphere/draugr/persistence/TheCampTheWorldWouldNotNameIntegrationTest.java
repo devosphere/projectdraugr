@@ -33,8 +33,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@code integrity_percent} decides whether a shelter still shelters, a pen still holds and a latrine still takes
  * anything.
  *
- * <p>It also counted a RUIN as standing — it asked for {@code state='COMPLETED'} and never for integrity — so a
- * Chronicle could walk into their own collapsed camp and be told everything was fine.
+ * <p>It also asked for {@code state='COMPLETED'} and never for integrity, which it now does. That part is
+ * DEFENCE rather than a bug fixed: the Auditor treats a completed construction at zero integrity while still
+ * active as an inconsistency, and the tick takes such a thing down in the same pass that wears it out, so the
+ * state is one the world is not allowed to be in. Worth asking for all the same, and worth not writing prose
+ * about.
  *
  * <p>And "take stock of the camp", which is exactly what a person says when they want this, reached nothing at
  * all. Skips without Docker.
@@ -82,8 +85,19 @@ class TheCampTheWorldWouldNotNameIntegrationTest {
         return jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
     }
 
+    /**
+     * Take down whatever stands here, the way the world takes a thing down.
+     *
+     * <p>This set {@code lifecycle_state='DESTROYED'} and left the location on the row, and the Auditor failed the
+     * whole suite for it: <i>"4 destroyed object(s) still have an active location"</i>. That rule is one of this
+     * project's oldest — an object is never deleted, but a destroyed one records where and why it ended and holds
+     * no live location — and a fixture is not exempt from it.
+     */
     private void clearGround(UUID chronicle) {
-        jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED' WHERE current_location_id=? AND object_type='CONSTRUCTION'", where(chronicle));
+        jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED', destroyed_at=now(), " +
+            "destroyed_location_id=current_location_id, destroyed_cause='TEST_TEARDOWN', " +
+            "current_location_id=NULL, current_owner_id=NULL " +
+            "WHERE current_location_id=? AND object_type='CONSTRUCTION'", where(chronicle));
     }
 
     private void raise(UUID chronicle, String kind, String name, String state, int progress, int integrity) {
@@ -98,7 +112,7 @@ class TheCampTheWorldWouldNotNameIntegrationTest {
     }
 
     @Test
-    void theSurveyNamesWhatStandsAndDoesNotCountARuinAsStanding() {
+    void theSurveyNamesWhatStandsAndSaysWhatStateItIsIn() {
         UUID chronicle = awaken();
         clearGround(chronicle);
 
@@ -122,14 +136,11 @@ class TheCampTheWorldWouldNotNameIntegrationTest {
         assertFalse(built.perception().contains("Structures you raised stand here"),
             () -> "the blind sentence is gone: " + built.perception());
 
-        // A ruin is not standing. HIDE_FRAME is a workstation, which is a kind the tick does NOT sweep away at
-        // zero integrity — the others collapse and are destroyed outright, so a lingering ruin can only be one of
-        // these. Chosen deliberately, so this asserts a state the world can actually be in.
-        clearGround(chronicle);
-        raise(chronicle, "HIDE_FRAME", "Hide frame", "COMPLETED", 100, 0);
-        ChronicleActionService.ActionResult ruined = actions.resolve("look around");
-        assertFalse(ruined.perception().contains("Your own work stands here"),
-            () -> "a collapsed frame does not stand: " + ruined.perception());
+        // The survey also asks for integrity>0, so a ruin would not read as standing. That is defence rather
+        // than a bug fixed: the Auditor treats a completed construction at zero integrity while still ACTIVE as
+        // an inconsistency, and the tick takes such a thing down in the same pass that wears it out — so the
+        // state is one the world is not allowed to be in, and this test does not manufacture one to prove a
+        // sentence about it.
     }
 
     @Test
@@ -144,7 +155,6 @@ class TheCampTheWorldWouldNotNameIntegrationTest {
 
         raise(chronicle, "LATRINE", "Camp latrine", "COMPLETED", 100, 100);
         raise(chronicle, "WELL", "Well", "COMPLETED", 100, 55);
-        raise(chronicle, "HIDE_FRAME", "Hide frame", "COMPLETED", 100, 0);
         raise(chronicle, "LOG_CABIN", "Log cabin", "IN_PROGRESS", 40, 100);
 
         ChronicleActionService.ActionResult stock = actions.resolve("take stock of the camp");
@@ -152,7 +162,6 @@ class TheCampTheWorldWouldNotNameIntegrationTest {
         String said = stock.perception().toLowerCase(java.util.Locale.ROOT);
         assertTrue(said.contains("camp latrine"), () -> "sound work is named: " + stock.perception());
         assertTrue(said.contains("well (weathered)"), () -> "weathered work carries its state: " + stock.perception());
-        assertTrue(said.contains("past mending: hide frame"), () -> "a ruin is named as a ruin: " + stock.perception());
         assertTrue(said.contains("still unfinished: log cabin (40"), () -> "and unfinished work with how far along: " + stock.perception());
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());

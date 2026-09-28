@@ -2783,9 +2783,14 @@ public class ChronicleActionService {
      * would say only that structures stood here — so a Chronicle could not find out what they had built, what state
      * it was in, or what they had left half-finished, without reading the database.
      *
-     * <p>Read-only, and deliberately fuller than the survey: it names the ruins the survey passes over, and the
-     * work still under way with how far along it is. Nothing here is new information the world did not have; it is
-     * the world's own record, said out loud.
+     * <p>Read-only, and deliberately fuller than the survey: it carries the state of each standing thing and the
+     * work still under way with how far along it is. Nothing here is new information the world did not have; it
+     * is the world's own record, said out loud.
+     *
+     * <p>It does NOT list ruins, and that is a deliberate omission rather than an oversight: the Auditor treats a
+     * completed construction at zero integrity while still active as an inconsistency, and the tick takes such a
+     * thing down in the same pass that wears it out. A "past mending" list would be prose for a state the world
+     * is not allowed to be in.
      */
     private String campStocktake(UUID location) {
         java.util.List<String> sound = jdbc.query(
@@ -2797,11 +2802,6 @@ public class ChronicleActionService {
             "JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
             "WHERE w.current_location_id=? AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE' " +
             "ORDER BY cp.integrity_percent, ck.display_name", (rs, row) -> rs.getString(1), location);
-        java.util.List<String> ruined = jdbc.query(
-            "SELECT lower(ck.display_name) FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
-            "JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
-            "WHERE w.current_location_id=? AND cp.state='COMPLETED' AND cp.integrity_percent=0 AND w.lifecycle_state='ACTIVE' " +
-            "ORDER BY ck.display_name", (rs, row) -> rs.getString(1), location);
         java.util.List<String> started = jdbc.query(
             "SELECT lower(ck.display_name) || ' (' || cp.progress_percent || ' in the hundred)' " +
             "FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
@@ -2809,13 +2809,11 @@ public class ChronicleActionService {
             "WHERE w.current_location_id=? AND cp.state <> 'COMPLETED' AND w.lifecycle_state='ACTIVE' " +
             "ORDER BY cp.progress_percent DESC, ck.display_name", (rs, row) -> rs.getString(1), location);
 
-        if (sound.isEmpty() && ruined.isEmpty() && started.isEmpty())
+        if (sound.isEmpty() && started.isEmpty())
             return "You walk the ground over and there is nothing of yours on it — no shelter, no pit, no pen, "
                  + "nothing begun. Whatever you make of this place, none of it is made yet.";
         StringBuilder s = new StringBuilder();
         if (!sound.isEmpty()) s.append("You go round what you have raised here: ").append(joinAnd(sound)).append(". ");
-        if (!ruined.isEmpty()) s.append(ruined.size() == 1 ? "Past mending: " : "Past mending: ").append(joinAnd(ruined))
-            .append(", which will have to be raised again from the ground up. ");
         if (!started.isEmpty()) s.append("Still unfinished: ").append(joinAnd(started)).append(". ");
         return s.toString().trim();
     }
