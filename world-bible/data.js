@@ -2,18 +2,22 @@
 window.WorldBible = {
   seed: '681013497',
   biomes: [
-    { icon: '🌲', name: 'Temperate Forest', key: 'TEMPERATE_FOREST', status: 'Seed-supported', detail: 'Canopy, old growth, deadfall, understory and leaf litter. The richest first-hours source for shelter stock, fibre, forage, small wildlife and wood.' },
-    { icon: '🌾', name: 'Grassland', key: 'GRASSLAND', status: 'Seed-supported', detail: 'Open wind-exposed ground with grasses, seed heads, grazing routes, field stone and long sightlines. Strong for early food, fibre and herd ecology.' },
-    { icon: '🪷', name: 'Wetland', key: 'WETLAND', status: 'Seed-supported', detail: 'Waterlogged ground, reeds, clay, amphibious life and standing water. Productive but hazardous: rot, depth, contamination and disease matter.' },
-    { icon: '⛰️', name: 'Highland', key: 'HIGHLAND', status: 'Seed-supported', detail: 'Open slopes, thin turf, exposed stone and wind. Supports stone, hardy plants, goat/reindeer routes and difficult travel.' },
-    { icon: '🏔️', name: 'Mountain', key: 'MOUNTAIN', status: 'Seed-supported', detail: 'Cold, rocky, sparse and dangerous. A source of exposed geology, but never a guarantee of shelter, food, or safe access.' },
-    { icon: '🌊', name: 'Ocean', key: 'OCEAN', status: 'Seed-supported', detail: 'Open salt water and weather exposure. A coast is not implied: shore, estuary and tidal ecology require explicit topology.' }
+    { icon: '🌲', name: 'Temperate Forest', key: 'TEMPERATE_FOREST', status: 'Generated', detail: 'Canopy, finite tree stands, deadfall, understory and leaf litter; a major source of wood, fibre, forage and woodland ecology.' },
+    { icon: '🌾', name: 'Grassland', key: 'GRASSLAND', status: 'Generated', detail: 'Open wind-exposed ground with grasses, seed heads, grazing routes, field stone and long sightlines.' },
+    { icon: '🪷', name: 'Wetland', key: 'WETLAND', status: 'Generated', detail: 'Freshwater marsh ground with reeds, clay, fish and amphibious life; depth, rot, contamination and disease remain consequential.' },
+    { icon: '⛰️', name: 'Highland', key: 'HIGHLAND', status: 'Generated', detail: 'Open slopes, thin turf, exposed stone and wind, supporting hardy plants, upland animals and difficult travel.' },
+    { icon: '🏔️', name: 'Mountain', key: 'MOUNTAIN', status: 'Generated', detail: 'Cold, rocky terrain supporting exposed geology, cliff ecology and sparse high-altitude life.' },
+    { icon: '🌊', name: 'Ocean', key: 'OCEAN', status: 'Generated', detail: 'Open salt water with severe travel and weather exposure.' },
+    { icon: '🏖️', name: 'Coast', key: 'COAST', status: 'Generated', detail: 'Land directly touching open water: the implemented shore for littoral flora, shell beds, shore wildlife and salt-weather exposure.' },
+    { icon: '〰️', name: 'River Bank', key: 'RIVER_BANK', status: 'Generated', detail: 'Deterministically carved freshwater channels connecting high ground to standing water, with river-specific gathering, travel and ecology.' },
+    { icon: '◒', name: 'Cave Mouth', key: 'CAVE_MOUTH', status: 'Generated', detail: 'Sparse mountain entrances that open onto walkable ground and support cave sites, shelter and subterranean ecology.' },
+    { icon: '●', name: 'Cave Interior', key: 'CAVE_INTERIOR', status: 'Generated', detail: 'Enclosed rock immediately behind a valid entrance, with darkness, reduced wind and cave-specific environmental rules.' }
   ],
   topology: [
-    { icon: '〰️', name: 'Freshwater hydrology', status: 'Topology required', detail: 'Headwaters, streams, rivers, lake margins, floodplains, fords and marsh islands. Enables river-dependent life, irrigation and real migration corridors.' },
-    { icon: '🪨', name: 'Cave & karst', status: 'Topology required', detail: 'Cave mouths, interiors, drainage, ventilation, darkness and quarry interfaces. Required before cave peoples, cave shelters or subterranean ecology activate.' },
-    { icon: '🏝️', name: 'Littoral coast', status: 'Topology required', detail: 'Beach, rocky shore, tidal flat, estuary, dune, shell bed and coastal cliff. Prevents ocean content from appearing in featureless open water.' },
-    { icon: '🌋', name: 'Rare geology', status: 'Topology required', detail: 'Finite deposits for copper, tin, iron, gold, silver/lead, refractory clay, limestone, iron sand, and—where coherent—obsidian and sulphur.' }
+    { icon: '〰️', name: 'Freshwater hydrology', status: 'Implemented', detail: 'Rivers are carved from high ground to standing water; headwaters, ponds, lake margins, floodplains, fords, streams and marsh islands have persisted site markers.' },
+    { icon: '🪨', name: 'Cave & karst', status: 'Implemented', detail: 'Cave mouths and enclosed interiors are derived from mountain geometry and carry cave wildlife, water and limestone sites.' },
+    { icon: '🏝️', name: 'Littoral coast', status: 'Implemented', detail: 'Coastal chunks are derived where walkable land touches ocean and support shell beds, iron-sand bars and littoral ecology.' },
+    { icon: '🌋', name: 'Finite geology', status: 'Implemented', detail: 'Mineral provinces bind rare materials to named persisted sites including tin, silver-lead, pyrite, soapstone, refractory clay, obsidian and iron sand.' }
   ],
   atlasLegend: [
     ['ecology', '◆', 'Ecology & survival'], ['material', '●', 'Material province'], ['wildlife', '✦', 'Wildlife range'], ['monster', '▲', 'Monster territory'], ['native', '◇', 'Native-society candidate'], ['ruin', '✚', 'Ancient ruin'], ['future', '⬡', 'Future-work / impact zone']
