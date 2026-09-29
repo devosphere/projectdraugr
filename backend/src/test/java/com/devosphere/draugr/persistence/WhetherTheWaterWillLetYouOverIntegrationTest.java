@@ -116,6 +116,9 @@ class WhetherTheWaterWillLetYouOverIntegrationTest {
         assertNotNull(beside, "the world must have dry ground beside a fen");
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", beside, chronicle);
         // Put down everything, the way a destroyed object is put down: no live owner, and a recorded end.
+        // The attachments go FIRST -- an equipment_attachment pointing at a destroyed item is an Auditor
+        // violation ("N equipment attachment(s) reference an inactive item"), and it failed the whole suite.
+        jdbc.update("DELETE FROM equipment_attachment WHERE chronicle_id=?", chronicle);
         jdbc.update("UPDATE world_object SET current_owner_id=NULL, lifecycle_state='DESTROYED', destroyed_at=now(), " +
             "destroyed_location_id=?, destroyed_cause='TEST_TEARDOWN' WHERE current_owner_id=? AND object_type='ITEM'",
             beside, chronicle);
@@ -135,10 +138,17 @@ class WhetherTheWaterWillLetYouOverIntegrationTest {
             () -> "carrying nothing, the fen is wadeable and says so: " + light.perception());
 
         // Now load past three quarters of capacity, which is the fen's own limit.
-        Integer capacity = jdbc.queryForObject(
-            "SELECT sustained_mass_grams FROM chronicle_carry_capacity WHERE chronicle_id=?", Integer.class, chronicle);
-        assertNotNull(capacity);
-        for (int i = 0; i < (capacity / 750) + 6; i++)
+        // The EFFECTIVE capacity, read exactly as the judgement reads it. The chronicle_carry_capacity column
+        // is only the base: load conditioning, worn carry aids and a hitched draft beast all raise it, so a load
+        // computed from the base could sit under three quarters of the real thing and prove nothing.
+        int capacity = items.currentLoad(chronicle).sustainedMassCapacityGrams();
+        assertTrue(capacity > 0, "a living Chronicle can carry something");
+        // Past the fen's three quarters, but still inside what a body can carry: createCarriedItem asserts
+        // the Chronicle can physically take what it is handed, and handing it more than capacity throws
+        // "The Chronicle cannot physically carry that load" -- which is the assert doing its job, and was my
+        // test asking for the impossible.
+        int stones = (int) (capacity * 0.92 / 750);   // over the fen's three quarters, under the body's all
+        for (int i = 0; i < stones; i++)
             items.createCarriedItem(chronicle, "field_stone", "Field stone", now, "TEST_SEED");
 
         ChronicleActionService.ActionResult loaded = actions.resolve("can I cross here");
