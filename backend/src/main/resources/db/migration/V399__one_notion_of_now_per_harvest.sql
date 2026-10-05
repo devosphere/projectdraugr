@@ -6,16 +6,19 @@
 --   SELECT p_months IS NULL
 --       OR EXTRACT(MONTH FROM (SELECT simulated_at FROM simulation_clock WHERE id=1) ...) = ANY (p_months)
 --
--- Four callers pass an explicit Instant for the moment their work happens, and then ask that function what
--- month it is — so each of them mixes two notions of "now" in one statement:
+-- Four callers pass an explicit Instant for the moment their work happens and then ask that function what
+-- month it is — collectInsects, takeTamedYield, takeSpeciesDrops and fish. In ordinary play the two agree,
+-- because an action's resolvedAt comes from the clock, which is why it has gone unnoticed.
 --
---   PhysicalItemService.collectInsects(chronicle, chunk, text, occurredAt)
---   WildlifeEncounterService.takeTamedYield(chronicle, at, text)
---   WildlifeEncounterService.takeSpeciesDrops(chronicle, species, at)
---   WildlifeEncounterService.fish(chronicle, chunk, action, at, text)
+-- ONLY ONE OF THEM IS CHANGED HERE, and deliberately: collectInsects is the only one that CONTRADICTS ITSELF
+-- INSIDE A SINGLE CALL. It picks the colony KIND from seasonOf(occurredAt) and then filtered that colony's
+-- PRODUCTS by the clock, so the two halves of one harvest could disagree about the month. The other three use
+-- the clock throughout and have no internal disagreement; converting them would be a behaviour change with no
+-- defect behind it, and it breaks ten test classes that hand those methods Instant.now() — which would make
+-- the suite pass or fail by today's real calendar month. They stay on the one-argument form, which for them
+-- means what it says.
 --
--- In ordinary play the two agree, because an action's resolvedAt comes from the clock — which is exactly why
--- this has been invisible. It is not invisible in its consequences:
+-- The consequence of the contradiction was not invisible:
 --
 -- A harvest asked about a summer morning picked its COLONY KIND from that morning (seasonOf(occurredAt)) and
 -- then had the colony's PRODUCTS filtered by whatever month the world clock stood in. Cricket and grasshopper
@@ -25,8 +28,9 @@
 -- harvests in a row, every one of them "You work at the cricket colony for a while, but come away
 -- empty-handed", with the colony row never written.
 --
--- This adds a two-argument form that takes the month it should judge by. The one-argument form is left exactly
--- as it is, for the callers that genuinely mean the world's own now.
+-- This adds a two-argument form that takes the month it should judge by, and collectInsects passes the month
+-- of its own instant. The one-argument form is left exactly as it is, for the callers that genuinely mean the
+-- world's own now.
 
 CREATE OR REPLACE FUNCTION in_season(p_months smallint[], p_month int)
 RETURNS boolean
