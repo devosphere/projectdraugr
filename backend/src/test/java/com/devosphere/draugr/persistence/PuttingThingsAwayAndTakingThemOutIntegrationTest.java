@@ -176,15 +176,21 @@ class PuttingThingsAwayAndTakingThemOutIntegrationTest {
         assertEquals(3, inside(pouch), "a refused emptying moves nothing");
 
         // Open: emptied, and what was in it is now carried.
+        //
+        // Counted as a DELTA, not a total. The total is the suite's: the sibling test in this class empties a
+        // pouch of its own, and any other class may leave a hazelnut on this Chronicle — so an absolute count
+        // read 6 where it expected 3. What this test owns is the three it put in, and the change in the count
+        // is the only honest way to measure them.
         jdbc.update("UPDATE container_properties SET access_state='OPEN' WHERE object_id=?", pouch);
+        String carriedNuts = "SELECT COUNT(*) FROM world_object w JOIN item_instance i ON i.object_id=w.id "
+                           + "WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' "
+                           + "AND i.item_key IN ('hazelnut','beech_mast')";
+        Integer before = jdbc.queryForObject(carriedNuts, Integer.class, chronicle);
         ChronicleActionService.ActionResult emptied = actions.resolve("empty the pouch");
         assertEquals("SUCCEEDED", emptied.outcome(), () -> "an open pouch empties: " + emptied.perception());
         assertEquals(0, inside(pouch), "everything must come out");
-        Integer carried = jdbc.queryForObject(
-            "SELECT COUNT(*) FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
-            "WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key IN ('hazelnut','beech_mast')",
-            Integer.class, chronicle);
-        assertEquals(3, carried, "and be carried afterwards");
+        Integer after = jdbc.queryForObject(carriedNuts, Integer.class, chronicle);
+        assertEquals(3, after - before, "and the three that were in it must be carried afterwards");
 
         // And again: already empty, said so rather than succeeding at nothing. The asymmetry is the point.
         ChronicleActionService.ActionResult again = actions.resolve("empty the pouch");

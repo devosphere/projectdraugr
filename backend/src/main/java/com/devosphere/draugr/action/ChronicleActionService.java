@@ -2056,7 +2056,7 @@ public class ChronicleActionService {
         // against a fish or a named species. The bare word "fish" on its own still means it, because that is
         // what a person says when they mean to go — but "the fish" in the middle of a sentence does not.
         boolean fishingAct = value.trim().equals("fish") || value.contains("fishing")
-            || value.contains("fish for") || value.contains("fish with") || value.contains("fish the ")
+            || value.contains("fish for") || value.contains("for fish") || value.contains("fish with") || value.contains("fish the ")
             || value.contains("cast a line") || value.contains("cast the line") || value.contains("a line in")
             || ((value.contains("catch")||value.contains("land ")||value.contains("hook")||value.contains("net ")
                  ||value.contains("spear")||value.contains("take")||value.contains("get"))
