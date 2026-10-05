@@ -133,6 +133,15 @@ class PuttingThingsAwayAndTakingThemOutIntegrationTest {
      * @return the pouch's object id
      */
     private UUID aPouchWithThreeThingsIn(UUID chronicle) {
+        // THE POUCH MUST BE THE ONLY ONE WITHIN REACH. Other classes leave leather pouches on this ground, the
+        // matcher orders by name length and they all have the same name, so the emptying found a stranger's
+        // empty pouch and reported it already empty. Clear every container this Chronicle can reach first.
+        UUID here = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+        jdbc.update("DELETE FROM item_containment WHERE container_id IN (SELECT cp.object_id FROM container_properties cp " +
+            "JOIN world_object w ON w.id=cp.object_id WHERE w.current_owner_id=? OR w.current_location_id=?)", chronicle, here);
+        jdbc.update("DELETE FROM container_properties WHERE object_id IN (SELECT w.id FROM world_object w " +
+            "WHERE w.current_owner_id=? OR w.current_location_id=?)", chronicle, here);
+
         UUID pouch = UUID.randomUUID();
         String name = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key='leather_pouch'", String.class);
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM',?,?)", pouch, name, chronicle);

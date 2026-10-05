@@ -139,12 +139,19 @@ class APlaceAmongThemIntegrationTest {
 
         // One more mouth: the isle's day feeds them too.
         int ration = jdbc.queryForObject("SELECT daily_ration FROM native_community WHERE id=?", Integer.class, community);
-        int eaten = jdbc.queryForObject("SELECT COUNT(*) FROM world_object WHERE destroyed_cause='EATEN_BY_COMMUNITY'", Integer.class);
+        // Scoped to THIS community's own ground. The count was global, so any other community that happened to
+        // eat during the same advance was counted into this one's delta — and which other communities exist and
+        // when they last simulated depends on which of nine hundred tests ran first. It failed as 9 against an
+        // expected 8 the moment a new test class shifted the order. retire() records destroyed_location_id from
+        // the item's owner, and a larder item is owned by the community, so its meals land on its home chunk.
+        String eatenHere = "SELECT COUNT(*) FROM world_object WHERE destroyed_cause='EATEN_BY_COMMUNITY' "
+                         + "AND destroyed_location_id = (SELECT home_chunk_id FROM native_community WHERE id=?)";
+        int eaten = jdbc.queryForObject(eatenHere, Integer.class, community);
         jdbc.update("UPDATE native_community SET last_simulated_at=? WHERE id=?", Timestamp.from(Instant.parse("2031-06-10T00:00:00Z")), community);
         natives.advanceTo(Instant.parse("2031-06-11T00:00:00Z"));
         int eatersOnTheIsle = jdbc.queryForObject("SELECT COUNT(*) FROM native_individual n JOIN world_object w ON w.id=n.object_id " +
             "WHERE n.community_id=? AND n.condition <> 'DEAD' AND w.lifecycle_state='ACTIVE'", Integer.class, community);
-        int ateToday = jdbc.queryForObject("SELECT COUNT(*) FROM world_object WHERE destroyed_cause='EATEN_BY_COMMUNITY'", Integer.class) - eaten;
+        int ateToday = jdbc.queryForObject(eatenHere, Integer.class, community) - eaten;
         assertEquals((eatersOnTheIsle + 1) * ration, ateToday, "the isle feeds its member too");
 
         // Walking onto the isle is no longer walking in unasked.
