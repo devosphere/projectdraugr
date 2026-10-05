@@ -120,6 +120,29 @@ Every defect this project has found is the same defect: **the world knows someth
   Assert the **direction**, and put the body in a known state first or the assertion is vacuous.
 - **`chunk_refuse` is drained against SIMULATED time**, so a fixture row stamped `now()` is drained to nothing the
   moment the world turns. Date it from `simulation_clock`. Same family as `construction_project.last_structural_update`.
+- **A TEST MUST OWN WHAT IT MEASURES.** One world and one Chronicle sequence are shared across ~925 tests, so
+  anything measuring state it did not create is order-dependent, and adding a single test class reshuffles the
+  order. Four shapes, three of them found in one session:
+  - *a resource other tests already stamped* — the colony depletion test picks the first GRASSLAND chunk in
+    grid order, which much of the suite stands on, and asserts a depletion; clear the rows first.
+  - *a GLOBAL count compared as a delta* — `EATEN_BY_COMMUNITY` counted world-wide, so another community's
+    meals landed in this one's total. Scope it (`destroyed_location_id` = the community's home chunk).
+  - *a fixture the matcher cannot tell from a stranger's* — several classes leave `Leather pouch` objects
+    about, the matcher takes the longest name first, and the emptying found somebody else's empty pouch.
+  - *asking the world for a thing instead of making it* — only 3 of 10 draft species have a population in a
+    default world and the suite hunts across it, so `queryForObject` threw. **Materialise what you need.**
+
+  The tell: a test that passes locally and fails in CI, or whose failure message changes between runs, is
+  almost always one of these rather than a defect in the world. **Check whether `development` is green before
+  blaming your own branch** — mine inherited a red one twice.
+- **Every Auditor rule has the conservation gate's blast radius, not just conservation.** Two
+  `item_definition` rows added without `item_source` rows gave *"2 item definition(s) have no way to be
+  obtained"* and failed **399 of 926 tests**. Any new item declares its source, and `CODE` with the producing
+  method in `detail` is the answer for anything Java makes. Run the Auditor's own query before pushing.
+- **The merge gate is the four conclusions, never an exit code, and never a column position.** `gh pr checks
+  --watch` has now exited **0** on a failing suite twice, and the rows do not come back in a stable order — a
+  positional read of `pass pending pass pass` was the *frontend* passing, not the backend. The gate that works:
+  `gh pr checks <n> | awk -F'\t' '$2!="pass"{print $1" = "$2}'` must print nothing.
 - **A rebase can be the reason CI never ran.** Two branches took a push, showed the new head, and produced no
   workflow run at all; rebasing them onto `development` and force-pushing started one immediately. If `gh pr
   checks` says "no checks" for more than a few minutes, rebase rather than wait.
