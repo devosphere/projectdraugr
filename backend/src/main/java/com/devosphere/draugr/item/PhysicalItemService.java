@@ -4032,7 +4032,7 @@ public class PhysicalItemService {
             (rs,row) -> java.util.Map.of("id", rs.getObject(1,UUID.class), "name", rs.getString(2)), chronicle, location);
         if (containers.isEmpty()) return new String[]{"FAILED", "You have no container within reach to store anything in."};
         java.util.Map<String,Object> container = containers.stream()
-            .filter(c -> lower.contains(((String)c.get("name")).toLowerCase(java.util.Locale.ROOT))).findFirst()
+            .filter(c -> sentenceNamesContainer(lower, (String) c.get("name"))).findFirst()
             .orElse(containers.size() == 1 ? containers.get(0) : null);
         if (container == null) return new String[]{"FAILED", "You cannot tell which container you mean — name the one to store it in."};
         UUID containerId = (UUID) container.get("id"); String containerName = ((String) container.get("name")).toLowerCase(java.util.Locale.ROOT);
@@ -4082,7 +4082,7 @@ public class PhysicalItemService {
             (rs,row) -> java.util.Map.of("id", rs.getObject(1,UUID.class), "name", rs.getString(2), "state", rs.getString(3)), chronicle, location);
         if (containers.isEmpty()) return new String[]{"FAILED", "There is no container within reach to open or close."};
         java.util.Map<String,Object> container = containers.stream()
-            .filter(c -> lower.contains(((String)c.get("name")).toLowerCase(java.util.Locale.ROOT))).findFirst()
+            .filter(c -> sentenceNamesContainer(lower, (String) c.get("name"))).findFirst()
             .orElse(containers.size() == 1 ? containers.get(0) : null);
         if (container == null) return new String[]{"FAILED", "You cannot tell which container you mean — name the one to open or close."};
         UUID id = (UUID) container.get("id"); String name = ((String) container.get("name")).toLowerCase(java.util.Locale.ROOT); String cur = (String) container.get("state");
@@ -4091,6 +4091,97 @@ public class PhysicalItemService {
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'ACCESS_CHANGED',jsonb_build_object('from',?,'to',?))", id, Timestamp.from(at), cur, newState);
         String verb = switch (newState) { case "OPEN" -> "open"; case "SEALED" -> "seal shut"; default -> "close"; };
         return new String[]{"SUCCEEDED", "You " + verb + " the " + name + "."};
+    }
+
+    /**
+     * Take everything out of a reachable container (#37).
+     *
+     * <p>The container system could open, close and seal a container, put a named thing in, and take a named
+     * thing out — and had no way to <b>empty</b> one. "empty the pot" reached nothing at all, and a Chronicle who
+     * could not remember what they had put by had to name each thing in turn to get it back.
+     *
+     * <p>Honours the rules the single take already honours: a closed or sealed container must be opened first,
+     * and what will not fit is left inside and said so, rather than vanishing or overloading the Chronicle.
+     *
+     * @return [outcome, narration]
+     */
+    @Transactional
+    public String[] emptyContainer(UUID chronicle, UUID location, String text, Instant at) {
+        String lower = text == null ? "" : text.toLowerCase(java.util.Locale.ROOT);
+        java.util.List<java.util.Map<String,Object>> containers = jdbc.query(REACHABLE_CTE +
+            "SELECT w.id, w.display_name, cp.access_state FROM reachable r JOIN world_object w ON w.id=r.id " +
+            "JOIN container_properties cp ON cp.object_id=w.id ORDER BY length(w.display_name) DESC",
+            (rs,row) -> java.util.Map.of("id", rs.getObject(1,UUID.class), "name", rs.getString(2), "state", rs.getString(3)),
+            chronicle, location);
+        if (containers.isEmpty()) return new String[]{"FAILED", "There is no container within reach to empty."};
+        java.util.Map<String,Object> container = containers.stream()
+            .filter(c -> sentenceNamesContainer(lower, (String) c.get("name"))).findFirst()
+            .orElse(containers.size() == 1 ? containers.get(0) : null);
+        if (container == null)
+            return new String[]{"FAILED", "You cannot tell which container you mean — name the one to empty."};
+
+        UUID id = (UUID) container.get("id");
+        String name = ((String) container.get("name")).toLowerCase(java.util.Locale.ROOT);
+        String access = (String) container.get("state");
+        if (!"OPEN".equals(access))
+            return new String[]{"FAILED", "The " + name + " is " + access.toLowerCase(java.util.Locale.ROOT)
+                + " — open it before you can take anything out."};
+
+        java.util.List<java.util.Map<String,Object>> inside = jdbc.queryForList(
+            "SELECT ic.item_id, w.display_name, i.item_key FROM item_containment ic " +
+            "JOIN world_object w ON w.id=ic.item_id JOIN item_instance i ON i.object_id=ic.item_id " +
+            "WHERE ic.container_id=? AND w.lifecycle_state='ACTIVE' ORDER BY w.display_name", id);
+        if (inside.isEmpty()) return new String[]{"SUCCEEDED", "The " + name + " is already empty."};
+
+        java.util.List<String> took = new java.util.ArrayList<>();
+        java.util.List<String> left = new java.util.ArrayList<>();
+        for (java.util.Map<String,Object> row : inside) {
+            UUID item = (UUID) row.get("item_id");
+            String itemKey = (String) row.get("item_key");
+            String itemName = ((String) row.get("display_name")).toLowerCase(java.util.Locale.ROOT);
+            // Asked per item and after each take, because the headroom shrinks as the pack fills.
+            if (capacityHeadroomUnits(chronicle, itemKey) < 1) { left.add(itemName); continue; }
+            jdbc.update("DELETE FROM item_containment WHERE item_id=?", item);
+            jdbc.update("UPDATE world_object SET current_owner_id=?, current_location_id=NULL WHERE id=?", chronicle, item);
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) " +
+                "VALUES (?,?,'PICKED_UP',jsonb_build_object('itemKey',?,'from','CONTAINER'))",
+                item, Timestamp.from(at), itemKey);
+            took.add(itemName);
+        }
+        if (took.isEmpty())
+            return new String[]{"FAILED", "You cannot carry what is in the " + name
+                + " — your load is already as much as you can bear. Set something down first."};
+        StringBuilder s = new StringBuilder("You turn the ").append(name).append(" out and take up ")
+            .append(joinAnd(took)).append(".");
+        // The asymmetry matters: a part-emptied container must not read like an emptied one.
+        if (!left.isEmpty()) s.append(" ").append(joinAnd(left))
+            .append(left.size() == 1 ? " stays in it — you have no room for it." : " stay in it — you have no room for them.");
+        return new String[]{"SUCCEEDED", s.toString()};
+    }
+
+    private static String joinAnd(java.util.List<String> parts) {
+        if (parts.size() == 1) return parts.get(0);
+        return String.join(", ", parts.subList(0, parts.size() - 1)) + " and " + parts.get(parts.size() - 1);
+    }
+
+    /**
+     * Whether a sentence names this container (#37).
+     *
+     * <p>Every container act — open, close, seal, store in, empty — asked whether the sentence contained the
+     * whole display name, so <b>"empty the basket" could not find a "Primitive backpack basket"</b> and
+     * "open the pot" could not find a "Fired clay cooking pot". A Chronicle had to say the catalogue's name
+     * back to it, which is the plain-family-word defect in its own corner of the game.
+     *
+     * <p>The head noun is the last word of the name, which is what the thing IS — a basket, a pot, a sack, a
+     * creel. Callers order by name length descending, so where two containers answer to the same head word the
+     * longer, more specific name is tried first and a sentence naming it in full still wins.
+     */
+    private static boolean sentenceNamesContainer(String lower, String displayName) {
+        String name = displayName.toLowerCase(java.util.Locale.ROOT);
+        if (lower.contains(name)) return true;
+        String[] words = name.split("\\s+");
+        String head = words[words.length - 1];
+        return head.length() >= 3 && com.devosphere.draugr.narration.Words.word(lower, head);
     }
 
     /**
