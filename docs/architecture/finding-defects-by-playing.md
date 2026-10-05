@@ -12,6 +12,11 @@ defects are there, because the tests assert what the code does and the defects a
 does is not what the world says. A session of forty plain phrases, typed the way a person would type them,
 reliably finds a dozen.
 
+**Sweep the axis the bug is on, not just the bug.** "cut reeds" reached nothing while "gather reeds" worked, so
+the axis was the VERB rather than the noun — thirteen verbs against seventeen objects found 114 dead pairs out of
+221, and eight rules that had each grown their own three or four verbs. The same shape appears wherever N
+hand-written lists stand in for one question: ask which axis varies, then vary it on purpose.
+
 Then **turn each hand-found bug into a sweep.** One snowshoe routed to boots (#719) became 29 paired garment
 families (#720), became 183 keywords with a foreign-category verb (#721), became five hyphenated keywords that
 could never match (#722), became a permanent guard holding 2,157 keywords to account (#723). The single bug is
@@ -120,6 +125,27 @@ Every defect this project has found is the same defect: **the world knows someth
   Assert the **direction**, and put the body in a known state first or the assertion is vacuous.
 - **`chunk_refuse` is drained against SIMULATED time**, so a fixture row stamped `now()` is drained to nothing the
   moment the world turns. Date it from `simulation_clock`. Same family as `construction_project.last_structural_update`.
+- **A widening that sits inside the wrong bracket is inert and looks done.** A new disjunct added to the verb
+  group of `if ((verbs…) && (nouns…))` is still gated on the noun, so "take the hide" stayed UNKNOWN while the
+  code read as though it were fixed. Only the live sweep caught it. **Sweep every phrase you claim to have
+  fixed**, not a representative one.
+- **The fix is as liable to the substring defect as the bug was.** A shared gathering-verb clause written with
+  `contains("cut")` turned *"scutch the flax"* into a plant gather, because **scutch contains cut** — and broke
+  the linen road at its third step. `pick` sits inside `pickaxe` the same way. Every verb or name a rule matches
+  goes through `Words.word` or a bounded regex, in the fix as much as in the code being fixed. And where no
+  boundary saves it — *"dig a root cellar"* really does say *root* — narrow the VERB instead: the clause asks for
+  `dig up`, which is how the act is said of a root and not of a cellar.
+- **`target/classes/db/migration` keeps the migrations of whichever branch built last.** Switching branches and
+  booting applies a migration this branch does not have, and the schema history then disagrees with the source
+  tree in both directions. `rm` the stray file and delete its history row.
+- **Do not edit a migration after the scratch database has applied it.** Flyway then refuses to boot with a
+  checksum mismatch. `DELETE FROM flyway_schema_history WHERE version='NNN'` and let it re-apply — which works
+  only because these migrations are written idempotently (`ON CONFLICT DO NOTHING` plus `DO` blocks that only
+  check). The same applies in reverse when you switch to a branch that does not have the migration: the boot
+  fails on "applied migration not resolved locally", and the fix is the same delete.
+- **A fixture that inserts rows by hand asserts nothing about the service that should have inserted them.** A
+  test for "honey must not be given a spoilage clock" that inserts the honey itself with no clock passes on any
+  code at all. Create the object through the path under test, or the test is decoration.
 - **A rebase can be the reason CI never ran.** Two branches took a push, showed the new head, and produced no
   workflow run at all; rebasing them onto `development` and force-pushing started one immediately. If `gh pr
   checks` says "no checks" for more than a few minutes, rebase rather than wait.

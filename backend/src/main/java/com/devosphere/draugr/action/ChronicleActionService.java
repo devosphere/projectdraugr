@@ -2080,15 +2080,14 @@ public class ChronicleActionService {
         // down" and "cut rods" above, so those stay theirs.
         boolean gatherVerb = value.contains("gather")||value.contains("collect")||value.contains("forage")
             ||value.contains("harvest")||value.contains("take all")||value.contains("gather up")
-            ||value.contains("pick")||value.contains("cut")||value.contains("snip")||value.contains("pull")
-            ||value.contains("dig");
+            ||GATHERING_VERB.matcher(value).find()||value.contains("dig up");
         // A tree named in the singular (#37). The nouns had "a tree" and "trees" but nothing for "an apple
         // tree", which contains neither. plantTree grows oak from an acorn and pine from a pine nut and nothing
         // else, and its refusal says so -- which is a far better answer to a Chronicle asking for an apple tree
         // than prose about failing to make something, because it names what CAN be put in the ground.
         if((value.contains("plant")||value.contains("sow")||value.contains("replant"))&&(value.contains("acorn")||value.contains("pine nut")||value.contains("pine_nut")||value.contains("seed")||value.contains("sapling")||value.contains("seedling")||value.contains("a tree")||word(value,"tree")||value.contains("an oak")||value.contains("a pine")||value.contains("some trees")||value.contains("trees"))) return Intent.PLANT_TREE;
         if((gatherVerb||value.contains("reap"))&&(value.contains("mushroom")||value.contains("fungi")||value.contains("herb")||value.contains("plant")||value.contains("berries")||value.contains("flower")||value.contains("leaf")||value.contains("root")||value.contains("nettle")||value.contains("yarrow")||value.contains("comfrey")||value.contains("mint")||value.contains("dandelion")||value.contains("garlic")||value.contains("burdock")||value.contains("watercress")||value.contains("cattail")||value.contains("reed")||value.contains("bulrush")||items.namesSomethingThatGrows(value)||value.contains("chanterelle")||value.contains("porcini")||value.contains("oyster")||value.contains("polypore")||value.contains("lion")||value.contains("hazel rod")||value.contains("hazel")&&value.contains("rod")||value.contains("willow")&&value.contains("branch")||value.contains("pine resin")||value.contains("maple sap")||value.contains("rose hip")||value.contains("elderberry")||value.contains("hawthorn")||value.contains("juniper berry")||value.contains("vine")||value.contains("sapling")||value.contains("straw")||value.contains("young tree")||value.contains("meadow grass")||value.contains("milkweed")||value.contains("flax")||value.contains("hemp")||value.contains("acorn")||value.contains("hazelnut")||value.contains("walnut")||value.contains("chestnut")||value.contains("pine nut")||value.contains("wild onion")||value.contains("wild grain")||value.contains("grain head")||value.contains("rhizome")||value.contains("chamomile")||value.contains("pine needle")||value.contains("wild rice")||value.contains("morel")||value.contains("crab apple")||value.contains("sloe")||value.contains("bilberry")||value.contains("bramble")||value.contains("fatwood")||value.contains("big leaf")||value.contains("broad leaf")||value.contains("dry grass")||value.contains("flexible root")||value.contains("bast"))&&!value.contains("fiber")&&!value.contains("bark")) return Intent.GATHER_PLANT;
-        if(value.contains("clay")&&(gatherVerb||value.contains("find")||value.contains("get")||value.contains("scoop"))) return Intent.GATHER_CLAY;
+        if(value.contains("clay")&&(gatherVerb||value.contains("dig")||value.contains("find")||value.contains("get")||value.contains("scoop"))) return Intent.GATHER_CLAY;
         if(value.contains("slab")&&(gatherVerb||value.contains("split")||value.contains("pry")||value.contains("make")||value.contains("get")||value.contains("quarry")||value.contains("shape")||value.contains("break"))) return Intent.GATHER_STONE_SLAB;
         // Everyday hand-gathered stock (#68 gather aliases): the specific gathers used to accept only gather/
         // collect; forage/harvest/take-all/gather-up now reach them too. A named material takes precedence over
@@ -2334,6 +2333,19 @@ public class ChronicleActionService {
     }
     /** Whole-word containment, delegating to the one definition of it — see {@link com.devosphere.draugr.narration.Words}. */
     private static boolean word(String haystack, String w) { return com.devosphere.draugr.narration.Words.word(haystack, w); }
+    /**
+     * The contested gathering verbs, as WORDS with their inflections.
+     *
+     * <p>Asked as a regex rather than with {@code contains}, because the first cut of this clause used
+     * {@code contains("cut")} and <b>"scutch the flax" contains "cut"</b> — so scutching flax became a plant
+     * gather and the linen road broke at its third step. "pick" sits inside "pickaxe" the same way. This is the
+     * substring defect #37 exists to find, and it is no better for being in the fix.
+     *
+     * <p>"dig" is deliberately absent and spelled "dig up" at the call site: "dig a root cellar" names a real
+     * root and a real assembly, so no boundary saves it, and "dig up" is how the act is said of a root.
+     */
+    private static final java.util.regex.Pattern GATHERING_VERB = java.util.regex.Pattern.compile(
+            "(?<!\\w)(cut|cuts|cutting|pick|picks|picking|pull|pulls|pulling|snip|snips|snipping)(?!\\w)");
     /**
      * Whether a phrase asks for a carcass's yield by naming the yield and nothing else — "take the hide",
      * "keep the antlers", "save the sinew", "take the pelt off".

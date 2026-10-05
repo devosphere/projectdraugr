@@ -35,12 +35,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>Eight gather rules, each of which had grown its own three or four verbs over as many tickets, and no two
  * lists the same. Swept live — thirteen verbs a person would use against seventeen things the world actually
- * grows or holds — <b>114 of 221 verb/object pairs reached nothing</b>:
+ * grows or holds — <b>113 of 221 verb/object pairs reached nothing</b>:
  *
  * <pre>
  *   gather reeds   -> GATHER_PLANT        cut reeds    -> nothing   (and a blade is how reeds are taken)
  *   pick mushrooms -> GATHER_PLANT        pick stones  -> nothing
- *   dig clay       -> GATHER_CLAY         dig a root   -> nothing
+ *   dig clay       -> GATHER_CLAY         dig up a root -> nothing
  *   gather bark    -> STRIP_BARK          harvest bark -> nothing
  * </pre>
  *
@@ -153,6 +153,18 @@ class TheVerbTheWorkIsDoneWithIntegrationTest {
     void andTheRulesWithABetterClaimOnThoseVerbsKeepIt() {
         awaken();
         Map<String, String> held = new LinkedHashMap<>();
+        // The two CI found, and both were this ticket's own defect committed inside its own fix.
+        //
+        // "scutch" CONTAINS "cut", so the first cut of the shared clause turned scutching flax into a plant
+        // gather and broke the linen road at its third step. The clause now asks whether the text says the WORD.
+        held.put("scutch the flax", "PROCESS_MATERIAL");
+        held.put("ret the flax", "PROCESS_MATERIAL");
+        // "root cellar" contains "root", which really is in the plant gather's nouns, so no word boundary saves
+        // this one — the clause asks for "dig up", which is how the act is said of a root and not of a cellar.
+        held.put("dig a root cellar", "ADVANCE_ASSEMBLY");
+        held.put("dig out a root cellar", "ADVANCE_ASSEMBLY");
+        // And clay keeps its own bare "dig", which it would otherwise have lost to that spelling.
+        held.put("dig clay", "GATHER_CLAY");
         // Felling and coppicing are above the gathers and own their own phrasings of "cut".
         held.put("cut down the tree", "FELL_TREE");
         held.put("coppice the hazel", "COPPICE");
