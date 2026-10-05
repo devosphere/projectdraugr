@@ -802,6 +802,7 @@ public class ChronicleActionService {
         else if (intent == Intent.DROP) { String[] r = dropByName(chronicle, text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.PICK_UP) { String[] r = items.pickUp(chronicle.id(), chronicle.location(), text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.STORE) { String[] r = items.storeInContainer(chronicle.id(), chronicle.location(), text, resolvedAt); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.EMPTY_CONTAINER) { String[] r = items.emptyContainer(chronicle.id(), chronicle.location(), text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.OPEN_CONTAINER) { String[] r = items.setContainerAccess(chronicle.id(), chronicle.location(), text, "OPEN", resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.CLOSE_CONTAINER) { String v = text.toLowerCase(Locale.ROOT); String st = (v.contains("seal") || v.contains("stopper") || v.contains("tightly") || v.contains("tie shut") || v.contains("tie it shut")) ? "SEALED" : "CLOSED"; String[] r = items.setContainerAccess(chronicle.id(), chronicle.location(), text, st, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.DESIGNATE) { String[] r = designate(chronicle, text, actionId, resolvedAt); outcome = r[0]; perception = r[1]; }
@@ -1899,6 +1900,43 @@ public class ChronicleActionService {
             ||value.contains(" store my ")||value.contains(" stow my ")||value.contains(" stash my "))
            &&!value.contains("build")&&!value.contains("construct")&&!value.contains("make")&&!value.contains("raise")
            &&!value.contains("set up")&&!value.contains("put up")&&!value.contains("erect")&&!value.contains("dig")) return Intent.STORE;
+        // The rest of how a person says it (#37). "store the meat", "put it away", "stow it", "cache it" and
+        // "put it in the basket" all worked; these seven reached nothing at all, across every thing you would
+        // put by — 26 of 75 phrasing/thing pairs dead, over a mechanism that was finished.
+        //
+        // Gated on a thing worth keeping, so that "bring the stock in" stays the animals' own rule and "bring
+        // in the harvest" stays the crop's.
+        //
+        // Fuel is included, because firewood is a thing you lay up — but the three phrasings GATHER_BRANCHES
+        // claims for it are held back by name, since "bring in more wood" is going out to get some and "bring
+        // the firewood in" is putting away what you already gathered. Leaving fuel out entirely left seven of
+        // these phrasings dead for it; taking the gather's phrasings would have broken the gather.
+        if((value.contains("bring in")||value.contains("bring the")&&value.contains(" in")
+            ||value.contains("take")&&value.contains("inside")||value.contains("set")&&value.contains(" by")
+            ||value.contains("by for later")||value.contains("under cover")||value.contains("lay")&&value.contains(" up")
+            ||value.contains(" in the store")||value.contains(" in my store"))
+           &&(value.contains("meat")||value.contains("fish")||value.contains("grain")||value.contains("food")
+              ||value.contains("hide")||value.contains("stores")||value.contains("catch")||value.contains("game")
+              ||value.contains("firewood")||value.contains("fuel")||value.contains("wood"))
+           // Each phrasing another rule claims for these things is held back BY NAME, with the rule that
+           // claims it. "bring in more wood" is going out to get some and "bring in the grain" is reaping a
+           // standing crop, while "bring the firewood in" and "bring the grain in" are putting away what you
+           // already have. The local suite caught the grain one, which is what that regression test is for.
+           &&!((value.contains("firewood")||value.contains("fuel")||value.contains("wood"))
+               &&(value.contains("bring in")||value.contains("lay in")||value.contains("stock up")||value.contains("gather")))
+           &&!((value.contains("grain")||value.contains("harvest"))
+               &&(value.contains("bring in")||value.contains("reap")||value.contains("harvest the")))
+           &&!value.contains("stock")&&!value.contains("herd")&&!value.contains("flock")&&!value.contains("crop")
+           &&!value.contains("the field")&&!items.namesAKeptAnimal(value)) return Intent.STORE;
+        // Taking everything out of a container (#37). The container system could open, close, seal, put a named
+        // thing in and take a named thing out — and had no way to EMPTY one, so "empty the pot" reached nothing
+        // and a Chronicle who could not remember what they had put by had to name each thing in turn.
+        //
+        // Before the access rules, or "empty the pot" would be read as closing it; and before the storage rules,
+        // so that "empty" is never taken for a storage verb.
+        if((value.contains("empty")||value.contains("turn out")||value.contains("tip out")||value.contains("take everything out")
+            ||value.contains("take it all out")||value.contains("unpack everything")||value.contains("empty out"))
+           &&(containerNoun||value.contains("container"))) return Intent.EMPTY_CONTAINER;
         // PICK_UP (#67 take/retrieve/unpack): explicit retrieval verbs, or "take/get/remove/unpack X out of/from
         // the <container/storage/ground>" — distinct from gathering raw growth from the world.
         if(value.contains("pick up")||value.contains("pick it up")||value.contains("pick them up")||value.contains("pick it back")||value.contains("picked up")||value.contains("grab")||value.contains("retrieve")||value.contains("recover")||value.contains("take back")||value.contains("take it back")||(value.contains("fetch")&&!value.contains("water"))||value.contains("lift the")||value.contains("lift it")||value.contains("lift up")
@@ -2098,7 +2136,7 @@ public class ChronicleActionService {
         // ground is not reaping a stand you sowed, and taking that phrase would have broken foraging to fix
         // farming. When a second crop exists this wants reading the ground rather than a literal, the way #79
         // replaced the kept-animal list with the catalogue.
-        if(word(value,"reap")||((value.contains("harvest")||value.contains("bring in"))&&(value.contains("crop")||value.contains("the field")||value.contains("the grain")||value.contains("my grain")))) return Intent.HARVEST_CROP;
+        if(word(value,"reap")||((value.contains("harvest")||value.contains("bring in"))&&(value.contains("crop")||value.contains("the field")||value.contains("the grain")||value.contains("my grain")||value.contains("the harvest")))) return Intent.HARVEST_CROP;
         // The verbs a gather is actually asked for with (#37). Each family had grown its own three or four, so
         // "gather reeds" worked and "cut reeds" — the verb you hold a blade to do — reached nothing, and "pick
         // stones" reached nothing while "pick mushrooms" worked. One clause for all of them, or they drift again.
@@ -2702,7 +2740,7 @@ public class ChronicleActionService {
         return refuse != null && refuse >= 25;
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;} }    /**     * The structured perception frame — the seam every future Simulation Agent reads
      * from. Where {@code perception} is the finished player-facing prose, this frame
      * is the machine-legible truth behind it: the raw intent and outcome, where the
