@@ -547,6 +547,7 @@ public class ChronicleActionService {
         else if (intent == Intent.LINE_GARMENT) { String[] r = items.lineGarment(chronicle.id(), text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.WATER_CROP) { String[] r = items.waterCrop(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.SCARE_BIRDS) { String[] r = items.scareBirdsFromCrop(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.JUDGE_CROSSING) { String[] r = judgeCrossing(chronicle, text); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.HIDE_TRAIL) { String[] r = wildlife.hideTrail(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.WEED_CROP) { String[] r=items.tendCrop(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.CLEAR_LAND) { String[] r=items.clearLand(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
@@ -1539,6 +1540,61 @@ public class ChronicleActionService {
      * <p>Both thresholds are fractions of what this body can shoulder on dry land rather than fixed weights,
      * because a stronger Chronicle swims and wades a heavier load than a weaker one.
      */
+    /**
+     * Whether the water ahead will let you over, and what is stopping you if it will not (#37).
+     *
+     * <p>The world sounds its own depth beautifully — <i>"it shelves off gradually, past a safe wade before
+     * long"</i> — and then had no answer for "can I cross here". Crossing exists: {@link #waterCrossing} refuses
+     * a Chronicle carrying more than a quarter of their capacity into the sea or three quarters into a fen, a
+     * ford lifts the refusal outright, and a laid timber way lifts it over peat. All of it was reachable only by
+     * walking into the water and being told no.
+     *
+     * <p>Answered from those same readers, and answered as a JUDGEMENT: it never moves the Chronicle. The same
+     * rule as asking whether water is safe to drink, which used to be answered by drinking it (V392).
+     */
+    private String[] judgeCrossing(ActiveChronicle chronicle, String text) {
+        Direction named = Direction.from(text.toLowerCase(Locale.ROOT));
+        java.util.List<java.util.Map<String,Object>> ahead = jdbc.queryForList(
+            "SELECT next.id, next.biome, " +
+            "  EXISTS(SELECT 1 FROM ecology_site es WHERE es.chunk_id=next.id AND es.site_kind ILIKE '%ford%') AS ford " +
+            "FROM world_chunk here JOIN world_chunk next ON next.world_id=here.world_id " +
+            "  AND abs(next.grid_x-here.grid_x) + abs(next.grid_y-here.grid_y) = 1 " +
+            (named == null ? "" : "  AND next.grid_x = here.grid_x + ? AND next.grid_y = here.grid_y + ? ") +
+            "WHERE here.id=? AND next.biome IN ('OCEAN','WETLAND') ORDER BY next.biome",
+            named == null ? new Object[]{chronicle.location()} : new Object[]{named.dx, named.dy, chronicle.location()});
+
+        if (ahead.isEmpty())
+            return new String[]{"SUCCEEDED", named == null
+                ? "You look about for water that would have to be crossed, and there is none within a step of "
+                  + "this ground — whatever lies ahead, it is walked over rather than waded."
+                : "There is no water to the " + named.description.trim() + " — that ground is walked over, not waded."};
+
+        java.util.Map<String,Object> water = ahead.get(0);
+        UUID over = (UUID) water.get("id");
+        boolean sea = "OCEAN".equals(water.get("biome"));
+        String what = sea ? "the open water" : "the fen";
+        if (Boolean.TRUE.equals(water.get("ford")))
+            return new String[]{"SUCCEEDED", "There is a ford at " + what + " — the bottom comes up hard and shallow, "
+                + "and you would cross it dryshod with whatever you are carrying."};
+        if (!sea && laidCrossingAt(over))
+            return new String[]{"SUCCEEDED", "A laid way runs out over " + what + ", pegged and planked. It will "
+                + "carry you and your load both, which is the whole reason such roads were ever built."};
+
+        var load = items.currentLoad(chronicle.id());
+        int capacity = load.sustainedMassCapacityGrams();
+        int allowed = sea ? capacity / 4 : capacity * 3 / 4;
+        if (capacity <= 0 || load.massGrams() <= allowed)
+            return new String[]{"SUCCEEDED", sea
+                ? "You could swim " + what + " with what you have on you, though everything you carry goes into it with you."
+                : "You could wade " + what + " with what you have on you — slow going, and every step found before it is taken."};
+
+        int overweight = load.massGrams() - allowed;
+        return new String[]{"SUCCEEDED", "Not with this load. " + (sea
+            ? "The bottom falls away out there, and what you are carrying would take you down with it"
+            : "The bog would have you before halfway, and what is on your back is the reason")
+            + " — about " + (overweight / 1000) + " kg too much for it. Set that down, or find a ford."};
+    }
+
     private String waterCrossing(UUID chronicle, UUID destination) {
         String biome = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : null, destination);
         if (biome == null) return null;
@@ -2088,6 +2144,15 @@ public class ChronicleActionService {
                &&(value.contains("camp")||value.contains("what i have built")||value.contains("my work"))))
            &&!value.contains("animal")&&!value.contains("beast")&&!value.contains("the herd")&&!value.contains("the flock")
            &&!items.namesAKeptAnimal(value)) return Intent.TAKE_STOCK_OF_CAMP;
+        // Asking WHETHER the water will let you over is a question, not a wade (#37). Placed before the
+        // terrain-crossing rule, which turns "wade north" into movement: a question with a direction in it must
+        // still be a question. Gated on a question shape AND water, so "wade north" itself is untouched.
+        if((value.contains("can i cross")||value.contains("could i cross")||value.contains("is it safe to cross")
+            ||value.contains("can i get across")||value.contains("can i wade")||value.contains("can i swim")
+            ||value.contains("will it carry")||value.contains("is there a ford")||value.contains("crossable")
+            ||((value.startsWith("can i")||value.startsWith("could i")||value.startsWith("is "))
+               &&(value.contains("cross")||value.contains("wade")||value.contains("swim")||value.contains("ford"))))
+           ) return Intent.JUDGE_CROSSING;
         // Asking WHETHER the water is safe is a question, not a drink (#37). It reached DRINK and was answered
         // by drinking the marsh water, which is the one outcome the asker was trying to avoid. Gated on a
         // question shape AND water, and placed before anything that drinks.
@@ -2504,7 +2569,7 @@ public class ChronicleActionService {
         return refuse != null && refuse >= 25;
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;} }    /**     * The structured perception frame — the seam every future Simulation Agent reads
      * from. Where {@code perception} is the finished player-facing prose, this frame
      * is the machine-legible truth behind it: the raw intent and outcome, where the
