@@ -543,6 +543,8 @@ public class ChronicleActionService {
         else if (intent == Intent.SOW) { String[] r=items.sowCrop(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.HARVEST_CROP) { String[] r=items.harvestCrop(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.TAKE_STOCK_OF_CAMP) perception = campStocktake(chronicle.location());
+        else if (intent == Intent.TAKE_STOCK_OF_FOOD) perception = items.foodStocktake(chronicle.id(), chronicle.location(), resolvedAt);
+        else if (intent == Intent.JUDGE_HAULAGE) perception = items.judgeHaulage(chronicle.id());
         else if (intent == Intent.JUDGE_WATER) { String[] r = judgeWater(chronicle.location()); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.LINE_GARMENT) { String[] r = items.lineGarment(chronicle.id(), text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.WATER_CROP) { String[] r = items.waterCrop(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
@@ -578,7 +580,18 @@ public class ChronicleActionService {
         else if (intent == Intent.RAID_HIVE) { PhysicalItemService.InsectHarvest r=items.raidHive(chronicle.id(),chronicle.location(),text,resolvedAt); outcome=r.outcome(); perception=r.narration(); applyInsectHazard(chronicle.id(),r,actionId,resolvedAt); }
         else if (intent == Intent.COLLECT_INSECTS) { PhysicalItemService.InsectHarvest r=items.collectInsects(chronicle.id(),chronicle.location(),text,resolvedAt); outcome=r.outcome(); perception=r.narration(); applyInsectHazard(chronicle.id(),r,actionId,resolvedAt); }
         else if (intent == Intent.EAT) { String[] r = eat(chronicle.id(), text, actionId, resolvedAt); outcome = r[0]; perception = r[1]; if("SUCCEEDED".equals(outcome)) wildlife.recordRefuse(chronicle.location(),2,resolvedAt); }
-        else if (intent == Intent.COOK_MEAT) { int cooked=fire.cookGameMeat(chronicle.id(),chronicle.location(),resolvedAt); if(cooked>1) perception="You lay several pieces out over the steady heat and turn them until each darkens through — a batch done at once."; else if(cooked==1) perception="You hold the meat over the steady heat until its surface changes and darkens."; else {outcome="FAILED";perception="You prepare the meat for a moment, then set it aside unchanged.";} if(cooked>=1) wildlife.recordRefuse(chronicle.location(),4,resolvedAt); }
+        else if (intent == Intent.COOK_MEAT) {
+            // The fire cooks four things now (V396), so the prose must say which. It called a cooked fish
+            // "the meat" otherwise, which is the catalogue token in prose form: a new food that nothing names.
+            FireService.CookedAtFire done=fire.cookOverFire(chronicle.id(),chronicle.location(),resolvedAt,text);
+            int cooked=done.pieces();
+            String it=done.what()==null?"meat":done.what();
+            if(cooked>1) perception="You lay several pieces of "+it+" out over the steady heat and turn them until each darkens through — a batch done at once.";
+            else if(cooked==1) perception="You hold the "+it+" over the steady heat until its surface changes and darkens.";
+            else {outcome="FAILED";perception=done.hadFire()
+                ? "You have nothing raw within reach that a fire could cook — nothing to lay over the heat."
+                : "There is no fire burning here to cook anything over.";}
+            if(cooked>=1) wildlife.recordRefuse(chronicle.location(),4,resolvedAt); }
         else if (intent == Intent.DRINK) {
             // The safest water you carry first (boiled > filtered > raw), else raw from a source in reach. Raw and
             // standing water carry a gut-illness risk that accumulates; boiled water and a clean moving source do not (#71).
@@ -790,6 +803,7 @@ public class ChronicleActionService {
         else if (intent == Intent.DROP) { String[] r = dropByName(chronicle, text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.PICK_UP) { String[] r = items.pickUp(chronicle.id(), chronicle.location(), text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.STORE) { String[] r = items.storeInContainer(chronicle.id(), chronicle.location(), text, resolvedAt); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.EMPTY_CONTAINER) { String[] r = items.emptyContainer(chronicle.id(), chronicle.location(), text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.OPEN_CONTAINER) { String[] r = items.setContainerAccess(chronicle.id(), chronicle.location(), text, "OPEN", resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.CLOSE_CONTAINER) { String v = text.toLowerCase(Locale.ROOT); String st = (v.contains("seal") || v.contains("stopper") || v.contains("tightly") || v.contains("tie shut") || v.contains("tie it shut")) ? "SEALED" : "CLOSED"; String[] r = items.setContainerAccess(chronicle.id(), chronicle.location(), text, st, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.DESIGNATE) { String[] r = designate(chronicle, text, actionId, resolvedAt); outcome = r[0]; perception = r[1]; }
@@ -1887,6 +1901,43 @@ public class ChronicleActionService {
             ||value.contains(" store my ")||value.contains(" stow my ")||value.contains(" stash my "))
            &&!value.contains("build")&&!value.contains("construct")&&!value.contains("make")&&!value.contains("raise")
            &&!value.contains("set up")&&!value.contains("put up")&&!value.contains("erect")&&!value.contains("dig")) return Intent.STORE;
+        // The rest of how a person says it (#37). "store the meat", "put it away", "stow it", "cache it" and
+        // "put it in the basket" all worked; these seven reached nothing at all, across every thing you would
+        // put by — 26 of 75 phrasing/thing pairs dead, over a mechanism that was finished.
+        //
+        // Gated on a thing worth keeping, so that "bring the stock in" stays the animals' own rule and "bring
+        // in the harvest" stays the crop's.
+        //
+        // Fuel is included, because firewood is a thing you lay up — but the three phrasings GATHER_BRANCHES
+        // claims for it are held back by name, since "bring in more wood" is going out to get some and "bring
+        // the firewood in" is putting away what you already gathered. Leaving fuel out entirely left seven of
+        // these phrasings dead for it; taking the gather's phrasings would have broken the gather.
+        if((value.contains("bring in")||value.contains("bring the")&&value.contains(" in")
+            ||value.contains("take")&&value.contains("inside")||value.contains("set")&&value.contains(" by")
+            ||value.contains("by for later")||value.contains("under cover")||value.contains("lay")&&value.contains(" up")
+            ||value.contains(" in the store")||value.contains(" in my store"))
+           &&(value.contains("meat")||value.contains("fish")||value.contains("grain")||value.contains("food")
+              ||value.contains("hide")||value.contains("stores")||value.contains("catch")||value.contains("game")
+              ||value.contains("firewood")||value.contains("fuel")||value.contains("wood"))
+           // Each phrasing another rule claims for these things is held back BY NAME, with the rule that
+           // claims it. "bring in more wood" is going out to get some and "bring in the grain" is reaping a
+           // standing crop, while "bring the firewood in" and "bring the grain in" are putting away what you
+           // already have. The local suite caught the grain one, which is what that regression test is for.
+           &&!((value.contains("firewood")||value.contains("fuel")||value.contains("wood"))
+               &&(value.contains("bring in")||value.contains("lay in")||value.contains("stock up")||value.contains("gather")))
+           &&!((value.contains("grain")||value.contains("harvest"))
+               &&(value.contains("bring in")||value.contains("reap")||value.contains("harvest the")))
+           &&!value.contains("stock")&&!value.contains("herd")&&!value.contains("flock")&&!value.contains("crop")
+           &&!value.contains("the field")&&!items.namesAKeptAnimal(value)) return Intent.STORE;
+        // Taking everything out of a container (#37). The container system could open, close, seal, put a named
+        // thing in and take a named thing out — and had no way to EMPTY one, so "empty the pot" reached nothing
+        // and a Chronicle who could not remember what they had put by had to name each thing in turn.
+        //
+        // Before the access rules, or "empty the pot" would be read as closing it; and before the storage rules,
+        // so that "empty" is never taken for a storage verb.
+        if((value.contains("empty")||value.contains("turn out")||value.contains("tip out")||value.contains("take everything out")
+            ||value.contains("take it all out")||value.contains("unpack everything")||value.contains("empty out"))
+           &&(containerNoun||value.contains("container"))) return Intent.EMPTY_CONTAINER;
         // PICK_UP (#67 take/retrieve/unpack): explicit retrieval verbs, or "take/get/remove/unpack X out of/from
         // the <container/storage/ground>" — distinct from gathering raw growth from the world.
         if(value.contains("pick up")||value.contains("pick it up")||value.contains("pick them up")||value.contains("pick it back")||value.contains("picked up")||value.contains("grab")||value.contains("retrieve")||value.contains("recover")||value.contains("take back")||value.contains("take it back")||(value.contains("fetch")&&!value.contains("water"))||value.contains("lift the")||value.contains("lift it")||value.contains("lift up")
@@ -1994,7 +2045,24 @@ public class ChronicleActionService {
         boolean usingNet = value.contains("net")&&(value.contains("cast")||value.contains("throw")||value.contains("haul")||value.contains("set the net")||value.contains("use the net")||value.contains("with the net")||value.contains("with a net"));
         boolean craftingNet = value.contains("net")&&!usingNet&&(value.contains("weave")||value.contains("craft")||value.contains("make")||value.contains("knot")||value.contains("braid")||value.contains("tie")||value.contains("assemble")||value.contains("mesh"));
         if(craftingNet) return Intent.CRAFT_NET;
-        if((usingNet||(value.contains("fish")&&!value.contains("landing")&&!value.contains("jetty")&&!value.contains("shellfish"))||value.contains("angle")||((value.contains("catch")||value.contains("spear"))&&(value.contains("trout")||value.contains("perch")||value.contains("pike")||value.contains("carp")||value.contains("eel")||value.contains("catfish")||value.contains("crayfish"))))&&!items.actionMatchesProcess(action)) return Intent.FISH;
+        // Fishing is an ACT, not a noun (#37). This asked only whether the sentence contained "fish", so every
+        // sentence about a fish you had already caught was answered by sending you back to the water:
+        //
+        //   eat the fish        -> FISH      cook the fish     -> FISH
+        //   carry the fish      -> FISH      count the fish    -> FISH
+        //   look at the fish    -> FISH      bring the fish in -> FISH
+        //
+        // Now the sentence must be about going after one: fishing as a verb, a line or a rod, or a taking verb
+        // against a fish or a named species. The bare word "fish" on its own still means it, because that is
+        // what a person says when they mean to go — but "the fish" in the middle of a sentence does not.
+        boolean fishingAct = value.trim().equals("fish") || value.contains("fishing")
+            || value.contains("fish for") || value.contains("for fish") || value.contains("fish with") || value.contains("fish the ")
+            || value.contains("cast a line") || value.contains("cast the line") || value.contains("a line in")
+            || ((value.contains("catch")||value.contains("land ")||value.contains("hook")||value.contains("net ")
+                 ||value.contains("spear")||value.contains("take")||value.contains("get"))
+                && (value.contains("fish")||value.contains("trout")||value.contains("perch")||value.contains("pike")
+                    ||value.contains("carp")||word(value,"eel")||value.contains("catfish")||value.contains("crayfish")));
+        if((usingNet||(fishingAct&&!value.contains("landing")&&!value.contains("jetty")&&!value.contains("shellfish"))||value.contains("angle")||((value.contains("catch")||value.contains("spear"))&&(value.contains("trout")||value.contains("perch")||value.contains("pike")||value.contains("carp")||value.contains("eel")||value.contains("catfish")||value.contains("crayfish"))))&&!items.actionMatchesProcess(action)) return Intent.FISH;
         if(value.contains("snare")||value.contains("set a trap")||value.contains("set trap")||((value.contains("trap")||value.contains("noose"))&&(value.contains("rabbit")||value.contains("hare")||value.contains("bird")||value.contains("fowl")||value.contains("small")||value.contains("run")))) return Intent.SNARE;
         // A bird's nest and an insect's nest are the same word and not the same act (#122). The bird takes it when
         // the words name eggs or a bird and name nothing of a hive, so "rob the nest" beside a hive is still the hive.
@@ -2043,7 +2111,7 @@ public class ChronicleActionService {
         // Carry water to a growing stand (#37/#165). FEED_ANIMAL above already claims "water the" — but only
         // together with an animal noun, so a plot, a row or a seedling cannot be mistaken for a thirsty ox. Gated on
         // a crop noun for the same reason in the other direction.
-        if((value.contains("water")||value.contains("irrigate")||value.contains("douse")||value.contains("damp down"))
+        if((word(value,"water")||value.contains("irrigate")||value.contains("douse")||value.contains("damp down"))
            &&(value.contains("crop")||value.contains("field")||value.contains("seedling")||value.contains("seedbed")||value.contains("the plot")||value.contains("my plot")||value.contains("the rows")||value.contains("the row")||value.contains("the grain")||value.contains("my grain")||value.contains("barley")||value.contains("emmer")||value.contains("wheat")||value.contains("the stand"))
            &&!value.contains("animal")&&!value.contains("beast")&&!value.contains("stock")&&!value.contains("the herd")
            &&!items.namesAKeptAnimal(value)) return Intent.WATER_CROP;
@@ -2069,19 +2137,29 @@ public class ChronicleActionService {
         // ground is not reaping a stand you sowed, and taking that phrase would have broken foraging to fix
         // farming. When a second crop exists this wants reading the ground rather than a literal, the way #79
         // replaced the kept-animal list with the catalogue.
-        if(word(value,"reap")||((value.contains("harvest")||value.contains("bring in"))&&(value.contains("crop")||value.contains("the field")||value.contains("the grain")||value.contains("my grain")))) return Intent.HARVEST_CROP;
+        if(word(value,"reap")||((value.contains("harvest")||value.contains("bring in"))&&(value.contains("crop")||value.contains("the field")||value.contains("the grain")||value.contains("my grain")||value.contains("the harvest")))) return Intent.HARVEST_CROP;
+        // The verbs a gather is actually asked for with (#37). Each family had grown its own three or four, so
+        // "gather reeds" worked and "cut reeds" — the verb you hold a blade to do — reached nothing, and "pick
+        // stones" reached nothing while "pick mushrooms" worked. One clause for all of them, or they drift again.
+        //
+        // Held out deliberately: "take" and "get", which mean a dozen other things and already reach a take of
+        // what lies here; "grab", which reaches PICK_UP and should; and "crop", which is the noun for a sown
+        // stand and would turn "crop the watercress" into watering a field. Felling and coppicing claim "cut
+        // down" and "cut rods" above, so those stay theirs.
+        boolean gatherVerb = value.contains("gather")||value.contains("collect")||value.contains("forage")
+            ||value.contains("harvest")||value.contains("take all")||value.contains("gather up")
+            ||GATHERING_VERB.matcher(value).find()||value.contains("dig up");
         // A tree named in the singular (#37). The nouns had "a tree" and "trees" but nothing for "an apple
         // tree", which contains neither. plantTree grows oak from an acorn and pine from a pine nut and nothing
         // else, and its refusal says so -- which is a far better answer to a Chronicle asking for an apple tree
         // than prose about failing to make something, because it names what CAN be put in the ground.
         if((value.contains("plant")||value.contains("sow")||value.contains("replant"))&&(value.contains("acorn")||value.contains("pine nut")||value.contains("pine_nut")||value.contains("seed")||value.contains("sapling")||value.contains("seedling")||value.contains("a tree")||word(value,"tree")||value.contains("an oak")||value.contains("a pine")||value.contains("some trees")||value.contains("trees"))) return Intent.PLANT_TREE;
-        if((value.contains("gather")||value.contains("pick")||value.contains("collect")||value.contains("harvest")||value.contains("forage"))&&(value.contains("mushroom")||value.contains("fungi")||value.contains("herb")||value.contains("plant")||value.contains("berries")||value.contains("flower")||value.contains("leaf")||value.contains("root")||value.contains("nettle")||value.contains("yarrow")||value.contains("comfrey")||value.contains("mint")||value.contains("dandelion")||value.contains("garlic")||value.contains("burdock")||value.contains("watercress")||value.contains("cattail")||value.contains("reed")||value.contains("bulrush")||items.namesSomethingThatGrows(value)||value.contains("chanterelle")||value.contains("porcini")||value.contains("oyster")||value.contains("polypore")||value.contains("lion")||value.contains("hazel rod")||value.contains("hazel")&&value.contains("rod")||value.contains("willow")&&value.contains("branch")||value.contains("pine resin")||value.contains("maple sap")||value.contains("rose hip")||value.contains("elderberry")||value.contains("hawthorn")||value.contains("juniper berry")||value.contains("vine")||value.contains("sapling")||value.contains("straw")||value.contains("young tree")||value.contains("meadow grass")||value.contains("milkweed")||value.contains("flax")||value.contains("hemp")||value.contains("acorn")||value.contains("hazelnut")||value.contains("walnut")||value.contains("chestnut")||value.contains("pine nut")||value.contains("wild onion")||value.contains("wild grain")||value.contains("grain head")||value.contains("rhizome")||value.contains("chamomile")||value.contains("pine needle")||value.contains("wild rice")||value.contains("morel")||value.contains("crab apple")||value.contains("sloe")||value.contains("bilberry")||value.contains("bramble")||value.contains("fatwood")||value.contains("big leaf")||value.contains("broad leaf")||value.contains("dry grass")||value.contains("flexible root")||value.contains("bast"))&&!value.contains("fiber")) return Intent.GATHER_PLANT;
-        if(value.contains("clay")&&(value.contains("gather")||value.contains("dig")||value.contains("collect")||value.contains("find")||value.contains("get")||value.contains("scoop")||value.contains("pull"))) return Intent.GATHER_CLAY;
-        if(value.contains("slab")&&(value.contains("gather")||value.contains("split")||value.contains("pry")||value.contains("cut")||value.contains("make")||value.contains("get")||value.contains("collect")||value.contains("quarry")||value.contains("shape")||value.contains("break"))) return Intent.GATHER_STONE_SLAB;
+        if((gatherVerb||value.contains("reap"))&&(value.contains("mushroom")||value.contains("fungi")||value.contains("herb")||value.contains("plant")||value.contains("berries")||value.contains("flower")||value.contains("leaf")||value.contains("root")||value.contains("nettle")||value.contains("yarrow")||value.contains("comfrey")||value.contains("mint")||value.contains("dandelion")||value.contains("garlic")||value.contains("burdock")||value.contains("watercress")||value.contains("cattail")||value.contains("reed")||value.contains("bulrush")||items.namesSomethingThatGrows(value)||value.contains("chanterelle")||value.contains("porcini")||value.contains("oyster")||value.contains("polypore")||value.contains("lion")||value.contains("hazel rod")||value.contains("hazel")&&value.contains("rod")||value.contains("willow")&&value.contains("branch")||value.contains("pine resin")||value.contains("maple sap")||value.contains("rose hip")||value.contains("elderberry")||value.contains("hawthorn")||value.contains("juniper berry")||value.contains("vine")||value.contains("sapling")||value.contains("straw")||value.contains("young tree")||value.contains("meadow grass")||value.contains("milkweed")||value.contains("flax")||value.contains("hemp")||value.contains("acorn")||value.contains("hazelnut")||value.contains("walnut")||value.contains("chestnut")||value.contains("pine nut")||value.contains("wild onion")||value.contains("wild grain")||value.contains("grain head")||value.contains("rhizome")||value.contains("chamomile")||value.contains("pine needle")||value.contains("wild rice")||value.contains("morel")||value.contains("crab apple")||value.contains("sloe")||value.contains("bilberry")||value.contains("bramble")||value.contains("fatwood")||value.contains("big leaf")||value.contains("broad leaf")||value.contains("dry grass")||value.contains("flexible root")||value.contains("bast"))&&!value.contains("fiber")&&!value.contains("bark")) return Intent.GATHER_PLANT;
+        if(value.contains("clay")&&(gatherVerb||value.contains("dig")||value.contains("find")||value.contains("get")||value.contains("scoop"))) return Intent.GATHER_CLAY;
+        if(value.contains("slab")&&(gatherVerb||value.contains("split")||value.contains("pry")||value.contains("make")||value.contains("get")||value.contains("quarry")||value.contains("shape")||value.contains("break"))) return Intent.GATHER_STONE_SLAB;
         // Everyday hand-gathered stock (#68 gather aliases): the specific gathers used to accept only gather/
         // collect; forage/harvest/take-all/gather-up now reach them too. A named material takes precedence over
         // a generic "gather".
-        boolean gatherVerb = value.contains("gather")||value.contains("collect")||value.contains("forage")||value.contains("harvest")||value.contains("take all")||value.contains("gather up");
         if(gatherVerb&&(value.contains("fiber")||value.contains("fibre"))) return Intent.GATHER_FIBER;
         if(gatherVerb&&(value.contains("branch")||value.contains("stick")||value.contains("deadwood")||value.contains("firewood")||value.contains("kindling"))) return Intent.GATHER_BRANCHES;
         if(gatherVerb&&(value.contains("berry")||value.contains("berries"))) return Intent.GATHER_BERRIES;
@@ -2139,6 +2217,20 @@ public class ChronicleActionService {
         // churned earth and replant so the land grows quiet, and the wildlife return, sooner. A restore/replant
         // verb tied to the land, or a distinctive heal-the-land phrase.
         if(((value.contains("restore")||value.contains("replant")||value.contains("rehabilitat")||value.contains("make good"))&&(value.contains("land")||value.contains("ground")||value.contains("habitat")||value.contains("wild")||value.contains("forest")||value.contains("range")||value.contains("earth")||value.contains("here")||value.contains("this place")))||value.contains("let the land heal")||value.contains("let the ground recover")||value.contains("heal the land")||value.contains("mend the ground")||value.contains("mend the land")) return Intent.RESTORE_HABITAT;
+        // Asking what food you have and how long it will keep (#37). Every one of these reached nothing while
+        // the spoilage subsystem underneath had five tiers, a clock per object and an illness for getting it
+        // wrong. Anchored on the QUESTION words, so that "smoke the meat" and "salt the fish" — which are how
+        // you act on the answer — keep their own processes.
+        if (value.contains("food store")||value.contains("food stock")||value.contains("check my food")
+            ||value.contains("check the food")||value.contains("look at my food")||value.contains("what food")
+            ||value.contains("how much food")||value.contains("check my supplies")||value.contains("check my stores")
+            ||value.contains("take stock of the food")||value.contains("take stock of my food")
+            ||value.contains("how long will the food")||value.contains("how long the food")
+            ||value.contains("is anything going off")||value.contains("anything gone off")
+            ||value.contains("will the meat keep")||value.contains("will it keep")
+            ||value.contains("is the meat still good")||value.contains("still good to eat")
+            ||value.contains("what have i got to eat")||value.contains("have i anything to eat")
+            ||value.contains("go through the food")) return Intent.TAKE_STOCK_OF_FOOD;
         // Go round the camp and account for it (#37). Perception, not work. Placed before MAINTAIN_CAMP, which
         // claims the camp with a tidying verb — taking stock is not tidying, and must not be answered by sweeping.
         // "stock" is also the word for animals, so this needs the stocktaking PHRASE rather than the bare noun:
@@ -2159,6 +2251,28 @@ public class ChronicleActionService {
             ||((value.startsWith("can i")||value.startsWith("could i")||value.startsWith("is "))
                &&(value.contains("cross")||value.contains("wade")||value.contains("swim")||value.contains("ford"))))
            ) return Intent.JUDGE_CROSSING;
+        // What the team can pull (#37). The draft subsystem is finished and almost entirely invisible: gear is
+        // sized to the body, four vehicles have four beds, rough ground tires a team half again as hard, and
+        // fatigue, hunger, thirst and conditioning all scale the draw. All of it is computed inside an UPDATE
+        // that runs only when you WALK, so a keeper standing in their own camp could not ask any of it.
+        //
+        // And every sentence that asked was answered by a recipe for a cart:
+        //
+        //   pull the cart           -> "You have not got enough cart wheel within reach"
+        //   load the cart           -> the same
+        //   hitch the ox to the cart-> the same
+        //   harness the ox          -> nothing at all
+        //   yoke the oxen           -> nothing at all
+        //
+        // Gated on the draught rather than on the vehicle noun alone, so that making one is still making one.
+        if((value.contains("harness")||value.contains("yoke")||value.contains("hitch")||value.contains("unhitch")
+            ||value.contains("pull the")||value.contains("draw the")||value.contains("load the")||value.contains("unload the")
+            ||value.contains("what can the")||value.contains("how is the team")||value.contains("how are the team")
+            ||value.contains("can they pull")||value.contains("what will they pull")||value.contains("how much can they pull"))
+           &&(value.contains("cart")||value.contains("travois")||value.contains("sledge")||value.contains("sled")
+              ||value.contains("pack-saddle")||value.contains("pack saddle")||value.contains("team")||value.contains("beast")
+              ||value.contains("ox")||value.contains("oxen")||value.contains("horse")||value.contains("donkey")||value.contains("yak"))
+           &&!MAKING_SOMETHING.matcher(value).find()) return Intent.JUDGE_HAULAGE;
         // Asking WHETHER the water is safe is a question, not a drink (#37). It reached DRINK and was answered
         // by drinking the marsh water, which is the one outcome the asker was trying to avoid. Gated on a
         // question shape AND water, and placed before anything that drinks.
@@ -2192,7 +2306,13 @@ public class ChronicleActionService {
            ||((value.contains("sit")||value.contains("stand")||value.contains("stay")||value.contains("rest"))
               &&(value.contains("by the fire")||value.contains("at the fire")||value.contains("near the fire")))
            ||value.contains("thaw")||value.contains("rub my hands")||value.contains("chafe my hands")) return Intent.WARM_BODY;
-        if(value.contains("dry off")||value.contains("dry myself")||value.contains("dry my ")||value.contains("get dry")||value.contains("warm and dry")||value.contains("dry out by")) return Intent.DRY_BODY;
+        // Act fourteen: three more ways of saying it, over the drying and warming that already work.
+        if(value.contains("wring out")||value.contains("wring my")||value.contains("change into dry")
+           ||value.contains("dry clothes")||value.contains("dry things")) return Intent.DRY_BODY;
+        if(value.contains("rub the feeling")||value.contains("rub some feeling")||value.contains("get the feeling back")) return Intent.WARM_BODY;
+        if(value.contains("dry off")||value.contains("dry myself")||value.contains("dry my ")
+           ||(value.contains("get dry")&&!value.contains("dry grass")&&!value.contains("dry wood")&&!value.contains("dry tinder")&&!value.contains("dry branch"))
+           ||value.contains("warm and dry")||value.contains("dry out by")) return Intent.DRY_BODY;
         if(value.contains("cool off")||value.contains("cool down")||value.contains("cool myself")||value.contains("rest in the shade")||value.contains("rest in shade")||value.contains("get out of the heat")||value.contains("get out of the sun")||value.contains("get into the shade")) return Intent.COOL_BODY;
         // Said plainly (#37). SHELTER_BODY knew "take shelter" and "get out of the rain" but not the shortest
         // way anybody puts it, so "go inside" reached nothing at all.
@@ -2214,7 +2334,7 @@ public class ChronicleActionService {
         if(value.contains("find water")||value.contains("find some water")||value.contains("find a stream")
            ||value.contains("collect water")||value.contains("fetch water")||value.contains("draw water")||value.contains("gather water")||value.contains("fill container")||value.contains("scoop water")||((value.contains("fill")||value.contains("refill"))&&(value.contains("waterskin")||value.contains("water skin")||value.contains("bucket")||value.contains("vessel")||value.contains("jar")||value.contains("with water")||value.contains("flask")||value.contains("gourd")))) return Intent.COLLECT_WATER;
         if(value.contains("charcoal")&&(value.contains("make")||value.contains("take")||value.contains("gather")||value.contains("get")||value.contains("collect"))&&!items.actionMatchesProcess(value)) return Intent.MAKE_CHARCOAL;
-        if(value.contains("bark")&&!value.contains("loose")&&(value.contains("strip")||value.contains("peel")||value.contains("gather")||value.contains("cut")||value.contains("collect")||value.contains("pull")||value.contains("take"))) return Intent.STRIP_BARK;
+        if(value.contains("bark")&&!value.contains("loose")&&(gatherVerb||value.contains("strip")||value.contains("peel")||value.contains("take"))) return Intent.STRIP_BARK;
         // Ambient ground scavenge (#133): search the forest floor / under a log for small survival materials — the
         // bare-hand pickup of the #192 litter (twigs, leaf litter/tinder, loose bark, shed feather/fur, driftwood,
         // reeds). Placed after the specific gathers (branches/strip-bark/tinder) and before the generic SEARCH, so a
@@ -2278,7 +2398,21 @@ public class ChronicleActionService {
            // Act ten and act twelve: each of these is a person asking the body a question it can answer, and each
            // reached nothing. The body knows every one of its own pressures.
            ||value.contains("what do i need")||value.contains("am i freezing")||value.contains("am i starving")
-           ||value.contains("am i too cold")||value.contains("how am i holding")||value.contains("how bad is it")&&value.contains("wound")) return Intent.SENSE_BODY;
+           ||value.contains("am i too cold")||value.contains("how am i holding")||value.contains("how bad is it")&&value.contains("wound")
+           // Act fourteen swept the one domain the earlier acts never did — what a person says ABOUT THEMSELVES
+           // — and 28 of 41 reached nothing while "am I ill" answered well. Every one of these asks after
+           // something the body tracks by name (injury_severity, blood_loss_ml, pain_level, illness_severity,
+           // core_temperature_c, wetness_level, sleep_debt_hours, energy_level) and that bodyReading already
+           // says out loud, down to "the wet has got through your clothes" and "your legs are going out from
+           // under you". Nothing here is new. It was the asking that failed.
+           ||value.contains("how bad is the cut")||value.contains("how bad is the wound")
+           ||value.contains("am i bleeding")||value.contains("still bleeding")||value.contains("stopped bleeding")
+           ||value.contains("is the bleeding")||value.contains("is it swelling")||value.contains("can i walk on")
+           ||value.contains("how sick")||value.contains("do i have a fever")||value.contains("have i got a fever")
+           ||value.contains("am i feverish")||value.contains("am i getting cold")||value.contains("am i cold")
+           ||value.contains("are my feet wet")||value.contains("am i wet")||value.contains("going numb")
+           ||value.contains("how tired")||value.contains("can i keep going")||value.contains("what state am i")
+           ||value.contains("how do i feel")||value.contains("how am i bearing")) return Intent.SENSE_BODY;
         // Whether the stock will get in calf (#37). Not an act — breeding is simulated and happens on its own
         // when the conditions are right — but a question with five real answers behind it, none of which the
         // keeper could see. Before this, "breed the goats" was caught by the bestiality filter and answered as
@@ -2310,6 +2444,19 @@ public class ChronicleActionService {
         // marker verbs are already claimed above, so a bare place/lay/set-down here is a plain drop.
         if(value.contains("drop")||value.contains("leave behind")||value.contains("set down")||value.contains("put down")||value.contains("discard")||value.contains("lay down")||value.contains("lay it down")||value.contains("lay them down")||((value.contains("place")||value.contains("set")||value.contains("put")||value.contains("lay")||value.contains("leave"))&&(value.contains("on the ground")||value.contains("down here")||value.contains(" aside")))) return Intent.DROP;
         if(value.contains("unequip")||value.contains("take off")||value.contains("remove my")||value.contains("remove the")||value.contains("doff")) return Intent.UNEQUIP;
+        // Treating a hurt where the sentence names the PART rather than the hurt (#37, act fourteen). The
+        // treatment rule knew bind, bandage, dress, clean, tend, treat, see to and wash — against wound, injury,
+        // bleeding, cut and gash. So "splint my leg" and "cauterise it" reached nothing over a mechanism that
+        // works perfectly from "bind the wound", because nothing in them is a word for a wound.
+        //
+        // Above EQUIP, which otherwise answers "splint my leg" with "you have nothing unequipped that can be
+        // worn or wielded" — a wrong answer in the even voice of a true one.
+        if((value.contains("splint")||value.contains("stitch")||value.contains("cauteris")||value.contains("cauteriz")
+            ||value.contains("staunch")||value.contains("change the dressing")||value.contains("press on"))
+           &&(value.contains("wound")||value.contains("cut")||value.contains("bleeding")||value.contains("gash")
+              ||value.contains("my leg")||value.contains("my arm")||value.contains("my ankle")||value.contains("my wrist")
+              ||value.contains("my ribs")||value.contains("my hand")||value.contains("my foot")||value.contains("my shoulder")
+              ||value.contains("my knee")||value.contains("my side")||value.contains("dressing")||value.contains(" it"))) return Intent.TREAT_WOUND;
         if((value.contains("equip")||value.contains("wear")||value.contains("put on")||value.contains("wield")||value.contains("hold my")||value.contains("hold the")||value.contains("carry on my back"))) return Intent.EQUIP;
         // "sling" also means equip (sling it over a shoulder) — but not when 'sling' is part of a thing being made,
         // i.e. a sling stone or a sling pouch ("shape a sling stone", "sew a sling stone pouch"). Those route to their
@@ -2321,6 +2468,41 @@ public class ChronicleActionService {
     }
     /** Whole-word containment, delegating to the one definition of it — see {@link com.devosphere.draugr.narration.Words}. */
     private static boolean word(String haystack, String w) { return com.devosphere.draugr.narration.Words.word(haystack, w); }
+    /**
+     * The verbs that ask for something to be cooked — as WORDS, and never their past participles.
+     *
+     * <p>This rule asked {@code contains("cook")}, and "cooked" contains "cook": so "eat the cooked fish"
+     * was answered by putting another fish on the fire. <b>A past participle names a FOOD; the verb asks for
+     * work.</b> The same held for roasted, grilled, baked and stewed, and the defect was waiting in the rule
+     * before V396 widened it — "eat the cooked meat" has always cooked more meat.
+     */
+    private static final java.util.regex.Pattern COOKING_VERB = java.util.regex.Pattern.compile(
+            "(?<!\\w)(cook|cooks|cooking|roast|roasts|roasting|grill|grills|grilling|bake|bakes|baking"
+          + "|broil|broils|broiling|simmer|simmers|simmering|stew|stews|stewing|braise|braises|braising)(?!\\w)");
+
+    /**
+     * The contested gathering verbs, as WORDS with their inflections.
+     *
+     * <p>Asked as a regex rather than with {@code contains}, because the first cut of this clause used
+     * {@code contains("cut")} and <b>"scutch the flax" contains "cut"</b> — so scutching flax became a plant
+     * gather and the linen road broke at its third step. "pick" sits inside "pickaxe" the same way. This is the
+     * substring defect #37 exists to find, and it is no better for being in the fix.
+     *
+     * <p>"dig" is deliberately absent and spelled "dig up" at the call site: "dig a root cellar" names a real
+     * root and a real assembly, so no boundary saves it, and "dig up" is how the act is said of a root.
+     */
+    private static final java.util.regex.Pattern GATHERING_VERB = java.util.regex.Pattern.compile(
+            "(?<!\\w)(cut|cuts|cutting|pick|picks|picking|pull|pulls|pulling|snip|snips|snipping)(?!\\w)");
+    /**
+     * The verbs that mean MAKING the thing, as words — so that asking a team to pull a cart is read as hauling
+     * while asking for a cart is still read as building one. Held as words rather than substrings, because
+     * "make" sits inside nothing useful but "carve" sits inside "carved" and a past participle names a thing
+     * that already exists rather than asking for another.
+     */
+    private static final java.util.regex.Pattern MAKING_SOMETHING = java.util.regex.Pattern.compile(
+            "(?<!\\w)(make|makes|making|build|builds|building|craft|crafts|crafting|carve|carves|carving"
+          + "|assemble|assembles|assembling|weave|weaves|weaving|lash|lashes|lashing|haft|hafts|hafting"
+          + "|repair|repairs|repairing|mend|mends|mending|dismantle|dismantles|dismantling)(?!\\w)");
     /**
      * Whether a phrase asks for a carcass's yield by naming the yield and nothing else — "take the hide",
      * "keep the antlers", "save the sinew", "take the pelt off".
@@ -2341,14 +2523,18 @@ public class ChronicleActionService {
         if(value.contains("resume")||value.contains("return to")) return Intent.RESUME_LEAN_TO;
         return (value.contains("work") || value.contains("continue") || value.contains("build") || value.contains("weave") || value.contains("bind")) ? Intent.WORK_LEAN_TO : Intent.START_LEAN_TO;
     }
-    private Intent classifyLegacy(String action) { String value = action.toLowerCase(Locale.ROOT); if ((value.contains("cook") || value.contains("roast") || value.contains("grill") || value.contains("bake") || value.contains("broil") || value.contains("simmer") || value.contains("stew") || value.contains("braise")) && (value.contains("meat") || value.contains("game") || value.contains("flesh") || value.contains("carcass"))) return Intent.COOK_MEAT; if ((value.contains("harvest") || value.contains("butcher") || value.contains("skin") || value.contains("gut") || value.contains("quarter") || value.contains("dress")
+    private Intent classifyLegacy(String action) { String value = action.toLowerCase(Locale.ROOT); if (COOKING_VERB.matcher(value).find() && (value.contains("meat") || value.contains("game") || value.contains("flesh") || value.contains("carcass")
+            // V396 gave the fire a table of what it turns into what, so the other raw foods it can now cook are
+            // reachable by the sentence a person would use. A fish was the sharpest case: every preservation
+            // process would take it and nothing would simply cook it.
+            || value.contains("fish") || value.contains("fowl") || word(value, "bird"))) return Intent.COOK_MEAT; if ((value.contains("harvest") || value.contains("butcher") || value.contains("skin") || value.contains("gut") || value.contains("quarter") || value.contains("dress")
 ) && (value.contains("carcass") || value.contains("remains") || value.contains("animal") || value.contains("the kill") || value.contains("the game") || word(value, "deer") || word(value, "boar") || word(value, "elk") || word(value, "aurochs") || word(value, "hare") || word(value, "rabbit") || word(value, "goat") || word(value, "wolf") || word(value, "bear") || word(value, "fox"))
             // Act eleven: "take the hide" reached nothing standing over a deer this same rule would have skinned,
             // because every phrasing it knew named the animal. Naming the yield is naming the act; when nothing
             // here is dead, the harvest says so, which is a better answer than no answer.
             || namesTheYieldItself(value)) return Intent.HARVEST_CARCASS; if ((value.contains("bind") || value.contains("bandage") || value.contains("dress") || value.contains("clean") || value.contains("tend") || value.contains("treat") || value.contains("see to") || value.contains("wash")) && !value.contains("woundwort") && (value.contains("wound") || value.contains("injury") || value.contains("bleeding") || value.contains("the cut") || value.contains("my cut") || value.contains("gash"))) return Intent.TREAT_WOUND; if ((value.contains("feed") || value.contains("stoke") || value.contains("add wood")) && value.contains("fire")) return Intent.FEED_FIRE; if ((value.contains("light")||value.contains("ignite")) && value.contains("fire")) return Intent.LIGHT_FIRE; if (value.contains("fire pit") || value.contains("firepit")) return Intent.BUILD_FIRE_PIT; if ((value.contains("fight")||value.contains("attack")||value.contains("strike")||value.contains("spear ")||value.contains("shoot")||value.contains("hurl")||value.contains("throw the")||value.contains("throw my")||word(value,"kill")||word(value,"hunt")||word(value,"stalk")) && (value.contains("animal")||value.contains("wildlife")||value.contains("creature")||value.contains("beast")||word(value,"deer")||word(value,"boar")||word(value,"wolf")||word(value,"hare")||word(value,"rabbit")||word(value,"fox")||word(value,"elk")||word(value,"aurochs")||word(value,"bear")||word(value,"goat")||word(value,"bird"))) return Intent.CONFRONT_WILDLIFE; if ((value.contains("weave") || value.contains("craft") || value.contains("make")) && value.contains("basket") && !value.contains("burden") && !value.contains("pack") && !value.contains("large") && !value.contains("big") && !value.contains("pannier") && !value.contains("carrying") && !value.contains("back basket") && !value.contains("shoulder") && !value.contains("lidded") && !value.contains("covered") && !value.contains("with a lid")) return Intent.CRAFT_BASKET; if ((value.contains("gather")||value.contains("collect")) && value.contains("fiber")) return Intent.GATHER_FIBER; if (((value.contains("gather")||value.contains("collect")) && (value.contains("branch")||value.contains("stick")))
             // Act twelve, before a storm: "lay in more wood" is the same act as gathering it, and reached nothing.
-            || ((value.contains("lay in")||value.contains("stock up")||value.contains("bring in")) && (value.contains("wood")||value.contains("fuel")||value.contains("firewood")))) return Intent.GATHER_BRANCHES; if ((value.contains("gather")||value.contains("collect")) && (value.contains("berry")||value.contains("berries"))) return Intent.GATHER_BERRIES; if ((value.contains("gather")||value.contains("collect")) && (value.contains("stone")||value.contains("rock"))) return Intent.GATHER_STONE; if (word(value,"eat")||value.contains("consume")) return Intent.EAT; if (value.contains("drink")) return Intent.DRINK; if (Direction.from(value) != null && (value.contains("walk") || value.contains("travel") || value.contains("go ") || value.contains("move"))) return Intent.MOVE; if (value.contains("observe") || value.contains("look") || value.contains("inspect") || value.contains("survey") || value.contains("scout") || value.contains("scan") || value.contains("explore") || value.contains("examine") || value.contains("study the") || value.contains("take in")) return Intent.OBSERVE; if ((value.contains("sleep") && !value.contains("platform") && !value.contains("sleeping bench") && !value.contains("sleeping mat") && !value.contains("sleeping pad")) || word(value,"nap") || value.contains("lie down to sleep") || value.contains("bed down") || value.contains("go to sleep") || value.contains("go to bed")) return Intent.SLEEP; if (value.contains("rest") || value.contains("wait")) return Intent.REST; if (value.contains("where am i") || value.contains("what is this place") || value.contains("what place is this") || value.contains("where do i stand")) return Intent.OBSERVE; if ((value.contains("write") || value.contains("inscribe") || value.contains("jot")) && !value.contains("map")) return Intent.WRITE; if (value.contains("urinate") || word(value, "pee")) return Intent.URINATE; if (value.contains("defecate") || value.contains("poop")) return Intent.DEFECATE;
+            || ((value.contains("lay in")||value.contains("stock up")||value.contains("bring in")) && (value.contains("wood")||value.contains("fuel")||value.contains("firewood")))) return Intent.GATHER_BRANCHES; if ((value.contains("gather")||value.contains("collect")) && (value.contains("berry")||value.contains("berries"))) return Intent.GATHER_BERRIES; if ((value.contains("gather")||value.contains("collect")) && (value.contains("stone")||value.contains("rock"))) return Intent.GATHER_STONE; if (word(value,"eat")||value.contains("consume")) return Intent.EAT; if (value.contains("drink")) return Intent.DRINK; if (Direction.from(value) != null && (value.contains("walk") || value.contains("travel") || value.contains("go ") || value.contains("move"))) return Intent.MOVE; if (value.contains("observe") || value.contains("look") || value.contains("inspect") || value.contains("survey") || value.contains("scout") || value.contains("scan") || value.contains("explore") || value.contains("examine") || value.contains("study the") || value.contains("take in")) return Intent.OBSERVE; if ((value.contains("sleep") && !value.contains("platform") && !value.contains("sleeping bench") && !value.contains("sleeping mat") && !value.contains("sleeping pad")) || word(value,"nap") || value.contains("lie down to sleep") || value.contains("bed down") || value.contains("go to sleep") || value.contains("go to bed")) return Intent.SLEEP; if (value.contains("rest") || value.contains("wait") || value.contains("sit down") || value.contains("sit for a") || value.contains("take the weight off")) return Intent.REST; if (value.contains("where am i") || value.contains("what is this place") || value.contains("what place is this") || value.contains("where do i stand")) return Intent.OBSERVE; if ((value.contains("write") || value.contains("inscribe") || value.contains("jot")) && !value.contains("map")) return Intent.WRITE; if (value.contains("urinate") || word(value, "pee")) return Intent.URINATE; if (value.contains("defecate") || value.contains("poop")) return Intent.DEFECATE;
         // "take off my boots" was an unequip and "take my boots off" reached nothing — the same sentence in the
         // word order English actually prefers for a separable particle. Deliberately the LAST rule in the chain,
         // so that everything with a better claim on a trailing "off" has already taken it: the lid comes off a
@@ -2618,7 +2804,7 @@ public class ChronicleActionService {
         return refuse != null && refuse >= 25;
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;} }    /**     * The structured perception frame — the seam every future Simulation Agent reads
      * from. Where {@code perception} is the finished player-facing prose, this frame
      * is the machine-legible truth behind it: the raw intent and outcome, where the

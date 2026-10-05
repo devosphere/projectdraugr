@@ -159,22 +159,85 @@ public class FireService {
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'FIRE_BANKED','{}'::jsonb)",pit,Timestamp.from(now));
         return true;
     }
-    /** Cook the raw game meat the Chronicle carries over an active fire here. Returns how many pieces were
-     *  cooked (0 if there is no fire or no meat). A cooking tripod (skewers over the flames) or a stone
-     *  griddle (a hot surface) lets several pieces cook in one turn; over a bare fire, one at a time (#257). */
+    /**
+     * Cook a raw food the Chronicle carries over an active fire here (#37, V396).
+     *
+     * <p><b>What the fire can turn into what is a table, not a pair of string literals.</b> This method read
+     * {@code raw_game_meat} in and {@code cooked_game_meat} out, so of the raw foods the catalogue holds — game
+     * meat, a whole fish, a gutted fish, fowl off a snare — only game meat could ever be cooked. Every one of
+     * them could already be smoked, dried, salted, brined and cured by a named process; only one could be put
+     * over a fire and eaten, and there was no cooked fish in the catalogue at all.
+     *
+     * <p>A food the player NAMES is cooked ("cook the fish"); otherwise whatever raw food is to hand, game meat
+     * first, since that is what the fire has always preferred and a replay should not change its mind.
+     *
+     * <p>A cooking tripod (skewers over the flames) or a stone griddle (a hot surface) lets several pieces cook
+     * in one turn; over a bare fire, one at a time (#257).
+     *
+     * @return how many pieces were cooked — 0 if there is no live fire or nothing raw within reach
+     */
     @Transactional
     public int cookGameMeat(UUID chronicle, UUID location, Instant now) {
+        return cookOverFire(chronicle, location, now, null).pieces();
+    }
+
+    /**
+     * What came off the fire: how many pieces, what they are called, and whether there was a fire at all — so
+     * the refusal can name its reason instead of saying the same vague thing to a cold camp and a full pack.
+     */
+    public record CookedAtFire(int pieces, String what, boolean hadFire) { }
+
+    /** As above, cooking whatever raw food the sentence names if it names one. */
+    @Transactional
+    public CookedAtFire cookOverFire(UUID chronicle, UUID location, Instant now, String actionText) {
         Integer active = jdbc.queryForObject("SELECT COUNT(*) FROM construction_project cp JOIN world_object w ON w.id=cp.object_id JOIN fire_state fs ON fs.construction_id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind IN (SELECT project_kind FROM construction_kind WHERE holds_fire) AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' AND fs.active=true", Integer.class, location);
-        if(active==null || active==0) return 0;
+        if(active==null || active==0) return new CookedAtFire(0, null, false);
         int max = (items.hasAtLeast(chronicle,"stone_griddle",1) || items.hasAtLeast(chronicle,"cooking_tripod",1)) ? 3 : 1;
+
+        // The catalogue's own answer to "what does the fire make of this", game meat first so the long-standing
+        // behaviour of a bare "cook" is unchanged.
+        java.util.List<java.util.Map<String,Object>> pairs = jdbc.queryForList(
+            "SELECT fc.raw_item_key, fc.cooked_item_key, fc.keywords, d.display_name FROM fire_cooking fc " +
+            "JOIN item_definition d ON d.item_key=fc.cooked_item_key " +
+            "ORDER BY (fc.raw_item_key <> 'raw_game_meat'), fc.raw_item_key");
+        String said = actionText == null ? "" : actionText.toLowerCase(java.util.Locale.ROOT);
+        java.util.Map<String,Object> chosen = null;
+        // Named by the player: "cook the fish" must cook the fish and not whatever else is in the pack. The
+        // words come from the row, because nobody says "cook the raw fowl meat" — a first cut of this derived
+        // the spoken form from the item key, matched nothing, and cooked game meat when asked for fowl.
+        //
+        // Longest keyword first, so "gutted fish" is preferred over the bare "fish" it contains.
+        if (!said.isEmpty()) {
+            String bestWord = "";
+            for (java.util.Map<String,Object> p : pairs) {
+                if (!items.hasAtLeast(chronicle, (String) p.get("raw_item_key"), 1)) continue;
+                for (String kw : ((String) p.get("keywords")).split(",")) {
+                    String w = kw.trim();
+                    if (w.isEmpty() || w.length() <= bestWord.length()) continue;
+                    if (com.devosphere.draugr.narration.Words.word(said, w)) { bestWord = w; chosen = p; }
+                }
+            }
+        }
+        if (chosen == null)
+            for (java.util.Map<String,Object> p : pairs)
+                if (items.hasAtLeast(chronicle, (String) p.get("raw_item_key"), 1)) { chosen = p; break; }
+        if (chosen == null) return new CookedAtFire(0, null, true);
+
+        String raw = (String) chosen.get("raw_item_key");
+        String out = (String) chosen.get("cooked_item_key");
+        String outName = (String) chosen.get("display_name");
         int cooked=0;
         for(int i=0;i<max;i++){
-            if(!items.consumeOne(chronicle,"raw_game_meat",now)) break;
-            UUID c=items.createCarriedItem(chronicle,"cooked_game_meat","Cooked game meat",now,"COOKED_AT_FIRE");
+            if(!items.consumeOne(chronicle,raw,now)) break;
+            UUID c=items.createCarriedItem(chronicle,out,outName,now,"COOKED_AT_FIRE");
             food.registerCooked(c,now);
             cooked++;
         }
-        return cooked;
+        // Named by the plain word for the thing, which is the row's first keyword — you hold "the fish" over the
+        // heat, not "the cooked fish", and not "the raw fowl meat" either. The display names of both sides read
+        // wrong in that sentence, which is why the words a person uses are in the table.
+        String plainWord = ((String) chosen.get("keywords")).split(",")[0].trim();
+        return new CookedAtFire(cooked, plainWord.isEmpty() ? outName.toLowerCase(java.util.Locale.ROOT) : plainWord, true);
     }
     @Transactional
     public void advanceTo(Instant now) {

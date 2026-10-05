@@ -223,6 +223,77 @@ public class PhysicalItemService {
         return Boolean.TRUE.equals(poisonous);
     }
 
+    /**
+     * What food you have and how long it will keep (#37).
+     *
+     * <p>Spoilage is a complete subsystem: five tiers with their own spans (raw 18h, cooked 72h, smoked 30d,
+     * dried 45d, salted 60d), a clock each object keeps, and an illness for eating what has gone over. All of it
+     * was invisible from inside the game. A Chronicle could carry a fortnight of salted meat and a fish that was
+     * finished by evening and had no way to tell them apart — no phrasing of the question reached anything, and
+     * the survey that does walk your camp counts only structures.
+     *
+     * <p>Read-only, and nothing here is new information: it is the world's own record said out loud, on the same
+     * reach rule that decides what you can eat, so what is counted is exactly what is within your hands.
+     * Soonest to spoil is named first, because that is the one the answer is really about.
+     *
+     * <p>Food with no preservation state is named as keeping, without a span — that is the honest reading of the
+     * record, and it is also the only place in the game where an untracked food becomes visible at all.
+     */
+    @Transactional(readOnly = true)
+    public String foodStocktake(UUID chronicle, UUID location, Instant at) {
+        record Lot(String name, int count, String tier, Long hoursLeft) { }
+        java.util.List<Lot> lots = jdbc.query(REACHABLE_CTE +
+            "SELECT d.display_name, COUNT(*)::int, MIN(f.preparation_kind), " +
+            "       MIN(EXTRACT(EPOCH FROM (f.safe_until - ?))/3600.0) " +
+            "FROM reachable r JOIN item_instance i ON i.object_id=r.id JOIN item_definition d ON d.item_key=i.item_key " +
+            "LEFT JOIN food_preservation_state f ON f.object_id=r.id " +
+            "WHERE d.category='FOOD' GROUP BY d.display_name " +
+            // Nulls last: what has no clock on it is not what you want told first.
+            "ORDER BY 4 NULLS LAST, d.display_name",
+            (rs, row) -> {
+                double h = rs.getDouble(4);
+                return new Lot(rs.getString(1).toLowerCase(java.util.Locale.ROOT), rs.getInt(2),
+                               rs.getString(3), rs.wasNull() ? null : Math.round(h));
+            }, chronicle, location, Timestamp.from(at));
+
+        if (lots.isEmpty())
+            return "You go through what you are carrying and what is put by here, and there is no food in any of "
+                 + "it. Nothing to eat now and nothing kept against later.";
+
+        java.util.List<String> said = new java.util.ArrayList<>();
+        int gone = 0;
+        for (Lot lot : lots) {
+            // "6 beech mast", not "6 beech masts" — the bare count is how this game already says a quantity of an
+            // item everywhere else, and half the food names are mass nouns that no -s fits.
+            String head = lot.count() > 1 ? lot.count() + " " + lot.name() : lot.name();
+            if (lot.hoursLeft() == null) { said.add(head + ", which keeps"); continue; }
+            if (lot.hoursLeft() <= 0) { said.add(head + ", gone over and not safe"); gone++; continue; }
+            said.add(head + " (" + tierWord(lot.tier()) + ") with " + spanLeft(lot.hoursLeft()) + " left in it");
+        }
+        StringBuilder s = new StringBuilder("You go through the food: ").append(joinAnd(said)).append(".");
+        if (gone > 0) s.append(gone == 1
+            ? " One of them is past eating; it will sicken you if you try."
+            : " " + gone + " of them are past eating; they will sicken you if you try.");
+        return s.toString();
+    }
+
+    /** The tier a food keeps on, in the word a person would use for it. */
+    private static String tierWord(String kind) {
+        if (kind == null) return "untreated";
+        return switch (kind) {
+            case "SALTED" -> "salted"; case "SMOKED" -> "smoked"; case "DRIED" -> "dried";
+            case "COOKED" -> "cooked"; case "FRESH" -> "fresh"; case "RAW" -> "raw";
+            default -> kind.toLowerCase(java.util.Locale.ROOT);
+        };
+    }
+
+    /** How long is left, in the coarsest unit that is still honest — nobody counts a month of salt beef in hours. */
+    private static String spanLeft(long hours) {
+        if (hours < 24) return hours <= 1 ? "under an hour" : hours + " hours";
+        long days = hours / 24;
+        return days == 1 ? "a day" : days + " days";
+    }
+
     /** Reachable FOOD-category items as [item_key, display_name] pairs. */
     private java.util.List<String[]> reachableFoods(UUID chronicle) {
         return jdbc.query(REACHABLE_CTE +
@@ -263,11 +334,34 @@ public class PhysicalItemService {
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM',?,?)", id, displayName, holder);
         jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state,quality_grade) VALUES (?,?,'SOUND','SOUND')", id, itemKey);
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,?,jsonb_build_object('itemKey',?))", id, Timestamp.from(occurredAt), transitionType, itemKey);
-        String keep = preservationKind(itemKey);
-        if (keep == null && "FOOD".equals(jdbc.query("SELECT category FROM item_definition WHERE item_key=?", rs -> rs.next() ? rs.getString(1) : null, itemKey)))
-            keep = foragedKeepKind(itemKey);
+        String keep = keepKindFor(itemKey);
         if (keep != null) registerPreserved(id, keep, occurredAt);
         return id;
+    }
+
+    /**
+     * The tier an item keeps on, or null for anything that is not food (#37, #60).
+     *
+     * <p>The named map is the authority where a preparation decides the span — salting, smoking, drying, a wet
+     * cooked dish. <b>Everything else that is FOOD falls back to the foraged reading rather than to nothing</b>,
+     * and that fallback is the point of this method: the map was a hand-written list standing in for a table, and
+     * a made food missing from it never spoiled at all.
+     *
+     * <p>Eight made foods were in exactly that state — acorn flour, grain flour, wild grain, hazelnut and walnut
+     * kernels, a peeled root, a washed root and a bait pouch — because nothing had added them. A washed root is
+     * the #60 defect again: <i>processing a perishable food laundered it into food that never spoiled</i>, the
+     * same way gutting a fish once did. The dry keepers genuinely do keep for weeks and take DRIED; a prepared
+     * root is produce and takes FRESH; worms and crushed berries in a pouch are produce too.
+     *
+     * <p>Fixing it by adding eight cases would have left the next made food to be found the same way. Both paths
+     * already agreed on all eight, so the honest fix is to stop asking the list and let the fallback answer.
+     */
+    private String keepKindFor(String itemKey) {
+        String named = preservationKind(itemKey);
+        if (named != null) return named;
+        return "FOOD".equals(jdbc.query("SELECT category FROM item_definition WHERE item_key=?",
+                                        rs -> rs.next() ? rs.getString(1) : null, itemKey))
+             ? foragedKeepKind(itemKey) : null;
     }
 
     /** As above, but with an explicit quality grade — used by processes and assemblies whose output grade flows from their inputs (M3b). */
@@ -339,6 +433,115 @@ public class PhysicalItemService {
             "AND EXISTS (SELECT 1 FROM wildlife_population wp JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wp.id=wb.population_id) " +
             "AND EXISTS (SELECT 1 FROM item_instance ti JOIN world_object tw ON tw.id=ti.object_id " +
             "  WHERE ti.item_key IN (SELECT item_key FROM draft_vehicle) AND ti.condition_state <> 'BROKEN' AND tw.current_owner_id=? AND tw.lifecycle_state='ACTIVE')";
+    }
+
+    /**
+     * What your team can pull, asked standing still (#37).
+     *
+     * <p>The draft subsystem is finished and almost entirely invisible. Gear is sized to the body, so a collar
+     * harness eases a goat and does nothing whatever for an ox; four vehicles have four different beds; rough
+     * ground tires a team half again as hard; fatigue, hunger, thirst and conditioning all scale what a beast can
+     * draw. <b>All of it is computed inside an UPDATE that runs only when you walk</b>, and the one line of prose
+     * about it comes back as part of a journey. A keeper standing in their own camp could not ask what their
+     * oxen would pull, whether the strap they own fits them, or which of them was blown.
+     *
+     * <p>Worse than silent: every sentence that asked was answered by a recipe for a cart. "pull the cart",
+     * "load the cart", "hitch the ox to the cart" all reached the cart's own assembly and were told what timber
+     * they lacked.
+     *
+     * <p>Read-only, and nothing here is new: it is the same {@code gearOnBeast} expression the haul charges by
+     * and the same {@code bestBed} cap the load uses, said out loud. Deliberately a LOOSER clause than
+     * {@link #beastsAtWork()}, which requires a vehicle to exist — a keeper with two tamed oxen and no cart has
+     * the most to be told, and that clause would tell them nothing.
+     */
+    @Transactional(readOnly = true)
+    public String judgeHaulage(UUID chronicle) {
+        String biome = jdbc.query("SELECT ch.biome FROM world_object cw JOIN world_chunk ch ON ch.id=cw.current_location_id WHERE cw.id=?",
+            rs -> rs.next() ? rs.getString(1) : null, chronicle);
+        boolean easy = isEasyDraftGround(biome);
+
+        java.util.List<java.util.Map<String,Object>> team = jdbc.queryForList(
+            "SELECT (SELECT wp2.species_key FROM wildlife_population wp2 WHERE wp2.id=wb.population_id) AS species, " +
+            "  (" + gearOnBeast(easy) + ") IS NOT NULL AS geared, wb.draft_fatigue AS spentness, " +
+            "  GREATEST(wb.draft_hunger, wb.draft_thirst) AS want, wb.draft_conditioning AS seasoned " +
+            "FROM wildlife_bond wb WHERE wb.chronicle_id=? AND wb.bond_stage='TAMED' " +
+            "AND EXISTS (SELECT 1 FROM wildlife_population wp JOIN draft_species ds ON ds.species_key=wp.species_key " +
+            "            WHERE wp.id=wb.population_id) ORDER BY wb.draft_fatigue DESC",
+            // One parameter, not two: gearOnBeast carries no placeholder of its own (it reaches the keeper
+            // through wb.chronicle_id), and this clause is the looser one rather than beastsAtWork's pair.
+            chronicle);
+
+        java.util.List<String> vehicles = jdbc.queryForList(
+            "SELECT DISTINCT w.display_name FROM item_instance i JOIN world_object w ON w.id=i.object_id " +
+            "JOIN draft_vehicle dv ON dv.item_key=i.item_key " +
+            "WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.condition_state <> 'BROKEN' " +
+            "ORDER BY w.display_name", String.class, chronicle);
+        java.util.List<String> gear = jdbc.queryForList(
+            "SELECT DISTINCT w.display_name FROM item_instance i JOIN world_object w ON w.id=i.object_id " +
+            "JOIN draft_gear dg ON dg.item_key=i.item_key " +
+            "WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.condition_state <> 'BROKEN' " +
+            "ORDER BY w.display_name", String.class, chronicle);
+
+        if (team.isEmpty())
+            return vehicles.isEmpty()
+                ? "You have nothing tamed that pulls, and nothing for it to pull. A beast has to be tamed to the "
+                + "hand before it will draw anything, and then it needs something to draw."
+                : "You have " + joinAnd(withArticle(vehicles)) + " and nothing tamed to put in front of it. It will "
+                + "sit where you left it until there is a beast that answers to you.";
+
+        java.util.List<String> said = new java.util.ArrayList<>();
+        int geared = 0, blown = 0, wanting = 0;
+        java.util.List<String> bare = new java.util.ArrayList<>();
+        for (java.util.Map<String,Object> beast : team) {
+            String name = String.valueOf(beast.get("species")).replace('_', ' ');
+            if (Boolean.TRUE.equals(beast.get("geared"))) geared++; else bare.add(name);
+            if (((Number) beast.get("spentness")).intValue() >= UNFIT_TO_CARRY) blown++;
+            if (((Number) beast.get("want")).intValue() >= UNFIT_TO_CARRY) wanting++;
+        }
+        // The team and what it has to draw are ONE sentence, joined by a comma: said as two they read as
+        // "You have 1 tamed to the draught. and a cart for them to draw", which is how the first cut read.
+        said.add("You have " + team.size() + (team.size() == 1 ? " beast" : " beasts") + " tamed to the draught"
+               + (vehicles.isEmpty()
+                  ? ", and nothing for them to pull — a beast with no load behind it is a beast standing still"
+                  : ", and " + joinAnd(withArticle(vehicles)) + " for them to draw"));
+
+        if (gear.isEmpty())
+            said.add("You keep no gear for them at all, so they would haul against bare rope and pay for every mile of it");
+        else if (geared == team.size())
+            said.add("The " + joinAnd(lower(gear)) + " you keep fits them, and the weight would ride spread rather than on one strap");
+        else if (geared == 0)
+            said.add("The " + joinAnd(lower(gear)) + " you keep goes on none of them — nothing you have will fit an "
+                   + "animal that size, so the whole load would hang off bare rope");
+        else
+            said.add("Your gear fits some of them; the " + joinAnd(bare) + " would pull bare alongside");
+
+        if (blown > 0) said.add(blown == 1 ? "One of them is blown and will haul nothing until it has stood a long while"
+                                           : blown + " of them are blown and will haul nothing until they have stood a long while");
+        if (wanting > 0) said.add(wanting == 1 ? "One of them wants feeding or watering before it draws well"
+                                               : wanting + " of them want feeding or watering before they draw well");
+        if (!vehicles.isEmpty())
+            said.add(easy ? "The ground here is open going, which is the easiest work they will get"
+                          : "The ground here is broken going, and they would labour half again as hard over it as over open country");
+        return String.join(". ", said) + ".";
+    }
+
+    /** Lower-cased for prose. */
+    private static java.util.List<String> lower(java.util.List<String> names) {
+        return names.stream().map(n -> n.toLowerCase(java.util.Locale.ROOT)).toList();
+    }
+
+    /** Lower-cased and given its article, so a list reads "a cart and an ox-yoke" rather than "cart, ox-yoke".
+     *  Used where the sentence does not supply a determiner of its own — "Your an ox-yoke" was the first cut. */
+    private static java.util.List<String> withArticle(java.util.List<String> names) {
+        return lower(names).stream()
+            .map(s -> s.isEmpty() ? s : ("aeiou".indexOf(s.charAt(0)) >= 0 ? "an " + s : "a " + s))
+            .toList();
+    }
+
+    private static String joinAnd(java.util.List<String> parts) {
+        if (parts.isEmpty()) return "";
+        if (parts.size() == 1) return parts.get(0);
+        return String.join(", ", parts.subList(0, parts.size() - 1)) + " and " + parts.get(parts.size() - 1);
     }
 
     /**
@@ -2008,17 +2211,51 @@ public class PhysicalItemService {
         if (said.isEmpty()) return false;
         String verb = said.split("[^a-z]+")[0];
         if (verb.isEmpty() || MAKING_VERBS.contains(verb)) return false;
+        // A sentence of one word is a NAME, not a verb phrase — "shield", "poultice", "bowl" — and reaching the
+        // family from the bare family word is a thing this project worked to get. Several of those names are also
+        // plain verbs, so without this they would be read as sentences about an object they never mention.
+        if (said.split("[^a-z]+").length <= 1) return false;
 
-        // What this process calls itself. If the verb is anywhere in its own vocabulary, the words fit it.
+        // What this process calls itself.
         java.util.List<String> keywords = jdbc.queryForList(
             "SELECT lower(keywords) FROM material_process WHERE process_key=?", String.class, processKey);
         String vocabulary = keywords.isEmpty() ? "" : keywords.get(0);
-        if ((" " + vocabulary.replace(',', ' ') + " ").contains(" " + verb + " ")) return false;
+        boolean vocabularyKnowsTheVerb = (" " + vocabulary.replace(',', ' ') + " ").contains(" " + verb + " ");
 
-        // What is left is a sentence that opens with an ordinary verb this process has never heard of, against a
-        // thing the process happens to name. That is a sentence about the object, not a request to make one.
-        return isAPlainVerb(verb);
+        // What else the sentence is about. Articles, prepositions and pronouns say nothing about the subject, so
+        // they are passed over; what is left is the thing the sentence names.
+        java.util.List<String> aboutWords = new java.util.ArrayList<>();
+        String[] words = said.split("[^a-z]+");
+        for (int i = 1; i < words.length; i++)
+            if (words[i].length() >= 3 && !SAYS_NOTHING_ABOUT_THE_SUBJECT.contains(words[i])) aboutWords.add(words[i]);
+        boolean namesWhatTheProcessIsAbout = aboutWords.stream()
+            .anyMatch(w -> com.devosphere.draugr.narration.Words.word(vocabulary, w));
+
+        // The verb alone is not enough to make the sentence this process's. A process names itself with a bare
+        // noun so that the plain family word reaches its family — "shield", "comb", "hoe", "roof", "wedge" — and
+        // that bare noun was being read as a declaration of the VERB, so every one of them answered a sentence
+        // about something else with a recipe for itself. The verb counts only when the sentence ALSO names
+        // something this process is about, which is what keeps "break the stone" and "skin the fish".
+        if (vocabularyKnowsTheVerb && namesWhatTheProcessIsAbout) return false;
+
+        // A sentence that opens with an ordinary verb this process has never heard of, against a thing the
+        // process happens to name. That is a sentence about the object, not a request to make one (#739).
+        if (isAPlainVerb(verb)) return true;
+
+        // And a sentence that names nothing this process is about matched on the verb and nothing else, whatever
+        // that verb was. "skin the fire" is not a fish; "tar the path" is not a timber. A sentence carrying no
+        // subject at all — "ret it" — is left alone, because there is nothing in it to contradict the process.
+        return !aboutWords.isEmpty() && !namesWhatTheProcessIsAbout;
     }
+
+    /** Words that are in every sentence and tell you nothing about what it is about. */
+    private static final java.util.Set<String> SAYS_NOTHING_ABOUT_THE_SUBJECT = java.util.Set.of(
+        "the", "and", "with", "for", "from", "into", "onto", "upon", "that", "this", "these", "those", "some",
+        "any", "all", "out", "off", "down", "over", "under", "your", "mine", "them", "there", "here", "then",
+        "more", "most", "less", "than", "what", "when", "where", "now", "again", "just", "one", "two", "bit",
+        "little", "much", "very", "really", "properly", "carefully", "well", "good", "ready", "about", "around",
+        "back", "away", "together", "enough", "few", "can", "will", "should", "would", "could", "have",
+        "has", "had", "get", "got", "let", "its", "his", "her", "their", "our", "ours", "yours", "theirs");
 
     /** Whether a word is a verb a person would use for an ordinary act — as against a noun or an article. Kept
      *  short deliberately: a word that is not clearly a verb leaves the sentence alone. */
@@ -2287,7 +2524,7 @@ public class PhysicalItemService {
         if ((atStation || toolAssist) && hi > lo) roll = Math.max(roll, Math.random());
         int made = Math.max(1, lo + (hi > lo ? (int)(roll*(hi-lo+1)) : 0));
         String outName = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, outKey);
-        String kind = preservationKind(outKey);
+        String kind = keepKindFor(outKey);
         // Carried while there is room, then set on the ground in front — a process never fails for
         // want of carrying room (GitHub #19); the worked material lies where it was made.
         for (int i = 0; i < made; i++) {
@@ -2304,7 +2541,7 @@ public class PhysicalItemService {
             int n = omin + (int) Math.round((omax - omin) * yieldFactor);
             if (n <= 0) continue;
             String on = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, ok);
-            String okind = preservationKind(ok);
+            String okind = keepKindFor(ok);
             for (int i = 0; i < n; i++) { UUID mid = UUID.randomUUID(); createCraftedItem(chronicle, location, mid, ok, on, at, "PROCESSED", grade); if (okind != null) registerPreserved(mid, okind, at); }
         }
         // The tool wears with the work (#220), the same way the axe wears with felling: a use accrues and at
@@ -3011,13 +3248,24 @@ public class PhysicalItemService {
      * mushrooms, greens and roots never spoiled — only animal food was ever registered. Dry keepers (nuts, mast,
      * grain) genuinely do keep for weeks, so they take the DRIED tier; everything else is perishable produce and
      * takes FRESH. Returns null for anything that is not food, which is left untracked as before.
+     *
+     * <p>Two FOOD-category things are held back by name, because for them a spoilage clock would be the lie:
+     * <b>raw honey does not spoil</b> — that is a real property of honey and the reason it was left out of the
+     * named map in the first place — and <b>water is not perishable food</b>, though the catalogue files the three
+     * water items under FOOD so that drinking can find them. Water carries its own risk, judged where it is drawn
+     * and drunk, and a bucket does not go over in four days.
      */
     private static String foragedKeepKind(String itemKey) {
         String k = itemKey.toLowerCase(java.util.Locale.ROOT);
+        if (KEEPS_INDEFINITELY.contains(k)) return null;
         boolean dryKeeper = k.contains("nut") || k.contains("mast") || k.contains("grain") || k.contains("rice")
                          || k.contains("acorn") || k.contains("chestnut") || k.contains("seed");
         return dryKeeper ? "DRIED" : "FRESH";
     }
+
+    /** FOOD-category items that genuinely do not go over, each one for its own stated reason. */
+    private static final java.util.Set<String> KEEPS_INDEFINITELY =
+        java.util.Set.of("raw_honey", "clean_water", "filtered_water", "raw_water");
 
     private static String preservationKind(String itemKey) {
         return switch (itemKey) {
@@ -3573,8 +3821,21 @@ public class PhysicalItemService {
         // Yield each product by its rarity roll, respecting carry capacity.
         java.util.List<java.util.Map<String,Object>> products = jdbc.queryForList(
             // Only what the season gives (#161, V323): a hive holds no honey worth taking in winter, and crickets are
-            // not adults until midsummer. in_season() is the one definition every living yield reads.
-            "SELECT item_key, yield_min, yield_max, rarity FROM insect_colony_product WHERE colony_kind=? AND in_season(available_months) ORDER BY rarity DESC", colonyKind);
+            // not adults until midsummer.
+            //
+            // ONE NOTION OF NOW PER HARVEST (#37). This asked in_season(), which reads the GLOBAL
+            // simulation_clock, while the colony KIND five statements above is chosen from seasonOf(occurredAt)
+            // — the moment this harvest actually happens. So a caller working a summer morning got summer
+            // colonies and then had their products filtered by whatever month the world clock happened to
+            // stand in. Cricket and grasshopper yields exist only in months 6-9, so with the clock outside
+            // June-September a summer harvest of either came away EMPTY FOR EVER — and because nothing was
+            // taken, the ground was never stamped as worked, so it could never be worked out either.
+            //
+            // Asked of occurredAt instead. in_season() stays as it is for the callers that genuinely mean
+            // "now"; this one means "then", and says so.
+            "SELECT item_key, yield_min, yield_max, rarity FROM insect_colony_product " +
+            "WHERE colony_kind=? AND (available_months IS NULL OR ?::int = ANY(available_months)) ORDER BY rarity DESC",
+            colonyKind, occurredAt.atZone(java.time.ZoneOffset.UTC).getMonthValue());
         int totalTaken = 0; String firstItemName = null;
         for (java.util.Map<String,Object> p : products) {
             double rarity = ((Number) p.get("rarity")).doubleValue();
@@ -3589,9 +3850,10 @@ public class PhysicalItemService {
             String displayName = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, itemKey);
             if (firstItemName == null) firstItemName = displayName;
             // A colony harvest wrote item rows and nothing else, so anything perishable that came off one kept
-            // forever. Honey and chitin genuinely do not spoil and are absent from the map, so this only ever
-            // tracks what should be tracked — a mussel out of the water is dead within the day (V270).
-            String keepKind = preservationKind(itemKey);
+            // forever — a mussel out of the water is dead within the day (V270). Honey and chitin still keep
+            // indefinitely: chitin is not food at all, and raw honey is held back by name in foragedKeepKind
+            // because not spoiling is a real property of honey rather than an omission from a list.
+            String keepKind = keepKindFor(itemKey);
             for (int i = 0; i < take; i++) {
                 UUID id = UUID.randomUUID();
                 jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM',?,?)", id, displayName, chronicle);
@@ -4032,7 +4294,7 @@ public class PhysicalItemService {
             (rs,row) -> java.util.Map.of("id", rs.getObject(1,UUID.class), "name", rs.getString(2)), chronicle, location);
         if (containers.isEmpty()) return new String[]{"FAILED", "You have no container within reach to store anything in."};
         java.util.Map<String,Object> container = containers.stream()
-            .filter(c -> lower.contains(((String)c.get("name")).toLowerCase(java.util.Locale.ROOT))).findFirst()
+            .filter(c -> sentenceNamesContainer(lower, (String) c.get("name"))).findFirst()
             .orElse(containers.size() == 1 ? containers.get(0) : null);
         if (container == null) return new String[]{"FAILED", "You cannot tell which container you mean — name the one to store it in."};
         UUID containerId = (UUID) container.get("id"); String containerName = ((String) container.get("name")).toLowerCase(java.util.Locale.ROOT);
@@ -4082,7 +4344,7 @@ public class PhysicalItemService {
             (rs,row) -> java.util.Map.of("id", rs.getObject(1,UUID.class), "name", rs.getString(2), "state", rs.getString(3)), chronicle, location);
         if (containers.isEmpty()) return new String[]{"FAILED", "There is no container within reach to open or close."};
         java.util.Map<String,Object> container = containers.stream()
-            .filter(c -> lower.contains(((String)c.get("name")).toLowerCase(java.util.Locale.ROOT))).findFirst()
+            .filter(c -> sentenceNamesContainer(lower, (String) c.get("name"))).findFirst()
             .orElse(containers.size() == 1 ? containers.get(0) : null);
         if (container == null) return new String[]{"FAILED", "You cannot tell which container you mean — name the one to open or close."};
         UUID id = (UUID) container.get("id"); String name = ((String) container.get("name")).toLowerCase(java.util.Locale.ROOT); String cur = (String) container.get("state");
@@ -4091,6 +4353,92 @@ public class PhysicalItemService {
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'ACCESS_CHANGED',jsonb_build_object('from',?,'to',?))", id, Timestamp.from(at), cur, newState);
         String verb = switch (newState) { case "OPEN" -> "open"; case "SEALED" -> "seal shut"; default -> "close"; };
         return new String[]{"SUCCEEDED", "You " + verb + " the " + name + "."};
+    }
+
+    /**
+     * Take everything out of a reachable container (#37).
+     *
+     * <p>The container system could open, close and seal a container, put a named thing in, and take a named
+     * thing out — and had no way to <b>empty</b> one. "empty the pot" reached nothing at all, and a Chronicle who
+     * could not remember what they had put by had to name each thing in turn to get it back.
+     *
+     * <p>Honours the rules the single take already honours: a closed or sealed container must be opened first,
+     * and what will not fit is left inside and said so, rather than vanishing or overloading the Chronicle.
+     *
+     * @return [outcome, narration]
+     */
+    @Transactional
+    public String[] emptyContainer(UUID chronicle, UUID location, String text, Instant at) {
+        String lower = text == null ? "" : text.toLowerCase(java.util.Locale.ROOT);
+        java.util.List<java.util.Map<String,Object>> containers = jdbc.query(REACHABLE_CTE +
+            "SELECT w.id, w.display_name, cp.access_state FROM reachable r JOIN world_object w ON w.id=r.id " +
+            "JOIN container_properties cp ON cp.object_id=w.id ORDER BY length(w.display_name) DESC",
+            (rs,row) -> java.util.Map.of("id", rs.getObject(1,UUID.class), "name", rs.getString(2), "state", rs.getString(3)),
+            chronicle, location);
+        if (containers.isEmpty()) return new String[]{"FAILED", "There is no container within reach to empty."};
+        java.util.Map<String,Object> container = containers.stream()
+            .filter(c -> sentenceNamesContainer(lower, (String) c.get("name"))).findFirst()
+            .orElse(containers.size() == 1 ? containers.get(0) : null);
+        if (container == null)
+            return new String[]{"FAILED", "You cannot tell which container you mean — name the one to empty."};
+
+        UUID id = (UUID) container.get("id");
+        String name = ((String) container.get("name")).toLowerCase(java.util.Locale.ROOT);
+        String access = (String) container.get("state");
+        if (!"OPEN".equals(access))
+            return new String[]{"FAILED", "The " + name + " is " + access.toLowerCase(java.util.Locale.ROOT)
+                + " — open it before you can take anything out."};
+
+        java.util.List<java.util.Map<String,Object>> inside = jdbc.queryForList(
+            "SELECT ic.item_id, w.display_name, i.item_key FROM item_containment ic " +
+            "JOIN world_object w ON w.id=ic.item_id JOIN item_instance i ON i.object_id=ic.item_id " +
+            "WHERE ic.container_id=? AND w.lifecycle_state='ACTIVE' ORDER BY w.display_name", id);
+        if (inside.isEmpty()) return new String[]{"SUCCEEDED", "The " + name + " is already empty."};
+
+        java.util.List<String> took = new java.util.ArrayList<>();
+        java.util.List<String> left = new java.util.ArrayList<>();
+        for (java.util.Map<String,Object> row : inside) {
+            UUID item = (UUID) row.get("item_id");
+            String itemKey = (String) row.get("item_key");
+            String itemName = ((String) row.get("display_name")).toLowerCase(java.util.Locale.ROOT);
+            // Asked per item and after each take, because the headroom shrinks as the pack fills.
+            if (capacityHeadroomUnits(chronicle, itemKey) < 1) { left.add(itemName); continue; }
+            jdbc.update("DELETE FROM item_containment WHERE item_id=?", item);
+            jdbc.update("UPDATE world_object SET current_owner_id=?, current_location_id=NULL WHERE id=?", chronicle, item);
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) " +
+                "VALUES (?,?,'PICKED_UP',jsonb_build_object('itemKey',?,'from','CONTAINER'))",
+                item, Timestamp.from(at), itemKey);
+            took.add(itemName);
+        }
+        if (took.isEmpty())
+            return new String[]{"FAILED", "You cannot carry what is in the " + name
+                + " — your load is already as much as you can bear. Set something down first."};
+        StringBuilder s = new StringBuilder("You turn the ").append(name).append(" out and take up ")
+            .append(joinAnd(took)).append(".");
+        // The asymmetry matters: a part-emptied container must not read like an emptied one.
+        if (!left.isEmpty()) s.append(" ").append(joinAnd(left))
+            .append(left.size() == 1 ? " stays in it — you have no room for it." : " stay in it — you have no room for them.");
+        return new String[]{"SUCCEEDED", s.toString()};
+    }
+
+    /**
+     * Whether a sentence names this container (#37).
+     *
+     * <p>Every container act — open, close, seal, store in, empty — asked whether the sentence contained the
+     * whole display name, so <b>"empty the basket" could not find a "Primitive backpack basket"</b> and
+     * "open the pot" could not find a "Fired clay cooking pot". A Chronicle had to say the catalogue's name
+     * back to it, which is the plain-family-word defect in its own corner of the game.
+     *
+     * <p>The head noun is the last word of the name, which is what the thing IS — a basket, a pot, a sack, a
+     * creel. Callers order by name length descending, so where two containers answer to the same head word the
+     * longer, more specific name is tried first and a sentence naming it in full still wins.
+     */
+    private static boolean sentenceNamesContainer(String lower, String displayName) {
+        String name = displayName.toLowerCase(java.util.Locale.ROOT);
+        if (lower.contains(name)) return true;
+        String[] words = name.split("\\s+");
+        String head = words[words.length - 1];
+        return head.length() >= 3 && com.devosphere.draugr.narration.Words.word(lower, head);
     }
 
     /**
