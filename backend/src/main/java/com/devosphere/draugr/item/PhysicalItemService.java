@@ -441,6 +441,115 @@ public class PhysicalItemService {
     }
 
     /**
+     * What your team can pull, asked standing still (#37).
+     *
+     * <p>The draft subsystem is finished and almost entirely invisible. Gear is sized to the body, so a collar
+     * harness eases a goat and does nothing whatever for an ox; four vehicles have four different beds; rough
+     * ground tires a team half again as hard; fatigue, hunger, thirst and conditioning all scale what a beast can
+     * draw. <b>All of it is computed inside an UPDATE that runs only when you walk</b>, and the one line of prose
+     * about it comes back as part of a journey. A keeper standing in their own camp could not ask what their
+     * oxen would pull, whether the strap they own fits them, or which of them was blown.
+     *
+     * <p>Worse than silent: every sentence that asked was answered by a recipe for a cart. "pull the cart",
+     * "load the cart", "hitch the ox to the cart" all reached the cart's own assembly and were told what timber
+     * they lacked.
+     *
+     * <p>Read-only, and nothing here is new: it is the same {@code gearOnBeast} expression the haul charges by
+     * and the same {@code bestBed} cap the load uses, said out loud. Deliberately a LOOSER clause than
+     * {@link #beastsAtWork()}, which requires a vehicle to exist — a keeper with two tamed oxen and no cart has
+     * the most to be told, and that clause would tell them nothing.
+     */
+    @Transactional(readOnly = true)
+    public String judgeHaulage(UUID chronicle) {
+        String biome = jdbc.query("SELECT ch.biome FROM world_object cw JOIN world_chunk ch ON ch.id=cw.current_location_id WHERE cw.id=?",
+            rs -> rs.next() ? rs.getString(1) : null, chronicle);
+        boolean easy = isEasyDraftGround(biome);
+
+        java.util.List<java.util.Map<String,Object>> team = jdbc.queryForList(
+            "SELECT (SELECT wp2.species_key FROM wildlife_population wp2 WHERE wp2.id=wb.population_id) AS species, " +
+            "  (" + gearOnBeast(easy) + ") IS NOT NULL AS geared, wb.draft_fatigue AS spentness, " +
+            "  GREATEST(wb.draft_hunger, wb.draft_thirst) AS want, wb.draft_conditioning AS seasoned " +
+            "FROM wildlife_bond wb WHERE wb.chronicle_id=? AND wb.bond_stage='TAMED' " +
+            "AND EXISTS (SELECT 1 FROM wildlife_population wp JOIN draft_species ds ON ds.species_key=wp.species_key " +
+            "            WHERE wp.id=wb.population_id) ORDER BY wb.draft_fatigue DESC",
+            // One parameter, not two: gearOnBeast carries no placeholder of its own (it reaches the keeper
+            // through wb.chronicle_id), and this clause is the looser one rather than beastsAtWork's pair.
+            chronicle);
+
+        java.util.List<String> vehicles = jdbc.queryForList(
+            "SELECT DISTINCT w.display_name FROM item_instance i JOIN world_object w ON w.id=i.object_id " +
+            "JOIN draft_vehicle dv ON dv.item_key=i.item_key " +
+            "WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.condition_state <> 'BROKEN' " +
+            "ORDER BY w.display_name", String.class, chronicle);
+        java.util.List<String> gear = jdbc.queryForList(
+            "SELECT DISTINCT w.display_name FROM item_instance i JOIN world_object w ON w.id=i.object_id " +
+            "JOIN draft_gear dg ON dg.item_key=i.item_key " +
+            "WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.condition_state <> 'BROKEN' " +
+            "ORDER BY w.display_name", String.class, chronicle);
+
+        if (team.isEmpty())
+            return vehicles.isEmpty()
+                ? "You have nothing tamed that pulls, and nothing for it to pull. A beast has to be tamed to the "
+                + "hand before it will draw anything, and then it needs something to draw."
+                : "You have " + joinAnd(withArticle(vehicles)) + " and nothing tamed to put in front of it. It will "
+                + "sit where you left it until there is a beast that answers to you.";
+
+        java.util.List<String> said = new java.util.ArrayList<>();
+        int geared = 0, blown = 0, wanting = 0;
+        java.util.List<String> bare = new java.util.ArrayList<>();
+        for (java.util.Map<String,Object> beast : team) {
+            String name = String.valueOf(beast.get("species")).replace('_', ' ');
+            if (Boolean.TRUE.equals(beast.get("geared"))) geared++; else bare.add(name);
+            if (((Number) beast.get("spentness")).intValue() >= UNFIT_TO_CARRY) blown++;
+            if (((Number) beast.get("want")).intValue() >= UNFIT_TO_CARRY) wanting++;
+        }
+        // The team and what it has to draw are ONE sentence, joined by a comma: said as two they read as
+        // "You have 1 tamed to the draught. and a cart for them to draw", which is how the first cut read.
+        said.add("You have " + team.size() + (team.size() == 1 ? " beast" : " beasts") + " tamed to the draught"
+               + (vehicles.isEmpty()
+                  ? ", and nothing for them to pull — a beast with no load behind it is a beast standing still"
+                  : ", and " + joinAnd(withArticle(vehicles)) + " for them to draw"));
+
+        if (gear.isEmpty())
+            said.add("You keep no gear for them at all, so they would haul against bare rope and pay for every mile of it");
+        else if (geared == team.size())
+            said.add("The " + joinAnd(lower(gear)) + " you keep fits them, and the weight would ride spread rather than on one strap");
+        else if (geared == 0)
+            said.add("The " + joinAnd(lower(gear)) + " you keep goes on none of them — nothing you have will fit an "
+                   + "animal that size, so the whole load would hang off bare rope");
+        else
+            said.add("Your gear fits some of them; the " + joinAnd(bare) + " would pull bare alongside");
+
+        if (blown > 0) said.add(blown == 1 ? "One of them is blown and will haul nothing until it has stood a long while"
+                                           : blown + " of them are blown and will haul nothing until they have stood a long while");
+        if (wanting > 0) said.add(wanting == 1 ? "One of them wants feeding or watering before it draws well"
+                                               : wanting + " of them want feeding or watering before they draw well");
+        if (!vehicles.isEmpty())
+            said.add(easy ? "The ground here is open going, which is the easiest work they will get"
+                          : "The ground here is broken going, and they would labour half again as hard over it as over open country");
+        return String.join(". ", said) + ".";
+    }
+
+    /** Lower-cased for prose. */
+    private static java.util.List<String> lower(java.util.List<String> names) {
+        return names.stream().map(n -> n.toLowerCase(java.util.Locale.ROOT)).toList();
+    }
+
+    /** Lower-cased and given its article, so a list reads "a cart and an ox-yoke" rather than "cart, ox-yoke".
+     *  Used where the sentence does not supply a determiner of its own — "Your an ox-yoke" was the first cut. */
+    private static java.util.List<String> withArticle(java.util.List<String> names) {
+        return lower(names).stream()
+            .map(s -> s.isEmpty() ? s : ("aeiou".indexOf(s.charAt(0)) >= 0 ? "an " + s : "a " + s))
+            .toList();
+    }
+
+    private static String joinAnd(java.util.List<String> parts) {
+        if (parts.isEmpty()) return "";
+        if (parts.size() == 1) return parts.get(0);
+        return String.join(", ", parts.subList(0, parts.size() - 1)) + " and " + parts.get(parts.size() - 1);
+    }
+
+    /**
      * What a keeper sees of their own team after a haul (#106), or "" when nothing of theirs pulled.
      *
      * <p><b>The gear was silent.</b> V371 sized draft gear to the body, so a collar harness eases a goat and does
