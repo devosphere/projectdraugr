@@ -135,12 +135,37 @@ class WhatTheTeamCanPullIntegrationTest {
         jdbc.update("INSERT INTO item_instance (object_id,item_key) VALUES (?,?)", id, itemKey);
     }
 
-    /** One tamed draft beast, of a species the seeded world actually has a population of. */
+    /**
+     * One tamed draft beast — MATERIALISED if the world has none left.
+     *
+     * <p>This asked the seeded world for a population of any draft species and took it. In CI it found none and
+     * threw: only three of the ten draft species have a population in a default world (red deer, elk, ox), and
+     * nine hundred other tests hunt and tame across the same world, so by the time this class runs there may be
+     * nothing of the draught left standing. <b>A test that needs a thing must make it, not hope for it</b> — the
+     * same rule this project settled on for features: a read-only one names what is there, an acting one
+     * materialises.
+     */
     private void tameADraftBeast(UUID chronicle) {
-        UUID population = jdbc.queryForObject(
+        UUID population = jdbc.query(
             "SELECT wp.id FROM wildlife_population wp JOIN draft_species ds ON ds.species_key=wp.species_key LIMIT 1",
-            UUID.class);
-        assertNotNull(population, "the seeded world must hold a population of some draft species");
+            rs -> rs.next() ? rs.getObject(1, UUID.class) : null);
+        if (population == null) {
+            // A site of our own, because wildlife_population holds one population per site. The site is a world
+            // object first: ecology_site.id is a foreign key to world_object, which a first cut of this missed.
+            UUID site = UUID.randomUUID();
+            UUID where = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+            String species = jdbc.queryForObject("SELECT species_key FROM draft_species ORDER BY species_key LIMIT 1", String.class);
+            jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) " +
+                "VALUES (?,'ECOLOGY_SITE','Draught pasture',?)", site, where);
+            jdbc.update("INSERT INTO ecology_site (id,world_id,chunk_id,site_category,site_kind,baseline_abundance) " +
+                "SELECT ?, es.world_id, ?, 'WILDLIFE', 'Draught pasture', 40 FROM ecology_site es LIMIT 1", site, where);
+            population = UUID.randomUUID();
+            jdbc.update("INSERT INTO wildlife_population (id,site_id,species_key,ecological_role,activity_cycle," +
+                "population_count,carrying_capacity,behavior_state,last_simulated_at) " +
+                "VALUES (?,?,?,'HERBIVORE','DIURNAL',4,8,'RESTING',(SELECT simulated_at FROM simulation_clock WHERE id=1))",
+                population, site, species);
+        }
+        assertNotNull(population, "there must be a draft population to tame, found or made");
         jdbc.update("INSERT INTO wildlife_bond (chronicle_id,population_id,bond_stage,draft_fatigue,draft_hunger," +
             "draft_thirst,draft_conditioning,last_interaction_at) " +
             "VALUES (?,?,'TAMED',0,0,0,50,(SELECT simulated_at FROM simulation_clock WHERE id=1))",
