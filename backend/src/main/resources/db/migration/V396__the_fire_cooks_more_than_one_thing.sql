@@ -28,6 +28,20 @@ VALUES
  ('cooked_fowl_meat', 'Cooked fowl', 'FOOD', 270, 280, TRUE, FALSE)
 ON CONFLICT (item_key) DO NOTHING;
 
+-- And each must DECLARE how it enters the world, or it is scenery wearing the costume of a mechanic. The
+-- Auditor holds every item_definition to having an item_source row, and nearly every integration test asserts
+-- auditor.consistent() — so two undeclared items failed 399 of 926 tests. These two come from the fire, the
+-- same way cooked_game_meat has always declared itself (CODE / FireService.cookGameMeat).
+INSERT INTO item_source (item_key, source_kind, detail) VALUES
+ ('cooked_fish', 'CODE', 'FireService.cookOverFire via fire_cooking'),
+ ('cooked_fowl_meat', 'CODE', 'FireService.cookOverFire via fire_cooking')
+ON CONFLICT (item_key, source_kind) DO NOTHING;
+
+-- cookGameMeat is now cookOverFire, so the row that named the old method would send a reader to a method that
+-- no longer exists. A source's detail is documentation the Auditor keeps honest; keep it true.
+UPDATE item_source SET detail = 'FireService.cookOverFire via fire_cooking'
+ WHERE item_key = 'cooked_game_meat' AND source_kind = 'CODE';
+
 CREATE TABLE IF NOT EXISTS fire_cooking (
     raw_item_key    VARCHAR(100) PRIMARY KEY REFERENCES item_definition(item_key),
     cooked_item_key VARCHAR(100) NOT NULL     REFERENCES item_definition(item_key),
@@ -83,6 +97,18 @@ BEGIN
     -- raw food happened to be first in the pack.
     SELECT string_agg(raw_item_key, ', ') INTO bad FROM fire_cooking WHERE trim(keywords) = '';
     IF bad IS NOT NULL THEN RAISE EXCEPTION 'V396: no spoken words for: %', bad; END IF;
+
+    -- Every item either side of a pair must DECLARE how it enters the world, or the Auditor counts it as
+    -- unobtainable and nearly every integration test fails with it. The two new cooked foods come from the
+    -- fire and say so; the raw sides were already declared.
+    SELECT string_agg(k, ', ') INTO bad FROM (
+        SELECT raw_item_key AS k FROM fire_cooking
+        UNION SELECT cooked_item_key FROM fire_cooking
+    ) s WHERE NOT EXISTS (SELECT 1 FROM item_source src WHERE src.item_key=s.k)
+      AND NOT EXISTS (SELECT 1 FROM item_unreachable_known u WHERE u.item_key=s.k);
+    IF bad IS NOT NULL THEN
+        RAISE EXCEPTION 'V396: no declared way to obtain: %', bad;
+    END IF;
 
     -- And every raw food the catalogue holds should either have a row here or a stated reason not to. This
     -- names the reason rather than leaving the gap to be rediscovered: the two fish cuts are for drying and
