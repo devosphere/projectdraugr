@@ -223,6 +223,82 @@ public class PhysicalItemService {
         return Boolean.TRUE.equals(poisonous);
     }
 
+    /**
+     * What food you have and how long it will keep (#37).
+     *
+     * <p>Spoilage is a complete subsystem: five tiers with their own spans (raw 18h, cooked 72h, smoked 30d,
+     * dried 45d, salted 60d), a clock each object keeps, and an illness for eating what has gone over. All of it
+     * was invisible from inside the game. A Chronicle could carry a fortnight of salted meat and a fish that was
+     * finished by evening and had no way to tell them apart — no phrasing of the question reached anything, and
+     * the survey that does walk your camp counts only structures.
+     *
+     * <p>Read-only, and nothing here is new information: it is the world's own record said out loud, on the same
+     * reach rule that decides what you can eat, so what is counted is exactly what is within your hands.
+     * Soonest to spoil is named first, because that is the one the answer is really about.
+     *
+     * <p>Food with no preservation state is named as keeping, without a span — that is the honest reading of the
+     * record, and it is also the only place in the game where an untracked food becomes visible at all.
+     */
+    @Transactional(readOnly = true)
+    public String foodStocktake(UUID chronicle, UUID location, Instant at) {
+        record Lot(String name, int count, String tier, Long hoursLeft) { }
+        java.util.List<Lot> lots = jdbc.query(REACHABLE_CTE +
+            "SELECT d.display_name, COUNT(*)::int, MIN(f.preparation_kind), " +
+            "       MIN(EXTRACT(EPOCH FROM (f.safe_until - ?))/3600.0) " +
+            "FROM reachable r JOIN item_instance i ON i.object_id=r.id JOIN item_definition d ON d.item_key=i.item_key " +
+            "LEFT JOIN food_preservation_state f ON f.object_id=r.id " +
+            "WHERE d.category='FOOD' GROUP BY d.display_name " +
+            // Nulls last: what has no clock on it is not what you want told first.
+            "ORDER BY 4 NULLS LAST, d.display_name",
+            (rs, row) -> {
+                double h = rs.getDouble(4);
+                return new Lot(rs.getString(1).toLowerCase(java.util.Locale.ROOT), rs.getInt(2),
+                               rs.getString(3), rs.wasNull() ? null : Math.round(h));
+            }, chronicle, location, Timestamp.from(at));
+
+        if (lots.isEmpty())
+            return "You go through what you are carrying and what is put by here, and there is no food in any of "
+                 + "it. Nothing to eat now and nothing kept against later.";
+
+        java.util.List<String> said = new java.util.ArrayList<>();
+        int gone = 0;
+        for (Lot lot : lots) {
+            // "6 beech mast", not "6 beech masts" — the bare count is how this game already says a quantity of an
+            // item everywhere else, and half the food names are mass nouns that no -s fits.
+            String head = lot.count() > 1 ? lot.count() + " " + lot.name() : lot.name();
+            if (lot.hoursLeft() == null) { said.add(head + ", which keeps"); continue; }
+            if (lot.hoursLeft() <= 0) { said.add(head + ", gone over and not safe"); gone++; continue; }
+            said.add(head + " (" + tierWord(lot.tier()) + ") with " + spanLeft(lot.hoursLeft()) + " left in it");
+        }
+        StringBuilder s = new StringBuilder("You go through the food: ").append(joinAnd(said)).append(".");
+        if (gone > 0) s.append(gone == 1
+            ? " One of them is past eating; it will sicken you if you try."
+            : " " + gone + " of them are past eating; they will sicken you if you try.");
+        return s.toString();
+    }
+
+    /** The tier a food keeps on, in the word a person would use for it. */
+    private static String tierWord(String kind) {
+        if (kind == null) return "untreated";
+        return switch (kind) {
+            case "SALTED" -> "salted"; case "SMOKED" -> "smoked"; case "DRIED" -> "dried";
+            case "COOKED" -> "cooked"; case "FRESH" -> "fresh"; case "RAW" -> "raw";
+            default -> kind.toLowerCase(java.util.Locale.ROOT);
+        };
+    }
+
+    /** How long is left, in the coarsest unit that is still honest — nobody counts a month of salt beef in hours. */
+    private static String spanLeft(long hours) {
+        if (hours < 24) return hours <= 1 ? "under an hour" : hours + " hours";
+        long days = hours / 24;
+        return days == 1 ? "a day" : days + " days";
+    }
+
+    private static String joinAnd(java.util.List<String> parts) {
+        if (parts.size() == 1) return parts.get(0);
+        return String.join(", ", parts.subList(0, parts.size() - 1)) + " and " + parts.get(parts.size() - 1);
+    }
+
     /** Reachable FOOD-category items as [item_key, display_name] pairs. */
     private java.util.List<String[]> reachableFoods(UUID chronicle) {
         return jdbc.query(REACHABLE_CTE +
@@ -263,11 +339,34 @@ public class PhysicalItemService {
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM',?,?)", id, displayName, holder);
         jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state,quality_grade) VALUES (?,?,'SOUND','SOUND')", id, itemKey);
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,?,jsonb_build_object('itemKey',?))", id, Timestamp.from(occurredAt), transitionType, itemKey);
-        String keep = preservationKind(itemKey);
-        if (keep == null && "FOOD".equals(jdbc.query("SELECT category FROM item_definition WHERE item_key=?", rs -> rs.next() ? rs.getString(1) : null, itemKey)))
-            keep = foragedKeepKind(itemKey);
+        String keep = keepKindFor(itemKey);
         if (keep != null) registerPreserved(id, keep, occurredAt);
         return id;
+    }
+
+    /**
+     * The tier an item keeps on, or null for anything that is not food (#37, #60).
+     *
+     * <p>The named map is the authority where a preparation decides the span — salting, smoking, drying, a wet
+     * cooked dish. <b>Everything else that is FOOD falls back to the foraged reading rather than to nothing</b>,
+     * and that fallback is the point of this method: the map was a hand-written list standing in for a table, and
+     * a made food missing from it never spoiled at all.
+     *
+     * <p>Eight made foods were in exactly that state — acorn flour, grain flour, wild grain, hazelnut and walnut
+     * kernels, a peeled root, a washed root and a bait pouch — because nothing had added them. A washed root is
+     * the #60 defect again: <i>processing a perishable food laundered it into food that never spoiled</i>, the
+     * same way gutting a fish once did. The dry keepers genuinely do keep for weeks and take DRIED; a prepared
+     * root is produce and takes FRESH; worms and crushed berries in a pouch are produce too.
+     *
+     * <p>Fixing it by adding eight cases would have left the next made food to be found the same way. Both paths
+     * already agreed on all eight, so the honest fix is to stop asking the list and let the fallback answer.
+     */
+    private String keepKindFor(String itemKey) {
+        String named = preservationKind(itemKey);
+        if (named != null) return named;
+        return "FOOD".equals(jdbc.query("SELECT category FROM item_definition WHERE item_key=?",
+                                        rs -> rs.next() ? rs.getString(1) : null, itemKey))
+             ? foragedKeepKind(itemKey) : null;
     }
 
     /** As above, but with an explicit quality grade — used by processes and assemblies whose output grade flows from their inputs (M3b). */
@@ -2287,7 +2386,7 @@ public class PhysicalItemService {
         if ((atStation || toolAssist) && hi > lo) roll = Math.max(roll, Math.random());
         int made = Math.max(1, lo + (hi > lo ? (int)(roll*(hi-lo+1)) : 0));
         String outName = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, outKey);
-        String kind = preservationKind(outKey);
+        String kind = keepKindFor(outKey);
         // Carried while there is room, then set on the ground in front — a process never fails for
         // want of carrying room (GitHub #19); the worked material lies where it was made.
         for (int i = 0; i < made; i++) {
@@ -2304,7 +2403,7 @@ public class PhysicalItemService {
             int n = omin + (int) Math.round((omax - omin) * yieldFactor);
             if (n <= 0) continue;
             String on = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, ok);
-            String okind = preservationKind(ok);
+            String okind = keepKindFor(ok);
             for (int i = 0; i < n; i++) { UUID mid = UUID.randomUUID(); createCraftedItem(chronicle, location, mid, ok, on, at, "PROCESSED", grade); if (okind != null) registerPreserved(mid, okind, at); }
         }
         // The tool wears with the work (#220), the same way the axe wears with felling: a use accrues and at
@@ -3011,13 +3110,24 @@ public class PhysicalItemService {
      * mushrooms, greens and roots never spoiled — only animal food was ever registered. Dry keepers (nuts, mast,
      * grain) genuinely do keep for weeks, so they take the DRIED tier; everything else is perishable produce and
      * takes FRESH. Returns null for anything that is not food, which is left untracked as before.
+     *
+     * <p>Two FOOD-category things are held back by name, because for them a spoilage clock would be the lie:
+     * <b>raw honey does not spoil</b> — that is a real property of honey and the reason it was left out of the
+     * named map in the first place — and <b>water is not perishable food</b>, though the catalogue files the three
+     * water items under FOOD so that drinking can find them. Water carries its own risk, judged where it is drawn
+     * and drunk, and a bucket does not go over in four days.
      */
     private static String foragedKeepKind(String itemKey) {
         String k = itemKey.toLowerCase(java.util.Locale.ROOT);
+        if (KEEPS_INDEFINITELY.contains(k)) return null;
         boolean dryKeeper = k.contains("nut") || k.contains("mast") || k.contains("grain") || k.contains("rice")
                          || k.contains("acorn") || k.contains("chestnut") || k.contains("seed");
         return dryKeeper ? "DRIED" : "FRESH";
     }
+
+    /** FOOD-category items that genuinely do not go over, each one for its own stated reason. */
+    private static final java.util.Set<String> KEEPS_INDEFINITELY =
+        java.util.Set.of("raw_honey", "clean_water", "filtered_water", "raw_water");
 
     private static String preservationKind(String itemKey) {
         return switch (itemKey) {
@@ -3602,9 +3712,10 @@ public class PhysicalItemService {
             String displayName = jdbc.queryForObject("SELECT display_name FROM item_definition WHERE item_key=?", String.class, itemKey);
             if (firstItemName == null) firstItemName = displayName;
             // A colony harvest wrote item rows and nothing else, so anything perishable that came off one kept
-            // forever. Honey and chitin genuinely do not spoil and are absent from the map, so this only ever
-            // tracks what should be tracked — a mussel out of the water is dead within the day (V270).
-            String keepKind = preservationKind(itemKey);
+            // forever — a mussel out of the water is dead within the day (V270). Honey and chitin still keep
+            // indefinitely: chitin is not food at all, and raw honey is held back by name in foragedKeepKind
+            // because not spoiling is a real property of honey rather than an omission from a list.
+            String keepKind = keepKindFor(itemKey);
             for (int i = 0; i < take; i++) {
                 UUID id = UUID.randomUUID();
                 jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM',?,?)", id, displayName, chronicle);
