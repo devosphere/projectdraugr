@@ -294,11 +294,6 @@ public class PhysicalItemService {
         return days == 1 ? "a day" : days + " days";
     }
 
-    private static String joinAnd(java.util.List<String> parts) {
-        if (parts.size() == 1) return parts.get(0);
-        return String.join(", ", parts.subList(0, parts.size() - 1)) + " and " + parts.get(parts.size() - 1);
-    }
-
     /** Reachable FOOD-category items as [item_key, display_name] pairs. */
     private java.util.List<String[]> reachableFoods(UUID chronicle) {
         return jdbc.query(REACHABLE_CTE +
@@ -4424,11 +4419,6 @@ public class PhysicalItemService {
         if (!left.isEmpty()) s.append(" ").append(joinAnd(left))
             .append(left.size() == 1 ? " stays in it — you have no room for it." : " stay in it — you have no room for them.");
         return new String[]{"SUCCEEDED", s.toString()};
-    }
-
-    private static String joinAnd(java.util.List<String> parts) {
-        if (parts.size() == 1) return parts.get(0);
-        return String.join(", ", parts.subList(0, parts.size() - 1)) + " and " + parts.get(parts.size() - 1);
     }
 
     /**

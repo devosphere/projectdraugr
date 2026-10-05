@@ -2493,6 +2493,7 @@ public class ChronicleActionService {
      */
     private static final java.util.regex.Pattern GATHERING_VERB = java.util.regex.Pattern.compile(
             "(?<!\\w)(cut|cuts|cutting|pick|picks|picking|pull|pulls|pulling|snip|snips|snipping)(?!\\w)");
+    /**
      * The verbs that mean MAKING the thing, as words — so that asking a team to pull a cart is read as hauling
      * while asking for a cart is still read as building one. Held as words rather than substrings, because
      * "make" sits inside nothing useful but "carve" sits inside "carved" and a past participle names a thing
