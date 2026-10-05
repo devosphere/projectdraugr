@@ -2008,17 +2008,51 @@ public class PhysicalItemService {
         if (said.isEmpty()) return false;
         String verb = said.split("[^a-z]+")[0];
         if (verb.isEmpty() || MAKING_VERBS.contains(verb)) return false;
+        // A sentence of one word is a NAME, not a verb phrase — "shield", "poultice", "bowl" — and reaching the
+        // family from the bare family word is a thing this project worked to get. Several of those names are also
+        // plain verbs, so without this they would be read as sentences about an object they never mention.
+        if (said.split("[^a-z]+").length <= 1) return false;
 
-        // What this process calls itself. If the verb is anywhere in its own vocabulary, the words fit it.
+        // What this process calls itself.
         java.util.List<String> keywords = jdbc.queryForList(
             "SELECT lower(keywords) FROM material_process WHERE process_key=?", String.class, processKey);
         String vocabulary = keywords.isEmpty() ? "" : keywords.get(0);
-        if ((" " + vocabulary.replace(',', ' ') + " ").contains(" " + verb + " ")) return false;
+        boolean vocabularyKnowsTheVerb = (" " + vocabulary.replace(',', ' ') + " ").contains(" " + verb + " ");
 
-        // What is left is a sentence that opens with an ordinary verb this process has never heard of, against a
-        // thing the process happens to name. That is a sentence about the object, not a request to make one.
-        return isAPlainVerb(verb);
+        // What else the sentence is about. Articles, prepositions and pronouns say nothing about the subject, so
+        // they are passed over; what is left is the thing the sentence names.
+        java.util.List<String> aboutWords = new java.util.ArrayList<>();
+        String[] words = said.split("[^a-z]+");
+        for (int i = 1; i < words.length; i++)
+            if (words[i].length() >= 3 && !SAYS_NOTHING_ABOUT_THE_SUBJECT.contains(words[i])) aboutWords.add(words[i]);
+        boolean namesWhatTheProcessIsAbout = aboutWords.stream()
+            .anyMatch(w -> com.devosphere.draugr.narration.Words.word(vocabulary, w));
+
+        // The verb alone is not enough to make the sentence this process's. A process names itself with a bare
+        // noun so that the plain family word reaches its family — "shield", "comb", "hoe", "roof", "wedge" — and
+        // that bare noun was being read as a declaration of the VERB, so every one of them answered a sentence
+        // about something else with a recipe for itself. The verb counts only when the sentence ALSO names
+        // something this process is about, which is what keeps "break the stone" and "skin the fish".
+        if (vocabularyKnowsTheVerb && namesWhatTheProcessIsAbout) return false;
+
+        // A sentence that opens with an ordinary verb this process has never heard of, against a thing the
+        // process happens to name. That is a sentence about the object, not a request to make one (#739).
+        if (isAPlainVerb(verb)) return true;
+
+        // And a sentence that names nothing this process is about matched on the verb and nothing else, whatever
+        // that verb was. "skin the fire" is not a fish; "tar the path" is not a timber. A sentence carrying no
+        // subject at all — "ret it" — is left alone, because there is nothing in it to contradict the process.
+        return !aboutWords.isEmpty() && !namesWhatTheProcessIsAbout;
     }
+
+    /** Words that are in every sentence and tell you nothing about what it is about. */
+    private static final java.util.Set<String> SAYS_NOTHING_ABOUT_THE_SUBJECT = java.util.Set.of(
+        "the", "and", "with", "for", "from", "into", "onto", "upon", "that", "this", "these", "those", "some",
+        "any", "all", "out", "off", "down", "over", "under", "your", "mine", "them", "there", "here", "then",
+        "more", "most", "less", "than", "what", "when", "where", "now", "again", "just", "one", "two", "bit",
+        "little", "much", "very", "really", "properly", "carefully", "well", "good", "ready", "about", "around",
+        "back", "away", "together", "enough", "few", "can", "will", "should", "would", "could", "have",
+        "has", "had", "get", "got", "let", "its", "his", "her", "their", "our", "ours", "yours", "theirs");
 
     /** Whether a word is a verb a person would use for an ordinary act — as against a noun or an article. Kept
      *  short deliberately: a word that is not clearly a verb leaves the sentence alone. */
