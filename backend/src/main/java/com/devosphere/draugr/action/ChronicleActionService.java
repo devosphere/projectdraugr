@@ -2388,6 +2388,7 @@ public class ChronicleActionService {
             "(?<!\\w)(cook|cooks|cooking|roast|roasts|roasting|grill|grills|grilling|bake|bakes|baking"
           + "|broil|broils|broiling|simmer|simmers|simmering|stew|stews|stewing|braise|braises|braising)(?!\\w)");
 
+    /**
      * The contested gathering verbs, as WORDS with their inflections.
      *
      * <p>Asked as a regex rather than with {@code contains}, because the first cut of this clause used
