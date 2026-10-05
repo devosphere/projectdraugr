@@ -97,12 +97,22 @@ class ColonyDepletionAndPollinationIntegrationTest {
         // Work every colony this ground carries flat, then find there is nothing left to take.
         String lastNarration = first.narration();
         boolean refused = false;
-        for (int attempt = 0; attempt < 8 && !refused; attempt++) {
+        // A harvest can come away with nothing by chance — each product is rolled against its own rarity — and
+        // that is reported as FAILED too. Stopping on the first FAILED therefore stopped on a bad roll about as
+        // often as on the thing under test, and the next assertion then read a narration about empty hands
+        // rather than about ground that needs time. This test was red on development for exactly that reason.
+        //
+        // So: keep working until the ground says it is worked out, and let a barren roll be just another
+        // attempt. The budget is generous because the stopping condition is now the real one.
+        for (int attempt = 0; attempt < 60 && !refused; attempt++) {
             PhysicalItemService.InsectHarvest again = items.collectInsects(chronicle, chunk, "turn over the ground for insects", summer);
-            lastNarration = again.narration();
-            if ("FAILED".equals(again.outcome())) refused = true;
+            String said = again.narration().toLowerCase(java.util.Locale.ROOT);
+            if ("FAILED".equals(again.outcome()) && (said.contains("come back") || said.contains("ready"))) {
+                lastNarration = again.narration();
+                refused = true;
+            }
         }
-        assertTrue(refused, "ground worked over and over must eventually give nothing — it gave forever before: " + lastNarration);
+        assertTrue(refused, "ground worked over and over must eventually say it needs time — it gave forever before: " + lastNarration);
         assertTrue(lastNarration.toLowerCase(java.util.Locale.ROOT).contains("come back")
                 || lastNarration.toLowerCase(java.util.Locale.ROOT).contains("ready"),
             "the refusal must say the ground needs time, not that there was never anything here: " + lastNarration);
