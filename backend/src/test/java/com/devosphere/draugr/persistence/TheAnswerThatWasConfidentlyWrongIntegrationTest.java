@@ -51,12 +51,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * the word a person uses for it; and a sentence carrying "drink" is no longer a drink when it carries a making
  * verb too.
  *
- * <p><b>{@code make a hot drink} now reaches nothing, and that is the improvement.</b> This project triages a
- * wrong answer above a missing one, and the keywords that would have carried it were taken back out of V401
- * rather than shipped dead: {@code ProcessMatcher} skips any candidate whose category is not the one the
- * sentence classified to, {@code brew_infusion} is PROCESS, and "make" classifies CRAFT while "drink"
- * classifies INHABIT. Adding {@code brew}, {@code steep} and {@code infuse} as PROCESS terms did not move it
- * either — measured, with none of five phrasings changing. That gate wants a slice of its own.
+ * <p><b>And the hot drink was the SUBJECT, not the category.</b> I recorded the category gate first and was
+ * wrong: the category is already a hint rather than a gate — {@code resolveAndRecord} has fallen back to the
+ * whole catalogue since #721 when the guessed category answers nothing. What refuses a sentence is the
+ * SUBJECT: <i>"right work, right verb, wrong material"</i>, in the matcher&#39;s own words.
+ * {@code brew_infusion}&#39;s subjects were {@code infusion} and {@code tea}, and "a hot drink" names neither —
+ * it names a PROPERTY of the thing rather than the thing. Adding {@code brew}, {@code steep} and
+ * {@code infuse} as PROCESS category terms changed nothing, measured, because the category was never what
+ * stopped it. Two subject rows were.
  *
  * <p>Skips without Docker.
  */
@@ -157,8 +159,12 @@ class TheAnswerThatWasConfidentlyWrongIntegrationTest {
         awaken();
         // Was answered by looking round for water to swallow. Now an honest miss, which this project counts as
         // better than a confident wrong answer — see the class note on why the keywords were not shipped.
-        assertNotEquals("DRINK", actions.resolve("make a hot drink").intent(),
-            () -> "a request to MAKE one is not a drink: " + actions.resolve("make a hot drink").perception());
+        // Now reaches the infusion and refuses truthfully for want of heat, which is the real answer.
+        ChronicleActionService.ActionResult hot = actions.resolve("make a hot drink");
+        assertEquals("PROCESS_MATERIAL", hot.intent(),
+            () -> "a request to MAKE one is a making, not a drink: " + hot.intent() + " / " + hot.perception());
+        assertEquals("PROCESS_MATERIAL", actions.resolve("brew something hot").intent(),
+            "and so is brewing something hot, which reached nothing at all before");
         // And drinking is still drinking.
         Map<String, String> held = new LinkedHashMap<>();
         held.put("take a drink", "DRINK");
