@@ -4522,6 +4522,101 @@ public class PhysicalItemService {
     public LoadState currentLoad(UUID chronicle) { return loadState(chronicle); }
 
     /**
+     * What you are carrying, what state it is in, and how near your limit you are (#37).
+     *
+     * <p>Act fifteen found the whole of this unaskable. {@code item_instance} has carried
+     * {@code condition_state} (SOUND / WORN / BROKEN), {@code use_count} and {@code quality_grade} since the
+     * table existed, and the LOAD is computed on every single action — mass, bulk, the single-lift limit, carry
+     * aids, a draft team's haul. None of it could be asked for:
+     *
+     * <pre>
+     *   what am I carrying      check my tools        what tools do I have
+     *   is anything broken      how worn is the knife how is my axe
+     *   am I carrying too much
+     * </pre>
+     *
+     * <p>{@code how heavy is my pack} did reach MEASURE, and answered <i>"You have nothing by that name in hand
+     * to weigh"</i> — the load computed on every action, answered as though a pack were an object to put on
+     * scales.
+     *
+     * <p>Read-only and nothing new: the same {@link #loadState} the carry checks are made against, said out
+     * loud. Worn and broken things are named FIRST, because a broken tool is the thing a person most needs to
+     * know and the condition that decides whether work can be done at all.
+     */
+    @Transactional(readOnly = true)
+    public String gearStocktake(UUID chronicle) { return gearStocktake(chronicle, null); }
+
+    /** As above, and if the sentence NAMES a thing, answer about that thing. */
+    @Transactional(readOnly = true)
+    public String gearStocktake(UUID chronicle, String actionText) {
+        record Held(String name, int count, String condition) { }
+        java.util.List<Held> held = jdbc.query(REACHABLE_CTE +
+            "SELECT lower(d.display_name), COUNT(*)::int, MIN(i.condition_state) " +
+            "FROM reachable r JOIN item_instance i ON i.object_id=r.id JOIN item_definition d ON d.item_key=i.item_key " +
+            "JOIN world_object w ON w.id=r.id WHERE w.current_owner_id=? " +
+            "GROUP BY lower(d.display_name) " +
+            // Broken first, then worn, then sound: the order a person would look in.
+            "ORDER BY CASE MIN(i.condition_state) WHEN 'BROKEN' THEN 0 WHEN 'WORN' THEN 1 ELSE 2 END, 1",
+            (rs, row) -> new Held(rs.getString(1), rs.getInt(2), rs.getString(3)),
+            chronicle, chronicleLocation(chronicle), chronicle);
+
+        LoadState load = loadState(chronicle);
+        // A sentence that NAMES a thing is a question about that thing. Asked "how is my axe" and answered
+        // with a list of your clothes is the approximate answer this project triages above a missing one.
+        String said0 = actionText == null ? "" : actionText.toLowerCase(java.util.Locale.ROOT);
+        if (!said0.isEmpty()) {
+            Held named = held.stream().filter(h -> com.devosphere.draugr.narration.Words.word(said0, h.name())
+                    || said0.contains(h.name())).findFirst().orElse(null);
+            if (named == null) {
+                // Or by the LAST word of its name, which is what the thing is: an axe, a knife, a pot.
+                named = held.stream().filter(h -> {
+                    String[] w = h.name().split("\s+");
+                    String head = w[w.length - 1];
+                    return head.length() >= 3 && com.devosphere.draugr.narration.Words.word(said0, head);
+                }).findFirst().orElse(null);
+            }
+            if (named != null) return oneThing(named.name(), named.count(), named.condition());
+        }
+        if (held.isEmpty())
+            return "You are carrying nothing at all — not a tool, not a scrap. Whatever you mean to do here, you "
+                 + "will be doing it with your hands.";
+
+        java.util.List<String> broken = new java.util.ArrayList<>(), worn = new java.util.ArrayList<>(), sound = new java.util.ArrayList<>();
+        for (Held h : held) {
+            String named = h.count() > 1 ? h.count() + " " + h.name() : h.name();
+            if ("BROKEN".equals(h.condition())) broken.add(named);
+            else if ("WORN".equals(h.condition())) worn.add(named);
+            else sound.add(named);
+        }
+        StringBuilder said = new StringBuilder();
+        if (!broken.isEmpty()) said.append("Past use until it is mended: ").append(joinAnd(broken)).append(". ");
+        if (!worn.isEmpty()) said.append("Worn and wanting attention: ").append(joinAnd(worn)).append(". ");
+        if (!sound.isEmpty()) said.append("Sound and to hand: ").append(joinAnd(sound)).append(". ");
+
+        // And how near the limit, which is the other half of the question and was computed all along.
+        int massPct = load.sustainedMassCapacityGrams() <= 0 ? 0
+                    : (int) Math.round(100.0 * load.massGrams() / load.sustainedMassCapacityGrams());
+        int bulkPct = load.directBulkCapacityMl() <= 0 ? 0
+                    : (int) Math.round(100.0 * load.bulkMl() / load.directBulkCapacityMl());
+        int worst = Math.max(massPct, bulkPct);
+        said.append(worst >= 95 ? "You are loaded to the limit of what you can bear, and the next thing you pick up will have to replace something."
+                  : worst >= 70 ? "You are carrying a good load — heavy enough to feel on a long walk, with room for a little more."
+                  : worst >= 35 ? "The load sits easily enough on you, with room for a good deal more."
+                  : "You are travelling light, with room for whatever the day turns up.");
+        return said.toString().trim();
+    }
+
+    /** What one named thing is worth, by its condition — the answer to "how is my axe" (#37). */
+    private static String oneThing(String name, int count, String condition) {
+        String many = count > 1 ? " (you have " + count + ")" : "";
+        return switch (condition == null ? "SOUND" : condition) {
+            case "BROKEN" -> "The " + name + " is broken" + many + " — past use until it is mended.";
+            case "WORN" -> "The " + name + " is worn" + many + ": it still serves, but it has had use out of it and will want mending before long.";
+            default -> "The " + name + " is sound" + many + ", with no fault in it you can find.";
+        };
+    }
+
+    /**
      * The biggest load-bed among the sound draft vehicles this keeper owns, in {@code max_mass_grams} or
      * {@code max_volume_ml} — and 0 when they own no vehicle at all, which is what makes a team with nothing to
      * pull add nothing.

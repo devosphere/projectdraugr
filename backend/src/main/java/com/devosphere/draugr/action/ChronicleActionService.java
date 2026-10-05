@@ -543,6 +543,8 @@ public class ChronicleActionService {
         else if (intent == Intent.SOW) { String[] r=items.sowCrop(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.HARVEST_CROP) { String[] r=items.harvestCrop(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.TAKE_STOCK_OF_CAMP) perception = campStocktake(chronicle.location());
+        else if (intent == Intent.READ_THE_SKY) perception = skyReading(chronicle.location(), resolvedAt);
+        else if (intent == Intent.TAKE_STOCK_OF_GEAR) perception = items.gearStocktake(chronicle.id(), text);
         else if (intent == Intent.TAKE_STOCK_OF_FOOD) perception = items.foodStocktake(chronicle.id(), chronicle.location(), resolvedAt);
         else if (intent == Intent.JUDGE_HAULAGE) perception = items.judgeHaulage(chronicle.id());
         else if (intent == Intent.JUDGE_WATER) { String[] r = judgeWater(chronicle.location()); outcome = r[0]; perception = r[1]; }
@@ -2231,6 +2233,33 @@ public class ChronicleActionService {
             ||value.contains("is the meat still good")||value.contains("still good to eat")
             ||value.contains("what have i got to eat")||value.contains("have i anything to eat")
             ||value.contains("go through the food")) return Intent.TAKE_STOCK_OF_FOOD;
+        // What the sky is doing (#37, act fifteen). The hour, the month, the felt wind, the frost and whether
+        // rain is in it are all simulated, and 22 of 35 phrasings about them reached nothing while "what is the
+        // weather doing" answered well. world_weather.wind_speed_kph is the sharpest: a column the simulation
+        // maintains, carried into BiomeClimate.Local as a wind FELT at this elevation, and unreachable by words.
+        // FEEL already owns the season and the temperature, and IntentClassificationRegressionTest holds it to
+        // them — "what time OF YEAR is it" is a season question and my "what time" took it. The hour and the
+        // year are different questions and the guard was right to say so.
+        if((value.contains("what time")&&!value.contains("time of year"))||value.contains("how long until dark")||value.contains("until dark")
+           ||value.contains("is it getting dark")||value.contains("is it dark")||value.contains("how high is the sun")
+           ||value.contains("where is the sun")||value.contains("how much light")||value.contains("light is left")
+           ||value.contains("what month")||value.contains("is it near winter")||value.contains("how near winter")
+           ||value.contains("what is the wind")||value.contains("is the wind")||value.contains("how hard is the wind")
+           ||value.contains("is it going to rain")||value.contains("will it rain")||value.contains("is there frost")
+           ||value.contains("will it freeze")||value.contains("read the sky")||value.contains("look at the sky")
+           ||value.contains("what is the sky")||value.contains("which way is north")||value.contains("which way is south")||value.contains("take a bearing")) return Intent.READ_THE_SKY;
+        // What you are carrying and what state it is in (#37, act fifteen). condition_state, use_count and
+        // quality_grade have been on every item since the table existed, and the LOAD is computed on every
+        // action — and "how heavy is my pack" was answered "you have nothing by that name in hand to weigh".
+        //
+        // Gated away from the acts: mending is REPAIR_ITEM's, equipping is EQUIP's. These are the questions.
+        if((value.contains("what am i carrying")||value.contains("what do i carry")||value.contains("check my tools")
+            ||value.contains("check my gear")||value.contains("look over my gear")||value.contains("what tools do i have")
+            ||value.contains("what gear do i have")||value.contains("is anything broken")||value.contains("anything need mending")
+            ||value.contains("what needs mending")||value.contains("how worn")||value.contains("how is my")
+            ||value.contains("am i carrying too much")||value.contains("how heavy is my")||value.contains("how much am i carrying")
+            ||value.contains("take stock of my gear")||value.contains("what is in my pack")||value.contains("still good")&&value.contains("my ")||value.contains("still sound"))
+           &&!value.contains("food")&&!value.contains("supplies")) return Intent.TAKE_STOCK_OF_GEAR;
         // Go round the camp and account for it (#37). Perception, not work. Placed before MAINTAIN_CAMP, which
         // claims the camp with a tidying verb — taking stock is not tidying, and must not be answered by sweeping.
         // "stock" is also the word for animals, so this needs the stocktaking PHRASE rather than the bare noun:
@@ -2804,7 +2833,7 @@ public class ChronicleActionService {
         return refuse != null && refuse >= 25;
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;} }    /**     * The structured perception frame — the seam every future Simulation Agent reads
      * from. Where {@code perception} is the finished player-facing prose, this frame
      * is the machine-legible truth behind it: the raw intent and outcome, where the
@@ -3101,6 +3130,104 @@ public class ChronicleActionService {
      * thing down in the same pass that wears it out. A "past mending" list would be prose for a state the world
      * is not allowed to be in.
      */
+    /**
+     * What the sky is doing, asked plainly (#37).
+     *
+     * <p>Act fifteen swept what a person says about the world over their head, and <b>22 of 35 phrasings reached
+     * nothing</b> — while "what is the weather doing" and "what season is it" answered well. The hour, the month,
+     * the wind and the frost were all simulated and none of them could be asked:
+     *
+     * <pre>
+     *   what time is it        how long until dark     is it getting dark
+     *   how high is the sun    what month is it        is it near winter
+     *   what is the wind doing is the wind getting up  is it going to rain
+     *   is there frost         will it freeze tonight  which way is north
+     * </pre>
+     *
+     * <p><b>{@code world_weather.wind_speed_kph} is the sharpest of them</b>: a column the simulation maintains,
+     * carried all the way into {@link com.devosphere.draugr.simulation.BiomeClimate.Local} as a FELT wind at this
+     * elevation and aspect, and no sentence in the game could reach it.
+     *
+     * <p>Read-only, and all of it already known: the hour and the month from {@code simulation_clock}, the felt
+     * wind and temperature from the same local climate the body is charged against, and the frost from whether
+     * that temperature is near freezing. Day runs 06:00 to 20:00, the same hours {@link #isDark} uses, so the
+     * answer about the light can never disagree with whether fine work is possible.
+     */
+    private String skyReading(UUID location, java.time.Instant at) {
+        java.time.ZonedDateTime now = at.atZone(java.time.ZoneOffset.UTC);
+        int hour = now.getHour();
+        com.devosphere.draugr.simulation.BiomeClimate.Local local = localClimate(location);
+
+        java.util.List<String> said = new java.util.ArrayList<>();
+        // The hour, as a person tells it — by where the light is, not by a number nobody here could read.
+        said.add(hour < 6 ? "It is still dark, the small hours before any light"
+               : hour < 9 ? "The light is new and low, the morning not long up"
+               : hour < 12 ? "The sun is climbing and the morning is well on"
+               : hour < 14 ? "The sun stands at its highest, as near noon as makes no difference"
+               : hour < 17 ? "The sun is past its height and going down the sky"
+               : hour < 20 ? "The light is going amber and long, the day nearly done"
+               : "The light has gone and the dark is full in");
+        // How long until dark, which is the question behind most of the others.
+        if (hour >= 6 && hour < 20) {
+            int left = 20 - hour;
+            said.add(left <= 1 ? "You have less than an hour of working light"
+                   : "You have about " + left + " hours of light left");
+        } else {
+            int untilLight = hour < 6 ? 6 - hour : 30 - hour;
+            said.add("First light is some " + untilLight + (untilLight == 1 ? " hour off" : " hours off"));
+        }
+        // The month and where it stands in the year, since the season decides what the ground will give.
+        said.add("It is " + now.getMonth().getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.ENGLISH)
+               + ", and the season is " + seasonNamed(now.getMonthValue()));
+
+        // The wind, FELT here rather than the world's figure — the thing nothing could ask.
+        int wind = local.windKph();
+        said.add(wind < 5 ? "The air is almost still"
+               : wind < 15 ? "There is a steady breeze, enough to feel and no more"
+               : wind < 30 ? "The wind is up and working at everything loose"
+               : "The wind is hard enough to lean on, and it will take heat out of you faster than the cold alone");
+
+        double t = local.temperatureC();
+        if (t <= 0) said.add("It is below freezing, and there is frost on everything that holds it");
+        else if (t <= 3) said.add("It is near enough freezing that there will be frost before morning");
+        String kind = local.kind() == null ? "CLEAR" : local.kind();
+        if (kind.contains("RAIN") || kind.contains("STORM")) said.add("Rain is falling and shows no sign of easing");
+        else if (kind.contains("SNOW")) said.add("Snow is coming down");
+        else if (kind.contains("OVERCAST") || kind.contains("CLOUD")) said.add("The sky is closed over and could turn to rain");
+        else said.add("The sky is open, with nothing in it that threatens rain");
+        // Which way is north, which the sun answers at any hour of the day it is up.
+        if (hour >= 6 && hour < 20) said.add(hour < 11 ? "The sun is in the east, so north is to your left as you face it"
+                                    : hour < 14 ? "The sun is due south at this hour, so north is at your back as you face it"
+                                    : "The sun is in the west, so north is to your right as you face it");
+        else said.add("With the sun down there is nothing to take a bearing from but the stars");
+        return String.join(". ", said) + ".";
+    }
+
+    /** The season a month falls in — the same mapping WeatherSimulationService drives the weather by, so the
+     *  sky cannot name one season while the world is simulating another. */
+    private static String seasonNamed(int month) {
+        return switch (month) { case 12, 1, 2 -> "winter"; case 3, 4, 5 -> "spring"; case 6, 7, 8 -> "summer"; default -> "autumn"; };
+    }
+
+    /** The climate as FELT on this ground — the same reading the body is charged against (#28/#159). */
+    private com.devosphere.draugr.simulation.BiomeClimate.Local localClimate(UUID location) {
+        java.util.Map<String,Object> env = jdbc.queryForMap(
+            "SELECT wc.biome, COALESCE(wc.elevation,0) AS elevation, COALESCE(wc.moisture,500) AS moisture, " +
+            "COALESCE(wc.grid_y,0) AS grid_y, COALESCE(wg.height_chunks,1) AS height_chunks, " +
+            "COALESCE(ww.weather_kind,'CLEAR') AS weather_kind, COALESCE(ww.ambient_temperature_c,18.0) AS t, " +
+            "COALESCE(ww.wind_speed_kph,6) AS w, " +
+            "COALESCE((SELECT TRUE FROM world_chunk n WHERE n.world_id=wc.world_id AND n.grid_x=wc.grid_x " +
+            "          AND n.grid_y=wc.grid_y-1 AND n.elevation > wc.elevation + 40 LIMIT 1), FALSE) AS sun_warmed " +
+            "FROM world_chunk wc LEFT JOIN world_genesis wg ON wg.world_id=wc.world_id " +
+            "LEFT JOIN world_weather ww ON ww.world_id=wc.world_id WHERE wc.id=?", location);
+        return com.devosphere.draugr.simulation.BiomeClimate.at(
+            (String) env.get("biome"), ((Number) env.get("elevation")).intValue(),
+            ((Number) env.get("moisture")).intValue(), ((Number) env.get("grid_y")).intValue(),
+            ((Number) env.get("height_chunks")).intValue(), (String) env.get("weather_kind"),
+            ((Number) env.get("t")).doubleValue(), ((Number) env.get("w")).intValue(),
+            Boolean.TRUE.equals(env.get("sun_warmed")));
+    }
+
     private String campStocktake(UUID location) {
         java.util.List<String> sound = jdbc.query(
             // Parenthesised, not comma'd: in a joined list "drying rack, coming apart, well, weathered, and the
