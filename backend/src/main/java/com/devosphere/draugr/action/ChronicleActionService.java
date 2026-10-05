@@ -578,7 +578,18 @@ public class ChronicleActionService {
         else if (intent == Intent.RAID_HIVE) { PhysicalItemService.InsectHarvest r=items.raidHive(chronicle.id(),chronicle.location(),text,resolvedAt); outcome=r.outcome(); perception=r.narration(); applyInsectHazard(chronicle.id(),r,actionId,resolvedAt); }
         else if (intent == Intent.COLLECT_INSECTS) { PhysicalItemService.InsectHarvest r=items.collectInsects(chronicle.id(),chronicle.location(),text,resolvedAt); outcome=r.outcome(); perception=r.narration(); applyInsectHazard(chronicle.id(),r,actionId,resolvedAt); }
         else if (intent == Intent.EAT) { String[] r = eat(chronicle.id(), text, actionId, resolvedAt); outcome = r[0]; perception = r[1]; if("SUCCEEDED".equals(outcome)) wildlife.recordRefuse(chronicle.location(),2,resolvedAt); }
-        else if (intent == Intent.COOK_MEAT) { int cooked=fire.cookGameMeat(chronicle.id(),chronicle.location(),resolvedAt); if(cooked>1) perception="You lay several pieces out over the steady heat and turn them until each darkens through — a batch done at once."; else if(cooked==1) perception="You hold the meat over the steady heat until its surface changes and darkens."; else {outcome="FAILED";perception="You prepare the meat for a moment, then set it aside unchanged.";} if(cooked>=1) wildlife.recordRefuse(chronicle.location(),4,resolvedAt); }
+        else if (intent == Intent.COOK_MEAT) {
+            // The fire cooks four things now (V396), so the prose must say which. It called a cooked fish
+            // "the meat" otherwise, which is the catalogue token in prose form: a new food that nothing names.
+            FireService.CookedAtFire done=fire.cookOverFire(chronicle.id(),chronicle.location(),resolvedAt,text);
+            int cooked=done.pieces();
+            String it=done.what()==null?"meat":done.what();
+            if(cooked>1) perception="You lay several pieces of "+it+" out over the steady heat and turn them until each darkens through — a batch done at once.";
+            else if(cooked==1) perception="You hold the "+it+" over the steady heat until its surface changes and darkens.";
+            else {outcome="FAILED";perception=done.hadFire()
+                ? "You have nothing raw within reach that a fire could cook — nothing to lay over the heat."
+                : "There is no fire burning here to cook anything over.";}
+            if(cooked>=1) wildlife.recordRefuse(chronicle.location(),4,resolvedAt); }
         else if (intent == Intent.DRINK) {
             // The safest water you carry first (boiled > filtered > raw), else raw from a source in reach. Raw and
             // standing water carry a gut-illness risk that accumulates; boiled water and a clean moving source do not (#71).
@@ -1994,7 +2005,24 @@ public class ChronicleActionService {
         boolean usingNet = value.contains("net")&&(value.contains("cast")||value.contains("throw")||value.contains("haul")||value.contains("set the net")||value.contains("use the net")||value.contains("with the net")||value.contains("with a net"));
         boolean craftingNet = value.contains("net")&&!usingNet&&(value.contains("weave")||value.contains("craft")||value.contains("make")||value.contains("knot")||value.contains("braid")||value.contains("tie")||value.contains("assemble")||value.contains("mesh"));
         if(craftingNet) return Intent.CRAFT_NET;
-        if((usingNet||(value.contains("fish")&&!value.contains("landing")&&!value.contains("jetty")&&!value.contains("shellfish"))||value.contains("angle")||((value.contains("catch")||value.contains("spear"))&&(value.contains("trout")||value.contains("perch")||value.contains("pike")||value.contains("carp")||value.contains("eel")||value.contains("catfish")||value.contains("crayfish"))))&&!items.actionMatchesProcess(action)) return Intent.FISH;
+        // Fishing is an ACT, not a noun (#37). This asked only whether the sentence contained "fish", so every
+        // sentence about a fish you had already caught was answered by sending you back to the water:
+        //
+        //   eat the fish        -> FISH      cook the fish     -> FISH
+        //   carry the fish      -> FISH      count the fish    -> FISH
+        //   look at the fish    -> FISH      bring the fish in -> FISH
+        //
+        // Now the sentence must be about going after one: fishing as a verb, a line or a rod, or a taking verb
+        // against a fish or a named species. The bare word "fish" on its own still means it, because that is
+        // what a person says when they mean to go — but "the fish" in the middle of a sentence does not.
+        boolean fishingAct = value.trim().equals("fish") || value.contains("fishing")
+            || value.contains("fish for") || value.contains("fish with") || value.contains("fish the ")
+            || value.contains("cast a line") || value.contains("cast the line") || value.contains("a line in")
+            || ((value.contains("catch")||value.contains("land ")||value.contains("hook")||value.contains("net ")
+                 ||value.contains("spear")||value.contains("take")||value.contains("get"))
+                && (value.contains("fish")||value.contains("trout")||value.contains("perch")||value.contains("pike")
+                    ||value.contains("carp")||word(value,"eel")||value.contains("catfish")||value.contains("crayfish")));
+        if((usingNet||(fishingAct&&!value.contains("landing")&&!value.contains("jetty")&&!value.contains("shellfish"))||value.contains("angle")||((value.contains("catch")||value.contains("spear"))&&(value.contains("trout")||value.contains("perch")||value.contains("pike")||value.contains("carp")||value.contains("eel")||value.contains("catfish")||value.contains("crayfish"))))&&!items.actionMatchesProcess(action)) return Intent.FISH;
         if(value.contains("snare")||value.contains("set a trap")||value.contains("set trap")||((value.contains("trap")||value.contains("noose"))&&(value.contains("rabbit")||value.contains("hare")||value.contains("bird")||value.contains("fowl")||value.contains("small")||value.contains("run")))) return Intent.SNARE;
         // A bird's nest and an insect's nest are the same word and not the same act (#122). The bird takes it when
         // the words name eggs or a bird and name nothing of a hive, so "rob the nest" beside a hive is still the hive.
@@ -2322,6 +2350,17 @@ public class ChronicleActionService {
     /** Whole-word containment, delegating to the one definition of it — see {@link com.devosphere.draugr.narration.Words}. */
     private static boolean word(String haystack, String w) { return com.devosphere.draugr.narration.Words.word(haystack, w); }
     /**
+     * The verbs that ask for something to be cooked — as WORDS, and never their past participles.
+     *
+     * <p>This rule asked {@code contains("cook")}, and "cooked" contains "cook": so "eat the cooked fish"
+     * was answered by putting another fish on the fire. <b>A past participle names a FOOD; the verb asks for
+     * work.</b> The same held for roasted, grilled, baked and stewed, and the defect was waiting in the rule
+     * before V396 widened it — "eat the cooked meat" has always cooked more meat.
+     */
+    private static final java.util.regex.Pattern COOKING_VERB = java.util.regex.Pattern.compile(
+            "(?<!\\w)(cook|cooks|cooking|roast|roasts|roasting|grill|grills|grilling|bake|bakes|baking"
+          + "|broil|broils|broiling|simmer|simmers|simmering|stew|stews|stewing|braise|braises|braising)(?!\\w)");
+    /**
      * Whether a phrase asks for a carcass's yield by naming the yield and nothing else — "take the hide",
      * "keep the antlers", "save the sinew", "take the pelt off".
      *
@@ -2341,7 +2380,11 @@ public class ChronicleActionService {
         if(value.contains("resume")||value.contains("return to")) return Intent.RESUME_LEAN_TO;
         return (value.contains("work") || value.contains("continue") || value.contains("build") || value.contains("weave") || value.contains("bind")) ? Intent.WORK_LEAN_TO : Intent.START_LEAN_TO;
     }
-    private Intent classifyLegacy(String action) { String value = action.toLowerCase(Locale.ROOT); if ((value.contains("cook") || value.contains("roast") || value.contains("grill") || value.contains("bake") || value.contains("broil") || value.contains("simmer") || value.contains("stew") || value.contains("braise")) && (value.contains("meat") || value.contains("game") || value.contains("flesh") || value.contains("carcass"))) return Intent.COOK_MEAT; if ((value.contains("harvest") || value.contains("butcher") || value.contains("skin") || value.contains("gut") || value.contains("quarter") || value.contains("dress")
+    private Intent classifyLegacy(String action) { String value = action.toLowerCase(Locale.ROOT); if (COOKING_VERB.matcher(value).find() && (value.contains("meat") || value.contains("game") || value.contains("flesh") || value.contains("carcass")
+            // V396 gave the fire a table of what it turns into what, so the other raw foods it can now cook are
+            // reachable by the sentence a person would use. A fish was the sharpest case: every preservation
+            // process would take it and nothing would simply cook it.
+            || value.contains("fish") || value.contains("fowl") || word(value, "bird"))) return Intent.COOK_MEAT; if ((value.contains("harvest") || value.contains("butcher") || value.contains("skin") || value.contains("gut") || value.contains("quarter") || value.contains("dress")
 ) && (value.contains("carcass") || value.contains("remains") || value.contains("animal") || value.contains("the kill") || value.contains("the game") || word(value, "deer") || word(value, "boar") || word(value, "elk") || word(value, "aurochs") || word(value, "hare") || word(value, "rabbit") || word(value, "goat") || word(value, "wolf") || word(value, "bear") || word(value, "fox"))
             // Act eleven: "take the hide" reached nothing standing over a deer this same rule would have skinned,
             // because every phrasing it knew named the animal. Naming the yield is naming the act; when nothing
