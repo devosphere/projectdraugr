@@ -965,7 +965,7 @@ public class WildlifeEncounterService {
         // The clock is per product, so this joins tamed_production on the bond AND the item.
         java.util.Map<String,Object> ready = jdbc.query(
             "SELECT wb.id, wp.species_key, ty.item_key, ty.interval_hours, tp.last_yielded_at, d.display_name, " +
-            "       wp.population_count, in_season(ty.available_months), wb.coat_condition, " +
+            "       wp.population_count, in_season(ty.available_months, " + monthOf(at) + "), wb.coat_condition, " +
             "       wb.draft_hunger, wb.draft_thirst, ws.needs_open_water " +
             "FROM wildlife_bond wb " +
             "JOIN wildlife_population wp ON wp.id = wb.population_id " +
@@ -978,7 +978,7 @@ public class WildlifeEncounterService {
             "WHERE wb.chronicle_id = ? AND wb.bond_stage = 'TAMED' AND wp.population_count > 0 " +
             "  AND wb.sickness < " + com.devosphere.draugr.item.PhysicalItemService.TOO_SICK_TO_GIVE + " " +
             // An animal in season is gone to before one out of it (#161, V323) — a buffalo in milk before a goat dry.
-            "ORDER BY in_season(ty.available_months) DESC, tp.last_yielded_at NULLS FIRST LIMIT 1 FOR UPDATE OF wb",
+            "ORDER BY in_season(ty.available_months, " + monthOf(at) + ") DESC, tp.last_yielded_at NULLS FIRST LIMIT 1 FOR UPDATE OF wb",
             // ofEntries rather than of: Map.of tops out at ten pairs, and the animal's condition is the eleventh.
             rs -> rs.next() ? java.util.Map.<String, Object>ofEntries(
                     java.util.Map.entry("id", rs.getObject(1, UUID.class)),
@@ -1471,8 +1471,13 @@ public class WildlifeEncounterService {
     private record Threat(UUID populationId, String species, String behavior, Integer baseResistance, boolean ambushHunter, String sizeTier) { }
 
     /** Take a species' catalogued yields from a carcass. Returns how many items came away. */
+    /** The calendar month of the moment a piece of work happens, for in_season(months, month) (#37). The
+     *  one-argument in_season() reads the world clock, which is a different question from the one a method
+     *  holding its own Instant is asking. */
+    private static int monthOf(Instant at) { return at.atZone(java.time.ZoneOffset.UTC).getMonthValue(); }
+
     private int takeSpeciesDrops(UUID chronicle, String species, Instant at) {
-        java.util.List<java.util.Map<String,Object>> drops = jdbc.queryForList("SELECT item_key,yield_min,yield_max,rarity FROM wildlife_drop WHERE species_key=? AND in_season(available_months) ORDER BY rarity DESC", species); // an egg only in the nesting season (#161, V323)
+        java.util.List<java.util.Map<String,Object>> drops = jdbc.queryForList("SELECT item_key,yield_min,yield_max,rarity FROM wildlife_drop WHERE species_key=? AND in_season(available_months, " + monthOf(at) + ") ORDER BY rarity DESC", species); // an egg only in the nesting season (#161, V323)
         int taken = 0;
         for (java.util.Map<String,Object> d : drops) {
             if (Math.random() > ((Number)d.get("rarity")).doubleValue()) continue;
@@ -1592,7 +1597,7 @@ public class WildlifeEncounterService {
                 : "You work the water patiently, and it gives up nothing this time.");
         String caught = species.get(Math.floorMod(action.hashCode(), species.size()));
         int got = 0;
-        for (java.util.Map<String,Object> d : jdbc.queryForList("SELECT item_key,yield_min,yield_max,rarity FROM wildlife_drop WHERE species_key=? AND in_season(available_months)", caught)) { // seasonal yields keep their season (#161, V323)
+        for (java.util.Map<String,Object> d : jdbc.queryForList("SELECT item_key,yield_min,yield_max,rarity FROM wildlife_drop WHERE species_key=? AND in_season(available_months, " + monthOf(at) + ")", caught)) { // seasonal yields keep their season (#161, V323)
             if (Math.random() > ((Number)d.get("rarity")).doubleValue()) continue;
             String itemKey=(String)d.get("item_key");
             int lo=((Number)d.get("yield_min")).intValue(), hi=((Number)d.get("yield_max")).intValue();

@@ -3573,8 +3573,21 @@ public class PhysicalItemService {
         // Yield each product by its rarity roll, respecting carry capacity.
         java.util.List<java.util.Map<String,Object>> products = jdbc.queryForList(
             // Only what the season gives (#161, V323): a hive holds no honey worth taking in winter, and crickets are
-            // not adults until midsummer. in_season() is the one definition every living yield reads.
-            "SELECT item_key, yield_min, yield_max, rarity FROM insect_colony_product WHERE colony_kind=? AND in_season(available_months) ORDER BY rarity DESC", colonyKind);
+            // not adults until midsummer.
+            //
+            // ONE NOTION OF NOW PER HARVEST (#37). This asked in_season(), which reads the GLOBAL
+            // simulation_clock, while the colony KIND five statements above is chosen from seasonOf(occurredAt)
+            // — the moment this harvest actually happens. So a caller working a summer morning got summer
+            // colonies and then had their products filtered by whatever month the world clock happened to
+            // stand in. Cricket and grasshopper yields exist only in months 6-9, so with the clock outside
+            // June-September a summer harvest of either came away EMPTY FOR EVER — and because nothing was
+            // taken, the ground was never stamped as worked, so it could never be worked out either.
+            //
+            // Asked of occurredAt instead. in_season() stays as it is for the callers that genuinely mean
+            // "now"; this one means "then", and says so.
+            "SELECT item_key, yield_min, yield_max, rarity FROM insect_colony_product " +
+            "WHERE colony_kind=? AND (available_months IS NULL OR ?::int = ANY(available_months)) ORDER BY rarity DESC",
+            colonyKind, occurredAt.atZone(java.time.ZoneOffset.UTC).getMonthValue());
         int totalTaken = 0; String firstItemName = null;
         for (java.util.Map<String,Object> p : products) {
             double rarity = ((Number) p.get("rarity")).doubleValue();
