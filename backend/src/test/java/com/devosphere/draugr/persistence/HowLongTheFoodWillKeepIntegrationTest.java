@@ -201,7 +201,10 @@ class HowLongTheFoodWillKeepIntegrationTest {
                 new Held("salt the fish", "PROCESS_MATERIAL"),
                 new Held("dry the meat", "PROCESS_MATERIAL"),
                 new Held("cook the meat", "COOK_MEAT"),
-                new Held("water the stock", "FEED_ANIMAL"),
+                // Watering is CHECK_STOCK since #106 — FEED_ANIMAL shakes out dry grass and reports HUNGER, so
+                // "water the animals" was answered "none of your draft beasts is hungry". This test's point is
+                // untouched: the word "stock" is still the ANIMALS' and not the camp stocktake's.
+                new Held("water the stock", "CHECK_STOCK"),
                 new Held("feed the stock", "FEED_ANIMAL"))) {
             assertEquals(h.intent(), actions.resolve(h.said()).intent(),
                 () -> "\"" + h.said() + "\" must stay " + h.intent() + ": " + actions.resolve(h.said()).intent());

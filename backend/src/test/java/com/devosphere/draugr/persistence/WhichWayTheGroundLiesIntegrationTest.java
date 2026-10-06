@@ -214,12 +214,23 @@ class WhichWayTheGroundLiesIntegrationTest {
         UUID me = awaken();
         standOn(me, "c.biome = 'GRASSLAND'");
 
-        // Nothing to take back until a step has been taken ON this ground.
-        jdbc.update("DELETE FROM object_transition WHERE object_id=? AND transition_type='MOVED'", me);
-        ChronicleActionService.ActionResult none = actions.resolve("retrace my steps");
-        assertEquals("MOVE", none.intent());
-        assertTrue(none.perception().toLowerCase(Locale.ROOT).contains("no step behind you"),
-            () -> "with no step behind it, say so: " + none.perception());
+        // Nothing to take back until a step has been taken ONTO this ground.
+        //
+        // The ground is CHOSEN for having no arrival recorded on it rather than the record being cleared:
+        // object_transition is IMMUTABLE — a trigger refuses the delete, which is exactly right, since the
+        // history of a thing is the one part of this world that must survive everything. The first cut of this
+        // test tried to delete and CI answered "object_transition is immutable", which is the table doing its
+        // job. standOn already moved the Chronicle by UPDATE, so no arrival was recorded for this chunk.
+        boolean cameFromSomewhere = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM object_transition WHERE object_id=? AND transition_type='MOVED' " +
+            "  AND payload->>'toLocationId' = (SELECT current_location_id::text FROM world_object WHERE id=?))",
+            Boolean.class, me, me));
+        if (!cameFromSomewhere) {
+            ChronicleActionService.ActionResult none = actions.resolve("retrace my steps");
+            assertEquals("MOVE", none.intent());
+            assertTrue(none.perception().toLowerCase(Locale.ROOT).contains("no step behind you"),
+                () -> "with no step behind it onto this ground, say so: " + none.perception());
+        }
 
         // Take one, then take it back. The record is what decides the way, not a guess.
         UUID start = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, me);

@@ -258,7 +258,9 @@ class PuttingThingsAwayAndTakingThemOutIntegrationTest {
         // "bring in the harvest" is the plainest word for reaping and reached nothing before; it is the crop's.
         held.put("bring in the harvest", "HARVEST_CROP");
         // And the animals keep the word "stock".
-        held.put("water the stock", "FEED_ANIMAL");
+        // CHECK_STOCK since #106: watering is a question of THIRST, which FEED_ANIMAL could not answer —
+        // it fed dry grass and reported hunger. Still the animals' word, which is what this asserts.
+        held.put("water the stock", "CHECK_STOCK");
         held.put("feed the stock", "FEED_ANIMAL");
         eachReaches(held);
     }

@@ -2205,7 +2205,17 @@ public class ChronicleActionService {
            &&namesABeast(value)
            // The acts keep their own verbs. Asking after a beast is not tending, grooming, feeding or milking one.
            &&!value.contains("tend")&&!value.contains("treat")&&!value.contains("groom")&&!value.contains("curry")
-           &&!value.contains("feed the")&&!word(value,"milk")&&!value.contains("shear")) return Intent.CHECK_STOCK;
+           &&!value.contains("feed the")&&!word(value,"milk")&&!value.contains("shear")
+           // ...and BUILDING something is the assembly matcher's, never a question about the stock. A sick
+           // animal shelter is a thing a keeper raises, and "sick" plus "animal" is all this rule needed to
+           // steal all three of its own keywords — which noJavaIntentShadowsAnAssemblysOwnKeywords caught.
+           &&!value.contains("build")&&!value.contains("raise")&&!value.contains("put up")
+           &&!value.contains("make ")&&!value.contains("construct")&&!value.contains("erect")
+           // ...and a sentence that IS an assembly's own keyword belongs to the assembly matcher, verb or no
+           // verb. The bare "sick animal shelter" is the NAME of a thing a keeper raises, and no list of
+           // building words would have caught it. Asked of the matcher, so that every assembly added after this
+           // one is protected too — which a hand-kept list could never promise.
+           &&!namesAnAssembly(value)) return Intent.CHECK_STOCK;
         // The dressing verbs belong here too (#106): tendSickAnimal works a poultice, an infusion or a dried herb
         // bundle into an ailing beast, which is exactly what "bandage the goat" and "put a poultice on the ewe"
         // ask for, and both reached nothing. Gated on the beast as everything in this block is, so "bind the
@@ -2650,7 +2660,13 @@ public class ChronicleActionService {
         // takes "how long until dark", and reckonsElapsedTime takes "how long have I been here" on the line
         // above. A length question is what is left.
         if(value.contains("measure")||value.contains("pace out")||value.contains("pace off")||word(value,"weigh")||value.contains("how heavy")||word(value,"heft")||value.contains("how many")||word(value,"count")||word(value,"tally")||value.contains("how far")||value.contains("how deep")
-           ||value.contains("how long")||value.contains("how wide")||value.contains("how thick")||value.contains("how tall")||value.contains("how big")
+           ||(value.contains("how long")
+              // ...except where there is nothing behind the number. Healing time, infection and a broken bone
+              // are deliberately unmodelled, and TheQuestionsABodyCanAnswerIntegrationTest holds that they
+              // stay honest misses — "you pace it out and reckon by eye" over a wound is a near-miss dressed
+              // as an answer, which is worse than nothing.
+              &&!value.contains("heal")&&!value.contains("mend itself")&&!value.contains("to knit"))
+           ||value.contains("how wide")||value.contains("how thick")||value.contains("how tall")||value.contains("how big")
            ||value.contains("test the depth")||value.contains("estimate the distance")||value.contains("gauge")) return Intent.MEASURE;
         if(value.contains("refine")||value.contains("improve")||value.contains("upgrade")||value.contains("revise")||value.contains("enhance")||(value.contains("add")&&value.contains("holder"))) return Intent.REFINE;
         if(value.contains("designate")||value.contains("christen")||((value.contains("name")||value.contains("call")||value.contains("establish")||value.contains("found")||value.contains("mark"))&&(value.contains("this place")||value.contains("this area")||value.contains("this spot")||value.contains("this location")||value.contains("here as")||value.contains("this as")||value.contains("this the")))) return Intent.DESIGNATE;
@@ -2790,6 +2806,22 @@ public class ChronicleActionService {
      * twice, the article is stripped and the bare noun matched <b>as a word</b>. That boundary is not optional:
      * "sea" sits inside "season" and "research", and this project has shipped the substring defect four times.
      */
+    /**
+     * Whether the sentence is an assembly's own name (#106/#77).
+     *
+     * <p>A buildable thing is reached by the assembly matcher, which only runs when no hard intent claims the
+     * phrase first. So a question-intent broad enough to swallow an assembly's keyword makes that thing
+     * unbuildable by its own name: {@code noJavaIntentShadowsAnAssemblysOwnKeywords} caught CHECK_STOCK doing it
+     * to all three of the sick animal shelter's words, on "sick" plus "animal".
+     *
+     * <p>Asked of the matcher rather than held as a list of building verbs, so that every assembly added after
+     * this one is protected too. Null-guarded because the routing regression test builds this service without an
+     * AssemblyService: it has no world, and the guard that found this needs one.
+     */
+    private boolean namesAnAssembly(String value) {
+        return assembly != null && assembly.match(value) != null;
+    }
+
     private static boolean namesGroundAsked(String value) {
         for (String[] kind : GROUND_ASKED_FOR) if (groundNamed(value, kind[0])) return true;
         return false;
@@ -2963,6 +2995,11 @@ public class ChronicleActionService {
      * are the commonest way of saying it, so they are here beside the climbing words.
      */
     private static boolean wantsGroundStep(String value) {
+        // CLIMBING A TREE IS NOT WALKING UPHILL. A tree is a thing on the ground rather than a piece of it,
+        // and the act of going up one has its own answer — which witnesses the ground it refuses on
+        // ("nothing here that will take your weight"). This rule walked north instead, and found higher
+        // ground to do it on, so a Chronicle on open grass climbed a tree that was not there.
+        if (value.contains("tree") || value.contains("trunk") || value.contains("branches")) return false;
         boolean verb = CLIMB_OR_FOLLOW.matcher(value).find()
             || value.contains("go up") || value.contains("go down")
             || value.contains("head up") || value.contains("head down")
