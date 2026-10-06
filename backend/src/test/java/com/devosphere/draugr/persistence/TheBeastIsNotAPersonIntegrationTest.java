@@ -279,6 +279,79 @@ class TheBeastIsNotAPersonIntegrationTest {
         assertFalse(watered.contains("hungry — there is nothing"), () -> "and not about hunger: " + watered);
     }
 
+    /**
+     * The four care acts that reached nothing over mechanisms that already worked (#106).
+     *
+     * <p>Each is a routing fix rather than a new capability, and each lands on something real:
+     *
+     * <ul>
+     *   <li><b>bandaging a beast</b> — {@code tendSickAnimal} works a poultice, an infusion or a dried herb
+     *       bundle into an ailing animal, which is exactly what "bandage the goat" asks for.</li>
+     *   <li><b>holding one</b> — {@code animal_restraint} eases handling while a beast is worked on, by being
+     *       CARRIED. No sentence could reach it, and there is no restrained state to pretend at, so the answer
+     *       says what the keeper has and what it does.</li>
+     *   <li><b>mucking out</b> — {@code maintainCamp} carries off {@code chunk_refuse}, which is the very thing
+     *       V299's stock sickness offers "clean ground" as a way out of. The same work, in its own words.</li>
+     *   <li><b>the wool</b> — the yield rule knew "fleece" and not "wool", so {@code shear the sheep} worked
+     *       and {@code take the wool} reached nothing.</li>
+     * </ul>
+     */
+    @Test
+    void theCareActsThatHadNoWords() {
+        UUID me = awaken();
+        String beast = keepOneCompoundNamedBeast(me);
+
+        wanting();
+        ChronicleActionService.ActionResult dressed = actions.resolve("bandage the " + beast);
+        assertEquals("TEND_ANIMAL", dressed.intent(),
+            () -> "bandaging a beast is tending it: " + dressed.intent() + " / " + dressed.perception());
+
+        wanting();
+        ChronicleActionService.ActionResult held = actions.resolve("hobble the " + beast);
+        assertEquals("CHECK_STOCK", held.intent(), () -> "holding a beast must answer: " + held.perception());
+        String about = held.perception().toLowerCase(Locale.ROOT);
+        // About HOLDING, not a welfare report nobody asked for — which is the fault this ticket is full of.
+        assertTrue(about.contains("hold") || about.contains("hobble") || about.contains("harness"),
+            () -> "and must answer about holding it: " + held.perception());
+        assertFalse(about.contains("short of water"),
+            () -> "and not with the welfare report, which was not the question: " + held.perception());
+
+        // Mucking out. Foul the ground first, so there is something to carry off — and the refuse must actually
+        // fall, because a sentence that says the ground is sweeter and leaves it as it was is the whole defect.
+        UUID where = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, me);
+        jdbc.update("INSERT INTO chunk_refuse (chunk_id, refuse_level, last_updated_at) VALUES (?,60,now()) " +
+            "ON CONFLICT (chunk_id) DO UPDATE SET refuse_level=60", where);
+        int before = jdbc.queryForObject("SELECT refuse_level FROM chunk_refuse WHERE chunk_id=?", Integer.class, where);
+        ChronicleActionService.ActionResult mucked = actions.resolve("muck out the pen");
+        assertEquals("MAINTAIN_CAMP", mucked.intent(), () -> "mucking out is that work: " + mucked.perception());
+        int after = jdbc.queryForObject("SELECT refuse_level FROM chunk_refuse WHERE chunk_id=?", Integer.class, where);
+        assertTrue(after < before, () -> "the refuse must actually fall: " + before + " -> " + after);
+        assertTrue(mucked.perception().toLowerCase(Locale.ROOT).contains("muck"),
+            () -> "and be told in the words it was asked in, not \"you tidy the camp\": " + mucked.perception());
+
+        assertEquals("TAKE_ANIMAL_YIELD", actions.resolve("take the wool").intent(),
+            "wool is what a fleece is called once it is off the animal");
+    }
+
+    /**
+     * And bandaging YOURSELF, which was found while giving the animal rules their dressing verbs.
+     *
+     * <p>{@code bandage my arm} reached nothing at all: the legacy rule pairs "bandage" only with a word for a
+     * wound, and the body-part rule did not know the verb — so naming the arm was no help to it. Meanwhile
+     * {@code bind the wound} worked perfectly, over the same mechanism.
+     */
+    @Test
+    void bandagingYourOwnArmReachesTheSameCareAsBindingAWound() {
+        awaken();
+        assertEquals("TREAT_WOUND", actions.resolve("bandage my arm").intent());
+        assertEquals("TREAT_WOUND", actions.resolve("bandage my leg").intent());
+        assertEquals("TREAT_WOUND", actions.resolve("bind the wound").intent(), "which always worked");
+        // Only "bandage" was added to that clause, because its noun group ends in a bare " it" and the other
+        // dressing verbs would each steal a sentence from somebody.
+        assertNotEquals("TREAT_WOUND", actions.resolve("bind the planks").intent(), "lashing planks is not wound care");
+        assertNotEquals("TREAT_WOUND", actions.resolve("wash it").intent(), "nor is washing something");
+    }
+
     @Test
     void andTheRulesThatOwnedThoseWordsKeepThem() {
         UUID me = awaken();

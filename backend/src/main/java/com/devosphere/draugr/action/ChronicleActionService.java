@@ -678,7 +678,7 @@ public class ChronicleActionService {
         else if (intent == Intent.SHELTER_BODY) { if(shelterInReach(chronicle.location())){physiology.shelterFromWeather(chronicle.id());perception="You duck under the shelter and out of the weather, and the worst of it stops reaching you.";}else{outcome="FAILED";perception="You look for cover, but there is none built here — nothing stands between you and the weather.";} }
         else if (intent == Intent.STRETCH) { physiology.stretch(chronicle.id()); perception="You stretch and work the stiffness out of your limbs, and stand a little easier for it."; }
         else if (intent == Intent.MAKE_BED) { String[] r = construction.makeBed(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
-        else if (intent == Intent.MAINTAIN_CAMP) { String[] r = construction.maintainCamp(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; if ("SUCCEEDED".equals(outcome)) physiology.settleCamp(chronicle.id()); }
+        else if (intent == Intent.MAINTAIN_CAMP) { String[] r = construction.maintainCamp(chronicle.id(), chronicle.location(), resolvedAt, text); outcome = r[0]; perception = r[1]; if ("SUCCEEDED".equals(outcome)) physiology.settleCamp(chronicle.id()); }
         else if (intent == Intent.PLACE_WINDBREAK) { String[] r = construction.placeWindbreak(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.PLACE_COVER) { String[] r = construction.placeCover(chronicle.id(), chronicle.location(), resolvedAt, coverKindOf(text.toLowerCase(Locale.ROOT))); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.TREAT_WOUND) { if (physiology.bindWound(chronicle.id(), items, actionId, resolvedAt)) perception="You press and bind the wounded place until the immediate bleeding eases."; else { outcome="FAILED";
@@ -2106,8 +2106,10 @@ public class ChronicleActionService {
         // 'milk' must be whole-word: milkweed is a fibre plant belonging to GATHER_PLANT, and a substring match stole
         // it. Wool is not a trigger noun — "weave wool cloth" is weaving — and a bare 'fleece' is not either, since
         // rinsing a fleece is washing it, not taking it off an animal. So a fleece needs a taking verb.
+        // "wool" is what a keeper calls a fleece once it is off the animal (#106), and the rule knew only
+        // "fleece": `shear the sheep` worked and `take the wool` reached nothing, over the same mechanism.
         if(word(value,"milk")||value.contains("shear")
-           ||(value.contains("fleece")&&(value.contains("take")||value.contains("clip")||value.contains("cut")||value.contains("pull")))
+           ||((value.contains("fleece")||word(value,"wool"))&&(value.contains("take")||value.contains("clip")||value.contains("cut")||value.contains("pull")))
            ||((value.contains("collect")||value.contains("gather")||value.contains("take")||value.contains("check"))
               &&(word(value,"egg")||word(value,"eggs")))) return Intent.TAKE_ANIMAL_YIELD;
         // Tending a sick beast (#106/#108). Needs BOTH a tending verb and an animal, so it cannot steal
@@ -2128,12 +2130,23 @@ public class ChronicleActionService {
             ||value.contains("do they need")||value.contains("what do they need")||value.contains("sick")||value.contains("ailing")
             ||value.contains("limping")||value.contains("lame")||value.contains("off its feed")||value.contains("off their feed")
             ||value.contains("thirsty")||value.contains("water the")||value.contains("give the")&&value.contains("water")
-            ||value.contains("check the")&&(value.contains(" over")||value.contains("for tick")))
+            ||value.contains("check the")&&(value.contains(" over")||value.contains("for tick"))
+            // ...and what a beast can be HELD with (#106). animal_restraint works by being CARRIED and no
+            // sentence could reach it, so these are answered with what you have for it and what it does. There
+            // is no restrained state in this world and an invented one would change nothing and claim it had.
+            ||value.contains("tether")||value.contains("hobble")||value.contains("halter")||value.contains("tie up")
+            ||value.contains("restrain")||value.contains("lead the")||value.contains("catch the")||value.contains("hold the")
+            ||value.contains("shut the")||value.contains("shut in")||value.contains("keep hold of"))
            &&namesABeast(value)
            // The acts keep their own verbs. Asking after a beast is not tending, grooming, feeding or milking one.
            &&!value.contains("tend")&&!value.contains("treat")&&!value.contains("groom")&&!value.contains("curry")
            &&!value.contains("feed the")&&!word(value,"milk")&&!value.contains("shear")) return Intent.CHECK_STOCK;
-        if((value.contains("tend")||value.contains("treat")||value.contains("doctor")||value.contains("physic")||value.contains("dose")||value.contains("nurse"))
+        // The dressing verbs belong here too (#106): tendSickAnimal works a poultice, an infusion or a dried herb
+        // bundle into an ailing beast, which is exactly what "bandage the goat" and "put a poultice on the ewe"
+        // ask for, and both reached nothing. Gated on the beast as everything in this block is, so "bind the
+        // wound" and "bandage my arm" stay TREAT_WOUND — the noun is the whole of the difference.
+        if((value.contains("tend")||value.contains("treat")||value.contains("doctor")||value.contains("physic")||value.contains("dose")||value.contains("nurse")
+            ||value.contains("bandage")||value.contains("poultice")||value.contains("salve")||value.contains("dress the")||value.contains("bind the"))
            &&namesABeast(value)) return Intent.TEND_ANIMAL;
         // Combing out a coat (#106). Kept apart from TEND_ANIMAL by the verb: tending is for what ails a beast,
         // grooming is for the coat itself, and the two want different things in your hands. The coat, the mane and
@@ -2355,6 +2368,15 @@ public class ChronicleActionService {
               ||value.contains("garment")||value.contains("what i am wearing")||value.contains("my clothes"))
            &&!value.contains("make ")&&!value.contains("sew ")&&!value.contains("craft ")) return Intent.LINE_GARMENT;
         if((value.contains("tidy")||value.contains("arrange")||value.contains("straighten")||value.contains("set in order")||value.contains("order the")||value.contains("clean up")||value.contains("maintain")||value.contains("look after")||value.contains("protect"))&&(value.contains("camp")||value.contains("campsite")||value.contains("supplies")||value.contains("shelter site"))) return Intent.MAINTAIN_CAMP;
+        // Mucking out is the SAME WORK on the SAME counter (#106). maintainCamp carries off `chunk_refuse`, which
+        // is the very thing V299's stock sickness offers "clean ground" as a way out of — so a keeper clearing a
+        // pen is doing exactly what this intent does, and "muck out the pen" reached nothing at all while "tidy
+        // the camp" did it. Routed here rather than given a second implementation that would drift from this one.
+        if((value.contains("muck out")||value.contains("muck the")||value.contains("shovel out")||value.contains("clear the dung")
+            ||value.contains("clear the muck")||value.contains("clear the manure")||value.contains("clean out")
+            ||((value.contains("clean")||value.contains("clear"))&&(value.contains("the pen")||value.contains("the coop")||value.contains("the stable")
+               ||value.contains("the byre")||value.contains("the stall")||value.contains("the shelter")||value.contains("the fold"))))
+           &&!value.contains("build")&&!value.contains("make ")) return Intent.MAINTAIN_CAMP;
         // Bare-hand cover (#195): a windbreak/brush screen leant against the wind — no tool, partial protection.
         if((value.contains("windbreak")||value.contains("wind break")||value.contains("brush screen")||value.contains("wind screen")||value.contains("reed screen against"))&&(value.contains("make")||value.contains("build")||value.contains("raise")||value.contains("set up")||value.contains("put up")||value.contains("weave")||value.contains("lean")||value.contains("erect"))) return Intent.PLACE_WINDBREAK;
         // Bare-hand partial covers (#195): sunshade / rain cover / groundsheet / stone ring — a placing verb plus the
@@ -2513,7 +2535,13 @@ public class ChronicleActionService {
         //
         // Above EQUIP, which otherwise answers "splint my leg" with "you have nothing unequipped that can be
         // worn or wielded" — a wrong answer in the even voice of a true one.
+        // "bandage" joins them (#106). Found while giving the animal rules their dressing verbs: `bandage my arm`
+        // reached NOTHING, because the legacy rule pairs bandage only with a word for a wound and this one did
+        // not know the verb at all — so the body part was useless to it. Only "bandage", deliberately: the noun
+        // group below ends in a bare `" it"`, and bind, wash, clean and dress would each steal a sentence from
+        // somebody — `bind the planks` is lashing, `wash it` is washing. Nothing else in this world is bandaged.
         if((value.contains("splint")||value.contains("stitch")||value.contains("cauteris")||value.contains("cauteriz")||value.contains("sling")
+            ||value.contains("bandage")
             ||value.contains("staunch")||value.contains("change the dressing")||value.contains("press on"))
            &&(value.contains("wound")||value.contains("cut")||value.contains("bleeding")||value.contains("gash")
               ||value.contains("my leg")||value.contains("my arm")||value.contains("my ankle")||value.contains("my wrist")

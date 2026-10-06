@@ -3616,6 +3616,46 @@ public class PhysicalItemService {
     private static final int WORTH_NAMING = 25;
 
     /**
+     * What a beast can be HELD with (#106).
+     *
+     * <p>{@code animal_restraint} is a wired mechanic that no sentence could reach: the best piece a keeper
+     * CARRIES eases the handling while a bad-tempered beast is worked on, they do not stack — enough rope would
+     * otherwise be as good as a milking stanchion, and nobody would raise the building — and a broken one holds
+     * nothing. It works by being had, not by being fastened.
+     *
+     * <p>So there is no restrained state in this world, and this answer does not pretend there is one. "Hobble
+     * the goat" is told what the keeper actually has for it and what that actually does, and when they have
+     * nothing, which makeable things would answer. An invented <i>"the hobble is now on"</i> would change nothing
+     * and say that it had, which is the defect this ticket is full of.
+     */
+    @Transactional(readOnly = true)
+    public String holdingAnswer(UUID chronicle) {
+        java.util.Map<String,Object> best = jdbc.query(
+            "SELECT r.item_key, r.eases_handling_by, r.strains FROM animal_restraint r " +
+            "WHERE EXISTS (SELECT 1 FROM world_object w JOIN item_instance i ON i.object_id = w.id " +
+            "               WHERE w.current_owner_id = ? AND w.lifecycle_state = 'ACTIVE' " +
+            "                 AND i.item_key = r.item_key AND i.condition_state <> 'BROKEN') " +
+            "ORDER BY r.eases_handling_by DESC LIMIT 1",
+            rs -> rs.next() ? java.util.Map.of("key", rs.getString(1), "eases", rs.getInt(2), "strains", rs.getBoolean(3)) : null,
+            chronicle);
+        if (best == null) {
+            java.util.List<String> made = jdbc.queryForList(
+                "SELECT DISTINCT replace(r.item_key,'_',' ') FROM animal_restraint r " +
+                "JOIN material_process mp ON mp.output_item_key = r.item_key ORDER BY 1", String.class);
+            String none = "You have nothing to hold a beast with. A hand on the head is a hand on the head, and a "
+                + "grown animal that decides otherwise goes where it likes.";
+            return made.isEmpty() ? none
+                : none + " What would answer: " + joinAnd(made) + " — and each of them can be made.";
+        }
+        String held = ((String) best.get("key")).replace('_', ' ');
+        return "You have a " + held + " to hand, and with it the work on a beast is possible rather than a wrestle. "
+            + (Boolean.TRUE.equals(best.get("strains"))
+               ? "It takes the animal's weight when it throws itself about, which is why it wears out."
+               : "It was made to be pulled against, so the struggle does the animal no harm.")
+            + " It holds while you have it; there is nothing to fasten and nothing to undo.";
+    }
+
+    /**
      * How the stock are (#106). The plainest question a keeper asks, and nothing could answer it.
      *
      * <p><b>What the world already knew.</b> {@code wildlife_bond} carries hunger, thirst, fatigue and sickness on
@@ -3636,6 +3676,8 @@ public class PhysicalItemService {
     public String[] stockWelfare(UUID chronicle, UUID location, String actionText) {
         String v = actionText == null ? "" : actionText.toLowerCase(java.util.Locale.ROOT);
         boolean aboutWater = v.contains("water") || v.contains("thirst") || v.contains("drink") || v.contains("trough");
+        boolean aboutHolding = v.contains("tether") || v.contains("hobble") || v.contains("halter") || v.contains("tie up")
+            || v.contains("lead the") || v.contains("catch the") || v.contains("hold the") || v.contains("restrain");
 
         java.util.List<java.util.Map<String,Object>> kinds = jdbc.queryForList(
             "SELECT wp.species_key, COUNT(*) AS kept, MAX(wb.draft_hunger) AS hunger, MAX(wb.draft_thirst) AS thirst, " +
@@ -3668,6 +3710,11 @@ public class PhysicalItemService {
             Boolean.class, location));
 
         StringBuilder b = new StringBuilder();
+
+        // Asked how to HOLD a beast, answer about holding it — not with a welfare report nobody asked for, which
+        // is what the first cut did and is the same fault as answering a thirst question about appetite.
+        if (aboutHolding) return new String[]{"SUCCEEDED", holdingAnswer(chronicle)};
+
         for (java.util.Map<String,Object> k : asked) {
             String name = ((String) k.get("species_key")).replace('_', ' ');
             int kept = ((Number) k.get("kept")).intValue();
@@ -3691,6 +3738,11 @@ public class PhysicalItemService {
             else b.append(' ').append(joinAnd(wants)).append(". ");
         }
 
+        // What a beast can be HELD with (#106). There is no restrained state in this world and there should not
+        // be a pretended one: `animal_restraint` works by being CARRIED — the best piece applies while a beast is
+        // worked on, they do not stack, and a broken one holds nothing. That is a real mechanic that no sentence
+        // could reach, so asking to tether or hobble an animal is answered with what you actually have for it and
+        // what it actually does. An invented "the hobble is now on" would change nothing and say it had.
         // And what the want depends on, which is the half a keeper can act on.
         if (aboutWater || asked.stream().anyMatch(k -> ((Number) k.get("thirst")).intValue() >= WORTH_NAMING)) {
             b.append(wetGround
