@@ -1892,7 +1892,12 @@ public class ChronicleActionService {
         // STORE (#67 store/pack): put/stow/cache/stockpile something into a container, or the container-less
         // storage verbs that imply the settlement's store ("put it away", "cache the meat", "stockpile the wood").
         if((value.contains(" in ")||value.contains(" into ")||value.contains(" inside "))&&(value.contains("put")||value.contains("place")||value.contains("store")||value.contains("stow")||value.contains("stash")||value.contains("load")||value.contains("pack")||value.contains("drop"))&&containerNoun) return Intent.STORE;
-        if((value.contains("put")&&value.contains("away"))||value.contains("cache")||value.contains("stockpile")||value.contains("put in storage")||value.contains("stow away")||value.contains("stash away")) return Intent.STORE;
+        // "put it by" is the oldest English for storing a thing (#106), and the only phrasing of the fodder chain
+        // that still reached nothing — `store the hay` worked and `put the hay by` did not. Matched on the
+        // sentence ENDING in "by", which is what distinguishes it from placing something beside something else:
+        // "put the pot by the fire" carries on past the preposition and means nowhere near this.
+        if((value.contains("put")&&value.contains("away"))||value.contains("cache")||value.contains("stockpile")||value.contains("put in storage")||value.contains("stow away")||value.contains("stash away")
+           ||(value.contains("put")&&value.strip().endsWith(" by"))) return Intent.STORE;
         // "store the food" with no container named (#37). The rules above want a container noun or the words
         // "away"; a bare storage verb — the most ordinary way to say it — reached nothing.
         //
