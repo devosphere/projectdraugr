@@ -1329,4 +1329,26 @@ class IntentClassificationRegressionTest {
         assertNotEquals("MOVE", classify("cross my arms"));
         assertEquals("UNKNOWN", classify("peel the rushes", true), "and a process keyword is still the matcher's");
     }
+
+    /**
+     * Your own tracks are not quarry (#37).
+     *
+     * <p>{@code object_transition} has recorded the direction, the from and the to of every move since the table
+     * existed, and nothing had ever read it for this: "retrace my steps" and "go back the way I came" reached
+     * nothing, and <b>"follow my own tracks back" answered TRACK</b> — which hunts animal sign, so a player
+     * asking to go back the way they came was shown <i>"feathers caught in the low growth"</i>.
+     */
+    @Test void yourOwnTracksAreNotQuarry() throws Exception {
+        assertEquals("MOVE", classify("retrace my steps"));
+        assertEquals("MOVE", classify("go back the way I came"));
+        assertEquals("MOVE", classify("follow my own tracks back"));
+        assertEquals("MOVE", classify("back the way we came"));
+        // Hunting keeps every sentence that is about an animal's sign, which is all of its own.
+        assertEquals("TRACK", classify("look for tracks"));
+        assertEquals("TRACK", classify("follow the trail"));
+        assertEquals("TRACK", classify("read the ground"));
+        assertEquals("TRACK", classify("find the spoor"));
+        // And a journey to a place is still a journey. "back to camp" is TRAVEL's and always worked.
+        assertEquals("TRAVEL", classify("head back to camp"));
+    }
 }

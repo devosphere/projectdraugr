@@ -1425,6 +1425,29 @@ public class ChronicleActionService {
     }
     private String move(ActiveChronicle chronicle, String action, UUID actionId, Instant occurredAt) {
         Direction direction = Direction.from(action);
+        String said = action.toLowerCase(Locale.ROOT);
+        // Going back the way you came (#37). object_transition has recorded the direction, the from and the to of
+        // every single move since the table existed, and nothing had ever read it for this: "retrace my steps",
+        // "go back the way I came" and "follow my own tracks back" all reached nothing, and the last of those was
+        // answered by TRACK — which hunts animal sign, so a player asking to go back the way they came was shown
+        // somebody else's feathers in the low growth.
+        //
+        // The step is reversed rather than a bearing guessed: the record says which way the last one went, and
+        // the way back is the opposite of it. If the ground has changed under you — a cave mouth closed, water
+        // risen — the ordinary move checks below still apply, because this only chooses the direction.
+        if (direction == null && BACKTRACKING.matcher(said).find()) {
+            String last = jdbc.query(
+                "SELECT payload->>'direction' FROM object_transition " +
+                "WHERE object_id=? AND transition_type='MOVED' AND payload->>'toLocationId' = ?::text " +
+                "ORDER BY occurred_at DESC LIMIT 1",
+                rs -> rs.next() ? rs.getString(1) : null, chronicle.id(), chronicle.location().toString());
+            if (last == null)
+                return "You have not come to this ground from anywhere — there is no step behind you to take back.";
+            Direction came = Direction.valueOf(last);
+            direction = Direction.of(-came.dx, -came.dy);
+            if (direction == null)
+                return "You cannot work out which way you came onto this ground.";
+        }
         // A crossing names the WATER, not a bearing (#37). "wade across", "swim across" and "cross to the other
         // side" all reached nothing, while "can I get across here" answered in detail — the game could JUDGE a
         // crossing and not make one. judgeCrossing finds the water by looking at the neighbouring ground; so does
@@ -2068,6 +2091,11 @@ public class ChronicleActionService {
            &&(value.contains("track")||value.contains("trail")||value.contains("print")||value.contains("my sign")
               ||value.contains("where i")||value.contains("passage"))
            &&!value.contains("follow")&&!value.contains("read")) return Intent.HIDE_TRAIL;
+        // Your OWN tracks are not quarry (#37). Placed above TRACK, which hunts animal sign and answered "follow
+        // my own tracks back" with "you find feathers caught in the low growth" — a player asking to go back the
+        // way they came was shown somebody else's feathers. object_transition has recorded the direction of every
+        // move since the table existed, so the way back is a thing the world knows.
+        if(BACKTRACKING.matcher(value).find()) return Intent.MOVE;
         if(value.contains("track")||value.contains("follow the trail")||value.contains("read the ground")||value.contains("look for sign")||value.contains("look for tracks")||((value.contains("print")||value.contains("spoor")||value.contains("scat")||value.contains("droppings")||value.contains("trail"))&&(value.contains("find")||value.contains("read")||value.contains("follow")||value.contains("search")||value.contains("look")))) return Intent.TRACK;
         // Scan the boundary of the ground for a way clear of danger before moving into it (#128/#123: grounded
         // evidence before forced contact). Reads a predator ONE tile out by directional sense — scent on the
@@ -2832,6 +2860,16 @@ public class ChronicleActionService {
      * <p>"dig" is deliberately absent and spelled "dig up" at the call site: "dig a root cellar" names a real
      * root and a real assembly, so no boundary saves it, and "dig up" is how the act is said of a root.
      */
+    /**
+     * How a person says they are going back the way they came (#37).
+     *
+     * <p>"my own tracks" is the deciding phrase against TRACK, which hunts animal sign: the tracks are the
+     * player's and the act is retracing, not hunting. "back to camp" is deliberately absent — that is a journey
+     * to a named place and TRAVEL's, and it works.
+     */
+    private static final java.util.regex.Pattern BACKTRACKING = java.util.regex.Pattern.compile(
+            "retrace|back the way|way i came|way we came|my own tracks|my tracks|my own footprints|back on my tracks");
+
     /**
      * The verbs for getting over water (#37). As words, because "ford" is a name a person might give a place and
      * "cross" sits inside "crossbar", "crossing" and "crosswise" — and a sentence about a crossbar is not a
