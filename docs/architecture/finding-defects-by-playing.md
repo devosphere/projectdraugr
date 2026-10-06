@@ -190,6 +190,20 @@ Every defect this project has found is the same defect: **the world knows someth
 - **A rebase can be the reason CI never ran.** Two branches took a push, showed the new head, and produced no
   workflow run at all; rebasing them onto `development` and force-pushing started one immediately. If `gh pr
   checks` says "no checks" for more than a few minutes, rebase rather than wait.
+- **Never assert the exact wording of a refusal that is chosen from a SET — assert the set membership.**
+  `theYokeAnswersToTheWordAPersonUsesForIt` expected "wooden" or "yoke" from `carve a yoke` and CI returned
+  *"You have not got enough fiber cordage within reach"* — **entirely correct**. `make_draft_yoke` takes
+  `wooden_component` ×2 AND `fiber_cordage` ×1, the refusal names whichever input is MISSING, and which one that
+  is depends on what the shared Chronicle is carrying. It passed locally (the wood was short) and failed in CI
+  (the cordage was). Ask `material_process_input` and accept any of what the recipe wants. **A test that
+  hard-codes one of a multi-input recipe's inputs passes by luck** — a fifth shape of order-dependence, where
+  nothing is depleted out from under the test and the shared state merely chooses the *wording*.
+- **Sweep a CHAIN, not a feature.** The best-value sweep of the whole exercise walked all four steps of one
+  chain — grass grows → drying it yields a bundle → the bundle is an item → feeding consumes it — and found
+  **every step working and every word missing**: 15 of 25 sentences dead, and `gather grass` answering *"you
+  gather 4 elderberry from the elder shrub growing here"*. A feature sweep passes each step individually and
+  sees none of it. When a thing is attainable, workable and terminally useful, ask whether it is **nameable** at
+  every step, in the words a person uses rather than the words the catalogue uses.
 - **A migration may assert the SCHEMA and the CATALOGUE unconditionally. Simulation state only once the
   simulation has something to be in.** V400 ended with `IF NOT EXISTS (SELECT 1 FROM world_weather) THEN RAISE` —
   defensible, since the slice exists because `wind_speed_kph` was maintained and unaskable, and a reading about a
