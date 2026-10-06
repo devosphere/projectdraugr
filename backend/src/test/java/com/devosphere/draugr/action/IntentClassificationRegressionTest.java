@@ -1246,4 +1246,55 @@ class IntentClassificationRegressionTest {
         assertEquals("CRAFT_BASKET", classify("weave a basket"));
         assertEquals("CLOSE_CONTAINER", classify("put the lid on the pot"));
     }
+
+    /**
+     * Going somewhere, which is the thing a player does most often, and the axis nobody had swept (#37).
+     *
+     * <p>Forty-two sentences about movement and place: <b>26 reached nothing</b>. Two of them are fixed here.
+     *
+     * <p><b>"head east" reached NOTHING</b> while "go north", "walk south" and "go west" all worked. The move
+     * rule knows walk/travel/go/move; "head" was only ever read as part of "head to" and "head for", which are
+     * TRAVEL's and want a PLACE rather than a bearing — so one of the commonest ways of saying the commonest
+     * thing a player does fell between the two rules and out of the bottom.
+     *
+     * <p><b>And a KIND of ground could be asked for and never found.</b> {@code planTravel} only knows places the
+     * Chronicle has NAMED and can locate, so "which way is the water" had nothing to answer it, though the
+     * neighbouring biomes, their elevations and the grid offsets were all sitting in {@code world_chunk}.
+     */
+    @Test void goingSomewhereAndAskingTheWay() throws Exception {
+        // A bearing with any of the verbs for setting off.
+        assertEquals("MOVE", classify("head east"));
+        assertEquals("MOVE", classify("head north"));
+        assertEquals("MOVE", classify("heading south"));
+        assertEquals("MOVE", classify("set out west"));
+        assertEquals("MOVE", classify("strike out north"));
+        // The ones that already worked, which the new rule must not disturb.
+        assertEquals("MOVE", classify("go north"));
+        assertEquals("MOVE", classify("walk south"));
+        assertEquals("MOVE", classify("go west"));
+        assertEquals("MOVE", classify("wade north"));
+
+        // A PLACE is still a journey, not a step. This is the distinction the new rule is gated on.
+        assertEquals("TRAVEL", classify("head for the high ground"));
+        assertEquals("TRAVEL", classify("head back to camp"));
+        assertEquals("TRAVEL", classify("go to the old oak"));
+
+        // Asking the way to a kind of ground.
+        assertEquals("WHICH_WAY", classify("which way is the water"));
+        assertEquals("WHICH_WAY", classify("which way to the woods"));
+        assertEquals("WHICH_WAY", classify("where is the nearest high ground"));
+        assertEquals("WHICH_WAY", classify("what direction is the sea"));
+        assertEquals("WHICH_WAY", classify("how far is the river"));
+        assertEquals("WHICH_WAY", classify("is there open ground near here"));
+        assertEquals("WHICH_WAY", classify("any marsh nearby"));
+
+        // A bearing on the SUN is not a bearing on the country, and the sky keeps its own questions. This is
+        // what gating on a named kind of ground buys: the two rules cannot reach each other's sentences.
+        assertEquals("READ_THE_SKY", classify("which way is north"));
+        assertEquals("READ_THE_SKY", classify("take a bearing"));
+        assertEquals("READ_THE_SKY", classify("what time is it"));
+        // And measuring a THING is still measuring. "how far is" only asks the way when it asks about ground.
+        assertEquals("MEASURE", classify("how far is the hut"));
+        assertEquals("MEASURE", classify("how long is this plank"));
+    }
 }
