@@ -37,7 +37,12 @@ import java.util.List;
 public class VisualContextService {
 
     /** The response contract version. Additive changes keep it; a removal or rename must raise it. */
-    public static final int VERSION = 1;
+    /**
+     * The contract version. <b>2</b> since #224 gave this ground its bands ({@link Land}) and the next ground a
+     * bearing and a relief ({@link Nearby}). Additive: every field version 1 carried is still here and still
+     * means what it meant, so a client written against 1 keeps working and may ignore both new fields.
+     */
+    public static final int VERSION = 2;
 
     private final JdbcTemplate jdbc;
 
@@ -45,6 +50,44 @@ public class VisualContextService {
 
     /** One thing standing on this ground: a natural site, or something a Chronicle has built. */
     public record Feature(String kind, String name) { }
+
+    /**
+     * The lie of this ground in bands (#224).
+     *
+     * <p>{@code world_chunk.elevation} and {@code moisture} have been maintained by genesis since the table
+     * existed, and both were read into this service's own query to hand to {@link BiomeClimate} — and then
+     * thrown away. So the contract described a place by its biome alone: a saturated lowland fen and a dry
+     * upland heath could be the same WETLAND and the same GRASSLAND, and no caller could tell a bog from a
+     * moor. Bands rather than raw numbers, because a backdrop needs the kind of ground and not a survey, and
+     * raw elevation is a step toward the world-seed coordinates this payload must never carry.
+     *
+     * @param elevation LOWLAND / RISING / UPLAND / HIGH
+     * @param moisture  ARID / DRY / MOIST / WET / SATURATED
+     * @param sunWarmed whether higher ground to the north leaves this slope facing the sun — the same aspect the
+     *                  warmth model uses, so what a place looks like agrees with what it feels like
+     */
+    public record Land(String elevation, String moisture, boolean sunWarmed) { }
+
+    /**
+     * One piece of the next ground, and which way it lies (#224).
+     *
+     * <p>{@code surroundings} told a caller that moorland was visible from here and never which way to look, so
+     * nothing could be composed from it: a sea to the west and a mountain wall to the east are the same payload.
+     * The direction was always available — the neighbours are found by their grid offset — and was discarded on
+     * the way out. {@code relief} is the ticket's "elevation transition": whether that ground stands above this,
+     * level with it, or below.
+     *
+     * <p>Still only the LIE OF THE LAND. No neighbour's sites, structures, lairs or wildlife: a lair two chunks
+     * east is exactly what this payload must never tell a player, and one chunk east is no better.
+     *
+     * @param direction north / south / east / west, by {@link Compass}
+     * @param biome     the kind of country there
+     * @param relief    ABOVE / LEVEL / BELOW, by the same 40-unit step the aspect model uses
+     * @param distance  always ADJACENT — the one ring of ground a person can see the shape of from where they
+     *                  stand. Carried as a band rather than left implicit so that a farther tier, if one is ever
+     *                  earned, does not change the meaning of what is already here.
+     */
+    public record Nearby(String direction, String biome, String relief, String distance) { }
 
     /**
      * Everything visible from where the Chronicle stands.
@@ -59,17 +102,41 @@ public class VisualContextService {
      * @param lit         whether there is light enough to see by — daylight, or a fire burning here
      * @param surroundings the kinds of ground visible on the four neighbouring chunks (#232), distinct and sorted;
      *                    empty in the dark or inside a cave, where nothing beyond this ground can be seen. Only the
-     *                    lie of the land — never what stands on it.
+     *                    lie of the land — never what stands on it. <b>Kept</b> beside {@code nearby} rather than
+     *                    replaced by it: the ticket asks for an ADDITIVE contract, and a client reading this field
+     *                    at version 1 must keep working at version 2.
+     * @param land        the lie of THIS ground in bands (#224)
+     * @param nearby      the next ground with a direction and a relief on each piece of it (#224)
      * @param fingerprint stable hash of all of the above
      */
     public record VisualContext(int version, String biome, List<Feature> features, String timeOfDay,
                                 String season, String weather, double temperatureC, boolean lit,
-                                List<String> surroundings, String fingerprint) {
+                                List<String> surroundings, Land land, List<Nearby> nearby, String fingerprint) {
         /** The shape before #232's visible-nearby tier: nothing seen beyond this ground. */
         public VisualContext(int version, String biome, List<Feature> features, String timeOfDay, String season,
                              String weather, double temperatureC, boolean lit, String fingerprint) {
-            this(version, biome, features, timeOfDay, season, weather, temperatureC, lit, List.of(), fingerprint);
+            this(version, biome, features, timeOfDay, season, weather, temperatureC, lit, List.of(), null, List.of(), fingerprint);
         }
+        /** The shape before #224 gave the ground bands and the next ground a bearing. */
+        public VisualContext(int version, String biome, List<Feature> features, String timeOfDay, String season,
+                             String weather, double temperatureC, boolean lit, List<String> surroundings, String fingerprint) {
+            this(version, biome, features, timeOfDay, season, weather, temperatureC, lit, surroundings, null, List.of(), fingerprint);
+        }
+    }
+
+    /** Where one band ends and the next begins. Bands, not numbers: a backdrop wants the kind, not a survey. */
+    static String elevationBand(int elevation) {
+        return elevation < 120 ? "LOWLAND" : elevation < 400 ? "RISING" : elevation < 700 ? "UPLAND" : "HIGH";
+    }
+
+    /** The same, for how wet the ground is. SATURATED is standing water; ARID will not hold a crop. */
+    static String moistureBand(int moisture) {
+        return moisture < 20 ? "ARID" : moisture < 40 ? "DRY" : moisture < 60 ? "MOIST" : moisture < 80 ? "WET" : "SATURATED";
+    }
+
+    /** Whether that ground stands over this one, by the same 40-unit step the aspect model is built on. */
+    static String relief(int there, int here) {
+        return there > here + 40 ? "ABOVE" : there < here - 40 ? "BELOW" : "LEVEL";
     }
 
     /** The ground the Chronicle stands on, and the sky over it — a record because Map.of stops at ten pairs. */
@@ -139,18 +206,40 @@ public class VisualContextService {
         // that. The lie of the land is visible from where anyone stands — a mountain wall, the sea, a wood's edge —
         // but what stands on it is not: a lair two chunks east is exactly what this payload must never tell a player,
         // so no neighbour's sites or structures are read here. Nothing is seen from inside a cave, or in the dark.
-        List<String> surroundings = (!lit || "CAVE_INTERIOR".equals(biome)) ? List.of() : jdbc.queryForList(
-            "SELECT DISTINCT n.biome FROM world_chunk n WHERE n.world_id=? AND abs(n.grid_x-?)+abs(n.grid_y-?)=1 ORDER BY 1",
-            String.class, here.worldId(), here.gridX(), here.gridY());
+        // ...and WHICH WAY it lies (#224). The neighbours were already found by their grid offset and the offset
+        // was thrown away on the way out, so "moorland is visible" could not be composed into anything: a sea to
+        // the west and a mountain wall to the east were the same payload. Ordered by bearing so the list is
+        // stable, which the fingerprint depends on.
+        boolean blind = !lit || "CAVE_INTERIOR".equals(biome);
+        List<Nearby> nearby = new java.util.ArrayList<>();
+        if (!blind) jdbc.query(
+            "SELECT n.biome, n.elevation, n.grid_x - ? AS dx, n.grid_y - ? AS dy FROM world_chunk n " +
+            "WHERE n.world_id=? AND abs(n.grid_x-?)+abs(n.grid_y-?)=1 ORDER BY dy, dx", rs -> {
+                String bearing = Compass.of(rs.getInt("dx"), rs.getInt("dy"));
+                if (bearing != null)
+                    nearby.add(new Nearby(bearing, rs.getString("biome"),
+                        relief(rs.getInt("elevation"), here.elevation()), "ADJACENT"));
+            }, here.gridX(), here.gridY(), here.worldId(), here.gridX(), here.gridY());
+
+        // Kept exactly as it was, for a client written against version 1 (#232).
+        List<String> surroundings = nearby.stream().map(Nearby::biome).distinct().sorted().toList();
+
+        Land land = new Land(elevationBand(here.elevation()), moistureBand(here.moisture()), sunWarmed);
 
         String fingerprint = fingerprint(biome, features, timeOfDay, season, local, lit);
-        // Folded in only when something beyond this ground is seen, so a place with no view keeps the fingerprint it
-        // always had.
-        if (!surroundings.isEmpty())
-            fingerprint = Integer.toHexString((fingerprint + "|around:" + String.join(",", surroundings)).hashCode());
+        // The ground's own bands always count: they are a property of the place and are known in the dark, so
+        // folding them in unconditionally is right — and it means a bog and a moor that share a biome no longer
+        // share a fingerprint, which is the bug the bands exist to fix.
+        fingerprint = Integer.toHexString((fingerprint + "|land:" + land.elevation() + "/" + land.moisture()
+            + (land.sunWarmed() ? "/sun" : "")).hashCode());
+        // The view is folded in only when there IS one, so a place with nothing to see keeps the fingerprint it
+        // always had — in a cave, or after dark.
+        if (!nearby.isEmpty())
+            fingerprint = Integer.toHexString((fingerprint + "|around:" + nearby.stream()
+                .map(n -> n.direction() + ":" + n.biome() + ":" + n.relief()).reduce("", (a, b) -> a + "," + b)).hashCode());
 
         return new VisualContext(VERSION, biome, List.copyOf(features), timeOfDay, season,
-            local.kind(), local.temperatureC(), lit, List.copyOf(surroundings), fingerprint);
+            local.kind(), local.temperatureC(), lit, surroundings, land, List.copyOf(nearby), fingerprint);
     }
 
     private boolean fireBurningAt(java.util.UUID chunk) {

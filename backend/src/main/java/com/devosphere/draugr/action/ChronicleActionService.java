@@ -2781,8 +2781,11 @@ public class ChronicleActionService {
         return b.toString();
     }
     /** Eight-point compass from a grid offset; grid y increases southward. */
-    private String compass(int dx, int dy) { String ns = dy < 0 ? "north" : dy > 0 ? "south" : ""; String ew = dx > 0 ? "east" : dx < 0 ? "west" : ""; String c = ns + ew; return c.isEmpty() ? "at the centre" : c; }
-    private String rotateCompass(String dir, boolean clockwise) { String[] ring = {"north","northeast","east","southeast","south","southwest","west","northwest"}; for (int i=0;i<ring.length;i++) if (ring[i].equals(dir)) return ring[(i + (clockwise?1:ring.length-1)) % ring.length]; return dir; }
+    // The convention — north is grid_y-1 — now lives in Compass (#224), because the visual context had to say
+    // which way the next ground lies and a second copy of it would have let a place look one way and feel
+    // another. CompassAgreesWithDirectionTest holds the enum below to the same convention.
+    private String compass(int dx, int dy) { String c = com.devosphere.draugr.world.Compass.of(dx, dy); return c == null ? "at the centre" : c; }
+    private String rotateCompass(String dir, boolean clockwise) { return com.devosphere.draugr.world.Compass.rotate(dir, clockwise); }
     private String[] equipByName(ActiveChronicle chronicle, String text, Instant at) {
         java.util.List<java.util.Map<String,Object>> candidates = jdbc.queryForList("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT w.id,w.display_name,c.body_position,c.layer FROM reachable r JOIN world_object w ON w.id=r.id JOIN item_instance i ON i.object_id=w.id JOIN item_equipment_compatibility c ON c.item_key=i.item_key LEFT JOIN equipment_attachment e ON e.item_id=w.id WHERE e.item_id IS NULL ORDER BY w.display_name", chronicle.id());
         if (candidates.isEmpty()) return new String[]{"FAILED","You have nothing unequipped that can be worn or wielded."};
