@@ -1468,9 +1468,11 @@ public class ChronicleActionService {
             String biomes = null;
             for (String[] kind : GROUND_ASKED_FOR)
                 if (groundNamed(said, kind[0]) && (biomes == null || kind[0].length() > biomes.length())) biomes = kind[1];
+            // Down beats up only when it is said: "climb down" descends, and a bare "climb" or "scramble" is up.
             Boolean upward = biomes != null ? null
                 : said.contains("down") || said.contains("descend") ? Boolean.FALSE
-                : said.contains("up") || said.contains("ascend") ? Boolean.TRUE : null;
+                : said.contains("up") || said.contains("ascend") ? Boolean.TRUE
+                : CLIMBING_VERB.matcher(said).find() ? Boolean.TRUE : null;
             if (biomes == null && upward == null)
                 return "You could climb, or follow something, but you have not said what.";
             Toward it = toward(chronicle.location(), biomes, upward);
@@ -2943,6 +2945,14 @@ public class ChronicleActionService {
             + "|follow|follows|following|ascend|ascends|descend|descends)(?!\\w)");
 
     /**
+     * The climbing verbs alone, which need no object: a bare "climb" means UP in anybody's English, and so do
+     * "scramble" and "ascend". "follow" is deliberately not among them — following with no object named is a
+     * sentence with a hole in it, and the honest answer is to say so rather than pick a direction.
+     */
+    private static final java.util.regex.Pattern CLIMBING_VERB = java.util.regex.Pattern.compile(
+            "(?<!\\w)(climb|climbs|climbing|scramble|scrambles|scrambling|clamber|clambers|clambering|ascend|ascends)(?!\\w)");
+
+    /**
      * Whether the sentence asks for a step whose object is a piece of GROUND rather than a bearing (#37).
      *
      * <p>One condition, read by the classifier and by {@link #move} both, because the two must agree exactly:
@@ -2959,9 +2969,11 @@ public class ChronicleActionService {
             || value.contains("up into") || value.contains("down into")
             || value.contains("make my way up") || value.contains("make my way down");
         if (!verb) return false;
+        // A climbing verb needs no object — a bare "climb" means up — so it is enough on its own.
+        if (CLIMBING_VERB.matcher(value).find()) return true;
         return namesGroundAsked(value) || value.contains("up the") || value.contains("down the")
             || value.contains("up into") || value.contains("down into")
-            || value.contains("ascend") || value.contains("descend")
+            || value.contains("descend")
             || value.strip().endsWith(" up") || value.strip().endsWith(" down");
     }
 
