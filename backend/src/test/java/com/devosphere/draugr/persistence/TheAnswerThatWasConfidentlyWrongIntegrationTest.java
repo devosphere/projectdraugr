@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -146,10 +147,21 @@ class TheAnswerThatWasConfidentlyWrongIntegrationTest {
         ChronicleActionService.ActionResult r = actions.resolve("carve a yoke");
         assertEquals("PROCESS_MATERIAL", r.intent(),
             () -> "carving a yoke is making one, not blazing a trail: " + r.intent() + " / " + r.perception());
-        // And the recipe it reaches is the yoke's own, which refuses for want of the right material.
-        assertTrue(r.perception().toLowerCase(java.util.Locale.ROOT).contains("wooden")
-                || r.perception().toLowerCase(java.util.Locale.ROOT).contains("yoke"),
-            () -> "and it must be the yoke's recipe that answers: " + r.perception());
+
+        // And the recipe it reaches is the yoke's own, which refuses for want of a material it actually wants.
+        //
+        // ASKED OF THE CATALOGUE, not guessed from the prose. The first cut of this assertion looked for "wooden"
+        // or "yoke" in the answer and failed in CI on a perfectly correct reply — "You have not got enough fiber
+        // cordage within reach" — because make_draft_yoke takes wooden_component AND fiber_cordage, the refusal
+        // names whichever input is missing, and which one that is depends on what the shared world's Chronicle
+        // happens to be carrying. A test that hard-codes one of a recipe's inputs is a test that passes by luck.
+        java.util.List<String> wants = jdbc.queryForList(
+            "SELECT replace(item_key, '_', ' ') FROM material_process_input WHERE process_key='make_draft_yoke'",
+            String.class);
+        assertFalse(wants.isEmpty(), "make_draft_yoke must declare what it is made of");
+        String answered = r.perception().toLowerCase(java.util.Locale.ROOT);
+        assertTrue(answered.contains("yoke") || wants.stream().anyMatch(answered::contains),
+            () -> "the answer must come from the yoke's own recipe — it wants " + wants + " — but was: " + r.perception());
         // The marking intent keeps its own phrasings, which is why it was right to take the sentence before.
         assertEquals("MARK", actions.resolve("blaze a trail").intent(), "blazing a trail is still a marking");
     }
