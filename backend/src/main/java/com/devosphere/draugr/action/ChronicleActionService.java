@@ -2133,7 +2133,12 @@ public class ChronicleActionService {
         // the pit is excluded by name here because BUILD_FIRE_PIT is claimed later, in the legacy rule.
         if(((value.contains("start")||value.contains("make")||value.contains("kindle")||value.contains("set")
              ||value.contains("get")||value.contains("build"))&&word(value,"fire")
-            &&!value.contains("pit")&&!value.contains("firepit")&&!value.contains("hearth")&&!value.contains("ring"))
+            &&!value.contains("pit")&&!value.contains("firepit")&&!value.contains("hearth")&&!value.contains("ring")
+            // "set fire to THEIR store" is arson against a people, which ConductService owns and prices. The
+            // conduct pre-pass takes it whenever a community is in reach — but off the isle this rule would have
+            // answered it by crouching down to light a campfire, which is not what was said.
+            &&!value.contains("their")&&!value.contains("the village")&&!value.contains("the store")
+            &&!value.contains("the houses")&&!value.contains("the hut"))
            ||value.contains("strike a spark")||value.contains("strike sparks")||value.contains("light the tinder")
            ||value.contains("get a blaze")||value.contains("coax it alight")||value.contains("coax a flame")) return Intent.LIGHT_FIRE;
         // Gathering FUEL, by the plain word for it (#37). `gather firewood`, `collect firewood`, `gather
@@ -2216,7 +2221,7 @@ public class ChronicleActionService {
         //
         // As words where they are short or live inside other words: "hone" sits in "honey" and "whet" in
         // "whether", and this project has shipped the substring defect four times over.
-        if((value.contains("repair")||value.contains("mend")||value.contains("patch")||value.contains("reinforce")||value.contains("sharpen")||value.contains("abrade")||value.contains("darn")
+        boolean mendsSomething = value.contains("repair")||value.contains("mend")||value.contains("patch")||value.contains("reinforce")||value.contains("sharpen")||value.contains("abrade")||value.contains("darn")
             ||word(value,"hone")||word(value,"honing")||word(value,"whet")||word(value,"whets")||word(value,"whetting")
             ||word(value,"strop")||word(value,"strops")||word(value,"stropping")
             ||(word(value,"grind")&&(value.contains("axe")||value.contains("blade")||value.contains("knife")||value.contains("edge")||value.contains("adze")||value.contains("chisel")))
@@ -2224,8 +2229,24 @@ public class ChronicleActionService {
             // Rehafting IS mending: a head is sound and the handle it sits on has split, which is the commonest
             // repair there is and reached nothing by any of its names.
             ||value.contains("rehaft")||value.contains("re-haft")||value.contains("new handle")
-            ||value.contains("replace the handle")||value.contains("replace the haft")||value.contains("the handle again")
-            ||(word(value,"fix")&&!value.contains("memory")&&!value.contains("mind")&&!value.contains("place")))
+            ||value.contains("replace the handle")||value.contains("replace the haft")||value.contains("the handle again");
+        // MAKING one of these things is the matcher's, not a mend. "assemble a honing kit" produces a
+        // sharpening_kit and must SUCCEED at it, and "honing" in the name of the kit was all this rule needed to
+        // take it away. Found by replaying every phrase the test tree gives the composer — before pushing, this
+        // time, rather than 65 minutes later.
+        //
+        // Named as locals rather than threaded into one condition: the first cut put the new clause inside the
+        // existing parentheses and closed the `if` a line early, which the compiler caught but which a reader
+        // would not have. A condition this long is easier to get right in pieces.
+        boolean fixesSomething = word(value,"fix")&&!value.contains("memory")&&!value.contains("mind")&&!value.contains("place");
+        // CONSTRUCTING one, specifically — not MAKING_SOMETHING, which also holds repair, mend and dismantle
+        // because it means "working on a thing" rather than "building one". Excluding that pattern excluded
+        // repair itself and sent "repair my stone knife" and "mend the woven basket" to nothing at all, which the
+        // routing regression caught at once. The lesson is to read what a shared predicate MEANS before reusing
+        // it: its name said making, its body said working.
+        boolean buildingOne = value.contains("assemble")||value.contains("craft")||value.contains("make ")
+            ||value.contains("build")||value.contains("put together");
+        if((mendsSomething&&!buildingOne&&!namesAnAssembly(value) || fixesSomething)
            &&!value.contains("shelter")&&!value.contains("frame")&&!value.contains("lean")) return Intent.REPAIR_ITEM;
         // "fishing net" / "weave a fish net" contain "fish" but are CRAFTING a net, not angling (#36/#43/#44).
         // Making a net is an explicit craft (CRAFT_NET) — a mesh knotted from cordage — distinct from USING a
