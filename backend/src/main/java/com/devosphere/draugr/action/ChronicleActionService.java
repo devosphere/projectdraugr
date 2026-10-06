@@ -306,7 +306,10 @@ public class ChronicleActionService {
         // not left to the wildlife encounter to resolve. Only within sight of an isle, as with contact.
         com.devosphere.draugr.people.ConductService.Act conductAct = null;
         if (conduct != null && intent != Intent.MOVE && intent != Intent.TRAVEL) {
-            conductAct = com.devosphere.draugr.people.ConductService.recognise(text);
+            // recogniseHere, not the static recognise (#106): an offence whose phrase names no object — "tie up
+            // the", "seize the", "drag the" — must be told who it is about, from the people vocabulary or from the
+            // names the world gave this community. Without that, tying up a BUNDLE was an assault on a person.
+            conductAct = conduct.recogniseHere(text);
             if (conductAct != null) { contactWith = contact.communityInReach(chronicle.location()); if (contactWith != null) intent = Intent.CONDUCT_TOWARD_PEOPLE; else { conductAct = null; meantForPeople = true; } }
         }
         // Travelling together (#113). Asking is done on the isle, face to face; parting can be done anywhere the two
@@ -825,6 +828,7 @@ public class ChronicleActionService {
         else if (intent == Intent.SEARCH) { String[] r = examination.sense(chronicle.id(), chronicle.location(), text, ExaminationService.Sense.SEARCH); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.SENSE_BODY) { perception = bodyReading(beforeBody); }
         else if (intent == Intent.BREEDING_PROSPECTS) { String[] r = items.breedingProspects(chronicle.id(), chronicle.location(), text); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.CHECK_STOCK) { String[] r = items.stockWelfare(chronicle.id(), chronicle.location(), text); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.LISTEN) { String[] r = examination.sense(chronicle.id(), chronicle.location(), text, ExaminationService.Sense.LISTEN); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.SMELL)  { String[] r = examination.sense(chronicle.id(), chronicle.location(), text, ExaminationService.Sense.SMELL);  outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.FEEL)   { String[] r = examination.sense(chronicle.id(), chronicle.location(), text, ExaminationService.Sense.FEEL);   outcome = r[0]; perception = r[1]; }
@@ -2008,7 +2012,17 @@ public class ChronicleActionService {
         // "snare a rabbit" is the immediate hand-worked attempt (V42).
         if((value.contains("build")||value.contains("set")||value.contains("make")||value.contains("place")||value.contains("construct")||value.contains("lay"))&&(value.contains("deadfall")||value.contains("pit trap")||value.contains("fish trap")||value.contains("cage trap")||value.contains("box trap")||value.contains("snare")||(value.contains("trap")&&!value.contains("check")))) return Intent.SET_TRAP;
         if(value.contains("lure")||value.contains("bait the")||((value.contains("leave")||value.contains("put")||value.contains("place")||value.contains("set"))&&(value.contains("bait")||value.contains("draw them")||value.contains("draw it")))) return Intent.LURE;
-        if(value.contains("tame")||value.contains("befriend")||value.contains("domesticate")||value.contains("gain its trust")||value.contains("earn its trust")||((value.contains("approach")||value.contains("offer")||value.contains("feed")||value.contains("hold out"))&&(value.contains("calm")||value.contains("slow")||value.contains("gentl")||value.contains("quiet")||value.contains("trust")||value.contains("goat")||value.contains("rabbit")||value.contains("fowl")||value.contains("turtle")||value.contains("hedgehog")||value.contains("pigeon")||value.contains("deer")||value.contains("reindeer")||value.contains("duck")))) return Intent.TAME;
+        // Taming by offering food, and the one case where the same words are not taming at all (#106). A keeper
+        // feeding their OWN goat says "feed the goat", exactly as someone winning a wild one over does, and was
+        // answered "it lets you come nearer than last time, and holds there, watching" — the approach to a wild
+        // animal, offered to someone whose goat is already theirs. No wording tells the two apart; the data does,
+        // so the feeding branch yields the sentence once a beast of that kind is kept, and FEED_ANIMAL takes it.
+        //
+        // Only the FEEDING branch yields. "tame the goat" is unambiguous whatever is in the pen, and a keeper who
+        // says it about a second, wild goat means it.
+        if(value.contains("tame")||value.contains("befriend")||value.contains("domesticate")||value.contains("gain its trust")||value.contains("earn its trust")
+           ||(((value.contains("approach")||value.contains("offer")||value.contains("feed")||value.contains("hold out"))&&(value.contains("calm")||value.contains("slow")||value.contains("gentl")||value.contains("quiet")||value.contains("trust")||value.contains("goat")||value.contains("rabbit")||value.contains("fowl")||value.contains("turtle")||value.contains("hedgehog")||value.contains("pigeon")||value.contains("deer")||value.contains("reindeer")||value.contains("duck")))
+              &&!items.keepsSuchABeast(value))) return Intent.TAME;
         // Marking a trail is not following one (#75). TRACK's trail branch fires on "trail" beside find/read/follow,
         // so "mark the trail so I can find my way back" — the most natural way to say it — was read as tracking on
         // the strength of the word "find". A marking verb beside a trail is marking; TRACK is left untouched.
@@ -2098,17 +2112,36 @@ public class ChronicleActionService {
               &&(word(value,"egg")||word(value,"eggs")))) return Intent.TAKE_ANIMAL_YIELD;
         // Tending a sick beast (#106/#108). Needs BOTH a tending verb and an animal, so it cannot steal
         // "tend the crop" from WEED_CROP or "bind the wound" from TREAT_WOUND — the nouns keep them apart.
-        if((value.contains("tend")||value.contains("treat")||value.contains("doctor")||value.contains("physic")||value.contains("dose")||value.contains("nurse"))&&(value.contains("animal")||value.contains("beast")||value.contains("stock")||value.contains("the herd")||value.contains("the flock")||word(value,"goat")||word(value,"goats")||word(value,"horse")||word(value,"cow")||word(value,"ox")||word(value,"oxen")||word(value,"sheep")||word(value,"fowl")||word(value,"reindeer")||word(value,"donkey")||value.contains("buffalo")||value.contains("sick one")
-           // ...or the catalogue knows the name (#79). The literals above are a hand-kept list of the kept species, and a
-           // species added to draft_species or tamed_yield — a yak — would be tended by nobody who said its name.
-           ||items.namesAKeptAnimal(value))) return Intent.TEND_ANIMAL;
+        // How the stock ARE (#106). wildlife_bond keeps hunger, thirst, fatigue and sickness on every tamed beast,
+        // the tick moves all four, and haulage, breeding and yield are each gated on them — and the plainest
+        // question a keeper asks reached nothing: "how is the goat", "is the goat sick", "check on the animals".
+        // Worse, "water the animals" was answered "none of your draft beasts is hungry", which is an answer about
+        // appetite to a question about thirst.
+        //
+        // Placed before tending, grooming and feeding, and sharing their one species vocabulary. It takes the
+        // ASKING and the watering; the three acts below keep their verbs, so "tend the goat" still tends and
+        // "feed the goat" still feeds. Thirst falls by place and by structure rather than by a bucket, so the
+        // honest answer to watering is what the animals' water depends on — which is what this says.
+        if((value.contains("how is")||value.contains("how are")||value.contains("how do the")||value.contains("check on")
+            ||value.contains("check over")||value.contains("look over")||value.contains("look in on")||value.contains("see to the")
+            ||value.contains("are they well")||value.contains("are they all right")||value.contains("what state")
+            ||value.contains("do they need")||value.contains("what do they need")||value.contains("sick")||value.contains("ailing")
+            ||value.contains("limping")||value.contains("lame")||value.contains("off its feed")||value.contains("off their feed")
+            ||value.contains("thirsty")||value.contains("water the")||value.contains("give the")&&value.contains("water")
+            ||value.contains("check the")&&(value.contains(" over")||value.contains("for tick")))
+           &&namesABeast(value)
+           // The acts keep their own verbs. Asking after a beast is not tending, grooming, feeding or milking one.
+           &&!value.contains("tend")&&!value.contains("treat")&&!value.contains("groom")&&!value.contains("curry")
+           &&!value.contains("feed the")&&!word(value,"milk")&&!value.contains("shear")) return Intent.CHECK_STOCK;
+        if((value.contains("tend")||value.contains("treat")||value.contains("doctor")||value.contains("physic")||value.contains("dose")||value.contains("nurse"))
+           &&namesABeast(value)) return Intent.TEND_ANIMAL;
         // Combing out a coat (#106). Kept apart from TEND_ANIMAL by the verb: tending is for what ails a beast,
-        // grooming is for the coat itself, and the two want different things in your hands.
+        // grooming is for the coat itself, and the two want different things in your hands. The coat, the mane and
+        // the fleece are its own — a part of the animal rather than another name for it — so they are here.
         if((value.contains("groom")||value.contains("curry")||word(value,"brush")||word(value,"comb")||value.contains("brushing")||value.contains("combing"))
-           &&(value.contains("animal")||value.contains("beast")||value.contains("stock")||value.contains("the herd")||value.contains("the flock")||value.contains("coat")||value.contains("mane")||value.contains("fleece")
-              ||items.namesAKeptAnimal(value))) return Intent.GROOM_ANIMAL;
-        if((value.contains("feed")||value.contains("forage")||value.contains("graze")||value.contains("water the"))&&(value.contains("animal")||value.contains("beast")||value.contains("ox")||value.contains("oxen")||value.contains("aurochs")||value.contains("deer")||value.contains("elk")||value.contains("reindeer")||value.contains("draft")||value.contains("cattle")||value.contains("livestock")||value.contains("the herd")||value.contains("the stock")
-           ||items.namesAKeptAnimal(value))) return Intent.FEED_ANIMAL;
+           &&(namesABeast(value)||value.contains("coat")||value.contains("mane")||value.contains("fleece"))) return Intent.GROOM_ANIMAL;
+        if((value.contains("feed")||value.contains("forage")||value.contains("graze")||value.contains("water the"))
+           &&namesABeast(value)) return Intent.FEED_ANIMAL;
         if(value.contains("clear")&&(value.contains("land")||value.contains("forest")||value.contains("brush")||value.contains("woods")||value.contains("woodland")||value.contains("trees")||value.contains("arable")||value.contains("for a field")||value.contains("for planting")||value.contains("ground for"))) return Intent.CLEAR_LAND;
         // Carry water to a growing stand (#37/#165). FEED_ANIMAL above already claims "water the" — but only
         // together with an animal noun, so a plot, a row or a seedling cannot be mistaken for a thirsty ox. Gated on
@@ -2497,6 +2530,36 @@ public class ChronicleActionService {
     }
     /** Whole-word containment, delegating to the one definition of it — see {@link com.devosphere.draugr.narration.Words}. */
     private static boolean word(String haystack, String w) { return com.devosphere.draugr.narration.Words.word(haystack, w); }
+
+    /** The words a keeper has for an animal that is NOT in the catalogue — the kinds, ranks and ages of stock. */
+    private static final String[] KEPT_STOCK_WORDS = {
+        "animal", "animals", "beast", "beasts", "stock", "livestock", "cattle", "herd", "flock",
+        "cow", "cows", "calf", "calves", "bullock", "heifer", "bull", "hen", "hens", "chick", "chicks",
+        "ewe", "ram", "lamb", "kid", "foal", "mare", "colt", "mule", "sick one"};
+
+    /**
+     * Whether the sentence is about an animal somebody keeps (#106).
+     *
+     * <p><b>One list, for all three of them.</b> Tending, grooming and feeding each carried its OWN hand-kept
+     * roll of species, and the three had drifted apart until they no longer agreed on what an animal was:
+     *
+     * <pre>
+     *   TEND_ANIMAL    goat, horse, cow, ox, sheep, fowl, reindeer, donkey, buffalo
+     *   GROOM_ANIMAL   (no species at all — only animal/beast/stock/herd/flock)
+     *   FEED_ANIMAL    ox, aurochs, deer, elk, reindeer, cattle, livestock — no goat, sheep or horse
+     * </pre>
+     *
+     * So the beast you could tend you could not groom, and the one you could groom you could not feed. Measured
+     * on a booted world: "groom the goat" reached nothing, and "feed the goat" was answered by TAME — <i>"it lets
+     * you come nearer than last time"</i> — which is the approach to a WILD animal offered to a keeper feeding
+     * their own. Three lists meant three different animals; this is the one list, and the catalogue is the rest
+     * of it. A species added to {@code draft_species} or {@code tamed_yield} becomes tendable, groomable and
+     * feedable in the same breath, which is the whole point of asking the table.
+     */
+    private boolean namesABeast(String value) {
+        for (String w : KEPT_STOCK_WORDS) if (w.indexOf(' ') < 0 ? word(value, w) : value.contains(w)) return true;
+        return items.namesAKeptAnimal(value);
+    }
     /**
      * The verbs that ask for something to be cooked — as WORDS, and never their past participles.
      *
@@ -2833,7 +2896,7 @@ public class ChronicleActionService {
         return refuse != null && refuse >= 25;
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;} }    /**     * The structured perception frame — the seam every future Simulation Agent reads
      * from. Where {@code perception} is the finished player-facing prose, this frame
      * is the machine-legible truth behind it: the raw intent and outcome, where the

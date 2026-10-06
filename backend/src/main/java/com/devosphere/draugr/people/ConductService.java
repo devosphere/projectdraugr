@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -86,13 +87,84 @@ public class ConductService {
     }
 
     /** The act of conduct a text names, or null. Longest phrase wins. */
-    public static Act recognise(String text) {
+    /**
+     * The phrases above whose object is left open: the words end at an article or a possessive and take whatever
+     * follows. Each one must be told who it is about, or it will answer for anything (#106).
+     *
+     * <p>They are listed rather than detected because the list is the point. A phrase that names its object —
+     * "attack the reedkin", "take the child", "bury the dead" — needs no such help, and a phrase that is only a
+     * verb and an article cannot be trusted with a sentence it has not read.
+     */
+    private static final Set<String> OPEN_OBJECT = Set.of(
+        "steal the", "steal their", "threaten the", "stab the", "tie up the", "capture the", "seize the",
+        "drag the", "leash the", "burn their", "torch their", "wreck their", "damage their", "tear down their",
+        "smash their", "set fire to their");
+
+    /** The longest phrase in the table that the sentence contains, or null. Longest wins, as everywhere else. */
+    private static String bestPhrase(String text) {
         if (text == null) return null;
         String v = " " + text.toLowerCase(Locale.ROOT).replaceAll("[^a-z' ]", " ").replaceAll("\\s+", " ").trim() + " ";
         String best = null;
         for (String phrase : PHRASES.keySet())
             if (v.contains(" " + phrase + " ") && (best == null || phrase.length() > best.length())) best = phrase;
-        return best == null ? null : PHRASES.get(best);
+        return best;
+    }
+
+    /**
+     * What the words alone say, with the open-object phrases held to {@link PersonWords}.
+     *
+     * <p>Static, and so it knows only the vocabulary — a person the world has named is found by
+     * {@link #recogniseHere}, which can ask. Use that one in play; this one is the words.
+     */
+    public static Act recognise(String text) {
+        String best = bestPhrase(text);
+        if (best == null) return null;
+        if (OPEN_OBJECT.contains(best) && !PersonWords.namesAPerson(text)) return null;
+        return PHRASES.get(best);
+    }
+
+    /**
+     * The recogniser the game uses: {@link #recognise}, and then the names the world made up.
+     *
+     * <p>A community's people are named in {@code native_individual} when it is settled, so "tie up Holm" names a
+     * person that no vocabulary could have known in advance. This is the half of the question only the database
+     * can answer, and it is asked only for the open-object phrases — the ones that have no object of their own.
+     */
+    @Transactional(readOnly = true)
+    public Act recogniseHere(String text) {
+        String best = bestPhrase(text);
+        if (best == null) return null;
+        if (!OPEN_OBJECT.contains(best)) return PHRASES.get(best);
+        if (PersonWords.namesAPerson(text)) return PHRASES.get(best);
+        return namesSomebodyLiving(text) ? PHRASES.get(best) : null;
+    }
+
+    /**
+     * Whether the sentence uses the given name of someone alive in the world. Word by word, never a substring.
+     *
+     * <p><b>Except a name that is also an animal's or a thing's.</b> This world names its people after what grows
+     * and flies in it — Holm, Sedge, Rushe, Lark, Tern, <b>Wren</b> — and {@code wren} is a species in
+     * {@code wildlife_species}. Taking the name at face value would make "capture the wren" an assault on a
+     * person, which is the very defect this guard was added to end: the fix is as liable to it as the bug was.
+     * So a name the world also uses for an animal or an item does not settle an offence by itself, and the
+     * sentence must name a person some other way — "capture Wren's child", "seize the woman".
+     *
+     * <p>The trade is deliberate and narrow: one name in twenty-four here, against turning every bird in the
+     * marsh into somebody. V402 guards that a community cannot have ALL of its names taken this way.
+     */
+    @Transactional(readOnly = true)
+    public boolean namesSomebodyLiving(String text) {
+        if (text == null || text.isBlank()) return false;
+        Set<String> said = new java.util.HashSet<>(List.of(text.toLowerCase(Locale.ROOT).split("[^a-z]+")));
+        if (said.isEmpty()) return false;
+        for (String name : jdbc.queryForList(
+                "SELECT DISTINCT lower(i.given_name) FROM native_individual i WHERE i.given_name IS NOT NULL " +
+                "  AND lower(i.given_name) NOT IN (SELECT lower(species_key) FROM wildlife_species " +
+                "                                   UNION SELECT regexp_replace(lower(species_key), '^.*_', '') FROM wildlife_species " +
+                "                                   UNION SELECT replace(lower(item_key), '_', ' ') FROM item_definition)",
+                String.class))
+            if (said.contains(name)) return true;
+        return false;
     }
 
     /** Carry out an act of conduct toward a community within reach. */

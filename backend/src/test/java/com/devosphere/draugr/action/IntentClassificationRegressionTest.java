@@ -43,8 +43,21 @@ class IntentClassificationRegressionTest {
                 }
                 @Override public boolean namesAKeptAnimal(String t) {
                     String v = t == null ? "" : t.toLowerCase(java.util.Locale.ROOT);
-                    return v.contains("yak") || v.contains("musk ox") || v.contains("llama");
+                    // The fake catalogue now carries the HEAD NOUNS too (#106). Tending, grooming and feeding
+                    // used to hold three separate literal species lists in the classifier; they share one
+                    // vocabulary now, and the species half of it is the catalogue's. So a fake that knows only
+                    // yak, musk ox and llama would make "tend the sick goat" unclassifiable here while it works
+                    // perfectly in play — the species are mountain_goat and bighorn_sheep, and the real method
+                    // matches their last word. These are those words.
+                    for (String beast : new String[]{"yak", "musk ox", "llama", "goat", "sheep", "horse",
+                                                     "buffalo", "fowl", "deer", "duck", "goose", "reindeer",
+                                                     "donkey", "elk", "aurochs", "turkey", "pigeon"})
+                        if (com.devosphere.draugr.narration.Words.word(v, beast) || v.contains(beast)) return true;
+                    return com.devosphere.draugr.narration.Words.word(v, "ox")
+                        || com.devosphere.draugr.narration.Words.word(v, "oxen");
                 }
+                /** Nothing is kept in a test with no world, so taming never yields its feeding branch here. */
+                @Override public boolean keepsSuchABeast(String t) { return false; }
             };
         ChronicleActionService svc = new ChronicleActionService(null, null, null, null, items, null, null, null, null, null, null, null, new com.devosphere.draugr.narration.ActionInputClassifier(), null, null, null, new com.devosphere.draugr.narration.NarrationEngine(), (com.devosphere.draugr.ai.RuntimeAuthoringService) null, (ExaminationService) null, (com.devosphere.draugr.people.ContactService) null, (com.devosphere.draugr.people.TradeService) null, (com.devosphere.draugr.people.ConductService) null, (com.devosphere.draugr.people.AgreementService) null, (com.devosphere.draugr.people.CompanionService) null, (com.devosphere.draugr.people.AudienceService) null, (com.devosphere.draugr.people.MembershipService) null, (com.devosphere.draugr.people.ClaimService) null);
         return ((Enum<?>) m.invoke(svc, text)).name();
@@ -86,11 +99,19 @@ class IntentClassificationRegressionTest {
         assertEquals("WATER_CROP", classify("water the rows"));
         assertEquals("WATER_CROP", classify("irrigate the field"));
         assertEquals("WATER_CROP", classify("carry water to the barley"));
-        // The ones it must not take: watering stock is FEED_ANIMAL and has been since #100.
-        assertEquals("FEED_ANIMAL", classify("water the animals"));
-        assertEquals("FEED_ANIMAL", classify("water the beasts"));
-        assertEquals("FEED_ANIMAL", classify("water the stock"));
-        assertEquals("FEED_ANIMAL", classify("water the herd"));
+        // The ones it must not take. Watering stock went to FEED_ANIMAL from #100 until #106 — and FEED_ANIMAL
+        // shakes out a bundle of dry grass and reports on HUNGER, so "water the animals" was answered "none of
+        // your draft beasts is hungry": appetite, in reply to thirst. It could not water anything. draft_thirst
+        // is simulated, falls on wet ground and at a watering station, and nothing could ask after it, so these
+        // are CHECK_STOCK now, which reports the thirst and names what relieves it. The point of the test is
+        // unchanged: the crop rule must not take a sentence about animals, and it does not.
+        assertEquals("CHECK_STOCK", classify("water the animals"));
+        assertEquals("CHECK_STOCK", classify("water the beasts"));
+        assertEquals("CHECK_STOCK", classify("water the stock"));
+        assertEquals("CHECK_STOCK", classify("water the herd"));
+        // And feeding is still feeding, which is the half CHECK_STOCK must not take.
+        assertEquals("FEED_ANIMAL", classify("feed the animals"));
+        assertEquals("FEED_ANIMAL", classify("feed the beasts"));
         // Nor the water a person handles for themselves.
         assertEquals("COLLECT_WATER", classify("collect water"));
         assertEquals("BOIL_WATER", classify("boil some water"));
