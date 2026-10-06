@@ -82,9 +82,16 @@ BEGIN
         RAISE EXCEPTION 'V400: the carry capacity is what "too much" is measured against';
     END IF;
 
-    -- The weather must actually carry a wind, or the sharpest line in the reading describes nothing. A world
-    -- with a row of zero wind is fine; a world with no row at all means the simulation has not run.
-    IF NOT EXISTS (SELECT 1 FROM world_weather) THEN
-        RAISE EXCEPTION 'V400: no weather row exists, so there is no wind to report';
+    -- The weather must actually carry a wind, or the sharpest line in the reading describes nothing. A row of
+    -- zero wind is fine; no row at all means the simulation has not run.
+    --
+    -- GATED ON A WORLD EXISTING, and that gate is the whole lesson of this guard. The first cut demanded a
+    -- weather row outright and CI failed on it — "V400: no weather row exists, so there is no wind to report" —
+    -- because on a FRESH database the migrations run before genesis, so there is no world yet and no weather by
+    -- construction. It passed locally only because the throwaway Postgres already had a world in it, which is
+    -- exactly the blind spot a long-lived scratch database creates. A migration may assert the SCHEMA and the
+    -- CATALOGUE unconditionally; simulation state only once the simulation has something to be in.
+    IF EXISTS (SELECT 1 FROM world_chunk) AND NOT EXISTS (SELECT 1 FROM world_weather) THEN
+        RAISE EXCEPTION 'V400: this world has chunks but no weather row, so there is no wind to report';
     END IF;
 END $$;
