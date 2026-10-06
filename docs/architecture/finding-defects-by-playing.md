@@ -43,6 +43,24 @@ Every defect this project has found is the same defect: **the world knows someth
 6. **The confidently WRONG answer** — and **these come first**. A missing answer announces itself; a wrong one,
    delivered in the same even voice as every true one, does not. *"You fix a name to this place: place."*
    *"You gather 6 beech mast"* when asked for grass. *"Is the water safe to drink"* answered by drinking it.
+   The worst found so far: **`tie up the goat`** was resolved as an assault on the native community in reach —
+   *"you are driven off the isle bruised and bleeding"* — and so were `tie up the bundle` and `drag the log`.
+
+### Two shapes that produce face 6 in bulk
+
+- **A rule keyed on a verb and a bare article answers for anything.** `"tie up the"`, `"drag the"`, `"seize
+  the"`, `"steal the"` took whatever followed without reading it: 11 of 31 sentences about a *thing* became
+  offences against people. If a phrase's object is left open, the object must be held to account — and the
+  thing it is held to must be ONE vocabulary, matched **word by word**. (A list holding `men` and `kin` is the
+  worst possible place to repeat the substring mistake, and the world had a person named **Wren** while `wren`
+  is a species: the fix is as liable to the defect as the bug.)
+- **N sibling rules for one domain grow N vocabularies, and they drift.** Tending, grooming and feeding each
+  carried its own roll of species. Tending knew nine, grooming knew none, feeding knew seven and not the goat —
+  so *the beast you could tend you could not groom, and the one you could groom you could not feed.* When you
+  find two rules about the same kind of thing, check they agree before anything else, then make them share one
+  clause. And when the shared clause asks the catalogue, ask it the way a person **speaks**: the keys are
+  `mountain_goat` and `bighorn_sheep`, and nobody says "mountain goat" twice a day about an animal they milk, so
+  the **head noun** has to count.
 
 ---
 
@@ -172,6 +190,19 @@ Every defect this project has found is the same defect: **the world knows someth
 - **A rebase can be the reason CI never ran.** Two branches took a push, showed the new head, and produced no
   workflow run at all; rebasing them onto `development` and force-pushing started one immediately. If `gh pr
   checks` says "no checks" for more than a few minutes, rebase rather than wait.
+- **A migration may assert the SCHEMA and the CATALOGUE unconditionally. Simulation state only once the
+  simulation has something to be in.** V400 ended with `IF NOT EXISTS (SELECT 1 FROM world_weather) THEN RAISE` —
+  defensible, since the slice exists because `wind_speed_kph` was maintained and unaskable, and a reading about a
+  wind that does not exist describes nothing. But **on a fresh database the migrations run before genesis**, so
+  there is no world and no weather by construction, and every clean boot failed on it. Gate such a guard on the
+  world existing: *"this world has chunks but no weather row"* is the thing actually worth refusing.
+- **A long-lived scratch database is a BETTER world than CI's, and that is the danger.** The guard above passed
+  locally because the throwaway Postgres had had a world in it for hours. Anything that is only true after
+  genesis — weather, populations, a Chronicle, a tamed bond — is already true there and will not be again on a
+  clean boot. Prove a migration the way Flyway will run it: a brand-new container, `CREATE EXTENSION pgcrypto`,
+  then every `V*.sql` in numeric order with `--single-transaction` per file. Per-statement psql is **not**
+  equivalent — three pre-existing migrations fail that way, because the `cognition_profile` trigger is DEFERRED
+  and Flyway wraps each migration in one transaction.
 
 ---
 
