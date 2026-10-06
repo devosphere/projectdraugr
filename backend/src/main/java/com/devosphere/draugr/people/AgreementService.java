@@ -266,7 +266,20 @@ public class AgreementService {
     private String owedToYou(UUID chronicle, UUID community) {
         Map<String, Object> owed = jdbc.queryForList("SELECT * FROM native_agreement WHERE community_id=? AND chronicle_id=? AND status='OWED'",
             community, chronicle).stream().findFirst().orElse(null);
-        if (owed == null) return "There is no work agreed between you and them, and nothing owed either way.";
+        if (owed == null) {
+            // THIS METHOD KNOWS ONLY ONE DIRECTION, and used to answer for both: "nothing owed either way" was
+            // said while community_relation.obligation held "a basket of fish for the water they could not
+            // drink" (#114/#37). Two confident answers, contradicting each other, and a player who asked the
+            // wrong one of the two was told their debt did not exist. A wrong they SAW is a wrong they price —
+            // ConductService.offence demands it through ClaimService — so it is read here rather than guessed at.
+            String held = jdbc.query(
+                "SELECT obligation FROM community_relation WHERE community_id=? AND chronicle_id=? AND obligation IS NOT NULL AND obligation <> ''",
+                rs -> rs.next() ? rs.getString(1) : null, community, chronicle);
+            return held == null
+                ? "There is no work agreed between you and them, and nothing owed either way."
+                : "There is no work agreed between you and them, and they owe you nothing. What THEY hold you to "
+                  + "is another matter: " + held + ".";
+        }
         int left = ((Number) owed.get("wage_count")).intValue() - ((Number) owed.get("wage_paid")).intValue();
         return "Your work for them is done. They still owe you " + WORDS[Math.min(left, 7)] + " of the " + wageWords(owed) + ".";
     }

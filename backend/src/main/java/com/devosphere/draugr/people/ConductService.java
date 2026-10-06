@@ -67,7 +67,12 @@ public class ConductService {
         Map.entry("take their things", Act.LOOT_THE_DEAD), Map.entry("loot the dead", Act.LOOT_THE_DEAD),
         Map.entry("bury them", Act.BURY), Map.entry("bury the body", Act.BURY), Map.entry("bury the dead", Act.BURY),
         Map.entry("build a cairn", Act.BURY), Map.entry("raise a cairn", Act.BURY), Map.entry("lay them in the ground", Act.BURY),
-        Map.entry("help them mend", Act.SHARED_LABOUR), Map.entry("help with their work", Act.SHARED_LABOUR), Map.entry("help them gather", Act.SHARED_LABOUR));
+        Map.entry("help them mend", Act.SHARED_LABOUR), Map.entry("help with their work", Act.SHARED_LABOUR), Map.entry("help them gather", Act.SHARED_LABOUR),
+        // Working alongside them is one of the three things that mend a standing, and "help them with their
+        // work" — the way most people would say it — matched none of the phrases above, because the noun
+        // sits between the verb and the possessive. Sitting and eating with them is the same courtesy.
+        Map.entry("help them with", Act.SHARED_LABOUR), Map.entry("lend them a hand", Act.SHARED_LABOUR),
+        Map.entry("work with them", Act.SHARED_LABOUR), Map.entry("sit with them", Act.SHARED_LABOUR));
 
     /** Standing at or below which a community drives the Chronicle off by force rather than only warning them. */
     static final int DRIVEN_OFF = -60;
@@ -404,6 +409,103 @@ public class ConductService {
             : "Those at the landing look up as you come onto the raised ground unasked, and one steps across your path. They know you, and they did not invite you in.";
     }
 
+    /** Standing at or below which a community's posture hardens to hostile outright, as {@link #offence} sets it. */
+    static final int HOSTILE_AT = -30;
+
+    /**
+     * How they regard you (#114, #37).
+     *
+     * <p><b>The whole memory system was invisible.</b> {@code community_relation} carries the standing, the last
+     * thing that moved it and when, an obligation in plain words, how much of each other's speech you have
+     * worked out, and the date of first contact. {@code native_event} keeps every offence, every amends and
+     * every approach, witnessed or not. {@link #offence} spends the standing, {@link #DRIVEN_OFF} decides when
+     * they drive you off with stones, {@link #HOSTILE_AT} decides when the isle closes, and trade and contact
+     * both read the same number. Swept on a real isle, <b>six of six questions about the relationship reached
+     * nothing</b>: how do they regard me, do they trust me, am I welcome here, what do they think of me, have I
+     * wronged them, what do they remember.
+     *
+     * <p>Read-only, and it says nothing a stranger could not work out from how they are treated — the standing
+     * is given as a manner rather than a number, and what is named is what the Chronicle themselves did.
+     *
+     * <p>Returns null when there is no community in reach, so the caller can fall through to its own answer.
+     */
+    @Transactional(readOnly = true)
+    public String standingReading(UUID chronicle, UUID chunk, Instant at) {
+        UUID community = jdbc.query(
+            "SELECT c.id FROM native_community c JOIN native_settlement_site s ON s.community_id=c.id " +
+            "JOIN world_object w ON w.id=s.object_id " +
+            "WHERE w.lifecycle_state='ACTIVE' AND (w.current_location_id=? OR EXISTS(" +
+            "  SELECT 1 FROM world_chunk a, world_chunk b WHERE a.id=? AND b.id=w.current_location_id " +
+            "    AND a.world_id=b.world_id AND abs(a.grid_x-b.grid_x)+abs(a.grid_y-b.grid_y)<=1)) LIMIT 1",
+            rs -> rs.next() ? rs.getObject(1, UUID.class) : null, chunk, chunk);
+        if (community == null) return null;
+
+        Map<String, Object> rel = jdbc.query(
+            "SELECT r.standing, r.last_event_kind, r.obligation, r.understanding, r.first_contact_at, " +
+            "       c.name, c.security_posture " +
+            "FROM native_community c LEFT JOIN community_relation r ON r.community_id=c.id AND r.chronicle_id=? " +
+            "WHERE c.id=?",
+            rs -> {
+                if (!rs.next()) return null;
+                Map<String, Object> m = new java.util.HashMap<>();
+                m.put("standing", rs.getObject("standing") == null ? 0 : rs.getInt("standing"));
+                m.put("last", rs.getString("last_event_kind"));
+                m.put("obligation", rs.getString("obligation"));
+                m.put("understanding", rs.getObject("understanding") == null ? 0 : rs.getInt("understanding"));
+                m.put("met", rs.getTimestamp("first_contact_at") != null);
+                m.put("name", rs.getString("name"));
+                m.put("posture", rs.getString("security_posture"));
+                return m;
+            }, chronicle, community);
+        if (rel == null) return null;
+
+        int standing = (int) rel.get("standing");
+        String name = (String) rel.get("name");
+        StringBuilder b = new StringBuilder();
+
+        if (!Boolean.TRUE.equals(rel.get("met")))
+            return "You have never spoken with " + name + ". They know you are about — nothing moves on this water "
+                + "unremarked — but nothing has passed between you that either of you could call a dealing.";
+
+        // The standing as a MANNER, not a number: what a stranger would read off how they are treated.
+        b.append(standing <= DRIVEN_OFF
+                   ? name + " will not have you on the isle at all. Come up onto the raised ground and the stones start."
+                 : standing <= HOSTILE_AT
+                   ? name + " counts you an enemy. The store is shut to you and so are the gates."
+                 : standing < -8 ? name + " holds something against you, and they are watching you for more of it."
+                 : standing < 0 ? name + " is wary of you — nothing settled, but nothing forgotten either."
+                 : standing == 0 ? name + " has taken no view of you yet. You are a stranger who has been civil."
+                 : standing < 20 ? name + " will deal with you, carefully."
+                 : standing < 50 ? name + " thinks well enough of you to bring things down to the landing."
+                 : name + " counts you a friend of the isle.")
+         .append(' ');
+
+        // What moved it last, and what is owed — both in the relation already, both never shown.
+        String last = (String) rel.get("last");
+        if (last != null) b.append("The last thing between you was ")
+            .append(last.toLowerCase(java.util.Locale.ROOT).replace('_', ' ')).append(". ");
+        String owed = (String) rel.get("obligation");
+        if (owed != null && !owed.isBlank()) b.append("They hold you to this: ").append(owed).append(". ");
+
+        // What they remember of the Chronicle's own doing — their record, not a secret.
+        List<String> remembered = jdbc.queryForList(
+            "SELECT DISTINCT lower(replace(event_kind,'_',' ')) FROM native_event " +
+            "WHERE community_id=? AND subject_id=? ORDER BY 1 LIMIT 5", String.class, community, chronicle);
+        if (!remembered.isEmpty()) b.append("What they have of you: ").append(String.join(", ", remembered)).append(". ");
+
+        // How much of each other's speech has been worked out — "listen to them" builds this and nothing read it.
+        int understanding = (int) rel.get("understanding");
+        b.append(understanding <= 0 ? "You have no words in common yet; everything passes by hand and by guess. "
+               : understanding < 30 ? "You have a handful of their words. "
+               : understanding < 70 ? "You can make yourself understood on plain matters. "
+               : "You and they understand one another well enough to talk. ");
+
+        // And the half the Chronicle can act on, which is the whole reason this is worth saying.
+        if (standing < 0) b.append("What would mend it is what always mends it: say you were wrong, make it good, "
+            + "and work alongside them — each a little, and only while there is something to answer for.");
+        return b.toString().trim();
+    }
+
     // ── What is kept. ────────────────────────────────────────────────────────────────────────────────────────────
 
     /**
@@ -417,8 +519,8 @@ public class ConductService {
         // What would put it right, said at the time (#211): a wrong they saw is a wrong they price.
         claims.demand(community, chronicle, kind, at);
         int standing = jdbc.queryForObject("SELECT standing FROM community_relation WHERE community_id=? AND chronicle_id=?", Integer.class, community, chronicle);
-        String to = "HOSTILE".equals(posture) || standing <= -30 ? "HOSTILE" : "GUARDED";
-        if ("HOSTILE_IF_LOW".equals(posture) && standing > -30) to = "GUARDED";
+        String to = "HOSTILE".equals(posture) || standing <= HOSTILE_AT ? "HOSTILE" : "GUARDED";
+        if ("HOSTILE_IF_LOW".equals(posture) && standing > HOSTILE_AT) to = "GUARDED";
         jdbc.update("UPDATE native_community SET security_posture = CASE WHEN security_posture='HOSTILE' THEN 'HOSTILE' ELSE ? END WHERE id=?", to, community);
         if ("HOSTILE".equals(to)) jdbc.update("UPDATE native_settlement_site SET access_rule='CLOSED' WHERE community_id=?", community);
     }
