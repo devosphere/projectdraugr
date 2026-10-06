@@ -190,6 +190,20 @@ Every defect this project has found is the same defect: **the world knows someth
 - **A rebase can be the reason CI never ran.** Two branches took a push, showed the new head, and produced no
   workflow run at all; rebasing them onto `development` and force-pushing started one immediately. If `gh pr
   checks` says "no checks" for more than a few minutes, rebase rather than wait.
+- **When you change a ROUTING, grep the integration tests for the old intent name before pushing.** Moving
+  `water the stock` from FEED_ANIMAL to CHECK_STOCK was right — FEED_ANIMAL shakes out dry grass and reports
+  HUNGER, so it could never water anything — and the unit test was updated and green. **Four integration tests
+  also pinned it**, and those *skip* locally, so CI found them 65 minutes later. `grep -rn '"water the stock"'
+  backend/src/test/java` would have found all four in a second. The unit suite covers the routing you were
+  thinking about; the integration tests cover the routing somebody else was thinking about.
+- **A question-intent can make a buildable thing unbuildable by its own name.** CHECK_STOCK fired on "sick" plus
+  an animal and took all three of the sick animal shelter's keywords, the bare noun phrase included — the
+  assembly matcher only runs when no hard intent claims the phrase first. Fix it by **asking the matcher**
+  (`assembly.match(value) != null`), never by excluding building verbs: a bare name has no verb to exclude, and
+  asking protects every assembly added afterwards. Reproduce `noJavaIntentShadowsAnAssemblysOwnKeywords` in two
+  minutes by replaying every `assembly_definition` keyword through the live classifier — but narrow the check to
+  the intents your own branch touched, because the full guard needs its `INTENT_BUILDS` map to avoid false
+  positives.
 - **Never assert the exact wording of a refusal that is chosen from a SET — assert the set membership.**
   `theYokeAnswersToTheWordAPersonUsesForIt` expected "wooden" or "yoke" from `carve a yoke` and CI returned
   *"You have not got enough fiber cordage within reach"* — **entirely correct**. `make_draft_yoke` takes
