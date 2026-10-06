@@ -2763,8 +2763,12 @@ public class PhysicalItemService {
      * <p>Which structures do it, and for how long, is declared in {@code construction_kind.retained_heat_minutes}
      * rather than named here — the same move V289 made for what can hold a fire at all. A hearth with no retained
      * heat reads as zero and behaves exactly as it always has, so nothing that worked before changes.
+     *
+     * <p><b>Public since #37's fire reading,</b> which must report usable heat by exactly the definition the
+     * processes accept it by. A reading that said the stone was still warm while a smelt refused for want of
+     * heat would be the worse kind of wrong answer: one that contradicts the game rather than the world.
      */
-    private boolean heatToWorkWith(UUID location, Instant at) {
+    public boolean heatToWorkWith(UUID location, Instant at) {
         Boolean burning = jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM fire_state fs JOIN world_object w ON w.id=fs.construction_id " +
             "WHERE w.current_location_id=? AND fs.active=true)", Boolean.class, location);
