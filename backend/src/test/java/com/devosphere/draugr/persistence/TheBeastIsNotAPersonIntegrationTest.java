@@ -352,6 +352,89 @@ class TheBeastIsNotAPersonIntegrationTest {
         assertNotEquals("TREAT_WOUND", actions.resolve("wash it").intent(), "nor is washing something");
     }
 
+    /**
+     * The fodder chain was whole, and nobody could ask for it by the name it goes by (#106, V404).
+     *
+     * <p>Swept as a chain — 25 sentences across its four steps — <b>15 reached nothing</b>:
+     *
+     * <pre>
+     *   the standing grass   gather meadow grass   WORKED
+     *   drying it            dry the grass         WORKED  -> dry_grass_bundle
+     *   the fodder in hand   dry_grass_bundle      EXISTED
+     *   giving it            feed the animals      WORKED  -- it consumes dry_grass_bundle
+     * </pre>
+     *
+     * <p>Every step worked, and <i>cut hay</i>, <i>make hay</i>, <i>cure the hay</i>, <i>make fodder</i>,
+     * <i>give the goat some hay</i> and <i>put hay in the trough</i> all reached nothing, because the catalogue
+     * calls it a dry grass bundle and a person calls it hay. No new item and no new process: the ticket's
+     * {@code cut_fodder} and {@code dry_fodder} ARE this chain, and what was missing was the word.
+     */
+    @Test
+    void theFodderChainAnswersToHay() {
+        awaken();
+        // Drying grass is making hay, by any of the words for it.
+        for (String said : List.of("make hay", "dry the hay", "cure the hay", "make fodder", "dry fodder", "cut fodder")) {
+            ChronicleActionService.ActionResult r = actions.resolve(said);
+            assertEquals("PROCESS_MATERIAL", r.intent(),
+                () -> "\"" + said + "\" must reach the drying: " + r.intent() + " / " + r.perception());
+            // And it must be the GRASS drying that answers, refusing for want of the green grass it wants —
+            // which is also the answer that tells a keeper what to go and cut.
+            assertTrue(r.perception().toLowerCase(Locale.ROOT).contains("grass"),
+                () -> "and it must be the grass's own recipe: " + r.perception());
+        }
+        // Handing it over is feeding, whether the beast or the vessel is named.
+        for (String said : List.of("give the animals hay", "put hay in the trough", "put out fodder", "fill the hay rack"))
+            assertEquals("FEED_ANIMAL", actions.resolve(said).intent(),
+                () -> "\"" + said + "\" is feeding: " + actions.resolve(said).perception());
+
+        // And cutting grass is gathering it, by the words for THAT work.
+        for (String said : List.of("mow the grass", "scythe the grass", "cut the grass"))
+            assertEquals("GATHER_PLANT", actions.resolve(said).intent(),
+                () -> "\"" + said + "\" is cutting grass: " + actions.resolve(said).perception());
+    }
+
+    /**
+     * Asked for grass, given berries (#106).
+     *
+     * <p>{@code gather grass} answered <b>"You gather 4 elderberry from the elder shrub growing here"</b>, and
+     * {@code cut grass} gave ten of them. {@code gatherPlant} asks the catalogue what the sentence names — 102
+     * plants and 126 drops — and asked only for WHOLE names: the flora is {@code meadow_grass} and the drop is a
+     * dry grass bundle, so the plain word "grass" named nothing, and naming nothing falls through to
+     * best-available-food. The head noun of a compound name fixes it, exactly as it did for the kept species.
+     *
+     * <p>The refusal path was already right and is what the fix reaches: naming something the world grows
+     * SOMEWHERE but not here is a different answer from "nothing here is worth taking", and the Chronicle is
+     * owed the difference.
+     */
+    @Test
+    void theFamilyWordFindsTheFamilyOrSaysItCannot() {
+        awaken();
+        for (String said : List.of("gather grass", "cut grass")) {
+            ChronicleActionService.ActionResult r = actions.resolve(said);
+            String got = r.perception().toLowerCase(Locale.ROOT);
+            // Whatever ground this is, the answer must be ABOUT GRASS: grass gathered, or grass refused for the
+            // ground. A full pack is the third honest answer and says nothing about any plant, so it counts too —
+            // the suite shares one Chronicle and an earlier test may have loaded it.
+            boolean aboutGrass = got.contains("grass");
+            boolean carriedOut = got.contains("cannot carry") || got.contains("no more room");
+            assertTrue(aboutGrass || carriedOut,
+                () -> "\"" + said + "\" must be answered about grass: " + r.intent() + " / " + r.perception());
+            // This is the assertion that matters: it may refuse, it may not reach grass on this ground, but it
+            // may NEVER quietly hand over a different plant. That was the defect.
+            assertFalse(got.contains("elderberry") || got.contains("beech mast") || got.contains("hawthorn berry"),
+                () -> "and never by handing over something else entirely: " + r.perception());
+        }
+
+        // A KIND word is not a NAME, and must not become one. 13 floras end in _shrub and 12 in _plant, so
+        // letting those head nouns through would make "gather a plant" mean agrimony — the same defect pointed
+        // the other way. These are held back by name in the vocabulary query, with the reason.
+        for (String said : List.of("gather a plant", "gather a shrub")) {
+            ChronicleActionService.ActionResult r = actions.resolve(said);
+            assertFalse(r.perception().toLowerCase(Locale.ROOT).contains("none grows within reach"),
+                () -> "\"" + said + "\" is a generic forage and must not be refused as a named species: " + r.perception());
+        }
+    }
+
     @Test
     void andTheRulesThatOwnedThoseWordsKeepThem() {
         UUID me = awaken();

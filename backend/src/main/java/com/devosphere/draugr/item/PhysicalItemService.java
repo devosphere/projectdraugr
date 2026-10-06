@@ -1755,18 +1755,49 @@ public class PhysicalItemService {
             // is a bundle of dry grass, and a person asks for dry grass.
             "SELECT d.flora_key, regexp_replace(replace(d.item_key,'_',' '), ' (bundle|tuft|head|piece|strip|sprig|handful)$', ''), d.item_key FROM flora_drop d " +
             "UNION ALL " +
-            "SELECT d.flora_key, lower(i.display_name), d.item_key FROM flora_drop d JOIN item_definition i ON i.item_key=d.item_key");
+            "SELECT d.flora_key, lower(i.display_name), d.item_key FROM flora_drop d JOIN item_definition i ON i.item_key=d.item_key " +
+            "UNION ALL " +
+            // ...and the HEAD NOUN of a compound name, which is the word a person actually uses (#106). The
+            // catalogue was asked and asked only for whole names: the flora is meadow_grass and the drop is a
+            // dry grass bundle, so "gather grass" named NOTHING — and falling through to best-available-food
+            // answered it with "you gather 4 elderberry from the elder shrub growing here". Asked for grass,
+            // given berries, in the same even voice as every true answer.
+            //
+            // KIND WORDS ARE HELD BACK BY NAME, with the reason: shrub, plant, fungus, tree and bed are how the
+            // catalogue says WHAT A THING IS, not what it is called — 13 floras end in _shrub and 12 in _plant —
+            // so letting them through would make "gather a plant" mean agrimony, which is the generic-word
+            // defect pointed the other way. Every other head noun is a real name: grass, rose, garlic, cress,
+            // polypore, mast, resin, withy.
+            "SELECT fd.flora_key, regexp_replace(replace(fd.flora_key,'_',' '), '^.* ', ''), CAST(NULL AS varchar) " +
+            "  FROM flora_definition fd WHERE fd.flora_key LIKE '%\\_%' " +
+            "   AND regexp_replace(fd.flora_key, '^.*_', '') NOT IN ('shrub','plant','fungus','tree','bed','bush') " +
+            "UNION ALL " +
+            "SELECT d.flora_key, regexp_replace(regexp_replace(replace(d.item_key,'_',' '), " +
+            "         ' (bundle|tuft|head|piece|strip|sprig|handful)$', ''), '^.* ', ''), d.item_key " +
+            "  FROM flora_drop d WHERE d.item_key LIKE '%\\_%' " +
+            "   AND regexp_replace(d.item_key, '^.*_', '') NOT IN ('bundle','tuft','head','piece','strip','sprig','handful')");
 
-        java.util.Map<String,Object> spoken = null;
+        // Every phrase that matches at the LONGEST length, not merely the first of them. Head nouns tie by
+        // construction — meadow_grass and wild_grass are both "grass", dog_rose and wild_rose both "rose" — and
+        // taking whichever the query happened to return first would refuse "gather grass" on ground where grass
+        // plainly grows, because the OTHER grass is the one that does not. The tie is settled by the world: the
+        // one that is actually here wins. (The same fault as the equal-length keyword ties V318 settled.)
+        java.util.List<java.util.Map<String,Object>> spokenAll = new java.util.ArrayList<>();
         int longest = 0;
         for (java.util.Map<String,Object> word : vocabulary) {
             String phrase = (String) word.get("phrase");
-            if (phrase == null || phrase.length() < 4 || phrase.length() <= longest) continue;
+            if (phrase == null || phrase.length() < 4 || phrase.length() < longest) continue;
             if ((" " + lower + " ").contains(" " + phrase + " ") || (" " + lower + " ").contains(" " + phrase + "s ")) {
-                spoken = word;
-                longest = phrase.length();
+                if (phrase.length() > longest) { spokenAll.clear(); longest = phrase.length(); }
+                spokenAll.add(word);
             }
         }
+        java.util.Set<String> growsHere = new java.util.HashSet<>();
+        for (java.util.Map<String,Object> c : candidates) growsHere.add((String) c.get("flora_key"));
+        java.util.Map<String,Object> spoken = spokenAll.stream()
+            .filter(w -> growsHere.contains((String) w.get("flora_key")))
+            .findFirst()
+            .orElse(spokenAll.isEmpty() ? null : spokenAll.get(0));
         final String wantedDrop = spoken == null ? null : (String) spoken.get("drop_key");
         final String spokenFlora = spoken == null ? null : (String) spoken.get("flora_key");
         final String spokenPhrase = spoken == null ? null : (String) spoken.get("phrase");

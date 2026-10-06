@@ -2153,8 +2153,24 @@ public class ChronicleActionService {
         // the fleece are its own — a part of the animal rather than another name for it — so they are here.
         if((value.contains("groom")||value.contains("curry")||word(value,"brush")||word(value,"comb")||value.contains("brushing")||value.contains("combing"))
            &&(namesABeast(value)||value.contains("coat")||value.contains("mane")||value.contains("fleece"))) return Intent.GROOM_ANIMAL;
-        if((value.contains("feed")||value.contains("forage")||value.contains("graze")||value.contains("water the"))
+        // "give the goat some hay" and "put hay in the trough" are feeding (#106), and reached nothing: the rule
+        // knew the verb "feed" and not the act of handing fodder over. The fodder chain was whole all along —
+        // grass grows, drying it yields the bundle, and THIS is the rule that consumes it — so the words for its
+        // last step belong here. Placed after the asking rule, so "give the goat water" still answers about
+        // thirst rather than shaking out a bundle of dry grass at it.
+        if((value.contains("feed")||value.contains("forage")||value.contains("graze")||value.contains("water the")
+            ||((value.contains("give")||value.contains("put out")||value.contains("put ")||value.contains("set out")
+                ||value.contains("fill"))&&(word(value,"hay")||value.contains("fodder")||value.contains("dry grass")
+                ||value.contains("dried grass"))))
            &&namesABeast(value)) return Intent.FEED_ANIMAL;
+        // ...and the same with no animal named, because a trough and a hay rack are only ever for stock: "put
+        // hay in the trough" and "put out fodder" name the vessel instead of the beast, which is how a keeper
+        // talks. Nothing else in this world holds fodder.
+        if((word(value,"hay")||value.contains("fodder"))
+           &&(value.contains("give")||value.contains("put out")||value.contains("set out")||value.contains("fill")
+              ||value.contains("in the trough")||value.contains("the rack")||value.contains("the manger"))
+           &&!value.contains("make ")&&!value.contains("cut ")&&!value.contains("dry ")&&!value.contains("cure ")
+           &&!value.contains("build")&&!value.contains("store")) return Intent.FEED_ANIMAL;
         if(value.contains("clear")&&(value.contains("land")||value.contains("forest")||value.contains("brush")||value.contains("woods")||value.contains("woodland")||value.contains("trees")||value.contains("arable")||value.contains("for a field")||value.contains("for planting")||value.contains("ground for"))) return Intent.CLEAR_LAND;
         // Carry water to a growing stand (#37/#165). FEED_ANIMAL above already claims "water the" — but only
         // together with an animal noun, so a plot, a row or a seedling cannot be mistaken for a thirsty ox. Gated on
@@ -2612,7 +2628,11 @@ public class ChronicleActionService {
      * root and a real assembly, so no boundary saves it, and "dig up" is how the act is said of a root.
      */
     private static final java.util.regex.Pattern GATHERING_VERB = java.util.regex.Pattern.compile(
-            "(?<!\\w)(cut|cuts|cutting|pick|picks|picking|pull|pulls|pulling|snip|snips|snipping)(?!\\w)");
+            "(?<!\\w)(cut|cuts|cutting|pick|picks|picking|pull|pulls|pulling|snip|snips|snipping"
+            // "mow" and "scythe" are what cutting grass is called (#106), and both reached nothing while "cut
+            // the grass" worked. Bounded like everything else here: "mow" sits inside "mower" and "mown", and
+            // a mown field is one that has already been cut rather than a request to cut it.
+            + "|mow|mows|mowing|scythe|scythes|scything|reap|reaps|reaping)(?!\\w)");
     /**
      * The verbs that mean MAKING the thing, as words — so that asking a team to pull a cart is read as hauling
      * while asking for a cart is still read as building one. Held as words rather than substrings, because
