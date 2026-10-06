@@ -1297,4 +1297,36 @@ class IntentClassificationRegressionTest {
         assertEquals("MEASURE", classify("how far is the hut"));
         assertEquals("MEASURE", classify("how long is this plank"));
     }
+
+    /**
+     * The game could JUDGE a crossing and not make one (#37).
+     *
+     * <p>{@code can I get across here} answered in detail — the load you carry, a ford in the bottom, a laid way
+     * pegged out over the fen — and <b>every verb for actually doing it reached nothing</b>: wade across, swim
+     * across, cross to the other side, ford the stream. A crossing names the WATER rather than a bearing, and
+     * the move rule wanted a bearing, so the one sentence the judgement invites was the one nobody could say.
+     *
+     * <p>The act now finds the water with the same query the judgement uses, so the two can never disagree about
+     * what is there: one side and it crosses, more than one and it asks which, none and it says so.
+     */
+    @Test void aCrossingNamesTheWaterRatherThanABearing() throws Exception {
+        assertEquals("MOVE", classify("wade across"));
+        assertEquals("MOVE", classify("swim across"));
+        assertEquals("MOVE", classify("cross to the other side"));
+        assertEquals("MOVE", classify("cross the fen"));
+        assertEquals("MOVE", classify("ford the stream"));
+        assertEquals("MOVE", classify("wade over"));
+        // With a bearing it was already a move, and still is.
+        assertEquals("MOVE", classify("wade north"));
+        assertEquals("MOVE", classify("swim east"));
+        // Judging whether you COULD is a different question and keeps its own rule.
+        assertEquals("JUDGE_CROSSING", classify("can I get across here"));
+        assertEquals("JUDGE_CROSSING", classify("is it safe to cross"));
+
+        // "cross" sits inside crossbar, crossing and crosswise, and this project has shipped the substring
+        // defect four times. None of these is a sentence about wading a fen.
+        assertNotEquals("MOVE", classify("make a crossbar"));
+        assertNotEquals("MOVE", classify("cross my arms"));
+        assertEquals("UNKNOWN", classify("peel the rushes", true), "and a process keyword is still the matcher's");
+    }
 }

@@ -1425,6 +1425,33 @@ public class ChronicleActionService {
     }
     private String move(ActiveChronicle chronicle, String action, UUID actionId, Instant occurredAt) {
         Direction direction = Direction.from(action);
+        // A crossing names the WATER, not a bearing (#37). "wade across", "swim across" and "cross to the other
+        // side" all reached nothing, while "can I get across here" answered in detail — the game could JUDGE a
+        // crossing and not make one. judgeCrossing finds the water by looking at the neighbouring ground; so does
+        // this, with the same query, so the act and the judgement can never disagree about what is there.
+        if (direction == null && CROSSING_VERB.matcher(action.toLowerCase(Locale.ROOT)).find()) {
+            java.util.List<java.util.Map<String,Object>> water = jdbc.queryForList(
+                "SELECT next.grid_x - here.grid_x AS dx, next.grid_y - here.grid_y AS dy, next.biome " +
+                "FROM world_chunk here JOIN world_chunk next ON next.world_id=here.world_id " +
+                "  AND abs(next.grid_x-here.grid_x) + abs(next.grid_y-here.grid_y) = 1 " +
+                // North first and round, so a list of sides reads like a compass rather than like a table.
+                "WHERE here.id=? AND next.biome IN ('OCEAN','WETLAND') ORDER BY dy, dx", chronicle.location());
+            if (water.isEmpty())
+                return "There is no water within a step of this ground to cross — whatever lies ahead is walked "
+                    + "over rather than waded.";
+            if (water.size() > 1) {
+                java.util.List<String> sides = new java.util.ArrayList<>();
+                for (java.util.Map<String,Object> w : water) {
+                    String bearing = com.devosphere.draugr.world.Compass.of(
+                        ((Number) w.get("dx")).intValue(), ((Number) w.get("dy")).intValue());
+                    if (bearing != null) sides.add(bearing);
+                }
+                return "There is water on more than one side of this ground — " + joinAnd(sides)
+                    + ". Say which way you mean to cross.";
+            }
+            direction = Direction.of(((Number) water.get(0).get("dx")).intValue(),
+                                     ((Number) water.get(0).get("dy")).intValue());
+        }
         if (direction == null) return "You shift through the wet ground, but do not commit to a direction.";
         UUID destination = jdbc.query("SELECT next.id FROM world_chunk current JOIN world_chunk next ON next.world_id=current.world_id AND next.grid_x=current.grid_x+? AND next.grid_y=current.grid_y+? WHERE current.id=?", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, direction.dx, direction.dy, chronicle.location());
         if (destination == null) return "The ground gives way toward the edge of what you can cross. You turn back before leaving the land behind.";
@@ -2463,6 +2490,17 @@ public class ChronicleActionService {
             return Intent.FORAGE_GROUND;
         // Terrain crossing (#72): wading/fording/swimming/climbing toward a direction is movement to the next ground.
         if(Direction.from(value)!=null && (value.contains("wade")||value.contains("ford")||value.contains("swim")||value.contains("cross")||value.contains("climb")||value.contains("scramble")||value.contains("clamber")||value.contains("traverse"))) return Intent.MOVE;
+        // A crossing with no bearing in it (#37). "can I get across here" answered in detail — the load, the
+        // ford, a laid way — and "wade across", "swim across" and "cross to the other side" reached nothing: the
+        // game could JUDGE a crossing and not make one. The water names the direction, and move() asks the same
+        // query the judgement does, so the two can never disagree about what is there.
+        //
+        // Gated on the sentence being about getting OVER something, so "cross my arms" and "I am cross" are
+        // nobody's crossing, and on no bearing being named, since the rule above already has those.
+        if(CROSSING_VERB.matcher(value).find()
+           &&(value.contains("across")||value.contains(" over")||value.contains("other side")||value.contains("far side")
+              ||value.contains("the river")||value.contains("the stream")||value.contains("the water")
+              ||value.contains("the fen")||value.contains("the marsh")||value.contains("the bog"))) return Intent.MOVE;
         // "head east" reached NOTHING while "go north", "walk south" and "go west" all worked (#37). The move rule
         // knows walk/travel/go/move; "head" was only ever read as part of "head to" and "head for", which are
         // TRAVEL's and want a place rather than a bearing — so one of the commonest ways of saying the commonest
@@ -2794,6 +2832,14 @@ public class ChronicleActionService {
      * <p>"dig" is deliberately absent and spelled "dig up" at the call site: "dig a root cellar" names a real
      * root and a real assembly, so no boundary saves it, and "dig up" is how the act is said of a root.
      */
+    /**
+     * The verbs for getting over water (#37). As words, because "ford" is a name a person might give a place and
+     * "cross" sits inside "crossbar", "crossing" and "crosswise" — and a sentence about a crossbar is not a
+     * sentence about wading a fen.
+     */
+    private static final java.util.regex.Pattern CROSSING_VERB = java.util.regex.Pattern.compile(
+            "(?<!\\w)(wade|wades|wading|ford|fords|fording|swim|swims|swimming|cross|crosses|traverse|traverses)(?!\\w)");
+
     private static final java.util.regex.Pattern GATHERING_VERB = java.util.regex.Pattern.compile(
             "(?<!\\w)(cut|cuts|cutting|pick|picks|picking|pull|pulls|pulling|snip|snips|snipping"
             // "mow" and "scythe" are what cutting grass is called (#106), and both reached nothing while "cut
@@ -3115,7 +3161,9 @@ public class ChronicleActionService {
     }
 
     private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, UNKNOWN }
-    private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;} }    /**     * The structured perception frame — the seam every future Simulation Agent reads
+    private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;}
+        /** The cardinal for a grid offset, for when the WORLD names the direction rather than the player (#37). */
+        static Direction of(int dx,int dy){ for(Direction d:values()) if(d.dx==dx&&d.dy==dy) return d; return null; } }    /**     * The structured perception frame — the seam every future Simulation Agent reads
      * from. Where {@code perception} is the finished player-facing prose, this frame
      * is the machine-legible truth behind it: the raw intent and outcome, where the
      * chronicle stood, the hour and weather in unembellished terms, what physically
