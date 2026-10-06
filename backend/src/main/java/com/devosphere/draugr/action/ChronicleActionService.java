@@ -1452,28 +1452,30 @@ public class ChronicleActionService {
         // side" all reached nothing, while "can I get across here" answered in detail — the game could JUDGE a
         // crossing and not make one. judgeCrossing finds the water by looking at the neighbouring ground; so does
         // this, with the same query, so the act and the judgement can never disagree about what is there.
-        if (direction == null && CROSSING_VERB.matcher(action.toLowerCase(Locale.ROOT)).find()) {
-            java.util.List<java.util.Map<String,Object>> water = jdbc.queryForList(
-                "SELECT next.grid_x - here.grid_x AS dx, next.grid_y - here.grid_y AS dy, next.biome " +
-                "FROM world_chunk here JOIN world_chunk next ON next.world_id=here.world_id " +
-                "  AND abs(next.grid_x-here.grid_x) + abs(next.grid_y-here.grid_y) = 1 " +
-                // North first and round, so a list of sides reads like a compass rather than like a table.
-                "WHERE here.id=? AND next.biome IN ('OCEAN','WETLAND') ORDER BY dy, dx", chronicle.location());
-            if (water.isEmpty())
-                return "There is no water within a step of this ground to cross — whatever lies ahead is walked "
-                    + "over rather than waded.";
-            if (water.size() > 1) {
-                java.util.List<String> sides = new java.util.ArrayList<>();
-                for (java.util.Map<String,Object> w : water) {
-                    String bearing = com.devosphere.draugr.world.Compass.of(
-                        ((Number) w.get("dx")).intValue(), ((Number) w.get("dy")).intValue());
-                    if (bearing != null) sides.add(bearing);
-                }
-                return "There is water on more than one side of this ground — " + joinAnd(sides)
-                    + ". Say which way you mean to cross.";
-            }
-            direction = Direction.of(((Number) water.get(0).get("dx")).intValue(),
-                                     ((Number) water.get(0).get("dy")).intValue());
+        if (direction == null && CROSSING_VERB.matcher(said).find()) {
+            Toward water = toward(chronicle.location(), "OCEAN|WETLAND", null);
+            if (water.refusal() != null) return water.refusal();
+            direction = water.direction();
+        }
+        // Climbing, and following a feature (#37). Same shape as the crossing above and the same helper: the
+        // GROUND names the direction. "climb the hill", "follow the stream", "follow the shore" and "go down into
+        // the valley" all reached nothing, because the move rule wanted a bearing and a hill is not a bearing —
+        // yet which way the hill lies is a thing world_chunk has always known.
+        //
+        // A named kind of ground decides it (the same vocabulary WHICH_WAY answers from, so what the game SAYS
+        // lies north is what walking north reaches). Failing a name, bare "up" and "down" go by the elevation.
+        if (direction == null && wantsGroundStep(said)) {
+            String biomes = null;
+            for (String[] kind : GROUND_ASKED_FOR)
+                if (groundNamed(said, kind[0]) && (biomes == null || kind[0].length() > biomes.length())) biomes = kind[1];
+            Boolean upward = biomes != null ? null
+                : said.contains("down") || said.contains("descend") ? Boolean.FALSE
+                : said.contains("up") || said.contains("ascend") ? Boolean.TRUE : null;
+            if (biomes == null && upward == null)
+                return "You could climb, or follow something, but you have not said what.";
+            Toward it = toward(chronicle.location(), biomes, upward);
+            if (it.refusal() != null) return it.refusal();
+            direction = it.direction();
         }
         if (direction == null) return "You shift through the wet ground, but do not commit to a direction.";
         UUID destination = jdbc.query("SELECT next.id FROM world_chunk current JOIN world_chunk next ON next.world_id=current.world_id AND next.grid_x=current.grid_x+? AND next.grid_y=current.grid_y+? WHERE current.id=?", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, direction.dx, direction.dy, chronicle.location());
@@ -2529,6 +2531,14 @@ public class ChronicleActionService {
            &&(value.contains("across")||value.contains(" over")||value.contains("other side")||value.contains("far side")
               ||value.contains("the river")||value.contains("the stream")||value.contains("the water")
               ||value.contains("the fen")||value.contains("the marsh")||value.contains("the bog"))) return Intent.MOVE;
+        // Climbing, and following a feature (#37). Both name a piece of GROUND rather than a bearing, which the
+        // move rule wanted — so "climb the hill", "follow the stream", "follow the shore" and "go down into the
+        // valley" all reached nothing, though which way the hill lies is a thing world_chunk has always known.
+        //
+        // Gated on a kind of ground being named, or on a bare up/down, so "follow the trail" is still TRACK's
+        // hunt and "follow them" is still the people's. The move itself resolves the bearing from the same
+        // vocabulary WHICH_WAY answers from, so what the game says lies north is what walking north reaches.
+        if(wantsGroundStep(value)) return Intent.MOVE;
         // "head east" reached NOTHING while "go north", "walk south" and "go west" all worked (#37). The move rule
         // knows walk/travel/go/move; "head" was only ever read as part of "head to" and "head for", which are
         // TRAVEL's and want a place rather than a bearing — so one of the commonest ways of saying the commonest
@@ -2860,6 +2870,101 @@ public class ChronicleActionService {
      * <p>"dig" is deliberately absent and spelled "dig up" at the call site: "dig a root cellar" names a real
      * root and a real assembly, so no boundary saves it, and "dig up" is how the act is said of a root.
      */
+    /** A direction the world chose, or the reason it could not. Exactly one of the two is set. */
+    private record Toward(Direction direction, String refusal) { }
+
+    /**
+     * Which way the next piece of a KIND of ground lies, for the acts whose object is the ground (#37).
+     *
+     * <p>One implementation for crossing, climbing and following, because all three ask the same question and
+     * three copies of it would drift — and because the answer must agree with what {@link #whichWay} tells the
+     * player. If the game says the marsh lies north, wading across had better go north.
+     *
+     * @param biomes pipe-separated biome keys, or null to go by height alone
+     * @param upward with a null {@code biomes}: TRUE for the highest neighbour, FALSE for the lowest
+     */
+    private Toward toward(UUID location, String biomes, Boolean upward) {
+        java.util.List<java.util.Map<String,Object>> around = jdbc.queryForList(
+            "SELECT next.grid_x - here.grid_x AS dx, next.grid_y - here.grid_y AS dy, next.biome, " +
+            "  next.elevation - here.elevation AS rise " +
+            "FROM world_chunk here JOIN world_chunk next ON next.world_id=here.world_id " +
+            "  AND abs(next.grid_x-here.grid_x) + abs(next.grid_y-here.grid_y) = 1 " +
+            // North first and round, so a list of sides reads like a compass rather than like a table.
+            "WHERE here.id=? ORDER BY dy, dx", location);
+
+        java.util.List<java.util.Map<String,Object>> fit = new java.util.ArrayList<>();
+        if (biomes != null) {
+            for (java.util.Map<String,Object> n : around)
+                for (String k : biomes.split("\\|")) if (k.equals(n.get("biome"))) { fit.add(n); break; }
+            if (fit.isEmpty())
+                return new Toward(null, "There is none of that within a step of this ground — not on any side of "
+                    + "it. What you are after lies further off than one step, which is a thing to be scouted.");
+        } else {
+            // By height. A step that barely rises is not a climb: the same 40-unit threshold the aspect model and
+            // the visual context's relief are built on, so "climb" means the same thing everywhere it is used.
+            java.util.Map<String,Object> best = null;
+            for (java.util.Map<String,Object> n : around) {
+                int rise = ((Number) n.get("rise")).intValue();
+                if (upward ? rise <= 40 : rise >= -40) continue;
+                if (best == null || (upward ? rise > ((Number) best.get("rise")).intValue()
+                                            : rise < ((Number) best.get("rise")).intValue())) best = n;
+            }
+            if (best == null)
+                return new Toward(null, upward
+                    ? "There is nothing to climb from here — the ground about you lies as level as this does."
+                    : "There is nothing to climb down to — the ground about you lies as level as this does.");
+            fit.add(best);
+        }
+
+        if (fit.size() > 1) {
+            java.util.List<String> sides = new java.util.ArrayList<>();
+            for (java.util.Map<String,Object> n : fit) {
+                String bearing = com.devosphere.draugr.world.Compass.of(
+                    ((Number) n.get("dx")).intValue(), ((Number) n.get("dy")).intValue());
+                if (bearing != null) sides.add(bearing);
+            }
+            return new Toward(null, "That lies on more than one side of this ground — " + joinAnd(sides)
+                + ". Say which way you mean to go.");
+        }
+        Direction chosen = Direction.of(((Number) fit.get(0).get("dx")).intValue(),
+                                        ((Number) fit.get(0).get("dy")).intValue());
+        return chosen == null ? new Toward(null, "You cannot work out which way that lies from here.")
+                              : new Toward(chosen, null);
+    }
+
+    /**
+     * The verbs whose object is a piece of ground rather than a bearing (#37).
+     *
+     * <p>As words: "follow" is harmless but "up" and "down" are not — "down" sits inside "downstream" and
+     * "sundown", and a bare {@code contains} would make every sentence with a sundown in it a descent.
+     */
+    private static final java.util.regex.Pattern CLIMB_OR_FOLLOW = java.util.regex.Pattern.compile(
+            "(?<!\\w)(climb|climbs|climbing|scramble|scrambles|scrambling|clamber|clambers|clambering"
+            + "|follow|follows|following|ascend|ascends|descend|descends)(?!\\w)");
+
+    /**
+     * Whether the sentence asks for a step whose object is a piece of GROUND rather than a bearing (#37).
+     *
+     * <p>One condition, read by the classifier and by {@link #move} both, because the two must agree exactly:
+     * a sentence the classifier sends to MOVE and the move cannot resolve is answered "you shift through the wet
+     * ground, but do not commit to a direction", which is a true sentence about the wrong thing.
+     *
+     * <p>"go up the hill" and "go down into the valley" carry no climbing verb at all — just a preposition — and
+     * are the commonest way of saying it, so they are here beside the climbing words.
+     */
+    private static boolean wantsGroundStep(String value) {
+        boolean verb = CLIMB_OR_FOLLOW.matcher(value).find()
+            || value.contains("go up") || value.contains("go down")
+            || value.contains("head up") || value.contains("head down")
+            || value.contains("up into") || value.contains("down into")
+            || value.contains("make my way up") || value.contains("make my way down");
+        if (!verb) return false;
+        return namesGroundAsked(value) || value.contains("up the") || value.contains("down the")
+            || value.contains("up into") || value.contains("down into")
+            || value.contains("ascend") || value.contains("descend")
+            || value.strip().endsWith(" up") || value.strip().endsWith(" down");
+    }
+
     /**
      * How a person says they are going back the way they came (#37).
      *
