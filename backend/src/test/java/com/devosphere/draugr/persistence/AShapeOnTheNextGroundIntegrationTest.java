@@ -139,14 +139,23 @@ class AShapeOnTheNextGroundIntegrationTest {
             rs -> rs.next() ? (UUID) rs.getObject(1) : null, dx, dy, chunk);
     }
 
-    /** Raise a named ruin on a chunk, exactly as genesis places one: an ecology_site of category RUIN. */
+    /**
+     * Raise a named ruin on a chunk, exactly as genesis places one: an {@code ecology_site} of category RUIN.
+     *
+     * <p>The abundance is 1000 because that is what genesis writes for a ruin, and because the column's own CHECK
+     * demands 1..1000 — a fixture that writes 0 is rejected. The first version of this test wrote 0, reasoning
+     * that a ruin yields nothing, and it passed every pre-push check I had: the queries were all PREPAREd against
+     * a real schema, which proves a statement parses and its columns exist and proves <b>nothing</b> about whether
+     * a row will be accepted. An INSERT has to actually run — inside a transaction that is rolled back — before
+     * it has been checked at all.
+     */
     private void raiseRuin(UUID chunk, String name) {
         UUID site = UUID.randomUUID();
         UUID world = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, chunk);
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id,lifecycle_state) " +
             "VALUES (?,'ECOLOGY_SITE',?,?,'ACTIVE')", site, name, chunk);
         jdbc.update("INSERT INTO ecology_site (id,world_id,chunk_id,site_category,site_kind,baseline_abundance) " +
-            "VALUES (?,?,?,'RUIN',?,0)", site, world, chunk, name);
+            "VALUES (?,?,?,'RUIN',?,1000)", site, world, chunk, name);
         raised.add(site);
     }
 
