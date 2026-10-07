@@ -1640,6 +1640,70 @@ class IntentClassificationRegressionTest {
         assertEquals("UNKNOWN", classify("check my boots"), "the game has shoes, not boots — recorded on #37");
     }
 
+    /**
+     * The water chain, end to end (#37) — a Chronicle drinks every day and dies without it.
+     *
+     * <p>Swept 40 sentences across the whole chain: finding water, judging it, drawing it, making it safe,
+     * drinking it, carrying it, emptying it. <b>16 reached nothing or answered wrongly. Now 4</b>, and those four
+     * want catalogue content rather than routing (catching rain, letting silt settle).
+     *
+     * <p>The sharpest was the fourth appearance of a shape this project keeps finding:
+     *
+     * <pre>
+     *   is my waterskin full  ->  "Make a waterskin turns on a cutting edge, and there is none within reach."
+     * </pre>
+     *
+     * <b>Asking about a thing is not making it</b> — after the lean-to question that built a hut, the trap
+     * question that set a trap, and the snare question that worked a snare. The process matcher took the noun and
+     * offered to make the very thing being asked after.
+     *
+     * <p>And a root cause worth more than the phrasings: {@code containerNoun} listed every dry container in the
+     * game — basket, pouch, sack, crate, chest, quiver — and <b>not one thing you carry liquid in</b>. So a
+     * waterskin was not a container, and `empty the waterskin` reached nothing while the same sentence about a
+     * basket worked.
+     */
+    @Test void theWaterChain() throws Exception {
+        // I. Judging it. The question forms worked; the verb the intent is NAMED for did not.
+        assertEquals("JUDGE_WATER", classify("is this water safe"), "which always worked");
+        assertEquals("JUDGE_WATER", classify("judge the water"));
+        assertEquals("JUDGE_WATER", classify("taste the water"));
+        // But a perception verb that already has an intent is not available to borrow. Both of these are
+        // deliberate and were broken by my first, greedier cut of the rule above.
+        assertEquals("SMELL", classify("sniff the water"), "smelling is its own act");
+        assertEquals("MEASURE", classify("test the depth of the water"), "and measuring is its own act");
+
+        // II. Drawing it. Six verbs were listed and not the plainest two.
+        assertEquals("COLLECT_WATER", classify("collect water"), "which always worked");
+        assertEquals("COLLECT_WATER", classify("get some water"));
+        assertEquals("COLLECT_WATER", classify("scoop up water"));
+        assertEquals("COLLECT_WATER", classify("fill the skin"), "what somebody holding one calls it");
+
+        // III. Making it safe. "make the water safe" answered by offering to MAKE A WATERSKIN.
+        assertEquals("BOIL_WATER", classify("boil water"), "which always worked");
+        assertEquals("BOIL_WATER", classify("make the water safe"));
+        assertEquals("FILTER_WATER", classify("filter the water"), "unchanged");
+
+        // IV. Drinking it. Neither "slake" nor "quench" contains "drink", which is all the drink rule looks for.
+        assertEquals("DRINK", classify("drink water"), "which always worked");
+        assertEquals("DRINK", classify("slake my thirst"));
+        assertEquals("DRINK", classify("quench my thirst"));
+
+        // V. Thirst is the BODY's question. hours_without_water is the only water state in the schema and it
+        // drives the thirst that kills a Chronicle; "am I dry" reached the body reading and "am I thirsty" did not.
+        assertEquals("SENSE_BODY", classify("am i thirsty"));
+        assertEquals("SENSE_BODY", classify("how thirsty am i"));
+        assertEquals("SENSE_BODY", classify("am i dry"), "which always worked");
+
+        // VI. Carrying and emptying it — and the waterskin question that offered to make one.
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("is my waterskin full"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("how much water do i have"));
+        assertEquals("EMPTY_CONTAINER", classify("empty the waterskin"));
+        assertEquals("EMPTY_CONTAINER", classify("pour the water out"));
+        // A waterskin is a container now, so storing into one works as it always did for a basket.
+        assertEquals("STORE", classify("put the water in the gourd"));
+        assertEquals("STORE", classify("put the berries in the basket"), "unchanged");
+    }
+
     @Test void aBedIsThreeThings() throws Exception {
         // I. Somewhere to sleep. The first four always worked; the rest did not.
         for (String p : new String[]{"make a bed", "make the bed", "build a bed", "lay a bed",
