@@ -38,7 +38,9 @@
 
 INSERT INTO construction_kind
   (project_kind, display_name, domain_key, is_shelter, is_workstation, decays, proven_in) VALUES
-  ('DRAFT_ANIMAL_STALL', 'Draft animal stall', 'construction', TRUE,  FALSE, TRUE, 'V410'),
+  -- is_shelter FALSE: a narrow bay with a beam across it is not somewhere a PERSON shelters, and V308's rule
+  -- forbids a restraint from being a shelter at all. The ox shed is the building; this is the frame.
+  ('DRAFT_ANIMAL_STALL', 'Draft animal stall', 'construction', FALSE, FALSE, TRUE, 'V410'),
   ('HORSE_STABLE',       'Horse stable',       'construction', TRUE,  FALSE, TRUE, 'V410'),
   ('TACK_ROOM',          'Tack room',          'construction', FALSE, FALSE, TRUE, 'V410'),
   ('HARNESS_RACK',       'Harness rack',       'construction', FALSE, FALSE, TRUE, 'V410');
@@ -47,23 +49,30 @@ INSERT INTO construction_kind
 --
 -- The stall is the point of the whole migration: it holds an animal still, which is what makes hoof care and
 -- harness work safe, and it shelters the beast and the gear hanging in it besides.
--- Sized HUGE, because the draft beast this is built for is the OX (HUGE), and shelter size is compared against
--- the animal's own tier by body_size_rank: a bay too small for the beast shelters nothing. The ox, the aurochs
--- and the water buffalo are all HUGE; the horse, the yak and the musk ox are LARGE.
-UPDATE construction_kind SET shelters_stock = TRUE, holds_an_animal_still = TRUE, shelters_gear = TRUE,
-                             shelters_up_to_size = 'HUGE',
-                             encloses = TRUE, is_barrier = TRUE, barrier_strength = 20, gives_shade = TRUE,
-                             flammable = TRUE
+-- A RESTRAINT IS A FRAME, NOT A BUILDING, and that distinction is already law here: V308's standing invariant
+-- holds that `holds_an_animal_still AND (is_shelter OR encloses OR is_barrier OR shelters_stock)` must be EMPTY
+-- — "a stanchion holds an animal still, nothing else". My first cut of this migration made the stall a shelter
+-- as well and CI failed that invariant, correctly.
+--
+-- The rule is right and worth keeping, so the stall follows it. Each structure keeps ONE job: the ox shed houses
+-- an ox, and the stall is the narrow bay with a beam across it where you can work on one. If housing granted
+-- safe handling, nobody would ever raise the bay — which is the same argument the size system rests on, and the
+-- same reason this migration refuses to let a horse stable hold an ox.
+--
+-- So: no shelter, no enclosure, no barrier, no stock. A beam and a bedded floor. It does keep the gear that
+-- hangs in it, which the invariant does not forbid and a yoke rack beside a stall plainly does.
+UPDATE construction_kind SET holds_an_animal_still = TRUE, shelters_gear = TRUE, flammable = TRUE
  WHERE project_kind = 'DRAFT_ANIMAL_STALL';
 
--- A stable is partitioned stalls under one roof: stock, their gear, and a wall a wolf will not come through.
--- It holds an animal still for the same reason the stall does — a horse in its own stall can be worked on.
+-- A stable IS a building: partitioned stalls under one roof, the stock in it, their gear, and a wall a wolf will
+-- not come through. By the same rule it does NOT grant safe handling — the bay above is what does that, and a
+-- keeper who wants to see to a horse's feet raises one inside the stable exactly as they would in a real yard.
 --
 -- Sized LARGE, DELIBERATELY, and this is where #108's "species-appropriate" stops being decoration: a horse is
--- LARGE and an ox is HUGE, so a horse stable will NOT house an ox and the keeper must raise the ox shed or the
--- draft stall for that. Sizing it HUGE "to be safe" would have made every other animal house redundant and
--- turned the whole size system into a formality.
-UPDATE construction_kind SET shelters_stock = TRUE, holds_an_animal_still = TRUE, shelters_gear = TRUE,
+-- LARGE and an ox is HUGE, so a horse stable will NOT house an ox and the keeper must raise the ox shed for
+-- that. Sizing it HUGE "to be safe" would have made every other animal house redundant and turned the whole
+-- size system into a formality.
+UPDATE construction_kind SET shelters_stock = TRUE, shelters_gear = TRUE,
                              shelters_up_to_size = 'LARGE',
                              encloses = TRUE, is_barrier = TRUE, barrier_strength = 24, gives_shade = TRUE,
                              flammable = TRUE
@@ -182,28 +191,35 @@ BEGIN
 
   -- THE POINT OF THE MIGRATION, asserted rather than assumed: a working animal must now have somewhere to be
   -- held still that is not a dairy stanchion. If this count ever returns to one, the gap has reopened.
+  -- The threshold is 2 — the dairy stanchion plus the draft bay — and NOT 3, which is what it said while the
+  -- horse stable also carried the flag. The stable lost it to V308's rule that a restraint is not a building,
+  -- and this guard had to follow: a number pinned to a draft of the design rather than to the rule it stands
+  -- for fails for the wrong reason, which is the same fault as the test that asserted exactly one restraint.
+  -- What the rule actually says is "more than the milking frame".
   SELECT count(*) INTO n FROM construction_kind WHERE holds_an_animal_still;
-  IF n < 3 THEN
+  IF n < 2 THEN
     RAISE EXCEPTION 'V410: holds_an_animal_still is carried by only % structure(s). The flag is read when the '
       'game decides whether handling a beast is safe, and a keeper must not have to raise a MILKING STANCHION '
       'to see to an ox''s feet', n;
   END IF;
 
-  -- SPECIES-APPROPRIATE, ASSERTED. The stall must take the largest draft beast there is, and the horse stable
-  -- must NOT — otherwise it quietly becomes a universal animal house and every other building in the catalogue
-  -- is redundant. This is the guard that keeps the size system from becoming a formality.
-  IF NOT EXISTS (SELECT 1 FROM construction_kind ck
-                  WHERE ck.project_kind = 'DRAFT_ANIMAL_STALL'
-                    AND body_size_rank(ck.shelters_up_to_size)
-                        >= (SELECT max(body_size_rank(ws.size_tier)) FROM wildlife_species ws
-                             WHERE ws.species_key IN ('ox','aurochs','water_buffalo'))) THEN
-    RAISE EXCEPTION 'V410: the draft stall must be sized for the heaviest draft beast, or an ox cannot stand in it';
+  -- A RESTRAINT IS NOT A BUILDING, which is V308's invariant and the rule my first cut of this migration broke.
+  -- Asserted here as well as there, because this is the file that would break it again: the moment a structure
+  -- both houses an animal and holds it still, the dedicated handling bay stops being worth raising.
+  IF EXISTS (SELECT 1 FROM construction_kind
+              WHERE holds_an_animal_still AND (is_shelter OR encloses OR is_barrier OR shelters_stock)) THEN
+    RAISE EXCEPTION 'V410: a structure that holds an animal still must not also shelter or enclose one — '
+      'housing that grants safe handling makes the handling bay pointless (V308''s rule, and CI enforces it)';
   END IF;
+
+  -- SPECIES-APPROPRIATE, ASSERTED. A horse stable must NOT be sized to hold an ox, or it quietly becomes a
+  -- universal animal house and every other building in the catalogue is redundant. This is the guard that keeps
+  -- the size system from becoming a formality.
   IF EXISTS (SELECT 1 FROM construction_kind ck, wildlife_species ws
               WHERE ck.project_kind = 'HORSE_STABLE' AND ws.species_key = 'ox'
                 AND body_size_rank(ck.shelters_up_to_size) >= body_size_rank(ws.size_tier)) THEN
-    RAISE EXCEPTION 'V410: a horse stable sized to hold an ox makes the ox shed and the draft stall pointless — '
-      '#108 asks for species-appropriate housing, which means each building has an animal it is WRONG for';
+    RAISE EXCEPTION 'V410: a horse stable sized to hold an ox makes the ox shed pointless — #108 asks for '
+      'species-appropriate housing, which means each building has an animal it is WRONG for';
   END IF;
 
   -- And a tack room must not quietly become stock housing. An animal shut in one is in the wrong building.
