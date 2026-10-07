@@ -36,13 +36,17 @@ import java.util.List;
 @Service
 public class VisualContextService {
 
-    /** The response contract version. Additive changes keep it; a removal or rename must raise it. */
     /**
-     * The contract version. <b>2</b> since #224 gave this ground its bands ({@link Land}) and the next ground a
-     * bearing and a relief ({@link Nearby}). Additive: every field version 1 carried is still here and still
-     * means what it meant, so a client written against 1 keeps working and may ignore both new fields.
+     * The contract version. Additive changes raise it; a removal or rename would too, and none has happened yet.
+     *
+     * <p><b>1</b> was biome, features and sky. <b>2</b> gave this ground its bands ({@link Land}) and the next
+     * ground a bearing and a relief ({@link Nearby}). <b>3</b> lets a skyline carry what is built or broken on that
+     * next ground ({@link Landmark}), which is the last line of #224's contract.
+     *
+     * <p>Every field each earlier version carried is still here and still means what it meant, so a client written
+     * against any of them keeps working and may ignore whatever it does not know.
      */
-    public static final int VERSION = 2;
+    public static final int VERSION = 3;
 
     private final JdbcTemplate jdbc;
 
@@ -90,6 +94,33 @@ public class VisualContextService {
     public record Nearby(String direction, String biome, String relief, String distance) { }
 
     /**
+     * Something built or broken standing on the next ground, and which way it lies (#224).
+     *
+     * <p>The last line of this story's contract: "adjacent or visible waterbody, coast, elevation transition,
+     * ecotone, <b>ruin, or structure</b> with direction/distance band". {@link Nearby} answered the first four and
+     * stopped at the lie of the land, and the comment beside it said flatly that no neighbour's structures are
+     * read — which was the right rule for the tier that existed and the wrong one for this ticket.
+     *
+     * <p><b>What makes it perception-safe is that a kind is not an identity.</b> A broken silhouette on the next
+     * hill is one of the plainest things in a landscape — you cannot stand at (12,14) and fail to see the tower at
+     * (12,15) — but which tower it is, what it was, and what is left inside it are not visible from here, and they
+     * are what makes a ruin worth walking to. So this carries RUIN, BUILT or SETTLEMENT and a bearing, and never a
+     * name: the watchtower is "something built, south" until the Chronicle goes and looks. The ticket's own words
+     * for this are "discovery/perception eligibility—not secret marker identity", and the discovery is preserved
+     * precisely because the shape is not.
+     *
+     * <p>What stays invisible is unchanged and deliberate: no ecology or resource site, no monster lair, no
+     * wildlife. A lair two chunks east is what this payload must never tell a player, and one chunk east is no
+     * better — a lair is not a silhouette, it is a thing you learn by tracking. Only works of hands and their
+     * wrecks are reported, because only those change a skyline.
+     *
+     * @param kind      RUIN / BUILT / SETTLEMENT — the category only, never which one
+     * @param direction north / south / east / west, by {@link Compass}
+     * @param distance  always ADJACENT, the one ring whose shapes can be made out from here
+     */
+    public record Landmark(String kind, String direction, String distance) { }
+
+    /**
      * Everything visible from where the Chronicle stands.
      *
      * @param version     the contract version this payload was built to
@@ -107,20 +138,29 @@ public class VisualContextService {
      *                    at version 1 must keep working at version 2.
      * @param land        the lie of THIS ground in bands (#224)
      * @param nearby      the next ground with a direction and a relief on each piece of it (#224)
+     * @param landmarks   works of hands and their wrecks visible on the next ground, by kind and bearing and never
+     *                    by name (#224); empty in the dark, inside a cave, and for ground that is itself occluded
      * @param fingerprint stable hash of all of the above
      */
     public record VisualContext(int version, String biome, List<Feature> features, String timeOfDay,
                                 String season, String weather, double temperatureC, boolean lit,
-                                List<String> surroundings, Land land, List<Nearby> nearby, String fingerprint) {
+                                List<String> surroundings, Land land, List<Nearby> nearby,
+                                List<Landmark> landmarks, String fingerprint) {
         /** The shape before #232's visible-nearby tier: nothing seen beyond this ground. */
         public VisualContext(int version, String biome, List<Feature> features, String timeOfDay, String season,
                              String weather, double temperatureC, boolean lit, String fingerprint) {
-            this(version, biome, features, timeOfDay, season, weather, temperatureC, lit, List.of(), null, List.of(), fingerprint);
+            this(version, biome, features, timeOfDay, season, weather, temperatureC, lit, List.of(), null, List.of(), List.of(), fingerprint);
         }
         /** The shape before #224 gave the ground bands and the next ground a bearing. */
         public VisualContext(int version, String biome, List<Feature> features, String timeOfDay, String season,
                              String weather, double temperatureC, boolean lit, List<String> surroundings, String fingerprint) {
-            this(version, biome, features, timeOfDay, season, weather, temperatureC, lit, surroundings, null, List.of(), fingerprint);
+            this(version, biome, features, timeOfDay, season, weather, temperatureC, lit, surroundings, null, List.of(), List.of(), fingerprint);
+        }
+        /** The shape before a skyline could carry a built thing: bands and bearings, but nothing standing on them. */
+        public VisualContext(int version, String biome, List<Feature> features, String timeOfDay, String season,
+                             String weather, double temperatureC, boolean lit, List<String> surroundings,
+                             Land land, List<Nearby> nearby, String fingerprint) {
+            this(version, biome, features, timeOfDay, season, weather, temperatureC, lit, surroundings, land, nearby, List.of(), fingerprint);
         }
     }
 
@@ -221,6 +261,42 @@ public class VisualContextService {
                         relief(rs.getInt("elevation"), here.elevation()), "ADJACENT"));
             }, here.gridX(), here.gridY(), here.worldId(), here.gridX(), here.gridY());
 
+        // AND WHAT STANDS ON IT (#224) — the last line of this story's contract, which asks for a "ruin, or
+        // structure with direction/distance band". The tier above reads the lie of the land and the comment on it
+        // said flatly that a neighbour's structures are never read; that was right for the tier that existed and
+        // wrong for this ticket, so it is now narrower: no neighbour's SITES, LAIRS or WILDLIFE are read, and
+        // works of hands are.
+        //
+        // The line between them is what a skyline shows. A ruin, a finished building and a standing village all
+        // break a horizon and cannot be missed from the next chunk; an ore seam, a berry stand and a wolf's lair
+        // do not and are learned by walking the ground. And only the KIND crosses — never the name — so the
+        // Overgrown Watchtower at (12,15) is "something built, to the south" to anyone standing at (12,14). That
+        // is the ticket's "perception eligibility, not secret marker identity", and it is also the only form in
+        // which this is safe to send: the shape is the invitation, the identity is the discovery.
+        //
+        // Occlusion cuts both ways. Blind sees nothing, as above; and nothing is seen INSIDE rock either, so a
+        // neighbour that is cave interior reports no shapes however bright the day is where the viewer stands.
+        List<Landmark> landmarks = new java.util.ArrayList<>();
+        if (!blind) jdbc.query(
+            "SELECT DISTINCT k.kind, n.grid_x - ? AS dx, n.grid_y - ? AS dy " +
+            "FROM world_chunk n " +
+            "JOIN LATERAL (" +
+            "      SELECT 'RUIN' AS kind FROM ecology_site es " +
+            "       WHERE es.chunk_id = n.id AND es.site_category = 'RUIN' " +
+            "  UNION ALL " +
+            "      SELECT 'BUILT' FROM construction_project cp JOIN world_object w ON w.id = cp.object_id " +
+            "       WHERE w.current_location_id = n.id AND cp.state = 'COMPLETED' AND w.lifecycle_state = 'ACTIVE' " +
+            "  UNION ALL " +
+            "      SELECT 'SETTLEMENT' FROM native_settlement_site s JOIN world_object w ON w.id = s.object_id " +
+            "       WHERE w.current_location_id = n.id AND w.lifecycle_state = 'ACTIVE' AND s.site_kind = 'VILLAGE'" +
+            ") k ON true " +
+            "WHERE n.world_id = ? AND abs(n.grid_x - ?) + abs(n.grid_y - ?) = 1 " +
+            "  AND n.biome <> 'CAVE_INTERIOR' " +
+            "ORDER BY dy, dx, k.kind", rs -> {
+                String bearing = Compass.of(rs.getInt("dx"), rs.getInt("dy"));
+                if (bearing != null) landmarks.add(new Landmark(rs.getString("kind"), bearing, "ADJACENT"));
+            }, here.gridX(), here.gridY(), here.worldId(), here.gridX(), here.gridY());
+
         // Kept exactly as it was, for a client written against version 1 (#232).
         List<String> surroundings = nearby.stream().map(Nearby::biome).distinct().sorted().toList();
 
@@ -237,9 +313,17 @@ public class VisualContextService {
         if (!nearby.isEmpty())
             fingerprint = Integer.toHexString((fingerprint + "|around:" + nearby.stream()
                 .map(n -> n.direction() + ":" + n.biome() + ":" + n.relief()).reduce("", (a, b) -> a + "," + b)).hashCode());
+        // Folded in only when a skyline actually carries something, for the same reason the view is: a place with
+        // nothing built near it keeps the fingerprint it had before this tier existed, so "refresh returns the same
+        // fingerprint for unchanged world state" still holds across the version bump for most of the map. When a
+        // neighbour's building is finished or burns down, this is what makes the backdrop notice (#224).
+        if (!landmarks.isEmpty())
+            fingerprint = Integer.toHexString((fingerprint + "|skyline:" + landmarks.stream()
+                .map(l -> l.direction() + ":" + l.kind()).reduce("", (a, b) -> a + "," + b)).hashCode());
 
         return new VisualContext(VERSION, biome, List.copyOf(features), timeOfDay, season,
-            local.kind(), local.temperatureC(), lit, surroundings, land, List.copyOf(nearby), fingerprint);
+            local.kind(), local.temperatureC(), lit, surroundings, land, List.copyOf(nearby),
+            List.copyOf(landmarks), fingerprint);
     }
 
     private boolean fireBurningAt(java.util.UUID chunk) {
