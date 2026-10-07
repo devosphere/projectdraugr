@@ -61,6 +61,39 @@ Every defect this project has found is the same defect: **the world knows someth
   clause. And when the shared clause asks the catalogue, ask it the way a person **speaks**: the keys are
   `mountain_goat` and `bighorn_sheep`, and nobody says "mountain goat" twice a day about an animal they milk, so
   the **head noun** has to count.
+- **An intent keyword that is a substring of ordinary English.** Every substring note in this project until now
+  was about a *catalogue key* colliding with speech. This is the mirror, and it is worse, because the trigger is
+  an **adjective**: it fires on sentences about something else entirely and no catalogue guard could ever see it.
+  `CRAFT_DESK` matched a bare `contains("table")` and `CRAFT_SHELF` a bare `contains("rack")` — and "table" sits
+  inside s·**table**, por·**table**, comfor·**table**, sui·**table**, no·**table**, while "rack" sits inside
+  t·**rack** and ·**rack**et:
+
+  ```
+  make a comfortable bed          -> CRAFT_DESK
+  construct a portable windbreak  -> CRAFT_DESK
+  build a notable marker          -> CRAFT_DESK
+  build a stable                  -> CRAFT_DESK   (how it was found)
+  build a track                   -> CRAFT_SHELF  (a laid track is a real staged structure here)
+  ```
+
+  **To find the next one:** extract every short `contains("…")` literal from the classifier and ask what English
+  word contains it. Of 644 literals, 22 were substrings of common words; replaying realistic sentences for all 22
+  found **no further collisions**, so the table/rack pair were unusual — but the audit is two minutes and the
+  defect is invisible without it.
+- **ASKING ABOUT A THING IS NOT MAKING IT — found FOUR times now, and it is the most expensive face there is**,
+  because the wrong answer *leaves something behind*:
+
+  | the question | what it did |
+  |---|---|
+  | `is the lean-to still good` | **built a hut** nobody asked for |
+  | `is the snare still set` | attempted to **build a trap** |
+  | `take up the snare` | **worked** the snare, when the player asked to remove it |
+  | `is my waterskin full` | offered to **make a waterskin** |
+
+  A missing answer costs a turn. These cost a turn *and* put a structure on the ground, or spend materials. The
+  cause is always the same: a question carries the NOUN of the thing it is about, and whatever owns that noun —
+  a Java build intent, or the process matcher — runs before anything that could recognise a question. **The fix
+  is to give the question its own branch, first, and send it to the reading that answers it.**
 
 ---
 
@@ -96,9 +129,40 @@ Every defect this project has found is the same defect: **the world knows someth
    as a player meets it.
 4. **`tests/regression/*.sql` (65 replays) and the routing probe** — run them against the throwaway DB *before*
    pushing, not after a 50-minute CI round.
+4a. **A new integration test's SQL, against a real schema — and `PREPARE` IS NOT ENOUGH FOR A WRITE.** `PREPARE
+   x AS <stmt with $1…>` proves a statement **parses** and that its columns exist. It proves nothing whatever
+   about whether a row will be **accepted**: a `CHECK` on the values, a trigger, a foreign key and a NOT NULL
+   default are none of them consulted until the statement runs. Every query of one new test was `PREPARE`d and
+   passed; CI then failed four of its five cases on `CHECK (baseline_abundance BETWEEN 1 AND 1000)` because the
+   fixture wrote `0`. **So execute the writes for real, inside a transaction you roll back:**
+
+   ```sql
+   BEGIN;
+     -- the fixture's inserts, with the actual values
+     -- the query under test, so you SEE the row you just wrote being found
+     -- the @AfterEach deletes, which can be refused too (object_transition is immutable by trigger)
+   ROLLBACK;
+   ```
+
+   And **copy constants from what the real thing writes** — genesis writes `baseline_abundance = 1000` for a
+   ruin, and reading one real row would have settled it before the constraint ever came up. A fixture should
+   look like the thing it stands in for. The same applies to a test's own **stub**: a stub more forgiving than
+   the world reports coverage that does not exist (a fake pack listing "boots" made a test pass on a phrasing
+   that fails in play, because the game has shoes).
 5. **All FOUR CI checks** — Backend/PostgreSQL (~65 min, serialised), Routing reachability, Frontend build,
    Journeys. **Every conclusion must read pass.** Nine PRs were once merged through a red one because the merge
    step grepped only the backend suite's name.
+
+   **Read the gate by NAME, and never trust an empty result on its own.** `gh pr checks <n> | awk -F'\t'
+   '$2!="pass"{print}'` printing nothing means "clear" only if `gh` actually ran — a wrong working directory
+   gives `fatal: not a git repository`, an empty blocker list, and a false all-clear. Check the exit status or
+   count the rows.
+
+   **And `--delete-branch` on a squash-merge CLOSES every PR stacked on that branch.** GitHub closes a PR whose
+   base branch is deleted, and a closed PR cannot be retargeted (`Cannot change the base branch of a closed pull
+   request`); the commits survive but the PR, its body and its review history must be reopened under a new
+   number. With a stack: **retarget the child to `development` before merging the parent**, or merge the parent
+   without `--delete-branch` and clean up afterwards.
 
 ---
 
