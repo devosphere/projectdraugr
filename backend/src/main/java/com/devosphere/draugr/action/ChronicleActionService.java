@@ -565,6 +565,7 @@ public class ChronicleActionService {
         else if (intent == Intent.READ_THE_SKY) perception = skyReading(chronicle.location(), resolvedAt);
         else if (intent == Intent.WHICH_WAY) perception = whichWay(chronicle.location(), text, resolvedAt);
         else if (intent == Intent.CHECK_FIRE) perception = fire.fireReading(chronicle.id(), chronicle.location(), resolvedAt, darkHoursLeft(resolvedAt));
+        else if (intent == Intent.CHECK_CROP) { String[] r = items.cropStanding(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.CHECK_STANDING) {
             // Null when no people are in reach, so the honest answer is that there is nobody to stand with.
             String how = conduct == null ? null : conduct.standingReading(chronicle.id(), chronicle.location(), resolvedAt);
@@ -1975,6 +1976,10 @@ public class ChronicleActionService {
         // that still reached nothing — `store the hay` worked and `put the hay by` did not. Matched on the
         // sentence ENDING in "by", which is what distinguishes it from placing something beside something else:
         // "put the pot by the fire" carries on past the preposition and means nowhere near this.
+        // Keeping seed back for next year IS putting grain by (#37): sowing consumes the grain a Chronicle
+        // carries, so seed held for a season is grain in a store and nothing else. Both reached nothing.
+        if((value.contains("save")||value.contains("keep")||value.contains("hold back"))
+           &&value.contains("seed")&&!value.contains("sow")&&!value.contains("plant")) return Intent.STORE;
         if((value.contains("put")&&value.contains("away"))||value.contains("cache")||value.contains("stockpile")||value.contains("put in storage")||value.contains("stow away")||value.contains("stash away")
            ||(value.contains("put")&&value.strip().endsWith(" by"))) return Intent.STORE;
         // "store the food" with no container named (#37). The rules above want a container noun or the words
@@ -2388,8 +2393,33 @@ public class ChronicleActionService {
             ||value.contains("shoo")||value.contains("frighten")||(value.contains("keep")&&value.contains(" off")))
            &&(value.contains("bird")||value.contains("crow")||value.contains("rook")||value.contains("sparrow")||value.contains("starling")||value.contains("pigeon"))
            &&((value.contains("crop")||value.contains("field")||value.contains("seedling")||value.contains("seedbed")||value.contains("the plot")||value.contains("my plot")||value.contains("the rows")||value.contains("the row")||value.contains("the grain")||value.contains("my grain")||value.contains("barley")||value.contains("emmer")||value.contains("wheat")||value.contains("the stand"))||value.contains("harvest")||value.contains("the heads"))) return Intent.SCARE_BIRDS;
+        if(value.contains("pull the weeds")||value.contains("pull up the weeds")||value.contains("hoe between")
+           ||value.contains("thin the seedling")||value.contains("thin out the")||value.contains("mulch the")) return Intent.WEED_CROP;
         if((word(value,"weed")||value.contains("tend")||value.contains("hoe the row")||value.contains("hoe the crop"))&&(value.contains("crop")||value.contains("field")||value.contains("stand")||value.contains("grain")||value.contains("seedbed")||value.contains("row")||value.contains("plot"))) return Intent.WEED_CROP;
-        if((word(value,"till")||value.contains("plough")||value.contains("plow")||((value.contains("break")||value.contains("turn")||value.contains("work")||value.contains("prepare")||value.contains("hoe"))&&(value.contains("ground")||value.contains("soil")||value.contains("seedbed")||value.contains("seed bed")||word(value,"earth")||value.contains("field"))&&!value.contains("earth sheltered")&&!value.contains("earth-sheltered"))) &&!value.contains("insect")&&!value.contains("grub")&&!value.contains("worm")&&!value.contains("bait")) return Intent.TILL_GROUND;
+        // TILLAGE, in pieces (#37). The condition had grown to one line of five nested groups, and threading a new
+        // clause into it displaced the `earth sheltered` exclusion so that "work on the earth sheltered hut" became
+        // breaking ground — which the routing regression caught at once, and which no reader would have. The same
+        // lesson the repair rule taught an hour earlier: a condition this long is got right in pieces.
+        boolean breakingGround = value.contains("break")||value.contains("turn")||value.contains("work")
+            ||value.contains("prepare")||value.contains("hoe");
+        boolean someGroundToBreak = value.contains("ground")||value.contains("soil")||value.contains("seedbed")
+            ||value.contains("seed bed")||word(value,"earth")||value.contains("field")
+            // The plot and the bed are what a person calls the ground they are breaking: "hoe the plot" and
+            // "dig the bed over" reached nothing while "hoe the ground" worked.
+            ||value.contains("the plot")||value.contains("the bed");
+        // "dig the bed over" and "make a seedbed". "dig" is kept out of the GATHERING verbs because "dig a root
+        // cellar" names a real root — but beside a bed or a plot it is plainly tillage, and so is making one.
+        boolean diggingABed = (value.contains("dig")||value.contains("make"))
+            &&(value.contains("seedbed")||value.contains("seed bed")||value.contains("the bed over")
+               ||value.contains("over the bed")||value.contains("the plot over"))
+            &&!namesAnAssembly(value);
+        boolean notAnEarthHouse = !value.contains("earth sheltered")&&!value.contains("earth-sheltered");
+        // Insects, grubs and worms are a grub hunt, not a seedbed — the ground and the verb are tillage's, the
+        // object is not (#37, V401).
+        boolean notAGrubHunt = !value.contains("insect")&&!value.contains("grub")&&!value.contains("worm")&&!value.contains("bait");
+        if((word(value,"till")||value.contains("plough")||value.contains("plow")
+            ||(breakingGround&&someGroundToBreak)||diggingABed)
+           &&notAnEarthHouse&&notAGrubHunt) return Intent.TILL_GROUND;
         // Sow a grain crop (#162 agriculture) — before PLANT_TREE, which also claims "sow"+"seed": a crop needs
         // grain/cereal/field context, so tree-planting ("sow an acorn", "plant a sapling") still falls through to it.
         if((word(value,"sow")||value.contains("broadcast")||value.contains("plant"))&&(value.contains("grain")||value.contains("crop")||value.contains("cereal")||value.contains("wheat")||value.contains("barley")||value.contains("emmer")||value.contains("the field"))) return Intent.SOW;
@@ -2404,7 +2434,12 @@ public class ChronicleActionService {
         // ground is not reaping a stand you sowed, and taking that phrase would have broken foraging to fix
         // farming. When a second crop exists this wants reading the ground rather than a literal, the way #79
         // replaced the kept-animal list with the catalogue.
-        if(word(value,"reap")||((value.contains("harvest")||value.contains("bring in"))&&(value.contains("crop")||value.contains("the field")||value.contains("the grain")||value.contains("my grain")||value.contains("the harvest")))) return Intent.HARVEST_CROP;
+        if(word(value,"reap")||((value.contains("harvest")||value.contains("bring in")||value.contains("cut ")||value.contains("get in"))
+           // ...and by the NAME of what is standing there (#37). "harvest the barley" reached nothing while
+           // "reap the grain" worked, because the rule knew "the grain" and not the grain's own name.
+           &&(value.contains("crop")||value.contains("the field")||value.contains("the grain")||value.contains("my grain")||value.contains("the harvest")
+              ||value.contains("barley")||value.contains("emmer")||value.contains("wheat")||value.contains("the ears")||value.contains("the stand")))
+           ||value.contains("gather the ears")||value.contains("bring in the harvest")) return Intent.HARVEST_CROP;
         // The verbs a gather is actually asked for with (#37). Each family had grown its own three or four, so
         // "gather reeds" worked and "cut reeds" — the verb you hold a blade to do — reached nothing, and "pick
         // stones" reached nothing while "pick mushrooms" worked. One clause for all of them, or they drift again.
@@ -2420,6 +2455,36 @@ public class ChronicleActionService {
         // tree", which contains neither. plantTree grows oak from an acorn and pine from a pine nut and nothing
         // else, and its refusal says so -- which is a far better answer to a Chronicle asking for an apple tree
         // than prose about failing to make something, because it names what CAN be put in the ground.
+        // HOW THE CROP STANDS (#37/#164/#165/#166). Seven things decide what a harvest gives — a tilled seedbed,
+        // the soil's fertility, whether animals grazed it, whether it was weeded, whether dry ground was watered,
+        // what is working the flowers, and how long past ripe it stood — and harvestCrop weighs every one of them
+        // while a player could learn NONE of them until the grain was in. The information arrived exactly one
+        // moment after it could have been used, which is the "world knew and would not say" defect at its most
+        // expensive. `how is the crop`, `is the barley ready`, `when can I harvest`, `is the soil any good`,
+        // `is the plot worn out` and `is anything growing` all reached nothing.
+        //
+        // It also takes the fallow questions, because the ground mending itself IS the answer to them: fertility
+        // climbs with every day nothing is taken off, faster on a floodplain, faster again beside a manure pit.
+        // And "how long until harvest" off MEASURE, which answered "you pace it out and reckon by eye" and gave
+        // no figure, while crop_stand holds the sowing date and the maturity in days.
+        if(value.contains("how is the crop")||value.contains("how is the field")||value.contains("how is the plot")
+           ||value.contains("how is the ground")||value.contains("how does the crop")
+           ||value.contains("is anything growing")||value.contains("what did i sow")||value.contains("what is sown")
+           ||value.contains("is the soil")||value.contains("how is the soil")||value.contains("plot worn")
+           ||value.contains("soil worn")||value.contains("ground worn")||value.contains("grow anything")
+           ||value.contains("until harvest")||value.contains("when can i harvest")||value.contains("when is it ripe")
+           ||((value.contains("ready")||value.contains("ripe"))&&(value.contains("crop")||value.contains("barley")
+              ||value.contains("emmer")||value.contains("grain")||value.contains("wheat")||value.contains("the stand")))
+           ||value.contains("let the ground rest")||value.contains("let it rest")||value.contains("leave it fallow")
+           ||value.contains("lie fallow")||value.contains("leave the ground")||value.contains("manure the")
+           ||value.contains("spread muck")||value.contains("dung the")) return Intent.CHECK_CROP;
+        // A seed is a crop seed or a tree seed and the word is the same (#37). PLANT_TREE claims the bare "seed"
+        // and answered "gather acorns under an oak, or pine nuts from the cones" to a keeper holding a handful of
+        // grain. No wording settles it; what they are CARRYING does — the same move the taming gate makes.
+        if((value.contains("plant")||value.contains("sow")||value.contains("put in")||value.contains("put the seed")||value.contains("put some seed"))&&value.contains("seed")
+           &&!value.contains("acorn")&&!value.contains("pine")&&!value.contains("sapling")&&!word(value,"tree")
+           &&!value.contains("oak")&&!value.contains("birch")&&!value.contains("willow")
+           &&items.carriesFieldSeed()) return Intent.SOW;
         if((value.contains("plant")||value.contains("sow")||value.contains("replant"))&&(value.contains("acorn")||value.contains("pine nut")||value.contains("pine_nut")||value.contains("seed")||value.contains("sapling")||value.contains("seedling")||value.contains("a tree")||word(value,"tree")||value.contains("an oak")||value.contains("a pine")||value.contains("some trees")||value.contains("trees"))) return Intent.PLANT_TREE;
         if((gatherVerb||value.contains("reap"))&&(value.contains("mushroom")||value.contains("fungi")||value.contains("herb")||value.contains("plant")||value.contains("berries")||value.contains("flower")||value.contains("leaf")||value.contains("root")||value.contains("nettle")||value.contains("yarrow")||value.contains("comfrey")||value.contains("mint")||value.contains("dandelion")||value.contains("garlic")||value.contains("burdock")||value.contains("watercress")||value.contains("cattail")||value.contains("reed")||value.contains("bulrush")||items.namesSomethingThatGrows(value)||value.contains("chanterelle")||value.contains("porcini")||value.contains("oyster")||value.contains("polypore")||value.contains("lion")||value.contains("hazel rod")||value.contains("hazel")&&value.contains("rod")||value.contains("willow")&&value.contains("branch")||value.contains("pine resin")||value.contains("maple sap")||value.contains("rose hip")||value.contains("elderberry")||value.contains("hawthorn")||value.contains("juniper berry")||value.contains("vine")||value.contains("sapling")||value.contains("straw")||value.contains("young tree")||value.contains("meadow grass")||value.contains("milkweed")||value.contains("flax")||value.contains("hemp")||value.contains("acorn")||value.contains("hazelnut")||value.contains("walnut")||value.contains("chestnut")||value.contains("pine nut")||value.contains("wild onion")||value.contains("wild grain")||value.contains("grain head")||value.contains("rhizome")||value.contains("chamomile")||value.contains("pine needle")||value.contains("wild rice")||value.contains("morel")||value.contains("crab apple")||value.contains("sloe")||value.contains("bilberry")||value.contains("bramble")||value.contains("fatwood")||value.contains("big leaf")||value.contains("broad leaf")||value.contains("dry grass")||value.contains("flexible root")||value.contains("bast"))&&!value.contains("fiber")&&!value.contains("bark")) return Intent.GATHER_PLANT;
         if(value.contains("clay")&&(gatherVerb||value.contains("dig")||value.contains("find")||value.contains("get")||value.contains("scoop"))) return Intent.GATHER_CLAY;
@@ -3517,7 +3582,7 @@ public class ChronicleActionService {
         return refuse != null && refuse >= 25;
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;}
         /** The cardinal for a grid offset, for when the WORLD names the direction rather than the player (#37). */
         static Direction of(int dx,int dy){ for(Direction d:values()) if(d.dx==dx&&d.dy==dy) return d; return null; } }    /**     * The structured perception frame — the seam every future Simulation Agent reads
