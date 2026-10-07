@@ -2953,6 +2953,149 @@ public class PhysicalItemService {
      * several for the one seed sown — which thresh to grain and grind to flour by the chain that already exists, so the
      * cultivated grain is functional end-to-end. A green stand is refused: reaping it early only wastes the crop.
      */
+    /**
+     * How the crop stands (#37/#164/#165/#166).
+     *
+     * <p><b>Seven things decide what a harvest gives, and a player could not learn one of them until the grain
+     * was in.</b> {@link #harvestCrop} weighs all of these, every one of them simulated and every one of them
+     * invisible:
+     *
+     * <ul>
+     *   <li>a <b>tilled</b> seedbed gives a fuller base stand — six heads against four;</li>
+     *   <li><b>worn soil</b> below {@link #FERTILITY_LOW_THRESHOLD} takes two off, won back only by fallow rest;</li>
+     *   <li>a stand the animals <b>grazed</b> loses two, and a fence would have kept it whole;</li>
+     *   <li><b>weeding</b> it even once adds one, for freeing the grain from what competes with it;</li>
+     *   <li><b>dry ground never watered</b> loses two, and the penalty lifts for a stand that was watered;</li>
+     *   <li><b>pollinators</b> add one or two, which is the whole reason to keep bees beside a plot;</li>
+     *   <li>and left past its clean window the ripe heads <b>shatter</b> and halve the yield — which keeping the
+     *       birds off buys time against, but does not buy back.</li>
+     * </ul>
+     *
+     * <p>Every one of those is something the keeper can still act on while the crop stands. A model this careful
+     * that says nothing until the reaping is the "world knew and would not say" defect at its most expensive:
+     * the information arrives exactly one moment after it could have been used.
+     *
+     * <p>Read-only. It reports what the reaping will weigh, by the same thresholds the reaping weighs it by.
+     */
+    @Transactional(readOnly = true)
+    public String[] cropStanding(UUID chronicle, UUID location, Instant at) {
+        java.util.Map<String,Object> crop = jdbc.query(
+            "SELECT crop_key, sown_at, maturity_days, tilled, grazed, (weeded_at IS NOT NULL) AS weeded, " +
+            "       (watered_at IS NOT NULL) AS watered, birds_scared_at " +
+            "FROM crop_stand WHERE chunk_id=? AND harvested=false ORDER BY sown_at LIMIT 1",
+            rs -> {
+                if (!rs.next()) return null;
+                java.util.Map<String,Object> row = new java.util.HashMap<>();
+                row.put("crop", rs.getString(1));
+                row.put("sown", rs.getTimestamp(2).toInstant());
+                row.put("days", rs.getInt(3));
+                row.put("tilled", rs.getBoolean(4));
+                row.put("grazed", rs.getBoolean(5));
+                row.put("weeded", rs.getBoolean(6));
+                row.put("watered", rs.getBoolean(7));
+                row.put("scared", rs.getTimestamp(8) == null ? null : rs.getTimestamp(8).toInstant());
+                return row;
+            }, location);
+
+        int fertility = fieldFertility(location, at);
+        // HOW THE GROUND MENDS ITSELF, which was as invisible as the rest. Fertility climbs with every fallow day,
+        // faster on a floodplain where the flood lays down silt, and faster again where a manure pit or compost bay
+        // stands — read from construction_kind.fertilises_field, so a keeper is told about the thing they built
+        // rather than about a rule. "Let the ground rest" and "manure the ground" are answered by this.
+        boolean dunged = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "JOIN construction_kind ck ON ck.project_kind=cp.project_kind AND ck.fertilises_field > 0 " +
+            "WHERE w.current_location_id=? AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
+            "  AND w.lifecycle_state='ACTIVE')", Boolean.class, location));
+        boolean renewsItself = floodplainAt(location);
+        String mends = dunged
+            ? "A heap stands here putting back what the cropping takes, and the ground mends faster for it."
+            : renewsItself
+              ? "This is ground the flood silts over, so it mends itself faster than most without anybody's help."
+              : "It mends by being left alone — every day nothing is taken off it — and faster still beside a "
+                + "manure pit or a compost bay.";
+        String soil = (fertility < FERTILITY_LOW_THRESHOLD
+            ? "The soil here is worn: cropped without rest, and it will give a thinner stand until it has had some. "
+            : "The soil here still has heart in it. ") + mends;
+
+        if (crop == null)
+            return new String[]{"SUCCEEDED", "Nothing is sown on this ground. " + soil};
+
+        String what = ((String) crop.get("crop")).replace('_', ' ');
+        Instant ripe = ((Instant) crop.get("sown")).plus(java.time.Duration.ofDays((int) crop.get("days")));
+        long daysOff = java.time.Duration.between(at, ripe).toDays();
+        StringBuilder b = new StringBuilder();
+        b.append("A stand of ").append(what).append(" is in the ground here");
+
+        if (daysOff > 0) {
+            b.append(", green yet — ").append(daysOff).append(daysOff == 1 ? " day" : " days")
+             .append(" off ripe by the look of it. ");
+        } else {
+            long late = -daysOff;
+            Instant scared = (Instant) crop.get("scared");
+            boolean kept = scared != null && !scared.isBefore(ripe)
+                && java.time.Duration.between(scared, at).toDays() <= BIRDS_STAY_OFF_DAYS;
+            long window = CROP_FULL_YIELD_DAYS + (kept ? BIRDS_STAY_OFF_DAYS : 0);
+            b.append(late > window
+                ? ", and you have left it too long: the ripe heads are shattering onto the ground and the birds "
+                  + "have been at them. Reap what is left, and reap it now. "
+                : ", ripe and standing. " + (window - late <= 3
+                    ? "It will not stand many more days before the heads begin to shatter. "
+                    : "There is time to get it in cleanly — about " + (window - late) + " days of it. "));
+        }
+
+        // What it has had, and what is against it — each named with what it is worth, because a keeper told their
+        // stand is thinner and not told why has been given a fact and no use for it.
+        java.util.List<String> going = new java.util.ArrayList<>();
+        java.util.List<String> against = new java.util.ArrayList<>();
+        if ((boolean) crop.get("tilled")) going.add("it went into broken ground, which carries it fuller");
+        else against.add("it was sown on unbroken ground, which costs it from the start");
+        if ((boolean) crop.get("weeded")) going.add("it has been worked clean at least once");
+        else against.add("nothing has been weeded out of it, and the weeds are taking their share");
+        if ((boolean) crop.get("grazed")) against.add("animals have been through it, and a fence would have kept it whole");
+        if (fertility < FERTILITY_LOW_THRESHOLD) against.add("the soil under it is worn");
+
+        Integer moisture = jdbc.queryForObject("SELECT COALESCE(moisture, 500) FROM world_chunk WHERE id=?", Integer.class, location);
+        boolean dry = moisture != null && moisture < GROUND_DRY_ENOUGH_TO_WANT_WATERING;
+        if (dry && !(boolean) crop.get("watered")) against.add("this ground is dry and the stand has had no water carried to it");
+        else if (dry) going.add("it has been watered, which dry ground wants");
+
+        int pollination = pollinationBonusAt(location, at);
+        if (pollination >= 20) going.add("there is plenty working the flowers — bees and worms both, and the stand is the better for it");
+        else if (pollination >= 10) going.add("there is some small life working the flowers");
+        else against.add("nothing much is working the flowers; a hive kept beside a plot fills it out");
+
+        if (!going.isEmpty()) b.append("In its favour: ").append(joinAnd(going)).append(". ");
+        if (!against.isEmpty()) b.append("Against it: ").append(joinAnd(against)).append(". ");
+        // Only how the ground MENDS, not the verdict on it — "the soil under it is worn" is already in the list
+        // against the stand, and saying it twice in one answer reads as a report that has lost track of itself.
+        return new String[]{"SUCCEEDED", b.append(mends).toString().trim()};
+    }
+
+    /**
+     * Whether the Chronicle carries seed that goes in a FIELD rather than seed that grows a tree (#37).
+     *
+     * <p>"plant the seed" was answered <i>"you have no seed to plant — gather acorns under an oak, or pine nuts
+     * from the cones"</i> to a keeper holding a handful of grain, because PLANT_TREE claims the bare word "seed"
+     * and a crop seed and a tree seed are the same word. No wording settles it; what the keeper is carrying does.
+     *
+     * <p>Asked of {@code crop_stand}'s own sowable item, so a second grain added to the catalogue is covered.
+     * No Chronicle id: one lives at a time, as {@code one_living_chronicle} enforces, and the classifier that
+     * needs this has none to pass.
+     */
+    @Transactional(readOnly = true)
+    public boolean carriesFieldSeed() {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "WITH RECURSIVE reach(id) AS (" +
+            "  SELECT w.id FROM world_object w JOIN chronicle c ON c.id = w.current_owner_id " +
+            "   WHERE c.life_state='LIVING' AND w.lifecycle_state='ACTIVE' " +
+            "  UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reach r ON r.id=ic.container_id " +
+            "    JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') " +
+            "SELECT EXISTS(SELECT 1 FROM reach x JOIN item_instance i ON i.object_id=x.id " +
+            "               WHERE i.item_key IN ('wild_grain_head','barley_grain','emmer_grain','seed_grain'))",
+            Boolean.class));
+    }
+
     @Transactional
     public String[] harvestCrop(UUID chronicle, UUID location, Instant at) {
         java.util.Map<String,Object> crop = jdbc.query(
