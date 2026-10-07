@@ -2173,6 +2173,31 @@ public class ChronicleActionService {
         // deciding signal is whether the chronicle is LEAVING something behind. A
         // setting/building verb means a persistent placed trap (V46); a bare
         // "snare a rabbit" is the immediate hand-worked attempt (V42).
+        // BUTCHERING, by the words somebody kneeling over a carcass uses (#37). `butcher the deer` and `take the
+        // hide` worked; `skin it` reached the material matcher, which offered to SKIN A FISH, and `gut it`,
+        // `break it down` and `carry the carcass` reached nothing. The fish has its own process and keeps it —
+        // the exclusion is by name, because "skin the fish" is a real recipe and "skin it" over a carcass is not.
+        if((value.contains("skin it")||value.contains("skin the")||value.contains("gut it")||value.contains("gut the")
+            ||value.contains("break it down")||value.contains("break down the")||value.contains("dress out")
+            ||value.contains("carry the carcass")||value.contains("drag the carcass")||value.contains("leave the offal"))
+           &&!value.contains("fish")&&!MAKING_SOMETHING.matcher(value).find()
+           &&!value.contains("hide boots")&&!value.contains("skin bag")) return Intent.HARVEST_CARCASS;
+        // And ASKING what is on it is a look, not a taking: "what can I get off this" and "how much meat is on
+        // it" were answered by neither. Examining a thing is the rule that exists for exactly this.
+        if((value.contains("what can i get off")||value.contains("what will it give")||value.contains("how much meat")
+            ||value.contains("what is on it")||value.contains("what is left on"))
+           &&!value.contains("cook")&&!value.contains("eat")) return Intent.EXAMINE;
+        // ASKING ABOUT A TRAP IS NOT SETTING ONE, and TAKING ONE UP is not building it (#37). The same family as
+        // the lean-to question that built a hut: `is the snare still set` and `where should I set a snare` were
+        // both answered by an ATTEMPT to build one, and `take up the snare` — which is removing it — reached the
+        // hand-worked snaring instead. A question goes to the check, which walks the ground and reports what of
+        // yours is standing on it, and that is exactly what all three of these want to know.
+        if((value.startsWith("is ")||value.startsWith("where ")||value.startsWith("has ")||value.startsWith("are ")
+            ||value.contains("still set")||value.contains("still standing")||value.contains("anything in")
+            ||value.contains("take up")||value.contains("take in")||value.contains("pick up the snare")
+            ||value.contains("lift the snare")||value.contains("pull up the snare"))
+           &&(value.contains("snare")||value.contains("trap")||value.contains("deadfall"))
+           &&!value.contains("bait")) return Intent.CHECK_TRAP;
         if((value.contains("build")||value.contains("set")||value.contains("make")||value.contains("place")||value.contains("construct")||value.contains("lay"))&&(value.contains("deadfall")||value.contains("pit trap")||value.contains("fish trap")||value.contains("cage trap")||value.contains("box trap")||value.contains("snare")||(value.contains("trap")&&!value.contains("check")))) return Intent.SET_TRAP;
         if(value.contains("lure")||value.contains("bait the")||((value.contains("leave")||value.contains("put")||value.contains("place")||value.contains("set"))&&(value.contains("bait")||value.contains("draw them")||value.contains("draw it")))) return Intent.LURE;
         // Taming by offering food, and the one case where the same words are not taming at all (#106). A keeper
