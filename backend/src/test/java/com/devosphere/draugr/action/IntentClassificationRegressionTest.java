@@ -1662,6 +1662,83 @@ class IntentClassificationRegressionTest {
      * waterskin was not a container, and `empty the waterskin` reached nothing while the same sentence about a
      * basket worked.
      */
+    /**
+     * One phrase, three subjects, and a precedence fault that gave the wrong one (#37).
+     *
+     * <p>The camp stocktake was written as
+     *
+     * <pre>
+     *   if( GROUP_A || GROUP_B &amp;&amp; !animal &amp;&amp; !beast &amp;&amp; !herd &amp;&amp; !flock &amp;&amp; !namesAKeptAnimal )
+     * </pre>
+     *
+     * and <b>{@code &&} binds tighter than {@code ||}</b>, so every one of those exclusions applied to GROUP_B
+     * alone. They were written for the whole rule. The half they never reached is the stocktaking half:
+     *
+     * <pre>
+     *   take stock of the animals  ->  TAKE_STOCK_OF_CAMP, an account of your lean-to
+     *   take stock of the herd     ->  the same
+     *   is the animal sound        ->  correctly declined — which is what proved the split
+     * </pre>
+     *
+     * <p>A keeper asking after their animals was told about their shelter, by a guard that was already there and
+     * silently governed only one branch. The rule is named locals now, which is how the two earlier paren faults
+     * in this method were settled. Fixing it left the sentence reaching nothing, so the herd reading was given
+     * the phrase as well — demanding a <b>real</b> animal word, because the subject gate counts the bare word
+     * "stock", which every one of these sentences contains whether it means the camp or the herd.
+     */
+    @Test void takingStockOfWhat() throws Exception {
+        assertEquals("CHECK_STOCK", classify("take stock of the animals"));
+        assertEquals("CHECK_STOCK", classify("take stock of the herd"));
+        assertEquals("CHECK_STOCK", classify("take stock of the flock"));
+        assertEquals("CHECK_STOCK", classify("taking stock of the animals"));
+        assertEquals("CHECK_STOCK", classify("take stock of the goats"));
+        assertEquals("SENSE_BODY", classify("take stock of myself"));
+        // The two that must keep working, and the one whose correct refusal exposed the fault.
+        assertEquals("TAKE_STOCK_OF_CAMP", classify("take stock of the camp"), "which always worked");
+        assertEquals("TAKE_STOCK_OF_CAMP", classify("is the shelter sound"), "and so did this");
+        assertEquals("UNKNOWN", classify("is the animal sound"), "the exclusion that did reach its branch");
+    }
+
+    /**
+     * The body, asked after in the words a person uses (#37).
+     *
+     * <p>Swept 41 sentences: how you are, the wound, cold and wet, rest and illness. The body chain was in far
+     * better shape than the water chain — WARM/DRY/COOL/SHELTER_BODY and most of TREAT_WOUND already worked — and
+     * 12 still reached nothing or the wrong thing.
+     *
+     * <p>The gaps all had the same shape: <b>a literal phrasing was in and its obvious twin was not.</b>
+     * "how tired" was in and "am I tired" was not; "am I cold" was in and "am I hungry" was not; "staunch" was in
+     * and "stop the bleeding" was not. <b>hours_without_food</b> drives starvation exactly as
+     * <b>hours_without_water</b> drives thirst, and fixing thirst without hunger would have been the same defect
+     * with a different column.
+     */
+    @Test void theBodyAnsweredInPlainWords() throws Exception {
+        // Hunger and thirst, the two columns that kill a Chronicle.
+        assertEquals("SENSE_BODY", classify("am i hungry"));
+        assertEquals("SENSE_BODY", classify("how hungry am i"));
+        assertEquals("SENSE_BODY", classify("am i thirsty"));
+        // Tiredness, shivering, sickness, and the general question.
+        assertEquals("SENSE_BODY", classify("am i tired"));
+        assertEquals("SENSE_BODY", classify("i am shivering"));
+        assertEquals("SENSE_BODY", classify("i feel sick"));
+        assertEquals("SENSE_BODY", classify("what is wrong with me"));
+        // The wound AS A QUESTION rather than as work — asking is not dressing, the same shape as the lean-to.
+        assertEquals("SENSE_BODY", classify("check the wound"));
+        assertEquals("SENSE_BODY", classify("is the wound healing"));
+        // ...and the wound as work, which must stay work.
+        assertEquals("TREAT_WOUND", classify("bind the wound"), "which always worked");
+        assertEquals("TREAT_WOUND", classify("stop the bleeding"));
+        assertEquals("TREAT_WOUND", classify("put a poultice on it"));
+        assertEquals("TREAT_WOUND", classify("bandage my arm"));
+        // The neighbours, unchanged.
+        assertEquals("WARM_BODY", classify("warm myself"));
+        assertEquals("DRY_BODY", classify("dry off"));
+        assertEquals("SHELTER_BODY", classify("get out of the wind"));
+        assertEquals("REST", classify("rest"));
+        // A poultice ON A BEAST is husbandry, and the noun is the whole of the difference.
+        assertEquals("TEND_ANIMAL", classify("put a poultice on the ewe"));
+    }
+
     @Test void theWaterChain() throws Exception {
         // I. Judging it. The question forms worked; the verb the intent is NAMED for did not.
         assertEquals("JUDGE_WATER", classify("is this water safe"), "which always worked");

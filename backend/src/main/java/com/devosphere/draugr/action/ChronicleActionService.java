@@ -2419,7 +2419,18 @@ public class ChronicleActionService {
             // is no restrained state in this world and an invented one would change nothing and claim it had.
             ||value.contains("tether")||value.contains("hobble")||value.contains("halter")||value.contains("tie up")
             ||value.contains("restrain")||value.contains("lead the")||value.contains("catch the")||value.contains("hold the")
-            ||value.contains("shut the")||value.contains("shut in")||value.contains("keep hold of"))
+            ||value.contains("shut the")||value.contains("shut in")||value.contains("keep hold of")
+            // TAKING STOCK OF THE STOCK (#37). The camp stocktake owned the phrase and, through a precedence
+            // fault, owned it without its animal exclusions — so "take stock of the animals" answered with an
+            // account of the lean-to. Fixing that made the sentence reach nothing, which is better and still not
+            // right: this is the reading that walks the herd.
+            //
+            // It demands a REAL animal word and not the subject gate below, because that gate counts the bare
+            // word "stock" — which every one of these sentences contains, camp or herd. "take stock of the camp"
+            // must keep falling through, and does.
+            ||((value.contains("take stock")||value.contains("taking stock")||value.contains("stocktake"))
+               &&(value.contains("animal")||value.contains("beast")||value.contains("the herd")
+                  ||value.contains("the flock")||value.contains("livestock")||items.namesAKeptAnimal(value))))
            &&namesABeast(value)
            // The acts keep their own verbs. Asking after a beast is not tending, grooming, feeding or milking one.
            &&!value.contains("tend")&&!value.contains("treat")&&!value.contains("groom")&&!value.contains("curry")
@@ -2779,21 +2790,43 @@ public class ChronicleActionService {
         // claims the camp with a tidying verb — taking stock is not tidying, and must not be answered by sweeping.
         // "stock" is also the word for animals, so this needs the stocktaking PHRASE rather than the bare noun:
         // "water the stock" and "feed the stock" are somebody else's rule and stay that way.
-        if((value.contains("take stock")||value.contains("taking stock")||value.contains("stocktake")
+        // IN PIECES, AND THE REASON IS A BUG THIS RULE WAS CARRYING (#37). It was written as
+        //
+        //     if( GROUP_A || GROUP_B && !animal && !beast && !herd && !flock && !namesAKeptAnimal )
+        //
+        // and in Java `&&` binds tighter than `||`, so every one of those exclusions applied to GROUP_B ALONE.
+        // They were written for the whole rule. The half they never reached is the stocktaking half, so:
+        //
+        //   take stock of the animals  ->  TAKE_STOCK_OF_CAMP, an account of your lean-to
+        //   take stock of the herd     ->  the same
+        //   take stock of the goats    ->  the same
+        //   is the animal sound        ->  correctly declined, which is what proved the split
+        //
+        // A keeper asking after their animals was told about their shelter, by a guard that was already there and
+        // silently governed only one branch. This is the third precedence-or-paren fault found in this method, so
+        // it goes the way the other two did: named locals, one claim each, and the exclusions applied once to the
+        // whole of it where they cannot be read two ways.
+        boolean takingStockOfTheCamp = value.contains("take stock")||value.contains("taking stock")||value.contains("stocktake")
             ||value.contains("what have i built")||value.contains("what have i made here")
             ||value.contains("what stands here")||value.contains("what is standing here")
             ||((value.contains("look over")||value.contains("go round")||value.contains("account for")||value.contains("survey"))
-               &&(value.contains("camp")||value.contains("what i have built")||value.contains("my work"))))
-            // ...and asking whether what you built is still sound (#37), which is the same walk round the same
-            // ground reading the same integrity_percent. "is the shelter sound" and "how is the shelter" reached
-            // nothing, and "is the lean-to still good" was answered by STARTING TO BUILD ANOTHER ONE.
-            ||((value.contains("sound")||value.contains("still good")||value.contains("still standing")
-                ||value.contains("still hold")||value.contains("in good repair")||value.contains("how is"))
-               &&(value.contains("shelter")||value.contains("lean-to")||value.contains("lean to")
-                  ||value.contains("the hut")||value.contains("the roof")||value.contains("what i built")
-                  ||value.contains("the pen")||value.contains("the fence")||value.contains("the rack")))
-           &&!value.contains("animal")&&!value.contains("beast")&&!value.contains("the herd")&&!value.contains("the flock")
-           &&!items.namesAKeptAnimal(value)) return Intent.TAKE_STOCK_OF_CAMP;
+               &&(value.contains("camp")||value.contains("what i have built")||value.contains("my work")));
+        // ...and asking whether what you built is still sound (#37), which is the same walk round the same
+        // ground reading the same integrity_percent. "is the shelter sound" and "how is the shelter" reached
+        // nothing, and "is the lean-to still good" was answered by STARTING TO BUILD ANOTHER ONE.
+        boolean askingIfABuiltThingHolds =
+            (value.contains("sound")||value.contains("still good")||value.contains("still standing")
+             ||value.contains("still hold")||value.contains("in good repair")||value.contains("how is"))
+            &&(value.contains("shelter")||value.contains("lean-to")||value.contains("lean to")
+               ||value.contains("the hut")||value.contains("the roof")||value.contains("what i built")
+               ||value.contains("the pen")||value.contains("the fence")||value.contains("the rack"));
+        // Neither an animal nor the Chronicle themselves is the camp. The stock have their own reading and so
+        // does the body; being told about a lean-to answers neither question.
+        boolean notAboutAnAnimal = !value.contains("animal")&&!value.contains("beast")&&!value.contains("the herd")
+            &&!value.contains("the flock")&&!items.namesAKeptAnimal(value);
+        boolean notAboutMyself = !value.contains("myself")&&!value.contains("of me")&&!value.contains("with me");
+        if((takingStockOfTheCamp||askingIfABuiltThingHolds)&&notAboutAnAnimal&&notAboutMyself)
+            return Intent.TAKE_STOCK_OF_CAMP;
         // Asking WHETHER the water will let you over is a question, not a wade (#37). Placed before the
         // terrain-crossing rule, which turns "wade north" into movement: a question with a direction in it must
         // still be a question. Gated on a question shape AND water, so "wade north" itself is untouched.
@@ -3054,7 +3087,28 @@ public class ChronicleActionService {
            // thirsty" reached nothing while "am I dry" reached this. First person only: watering the stock is
            // husbandry's question, not the body's.
            ||value.contains("am i thirsty")||value.contains("how thirsty")||value.contains("i am thirsty")
-           ||value.contains("do i need water")||value.contains("need a drink")) return Intent.SENSE_BODY;
+           ||value.contains("do i need water")||value.contains("need a drink")
+           // AND HUNGER, the exact twin of it (#37). hours_without_food drives starvation the way
+           // hours_without_water drives thirst, and "am I hungry" reached nothing while "am I cold" reached
+           // this. Fixing one and not the other would have been the same defect with a different column.
+           ||value.contains("am i hungry")||value.contains("how hungry")||value.contains("i am hungry")
+           ||value.contains("do i need to eat")||value.contains("need food")
+           // Tiredness (sleep_debt_hours), shivering, sickness and what the body makes of itself in general.
+           // "how tired" was in and "am I tired" was not, which is the literal-phrasing trap again.
+           ||value.contains("am i tired")||value.contains("i am tired")||value.contains("am i worn out")
+           ||value.contains("i am shivering")||value.contains("am i shivering")
+           ||value.contains("i feel sick")||value.contains("i feel ill")||value.contains("going to be sick")
+           ||value.contains("what is wrong with me")||value.contains("whats wrong with me")
+           // ...and the self-stocktake the camp reading used to take.
+           ||value.contains("take stock of myself")||value.contains("take stock of me")
+           ||value.contains("look myself over")
+           // The WOUND as a question rather than as work. injury_severity, blood_loss_ml and the healing clock
+           // are all tracked, and "check the wound", "is the wound healing" and "has it gone bad" reached
+           // nothing while "how bad is the wound" reached this. Asking is not dressing — the same shape as the
+           // lean-to and the waterskin, caught here before it could become a wrong answer.
+           ||((value.contains("check")||value.contains("healing")||value.contains("gone bad")||value.contains("mending"))
+              &&(value.contains("wound")||value.contains("the cut")||value.contains("the injury")
+                 ||value.contains("the break")||value.contains("it gone bad")))) return Intent.SENSE_BODY;
         // Whether the stock will get in calf (#37). Not an act — breeding is simulated and happens on its own
         // when the conditions are right — but a question with five real answers behind it, none of which the
         // keeper could see. Before this, "breed the goats" was caught by the bestiality filter and answered as
@@ -3115,7 +3169,13 @@ public class ChronicleActionService {
         // somebody — `bind the planks` is lashing, `wash it` is washing. Nothing else in this world is bandaged.
         if((value.contains("splint")||value.contains("stitch")||value.contains("cauteris")||value.contains("cauteriz")||value.contains("sling")
             ||value.contains("bandage")
-            ||value.contains("staunch")||value.contains("change the dressing")||value.contains("press on"))
+            ||value.contains("staunch")||value.contains("change the dressing")||value.contains("press on")
+            // "staunch" was in and the plain way of saying it was not (#37): `stop the bleeding` reached nothing
+            // over a mechanism that tracks blood_loss_ml to the millilitre. And a poultice is what you put on
+            // your own wound as readily as on a goat's — TEND_ANIMAL claims the beast case earlier, so this
+            // catches the one left over. Both are safe beside the bare " it" the noun group ends in, because
+            // nothing else in this world is poulticed and nothing else bleeds to be stopped.
+            ||value.contains("stop the bleed")||value.contains("stem the bleed")||value.contains("poultice"))
            &&(value.contains("wound")||value.contains("cut")||value.contains("bleeding")||value.contains("gash")
               ||value.contains("my leg")||value.contains("my arm")||value.contains("my ankle")||value.contains("my wrist")
               ||value.contains("my ribs")||value.contains("my hand")||value.contains("my foot")||value.contains("my shoulder")
