@@ -2010,7 +2010,15 @@ public class ChronicleActionService {
         // Physical logistics (#29/#40/#41). Storing something IN a container is checked before DROP and before
         // the gather verbs, so "put the stones in the basket" is containment, not dropping or gathering. It
         // needs a store verb, an in/into/inside, and a container noun together.
-        boolean containerNoun = value.contains("basket")||value.contains("container")||value.contains("pouch")||value.contains("bag")||value.contains("sack")||value.contains("pot")||value.contains("crate")||value.contains("chest")||value.contains("quiver")||value.contains("box")||value.contains("pannier")||value.contains("backpack")||value.contains("storage");
+        // A WATERSKIN IS A CONTAINER (#37). This list held every dry container in the game and not one thing you
+        // carry liquid in, so "empty the waterskin" and "put the water in the gourd" reached nothing while the
+        // same sentences about a basket worked. The liquid vessels are the ones the water chain turns on.
+        //
+        // "waterskin" and "water skin" are named in full rather than a bare "skin", which belongs to the hide and
+        // the fish — the substring lesson this file has learned several times over.
+        boolean containerNoun = value.contains("basket")||value.contains("container")||value.contains("pouch")||value.contains("bag")||value.contains("sack")||value.contains("pot")||value.contains("crate")||value.contains("chest")||value.contains("quiver")||value.contains("box")||value.contains("pannier")||value.contains("backpack")||value.contains("storage")
+            ||value.contains("waterskin")||value.contains("water skin")||value.contains("gourd")||value.contains("flask")
+            ||value.contains("jug")||value.contains("urn")||word(value,"jar")||word(value,"jars")||word(value,"vessel")||word(value,"vessels");
         // STORE (#67 store/pack): put/stow/cache/stockpile something into a container, or the container-less
         // storage verbs that imply the settlement's store ("put it away", "cache the meat", "stockpile the wood").
         if((value.contains(" in ")||value.contains(" into ")||value.contains(" inside "))&&(value.contains("put")||value.contains("place")||value.contains("store")||value.contains("stow")||value.contains("stash")||value.contains("load")||value.contains("pack")||value.contains("drop"))&&containerNoun) return Intent.STORE;
@@ -2073,8 +2081,11 @@ public class ChronicleActionService {
         // Before the access rules, or "empty the pot" would be read as closing it; and before the storage rules,
         // so that "empty" is never taken for a storage verb.
         if((value.contains("empty")||value.contains("turn out")||value.contains("tip out")||value.contains("take everything out")
-            ||value.contains("take it all out")||value.contains("unpack everything")||value.contains("empty out"))
-           &&(containerNoun||value.contains("container"))) return Intent.EMPTY_CONTAINER;
+            ||value.contains("take it all out")||value.contains("unpack everything")||value.contains("empty out")
+            // Pouring is how you empty a thing that holds liquid, and no verb here covered it (#37).
+            ||value.contains("pour out")||value.contains("pour the water out")||value.contains("pour it out")
+            ||value.contains("pour away")||value.contains("tip it out"))
+           &&(containerNoun||value.contains("container")||value.contains("the water out"))) return Intent.EMPTY_CONTAINER;
         // PICK_UP (#67 take/retrieve/unpack): explicit retrieval verbs, or "take/get/remove/unpack X out of/from
         // the <container/storage/ground>" — distinct from gathering raw growth from the world.
         if(value.contains("pick up")||value.contains("pick it up")||value.contains("pick them up")||value.contains("pick it back")||value.contains("picked up")||value.contains("grab")||value.contains("retrieve")||value.contains("recover")||value.contains("take back")||value.contains("take it back")||(value.contains("fetch")&&!value.contains("water"))||value.contains("lift the")||value.contains("lift it")||value.contains("lift up")
@@ -2748,6 +2759,20 @@ public class ChronicleActionService {
                 ||value.contains("in good order")||value.contains("any good left"))
                &&items.namesSomethingYouCarry(value))
             ||value.contains("am i carrying too much")||value.contains("how heavy is my")||value.contains("how much am i carrying")
+            // ASKING ABOUT A WATERSKIN IS NOT MAKING ONE — the fourth time this project has found that shape,
+            // after the lean-to question that built a hut, the trap question that set a trap, and the snare
+            // question that worked a snare. "is my waterskin full" answered "Make a waterskin turns on a cutting
+            // edge, and there is none within reach": the process matcher took the noun and offered to make the
+            // thing being asked after.
+            //
+            // It goes here because this is the reading that walks what the Chronicle carries, and a waterskin is
+            // carried. BE CLEAR WHAT THIS DOES AND DOES NOT ANSWER: there is no carried-water model anywhere in
+            // the schema — hours_without_water on the body is the only water state there is — so this reports
+            // the skin and its condition and CANNOT report how full it is. That is a true answer to a near
+            // question rather than a false answer to the exact one, and the gap is recorded on #37. Inventing a
+            // fill level here would have been the worse of the two by far.
+            ||value.contains("waterskin full")||value.contains("water skin full")||value.contains("skin full")
+            ||value.contains("how much water do i")||value.contains("how much water have i")
             ||value.contains("take stock of my gear")||value.contains("what is in my pack")||value.contains("still good")&&value.contains("my ")||value.contains("still sound"))
            &&!value.contains("food")&&!value.contains("supplies")) return Intent.TAKE_STOCK_OF_GEAR;
         // Go round the camp and account for it (#37). Perception, not work. Placed before MAINTAIN_CAMP, which
@@ -2807,7 +2832,17 @@ public class ChronicleActionService {
             ||((value.startsWith("is ")||value.startsWith("can i")||value.startsWith("will ")||value.contains("should i drink")
                 ||value.contains("how is the")||value.contains("what is the"))
                &&(value.contains("water")||value.contains("stream")||value.contains("pool")||value.contains("spring"))
-               &&(value.contains("safe")||value.contains("clean")||value.contains("drink")||value.contains("foul")||value.contains("ill"))))
+               &&(value.contains("safe")||value.contains("clean")||value.contains("drink")||value.contains("foul")||value.contains("ill")))
+            // ...and by the VERB, which the intent is named for and could not be reached by (#37). "judge the
+            // water" reached nothing while "is this water safe" worked.
+            //
+            // JUDGING AND TASTING ONLY. My first cut added "sniff" and "test" as well, on the reasoning that
+            // they are the same act — and broke two standing assertions: `sniff the water` is SMELL and `test the
+            // depth of the water` is MEASURE, both by deliberate design. The sweep that found this gap had itself
+            // printed `smell the water -> SMELL` two lines earlier, so the answer was already on the screen when
+            // I widened past it. A perception verb that already has an intent is not available to borrow.
+            ||((value.contains("judge")||value.contains("taste"))
+               &&(value.contains("water")||value.contains("the stream")||value.contains("the pool")||value.contains("the spring"))))
            &&!value.contains("boil")) return Intent.JUDGE_WATER;
         // Stuff or line a garment already being worn (#37). Gated on a lining VERB plus a garment word, so
         // "gather dry grass" still gathers and "make a fur cloak" still makes one — the difference is that this
@@ -2876,16 +2911,31 @@ public class ChronicleActionService {
         if(value.contains("boil water")||value.contains("boil the water")||value.contains("boil some water")||value.contains("heat water to a boil")||value.contains("boil it to make it safe")
            ||((value.contains("heat")||value.contains("warm"))
               &&(value.contains("the water")||value.contains("some water")||value.contains("water in the")
-                 ||value.contains("water up")))) return Intent.BOIL_WATER;
+                 ||value.contains("water up")))
+           // "make the water safe" is what the player is actually after, and it answered with MAKE A WATERSKIN —
+           // the process matcher took "water" and offered a vessel. Boiling is what the rule's own existing
+           // keyword "boil it to make it safe" already says this means (#37).
+           ||value.contains("make the water safe")||value.contains("make this water safe")
+           ||value.contains("make it safe to drink")) return Intent.BOIL_WATER;
         // Pour water through a filter to clarify it — but MAKING a filter ("make a bark and charcoal filter")
         // is a craft, so defer to the material process when the text names one rather than filtering here.
         if((value.contains("filter")||value.contains("strain")||value.contains("clarify")||value.contains("purify"))&&value.contains("water")&&!items.actionMatchesProcess(value)) return Intent.FILTER_WATER;
+        // Slaking and quenching a thirst are drinking, and neither word contains "drink", which is the whole of
+        // what the drink rule looks for (#37). Nothing else in the game is slaked or quenched.
+        if(value.contains("slake")||value.contains("quench")) return Intent.DRINK;
         // "find water" (#37). Looking for water and drawing it collapse to the same act the moment there is
         // water to draw, and COLLECT_WATER already answers honestly when there is none — "no stream, no spring,
         // only what the sky gives". That is a far better answer than silence. ("look for water" is left to
         // SEARCH, which claims "look for" and answers about what it finds.)
         if(value.contains("find water")||value.contains("find some water")||value.contains("find a stream")
-           ||value.contains("collect water")||value.contains("fetch water")||value.contains("draw water")||value.contains("gather water")||value.contains("fill container")||value.contains("scoop water")||((value.contains("fill")||value.contains("refill"))&&(value.contains("waterskin")||value.contains("water skin")||value.contains("bucket")||value.contains("vessel")||value.contains("jar")||value.contains("with water")||value.contains("flask")||value.contains("gourd")))) return Intent.COLLECT_WATER;
+           ||value.contains("collect water")||value.contains("fetch water")||value.contains("draw water")||value.contains("gather water")||value.contains("fill container")||value.contains("scoop water")||((value.contains("fill")||value.contains("refill"))&&(value.contains("waterskin")||value.contains("water skin")||value.contains("bucket")||value.contains("vessel")||value.contains("jar")||value.contains("with water")||value.contains("flask")||value.contains("gourd")
+              // "fill the skin" is what somebody holding a waterskin says about it. The list named the thing in
+              // full and not the word a person uses while they are doing it (#37).
+              ||value.contains("the skin")))
+           // Six verbs for drawing water and not the plainest two: "get some water" and "scoop up water" reached
+           // nothing while "fetch water" and "scoop water" worked.
+           ||((value.contains("get some water")||value.contains("get water")||value.contains("scoop up")
+               ||value.contains("dip")||value.contains("take some water"))&&value.contains("water"))) return Intent.COLLECT_WATER;
         if(value.contains("charcoal")&&(value.contains("make")||value.contains("take")||value.contains("gather")||value.contains("get")||value.contains("collect"))&&!items.actionMatchesProcess(value)) return Intent.MAKE_CHARCOAL;
         if(value.contains("bark")&&!value.contains("loose")&&(gatherVerb||value.contains("strip")||value.contains("peel")||value.contains("take"))) return Intent.STRIP_BARK;
         // Ambient ground scavenge (#133): search the forest floor / under a log for small survival materials — the
@@ -2998,7 +3048,13 @@ public class ChronicleActionService {
            // and "will I be warm enough tonight" and "am I dry" reached nothing.
            ||value.contains("warm enough")||value.contains("cold enough to")||value.contains("am i dry")
            ||value.contains("freeze tonight")||value.contains("see the night out myself")
-           ||value.contains("survive the night")||value.contains("get through the night")) return Intent.SENSE_BODY;
+           ||value.contains("survive the night")||value.contains("get through the night")
+           // THIRST, which the body has tracked all along (#37). chronicle_physiology.hours_without_water is the
+           // only water state in the whole schema — it drives the thirst that kills a Chronicle — and "am I
+           // thirsty" reached nothing while "am I dry" reached this. First person only: watering the stock is
+           // husbandry's question, not the body's.
+           ||value.contains("am i thirsty")||value.contains("how thirsty")||value.contains("i am thirsty")
+           ||value.contains("do i need water")||value.contains("need a drink")) return Intent.SENSE_BODY;
         // Whether the stock will get in calf (#37). Not an act — breeding is simulated and happens on its own
         // when the conditions are right — but a question with five real answers behind it, none of which the
         // keeper could see. Before this, "breed the goats" was caught by the bestiality filter and answered as
