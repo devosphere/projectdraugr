@@ -1386,11 +1386,15 @@ public class PhysicalItemService {
      *  every tamed draft beast bonded to them. Wants a bundle to hand and a hungry beast to feed. */
     @Transactional
     public String[] feedDraftBeasts(UUID chronicle, Instant at) {
+        // EVERY kept animal, not only the ones that pull (#106). The relief below never filtered on draft_species
+        // and the hunger tick stopped doing so for #122 — "a milk goat went through her whole life at nought" is
+        // the comment on it — but THIS gate still did. So a kept goat grew hungry every turn of the world, by a
+        // tick that was fixed to include her, and "feed the goat" answered "none of your draft beasts is hungry"
+        // while she stood there at thirty-five. Measured on a booted world; the gate was the last holdout.
         Integer hungry = jdbc.queryForObject(
-            "SELECT COUNT(*) FROM wildlife_bond wb WHERE wb.chronicle_id=? AND wb.bond_stage='TAMED' AND wb.draft_hunger>0 " +
-            "AND EXISTS (SELECT 1 FROM wildlife_population wp JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wp.id=wb.population_id)",
+            "SELECT COUNT(*) FROM wildlife_bond wb WHERE wb.chronicle_id=? AND wb.bond_stage='TAMED' AND wb.draft_hunger>0",
             Integer.class, chronicle);
-        if (hungry == null || hungry == 0) return new String[]{"FAILED", "None of your draft beasts is hungry — there is nothing to feed, or nothing tamed that pulls."};
+        if (hungry == null || hungry == 0) return new String[]{"FAILED", "None of your animals is hungry — there is nothing of yours to feed."};
         if (!hasAtLeast(chronicle, "dry_grass_bundle", 1))
             return new String[]{"FAILED", "You have no fodder to hand, and your beasts stay as hungry as they were."};
         consumeOne(chronicle, "dry_grass_bundle", at);
@@ -1751,18 +1755,49 @@ public class PhysicalItemService {
             // is a bundle of dry grass, and a person asks for dry grass.
             "SELECT d.flora_key, regexp_replace(replace(d.item_key,'_',' '), ' (bundle|tuft|head|piece|strip|sprig|handful)$', ''), d.item_key FROM flora_drop d " +
             "UNION ALL " +
-            "SELECT d.flora_key, lower(i.display_name), d.item_key FROM flora_drop d JOIN item_definition i ON i.item_key=d.item_key");
+            "SELECT d.flora_key, lower(i.display_name), d.item_key FROM flora_drop d JOIN item_definition i ON i.item_key=d.item_key " +
+            "UNION ALL " +
+            // ...and the HEAD NOUN of a compound name, which is the word a person actually uses (#106). The
+            // catalogue was asked and asked only for whole names: the flora is meadow_grass and the drop is a
+            // dry grass bundle, so "gather grass" named NOTHING — and falling through to best-available-food
+            // answered it with "you gather 4 elderberry from the elder shrub growing here". Asked for grass,
+            // given berries, in the same even voice as every true answer.
+            //
+            // KIND WORDS ARE HELD BACK BY NAME, with the reason: shrub, plant, fungus, tree and bed are how the
+            // catalogue says WHAT A THING IS, not what it is called — 13 floras end in _shrub and 12 in _plant —
+            // so letting them through would make "gather a plant" mean agrimony, which is the generic-word
+            // defect pointed the other way. Every other head noun is a real name: grass, rose, garlic, cress,
+            // polypore, mast, resin, withy.
+            "SELECT fd.flora_key, regexp_replace(replace(fd.flora_key,'_',' '), '^.* ', ''), CAST(NULL AS varchar) " +
+            "  FROM flora_definition fd WHERE fd.flora_key LIKE '%\\_%' " +
+            "   AND regexp_replace(fd.flora_key, '^.*_', '') NOT IN ('shrub','plant','fungus','tree','bed','bush') " +
+            "UNION ALL " +
+            "SELECT d.flora_key, regexp_replace(regexp_replace(replace(d.item_key,'_',' '), " +
+            "         ' (bundle|tuft|head|piece|strip|sprig|handful)$', ''), '^.* ', ''), d.item_key " +
+            "  FROM flora_drop d WHERE d.item_key LIKE '%\\_%' " +
+            "   AND regexp_replace(d.item_key, '^.*_', '') NOT IN ('bundle','tuft','head','piece','strip','sprig','handful')");
 
-        java.util.Map<String,Object> spoken = null;
+        // Every phrase that matches at the LONGEST length, not merely the first of them. Head nouns tie by
+        // construction — meadow_grass and wild_grass are both "grass", dog_rose and wild_rose both "rose" — and
+        // taking whichever the query happened to return first would refuse "gather grass" on ground where grass
+        // plainly grows, because the OTHER grass is the one that does not. The tie is settled by the world: the
+        // one that is actually here wins. (The same fault as the equal-length keyword ties V318 settled.)
+        java.util.List<java.util.Map<String,Object>> spokenAll = new java.util.ArrayList<>();
         int longest = 0;
         for (java.util.Map<String,Object> word : vocabulary) {
             String phrase = (String) word.get("phrase");
-            if (phrase == null || phrase.length() < 4 || phrase.length() <= longest) continue;
+            if (phrase == null || phrase.length() < 4 || phrase.length() < longest) continue;
             if ((" " + lower + " ").contains(" " + phrase + " ") || (" " + lower + " ").contains(" " + phrase + "s ")) {
-                spoken = word;
-                longest = phrase.length();
+                if (phrase.length() > longest) { spokenAll.clear(); longest = phrase.length(); }
+                spokenAll.add(word);
             }
         }
+        java.util.Set<String> growsHere = new java.util.HashSet<>();
+        for (java.util.Map<String,Object> c : candidates) growsHere.add((String) c.get("flora_key"));
+        java.util.Map<String,Object> spoken = spokenAll.stream()
+            .filter(w -> growsHere.contains((String) w.get("flora_key")))
+            .findFirst()
+            .orElse(spokenAll.isEmpty() ? null : spokenAll.get(0));
         final String wantedDrop = spoken == null ? null : (String) spoken.get("drop_key");
         final String spokenFlora = spoken == null ? null : (String) spoken.get("flora_key");
         final String spokenPhrase = spoken == null ? null : (String) spoken.get("phrase");
@@ -3378,6 +3413,52 @@ public class PhysicalItemService {
                 "SELECT species_key FROM draft_species UNION SELECT species_key FROM tamed_yield", String.class)) {
             String spoken = key.replace('_', ' ');
             if (v.contains(" " + spoken + " ") || v.contains(" " + spoken + "s ")) return true;
+            // ...and by the word a keeper actually uses for it (#106). The catalogue was asked, correctly, and
+            // asked only for the WHOLE compound key: the species are mountain_goat and bighorn_sheep, so "groom
+            // the goat" and "shear the sheep" named nothing the table would own to. Nobody says "mountain goat"
+            // twice a day about an animal they milk. The head noun is the last word of the key — goat, sheep,
+            // goose, duck, buffalo, fowl, turkey, pigeon, ox, deer — and it is the name the animal goes by.
+            //
+            // Only the head noun, and only as a whole word: a prefix would make "water buffalo" answer to
+            // "water" and a substring would find "ox" inside "oxbow" and "box". This project has been bitten by
+            // the substring four times over; HeadNounsNameOnlyAnimalsIntegrationTest holds the line.
+            int cut = spoken.lastIndexOf(' ');
+            if (cut > 0) {
+                String head = spoken.substring(cut + 1);
+                if (v.contains(" " + head + " ") || v.contains(" " + head + "s ")) return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Whether the sentence names a beast the keeper ALREADY KEEPS (#106).
+     *
+     * <p>Taming claims "feed" together with a species — goat, fowl, deer, duck — because offering food to a wild
+     * animal is how it is tamed. But a keeper feeding their own goat says exactly the same words, and got
+     * <i>"it lets you come nearer than last time, and holds there, watching"</i>: the approach to a wild animal,
+     * offered to someone whose goat is in the pen behind them. The words cannot tell the two apart. The data can,
+     * and this is the question it answers — so taming yields the sentence once the animal is yours.
+     *
+     * <p>No Chronicle id: one lives at a time, which {@code one_living_chronicle} enforces, and the taming rule is
+     * reached from {@link #namesAKeptAnimal}'s side of the classifier where there is none to pass.
+     */
+    @Transactional(readOnly = true)
+    public boolean keepsSuchABeast(String actionText) {
+        if (actionText == null || actionText.isBlank()) return false;
+        String v = " " + actionText.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim() + " ";
+        for (String key : jdbc.queryForList(
+                "SELECT DISTINCT wp.species_key FROM wildlife_bond wb " +
+                "JOIN wildlife_population wp ON wp.id = wb.population_id " +
+                "JOIN chronicle c ON c.id = wb.chronicle_id AND c.life_state = 'LIVING' " +
+                "WHERE wb.bond_stage = 'TAMED'", String.class)) {
+            String spoken = key.replace('_', ' ');
+            if (v.contains(" " + spoken + " ") || v.contains(" " + spoken + "s ")) return true;
+            int cut = spoken.lastIndexOf(' ');
+            if (cut > 0) {
+                String head = spoken.substring(cut + 1);
+                if (v.contains(" " + head + " ") || v.contains(" " + head + "s ")) return true;
+            }
         }
         return false;
     }
@@ -3560,6 +3641,150 @@ public class PhysicalItemService {
 
         createCarriedItem(chronicle, p.itemKey(), p.name(), occurredAt, "CRAFTED");
         return new String[]{"SUCCEEDED", "You work the material to shape and stitch it closed. The " + p.name().toLowerCase() + " is finished, and it is warm in the hand."};
+    }
+
+    /** Above this a want is worth naming, well before {@link #NOT_IN_CONDITION} stops the animal doing anything. */
+    private static final int WORTH_NAMING = 25;
+
+    /**
+     * What a beast can be HELD with (#106).
+     *
+     * <p>{@code animal_restraint} is a wired mechanic that no sentence could reach: the best piece a keeper
+     * CARRIES eases the handling while a bad-tempered beast is worked on, they do not stack — enough rope would
+     * otherwise be as good as a milking stanchion, and nobody would raise the building — and a broken one holds
+     * nothing. It works by being had, not by being fastened.
+     *
+     * <p>So there is no restrained state in this world, and this answer does not pretend there is one. "Hobble
+     * the goat" is told what the keeper actually has for it and what that actually does, and when they have
+     * nothing, which makeable things would answer. An invented <i>"the hobble is now on"</i> would change nothing
+     * and say that it had, which is the defect this ticket is full of.
+     */
+    @Transactional(readOnly = true)
+    public String holdingAnswer(UUID chronicle) {
+        java.util.Map<String,Object> best = jdbc.query(
+            "SELECT r.item_key, r.eases_handling_by, r.strains FROM animal_restraint r " +
+            "WHERE EXISTS (SELECT 1 FROM world_object w JOIN item_instance i ON i.object_id = w.id " +
+            "               WHERE w.current_owner_id = ? AND w.lifecycle_state = 'ACTIVE' " +
+            "                 AND i.item_key = r.item_key AND i.condition_state <> 'BROKEN') " +
+            "ORDER BY r.eases_handling_by DESC LIMIT 1",
+            rs -> rs.next() ? java.util.Map.of("key", rs.getString(1), "eases", rs.getInt(2), "strains", rs.getBoolean(3)) : null,
+            chronicle);
+        if (best == null) {
+            java.util.List<String> made = jdbc.queryForList(
+                "SELECT DISTINCT replace(r.item_key,'_',' ') FROM animal_restraint r " +
+                "JOIN material_process mp ON mp.output_item_key = r.item_key ORDER BY 1", String.class);
+            String none = "You have nothing to hold a beast with. A hand on the head is a hand on the head, and a "
+                + "grown animal that decides otherwise goes where it likes.";
+            return made.isEmpty() ? none
+                : none + " What would answer: " + joinAnd(made) + " — and each of them can be made.";
+        }
+        String held = ((String) best.get("key")).replace('_', ' ');
+        return "You have a " + held + " to hand, and with it the work on a beast is possible rather than a wrestle. "
+            + (Boolean.TRUE.equals(best.get("strains"))
+               ? "It takes the animal's weight when it throws itself about, which is why it wears out."
+               : "It was made to be pulled against, so the struggle does the animal no harm.")
+            + " It holds while you have it; there is nothing to fasten and nothing to undo.";
+    }
+
+    /**
+     * How the stock are (#106). The plainest question a keeper asks, and nothing could answer it.
+     *
+     * <p><b>What the world already knew.</b> {@code wildlife_bond} carries hunger, thirst, fatigue and sickness on
+     * every tamed beast; {@link #advanceDraftHunger} and {@link #advanceDraftThirst} move them every turn, the
+     * haul formula weighs all three, breeding is gated on all four, and a thirsty beast gives less milk. Not one
+     * sentence could ask after any of it. "How is the goat", "is the goat sick" and "check on the animals"
+     * reached nothing at all, and <b>"water the animals" was answered "none of your draft beasts is hungry"</b> —
+     * a question about thirst answered about appetite, by the only rule that would take the sentence.
+     *
+     * <p>Read-only, like {@link #breedingProspects} beside it: it reports the columns the tick maintains and
+     * changes none of them. What relieves each want is named, because a keeper told their beast is thirsty and not
+     * told that thirst falls on wet ground or at a watering station has been given a fact and no use for it.
+     *
+     * <p>When the sentence is about water, thirst is named first and named even when it is slight — "water the
+     * animals" is an instruction, and the honest reply to it is what the animals' water actually depends on.
+     */
+    @Transactional(readOnly = true)
+    public String[] stockWelfare(UUID chronicle, UUID location, String actionText) {
+        String v = actionText == null ? "" : actionText.toLowerCase(java.util.Locale.ROOT);
+        boolean aboutWater = v.contains("water") || v.contains("thirst") || v.contains("drink") || v.contains("trough");
+        boolean aboutHolding = v.contains("tether") || v.contains("hobble") || v.contains("halter") || v.contains("tie up")
+            || v.contains("lead the") || v.contains("catch the") || v.contains("hold the") || v.contains("restrain");
+
+        java.util.List<java.util.Map<String,Object>> kinds = jdbc.queryForList(
+            "SELECT wp.species_key, COUNT(*) AS kept, MAX(wb.draft_hunger) AS hunger, MAX(wb.draft_thirst) AS thirst, " +
+            "       MAX(wb.draft_fatigue) AS fatigue, MAX(wb.sickness) AS sickness " +
+            "FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id = wb.population_id " +
+            "WHERE wb.chronicle_id = ? AND wb.bond_stage = 'TAMED' " +
+            "GROUP BY wp.species_key ORDER BY wp.species_key", chronicle);
+        if (kinds.isEmpty())
+            return new String[]{"FAILED", "You keep no tamed animals, and there is nothing of yours to look over."};
+
+        // If they named a kind, answer about that kind — by its catalogue name or by the word it goes by (#106).
+        java.util.List<java.util.Map<String,Object>> asked = new java.util.ArrayList<>();
+        for (java.util.Map<String,Object> k : kinds) {
+            String spoken = ((String) k.get("species_key")).replace('_', ' ');
+            String head = spoken.contains(" ") ? spoken.substring(spoken.lastIndexOf(' ') + 1) : spoken;
+            if (v.contains(spoken) || v.contains(spoken + "s")
+                || com.devosphere.draugr.narration.Words.word(v, head)
+                || com.devosphere.draugr.narration.Words.word(v, head + "s")) asked.add(k);
+        }
+        if (asked.isEmpty()) asked = kinds;
+
+        boolean wetGround = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM world_chunk ch WHERE ch.id=? AND (ch.biome IN ('WETLAND','RIVER_BANK') " +
+            "  OR EXISTS(SELECT 1 FROM ecology_site es WHERE es.chunk_id=ch.id AND (" +
+            com.devosphere.draugr.ecology.FreshWater.sites("es") + "))))", Boolean.class, location));
+        boolean watered = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object tw ON tw.id=cp.object_id " +
+            "WHERE cp.project_kind IN ('WATERING_STATION','RAINWATER_CATCHMENT') AND cp.state='COMPLETED' " +
+            "  AND cp.integrity_percent>0 AND tw.lifecycle_state='ACTIVE' AND tw.current_location_id=?)",
+            Boolean.class, location));
+
+        StringBuilder b = new StringBuilder();
+
+        // Asked how to HOLD a beast, answer about holding it — not with a welfare report nobody asked for, which
+        // is what the first cut did and is the same fault as answering a thirst question about appetite.
+        if (aboutHolding) return new String[]{"SUCCEEDED", holdingAnswer(chronicle)};
+
+        for (java.util.Map<String,Object> k : asked) {
+            String name = ((String) k.get("species_key")).replace('_', ' ');
+            int kept = ((Number) k.get("kept")).intValue();
+            int hunger = ((Number) k.get("hunger")).intValue(), thirst = ((Number) k.get("thirst")).intValue();
+            int fatigue = ((Number) k.get("fatigue")).intValue(), sickness = ((Number) k.get("sickness")).intValue();
+
+            // Phrased so the sentence reads for one animal or for a dozen, and worst first: a sick beast matters
+            // more than a tired one, and a keeper reading a list wants the thing that needs them at the front.
+            java.util.List<String> wants = new java.util.ArrayList<>();
+            if (sickness >= TOO_SICK_TO_GIVE) wants.add("sick enough to want tending");
+            else if (sickness >= WORTH_NAMING) wants.add("off colour");
+            if (thirst >= NOT_IN_CONDITION) wants.add("badly short of water");
+            else if (thirst >= WORTH_NAMING || (aboutWater && thirst > 0)) wants.add("in want of water");
+            if (hunger >= NOT_IN_CONDITION) wants.add("hungry enough that it is telling on them");
+            else if (hunger >= WORTH_NAMING) wants.add("getting hungry");
+            if (fatigue >= NOT_IN_CONDITION) wants.add("worked past what they will stand");
+            else if (fatigue >= WORTH_NAMING) wants.add("tired");
+
+            b.append(kept == 1 ? "The " + name + " is" : "The " + name + "s, " + kept + " of them, are");
+            if (wants.isEmpty()) b.append(" in good order — fed, watered, rested and sound. ");
+            else b.append(' ').append(joinAnd(wants)).append(". ");
+        }
+
+        // What a beast can be HELD with (#106). There is no restrained state in this world and there should not
+        // be a pretended one: `animal_restraint` works by being CARRIED — the best piece applies while a beast is
+        // worked on, they do not stack, and a broken one holds nothing. That is a real mechanic that no sentence
+        // could reach, so asking to tether or hobble an animal is answered with what you actually have for it and
+        // what it actually does. An invented "the hobble is now on" would change nothing and say it had.
+        // And what the want depends on, which is the half a keeper can act on.
+        if (aboutWater || asked.stream().anyMatch(k -> ((Number) k.get("thirst")).intValue() >= WORTH_NAMING)) {
+            b.append(wetGround
+                ? "They drink where they stand; this ground holds water of its own and their thirst falls as fast as it rises."
+                : watered
+                  ? "The watering station here keeps them, and they come off it settled."
+                  : "There is no water on this ground and nothing built to hold any, so what they drink has to be "
+                    + "what you bring or where you take them — wet ground, a spring or a pool, or a watering "
+                    + "station raised where they are kept.");
+        }
+        return new String[]{"SUCCEEDED", b.toString().trim()};
     }
 
     /**

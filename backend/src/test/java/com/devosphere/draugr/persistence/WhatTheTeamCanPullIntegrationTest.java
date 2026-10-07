@@ -196,7 +196,8 @@ class WhatTheTeamCanPullIntegrationTest {
         assertEquals("REPAIR_ITEM", actions.resolve("repair the cart").intent(), "mending one is mending one");
         assertEquals("TAME", actions.resolve("tame the ox").intent(), "taming one is taming one");
         assertEquals("FEED_ANIMAL", actions.resolve("feed the stock").intent(), "feeding them is feeding them");
-        assertEquals("FEED_ANIMAL", actions.resolve("water the stock").intent(), "watering them is watering them");
+        // CHECK_STOCK since #106: FEED_ANIMAL reports hunger and cannot water anything. Still the team's.
+        assertEquals("CHECK_STOCK", actions.resolve("water the stock").intent(), "watering them is about them");
     }
 
     @Test

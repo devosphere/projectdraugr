@@ -585,7 +585,18 @@ public class ConstructionService {
      * Its benefit is the real integrity it restores; the small easing of mind is applied by the caller.
      */
     @Transactional
-    public String[] maintainCamp(UUID chronicle, UUID location, Instant at) {
+    public String[] maintainCamp(UUID chronicle, UUID location, Instant at) { return maintainCamp(chronicle, location, at, null); }
+
+    /**
+     * The same work, told in the words it was asked for (#106).
+     *
+     * <p>Mucking out a pen IS this: it carries off {@code chunk_refuse}, which is the very thing V299's stock
+     * sickness offers "clean ground" as a way out of. So "muck out the pen" routes here rather than to a second
+     * implementation that would drift from this one — but it should not be answered <i>"you tidy the camp"</i>,
+     * which is a true thing said about the wrong subject. The mechanism is shared; the sentence is not.
+     */
+    @Transactional
+    public String[] maintainCamp(UUID chronicle, UUID location, Instant at, String actionText) {
         List<UUID> here = jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' AND cp.state='COMPLETED' FOR UPDATE", (rs, r) -> rs.getObject(1, UUID.class), location);
         Timestamp ts = Timestamp.from(at);
         // Tidying a camp carries off the filth of living there (#218): clearing refuse is part of the work — the
@@ -597,7 +608,14 @@ public class ConstructionService {
             jdbc.update("UPDATE chunk_refuse SET refuse_level=GREATEST(0,refuse_level-25),last_updated_at=? WHERE chunk_id=?", ts, location);
             cleared = Math.min(25, refuseBefore);
         }
-        if (here.isEmpty() && cleared == 0) return new String[]{"FAILED", "You look around to set a camp in order, but there is nothing built here to tend and nothing to clear away."};
+        String said = actionText == null ? "" : actionText.toLowerCase(java.util.Locale.ROOT);
+        boolean muckingOut = said.contains("muck") || said.contains("dung") || said.contains("manure")
+            || said.contains("shovel out") || said.contains("the pen") || said.contains("the coop")
+            || said.contains("the stable") || said.contains("the byre") || said.contains("the stall")
+            || said.contains("the fold");
+        if (here.isEmpty() && cleared == 0) return new String[]{"FAILED", muckingOut
+            ? "You go to muck out, and find nothing fouled here that wants carrying off."
+            : "You look around to set a camp in order, but there is nothing built here to tend and nothing to clear away."};
         int tended = 0;
         for (UUID id : here) {
             Integer integ = jdbc.queryForObject("SELECT integrity_percent FROM construction_project WHERE object_id=?", Integer.class, id);
@@ -612,6 +630,17 @@ public class ConstructionService {
             : (tended == 0
                 ? "Everything here already stands sound; you set what little is astray back in its place."
                 : "You go over what stands here, working " + tended + " thing" + (tended == 1 ? "" : "s") + " back toward true and ordering the camp around them.");
+        if (muckingOut) {
+            // Led by the clearing, because that is what was asked for and what the sickness model reads.
+            String out = cleared > 0
+                ? "You muck out — scraping up the fouled bedding and the dung and carrying the lot well clear of "
+                  + "where anything stands. The ground underfoot is sweeter for it, and sound ground is one of the "
+                  + "two things that take a sickness out of a herd."
+                : "There is nothing fouled here to carry off.";
+            return new String[]{"SUCCEEDED", out + (tended > 0
+                ? " While you are about it you set " + tended + " thing" + (tended == 1 ? "" : "s") + " here back toward true."
+                : "")};
+        }
         String filth = cleared > 0 ? " You carry off the refuse that had gathered, and the living space is cleaner for it." : "";
         return new String[]{"SUCCEEDED", "You tidy the camp — stowing what is loose, righting what has shifted. " + tail + filth};
     }

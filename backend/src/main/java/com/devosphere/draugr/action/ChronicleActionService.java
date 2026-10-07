@@ -306,7 +306,10 @@ public class ChronicleActionService {
         // not left to the wildlife encounter to resolve. Only within sight of an isle, as with contact.
         com.devosphere.draugr.people.ConductService.Act conductAct = null;
         if (conduct != null && intent != Intent.MOVE && intent != Intent.TRAVEL) {
-            conductAct = com.devosphere.draugr.people.ConductService.recognise(text);
+            // recogniseHere, not the static recognise (#106): an offence whose phrase names no object — "tie up
+            // the", "seize the", "drag the" — must be told who it is about, from the people vocabulary or from the
+            // names the world gave this community. Without that, tying up a BUNDLE was an assault on a person.
+            conductAct = conduct.recogniseHere(text);
             if (conductAct != null) { contactWith = contact.communityInReach(chronicle.location()); if (contactWith != null) intent = Intent.CONDUCT_TOWARD_PEOPLE; else { conductAct = null; meantForPeople = true; } }
         }
         // Travelling together (#113). Asking is done on the isle, face to face; parting can be done anywhere the two
@@ -544,6 +547,7 @@ public class ChronicleActionService {
         else if (intent == Intent.HARVEST_CROP) { String[] r=items.harvestCrop(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.TAKE_STOCK_OF_CAMP) perception = campStocktake(chronicle.location());
         else if (intent == Intent.READ_THE_SKY) perception = skyReading(chronicle.location(), resolvedAt);
+        else if (intent == Intent.WHICH_WAY) perception = whichWay(chronicle.location(), text, resolvedAt);
         else if (intent == Intent.TAKE_STOCK_OF_GEAR) perception = items.gearStocktake(chronicle.id(), text);
         else if (intent == Intent.TAKE_STOCK_OF_FOOD) perception = items.foodStocktake(chronicle.id(), chronicle.location(), resolvedAt);
         else if (intent == Intent.JUDGE_HAULAGE) perception = items.judgeHaulage(chronicle.id());
@@ -675,7 +679,7 @@ public class ChronicleActionService {
         else if (intent == Intent.SHELTER_BODY) { if(shelterInReach(chronicle.location())){physiology.shelterFromWeather(chronicle.id());perception="You duck under the shelter and out of the weather, and the worst of it stops reaching you.";}else{outcome="FAILED";perception="You look for cover, but there is none built here — nothing stands between you and the weather.";} }
         else if (intent == Intent.STRETCH) { physiology.stretch(chronicle.id()); perception="You stretch and work the stiffness out of your limbs, and stand a little easier for it."; }
         else if (intent == Intent.MAKE_BED) { String[] r = construction.makeBed(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
-        else if (intent == Intent.MAINTAIN_CAMP) { String[] r = construction.maintainCamp(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; if ("SUCCEEDED".equals(outcome)) physiology.settleCamp(chronicle.id()); }
+        else if (intent == Intent.MAINTAIN_CAMP) { String[] r = construction.maintainCamp(chronicle.id(), chronicle.location(), resolvedAt, text); outcome = r[0]; perception = r[1]; if ("SUCCEEDED".equals(outcome)) physiology.settleCamp(chronicle.id()); }
         else if (intent == Intent.PLACE_WINDBREAK) { String[] r = construction.placeWindbreak(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.PLACE_COVER) { String[] r = construction.placeCover(chronicle.id(), chronicle.location(), resolvedAt, coverKindOf(text.toLowerCase(Locale.ROOT))); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.TREAT_WOUND) { if (physiology.bindWound(chronicle.id(), items, actionId, resolvedAt)) perception="You press and bind the wounded place until the immediate bleeding eases."; else { outcome="FAILED";
@@ -825,6 +829,7 @@ public class ChronicleActionService {
         else if (intent == Intent.SEARCH) { String[] r = examination.sense(chronicle.id(), chronicle.location(), text, ExaminationService.Sense.SEARCH); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.SENSE_BODY) { perception = bodyReading(beforeBody); }
         else if (intent == Intent.BREEDING_PROSPECTS) { String[] r = items.breedingProspects(chronicle.id(), chronicle.location(), text); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.CHECK_STOCK) { String[] r = items.stockWelfare(chronicle.id(), chronicle.location(), text); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.LISTEN) { String[] r = examination.sense(chronicle.id(), chronicle.location(), text, ExaminationService.Sense.LISTEN); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.SMELL)  { String[] r = examination.sense(chronicle.id(), chronicle.location(), text, ExaminationService.Sense.SMELL);  outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.FEEL)   { String[] r = examination.sense(chronicle.id(), chronicle.location(), text, ExaminationService.Sense.FEEL);   outcome = r[0]; perception = r[1]; }
@@ -1420,6 +1425,60 @@ public class ChronicleActionService {
     }
     private String move(ActiveChronicle chronicle, String action, UUID actionId, Instant occurredAt) {
         Direction direction = Direction.from(action);
+        String said = action.toLowerCase(Locale.ROOT);
+        // Going back the way you came (#37). object_transition has recorded the direction, the from and the to of
+        // every single move since the table existed, and nothing had ever read it for this: "retrace my steps",
+        // "go back the way I came" and "follow my own tracks back" all reached nothing, and the last of those was
+        // answered by TRACK — which hunts animal sign, so a player asking to go back the way they came was shown
+        // somebody else's feathers in the low growth.
+        //
+        // The step is reversed rather than a bearing guessed: the record says which way the last one went, and
+        // the way back is the opposite of it. If the ground has changed under you — a cave mouth closed, water
+        // risen — the ordinary move checks below still apply, because this only chooses the direction.
+        if (direction == null && BACKTRACKING.matcher(said).find()) {
+            String last = jdbc.query(
+                "SELECT payload->>'direction' FROM object_transition " +
+                "WHERE object_id=? AND transition_type='MOVED' AND payload->>'toLocationId' = ?::text " +
+                "ORDER BY occurred_at DESC LIMIT 1",
+                rs -> rs.next() ? rs.getString(1) : null, chronicle.id(), chronicle.location().toString());
+            if (last == null)
+                return "You have not come to this ground from anywhere — there is no step behind you to take back.";
+            Direction came = Direction.valueOf(last);
+            direction = Direction.of(-came.dx, -came.dy);
+            if (direction == null)
+                return "You cannot work out which way you came onto this ground.";
+        }
+        // A crossing names the WATER, not a bearing (#37). "wade across", "swim across" and "cross to the other
+        // side" all reached nothing, while "can I get across here" answered in detail — the game could JUDGE a
+        // crossing and not make one. judgeCrossing finds the water by looking at the neighbouring ground; so does
+        // this, with the same query, so the act and the judgement can never disagree about what is there.
+        if (direction == null && CROSSING_VERB.matcher(said).find()) {
+            Toward water = toward(chronicle.location(), "OCEAN|WETLAND", null);
+            if (water.refusal() != null) return water.refusal();
+            direction = water.direction();
+        }
+        // Climbing, and following a feature (#37). Same shape as the crossing above and the same helper: the
+        // GROUND names the direction. "climb the hill", "follow the stream", "follow the shore" and "go down into
+        // the valley" all reached nothing, because the move rule wanted a bearing and a hill is not a bearing —
+        // yet which way the hill lies is a thing world_chunk has always known.
+        //
+        // A named kind of ground decides it (the same vocabulary WHICH_WAY answers from, so what the game SAYS
+        // lies north is what walking north reaches). Failing a name, bare "up" and "down" go by the elevation.
+        if (direction == null && wantsGroundStep(said)) {
+            String biomes = null;
+            for (String[] kind : GROUND_ASKED_FOR)
+                if (groundNamed(said, kind[0]) && (biomes == null || kind[0].length() > biomes.length())) biomes = kind[1];
+            // Down beats up only when it is said: "climb down" descends, and a bare "climb" or "scramble" is up.
+            Boolean upward = biomes != null ? null
+                : said.contains("down") || said.contains("descend") ? Boolean.FALSE
+                : said.contains("up") || said.contains("ascend") ? Boolean.TRUE
+                : CLIMBING_VERB.matcher(said).find() ? Boolean.TRUE : null;
+            if (biomes == null && upward == null)
+                return "You could climb, or follow something, but you have not said what.";
+            Toward it = toward(chronicle.location(), biomes, upward);
+            if (it.refusal() != null) return it.refusal();
+            direction = it.direction();
+        }
         if (direction == null) return "You shift through the wet ground, but do not commit to a direction.";
         UUID destination = jdbc.query("SELECT next.id FROM world_chunk current JOIN world_chunk next ON next.world_id=current.world_id AND next.grid_x=current.grid_x+? AND next.grid_y=current.grid_y+? WHERE current.id=?", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, direction.dx, direction.dy, chronicle.location());
         if (destination == null) return "The ground gives way toward the edge of what you can cross. You turn back before leaving the land behind.";
@@ -1888,7 +1947,12 @@ public class ChronicleActionService {
         // STORE (#67 store/pack): put/stow/cache/stockpile something into a container, or the container-less
         // storage verbs that imply the settlement's store ("put it away", "cache the meat", "stockpile the wood").
         if((value.contains(" in ")||value.contains(" into ")||value.contains(" inside "))&&(value.contains("put")||value.contains("place")||value.contains("store")||value.contains("stow")||value.contains("stash")||value.contains("load")||value.contains("pack")||value.contains("drop"))&&containerNoun) return Intent.STORE;
-        if((value.contains("put")&&value.contains("away"))||value.contains("cache")||value.contains("stockpile")||value.contains("put in storage")||value.contains("stow away")||value.contains("stash away")) return Intent.STORE;
+        // "put it by" is the oldest English for storing a thing (#106), and the only phrasing of the fodder chain
+        // that still reached nothing — `store the hay` worked and `put the hay by` did not. Matched on the
+        // sentence ENDING in "by", which is what distinguishes it from placing something beside something else:
+        // "put the pot by the fire" carries on past the preposition and means nowhere near this.
+        if((value.contains("put")&&value.contains("away"))||value.contains("cache")||value.contains("stockpile")||value.contains("put in storage")||value.contains("stow away")||value.contains("stash away")
+           ||(value.contains("put")&&value.strip().endsWith(" by"))) return Intent.STORE;
         // "store the food" with no container named (#37). The rules above want a container noun or the words
         // "away"; a bare storage verb — the most ordinary way to say it — reached nothing.
         //
@@ -2008,7 +2072,17 @@ public class ChronicleActionService {
         // "snare a rabbit" is the immediate hand-worked attempt (V42).
         if((value.contains("build")||value.contains("set")||value.contains("make")||value.contains("place")||value.contains("construct")||value.contains("lay"))&&(value.contains("deadfall")||value.contains("pit trap")||value.contains("fish trap")||value.contains("cage trap")||value.contains("box trap")||value.contains("snare")||(value.contains("trap")&&!value.contains("check")))) return Intent.SET_TRAP;
         if(value.contains("lure")||value.contains("bait the")||((value.contains("leave")||value.contains("put")||value.contains("place")||value.contains("set"))&&(value.contains("bait")||value.contains("draw them")||value.contains("draw it")))) return Intent.LURE;
-        if(value.contains("tame")||value.contains("befriend")||value.contains("domesticate")||value.contains("gain its trust")||value.contains("earn its trust")||((value.contains("approach")||value.contains("offer")||value.contains("feed")||value.contains("hold out"))&&(value.contains("calm")||value.contains("slow")||value.contains("gentl")||value.contains("quiet")||value.contains("trust")||value.contains("goat")||value.contains("rabbit")||value.contains("fowl")||value.contains("turtle")||value.contains("hedgehog")||value.contains("pigeon")||value.contains("deer")||value.contains("reindeer")||value.contains("duck")))) return Intent.TAME;
+        // Taming by offering food, and the one case where the same words are not taming at all (#106). A keeper
+        // feeding their OWN goat says "feed the goat", exactly as someone winning a wild one over does, and was
+        // answered "it lets you come nearer than last time, and holds there, watching" — the approach to a wild
+        // animal, offered to someone whose goat is already theirs. No wording tells the two apart; the data does,
+        // so the feeding branch yields the sentence once a beast of that kind is kept, and FEED_ANIMAL takes it.
+        //
+        // Only the FEEDING branch yields. "tame the goat" is unambiguous whatever is in the pen, and a keeper who
+        // says it about a second, wild goat means it.
+        if(value.contains("tame")||value.contains("befriend")||value.contains("domesticate")||value.contains("gain its trust")||value.contains("earn its trust")
+           ||(((value.contains("approach")||value.contains("offer")||value.contains("feed")||value.contains("hold out"))&&(value.contains("calm")||value.contains("slow")||value.contains("gentl")||value.contains("quiet")||value.contains("trust")||value.contains("goat")||value.contains("rabbit")||value.contains("fowl")||value.contains("turtle")||value.contains("hedgehog")||value.contains("pigeon")||value.contains("deer")||value.contains("reindeer")||value.contains("duck")))
+              &&!items.keepsSuchABeast(value))) return Intent.TAME;
         // Marking a trail is not following one (#75). TRACK's trail branch fires on "trail" beside find/read/follow,
         // so "mark the trail so I can find my way back" — the most natural way to say it — was read as tracking on
         // the strength of the word "find". A marking verb beside a trail is marking; TRACK is left untouched.
@@ -2021,6 +2095,11 @@ public class ChronicleActionService {
            &&(value.contains("track")||value.contains("trail")||value.contains("print")||value.contains("my sign")
               ||value.contains("where i")||value.contains("passage"))
            &&!value.contains("follow")&&!value.contains("read")) return Intent.HIDE_TRAIL;
+        // Your OWN tracks are not quarry (#37). Placed above TRACK, which hunts animal sign and answered "follow
+        // my own tracks back" with "you find feathers caught in the low growth" — a player asking to go back the
+        // way they came was shown somebody else's feathers. object_transition has recorded the direction of every
+        // move since the table existed, so the way back is a thing the world knows.
+        if(BACKTRACKING.matcher(value).find()) return Intent.MOVE;
         if(value.contains("track")||value.contains("follow the trail")||value.contains("read the ground")||value.contains("look for sign")||value.contains("look for tracks")||((value.contains("print")||value.contains("spoor")||value.contains("scat")||value.contains("droppings")||value.contains("trail"))&&(value.contains("find")||value.contains("read")||value.contains("follow")||value.contains("search")||value.contains("look")))) return Intent.TRACK;
         // Scan the boundary of the ground for a way clear of danger before moving into it (#128/#123: grounded
         // evidence before forced contact). Reads a predator ONE tile out by directional sense — scent on the
@@ -2092,23 +2171,81 @@ public class ChronicleActionService {
         // 'milk' must be whole-word: milkweed is a fibre plant belonging to GATHER_PLANT, and a substring match stole
         // it. Wool is not a trigger noun — "weave wool cloth" is weaving — and a bare 'fleece' is not either, since
         // rinsing a fleece is washing it, not taking it off an animal. So a fleece needs a taking verb.
+        // "wool" is what a keeper calls a fleece once it is off the animal (#106), and the rule knew only
+        // "fleece": `shear the sheep` worked and `take the wool` reached nothing, over the same mechanism.
         if(word(value,"milk")||value.contains("shear")
-           ||(value.contains("fleece")&&(value.contains("take")||value.contains("clip")||value.contains("cut")||value.contains("pull")))
+           ||((value.contains("fleece")||word(value,"wool"))&&(value.contains("take")||value.contains("clip")||value.contains("cut")||value.contains("pull")))
            ||((value.contains("collect")||value.contains("gather")||value.contains("take")||value.contains("check"))
               &&(word(value,"egg")||word(value,"eggs")))) return Intent.TAKE_ANIMAL_YIELD;
         // Tending a sick beast (#106/#108). Needs BOTH a tending verb and an animal, so it cannot steal
         // "tend the crop" from WEED_CROP or "bind the wound" from TREAT_WOUND — the nouns keep them apart.
-        if((value.contains("tend")||value.contains("treat")||value.contains("doctor")||value.contains("physic")||value.contains("dose")||value.contains("nurse"))&&(value.contains("animal")||value.contains("beast")||value.contains("stock")||value.contains("the herd")||value.contains("the flock")||word(value,"goat")||word(value,"goats")||word(value,"horse")||word(value,"cow")||word(value,"ox")||word(value,"oxen")||word(value,"sheep")||word(value,"fowl")||word(value,"reindeer")||word(value,"donkey")||value.contains("buffalo")||value.contains("sick one")
-           // ...or the catalogue knows the name (#79). The literals above are a hand-kept list of the kept species, and a
-           // species added to draft_species or tamed_yield — a yak — would be tended by nobody who said its name.
-           ||items.namesAKeptAnimal(value))) return Intent.TEND_ANIMAL;
+        // How the stock ARE (#106). wildlife_bond keeps hunger, thirst, fatigue and sickness on every tamed beast,
+        // the tick moves all four, and haulage, breeding and yield are each gated on them — and the plainest
+        // question a keeper asks reached nothing: "how is the goat", "is the goat sick", "check on the animals".
+        // Worse, "water the animals" was answered "none of your draft beasts is hungry", which is an answer about
+        // appetite to a question about thirst.
+        //
+        // Placed before tending, grooming and feeding, and sharing their one species vocabulary. It takes the
+        // ASKING and the watering; the three acts below keep their verbs, so "tend the goat" still tends and
+        // "feed the goat" still feeds. Thirst falls by place and by structure rather than by a bucket, so the
+        // honest answer to watering is what the animals' water depends on — which is what this says.
+        if((value.contains("how is")||value.contains("how are")||value.contains("how do the")||value.contains("check on")
+            ||value.contains("check over")||value.contains("look over")||value.contains("look in on")||value.contains("see to the")
+            ||value.contains("are they well")||value.contains("are they all right")||value.contains("what state")
+            ||value.contains("do they need")||value.contains("what do they need")||value.contains("sick")||value.contains("ailing")
+            ||value.contains("limping")||value.contains("lame")||value.contains("off its feed")||value.contains("off their feed")
+            ||value.contains("thirsty")||value.contains("water the")||value.contains("give the")&&value.contains("water")
+            ||value.contains("check the")&&(value.contains(" over")||value.contains("for tick"))
+            // ...and what a beast can be HELD with (#106). animal_restraint works by being CARRIED and no
+            // sentence could reach it, so these are answered with what you have for it and what it does. There
+            // is no restrained state in this world and an invented one would change nothing and claim it had.
+            ||value.contains("tether")||value.contains("hobble")||value.contains("halter")||value.contains("tie up")
+            ||value.contains("restrain")||value.contains("lead the")||value.contains("catch the")||value.contains("hold the")
+            ||value.contains("shut the")||value.contains("shut in")||value.contains("keep hold of"))
+           &&namesABeast(value)
+           // The acts keep their own verbs. Asking after a beast is not tending, grooming, feeding or milking one.
+           &&!value.contains("tend")&&!value.contains("treat")&&!value.contains("groom")&&!value.contains("curry")
+           &&!value.contains("feed the")&&!word(value,"milk")&&!value.contains("shear")
+           // ...and BUILDING something is the assembly matcher's, never a question about the stock. A sick
+           // animal shelter is a thing a keeper raises, and "sick" plus "animal" is all this rule needed to
+           // steal all three of its own keywords — which noJavaIntentShadowsAnAssemblysOwnKeywords caught.
+           &&!value.contains("build")&&!value.contains("raise")&&!value.contains("put up")
+           &&!value.contains("make ")&&!value.contains("construct")&&!value.contains("erect")
+           // ...and a sentence that IS an assembly's own keyword belongs to the assembly matcher, verb or no
+           // verb. The bare "sick animal shelter" is the NAME of a thing a keeper raises, and no list of
+           // building words would have caught it. Asked of the matcher, so that every assembly added after this
+           // one is protected too — which a hand-kept list could never promise.
+           &&!namesAnAssembly(value)) return Intent.CHECK_STOCK;
+        // The dressing verbs belong here too (#106): tendSickAnimal works a poultice, an infusion or a dried herb
+        // bundle into an ailing beast, which is exactly what "bandage the goat" and "put a poultice on the ewe"
+        // ask for, and both reached nothing. Gated on the beast as everything in this block is, so "bind the
+        // wound" and "bandage my arm" stay TREAT_WOUND — the noun is the whole of the difference.
+        if((value.contains("tend")||value.contains("treat")||value.contains("doctor")||value.contains("physic")||value.contains("dose")||value.contains("nurse")
+            ||value.contains("bandage")||value.contains("poultice")||value.contains("salve")||value.contains("dress the")||value.contains("bind the"))
+           &&namesABeast(value)) return Intent.TEND_ANIMAL;
         // Combing out a coat (#106). Kept apart from TEND_ANIMAL by the verb: tending is for what ails a beast,
-        // grooming is for the coat itself, and the two want different things in your hands.
+        // grooming is for the coat itself, and the two want different things in your hands. The coat, the mane and
+        // the fleece are its own — a part of the animal rather than another name for it — so they are here.
         if((value.contains("groom")||value.contains("curry")||word(value,"brush")||word(value,"comb")||value.contains("brushing")||value.contains("combing"))
-           &&(value.contains("animal")||value.contains("beast")||value.contains("stock")||value.contains("the herd")||value.contains("the flock")||value.contains("coat")||value.contains("mane")||value.contains("fleece")
-              ||items.namesAKeptAnimal(value))) return Intent.GROOM_ANIMAL;
-        if((value.contains("feed")||value.contains("forage")||value.contains("graze")||value.contains("water the"))&&(value.contains("animal")||value.contains("beast")||value.contains("ox")||value.contains("oxen")||value.contains("aurochs")||value.contains("deer")||value.contains("elk")||value.contains("reindeer")||value.contains("draft")||value.contains("cattle")||value.contains("livestock")||value.contains("the herd")||value.contains("the stock")
-           ||items.namesAKeptAnimal(value))) return Intent.FEED_ANIMAL;
+           &&(namesABeast(value)||value.contains("coat")||value.contains("mane")||value.contains("fleece"))) return Intent.GROOM_ANIMAL;
+        // "give the goat some hay" and "put hay in the trough" are feeding (#106), and reached nothing: the rule
+        // knew the verb "feed" and not the act of handing fodder over. The fodder chain was whole all along —
+        // grass grows, drying it yields the bundle, and THIS is the rule that consumes it — so the words for its
+        // last step belong here. Placed after the asking rule, so "give the goat water" still answers about
+        // thirst rather than shaking out a bundle of dry grass at it.
+        if((value.contains("feed")||value.contains("forage")||value.contains("graze")||value.contains("water the")
+            ||((value.contains("give")||value.contains("put out")||value.contains("put ")||value.contains("set out")
+                ||value.contains("fill"))&&(word(value,"hay")||value.contains("fodder")||value.contains("dry grass")
+                ||value.contains("dried grass"))))
+           &&namesABeast(value)) return Intent.FEED_ANIMAL;
+        // ...and the same with no animal named, because a trough and a hay rack are only ever for stock: "put
+        // hay in the trough" and "put out fodder" name the vessel instead of the beast, which is how a keeper
+        // talks. Nothing else in this world holds fodder.
+        if((word(value,"hay")||value.contains("fodder"))
+           &&(value.contains("give")||value.contains("put out")||value.contains("set out")||value.contains("fill")
+              ||value.contains("in the trough")||value.contains("the rack")||value.contains("the manger"))
+           &&!value.contains("make ")&&!value.contains("cut ")&&!value.contains("dry ")&&!value.contains("cure ")
+           &&!value.contains("build")&&!value.contains("store")) return Intent.FEED_ANIMAL;
         if(value.contains("clear")&&(value.contains("land")||value.contains("forest")||value.contains("brush")||value.contains("woods")||value.contains("woodland")||value.contains("trees")||value.contains("arable")||value.contains("for a field")||value.contains("for planting")||value.contains("ground for"))) return Intent.CLEAR_LAND;
         // Carry water to a growing stand (#37/#165). FEED_ANIMAL above already claims "water the" — but only
         // together with an animal noun, so a plot, a row or a seedling cannot be mistaken for a thirsty ox. Gated on
@@ -2233,6 +2370,19 @@ public class ChronicleActionService {
             ||value.contains("is the meat still good")||value.contains("still good to eat")
             ||value.contains("what have i got to eat")||value.contains("have i anything to eat")
             ||value.contains("go through the food")) return Intent.TAKE_STOCK_OF_FOOD;
+        // Which way a kind of ground lies (#37). The movement axis swept at 26 of 42 sentences reaching nothing,
+        // and this was among them though every piece of the answer sits in world_chunk: the neighbouring biomes,
+        // their elevations, and the grid offsets that say which way each one lies. planTravel only knows places
+        // the Chronicle has NAMED, so a KIND of ground could be asked for and never found.
+        //
+        // Gated on the sentence naming one of those kinds, which is what keeps it clear of READ_THE_SKY's "which
+        // way is north" below — a bearing on the sun is not a bearing on the country. It also takes "how far is
+        // the river" from MEASURE, which answered "you pace it out and reckon by eye" and then gave no figure at
+        // all: a reckoning announced and not delivered.
+        if((value.contains("which way")||value.contains("what direction")||value.contains("which direction")
+            ||value.contains("where is the")||value.contains("where are the")||value.contains("how far is")
+            ||value.contains("how far to")||value.contains("near here")||value.contains("nearby"))
+           &&namesGroundAsked(value)) return Intent.WHICH_WAY;
         // What the sky is doing (#37, act fifteen). The hour, the month, the felt wind, the frost and whether
         // rain is in it are all simulated, and 22 of 35 phrasings about them reached nothing while "what is the
         // weather doing" answered well. world_weather.wind_speed_kph is the sharpest: a column the simulation
@@ -2322,6 +2472,15 @@ public class ChronicleActionService {
               ||value.contains("garment")||value.contains("what i am wearing")||value.contains("my clothes"))
            &&!value.contains("make ")&&!value.contains("sew ")&&!value.contains("craft ")) return Intent.LINE_GARMENT;
         if((value.contains("tidy")||value.contains("arrange")||value.contains("straighten")||value.contains("set in order")||value.contains("order the")||value.contains("clean up")||value.contains("maintain")||value.contains("look after")||value.contains("protect"))&&(value.contains("camp")||value.contains("campsite")||value.contains("supplies")||value.contains("shelter site"))) return Intent.MAINTAIN_CAMP;
+        // Mucking out is the SAME WORK on the SAME counter (#106). maintainCamp carries off `chunk_refuse`, which
+        // is the very thing V299's stock sickness offers "clean ground" as a way out of — so a keeper clearing a
+        // pen is doing exactly what this intent does, and "muck out the pen" reached nothing at all while "tidy
+        // the camp" did it. Routed here rather than given a second implementation that would drift from this one.
+        if((value.contains("muck out")||value.contains("muck the")||value.contains("shovel out")||value.contains("clear the dung")
+            ||value.contains("clear the muck")||value.contains("clear the manure")||value.contains("clean out")
+            ||((value.contains("clean")||value.contains("clear"))&&(value.contains("the pen")||value.contains("the coop")||value.contains("the stable")
+               ||value.contains("the byre")||value.contains("the stall")||value.contains("the shelter")||value.contains("the fold"))))
+           &&!value.contains("build")&&!value.contains("make ")) return Intent.MAINTAIN_CAMP;
         // Bare-hand cover (#195): a windbreak/brush screen leant against the wind — no tool, partial protection.
         if((value.contains("windbreak")||value.contains("wind break")||value.contains("brush screen")||value.contains("wind screen")||value.contains("reed screen against"))&&(value.contains("make")||value.contains("build")||value.contains("raise")||value.contains("set up")||value.contains("put up")||value.contains("weave")||value.contains("lean")||value.contains("erect"))) return Intent.PLACE_WINDBREAK;
         // Bare-hand partial covers (#195): sunshade / rain cover / groundsheet / stone ring — a placing verb plus the
@@ -2373,6 +2532,33 @@ public class ChronicleActionService {
             return Intent.FORAGE_GROUND;
         // Terrain crossing (#72): wading/fording/swimming/climbing toward a direction is movement to the next ground.
         if(Direction.from(value)!=null && (value.contains("wade")||value.contains("ford")||value.contains("swim")||value.contains("cross")||value.contains("climb")||value.contains("scramble")||value.contains("clamber")||value.contains("traverse"))) return Intent.MOVE;
+        // A crossing with no bearing in it (#37). "can I get across here" answered in detail — the load, the
+        // ford, a laid way — and "wade across", "swim across" and "cross to the other side" reached nothing: the
+        // game could JUDGE a crossing and not make one. The water names the direction, and move() asks the same
+        // query the judgement does, so the two can never disagree about what is there.
+        //
+        // Gated on the sentence being about getting OVER something, so "cross my arms" and "I am cross" are
+        // nobody's crossing, and on no bearing being named, since the rule above already has those.
+        if(CROSSING_VERB.matcher(value).find()
+           &&(value.contains("across")||value.contains(" over")||value.contains("other side")||value.contains("far side")
+              ||value.contains("the river")||value.contains("the stream")||value.contains("the water")
+              ||value.contains("the fen")||value.contains("the marsh")||value.contains("the bog"))) return Intent.MOVE;
+        // Climbing, and following a feature (#37). Both name a piece of GROUND rather than a bearing, which the
+        // move rule wanted — so "climb the hill", "follow the stream", "follow the shore" and "go down into the
+        // valley" all reached nothing, though which way the hill lies is a thing world_chunk has always known.
+        //
+        // Gated on a kind of ground being named, or on a bare up/down, so "follow the trail" is still TRACK's
+        // hunt and "follow them" is still the people's. The move itself resolves the bearing from the same
+        // vocabulary WHICH_WAY answers from, so what the game says lies north is what walking north reaches.
+        if(wantsGroundStep(value)) return Intent.MOVE;
+        // "head east" reached NOTHING while "go north", "walk south" and "go west" all worked (#37). The move rule
+        // knows walk/travel/go/move; "head" was only ever read as part of "head to" and "head for", which are
+        // TRAVEL's and want a place rather than a bearing — so one of the commonest ways of saying the commonest
+        // thing a player does fell between the two rules. Gated on a direction being named, so "head for the high
+        // ground" and "head back to camp" are still journeys, and as words, because "head" sits inside
+        // "arrowhead" and "headsperson".
+        if(Direction.from(value)!=null && (word(value,"head")||word(value,"heading")||word(value,"headed")
+            ||value.contains("set off")||value.contains("set out")||value.contains("strike out")||value.contains("push on"))) return Intent.MOVE;
         // Breaking off from danger (#72): retreat/flee/hide. "hide" scoped ("hide from"/"hide myself") so tanning
         // or working an animal hide is untouched.
         // Keeping away from something is how most encounters should end (#37). DISENGAGE knew retreat, flee and
@@ -2466,7 +2652,22 @@ public class ChronicleActionService {
         // wants a measuring word, and that sentence has none (#37). Gated on the same elapsed-time shape the
         // answer itself reads, so it takes nothing that was not already about time.
         if(reckonsElapsedTime(value)) return Intent.MEASURE;
-        if(value.contains("measure")||value.contains("pace out")||value.contains("pace off")||word(value,"weigh")||value.contains("how heavy")||word(value,"heft")||value.contains("how many")||word(value,"count")||word(value,"tally")||value.contains("how far")||value.contains("how deep")||value.contains("test the depth")||value.contains("estimate the distance")||value.contains("gauge")) return Intent.MEASURE;
+        // "how long", "how wide", "how thick" and "how tall" joined them (#37). The rule knew how far, how deep,
+        // how heavy and how many, and not the commonest measurement there is: "how long is this plank" reached
+        // nothing at all. Found by a test written for something else, which is the usual way.
+        //
+        // Safe here because the two rules that own a "how long" about TIME both run earlier — the sky reading
+        // takes "how long until dark", and reckonsElapsedTime takes "how long have I been here" on the line
+        // above. A length question is what is left.
+        if(value.contains("measure")||value.contains("pace out")||value.contains("pace off")||word(value,"weigh")||value.contains("how heavy")||word(value,"heft")||value.contains("how many")||word(value,"count")||word(value,"tally")||value.contains("how far")||value.contains("how deep")
+           ||(value.contains("how long")
+              // ...except where there is nothing behind the number. Healing time, infection and a broken bone
+              // are deliberately unmodelled, and TheQuestionsABodyCanAnswerIntegrationTest holds that they
+              // stay honest misses — "you pace it out and reckon by eye" over a wound is a near-miss dressed
+              // as an answer, which is worse than nothing.
+              &&!value.contains("heal")&&!value.contains("mend itself")&&!value.contains("to knit"))
+           ||value.contains("how wide")||value.contains("how thick")||value.contains("how tall")||value.contains("how big")
+           ||value.contains("test the depth")||value.contains("estimate the distance")||value.contains("gauge")) return Intent.MEASURE;
         if(value.contains("refine")||value.contains("improve")||value.contains("upgrade")||value.contains("revise")||value.contains("enhance")||(value.contains("add")&&value.contains("holder"))) return Intent.REFINE;
         if(value.contains("designate")||value.contains("christen")||((value.contains("name")||value.contains("call")||value.contains("establish")||value.contains("found")||value.contains("mark"))&&(value.contains("this place")||value.contains("this area")||value.contains("this spot")||value.contains("this location")||value.contains("here as")||value.contains("this as")||value.contains("this the")))) return Intent.DESIGNATE;
         // DROP / place (#67): set an object down on the ground here. STORE (into a container) and the trap/
@@ -2480,7 +2681,13 @@ public class ChronicleActionService {
         //
         // Above EQUIP, which otherwise answers "splint my leg" with "you have nothing unequipped that can be
         // worn or wielded" — a wrong answer in the even voice of a true one.
+        // "bandage" joins them (#106). Found while giving the animal rules their dressing verbs: `bandage my arm`
+        // reached NOTHING, because the legacy rule pairs bandage only with a word for a wound and this one did
+        // not know the verb at all — so the body part was useless to it. Only "bandage", deliberately: the noun
+        // group below ends in a bare `" it"`, and bind, wash, clean and dress would each steal a sentence from
+        // somebody — `bind the planks` is lashing, `wash it` is washing. Nothing else in this world is bandaged.
         if((value.contains("splint")||value.contains("stitch")||value.contains("cauteris")||value.contains("cauteriz")||value.contains("sling")
+            ||value.contains("bandage")
             ||value.contains("staunch")||value.contains("change the dressing")||value.contains("press on"))
            &&(value.contains("wound")||value.contains("cut")||value.contains("bleeding")||value.contains("gash")
               ||value.contains("my leg")||value.contains("my arm")||value.contains("my ankle")||value.contains("my wrist")
@@ -2497,6 +2704,183 @@ public class ChronicleActionService {
     }
     /** Whole-word containment, delegating to the one definition of it — see {@link com.devosphere.draugr.narration.Words}. */
     private static boolean word(String haystack, String w) { return com.devosphere.draugr.narration.Words.word(haystack, w); }
+
+    /**
+     * The kinds of ground a person asks the way to, and the biomes each one means (#37).
+     *
+     * <p>Spoken word first, longest spoken form first within a kind, so "high ground" is not read as "ground".
+     * Every biome the generator makes is reachable through one of these; a kind nobody has a word for would be a
+     * place that cannot be asked after, which is the defect this answer exists to end.
+     */
+    private static final String[][] GROUND_ASKED_FOR = {
+        {"open water", "OCEAN"}, {"the sea", "OCEAN"}, {"the ocean", "OCEAN"},
+        {"the shore", "COAST"}, {"the coast", "COAST"}, {"the beach", "COAST"},
+        {"the river", "RIVER_BANK"}, {"the stream", "RIVER_BANK"}, {"the bank", "RIVER_BANK"},
+        {"fresh water", "RIVER_BANK|WETLAND"}, {"freshwater", "RIVER_BANK|WETLAND"},
+        {"drinking water", "RIVER_BANK|WETLAND"}, {"water", "RIVER_BANK|WETLAND|COAST|OCEAN"},
+        {"the marsh", "WETLAND"}, {"the fen", "WETLAND"}, {"the bog", "WETLAND"},
+        {"marshland", "WETLAND"}, {"wetland", "WETLAND"}, {"the reeds", "WETLAND"},
+        {"high ground", "HIGHLAND|MOUNTAIN"}, {"higher ground", "HIGHLAND|MOUNTAIN"},
+        {"the hills", "HIGHLAND"}, {"the hill", "HIGHLAND"}, {"the uplands", "HIGHLAND"},
+        {"the mountain", "MOUNTAIN"}, {"the mountains", "MOUNTAIN"}, {"the ridge", "HIGHLAND|MOUNTAIN"},
+        {"the woods", "TEMPERATE_FOREST"}, {"the wood", "TEMPERATE_FOREST"}, {"the forest", "TEMPERATE_FOREST"},
+        {"the trees", "TEMPERATE_FOREST"}, {"timber", "TEMPERATE_FOREST"},
+        {"open ground", "GRASSLAND"}, {"the grassland", "GRASSLAND"}, {"the meadow", "GRASSLAND"},
+        {"grazing", "GRASSLAND"}, {"pasture", "GRASSLAND"}, {"the plain", "GRASSLAND"},
+        {"a cave", "CAVE_MOUTH|CAVE_INTERIOR"}, {"the cave", "CAVE_MOUTH|CAVE_INTERIOR"},
+        {"shelter from the wind", "TEMPERATE_FOREST|CAVE_MOUTH"},
+        {"lower ground", "GRASSLAND|WETLAND|RIVER_BANK|COAST"}, {"the valley", "GRASSLAND|RIVER_BANK"},
+    };
+
+    /**
+     * Which way a kind of ground lies (#37).
+     *
+     * <p>A player moves more often than they do anything else, and the movement axis swept at <b>26 of 42
+     * sentences reaching nothing</b>. "which way is the water" was among them, though every piece of the answer
+     * was in {@code world_chunk}: the neighbouring biomes, their elevations, and the grid offsets that say which
+     * way each one lies. {@code planTravel} only knows places the Chronicle has NAMED, so a kind of ground could
+     * be asked for and never found.
+     *
+     * <p><b>One ring, and only in the light</b>, which is the same bound {@link #skyReading} and the visual
+     * context keep: the shape of the next ground over is plain from where anyone stands, and what lies two
+     * chunks off is a thing to be scouted rather than known. Inside a cave, or after dark, nothing beyond this
+     * ground can be seen and the answer says so rather than reading the map for them.
+     *
+     * <p>Bearings come from {@link com.devosphere.draugr.world.Compass}, the one place the convention lives.
+     */
+    private String whichWay(UUID location, String actionText, Instant at) {
+        String v = actionText == null ? "" : actionText.toLowerCase(Locale.ROOT);
+        String asked = null, biomes = null;
+        for (String[] kind : GROUND_ASKED_FOR)
+            if (groundNamed(v, kind[0]) && (asked == null || kind[0].length() > asked.length())) { asked = kind[0]; biomes = kind[1]; }
+        if (asked == null) return null;
+
+        java.util.Map<String,Object> here = jdbc.queryForMap(
+            "SELECT world_id, grid_x, grid_y, elevation, biome FROM world_chunk WHERE id=?", location);
+        String standingOn = (String) here.get("biome");
+        boolean dark = isDark(at);
+        boolean underground = "CAVE_INTERIOR".equals(standingOn);
+
+        // Standing on it already is the first thing worth saying, and it is true in the dark and underground.
+        for (String b : biomes.split("\\|"))
+            if (b.equals(standingOn))
+                return "You are standing on it — this ground is " + groundSpoken(standingOn) + ", and what you are "
+                    + "looking for is underfoot.";
+
+        if (underground) return "You are inside the rock. There is no telling which way anything lies from in here.";
+        if (dark) return "It is too dark to make out the shape of the country beyond this ground. By daylight you "
+            + "could see which way it lies; now you would be going on memory and guesswork.";
+
+        java.util.List<String> seen = new java.util.ArrayList<>();
+        for (java.util.Map<String,Object> n : jdbc.queryForList(
+                "SELECT n.biome, n.elevation, n.grid_x - ? AS dx, n.grid_y - ? AS dy FROM world_chunk n " +
+                "WHERE n.world_id=? AND abs(n.grid_x-?)+abs(n.grid_y-?)=1 ORDER BY dy, dx",
+                here.get("grid_x"), here.get("grid_y"), here.get("world_id"), here.get("grid_x"), here.get("grid_y"))) {
+            String b = (String) n.get("biome");
+            boolean wanted = false;
+            for (String k : biomes.split("\\|")) wanted |= k.equals(b);
+            if (!wanted) continue;
+            String bearing = com.devosphere.draugr.world.Compass.of(
+                ((Number) n.get("dx")).intValue(), ((Number) n.get("dy")).intValue());
+            if (bearing == null) continue;
+            int rise = ((Number) n.get("elevation")).intValue() - ((Number) here.get("elevation")).intValue();
+            seen.add(bearing + " lies " + groundSpoken(b)
+                + (rise > 40 ? ", and the ground rises to it" : rise < -40 ? ", and the ground falls away to it" : ""));
+        }
+
+        if (seen.isEmpty())
+            return "You look about for " + asked.replace("the ", "").replace("a ", "")
+                + " and see nothing of it from here — not on this ground, and not on any ground you can see from "
+                + "it. It may lie further off than the eye reaches, which is a thing to be scouted rather than "
+                + "guessed at.";
+        // Joined with semicolons rather than "and", because each bearing may carry a clause of its own about the
+        // rise or the fall of the ground to it, and two kinds of "and" in one sentence read as one list.
+        return "From here: " + String.join("; ", seen) + ". That is as far as the eye carries; past the next "
+            + "ground over you would be scouting rather than looking.";
+    }
+
+    /**
+     * Whether the sentence names a kind of ground somebody could ask the way to — with or without its article.
+     *
+     * <p>"any marsh nearby" is how a person asks, and the table says "the marsh"; rather than keep every kind
+     * twice, the article is stripped and the bare noun matched <b>as a word</b>. That boundary is not optional:
+     * "sea" sits inside "season" and "research", and this project has shipped the substring defect four times.
+     */
+    /**
+     * Whether the sentence is an assembly's own name (#106/#77).
+     *
+     * <p>A buildable thing is reached by the assembly matcher, which only runs when no hard intent claims the
+     * phrase first. So a question-intent broad enough to swallow an assembly's keyword makes that thing
+     * unbuildable by its own name: {@code noJavaIntentShadowsAnAssemblysOwnKeywords} caught CHECK_STOCK doing it
+     * to all three of the sick animal shelter's words, on "sick" plus "animal".
+     *
+     * <p>Asked of the matcher rather than held as a list of building verbs, so that every assembly added after
+     * this one is protected too. Null-guarded because the routing regression test builds this service without an
+     * AssemblyService: it has no world, and the guard that found this needs one.
+     */
+    private boolean namesAnAssembly(String value) {
+        return assembly != null && assembly.match(value) != null;
+    }
+
+    private static boolean namesGroundAsked(String value) {
+        for (String[] kind : GROUND_ASKED_FOR) if (groundNamed(value, kind[0])) return true;
+        return false;
+    }
+
+    /** The kind as written, or its bare noun as a whole word. */
+    private static boolean groundNamed(String value, String kind) {
+        if (value.contains(kind)) return true;
+        String bare = kind.replaceFirst("^(the|a|an) ", "");
+        if (bare.equals(kind)) return false;
+        return bare.indexOf(' ') >= 0 ? value.contains(bare) : word(value, bare);
+    }
+
+    /** What a biome is called by somebody standing on it, rather than by the generator. */
+    private static String groundSpoken(String biome) {
+        return switch (biome) {
+            case "OCEAN" -> "open water";
+            case "COAST" -> "the shore";
+            case "RIVER_BANK" -> "a river bank";
+            case "WETLAND" -> "marsh";
+            case "GRASSLAND" -> "open grass";
+            case "TEMPERATE_FOREST" -> "woodland";
+            case "HIGHLAND" -> "high ground";
+            case "MOUNTAIN" -> "mountain";
+            case "CAVE_MOUTH" -> "a cave mouth";
+            case "CAVE_INTERIOR" -> "cave";
+            default -> biome.toLowerCase(Locale.ROOT).replace('_', ' ');
+        };
+    }
+
+    /** The words a keeper has for an animal that is NOT in the catalogue — the kinds, ranks and ages of stock. */
+    private static final String[] KEPT_STOCK_WORDS = {
+        "animal", "animals", "beast", "beasts", "stock", "livestock", "cattle", "herd", "flock",
+        "cow", "cows", "calf", "calves", "bullock", "heifer", "bull", "hen", "hens", "chick", "chicks",
+        "ewe", "ram", "lamb", "kid", "foal", "mare", "colt", "mule", "sick one"};
+
+    /**
+     * Whether the sentence is about an animal somebody keeps (#106).
+     *
+     * <p><b>One list, for all three of them.</b> Tending, grooming and feeding each carried its OWN hand-kept
+     * roll of species, and the three had drifted apart until they no longer agreed on what an animal was:
+     *
+     * <pre>
+     *   TEND_ANIMAL    goat, horse, cow, ox, sheep, fowl, reindeer, donkey, buffalo
+     *   GROOM_ANIMAL   (no species at all — only animal/beast/stock/herd/flock)
+     *   FEED_ANIMAL    ox, aurochs, deer, elk, reindeer, cattle, livestock — no goat, sheep or horse
+     * </pre>
+     *
+     * So the beast you could tend you could not groom, and the one you could groom you could not feed. Measured
+     * on a booted world: "groom the goat" reached nothing, and "feed the goat" was answered by TAME — <i>"it lets
+     * you come nearer than last time"</i> — which is the approach to a WILD animal offered to a keeper feeding
+     * their own. Three lists meant three different animals; this is the one list, and the catalogue is the rest
+     * of it. A species added to {@code draft_species} or {@code tamed_yield} becomes tendable, groomable and
+     * feedable in the same breath, which is the whole point of asking the table.
+     */
+    private boolean namesABeast(String value) {
+        for (String w : KEPT_STOCK_WORDS) if (w.indexOf(' ') < 0 ? word(value, w) : value.contains(w)) return true;
+        return items.namesAKeptAnimal(value);
+    }
     /**
      * The verbs that ask for something to be cooked — as WORDS, and never their past participles.
      *
@@ -2520,8 +2904,140 @@ public class ChronicleActionService {
      * <p>"dig" is deliberately absent and spelled "dig up" at the call site: "dig a root cellar" names a real
      * root and a real assembly, so no boundary saves it, and "dig up" is how the act is said of a root.
      */
+    /** A direction the world chose, or the reason it could not. Exactly one of the two is set. */
+    private record Toward(Direction direction, String refusal) { }
+
+    /**
+     * Which way the next piece of a KIND of ground lies, for the acts whose object is the ground (#37).
+     *
+     * <p>One implementation for crossing, climbing and following, because all three ask the same question and
+     * three copies of it would drift — and because the answer must agree with what {@link #whichWay} tells the
+     * player. If the game says the marsh lies north, wading across had better go north.
+     *
+     * @param biomes pipe-separated biome keys, or null to go by height alone
+     * @param upward with a null {@code biomes}: TRUE for the highest neighbour, FALSE for the lowest
+     */
+    private Toward toward(UUID location, String biomes, Boolean upward) {
+        java.util.List<java.util.Map<String,Object>> around = jdbc.queryForList(
+            "SELECT next.grid_x - here.grid_x AS dx, next.grid_y - here.grid_y AS dy, next.biome, " +
+            "  next.elevation - here.elevation AS rise " +
+            "FROM world_chunk here JOIN world_chunk next ON next.world_id=here.world_id " +
+            "  AND abs(next.grid_x-here.grid_x) + abs(next.grid_y-here.grid_y) = 1 " +
+            // North first and round, so a list of sides reads like a compass rather than like a table.
+            "WHERE here.id=? ORDER BY dy, dx", location);
+
+        java.util.List<java.util.Map<String,Object>> fit = new java.util.ArrayList<>();
+        if (biomes != null) {
+            for (java.util.Map<String,Object> n : around)
+                for (String k : biomes.split("\\|")) if (k.equals(n.get("biome"))) { fit.add(n); break; }
+            if (fit.isEmpty())
+                return new Toward(null, "There is none of that within a step of this ground — not on any side of "
+                    + "it. What you are after lies further off than one step, which is a thing to be scouted.");
+        } else {
+            // By height. A step that barely rises is not a climb: the same 40-unit threshold the aspect model and
+            // the visual context's relief are built on, so "climb" means the same thing everywhere it is used.
+            java.util.Map<String,Object> best = null;
+            for (java.util.Map<String,Object> n : around) {
+                int rise = ((Number) n.get("rise")).intValue();
+                if (upward ? rise <= 40 : rise >= -40) continue;
+                if (best == null || (upward ? rise > ((Number) best.get("rise")).intValue()
+                                            : rise < ((Number) best.get("rise")).intValue())) best = n;
+            }
+            if (best == null)
+                return new Toward(null, upward
+                    ? "There is nothing to climb from here — the ground about you lies as level as this does."
+                    : "There is nothing to climb down to — the ground about you lies as level as this does.");
+            fit.add(best);
+        }
+
+        if (fit.size() > 1) {
+            java.util.List<String> sides = new java.util.ArrayList<>();
+            for (java.util.Map<String,Object> n : fit) {
+                String bearing = com.devosphere.draugr.world.Compass.of(
+                    ((Number) n.get("dx")).intValue(), ((Number) n.get("dy")).intValue());
+                if (bearing != null) sides.add(bearing);
+            }
+            return new Toward(null, "That lies on more than one side of this ground — " + joinAnd(sides)
+                + ". Say which way you mean to go.");
+        }
+        Direction chosen = Direction.of(((Number) fit.get(0).get("dx")).intValue(),
+                                        ((Number) fit.get(0).get("dy")).intValue());
+        return chosen == null ? new Toward(null, "You cannot work out which way that lies from here.")
+                              : new Toward(chosen, null);
+    }
+
+    /**
+     * The verbs whose object is a piece of ground rather than a bearing (#37).
+     *
+     * <p>As words: "follow" is harmless but "up" and "down" are not — "down" sits inside "downstream" and
+     * "sundown", and a bare {@code contains} would make every sentence with a sundown in it a descent.
+     */
+    private static final java.util.regex.Pattern CLIMB_OR_FOLLOW = java.util.regex.Pattern.compile(
+            "(?<!\\w)(climb|climbs|climbing|scramble|scrambles|scrambling|clamber|clambers|clambering"
+            + "|follow|follows|following|ascend|ascends|descend|descends)(?!\\w)");
+
+    /**
+     * The climbing verbs alone, which need no object: a bare "climb" means UP in anybody's English, and so do
+     * "scramble" and "ascend". "follow" is deliberately not among them — following with no object named is a
+     * sentence with a hole in it, and the honest answer is to say so rather than pick a direction.
+     */
+    private static final java.util.regex.Pattern CLIMBING_VERB = java.util.regex.Pattern.compile(
+            "(?<!\\w)(climb|climbs|climbing|scramble|scrambles|scrambling|clamber|clambers|clambering|ascend|ascends)(?!\\w)");
+
+    /**
+     * Whether the sentence asks for a step whose object is a piece of GROUND rather than a bearing (#37).
+     *
+     * <p>One condition, read by the classifier and by {@link #move} both, because the two must agree exactly:
+     * a sentence the classifier sends to MOVE and the move cannot resolve is answered "you shift through the wet
+     * ground, but do not commit to a direction", which is a true sentence about the wrong thing.
+     *
+     * <p>"go up the hill" and "go down into the valley" carry no climbing verb at all — just a preposition — and
+     * are the commonest way of saying it, so they are here beside the climbing words.
+     */
+    private static boolean wantsGroundStep(String value) {
+        // CLIMBING A TREE IS NOT WALKING UPHILL. A tree is a thing on the ground rather than a piece of it,
+        // and the act of going up one has its own answer — which witnesses the ground it refuses on
+        // ("nothing here that will take your weight"). This rule walked north instead, and found higher
+        // ground to do it on, so a Chronicle on open grass climbed a tree that was not there.
+        if (value.contains("tree") || value.contains("trunk") || value.contains("branches")) return false;
+        boolean verb = CLIMB_OR_FOLLOW.matcher(value).find()
+            || value.contains("go up") || value.contains("go down")
+            || value.contains("head up") || value.contains("head down")
+            || value.contains("up into") || value.contains("down into")
+            || value.contains("make my way up") || value.contains("make my way down");
+        if (!verb) return false;
+        // A climbing verb needs no object — a bare "climb" means up — so it is enough on its own.
+        if (CLIMBING_VERB.matcher(value).find()) return true;
+        return namesGroundAsked(value) || value.contains("up the") || value.contains("down the")
+            || value.contains("up into") || value.contains("down into")
+            || value.contains("descend")
+            || value.strip().endsWith(" up") || value.strip().endsWith(" down");
+    }
+
+    /**
+     * How a person says they are going back the way they came (#37).
+     *
+     * <p>"my own tracks" is the deciding phrase against TRACK, which hunts animal sign: the tracks are the
+     * player's and the act is retracing, not hunting. "back to camp" is deliberately absent — that is a journey
+     * to a named place and TRAVEL's, and it works.
+     */
+    private static final java.util.regex.Pattern BACKTRACKING = java.util.regex.Pattern.compile(
+            "retrace|back the way|way i came|way we came|my own tracks|my tracks|my own footprints|back on my tracks");
+
+    /**
+     * The verbs for getting over water (#37). As words, because "ford" is a name a person might give a place and
+     * "cross" sits inside "crossbar", "crossing" and "crosswise" — and a sentence about a crossbar is not a
+     * sentence about wading a fen.
+     */
+    private static final java.util.regex.Pattern CROSSING_VERB = java.util.regex.Pattern.compile(
+            "(?<!\\w)(wade|wades|wading|ford|fords|fording|swim|swims|swimming|cross|crosses|traverse|traverses)(?!\\w)");
+
     private static final java.util.regex.Pattern GATHERING_VERB = java.util.regex.Pattern.compile(
-            "(?<!\\w)(cut|cuts|cutting|pick|picks|picking|pull|pulls|pulling|snip|snips|snipping)(?!\\w)");
+            "(?<!\\w)(cut|cuts|cutting|pick|picks|picking|pull|pulls|pulling|snip|snips|snipping"
+            // "mow" and "scythe" are what cutting grass is called (#106), and both reached nothing while "cut
+            // the grass" worked. Bounded like everything else here: "mow" sits inside "mower" and "mown", and
+            // a mown field is one that has already been cut rather than a request to cut it.
+            + "|mow|mows|mowing|scythe|scythes|scything|reap|reaps|reaping)(?!\\w)");
     /**
      * The verbs that mean MAKING the thing, as words — so that asking a team to pull a cart is read as hauling
      * while asking for a cart is still read as building one. Held as words rather than substrings, because
@@ -2718,8 +3234,11 @@ public class ChronicleActionService {
         return b.toString();
     }
     /** Eight-point compass from a grid offset; grid y increases southward. */
-    private String compass(int dx, int dy) { String ns = dy < 0 ? "north" : dy > 0 ? "south" : ""; String ew = dx > 0 ? "east" : dx < 0 ? "west" : ""; String c = ns + ew; return c.isEmpty() ? "at the centre" : c; }
-    private String rotateCompass(String dir, boolean clockwise) { String[] ring = {"north","northeast","east","southeast","south","southwest","west","northwest"}; for (int i=0;i<ring.length;i++) if (ring[i].equals(dir)) return ring[(i + (clockwise?1:ring.length-1)) % ring.length]; return dir; }
+    // The convention — north is grid_y-1 — now lives in Compass (#224), because the visual context had to say
+    // which way the next ground lies and a second copy of it would have let a place look one way and feel
+    // another. CompassAgreesWithDirectionTest holds the enum below to the same convention.
+    private String compass(int dx, int dy) { String c = com.devosphere.draugr.world.Compass.of(dx, dy); return c == null ? "at the centre" : c; }
+    private String rotateCompass(String dir, boolean clockwise) { return com.devosphere.draugr.world.Compass.rotate(dir, clockwise); }
     private String[] equipByName(ActiveChronicle chronicle, String text, Instant at) {
         java.util.List<java.util.Map<String,Object>> candidates = jdbc.queryForList("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT w.id,w.display_name,c.body_position,c.layer FROM reachable r JOIN world_object w ON w.id=r.id JOIN item_instance i ON i.object_id=w.id JOIN item_equipment_compatibility c ON c.item_key=i.item_key LEFT JOIN equipment_attachment e ON e.item_id=w.id WHERE e.item_id IS NULL ORDER BY w.display_name", chronicle.id());
         if (candidates.isEmpty()) return new String[]{"FAILED","You have nothing unequipped that can be worn or wielded."};
@@ -2833,8 +3352,10 @@ public class ChronicleActionService {
         return refuse != null && refuse >= 25;
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, UNKNOWN }
-    private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;} }    /**     * The structured perception frame — the seam every future Simulation Agent reads
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, UNKNOWN }
+    private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;}
+        /** The cardinal for a grid offset, for when the WORLD names the direction rather than the player (#37). */
+        static Direction of(int dx,int dy){ for(Direction d:values()) if(d.dx==dx&&d.dy==dy) return d; return null; } }    /**     * The structured perception frame — the seam every future Simulation Agent reads
      * from. Where {@code perception} is the finished player-facing prose, this frame
      * is the machine-legible truth behind it: the raw intent and outcome, where the
      * chronicle stood, the hour and weather in unembellished terms, what physically

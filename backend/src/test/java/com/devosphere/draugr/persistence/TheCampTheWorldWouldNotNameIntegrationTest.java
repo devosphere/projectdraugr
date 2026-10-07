@@ -205,7 +205,9 @@ class TheCampTheWorldWouldNotNameIntegrationTest {
         // MAINTAIN_CAMP claims the camp with a tidying verb; this must not answer a stocktake, nor be answered by
         // one. And "stock" is the word for animals, so the two phrases that were already spoken for are asserted.
         assertEquals("MAINTAIN_CAMP", actions.resolve("tidy the camp").intent(), "tidying is still tidying");
-        assertEquals("FEED_ANIMAL", actions.resolve("water the stock").intent(), "watering the stock is the beasts");
+        // CHECK_STOCK since #106 — thirst, not appetite — and still the BEASTS rather than the camp, which
+        // is the thing this test exists to hold.
+        assertEquals("CHECK_STOCK", actions.resolve("water the stock").intent(), "watering the stock is the beasts");
         assertEquals("FEED_ANIMAL", actions.resolve("feed the stock").intent(), "feeding the stock is the beasts");
         assertEquals("TAKE_STOCK_OF_CAMP", actions.resolve("take stock of the camp").intent(), "and taking stock is the camp");
         assertEquals("TAKE_STOCK_OF_CAMP", actions.resolve("what have I built here").intent(), "asked the other way round too");

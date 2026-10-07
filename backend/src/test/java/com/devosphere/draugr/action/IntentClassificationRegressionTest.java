@@ -43,8 +43,21 @@ class IntentClassificationRegressionTest {
                 }
                 @Override public boolean namesAKeptAnimal(String t) {
                     String v = t == null ? "" : t.toLowerCase(java.util.Locale.ROOT);
-                    return v.contains("yak") || v.contains("musk ox") || v.contains("llama");
+                    // The fake catalogue now carries the HEAD NOUNS too (#106). Tending, grooming and feeding
+                    // used to hold three separate literal species lists in the classifier; they share one
+                    // vocabulary now, and the species half of it is the catalogue's. So a fake that knows only
+                    // yak, musk ox and llama would make "tend the sick goat" unclassifiable here while it works
+                    // perfectly in play — the species are mountain_goat and bighorn_sheep, and the real method
+                    // matches their last word. These are those words.
+                    for (String beast : new String[]{"yak", "musk ox", "llama", "goat", "sheep", "horse",
+                                                     "buffalo", "fowl", "deer", "duck", "goose", "reindeer",
+                                                     "donkey", "elk", "aurochs", "turkey", "pigeon"})
+                        if (com.devosphere.draugr.narration.Words.word(v, beast) || v.contains(beast)) return true;
+                    return com.devosphere.draugr.narration.Words.word(v, "ox")
+                        || com.devosphere.draugr.narration.Words.word(v, "oxen");
                 }
+                /** Nothing is kept in a test with no world, so taming never yields its feeding branch here. */
+                @Override public boolean keepsSuchABeast(String t) { return false; }
             };
         ChronicleActionService svc = new ChronicleActionService(null, null, null, null, items, null, null, null, null, null, null, null, new com.devosphere.draugr.narration.ActionInputClassifier(), null, null, null, new com.devosphere.draugr.narration.NarrationEngine(), (com.devosphere.draugr.ai.RuntimeAuthoringService) null, (ExaminationService) null, (com.devosphere.draugr.people.ContactService) null, (com.devosphere.draugr.people.TradeService) null, (com.devosphere.draugr.people.ConductService) null, (com.devosphere.draugr.people.AgreementService) null, (com.devosphere.draugr.people.CompanionService) null, (com.devosphere.draugr.people.AudienceService) null, (com.devosphere.draugr.people.MembershipService) null, (com.devosphere.draugr.people.ClaimService) null);
         return ((Enum<?>) m.invoke(svc, text)).name();
@@ -86,11 +99,19 @@ class IntentClassificationRegressionTest {
         assertEquals("WATER_CROP", classify("water the rows"));
         assertEquals("WATER_CROP", classify("irrigate the field"));
         assertEquals("WATER_CROP", classify("carry water to the barley"));
-        // The ones it must not take: watering stock is FEED_ANIMAL and has been since #100.
-        assertEquals("FEED_ANIMAL", classify("water the animals"));
-        assertEquals("FEED_ANIMAL", classify("water the beasts"));
-        assertEquals("FEED_ANIMAL", classify("water the stock"));
-        assertEquals("FEED_ANIMAL", classify("water the herd"));
+        // The ones it must not take. Watering stock went to FEED_ANIMAL from #100 until #106 — and FEED_ANIMAL
+        // shakes out a bundle of dry grass and reports on HUNGER, so "water the animals" was answered "none of
+        // your draft beasts is hungry": appetite, in reply to thirst. It could not water anything. draft_thirst
+        // is simulated, falls on wet ground and at a watering station, and nothing could ask after it, so these
+        // are CHECK_STOCK now, which reports the thirst and names what relieves it. The point of the test is
+        // unchanged: the crop rule must not take a sentence about animals, and it does not.
+        assertEquals("CHECK_STOCK", classify("water the animals"));
+        assertEquals("CHECK_STOCK", classify("water the beasts"));
+        assertEquals("CHECK_STOCK", classify("water the stock"));
+        assertEquals("CHECK_STOCK", classify("water the herd"));
+        // And feeding is still feeding, which is the half CHECK_STOCK must not take.
+        assertEquals("FEED_ANIMAL", classify("feed the animals"));
+        assertEquals("FEED_ANIMAL", classify("feed the beasts"));
         // Nor the water a person handles for themselves.
         assertEquals("COLLECT_WATER", classify("collect water"));
         assertEquals("BOIL_WATER", classify("boil some water"));
@@ -1224,5 +1245,110 @@ class IntentClassificationRegressionTest {
         assertEquals("CRAFT_WORKSTATION", classify("build a workbench"));
         assertEquals("CRAFT_BASKET", classify("weave a basket"));
         assertEquals("CLOSE_CONTAINER", classify("put the lid on the pot"));
+    }
+
+    /**
+     * Going somewhere, which is the thing a player does most often, and the axis nobody had swept (#37).
+     *
+     * <p>Forty-two sentences about movement and place: <b>26 reached nothing</b>. Two of them are fixed here.
+     *
+     * <p><b>"head east" reached NOTHING</b> while "go north", "walk south" and "go west" all worked. The move
+     * rule knows walk/travel/go/move; "head" was only ever read as part of "head to" and "head for", which are
+     * TRAVEL's and want a PLACE rather than a bearing — so one of the commonest ways of saying the commonest
+     * thing a player does fell between the two rules and out of the bottom.
+     *
+     * <p><b>And a KIND of ground could be asked for and never found.</b> {@code planTravel} only knows places the
+     * Chronicle has NAMED and can locate, so "which way is the water" had nothing to answer it, though the
+     * neighbouring biomes, their elevations and the grid offsets were all sitting in {@code world_chunk}.
+     */
+    @Test void goingSomewhereAndAskingTheWay() throws Exception {
+        // A bearing with any of the verbs for setting off.
+        assertEquals("MOVE", classify("head east"));
+        assertEquals("MOVE", classify("head north"));
+        assertEquals("MOVE", classify("heading south"));
+        assertEquals("MOVE", classify("set out west"));
+        assertEquals("MOVE", classify("strike out north"));
+        // The ones that already worked, which the new rule must not disturb.
+        assertEquals("MOVE", classify("go north"));
+        assertEquals("MOVE", classify("walk south"));
+        assertEquals("MOVE", classify("go west"));
+        assertEquals("MOVE", classify("wade north"));
+
+        // A PLACE is still a journey, not a step. This is the distinction the new rule is gated on.
+        assertEquals("TRAVEL", classify("head for the high ground"));
+        assertEquals("TRAVEL", classify("head back to camp"));
+        assertEquals("TRAVEL", classify("go to the old oak"));
+
+        // Asking the way to a kind of ground.
+        assertEquals("WHICH_WAY", classify("which way is the water"));
+        assertEquals("WHICH_WAY", classify("which way to the woods"));
+        assertEquals("WHICH_WAY", classify("where is the nearest high ground"));
+        assertEquals("WHICH_WAY", classify("what direction is the sea"));
+        assertEquals("WHICH_WAY", classify("how far is the river"));
+        assertEquals("WHICH_WAY", classify("is there open ground near here"));
+        assertEquals("WHICH_WAY", classify("any marsh nearby"));
+
+        // A bearing on the SUN is not a bearing on the country, and the sky keeps its own questions. This is
+        // what gating on a named kind of ground buys: the two rules cannot reach each other's sentences.
+        assertEquals("READ_THE_SKY", classify("which way is north"));
+        assertEquals("READ_THE_SKY", classify("take a bearing"));
+        assertEquals("READ_THE_SKY", classify("what time is it"));
+        // And measuring a THING is still measuring. "how far is" only asks the way when it asks about ground.
+        assertEquals("MEASURE", classify("how far is the hut"));
+        assertEquals("MEASURE", classify("how long is this plank"));
+    }
+
+    /**
+     * The game could JUDGE a crossing and not make one (#37).
+     *
+     * <p>{@code can I get across here} answered in detail — the load you carry, a ford in the bottom, a laid way
+     * pegged out over the fen — and <b>every verb for actually doing it reached nothing</b>: wade across, swim
+     * across, cross to the other side, ford the stream. A crossing names the WATER rather than a bearing, and
+     * the move rule wanted a bearing, so the one sentence the judgement invites was the one nobody could say.
+     *
+     * <p>The act now finds the water with the same query the judgement uses, so the two can never disagree about
+     * what is there: one side and it crosses, more than one and it asks which, none and it says so.
+     */
+    @Test void aCrossingNamesTheWaterRatherThanABearing() throws Exception {
+        assertEquals("MOVE", classify("wade across"));
+        assertEquals("MOVE", classify("swim across"));
+        assertEquals("MOVE", classify("cross to the other side"));
+        assertEquals("MOVE", classify("cross the fen"));
+        assertEquals("MOVE", classify("ford the stream"));
+        assertEquals("MOVE", classify("wade over"));
+        // With a bearing it was already a move, and still is.
+        assertEquals("MOVE", classify("wade north"));
+        assertEquals("MOVE", classify("swim east"));
+        // Judging whether you COULD is a different question and keeps its own rule.
+        assertEquals("JUDGE_CROSSING", classify("can I get across here"));
+        assertEquals("JUDGE_CROSSING", classify("is it safe to cross"));
+
+        // "cross" sits inside crossbar, crossing and crosswise, and this project has shipped the substring
+        // defect four times. None of these is a sentence about wading a fen.
+        assertNotEquals("MOVE", classify("make a crossbar"));
+        assertNotEquals("MOVE", classify("cross my arms"));
+        assertEquals("UNKNOWN", classify("peel the rushes", true), "and a process keyword is still the matcher's");
+    }
+
+    /**
+     * Your own tracks are not quarry (#37).
+     *
+     * <p>{@code object_transition} has recorded the direction, the from and the to of every move since the table
+     * existed, and nothing had ever read it for this: "retrace my steps" and "go back the way I came" reached
+     * nothing, and <b>"follow my own tracks back" answered TRACK</b> — which hunts animal sign, so a player
+     * asking to go back the way they came was shown <i>"feathers caught in the low growth"</i>.
+     */
+    @Test void yourOwnTracksAreNotQuarry() throws Exception {
+        assertEquals("MOVE", classify("retrace my steps"));
+        assertEquals("MOVE", classify("go back the way I came"));
+        assertEquals("MOVE", classify("follow my own tracks back"));
+        assertEquals("MOVE", classify("back the way we came"));
+        // Hunting keeps every sentence that is about an animal's sign, which is all of its own.
+        assertEquals("TRACK", classify("look for tracks"));
+        assertEquals("TRACK", classify("follow the trail"));
+        assertEquals("TRACK", classify("read the ground"));
+        assertEquals("TRACK", classify("find the spoor"));
+        // And a journey to a place is still a journey. "back to camp" is TRAVEL's and always worked.
+        assertEquals("TRAVEL", classify("head back to camp"));
     }
 }
