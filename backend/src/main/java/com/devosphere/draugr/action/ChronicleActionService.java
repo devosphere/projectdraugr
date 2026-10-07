@@ -2423,6 +2423,24 @@ public class ChronicleActionService {
         if((value.contains("tend")||value.contains("treat")||value.contains("doctor")||value.contains("physic")||value.contains("dose")||value.contains("nurse")
             ||value.contains("bandage")||value.contains("poultice")||value.contains("salve")||value.contains("dress the")||value.contains("bind the"))
            &&namesABeast(value)) return Intent.TEND_ANIMAL;
+        // A BED IS THREE THINGS (#37): somewhere to sleep, ground for a crop, and litter for an animal. Two of
+        // the three had rules; the animal's had none, so "bed down the stock" fell all the way through to
+        // classifyLegacy's SLEEP:
+        //
+        //   bed down the stock    ->  SLEEP
+        //   bed down the animals  ->  SLEEP
+        //
+        // The keeper who settled their animals for the night went to sleep THEMSELVES — hours of game time gone
+        // and the stock still unbedded. "bed down" on its own IS sleeping ("I'll bed down here") and stays so;
+        // the noun is the whole of the difference, exactly as it is for `bandage the goat` above.
+        //
+        // The stock-house words are held as WORDS and not substrings, because "pen" sits inside OPEN and HAPPEN
+        // and "fold" inside FOLDABLE — the same lesson that had `build a stable` asking for a desk.
+        boolean beddingWork = value.contains("bed down")||value.contains("bed the")||value.contains("bedding");
+        boolean somewhereStockAreKept = word(value,"stall")||word(value,"stalls")||word(value,"byre")
+            ||word(value,"sty")||word(value,"coop")||word(value,"fold")||word(value,"stable")
+            ||word(value,"stables")||word(value,"pen")||word(value,"pens");
+        if(beddingWork&&(namesABeast(value)||somewhereStockAreKept)) return Intent.TEND_ANIMAL;
         // Combing out a coat (#106). Kept apart from TEND_ANIMAL by the verb: tending is for what ails a beast,
         // grooming is for the coat itself, and the two want different things in your hands. The coat, the mane and
         // the fleece are its own — a part of the animal rather than another name for it — so they are here.
@@ -2478,7 +2496,12 @@ public class ChronicleActionService {
         // cellar" names a real root — but beside a bed or a plot it is plainly tillage, and so is making one.
         boolean diggingABed = (value.contains("dig")||value.contains("make"))
             &&(value.contains("seedbed")||value.contains("seed bed")||value.contains("the bed over")
-               ||value.contains("over the bed")||value.contains("the plot over"))
+               ||value.contains("over the bed")||value.contains("the plot over")
+               // ...or a bed the sentence SAYS is for something growing. "dig a bed for the crop" reached
+               // nothing: the phrasings above are all about turning an existing bed over, and none of them
+               // covers digging a new one for a named purpose (#37).
+               ||(word(value,"bed")&&(value.contains("crop")||value.contains("grain")||value.contains("vegetable")
+                                      ||value.contains("seed")||value.contains("sow")||value.contains("plant"))))
             &&!namesAnAssembly(value);
         boolean notAnEarthHouse = !value.contains("earth sheltered")&&!value.contains("earth-sheltered");
         // Insects, grubs and worms are a grub hunt, not a seedbed — the ground and the verb are tillage's, the
@@ -2574,7 +2597,43 @@ public class ChronicleActionService {
         if((value.contains("stretch")&&!value.contains("hide")&&!value.contains("skin")&&!value.contains("pelt"))||value.contains("loosen my")||value.contains("loosen up")||value.contains("work the stiffness")||value.contains("limber up")) return Intent.STRETCH;
         // Camp upkeep (#71): laying a bed off the ground, and tending the whole site. make_bed is gated on
         // bedding nouns (not "bed down", which is sleeping) and excludes the raised-platform assembly phrase.
-        if((value.contains("make")||value.contains("prepare")||value.contains("lay")||value.contains("build")||value.contains("gather")||value.contains("arrange"))&&(value.contains("bedding")||value.contains("a bed")||value.contains("the bed")||value.contains("sleeping mat")||value.contains("bed of")||value.contains("pallet"))&&!value.contains("platform")) return Intent.MAKE_BED;
+        //
+        // HELD AS THE WORD "bed" rather than the literals "a bed"/"the bed" (#37). Those two caught the plainest
+        // phrasings and nothing else, so an adjective broke it outright:
+        //
+        //   make a comfortable bed  ->  nothing     (there is no "a bed" in "a comfortable bed")
+        //   soften the bed          ->  nothing     (no verb of ours)
+        //   freshen the bedding     ->  nothing     (likewise)
+        //   put down a bed of bracken -> DROP       (the noun matched; "put down" is not a making verb, so the
+        //                                            drop rule took it and the bed was never made)
+        //
+        // Safe to widen because the OTHER two senses of the word are both settled before this line: the animal's
+        // litter by the bedding rule above, and the crop's ground by TILL_GROUND, whose own "the bed" clause runs
+        // earlier. So "prepare the bed" is still tillage and "make a seedbed" is still tillage; by the time a
+        // sentence reaches here, a bed is a thing you sleep on.
+        if((value.contains("make")||value.contains("prepare")||value.contains("lay")||value.contains("build")||value.contains("gather")||value.contains("arrange")
+            ||value.contains("soften")||value.contains("freshen")||value.contains("put down")||value.contains("spread")||value.contains("strew"))
+           &&(value.contains("bedding")||word(value,"bed")||word(value,"beds")||value.contains("sleeping mat")||value.contains("bed of")||value.contains("pallet"))&&!value.contains("platform")
+           // ...and a sentence that is an assembly's OWN keyword belongs to the assembly matcher. Widening this
+           // rule to the bare word immediately swallowed `build a sand filter bed` — a staged water structure —
+           // which the standing routing test caught at once. Asked of the matcher rather than excluded by name,
+           // so every assembly added after this one is protected too; the same guard CHECK_STOCK and the tillage
+           // rule already use (#513).
+           //
+           // THE CATALOGUE ALSO CALLS THINGS BEDS, and the guard above is null-safe and therefore INERT in the
+           // DB-free unit test — a guard that only works in production is not a guard. So the collisions are
+           // audited and named as well. Every keyword in assembly_definition and material_process holding the
+           // whole word bed/beds/bedding:
+           //
+           //   raised_bed_platform  "bed platform", "raised bed platform"   already excluded by "platform"
+           //   sand_filter_bed      "build a sand filter bed", "dig a ..."  a staged water structure
+           //   lay_mortared_course  "bed the stone"                         carries no making verb, so safe
+           //   mix_mortar           "bedding mortar"                        but "prepare bedding mortar" would
+           //                                                                have come here
+           //
+           // The first was already safe and the third needs nothing; the other two are named. The standing
+           // routing test caught the filter bed the moment the widening landed, which is the system working.
+           &&!value.contains("filter bed")&&!value.contains("mortar")) return Intent.MAKE_BED;
         // A perimeter trip-line alarm (#126/#127): a line strung low with anything that clatters, so nothing
         // crosses into the camp unheard. Distinctive nouns ('alarm', 'trip-line', a 'warning'/'noise' line) own
         // the intent; placed before MAINTAIN_CAMP so "protect the camp with a trip-line alarm" rigs one.

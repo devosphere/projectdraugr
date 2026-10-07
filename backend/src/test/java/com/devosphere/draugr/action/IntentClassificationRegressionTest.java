@@ -1553,14 +1553,76 @@ class IntentClassificationRegressionTest {
      * reason the fix is held both ways: every real craft phrase must still reach its own intent, or the cure is
      * worse than the disease.
      */
+    /**
+     * A bed is three things (#37): somewhere to sleep, ground for a crop, and litter for an animal.
+     *
+     * <p>Two of the three had rules. The animal's had none, so the whole phrase fell through to
+     * {@code classifyLegacy}'s SLEEP rule and <b>the keeper who settled their animals for the night went to
+     * sleep themselves</b> — hours of game time gone and the stock still unbedded. And the sleeping sense was
+     * gated on the literals {@code "a bed"} / {@code "the bed"}, which an adjective defeats outright.
+     *
+     * <p>Swept 27 sentences across the three senses: 3 answered wrongly, 6 reached nothing. Now 0 and 0.
+     *
+     * <p>The order is what makes it safe, and it is asserted here rather than assumed: the animal's litter is
+     * settled first, then the crop's ground by TILL_GROUND, and only what survives both reaches MAKE_BED. So the
+     * same four words mean three different jobs depending on the noun beside them.
+     */
+    @Test void aBedIsThreeThings() throws Exception {
+        // I. Somewhere to sleep. The first four always worked; the rest did not.
+        for (String p : new String[]{"make a bed", "make the bed", "build a bed", "lay a bed",
+                                     "make a bed of grass", "gather bedding", "lay out my bedding",
+                                     "make a sleeping mat", "make a pallet", "arrange a bed",
+                                     "lay dry grass for a bed",
+                                     "make a comfortable bed", "soften the bed", "freshen the bedding",
+                                     "put down a bed of bracken"})
+            assertEquals("MAKE_BED", classify(p), p);
+
+        // II. Ground for a crop. Every one of these was already right and must stay right — TILL_GROUND runs
+        // before MAKE_BED, which is the only reason widening MAKE_BED to the bare word was safe.
+        for (String p : new String[]{"dig the bed over", "make a seedbed", "prepare the bed", "turn the bed",
+                                     "work the bed", "hoe the bed", "prepare a seed bed",
+                                     "dig a bed for the crop"})
+            assertEquals("TILL_GROUND", classify(p), p);
+
+        // III. Litter for an animal — the sense that had no rule at all.
+        for (String p : new String[]{"bed down the stock", "bed down the animals", "bed the stall",
+                                     "put fresh bedding in the byre"})
+            assertEquals("TEND_ANIMAL", classify(p), p);
+
+        // AND THE COUNTER-CASE THAT MUST NOT BREAK. "bed down" with no animal and no byre is a person turning
+        // in, and always was. The noun is the whole of the difference, so the rule has to be tested from both
+        // sides or it is only half a rule.
+        assertEquals("SLEEP", classify("bed down"), "a person turning in");
+        assertEquals("SLEEP", classify("bed down here for the night"));
+        assertEquals("SLEEP", classify("go to bed"), "which carries no making verb");
+        assertEquals("SLEEP", classify("lie down to sleep"));
+
+        // "pen" sits inside OPEN and HAPPEN and "fold" inside FOLDABLE, so the stock-house words are whole
+        // words. Without that, these would have been bedding down an animal.
+        assertEquals("SLEEP", classify("bed down in the open"), "\"open\" is not a pen");
+
+        // AND THE CATALOGUE CALLS THINGS BEDS TOO. Audited, not guessed: these are every keyword in
+        // assembly_definition and material_process holding the whole word bed/beds/bedding. Each must reach its
+        // own matcher, not this rule. The standing water-structure test caught the filter bed the moment the
+        // widening landed; the mortar one would not have been caught by anything, which is why it was audited.
+        assertEquals("UNKNOWN", classify("build a sand filter bed"), "a staged water structure");
+        assertEquals("UNKNOWN", classify("dig a sand filter bed"));
+        assertEquals("UNKNOWN", classify("build a raised bed platform"), "excluded by \"platform\" all along");
+        assertEquals("UNKNOWN", classify("prepare bedding mortar"), "a material process, not a place to sleep");
+        assertEquals("UNKNOWN", classify("bed the stone"), "which carries no making verb");
+    }
+
     @Test void aWordIsNotASubstring() throws Exception {
         // The six wrong answers, gone. UNKNOWN here means the assembly/process matchers get their turn.
         assertEquals("UNKNOWN", classify("build a stable"));
         assertEquals("UNKNOWN", classify("build a portable shelter"));
         assertEquals("UNKNOWN", classify("build a suitable shelter"));
-        assertEquals("UNKNOWN", classify("make a comfortable bed"));
         assertEquals("UNKNOWN", classify("build a notable marker"));
         assertEquals("UNKNOWN", classify("make a racket"));
+        // "make a comfortable bed" was the sixth, and it no longer stops at UNKNOWN: MAKE_BED is held as the
+        // word "bed" rather than the literal "a bed", so the adjective no longer defeats it. See
+        // {@link #aBedIsThreeThings}.
+        assertEquals("MAKE_BED", classify("make a comfortable bed"));
 
         // And two that now reach the RIGHT intent rather than merely a different wrong one.
         assertEquals("TRACK", classify("build a track"), "a track is read, not shelved");
