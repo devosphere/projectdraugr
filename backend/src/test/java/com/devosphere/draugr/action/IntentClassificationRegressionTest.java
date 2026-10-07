@@ -58,6 +58,24 @@ class IntentClassificationRegressionTest {
                 }
                 /** Nothing is kept in a test with no world, so taming never yields its feeding branch here. */
                 @Override public boolean keepsSuchABeast(String t) { return false; }
+                /**
+                 * What the Chronicle is carrying, as a fake pack rather than a database (#37). The real method
+                 * asks the recursive containment walk for every item in reach and matches its key and head noun;
+                 * this stands in for it with the arrival kit plus a knife, which is enough to assert both
+                 * directions of the gear-condition rule — a shoe IS carried, a millstone is not.
+                 */
+                @Override public boolean namesSomethingYouCarry(String t) {
+                    String v = t == null ? "" : t.toLowerCase(java.util.Locale.ROOT);
+                    // These are the head nouns of what a Chronicle ACTUALLY arrives with plus a knife, read off
+                    // a live world: arrival_left_shoe, arrival_right_shoe, arrival_shirt, arrival_trousers,
+                    // chert_knife. Deliberately NOT a generous list — a stub more forgiving than the world makes
+                    // the test pass on phrasings that fail in play, which is how "check my boots" nearly shipped
+                    // as covered when the game has no boots to check.
+                    for (String carried : new String[]{"shoe", "shirt", "trousers", "knife"})
+                        if (com.devosphere.draugr.narration.Words.word(v, carried)
+                            || com.devosphere.draugr.narration.Words.word(v, carried + "s")) return true;
+                    return false;
+                }
             };
         ChronicleActionService svc = new ChronicleActionService(null, null, null, null, items, null, null, null, null, null, null, null, new com.devosphere.draugr.narration.ActionInputClassifier(), null, null, null, new com.devosphere.draugr.narration.NarrationEngine(), (com.devosphere.draugr.ai.RuntimeAuthoringService) null, (ExaminationService) null, (com.devosphere.draugr.people.ContactService) null, (com.devosphere.draugr.people.TradeService) null, (com.devosphere.draugr.people.ConductService) null, (com.devosphere.draugr.people.AgreementService) null, (com.devosphere.draugr.people.CompanionService) null, (com.devosphere.draugr.people.AudienceService) null, (com.devosphere.draugr.people.MembershipService) null, (com.devosphere.draugr.people.ClaimService) null);
         return ((Enum<?>) m.invoke(svc, text)).name();
@@ -1553,14 +1571,272 @@ class IntentClassificationRegressionTest {
      * reason the fix is held both ways: every real craft phrase must still reach its own intent, or the cure is
      * worse than the disease.
      */
+    /**
+     * A bed is three things (#37): somewhere to sleep, ground for a crop, and litter for an animal.
+     *
+     * <p>Two of the three had rules. The animal's had none, so the whole phrase fell through to
+     * {@code classifyLegacy}'s SLEEP rule and <b>the keeper who settled their animals for the night went to
+     * sleep themselves</b> — hours of game time gone and the stock still unbedded. And the sleeping sense was
+     * gated on the literals {@code "a bed"} / {@code "the bed"}, which an adjective defeats outright.
+     *
+     * <p>Swept 27 sentences across the three senses: 3 answered wrongly, 6 reached nothing. Now 0 and 0.
+     *
+     * <p>The order is what makes it safe, and it is asserted here rather than assumed: the animal's litter is
+     * settled first, then the crop's ground by TILL_GROUND, and only what survives both reaches MAKE_BED. So the
+     * same four words mean three different jobs depending on the noun beside them.
+     */
+    /**
+     * Three features that worked and could not be asked for in the words a person uses (#37).
+     *
+     * <p>Found by sweeping the classifier for short {@code contains("…")} nouns that sit inside longer English
+     * words — the audit that turned up `build a stable` → CRAFT_DESK. That sweep found <b>no further substring
+     * collisions</b>, which is the negative result worth having; what it did turn up was this, three times over:
+     * <b>the canonical phrasing worked, refused correctly, and the natural phrasing reached nothing.</b>
+     *
+     * <pre>
+     *   boil water             -> "There is no fire burning here to boil water over."   heat the water  -> nothing
+     *   coppice the hazel      -> "There is no wood here to coppice."                   prune the branches -> nothing
+     *   how worn is the knife  -> "The chert knife is sound..."                          my shoe is worn -> nothing
+     * </pre>
+     *
+     * <p>In every case the work and its refusal were already right; only the words were missing. The third was
+     * the worst of them, because it was not a phrasing gap but a <b>vocabulary of four</b>: the rule asked for
+     * "worn" beside `the axe`, `the knife`, `the blade` or `my tool`, so every garment, vessel and cord in the
+     * game was outside it. That one is fixed by asking the catalogue what the Chronicle actually carries, as
+     * minerals and stock already do, rather than by adding a fifth noun.
+     */
+    @Test void theWorkWasThereAndTheWordsWereNot() throws Exception {
+        // I. Heating water IS boiling it, to a person with a pot and a fire.
+        assertEquals("BOIL_WATER", classify("boil water"), "which always worked");
+        assertEquals("BOIL_WATER", classify("heat the water"));
+        assertEquals("BOIL_WATER", classify("warm the water"));
+        assertEquals("BOIL_WATER", classify("heat some water"));
+        // ...but heating is not always about water. Stones for a pit oven are their own work.
+        assertEquals("UNKNOWN", classify("heat some stones"), "a process, not a kettle");
+
+        // II. Pruning and trimming are coppicing. "pollard" is a term of art and was already in; the two words
+        // anyone would actually reach for were not.
+        assertEquals("COPPICE", classify("coppice the hazel"), "which always worked");
+        assertEquals("COPPICE", classify("prune the branches"));
+        assertEquals("COPPICE", classify("trim the branches"));
+        assertEquals("COPPICE", classify("cut back the willow"));
+        // Gated on the wood, so trimming anything else stays with its own work.
+        assertEquals("UNKNOWN", classify("trim the wick"), "a lamp, not a tree");
+
+        // III. The gear-condition question, for anything carried rather than for four nouns.
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("how worn is the knife"), "which always worked");
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("my shoe is worn"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("check my shoes"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("is my shirt still in good order"));
+        // And the neighbours it must not take: mending one is repair, taking it off is unequipping.
+        assertEquals("REPAIR_ITEM", classify("mend my shoe"));
+        assertEquals("UNEQUIP", classify("take off my shoes"));
+        // A thing not carried is not something whose condition can be asked after.
+        assertEquals("UNKNOWN", classify("is the millstone worn"), "nothing of yours");
+        // AND THE LIMIT OF THE FIX, asserted so nobody mistakes it for covered: this asks the catalogue what the
+        // Chronicle holds, so it answers to the game's OWN word for a thing and not to a synonym. The arrival kit
+        // holds shoes; a player who says "boots" still reaches nothing. That is a vocabulary question for the
+        // catalogue to answer, and adding a synonym list here would rebuild the hand-kept list this replaced.
+        assertEquals("UNKNOWN", classify("check my boots"), "the game has shoes, not boots — recorded on #37");
+    }
+
+    /**
+     * The water chain, end to end (#37) — a Chronicle drinks every day and dies without it.
+     *
+     * <p>Swept 40 sentences across the whole chain: finding water, judging it, drawing it, making it safe,
+     * drinking it, carrying it, emptying it. <b>16 reached nothing or answered wrongly. Now 4</b>, and those four
+     * want catalogue content rather than routing (catching rain, letting silt settle).
+     *
+     * <p>The sharpest was the fourth appearance of a shape this project keeps finding:
+     *
+     * <pre>
+     *   is my waterskin full  ->  "Make a waterskin turns on a cutting edge, and there is none within reach."
+     * </pre>
+     *
+     * <b>Asking about a thing is not making it</b> — after the lean-to question that built a hut, the trap
+     * question that set a trap, and the snare question that worked a snare. The process matcher took the noun and
+     * offered to make the very thing being asked after.
+     *
+     * <p>And a root cause worth more than the phrasings: {@code containerNoun} listed every dry container in the
+     * game — basket, pouch, sack, crate, chest, quiver — and <b>not one thing you carry liquid in</b>. So a
+     * waterskin was not a container, and `empty the waterskin` reached nothing while the same sentence about a
+     * basket worked.
+     */
+    /**
+     * One phrase, three subjects, and a precedence fault that gave the wrong one (#37).
+     *
+     * <p>The camp stocktake was written as
+     *
+     * <pre>
+     *   if( GROUP_A || GROUP_B &amp;&amp; !animal &amp;&amp; !beast &amp;&amp; !herd &amp;&amp; !flock &amp;&amp; !namesAKeptAnimal )
+     * </pre>
+     *
+     * and <b>{@code &&} binds tighter than {@code ||}</b>, so every one of those exclusions applied to GROUP_B
+     * alone. They were written for the whole rule. The half they never reached is the stocktaking half:
+     *
+     * <pre>
+     *   take stock of the animals  ->  TAKE_STOCK_OF_CAMP, an account of your lean-to
+     *   take stock of the herd     ->  the same
+     *   is the animal sound        ->  correctly declined — which is what proved the split
+     * </pre>
+     *
+     * <p>A keeper asking after their animals was told about their shelter, by a guard that was already there and
+     * silently governed only one branch. The rule is named locals now, which is how the two earlier paren faults
+     * in this method were settled. Fixing it left the sentence reaching nothing, so the herd reading was given
+     * the phrase as well — demanding a <b>real</b> animal word, because the subject gate counts the bare word
+     * "stock", which every one of these sentences contains whether it means the camp or the herd.
+     */
+    @Test void takingStockOfWhat() throws Exception {
+        assertEquals("CHECK_STOCK", classify("take stock of the animals"));
+        assertEquals("CHECK_STOCK", classify("take stock of the herd"));
+        assertEquals("CHECK_STOCK", classify("take stock of the flock"));
+        assertEquals("CHECK_STOCK", classify("taking stock of the animals"));
+        assertEquals("CHECK_STOCK", classify("take stock of the goats"));
+        assertEquals("SENSE_BODY", classify("take stock of myself"));
+        // The two that must keep working, and the one whose correct refusal exposed the fault.
+        assertEquals("TAKE_STOCK_OF_CAMP", classify("take stock of the camp"), "which always worked");
+        assertEquals("TAKE_STOCK_OF_CAMP", classify("is the shelter sound"), "and so did this");
+        assertEquals("UNKNOWN", classify("is the animal sound"), "the exclusion that did reach its branch");
+    }
+
+    /**
+     * The body, asked after in the words a person uses (#37).
+     *
+     * <p>Swept 41 sentences: how you are, the wound, cold and wet, rest and illness. The body chain was in far
+     * better shape than the water chain — WARM/DRY/COOL/SHELTER_BODY and most of TREAT_WOUND already worked — and
+     * 12 still reached nothing or the wrong thing.
+     *
+     * <p>The gaps all had the same shape: <b>a literal phrasing was in and its obvious twin was not.</b>
+     * "how tired" was in and "am I tired" was not; "am I cold" was in and "am I hungry" was not; "staunch" was in
+     * and "stop the bleeding" was not. <b>hours_without_food</b> drives starvation exactly as
+     * <b>hours_without_water</b> drives thirst, and fixing thirst without hunger would have been the same defect
+     * with a different column.
+     */
+    @Test void theBodyAnsweredInPlainWords() throws Exception {
+        // Hunger and thirst, the two columns that kill a Chronicle.
+        assertEquals("SENSE_BODY", classify("am i hungry"));
+        assertEquals("SENSE_BODY", classify("how hungry am i"));
+        assertEquals("SENSE_BODY", classify("am i thirsty"));
+        // Tiredness, shivering, sickness, and the general question.
+        assertEquals("SENSE_BODY", classify("am i tired"));
+        assertEquals("SENSE_BODY", classify("i am shivering"));
+        assertEquals("SENSE_BODY", classify("i feel sick"));
+        assertEquals("SENSE_BODY", classify("what is wrong with me"));
+        // The wound AS A QUESTION rather than as work — asking is not dressing, the same shape as the lean-to.
+        assertEquals("SENSE_BODY", classify("check the wound"));
+        assertEquals("SENSE_BODY", classify("is the wound healing"));
+        // ...and the wound as work, which must stay work.
+        assertEquals("TREAT_WOUND", classify("bind the wound"), "which always worked");
+        assertEquals("TREAT_WOUND", classify("stop the bleeding"));
+        assertEquals("TREAT_WOUND", classify("put a poultice on it"));
+        assertEquals("TREAT_WOUND", classify("bandage my arm"));
+        // The neighbours, unchanged.
+        assertEquals("WARM_BODY", classify("warm myself"));
+        assertEquals("DRY_BODY", classify("dry off"));
+        assertEquals("SHELTER_BODY", classify("get out of the wind"));
+        assertEquals("REST", classify("rest"));
+        // A poultice ON A BEAST is husbandry, and the noun is the whole of the difference.
+        assertEquals("TEND_ANIMAL", classify("put a poultice on the ewe"));
+    }
+
+    @Test void theWaterChain() throws Exception {
+        // I. Judging it. The question forms worked; the verb the intent is NAMED for did not.
+        assertEquals("JUDGE_WATER", classify("is this water safe"), "which always worked");
+        assertEquals("JUDGE_WATER", classify("judge the water"));
+        assertEquals("JUDGE_WATER", classify("taste the water"));
+        // But a perception verb that already has an intent is not available to borrow. Both of these are
+        // deliberate and were broken by my first, greedier cut of the rule above.
+        assertEquals("SMELL", classify("sniff the water"), "smelling is its own act");
+        assertEquals("MEASURE", classify("test the depth of the water"), "and measuring is its own act");
+
+        // II. Drawing it. Six verbs were listed and not the plainest two.
+        assertEquals("COLLECT_WATER", classify("collect water"), "which always worked");
+        assertEquals("COLLECT_WATER", classify("get some water"));
+        assertEquals("COLLECT_WATER", classify("scoop up water"));
+        assertEquals("COLLECT_WATER", classify("fill the skin"), "what somebody holding one calls it");
+
+        // III. Making it safe. "make the water safe" answered by offering to MAKE A WATERSKIN.
+        assertEquals("BOIL_WATER", classify("boil water"), "which always worked");
+        assertEquals("BOIL_WATER", classify("make the water safe"));
+        assertEquals("FILTER_WATER", classify("filter the water"), "unchanged");
+
+        // IV. Drinking it. Neither "slake" nor "quench" contains "drink", which is all the drink rule looks for.
+        assertEquals("DRINK", classify("drink water"), "which always worked");
+        assertEquals("DRINK", classify("slake my thirst"));
+        assertEquals("DRINK", classify("quench my thirst"));
+
+        // V. Thirst is the BODY's question. hours_without_water is the only water state in the schema and it
+        // drives the thirst that kills a Chronicle; "am I dry" reached the body reading and "am I thirsty" did not.
+        assertEquals("SENSE_BODY", classify("am i thirsty"));
+        assertEquals("SENSE_BODY", classify("how thirsty am i"));
+        assertEquals("SENSE_BODY", classify("am i dry"), "which always worked");
+
+        // VI. Carrying and emptying it — and the waterskin question that offered to make one.
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("is my waterskin full"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("how much water do i have"));
+        assertEquals("EMPTY_CONTAINER", classify("empty the waterskin"));
+        assertEquals("EMPTY_CONTAINER", classify("pour the water out"));
+        // A waterskin is a container now, so storing into one works as it always did for a basket.
+        assertEquals("STORE", classify("put the water in the gourd"));
+        assertEquals("STORE", classify("put the berries in the basket"), "unchanged");
+    }
+
+    @Test void aBedIsThreeThings() throws Exception {
+        // I. Somewhere to sleep. The first four always worked; the rest did not.
+        for (String p : new String[]{"make a bed", "make the bed", "build a bed", "lay a bed",
+                                     "make a bed of grass", "gather bedding", "lay out my bedding",
+                                     "make a sleeping mat", "make a pallet", "arrange a bed",
+                                     "lay dry grass for a bed",
+                                     "make a comfortable bed", "soften the bed", "freshen the bedding",
+                                     "put down a bed of bracken"})
+            assertEquals("MAKE_BED", classify(p), p);
+
+        // II. Ground for a crop. Every one of these was already right and must stay right — TILL_GROUND runs
+        // before MAKE_BED, which is the only reason widening MAKE_BED to the bare word was safe.
+        for (String p : new String[]{"dig the bed over", "make a seedbed", "prepare the bed", "turn the bed",
+                                     "work the bed", "hoe the bed", "prepare a seed bed",
+                                     "dig a bed for the crop"})
+            assertEquals("TILL_GROUND", classify(p), p);
+
+        // III. Litter for an animal — the sense that had no rule at all.
+        for (String p : new String[]{"bed down the stock", "bed down the animals", "bed the stall",
+                                     "put fresh bedding in the byre"})
+            assertEquals("TEND_ANIMAL", classify(p), p);
+
+        // AND THE COUNTER-CASE THAT MUST NOT BREAK. "bed down" with no animal and no byre is a person turning
+        // in, and always was. The noun is the whole of the difference, so the rule has to be tested from both
+        // sides or it is only half a rule.
+        assertEquals("SLEEP", classify("bed down"), "a person turning in");
+        assertEquals("SLEEP", classify("bed down here for the night"));
+        assertEquals("SLEEP", classify("go to bed"), "which carries no making verb");
+        assertEquals("SLEEP", classify("lie down to sleep"));
+
+        // "pen" sits inside OPEN and HAPPEN and "fold" inside FOLDABLE, so the stock-house words are whole
+        // words. Without that, these would have been bedding down an animal.
+        assertEquals("SLEEP", classify("bed down in the open"), "\"open\" is not a pen");
+
+        // AND THE CATALOGUE CALLS THINGS BEDS TOO. Audited, not guessed: these are every keyword in
+        // assembly_definition and material_process holding the whole word bed/beds/bedding. Each must reach its
+        // own matcher, not this rule. The standing water-structure test caught the filter bed the moment the
+        // widening landed; the mortar one would not have been caught by anything, which is why it was audited.
+        assertEquals("UNKNOWN", classify("build a sand filter bed"), "a staged water structure");
+        assertEquals("UNKNOWN", classify("dig a sand filter bed"));
+        assertEquals("UNKNOWN", classify("build a raised bed platform"), "excluded by \"platform\" all along");
+        assertEquals("UNKNOWN", classify("prepare bedding mortar"), "a material process, not a place to sleep");
+        assertEquals("UNKNOWN", classify("bed the stone"), "which carries no making verb");
+    }
+
     @Test void aWordIsNotASubstring() throws Exception {
         // The six wrong answers, gone. UNKNOWN here means the assembly/process matchers get their turn.
         assertEquals("UNKNOWN", classify("build a stable"));
         assertEquals("UNKNOWN", classify("build a portable shelter"));
         assertEquals("UNKNOWN", classify("build a suitable shelter"));
-        assertEquals("UNKNOWN", classify("make a comfortable bed"));
         assertEquals("UNKNOWN", classify("build a notable marker"));
         assertEquals("UNKNOWN", classify("make a racket"));
+        // "make a comfortable bed" was the sixth, and it no longer stops at UNKNOWN: MAKE_BED is held as the
+        // word "bed" rather than the literal "a bed", so the adjective no longer defeats it. See
+        // {@link #aBedIsThreeThings}.
+        assertEquals("MAKE_BED", classify("make a comfortable bed"));
 
         // And two that now reach the RIGHT intent rather than merely a different wrong one.
         assertEquals("TRACK", classify("build a track"), "a track is read, not shelved");

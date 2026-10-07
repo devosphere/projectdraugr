@@ -2010,7 +2010,15 @@ public class ChronicleActionService {
         // Physical logistics (#29/#40/#41). Storing something IN a container is checked before DROP and before
         // the gather verbs, so "put the stones in the basket" is containment, not dropping or gathering. It
         // needs a store verb, an in/into/inside, and a container noun together.
-        boolean containerNoun = value.contains("basket")||value.contains("container")||value.contains("pouch")||value.contains("bag")||value.contains("sack")||value.contains("pot")||value.contains("crate")||value.contains("chest")||value.contains("quiver")||value.contains("box")||value.contains("pannier")||value.contains("backpack")||value.contains("storage");
+        // A WATERSKIN IS A CONTAINER (#37). This list held every dry container in the game and not one thing you
+        // carry liquid in, so "empty the waterskin" and "put the water in the gourd" reached nothing while the
+        // same sentences about a basket worked. The liquid vessels are the ones the water chain turns on.
+        //
+        // "waterskin" and "water skin" are named in full rather than a bare "skin", which belongs to the hide and
+        // the fish — the substring lesson this file has learned several times over.
+        boolean containerNoun = value.contains("basket")||value.contains("container")||value.contains("pouch")||value.contains("bag")||value.contains("sack")||value.contains("pot")||value.contains("crate")||value.contains("chest")||value.contains("quiver")||value.contains("box")||value.contains("pannier")||value.contains("backpack")||value.contains("storage")
+            ||value.contains("waterskin")||value.contains("water skin")||value.contains("gourd")||value.contains("flask")
+            ||value.contains("jug")||value.contains("urn")||word(value,"jar")||word(value,"jars")||word(value,"vessel")||word(value,"vessels");
         // STORE (#67 store/pack): put/stow/cache/stockpile something into a container, or the container-less
         // storage verbs that imply the settlement's store ("put it away", "cache the meat", "stockpile the wood").
         if((value.contains(" in ")||value.contains(" into ")||value.contains(" inside "))&&(value.contains("put")||value.contains("place")||value.contains("store")||value.contains("stow")||value.contains("stash")||value.contains("load")||value.contains("pack")||value.contains("drop"))&&containerNoun) return Intent.STORE;
@@ -2073,8 +2081,11 @@ public class ChronicleActionService {
         // Before the access rules, or "empty the pot" would be read as closing it; and before the storage rules,
         // so that "empty" is never taken for a storage verb.
         if((value.contains("empty")||value.contains("turn out")||value.contains("tip out")||value.contains("take everything out")
-            ||value.contains("take it all out")||value.contains("unpack everything")||value.contains("empty out"))
-           &&(containerNoun||value.contains("container"))) return Intent.EMPTY_CONTAINER;
+            ||value.contains("take it all out")||value.contains("unpack everything")||value.contains("empty out")
+            // Pouring is how you empty a thing that holds liquid, and no verb here covered it (#37).
+            ||value.contains("pour out")||value.contains("pour the water out")||value.contains("pour it out")
+            ||value.contains("pour away")||value.contains("tip it out"))
+           &&(containerNoun||value.contains("container")||value.contains("the water out"))) return Intent.EMPTY_CONTAINER;
         // PICK_UP (#67 take/retrieve/unpack): explicit retrieval verbs, or "take/get/remove/unpack X out of/from
         // the <container/storage/ground>" — distinct from gathering raw growth from the world.
         if(value.contains("pick up")||value.contains("pick it up")||value.contains("pick them up")||value.contains("pick it back")||value.contains("picked up")||value.contains("grab")||value.contains("retrieve")||value.contains("recover")||value.contains("take back")||value.contains("take it back")||(value.contains("fetch")&&!value.contains("water"))||value.contains("lift the")||value.contains("lift it")||value.contains("lift up")
@@ -2357,7 +2368,14 @@ public class ChronicleActionService {
         // planks" is log *processing*, and the two-axis matcher claims it (split_planks);
         // only text that resolves to no process is heard as an attempt to fell (#17).
         // Coppicing cuts rods from living stools rather than felling the tree — a distinct woodland craft (#204).
-        if(value.contains("coppice")||value.contains("cut rods")||value.contains("cut the rods")||value.contains("pollard")) return Intent.COPPICE;
+        // Pruning and trimming are coppicing by the words a person actually uses (#37). `coppice the hazel` and
+        // `pollard` worked — both terms of art — while `prune the branches` and `trim the branches` reached
+        // nothing, and the refusal for the working phrasing is already exactly right ("there is no wood here to
+        // coppice"). Gated on the wood so that trimming a wick, a hoof or a hide stays with its own work.
+        if(value.contains("coppice")||value.contains("cut rods")||value.contains("cut the rods")||value.contains("pollard")
+           ||((value.contains("prune")||value.contains("trim")||value.contains("cut back"))
+              &&(value.contains("branch")||value.contains("bough")||value.contains("hazel")||value.contains("willow")
+                 ||value.contains("coppice")||value.contains("the tree")||value.contains("the shrub")))) return Intent.COPPICE;
         if((value.contains("fell")||value.contains("cut down")||value.contains("chop down")||value.contains("drop the tree"))&&(value.contains("tree")||value.contains("oak")||value.contains("birch")||value.contains("pine")||value.contains("ash")||value.contains("willow")||value.contains("maple")||value.contains("hazel")||value.contains("spruce")||value.contains("juniper"))&&!items.actionMatchesProcess(action)) return Intent.FELL_TREE;
         // Plant a tree seed to establish or restore a stand (#200/#204) — the counter-play to felling/clear-cutting.
         // A plant/sow/replant verb with a seed or tree noun; placed before GATHER_PLANT (which also matches
@@ -2401,7 +2419,18 @@ public class ChronicleActionService {
             // is no restrained state in this world and an invented one would change nothing and claim it had.
             ||value.contains("tether")||value.contains("hobble")||value.contains("halter")||value.contains("tie up")
             ||value.contains("restrain")||value.contains("lead the")||value.contains("catch the")||value.contains("hold the")
-            ||value.contains("shut the")||value.contains("shut in")||value.contains("keep hold of"))
+            ||value.contains("shut the")||value.contains("shut in")||value.contains("keep hold of")
+            // TAKING STOCK OF THE STOCK (#37). The camp stocktake owned the phrase and, through a precedence
+            // fault, owned it without its animal exclusions — so "take stock of the animals" answered with an
+            // account of the lean-to. Fixing that made the sentence reach nothing, which is better and still not
+            // right: this is the reading that walks the herd.
+            //
+            // It demands a REAL animal word and not the subject gate below, because that gate counts the bare
+            // word "stock" — which every one of these sentences contains, camp or herd. "take stock of the camp"
+            // must keep falling through, and does.
+            ||((value.contains("take stock")||value.contains("taking stock")||value.contains("stocktake"))
+               &&(value.contains("animal")||value.contains("beast")||value.contains("the herd")
+                  ||value.contains("the flock")||value.contains("livestock")||items.namesAKeptAnimal(value))))
            &&namesABeast(value)
            // The acts keep their own verbs. Asking after a beast is not tending, grooming, feeding or milking one.
            &&!value.contains("tend")&&!value.contains("treat")&&!value.contains("groom")&&!value.contains("curry")
@@ -2423,6 +2452,24 @@ public class ChronicleActionService {
         if((value.contains("tend")||value.contains("treat")||value.contains("doctor")||value.contains("physic")||value.contains("dose")||value.contains("nurse")
             ||value.contains("bandage")||value.contains("poultice")||value.contains("salve")||value.contains("dress the")||value.contains("bind the"))
            &&namesABeast(value)) return Intent.TEND_ANIMAL;
+        // A BED IS THREE THINGS (#37): somewhere to sleep, ground for a crop, and litter for an animal. Two of
+        // the three had rules; the animal's had none, so "bed down the stock" fell all the way through to
+        // classifyLegacy's SLEEP:
+        //
+        //   bed down the stock    ->  SLEEP
+        //   bed down the animals  ->  SLEEP
+        //
+        // The keeper who settled their animals for the night went to sleep THEMSELVES — hours of game time gone
+        // and the stock still unbedded. "bed down" on its own IS sleeping ("I'll bed down here") and stays so;
+        // the noun is the whole of the difference, exactly as it is for `bandage the goat` above.
+        //
+        // The stock-house words are held as WORDS and not substrings, because "pen" sits inside OPEN and HAPPEN
+        // and "fold" inside FOLDABLE — the same lesson that had `build a stable` asking for a desk.
+        boolean beddingWork = value.contains("bed down")||value.contains("bed the")||value.contains("bedding");
+        boolean somewhereStockAreKept = word(value,"stall")||word(value,"stalls")||word(value,"byre")
+            ||word(value,"sty")||word(value,"coop")||word(value,"fold")||word(value,"stable")
+            ||word(value,"stables")||word(value,"pen")||word(value,"pens");
+        if(beddingWork&&(namesABeast(value)||somewhereStockAreKept)) return Intent.TEND_ANIMAL;
         // Combing out a coat (#106). Kept apart from TEND_ANIMAL by the verb: tending is for what ails a beast,
         // grooming is for the coat itself, and the two want different things in your hands. The coat, the mane and
         // the fleece are its own — a part of the animal rather than another name for it — so they are here.
@@ -2478,7 +2525,12 @@ public class ChronicleActionService {
         // cellar" names a real root — but beside a bed or a plot it is plainly tillage, and so is making one.
         boolean diggingABed = (value.contains("dig")||value.contains("make"))
             &&(value.contains("seedbed")||value.contains("seed bed")||value.contains("the bed over")
-               ||value.contains("over the bed")||value.contains("the plot over"))
+               ||value.contains("over the bed")||value.contains("the plot over")
+               // ...or a bed the sentence SAYS is for something growing. "dig a bed for the crop" reached
+               // nothing: the phrasings above are all about turning an existing bed over, and none of them
+               // covers digging a new one for a named purpose (#37).
+               ||(word(value,"bed")&&(value.contains("crop")||value.contains("grain")||value.contains("vegetable")
+                                      ||value.contains("seed")||value.contains("sow")||value.contains("plant"))))
             &&!namesAnAssembly(value);
         boolean notAnEarthHouse = !value.contains("earth sheltered")&&!value.contains("earth-sheltered");
         // Insects, grubs and worms are a grub hunt, not a seedbed — the ground and the verb are tillage's, the
@@ -2574,7 +2626,43 @@ public class ChronicleActionService {
         if((value.contains("stretch")&&!value.contains("hide")&&!value.contains("skin")&&!value.contains("pelt"))||value.contains("loosen my")||value.contains("loosen up")||value.contains("work the stiffness")||value.contains("limber up")) return Intent.STRETCH;
         // Camp upkeep (#71): laying a bed off the ground, and tending the whole site. make_bed is gated on
         // bedding nouns (not "bed down", which is sleeping) and excludes the raised-platform assembly phrase.
-        if((value.contains("make")||value.contains("prepare")||value.contains("lay")||value.contains("build")||value.contains("gather")||value.contains("arrange"))&&(value.contains("bedding")||value.contains("a bed")||value.contains("the bed")||value.contains("sleeping mat")||value.contains("bed of")||value.contains("pallet"))&&!value.contains("platform")) return Intent.MAKE_BED;
+        //
+        // HELD AS THE WORD "bed" rather than the literals "a bed"/"the bed" (#37). Those two caught the plainest
+        // phrasings and nothing else, so an adjective broke it outright:
+        //
+        //   make a comfortable bed  ->  nothing     (there is no "a bed" in "a comfortable bed")
+        //   soften the bed          ->  nothing     (no verb of ours)
+        //   freshen the bedding     ->  nothing     (likewise)
+        //   put down a bed of bracken -> DROP       (the noun matched; "put down" is not a making verb, so the
+        //                                            drop rule took it and the bed was never made)
+        //
+        // Safe to widen because the OTHER two senses of the word are both settled before this line: the animal's
+        // litter by the bedding rule above, and the crop's ground by TILL_GROUND, whose own "the bed" clause runs
+        // earlier. So "prepare the bed" is still tillage and "make a seedbed" is still tillage; by the time a
+        // sentence reaches here, a bed is a thing you sleep on.
+        if((value.contains("make")||value.contains("prepare")||value.contains("lay")||value.contains("build")||value.contains("gather")||value.contains("arrange")
+            ||value.contains("soften")||value.contains("freshen")||value.contains("put down")||value.contains("spread")||value.contains("strew"))
+           &&(value.contains("bedding")||word(value,"bed")||word(value,"beds")||value.contains("sleeping mat")||value.contains("bed of")||value.contains("pallet"))&&!value.contains("platform")
+           // ...and a sentence that is an assembly's OWN keyword belongs to the assembly matcher. Widening this
+           // rule to the bare word immediately swallowed `build a sand filter bed` — a staged water structure —
+           // which the standing routing test caught at once. Asked of the matcher rather than excluded by name,
+           // so every assembly added after this one is protected too; the same guard CHECK_STOCK and the tillage
+           // rule already use (#513).
+           //
+           // THE CATALOGUE ALSO CALLS THINGS BEDS, and the guard above is null-safe and therefore INERT in the
+           // DB-free unit test — a guard that only works in production is not a guard. So the collisions are
+           // audited and named as well. Every keyword in assembly_definition and material_process holding the
+           // whole word bed/beds/bedding:
+           //
+           //   raised_bed_platform  "bed platform", "raised bed platform"   already excluded by "platform"
+           //   sand_filter_bed      "build a sand filter bed", "dig a ..."  a staged water structure
+           //   lay_mortared_course  "bed the stone"                         carries no making verb, so safe
+           //   mix_mortar           "bedding mortar"                        but "prepare bedding mortar" would
+           //                                                                have come here
+           //
+           // The first was already safe and the third needs nothing; the other two are named. The standing
+           // routing test caught the filter bed the moment the widening landed, which is the system working.
+           &&!value.contains("filter bed")&&!value.contains("mortar")) return Intent.MAKE_BED;
         // A perimeter trip-line alarm (#126/#127): a line strung low with anything that clatters, so nothing
         // crosses into the camp unheard. Distinctive nouns ('alarm', 'trip-line', a 'warning'/'noise' line) own
         // the intent; placed before MAINTAIN_CAMP so "protect the camp with a trip-line alarm" rigs one.
@@ -2673,29 +2761,72 @@ public class ChronicleActionService {
             ||value.contains("blunt")||value.contains("how sharp")||value.contains("still sharp")
             ||value.contains("will it hold")||value.contains("will this hold")||value.contains("how much use")
             ||value.contains("much use left")||value.contains("how is the knife")||value.contains("how is the axe")
-            ||(value.contains("worn")&&(value.contains("the axe")||value.contains("the knife")||value.contains("the blade")||value.contains("my tool")))
+            // ...and for ANYTHING THE CHRONICLE IS CARRYING, not four nouns (#37). condition_state and use_count
+            // are on every item, and this clause asked for "worn" beside exactly `the axe`, `the knife`,
+            // `the blade` or `my tool`. So "my shoe is worn" and "check my boots" reached nothing, though a shoe
+            // is a tracked item with a condition like any other. Four nouns is a sample, not a vocabulary.
+            // The catalogue is asked instead — the same fix minerals and stock already had.
+            ||((value.contains("worn")||value.contains("check my")||value.contains("look at my")
+                ||value.contains("in good order")||value.contains("any good left"))
+               &&items.namesSomethingYouCarry(value))
             ||value.contains("am i carrying too much")||value.contains("how heavy is my")||value.contains("how much am i carrying")
+            // ASKING ABOUT A WATERSKIN IS NOT MAKING ONE — the fourth time this project has found that shape,
+            // after the lean-to question that built a hut, the trap question that set a trap, and the snare
+            // question that worked a snare. "is my waterskin full" answered "Make a waterskin turns on a cutting
+            // edge, and there is none within reach": the process matcher took the noun and offered to make the
+            // thing being asked after.
+            //
+            // It goes here because this is the reading that walks what the Chronicle carries, and a waterskin is
+            // carried. BE CLEAR WHAT THIS DOES AND DOES NOT ANSWER: there is no carried-water model anywhere in
+            // the schema — hours_without_water on the body is the only water state there is — so this reports
+            // the skin and its condition and CANNOT report how full it is. That is a true answer to a near
+            // question rather than a false answer to the exact one, and the gap is recorded on #37. Inventing a
+            // fill level here would have been the worse of the two by far.
+            ||value.contains("waterskin full")||value.contains("water skin full")||value.contains("skin full")
+            ||value.contains("how much water do i")||value.contains("how much water have i")
             ||value.contains("take stock of my gear")||value.contains("what is in my pack")||value.contains("still good")&&value.contains("my ")||value.contains("still sound"))
            &&!value.contains("food")&&!value.contains("supplies")) return Intent.TAKE_STOCK_OF_GEAR;
         // Go round the camp and account for it (#37). Perception, not work. Placed before MAINTAIN_CAMP, which
         // claims the camp with a tidying verb — taking stock is not tidying, and must not be answered by sweeping.
         // "stock" is also the word for animals, so this needs the stocktaking PHRASE rather than the bare noun:
         // "water the stock" and "feed the stock" are somebody else's rule and stay that way.
-        if((value.contains("take stock")||value.contains("taking stock")||value.contains("stocktake")
+        // IN PIECES, AND THE REASON IS A BUG THIS RULE WAS CARRYING (#37). It was written as
+        //
+        //     if( GROUP_A || GROUP_B && !animal && !beast && !herd && !flock && !namesAKeptAnimal )
+        //
+        // and in Java `&&` binds tighter than `||`, so every one of those exclusions applied to GROUP_B ALONE.
+        // They were written for the whole rule. The half they never reached is the stocktaking half, so:
+        //
+        //   take stock of the animals  ->  TAKE_STOCK_OF_CAMP, an account of your lean-to
+        //   take stock of the herd     ->  the same
+        //   take stock of the goats    ->  the same
+        //   is the animal sound        ->  correctly declined, which is what proved the split
+        //
+        // A keeper asking after their animals was told about their shelter, by a guard that was already there and
+        // silently governed only one branch. This is the third precedence-or-paren fault found in this method, so
+        // it goes the way the other two did: named locals, one claim each, and the exclusions applied once to the
+        // whole of it where they cannot be read two ways.
+        boolean takingStockOfTheCamp = value.contains("take stock")||value.contains("taking stock")||value.contains("stocktake")
             ||value.contains("what have i built")||value.contains("what have i made here")
             ||value.contains("what stands here")||value.contains("what is standing here")
             ||((value.contains("look over")||value.contains("go round")||value.contains("account for")||value.contains("survey"))
-               &&(value.contains("camp")||value.contains("what i have built")||value.contains("my work"))))
-            // ...and asking whether what you built is still sound (#37), which is the same walk round the same
-            // ground reading the same integrity_percent. "is the shelter sound" and "how is the shelter" reached
-            // nothing, and "is the lean-to still good" was answered by STARTING TO BUILD ANOTHER ONE.
-            ||((value.contains("sound")||value.contains("still good")||value.contains("still standing")
-                ||value.contains("still hold")||value.contains("in good repair")||value.contains("how is"))
-               &&(value.contains("shelter")||value.contains("lean-to")||value.contains("lean to")
-                  ||value.contains("the hut")||value.contains("the roof")||value.contains("what i built")
-                  ||value.contains("the pen")||value.contains("the fence")||value.contains("the rack")))
-           &&!value.contains("animal")&&!value.contains("beast")&&!value.contains("the herd")&&!value.contains("the flock")
-           &&!items.namesAKeptAnimal(value)) return Intent.TAKE_STOCK_OF_CAMP;
+               &&(value.contains("camp")||value.contains("what i have built")||value.contains("my work")));
+        // ...and asking whether what you built is still sound (#37), which is the same walk round the same
+        // ground reading the same integrity_percent. "is the shelter sound" and "how is the shelter" reached
+        // nothing, and "is the lean-to still good" was answered by STARTING TO BUILD ANOTHER ONE.
+        boolean askingIfABuiltThingHolds =
+            (value.contains("sound")||value.contains("still good")||value.contains("still standing")
+             ||value.contains("still hold")||value.contains("in good repair")||value.contains("how is"))
+            &&(value.contains("shelter")||value.contains("lean-to")||value.contains("lean to")
+               ||value.contains("the hut")||value.contains("the roof")||value.contains("what i built")
+               ||value.contains("the pen")||value.contains("the fence")||value.contains("the rack"));
+        // Neither an animal nor the Chronicle themselves is the camp. The stock have their own reading and so
+        // does the body; being told about a lean-to answers neither question.
+        boolean notAboutAnAnimal = !value.contains("animal")&&!value.contains("beast")&&!value.contains("the herd")
+            &&!value.contains("the flock")&&!items.namesAKeptAnimal(value);
+        boolean notAboutMyself = !value.contains("myself")&&!value.contains("of me")&&!value.contains("with me");
+        if((takingStockOfTheCamp||askingIfABuiltThingHolds)&&notAboutAnAnimal&&notAboutMyself)
+            return Intent.TAKE_STOCK_OF_CAMP;
         // Asking WHETHER the water will let you over is a question, not a wade (#37). Placed before the
         // terrain-crossing rule, which turns "wade north" into movement: a question with a direction in it must
         // still be a question. Gated on a question shape AND water, so "wade north" itself is untouched.
@@ -2734,7 +2865,17 @@ public class ChronicleActionService {
             ||((value.startsWith("is ")||value.startsWith("can i")||value.startsWith("will ")||value.contains("should i drink")
                 ||value.contains("how is the")||value.contains("what is the"))
                &&(value.contains("water")||value.contains("stream")||value.contains("pool")||value.contains("spring"))
-               &&(value.contains("safe")||value.contains("clean")||value.contains("drink")||value.contains("foul")||value.contains("ill"))))
+               &&(value.contains("safe")||value.contains("clean")||value.contains("drink")||value.contains("foul")||value.contains("ill")))
+            // ...and by the VERB, which the intent is named for and could not be reached by (#37). "judge the
+            // water" reached nothing while "is this water safe" worked.
+            //
+            // JUDGING AND TASTING ONLY. My first cut added "sniff" and "test" as well, on the reasoning that
+            // they are the same act — and broke two standing assertions: `sniff the water` is SMELL and `test the
+            // depth of the water` is MEASURE, both by deliberate design. The sweep that found this gap had itself
+            // printed `smell the water -> SMELL` two lines earlier, so the answer was already on the screen when
+            // I widened past it. A perception verb that already has an intent is not available to borrow.
+            ||((value.contains("judge")||value.contains("taste"))
+               &&(value.contains("water")||value.contains("the stream")||value.contains("the pool")||value.contains("the spring"))))
            &&!value.contains("boil")) return Intent.JUDGE_WATER;
         // Stuff or line a garment already being worn (#37). Gated on a lining VERB plus a garment word, so
         // "gather dry grass" still gathers and "make a fur cloak" still makes one — the difference is that this
@@ -2796,16 +2937,38 @@ public class ChronicleActionService {
            ||value.contains("find shelter")||value.contains("look for shelter")||value.contains("get inside")) return Intent.SHELTER_BODY;
         // Water handling (#71): collect / boil / filter — before the gather and drink rules so "collect water"
         // is filling a vessel, not gathering, and "boil water" reaches its handler rather than a process miss.
-        if(value.contains("boil water")||value.contains("boil the water")||value.contains("boil some water")||value.contains("heat water to a boil")||value.contains("boil it to make it safe")) return Intent.BOIL_WATER;
+        // Boiling is what makes water safe, and the five phrasings here all contained the word BOIL (#37). A
+        // person with a pot and a fire says "heat the water" — which reached nothing, while the canonical form
+        // already refuses perfectly ("there is no fire burning here to boil water over"). The work and its
+        // refusal were both right; only the words were missing.
+        if(value.contains("boil water")||value.contains("boil the water")||value.contains("boil some water")||value.contains("heat water to a boil")||value.contains("boil it to make it safe")
+           ||((value.contains("heat")||value.contains("warm"))
+              &&(value.contains("the water")||value.contains("some water")||value.contains("water in the")
+                 ||value.contains("water up")))
+           // "make the water safe" is what the player is actually after, and it answered with MAKE A WATERSKIN —
+           // the process matcher took "water" and offered a vessel. Boiling is what the rule's own existing
+           // keyword "boil it to make it safe" already says this means (#37).
+           ||value.contains("make the water safe")||value.contains("make this water safe")
+           ||value.contains("make it safe to drink")) return Intent.BOIL_WATER;
         // Pour water through a filter to clarify it — but MAKING a filter ("make a bark and charcoal filter")
         // is a craft, so defer to the material process when the text names one rather than filtering here.
         if((value.contains("filter")||value.contains("strain")||value.contains("clarify")||value.contains("purify"))&&value.contains("water")&&!items.actionMatchesProcess(value)) return Intent.FILTER_WATER;
+        // Slaking and quenching a thirst are drinking, and neither word contains "drink", which is the whole of
+        // what the drink rule looks for (#37). Nothing else in the game is slaked or quenched.
+        if(value.contains("slake")||value.contains("quench")) return Intent.DRINK;
         // "find water" (#37). Looking for water and drawing it collapse to the same act the moment there is
         // water to draw, and COLLECT_WATER already answers honestly when there is none — "no stream, no spring,
         // only what the sky gives". That is a far better answer than silence. ("look for water" is left to
         // SEARCH, which claims "look for" and answers about what it finds.)
         if(value.contains("find water")||value.contains("find some water")||value.contains("find a stream")
-           ||value.contains("collect water")||value.contains("fetch water")||value.contains("draw water")||value.contains("gather water")||value.contains("fill container")||value.contains("scoop water")||((value.contains("fill")||value.contains("refill"))&&(value.contains("waterskin")||value.contains("water skin")||value.contains("bucket")||value.contains("vessel")||value.contains("jar")||value.contains("with water")||value.contains("flask")||value.contains("gourd")))) return Intent.COLLECT_WATER;
+           ||value.contains("collect water")||value.contains("fetch water")||value.contains("draw water")||value.contains("gather water")||value.contains("fill container")||value.contains("scoop water")||((value.contains("fill")||value.contains("refill"))&&(value.contains("waterskin")||value.contains("water skin")||value.contains("bucket")||value.contains("vessel")||value.contains("jar")||value.contains("with water")||value.contains("flask")||value.contains("gourd")
+              // "fill the skin" is what somebody holding a waterskin says about it. The list named the thing in
+              // full and not the word a person uses while they are doing it (#37).
+              ||value.contains("the skin")))
+           // Six verbs for drawing water and not the plainest two: "get some water" and "scoop up water" reached
+           // nothing while "fetch water" and "scoop water" worked.
+           ||((value.contains("get some water")||value.contains("get water")||value.contains("scoop up")
+               ||value.contains("dip")||value.contains("take some water"))&&value.contains("water"))) return Intent.COLLECT_WATER;
         if(value.contains("charcoal")&&(value.contains("make")||value.contains("take")||value.contains("gather")||value.contains("get")||value.contains("collect"))&&!items.actionMatchesProcess(value)) return Intent.MAKE_CHARCOAL;
         if(value.contains("bark")&&!value.contains("loose")&&(gatherVerb||value.contains("strip")||value.contains("peel")||value.contains("take"))) return Intent.STRIP_BARK;
         // Ambient ground scavenge (#133): search the forest floor / under a log for small survival materials — the
@@ -2918,7 +3081,34 @@ public class ChronicleActionService {
            // and "will I be warm enough tonight" and "am I dry" reached nothing.
            ||value.contains("warm enough")||value.contains("cold enough to")||value.contains("am i dry")
            ||value.contains("freeze tonight")||value.contains("see the night out myself")
-           ||value.contains("survive the night")||value.contains("get through the night")) return Intent.SENSE_BODY;
+           ||value.contains("survive the night")||value.contains("get through the night")
+           // THIRST, which the body has tracked all along (#37). chronicle_physiology.hours_without_water is the
+           // only water state in the whole schema — it drives the thirst that kills a Chronicle — and "am I
+           // thirsty" reached nothing while "am I dry" reached this. First person only: watering the stock is
+           // husbandry's question, not the body's.
+           ||value.contains("am i thirsty")||value.contains("how thirsty")||value.contains("i am thirsty")
+           ||value.contains("do i need water")||value.contains("need a drink")
+           // AND HUNGER, the exact twin of it (#37). hours_without_food drives starvation the way
+           // hours_without_water drives thirst, and "am I hungry" reached nothing while "am I cold" reached
+           // this. Fixing one and not the other would have been the same defect with a different column.
+           ||value.contains("am i hungry")||value.contains("how hungry")||value.contains("i am hungry")
+           ||value.contains("do i need to eat")||value.contains("need food")
+           // Tiredness (sleep_debt_hours), shivering, sickness and what the body makes of itself in general.
+           // "how tired" was in and "am I tired" was not, which is the literal-phrasing trap again.
+           ||value.contains("am i tired")||value.contains("i am tired")||value.contains("am i worn out")
+           ||value.contains("i am shivering")||value.contains("am i shivering")
+           ||value.contains("i feel sick")||value.contains("i feel ill")||value.contains("going to be sick")
+           ||value.contains("what is wrong with me")||value.contains("whats wrong with me")
+           // ...and the self-stocktake the camp reading used to take.
+           ||value.contains("take stock of myself")||value.contains("take stock of me")
+           ||value.contains("look myself over")
+           // The WOUND as a question rather than as work. injury_severity, blood_loss_ml and the healing clock
+           // are all tracked, and "check the wound", "is the wound healing" and "has it gone bad" reached
+           // nothing while "how bad is the wound" reached this. Asking is not dressing — the same shape as the
+           // lean-to and the waterskin, caught here before it could become a wrong answer.
+           ||((value.contains("check")||value.contains("healing")||value.contains("gone bad")||value.contains("mending"))
+              &&(value.contains("wound")||value.contains("the cut")||value.contains("the injury")
+                 ||value.contains("the break")||value.contains("it gone bad")))) return Intent.SENSE_BODY;
         // Whether the stock will get in calf (#37). Not an act — breeding is simulated and happens on its own
         // when the conditions are right — but a question with five real answers behind it, none of which the
         // keeper could see. Before this, "breed the goats" was caught by the bestiality filter and answered as
@@ -2979,7 +3169,13 @@ public class ChronicleActionService {
         // somebody — `bind the planks` is lashing, `wash it` is washing. Nothing else in this world is bandaged.
         if((value.contains("splint")||value.contains("stitch")||value.contains("cauteris")||value.contains("cauteriz")||value.contains("sling")
             ||value.contains("bandage")
-            ||value.contains("staunch")||value.contains("change the dressing")||value.contains("press on"))
+            ||value.contains("staunch")||value.contains("change the dressing")||value.contains("press on")
+            // "staunch" was in and the plain way of saying it was not (#37): `stop the bleeding` reached nothing
+            // over a mechanism that tracks blood_loss_ml to the millilitre. And a poultice is what you put on
+            // your own wound as readily as on a goat's — TEND_ANIMAL claims the beast case earlier, so this
+            // catches the one left over. Both are safe beside the bare " it" the noun group ends in, because
+            // nothing else in this world is poulticed and nothing else bleeds to be stopped.
+            ||value.contains("stop the bleed")||value.contains("stem the bleed")||value.contains("poultice"))
            &&(value.contains("wound")||value.contains("cut")||value.contains("bleeding")||value.contains("gash")
               ||value.contains("my leg")||value.contains("my arm")||value.contains("my ankle")||value.contains("my wrist")
               ||value.contains("my ribs")||value.contains("my hand")||value.contains("my foot")||value.contains("my shoulder")
