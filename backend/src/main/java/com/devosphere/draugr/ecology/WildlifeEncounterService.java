@@ -31,6 +31,111 @@ public class WildlifeEncounterService {
      */
     @Transactional
     public EncounterResult confront(UUID chronicle, UUID chunk, UUID action, Instant at, int tacticBonus) {
+        return confront(chronicle, chunk, action, at, tacticBonus, null);
+    }
+
+    /**
+     * The same, told WHAT THE HUNTER NAMED (#37).
+     *
+     * <p><b>The hunt did not read the words.</b> This method took no action text at all: it picked a quarry from
+     * the ground by its own ordering — <i>carnivores first</i> — and fell back to the biggest thing the registry
+     * says lives in the biome. So <b>"hunt the deer" in a wood that also holds a boar closed with the boar</b>,
+     * and "stalk the deer" answered <i>"The wild boar moves with sudden force. The encounter leaves its mark
+     * before the forest takes it back."</i>
+     *
+     * <p>That is the "right work, wrong subject" defect in the single most consequential action in the game —
+     * this one can injure or kill a Chronicle — and it is worse than an ordinary wrong answer, because the player
+     * named a herbivore and was given something that fights back.
+     *
+     * <p>So a named quarry is preferred: the population standing here if there is one, else the species the
+     * registry says belongs to this ground, materialised as that ground's own herd exactly as the fallback
+     * already does. And <b>naming something that is NOT here is refused by name</b> rather than silently
+     * answered with whatever is: that is the difference between a hunt and an ambush the player walked into.
+     *
+     * <p>A sentence that names no species keeps the old behaviour entirely — carnivores first, because the
+     * dangerous thing is what notices you when you go looking for "something to hunt".
+     */
+    @Transactional
+    public EncounterResult confront(UUID chronicle, UUID chunk, UUID action, Instant at, int tacticBonus, String actionText) {
+        String named = speciesNamedIn(actionText, chunk);
+        if (named != null) {
+            Encounter asked = namedQuarryHere(chunk, named, at);
+            if (asked == null)
+                return new EncounterResult("FAILED", "You work this ground over for " + named.replace('_', ' ')
+                    + " and find none of it here — not a track, not a smell, nothing moving. Whatever else is "
+                    + "about, that is not.");
+            return closeWith(chronicle, chunk, action, at, tacticBonus, asked);
+        }
+        return confrontWhateverIsHere(chronicle, chunk, action, at, tacticBonus);
+    }
+
+    /**
+     * The species the sentence names, or null for none — by the catalogue, and by the word a person uses.
+     *
+     * <p>Head nouns count, as they do everywhere else since V402: the keys are {@code red_deer} and
+     * {@code wild_boar}, and a hunter says "deer" and "boar". Generic words are deliberately NOT names —
+     * "hunt something", "kill the animal", "take whatever is here" mean exactly what the old behaviour did, and
+     * must keep it.
+     */
+    private String speciesNamedIn(String actionText, UUID chunk) {
+        if (actionText == null || actionText.isBlank()) return null;
+        String v = " " + actionText.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim() + " ";
+        String wholeName = null;
+        java.util.List<String> byHeadNoun = new java.util.ArrayList<>();
+        for (String key : jdbc.queryForList("SELECT species_key FROM wildlife_species", String.class)) {
+            String spoken = key.replace('_', ' ');
+            if (v.contains(" " + spoken + " ") || v.contains(" " + spoken + "s ")) {
+                // Said in full. Longest wins, so "wild boar" beats a bare "boar" in the same sentence.
+                if (wholeName == null || key.length() > wholeName.length()) wholeName = key;
+                continue;
+            }
+            int cut = spoken.lastIndexOf(' ');
+            if (cut > 0) {
+                String head = spoken.substring(cut + 1);
+                if (v.contains(" " + head + " ") || v.contains(" " + head + "s ")) byHeadNoun.add(key);
+            }
+        }
+        // A NAME SAID IN FULL ALWAYS BEATS A HEAD NOUN, and that order is the whole of this. Preferring the
+        // longest key outright made "hunt the boar" mean THORNHIDE BOAR — a monster — over the wild boar, because
+        // both answer to "boar" and the monster's key is longer. A hunter who says "boar" means the pig.
+        if (wholeName != null) return wholeName;
+        if (byHeadNoun.isEmpty()) return null;
+        if (byHeadNoun.size() == 1) return byHeadNoun.get(0);
+
+        // Several answer to the same word. Settled by the world, as every other tie in this project is: the one
+        // standing on this ground, else an ordinary animal over a monster, else the plainest name.
+        String standing = jdbc.query(
+            "SELECT wp.species_key FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id " +
+            "WHERE es.chunk_id=? AND wp.population_count>0 AND wp.species_key = ANY(?) LIMIT 1",
+            rs -> rs.next() ? rs.getString(1) : null, chunk, byHeadNoun.toArray(new String[0]));
+        if (standing != null) return standing;
+        String ordinary = jdbc.query(
+            "SELECT species_key FROM wildlife_species WHERE species_key = ANY(?) AND kingdom_class <> 'MONSTRUM' " +
+            "ORDER BY length(species_key) LIMIT 1",
+            rs -> rs.next() ? rs.getString(1) : null, (Object) byHeadNoun.toArray(new String[0]));
+        return ordinary != null ? ordinary : byHeadNoun.stream().min(java.util.Comparator.comparingInt(String::length)).orElse(null);
+    }
+
+    /** The named species as a herd on this ground: the one standing here, or the registry's if it belongs here. */
+    private Encounter namedQuarryHere(UUID chunk, String species, Instant at) {
+        Encounter standing = jdbc.query(
+            "SELECT wp.id,wp.species_key,wp.ecological_role,wp.behavior_state,wp.population_count," +
+            "       ws.movement_class,ws.base_resistance,ws.ambush_hunter " +
+            "FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id " +
+            "LEFT JOIN wildlife_species ws ON ws.species_key=wp.species_key " +
+            "WHERE es.chunk_id=? AND wp.species_key=? AND wp.population_count>0 AND wildlife_abroad(wp.species_key) " +
+            "LIMIT 1 FOR UPDATE OF wp",
+            rs -> rs.next() ? new Encounter(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3),
+                rs.getString(4), rs.getInt(5), rs.getString(6), (Integer) rs.getObject(7), rs.getBoolean(8)) : null,
+            chunk, species);
+        if (standing != null) return standing;
+        // Not standing here yet — but if the registry says this species belongs on this ground, it is here to be
+        // found, and the same materialising the unnamed fallback does applies. Abroad at this hour, as ever.
+        return materialiseNamedQuarry(chunk, species, at);
+    }
+
+    @Transactional
+    public EncounterResult confrontWhateverIsHere(UUID chronicle, UUID chunk, UUID action, Instant at, int tacticBonus) {
         // The species registry (V41) supplies movement class, intrinsic resistance,
         // and the ambush flag; it is LEFT JOINed so a population whose species is not
         // yet catalogued still resolves on its role alone.
@@ -51,6 +156,18 @@ public class WildlifeEncounterService {
         // real herd and what survives stays there to be found again.
         if(candidate==null) candidate = quarryOnThisGround(chunk, at);
         if(candidate==null)return new EncounterResult("FAILED","The ground answers only with rain and the small movements of the forest.");
+        return closeWith(chronicle, chunk, action, at, tacticBonus, candidate);
+    }
+
+    /**
+     * The encounter itself, once the quarry is settled (#37).
+     *
+     * <p>Split out from the selection so that a NAMED quarry and an unnamed one close by exactly the same rules:
+     * the body's state, what is worn and carried, the animal's resistance and whether it ambushes. A second copy
+     * of this would have drifted, and the point of naming the deer is that the hunt is otherwise identical.
+     */
+    @Transactional
+    public EncounterResult closeWith(UUID chronicle, UUID chunk, UUID action, Instant at, int tacticBonus, Encounter candidate) {
         // One pass over what is worn and one over what is carried, aggregated conditionally — the combat-relevant
         // tally the encounter needs, replacing the dozen correlated COUNT subqueries this grew from. Column order
         // is the Combatant record's: energy, injury, pain, handWeapon, stones, poison, blunt, sling, javelin, bow,
@@ -1197,6 +1314,51 @@ public class WildlifeEncounterService {
         return new Encounter(populationId, species, (String) pick.get("ecological_role"), "FORAGING", 3,
             (String) pick.get("movement_class"), (Integer) pick.get("base_resistance"),
             Boolean.TRUE.equals(pick.get("ambush_hunter")));
+    }
+
+    /**
+     * The NAMED species as a herd on this ground, if the registry says it belongs here (#37).
+     *
+     * <p>The same materialising {@link #quarryOnThisGround} does, and for the same reason: you cannot fight an
+     * abstraction, so the animal closed with is a real population on its own ground and the kill takes it from a
+     * real herd. The difference is only which species — the one the hunter said, rather than the biggest thing
+     * about.
+     *
+     * <p>Returns null when the species does not belong to this ground or is not abroad at this hour, which is the
+     * honest refusal: there is no deer here to be hunted, and the caller says so by name instead of handing over
+     * a boar.
+     */
+    private Encounter materialiseNamedQuarry(UUID chunk, String species, Instant at) {
+        String biome = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : null, chunk);
+        if (biome == null) return null;
+        java.util.Map<String,Object> kind = jdbc.query(
+            "SELECT species_key, ecological_role, activity_cycle, movement_class, base_resistance, ambush_hunter " +
+            "FROM wildlife_species WHERE species_key=? AND kingdom_class <> 'MONSTRUM' AND movement_class <> 'AQUATIC' " +
+            "  AND biome_affinity ILIKE ? AND wildlife_abroad(species_key) LIMIT 1",
+            rs -> {
+                if (!rs.next()) return null;
+                java.util.Map<String,Object> m = new java.util.HashMap<>();
+                m.put("ecological_role", rs.getString("ecological_role"));
+                m.put("activity_cycle", rs.getString("activity_cycle"));
+                m.put("movement_class", rs.getString("movement_class"));
+                m.put("base_resistance", rs.getObject("base_resistance"));
+                m.put("ambush_hunter", rs.getBoolean("ambush_hunter"));
+                return m;
+            }, species, "%" + biome + "%");
+        if (kind == null) return null;
+
+        UUID siteId = UUID.randomUUID(), populationId = UUID.randomUUID();
+        UUID world = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, chunk);
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE',?,?)",
+            siteId, display(species) + " ground", chunk);
+        jdbc.update("INSERT INTO ecology_site (id,world_id,chunk_id,site_category,site_kind,baseline_abundance) VALUES (?,?,?,'WILDLIFE',?,?)",
+            siteId, world, chunk, display(species) + " ground", 400);
+        jdbc.update("INSERT INTO wildlife_population (id,site_id,species_key,ecological_role,activity_cycle,population_count,carrying_capacity,behavior_state,last_simulated_at) " +
+            "VALUES (?,?,?,?,?,?,?,'FORAGING',?)",
+            populationId, siteId, species, kind.get("ecological_role"), kind.get("activity_cycle"), 3, 6, Timestamp.from(at));
+        return new Encounter(populationId, species, (String) kind.get("ecological_role"), "FORAGING", 3,
+            (String) kind.get("movement_class"), (Integer) kind.get("base_resistance"),
+            Boolean.TRUE.equals(kind.get("ambush_hunter")));
     }
 
     private Tamable approachAmbient(UUID chunk, String actionText, Instant at) {
