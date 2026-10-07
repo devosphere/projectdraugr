@@ -58,6 +58,24 @@ class IntentClassificationRegressionTest {
                 }
                 /** Nothing is kept in a test with no world, so taming never yields its feeding branch here. */
                 @Override public boolean keepsSuchABeast(String t) { return false; }
+                /**
+                 * What the Chronicle is carrying, as a fake pack rather than a database (#37). The real method
+                 * asks the recursive containment walk for every item in reach and matches its key and head noun;
+                 * this stands in for it with the arrival kit plus a knife, which is enough to assert both
+                 * directions of the gear-condition rule — a shoe IS carried, a millstone is not.
+                 */
+                @Override public boolean namesSomethingYouCarry(String t) {
+                    String v = t == null ? "" : t.toLowerCase(java.util.Locale.ROOT);
+                    // These are the head nouns of what a Chronicle ACTUALLY arrives with plus a knife, read off
+                    // a live world: arrival_left_shoe, arrival_right_shoe, arrival_shirt, arrival_trousers,
+                    // chert_knife. Deliberately NOT a generous list — a stub more forgiving than the world makes
+                    // the test pass on phrasings that fail in play, which is how "check my boots" nearly shipped
+                    // as covered when the game has no boots to check.
+                    for (String carried : new String[]{"shoe", "shirt", "trousers", "knife"})
+                        if (com.devosphere.draugr.narration.Words.word(v, carried)
+                            || com.devosphere.draugr.narration.Words.word(v, carried + "s")) return true;
+                    return false;
+                }
             };
         ChronicleActionService svc = new ChronicleActionService(null, null, null, null, items, null, null, null, null, null, null, null, new com.devosphere.draugr.narration.ActionInputClassifier(), null, null, null, new com.devosphere.draugr.narration.NarrationEngine(), (com.devosphere.draugr.ai.RuntimeAuthoringService) null, (ExaminationService) null, (com.devosphere.draugr.people.ContactService) null, (com.devosphere.draugr.people.TradeService) null, (com.devosphere.draugr.people.ConductService) null, (com.devosphere.draugr.people.AgreementService) null, (com.devosphere.draugr.people.CompanionService) null, (com.devosphere.draugr.people.AudienceService) null, (com.devosphere.draugr.people.MembershipService) null, (com.devosphere.draugr.people.ClaimService) null);
         return ((Enum<?>) m.invoke(svc, text)).name();
@@ -1567,6 +1585,61 @@ class IntentClassificationRegressionTest {
      * settled first, then the crop's ground by TILL_GROUND, and only what survives both reaches MAKE_BED. So the
      * same four words mean three different jobs depending on the noun beside them.
      */
+    /**
+     * Three features that worked and could not be asked for in the words a person uses (#37).
+     *
+     * <p>Found by sweeping the classifier for short {@code contains("…")} nouns that sit inside longer English
+     * words — the audit that turned up `build a stable` → CRAFT_DESK. That sweep found <b>no further substring
+     * collisions</b>, which is the negative result worth having; what it did turn up was this, three times over:
+     * <b>the canonical phrasing worked, refused correctly, and the natural phrasing reached nothing.</b>
+     *
+     * <pre>
+     *   boil water             -> "There is no fire burning here to boil water over."   heat the water  -> nothing
+     *   coppice the hazel      -> "There is no wood here to coppice."                   prune the branches -> nothing
+     *   how worn is the knife  -> "The chert knife is sound..."                          my shoe is worn -> nothing
+     * </pre>
+     *
+     * <p>In every case the work and its refusal were already right; only the words were missing. The third was
+     * the worst of them, because it was not a phrasing gap but a <b>vocabulary of four</b>: the rule asked for
+     * "worn" beside `the axe`, `the knife`, `the blade` or `my tool`, so every garment, vessel and cord in the
+     * game was outside it. That one is fixed by asking the catalogue what the Chronicle actually carries, as
+     * minerals and stock already do, rather than by adding a fifth noun.
+     */
+    @Test void theWorkWasThereAndTheWordsWereNot() throws Exception {
+        // I. Heating water IS boiling it, to a person with a pot and a fire.
+        assertEquals("BOIL_WATER", classify("boil water"), "which always worked");
+        assertEquals("BOIL_WATER", classify("heat the water"));
+        assertEquals("BOIL_WATER", classify("warm the water"));
+        assertEquals("BOIL_WATER", classify("heat some water"));
+        // ...but heating is not always about water. Stones for a pit oven are their own work.
+        assertEquals("UNKNOWN", classify("heat some stones"), "a process, not a kettle");
+
+        // II. Pruning and trimming are coppicing. "pollard" is a term of art and was already in; the two words
+        // anyone would actually reach for were not.
+        assertEquals("COPPICE", classify("coppice the hazel"), "which always worked");
+        assertEquals("COPPICE", classify("prune the branches"));
+        assertEquals("COPPICE", classify("trim the branches"));
+        assertEquals("COPPICE", classify("cut back the willow"));
+        // Gated on the wood, so trimming anything else stays with its own work.
+        assertEquals("UNKNOWN", classify("trim the wick"), "a lamp, not a tree");
+
+        // III. The gear-condition question, for anything carried rather than for four nouns.
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("how worn is the knife"), "which always worked");
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("my shoe is worn"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("check my shoes"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("is my shirt still in good order"));
+        // And the neighbours it must not take: mending one is repair, taking it off is unequipping.
+        assertEquals("REPAIR_ITEM", classify("mend my shoe"));
+        assertEquals("UNEQUIP", classify("take off my shoes"));
+        // A thing not carried is not something whose condition can be asked after.
+        assertEquals("UNKNOWN", classify("is the millstone worn"), "nothing of yours");
+        // AND THE LIMIT OF THE FIX, asserted so nobody mistakes it for covered: this asks the catalogue what the
+        // Chronicle holds, so it answers to the game's OWN word for a thing and not to a synonym. The arrival kit
+        // holds shoes; a player who says "boots" still reaches nothing. That is a vocabulary question for the
+        // catalogue to answer, and adding a synonym list here would rebuild the hand-kept list this replaced.
+        assertEquals("UNKNOWN", classify("check my boots"), "the game has shoes, not boots — recorded on #37");
+    }
+
     @Test void aBedIsThreeThings() throws Exception {
         // I. Somewhere to sleep. The first four always worked; the rest did not.
         for (String p : new String[]{"make a bed", "make the bed", "build a bed", "lay a bed",

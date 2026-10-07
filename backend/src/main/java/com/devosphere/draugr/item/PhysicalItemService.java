@@ -3579,6 +3579,54 @@ public class PhysicalItemService {
     }
 
     /**
+     * Whether the text names something the living Chronicle is actually carrying (#37).
+     *
+     * <p>The same fix {@link #namesADugMineral} made for minerals and {@link #namesAKeptAnimal} for stock, for the
+     * last place that still kept a hand-written list: the gear-condition question. {@code condition_state} and
+     * {@code use_count} are on <b>every</b> item, and the rule that reads them asked for the word "worn" beside
+     * one of exactly four nouns — <i>the axe, the knife, the blade, my tool</i>. So
+     *
+     * <pre>
+     *   how worn is the knife  ->  answered
+     *   my shoe is worn        ->  nothing at all
+     *   check my boots         ->  nothing at all
+     * </pre>
+     *
+     * even though the shoe is a tracked item with a condition like any other. Four nouns is not a vocabulary, it
+     * is a sample — and every garment, vessel, basket and cord in the game fell outside it.
+     *
+     * <p>Asks what is in REACH rather than what exists, because the question is about the player's own gear: the
+     * same recursive containment walk {@link #carriesFieldSeed} uses, so a knife inside a basket inside a pack
+     * still counts. A thing the Chronicle does not hold is not something they can be asking after the state of.
+     *
+     * <p>Matched on the whole key and on its HEAD NOUN, both as whole words, for the reason written out at length
+     * in {@link #namesAKeptAnimal}: a prefix would make "fiber cordage" answer to "fiber", and a substring would
+     * find "awl" in "trawl" and "pot" in "spot". This project has been bitten by the substring more times than by
+     * anything else.
+     */
+    @Transactional(readOnly = true)
+    public boolean namesSomethingYouCarry(String actionText) {
+        if (actionText == null || actionText.isBlank()) return false;
+        String v = " " + actionText.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim() + " ";
+        for (String key : jdbc.queryForList(
+                "WITH RECURSIVE reach(id) AS (" +
+                "  SELECT w.id FROM world_object w JOIN chronicle c ON c.id = w.current_owner_id " +
+                "   WHERE c.life_state='LIVING' AND w.lifecycle_state='ACTIVE' " +
+                "  UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reach r ON r.id=ic.container_id " +
+                "    JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') " +
+                "SELECT DISTINCT i.item_key FROM reach x JOIN item_instance i ON i.object_id=x.id", String.class)) {
+            String spoken = key.replace('_', ' ');
+            if (v.contains(" " + spoken + " ") || v.contains(" " + spoken + "s ")) return true;
+            int cut = spoken.lastIndexOf(' ');
+            if (cut > 0) {
+                String head = spoken.substring(cut + 1);
+                if (v.contains(" " + head + " ") || v.contains(" " + head + "s ")) return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Whether the sentence names a beast the keeper ALREADY KEEPS (#106).
      *
      * <p>Taming claims "feed" together with a species — goat, fowl, deer, duck — because offering food to a wild
