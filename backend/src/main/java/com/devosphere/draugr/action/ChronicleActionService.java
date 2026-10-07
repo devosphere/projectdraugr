@@ -1962,8 +1962,47 @@ public class ChronicleActionService {
         // alloy_bronze both name it, so nothing metal is reachable without one.
         if(!value.contains("furnace")&&!value.contains("bloomery")
            &&(value.contains("craft")||value.contains("make")||value.contains("build")||value.contains("construct")||value.contains("assemble")||value.contains("set up"))&&(value.contains("loom")||value.contains("workbench")||value.contains("work bench")||((value.contains("woodworking")||value.contains("stoneworking")||value.contains("weaving")||value.contains("sewing")||value.contains("leatherwork"))&&(value.contains("bench")||value.contains("table")||value.contains("station"))))) return Intent.CRAFT_WORKSTATION;
-        if((value.contains("craft")||value.contains("make")||value.contains("build")||value.contains("construct")||value.contains("assemble"))&&(value.contains("shelf")||value.contains("shelves")||value.contains("rack")||value.contains("archive"))&&!value.contains("drying")&&!value.contains("fuel rack")&&!value.contains("wood rack")&&!value.contains("firewood rack")&&!value.contains("log rack")&&!value.contains("kindling rack")&&!value.contains("hay rack")&&!value.contains("fodder rack")&&!value.contains("smoke rack")) return Intent.CRAFT_SHELF;
-        if((value.contains("craft")||value.contains("make")||value.contains("build")||value.contains("construct")||value.contains("assemble"))&&(value.contains("desk")||value.contains("table")||value.contains("workbench")||value.contains("bench"))&&!value.contains("sleeping bench")) return Intent.CRAFT_DESK;
+        // The same disease as the desk rule below, and found by the same probe: "rack" sat inside TRACK and
+        // RACKET, so `build a track` asked for a shelf — and a laid track is a real staged structure in this
+        // catalogue, which is as wrong as an answer gets. Held as a word now.
+        //
+        // The named exclusions BELOW are a different thing and all still needed: a hay rack, a fuel rack and a
+        // harness rack are genuine uses of the whole word "rack" that belong to other structures. Word boundaries
+        // fix the accidents; only a name can settle a real collision.
+        if((value.contains("craft")||value.contains("make")||value.contains("build")||value.contains("construct")||value.contains("assemble"))&&(word(value,"shelf")||word(value,"shelves")||word(value,"rack")||word(value,"racks")||word(value,"archive"))&&!value.contains("drying")&&!value.contains("fuel rack")&&!value.contains("wood rack")&&!value.contains("firewood rack")&&!value.contains("log rack")&&!value.contains("kindling rack")&&!value.contains("hay rack")&&!value.contains("fodder rack")&&!value.contains("smoke rack")
+           // "smoking rack" is the smoke rack's FIFTH declared keyword and the exclusion above names only "smoke
+           // rack", so four of its five phrasings reached the assembly matcher and one came here instead. Found
+           // by auditing this list against the catalogue rather than reading it: a list of literal exceptions is
+           // only ever as good as its last audit, which is the argument for word boundaries doing the general
+           // work and names settling only the genuine collisions.
+           &&!value.contains("smoking rack")
+           // A harness, yoke or tack rack is a staged structure (V410), not a shelf. Same exclusion as the nine
+           // above it and for the same reason: this rule owns the word "rack" and runs before the assembly
+           // matcher, so a structure whose own keyword contains it is unreachable until named here (#513).
+           &&!value.contains("harness rack")&&!value.contains("yoke rack")&&!value.contains("tack rack")) return Intent.CRAFT_SHELF;
+        // HELD AS WORDS, not substrings (#37/#108). "table" sits inside stable, portable, comfortable, suitable
+        // and notable, and this rule ran on a bare contains, so a whole family of ordinary sentences built a desk:
+        //
+        //   make a comfortable bed          -> CRAFT_DESK
+        //   construct a portable windbreak  -> CRAFT_DESK
+        //   build a notable marker          -> CRAFT_DESK
+        //   build a portable shelter        -> CRAFT_DESK
+        //   build a stable                  -> CRAFT_DESK, which is how this was found
+        //
+        // Every one of those is a confidently WRONG answer rather than a missing one, and a player who asked for a
+        // comfortable bed and got a desk has no way to tell why. Plurals are named explicitly because word() is a
+        // whole-word match and "tables" is not "table".
+        //
+        // What they become is NOT automatically the right intent, and that is worth stating rather than implying.
+        // "construct a portable windbreak" does now reach PLACE_WINDBREAK, because that rule's verb list was
+        // widened here too. The other two fall through to UNKNOWN: MAKE_BED wants the literal "a bed" or "the
+        // bed", and MARK wants its own phrasings. Those are missing answers where there were wrong ones, which is
+        // the trade this change makes deliberately — an unreachable sentence costs a turn, and a desk costs the
+        // player their understanding of what the game heard. Both gaps are recorded on #37.
+        //
+        // MAKE_BED is deliberately NOT widened to the bare word "bed": a bed is also a thing you dig for a crop,
+        // and the tillage rule below owns that sense. Settling that needs the subject, not a looser keyword.
+        if((value.contains("craft")||value.contains("make")||value.contains("build")||value.contains("construct")||value.contains("assemble"))&&(word(value,"desk")||word(value,"desks")||word(value,"table")||word(value,"tables")||value.contains("workbench")||word(value,"bench")||word(value,"benches"))&&!value.contains("sleeping bench")) return Intent.CRAFT_DESK;
         if((value.contains("craft")||value.contains("make")||value.contains("build")||value.contains("construct")||value.contains("assemble"))&&(value.contains("chair")||value.contains("stool")||value.contains("seat"))) return Intent.CRAFT_CHAIR;
         // A primitive utility belt (#35): a fibre strap with tool loops. A making verb + "belt" — never the
         // wearing of one (that carries no craft verb and falls to EQUIP below).
@@ -2718,7 +2757,12 @@ public class ChronicleActionService {
                ||value.contains("the byre")||value.contains("the stall")||value.contains("the shelter")||value.contains("the fold"))))
            &&!value.contains("build")&&!value.contains("make ")) return Intent.MAINTAIN_CAMP;
         // Bare-hand cover (#195): a windbreak/brush screen leant against the wind — no tool, partial protection.
-        if((value.contains("windbreak")||value.contains("wind break")||value.contains("brush screen")||value.contains("wind screen")||value.contains("reed screen against"))&&(value.contains("make")||value.contains("build")||value.contains("raise")||value.contains("set up")||value.contains("put up")||value.contains("weave")||value.contains("lean")||value.contains("erect"))) return Intent.PLACE_WINDBREAK;
+        if((value.contains("windbreak")||value.contains("wind break")||value.contains("brush screen")||value.contains("wind screen")||value.contains("reed screen against"))&&(value.contains("make")||value.contains("build")||value.contains("raise")||value.contains("set up")||value.contains("put up")||value.contains("weave")||value.contains("lean")||value.contains("erect")
+              // The intent is called PLACE_WINDBREAK and "place a windbreak" reached nothing: eight verbs and
+              // not the one in its own name, nor "construct", which every other build rule in this file takes.
+              // Safe to add outright — the rule already requires a windbreak noun, so there is nothing else
+              // these verbs could be asking to do here.
+              ||value.contains("place")||value.contains("construct")||value.contains("set a")||value.contains("set the"))) return Intent.PLACE_WINDBREAK;
         // Bare-hand partial covers (#195): sunshade / rain cover / groundsheet / stone ring — a placing verb plus the
         // cover named. Kept after MAKE_BED and before COOL_BODY/SHELTER_BODY so "rest in the shade" (no placing verb)
         // stays a body act, while "rig a sunshade" places one.

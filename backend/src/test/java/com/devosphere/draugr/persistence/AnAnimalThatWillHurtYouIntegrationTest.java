@@ -201,10 +201,17 @@ class AnAnimalThatWillHurtYouIntegrationTest {
             "SELECT COUNT(*) FROM tamed_yield ty JOIN wildlife_species ws ON ws.species_key=ty.species_key " +
             "WHERE ty.yield_kind='MILK' AND ws.temperament <> 'DANGEROUS'", Integer.class) > 0,
             "every milk animal is dangerous; there would be no safe way to start");
-        assertEquals(1, (int) jdbc.queryForObject("SELECT COUNT(*) FROM construction_kind WHERE holds_an_animal_still", Integer.class),
-            "there is one restraint");
+        // AT LEAST ONE RESTRAINT, not exactly one. This asserted `== 1` and failed the moment #108 gave the
+        // working animal a handling bay of its own (V410) — the count was pinned to the catalogue having a single
+        // stanchion in it, which was the gap rather than the rule. There is no reason for the number to be one,
+        // and every reason for it to grow: a dairy stanchion is the wrong frame to see to an ox's feet in.
+        assertTrue(jdbc.queryForObject("SELECT COUNT(*) FROM construction_kind WHERE holds_an_animal_still", Integer.class) > 0,
+            "nothing holds an animal still, so handling one can never be made safe");
+        // THE RULE ITSELF, which is what that count was standing in for and is worth holding exactly: a restraint
+        // is a FRAME, not a building. If housing granted safe handling, the dedicated bay would never be worth
+        // raising. This is the assertion that caught V410's first cut, where the stall sheltered stock as well.
         assertEquals(0, (int) jdbc.queryForObject(
             "SELECT COUNT(*) FROM construction_kind WHERE holds_an_animal_still AND (is_shelter OR encloses OR is_barrier OR shelters_stock)", Integer.class),
-            "a stanchion holds an animal still, nothing else");
+            "a thing that holds an animal still must not also shelter or enclose one");
     }
 }
