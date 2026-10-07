@@ -2357,7 +2357,14 @@ public class ChronicleActionService {
         // planks" is log *processing*, and the two-axis matcher claims it (split_planks);
         // only text that resolves to no process is heard as an attempt to fell (#17).
         // Coppicing cuts rods from living stools rather than felling the tree — a distinct woodland craft (#204).
-        if(value.contains("coppice")||value.contains("cut rods")||value.contains("cut the rods")||value.contains("pollard")) return Intent.COPPICE;
+        // Pruning and trimming are coppicing by the words a person actually uses (#37). `coppice the hazel` and
+        // `pollard` worked — both terms of art — while `prune the branches` and `trim the branches` reached
+        // nothing, and the refusal for the working phrasing is already exactly right ("there is no wood here to
+        // coppice"). Gated on the wood so that trimming a wick, a hoof or a hide stays with its own work.
+        if(value.contains("coppice")||value.contains("cut rods")||value.contains("cut the rods")||value.contains("pollard")
+           ||((value.contains("prune")||value.contains("trim")||value.contains("cut back"))
+              &&(value.contains("branch")||value.contains("bough")||value.contains("hazel")||value.contains("willow")
+                 ||value.contains("coppice")||value.contains("the tree")||value.contains("the shrub")))) return Intent.COPPICE;
         if((value.contains("fell")||value.contains("cut down")||value.contains("chop down")||value.contains("drop the tree"))&&(value.contains("tree")||value.contains("oak")||value.contains("birch")||value.contains("pine")||value.contains("ash")||value.contains("willow")||value.contains("maple")||value.contains("hazel")||value.contains("spruce")||value.contains("juniper"))&&!items.actionMatchesProcess(action)) return Intent.FELL_TREE;
         // Plant a tree seed to establish or restore a stand (#200/#204) — the counter-play to felling/clear-cutting.
         // A plant/sow/replant verb with a seed or tree noun; placed before GATHER_PLANT (which also matches
@@ -2732,7 +2739,14 @@ public class ChronicleActionService {
             ||value.contains("blunt")||value.contains("how sharp")||value.contains("still sharp")
             ||value.contains("will it hold")||value.contains("will this hold")||value.contains("how much use")
             ||value.contains("much use left")||value.contains("how is the knife")||value.contains("how is the axe")
-            ||(value.contains("worn")&&(value.contains("the axe")||value.contains("the knife")||value.contains("the blade")||value.contains("my tool")))
+            // ...and for ANYTHING THE CHRONICLE IS CARRYING, not four nouns (#37). condition_state and use_count
+            // are on every item, and this clause asked for "worn" beside exactly `the axe`, `the knife`,
+            // `the blade` or `my tool`. So "my shoe is worn" and "check my boots" reached nothing, though a shoe
+            // is a tracked item with a condition like any other. Four nouns is a sample, not a vocabulary.
+            // The catalogue is asked instead — the same fix minerals and stock already had.
+            ||((value.contains("worn")||value.contains("check my")||value.contains("look at my")
+                ||value.contains("in good order")||value.contains("any good left"))
+               &&items.namesSomethingYouCarry(value))
             ||value.contains("am i carrying too much")||value.contains("how heavy is my")||value.contains("how much am i carrying")
             ||value.contains("take stock of my gear")||value.contains("what is in my pack")||value.contains("still good")&&value.contains("my ")||value.contains("still sound"))
            &&!value.contains("food")&&!value.contains("supplies")) return Intent.TAKE_STOCK_OF_GEAR;
@@ -2855,7 +2869,14 @@ public class ChronicleActionService {
            ||value.contains("find shelter")||value.contains("look for shelter")||value.contains("get inside")) return Intent.SHELTER_BODY;
         // Water handling (#71): collect / boil / filter — before the gather and drink rules so "collect water"
         // is filling a vessel, not gathering, and "boil water" reaches its handler rather than a process miss.
-        if(value.contains("boil water")||value.contains("boil the water")||value.contains("boil some water")||value.contains("heat water to a boil")||value.contains("boil it to make it safe")) return Intent.BOIL_WATER;
+        // Boiling is what makes water safe, and the five phrasings here all contained the word BOIL (#37). A
+        // person with a pot and a fire says "heat the water" — which reached nothing, while the canonical form
+        // already refuses perfectly ("there is no fire burning here to boil water over"). The work and its
+        // refusal were both right; only the words were missing.
+        if(value.contains("boil water")||value.contains("boil the water")||value.contains("boil some water")||value.contains("heat water to a boil")||value.contains("boil it to make it safe")
+           ||((value.contains("heat")||value.contains("warm"))
+              &&(value.contains("the water")||value.contains("some water")||value.contains("water in the")
+                 ||value.contains("water up")))) return Intent.BOIL_WATER;
         // Pour water through a filter to clarify it — but MAKING a filter ("make a bark and charcoal filter")
         // is a craft, so defer to the material process when the text names one rather than filtering here.
         if((value.contains("filter")||value.contains("strain")||value.contains("clarify")||value.contains("purify"))&&value.contains("water")&&!items.actionMatchesProcess(value)) return Intent.FILTER_WATER;
