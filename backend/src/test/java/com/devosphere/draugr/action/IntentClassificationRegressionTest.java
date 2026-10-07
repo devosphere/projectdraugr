@@ -1351,4 +1351,137 @@ class IntentClassificationRegressionTest {
         // And a journey to a place is still a journey. "back to camp" is TRAVEL's and always worked.
         assertEquals("TRAVEL", classify("head back to camp"));
     }
+
+    /**
+     * The fire, which a Chronicle tends more often than anything but walking (#37, V406).
+     *
+     * <p>Forty-four sentences about getting one going, keeping it, killing it and asking after it:
+     * <b>30 reached nothing</b>. The shape was the same every time — a rule that wanted the word "fire" beside
+     * the verb, while a person standing over one says "it", or talks about the wood.
+     *
+     * <pre>
+     *   light a fire      WORKED      start a fire / make a fire / kindle a fire   NOTHING
+     *   stoke the fire    WORKED      put more wood on                            NOTHING
+     *   put the fire out  WORKED      smother it / kick it out                    NOTHING
+     *   bank the fire     WORKED      bank it for the night / damp it down        NOTHING
+     * </pre>
+     *
+     * <p>And nothing could ask after it at all, over {@code fire_state.fuel_minutes} — the burning time
+     * remaining to the minute, which the tick counts down every turn and the body reads for warmth.
+     */
+    @Test void theFireAnswersToTheWordsPeopleUseAboutIt() throws Exception {
+        // Getting one going.
+        assertEquals("LIGHT_FIRE", classify("light a fire"), "which always worked");
+        assertEquals("LIGHT_FIRE", classify("start a fire"));
+        assertEquals("LIGHT_FIRE", classify("make a fire"));
+        assertEquals("LIGHT_FIRE", classify("kindle a fire"));
+        assertEquals("LIGHT_FIRE", classify("get a fire going"));
+        assertEquals("LIGHT_FIRE", classify("strike a spark"));
+        assertEquals("LIGHT_FIRE", classify("light the tinder"));
+
+        // Keeping it, including the phrasings that name the WOOD instead of the fire.
+        assertEquals("FEED_FIRE", classify("feed the fire"), "which always worked");
+        assertEquals("FEED_FIRE", classify("stoke the fire"));
+        assertEquals("FEED_FIRE", classify("put more wood on"));
+        assertEquals("FEED_FIRE", classify("build the fire up"));
+        assertEquals("FEED_FIRE", classify("throw another branch on"));
+
+        // Banking it and killing it, including the ones that say "it".
+        assertEquals("BANK_FIRE", classify("bank the fire"), "which always worked");
+        assertEquals("BANK_FIRE", classify("bank it for the night"));
+        assertEquals("BANK_FIRE", classify("damp it down"));
+        assertEquals("EXTINGUISH_FIRE", classify("put the fire out"), "which always worked");
+        assertEquals("EXTINGUISH_FIRE", classify("smother it"));
+        assertEquals("EXTINGUISH_FIRE", classify("kick it out"));
+
+        // Asking after it.
+        assertEquals("CHECK_FIRE", classify("is the fire still going"));
+        assertEquals("CHECK_FIRE", classify("how long will it burn"));
+        assertEquals("CHECK_FIRE", classify("will it last the night"));
+        assertEquals("CHECK_FIRE", classify("is there enough wood"));
+        assertEquals("CHECK_FIRE", classify("how much firewood have I got"));
+        assertEquals("CHECK_FIRE", classify("is it safe to leave it burning"));
+
+        // Warming yourself AT it is not asking after it, and getting nearer is the same act as sitting by it.
+        assertEquals("WARM_BODY", classify("sit by the fire"), "which always worked");
+        assertEquals("WARM_BODY", classify("move closer to the fire"));
+
+        // THE RULES THESE MUST NOT TAKE. The fire-tool crafts run earlier and keep their own sentences; the pit
+        // is claimed later and is excluded by name; and a hearth described rather than named is still the pit.
+        assertEquals("CRAFT_FIRE_KIT", classify("make a fire kit"));
+        assertEquals("CRAFT_FIRE_TOOL", classify("carve a fire bow"));
+        assertEquals("CRAFT_TINDER", classify("prepare a tinder bundle"));
+        assertEquals("BUILD_FIRE_PIT", classify("build a fire pit"));
+        assertEquals("BUILD_FIRE_PIT", classify("ring the fire with stones"));
+        // And gathering fuel is gathering, not feeding — "enough" and "how much" are questions about the wood.
+        assertEquals("GATHER_BRANCHES", classify("gather more wood"));
+        assertEquals("GATHER_BRANCHES", classify("gather wood"));
+        assertEquals("GATHER_BRANCHES", classify("gather fuel"));
+        assertEquals("GATHER_BRANCHES", classify("get some firewood"));
+        // "wood" sits inside "wooden" and "woodland": making a wooden thing is the matcher's, not a gather.
+        assertEquals("UNKNOWN", classify("make a wooden bowl", true), "a wooden thing is made, not gathered");
+    }
+
+    /**
+     * Tool care, mending, and a question that built a hut (#37).
+     *
+     * <p>35 sentences about keeping an edge, mending, and whether what you built is still standing: <b>16
+     * reached nothing</b>, and two of the nineteen that answered answered wrongly.
+     *
+     * <p><b>The worst wrong answer this project has found, because it is the only one that left something
+     * behind:</b> {@code is the lean-to still good} → START_LEAN_TO, <i>"You mark out a low shelter frame
+     * against the weather."</i> Asked whether their shelter was sound, the player had a new frame marked out for
+     * them. {@code classifyLeanTo} ends in a default branch and a question with no building verb fell into it.
+     *
+     * <p>And {@code hone the blade} / {@code whet the blade} reached the material matcher, which offered to
+     * <b>forge a bronze knife</b> — asked to put an edge back on what they hold, the player was offered a new one.
+     */
+    @Test void askingAboutAThingIsNotBuildingOrForgingIt() throws Exception {
+        // THE QUESTION MUST NOT BUILD. Every one of these is a question about a lean-to.
+        for (String asked : new String[]{"is the lean-to still good", "is the lean-to sound",
+                                         "how is the lean-to", "will the lean-to hold",
+                                         "does the lean-to still stand", "what state is the lean-to in"})
+            assertNotEquals("START_LEAN_TO", classify(asked),
+                "\"" + asked + "\" is a question, and must not put a frame on the ground");
+        assertEquals("TAKE_STOCK_OF_CAMP", classify("is the lean-to still good"));
+        assertEquals("TAKE_STOCK_OF_CAMP", classify("is the shelter sound"));
+        assertEquals("TAKE_STOCK_OF_CAMP", classify("how is the shelter"));
+
+        // ...and the ACTS on a lean-to all keep their own, which is the half that must not break.
+        assertEquals("WORK_LEAN_TO", classify("build a lean-to"));
+        assertEquals("WORK_LEAN_TO", classify("work on the lean-to"));
+        assertEquals("REPAIR_LEAN_TO", classify("repair the lean-to"));
+        assertEquals("ABANDON_LEAN_TO", classify("abandon the lean-to"));
+        assertEquals("RESUME_LEAN_TO", classify("resume the lean-to"));
+
+        // Putting an edge back on, by every word for it.
+        assertEquals("REPAIR_ITEM", classify("sharpen the knife"), "which always worked");
+        assertEquals("REPAIR_ITEM", classify("hone the blade"));
+        assertEquals("REPAIR_ITEM", classify("whet the blade"));
+        assertEquals("REPAIR_ITEM", classify("strop the knife"));
+        assertEquals("REPAIR_ITEM", classify("grind the axe"));
+        assertEquals("REPAIR_ITEM", classify("put an edge on the blade"));
+        // Rehafting is mending: the head is sound and the handle has split.
+        assertEquals("REPAIR_ITEM", classify("rehaft the axe"));
+        assertEquals("REPAIR_ITEM", classify("replace the handle"));
+
+        // HELD AS WORDS, and this is where it pays: "hone" sits inside HONEY and "whet" inside WHETHER. A
+        // contains() would have made gathering honey a sharpening and a question about rain a sharpening too.
+        assertNotEquals("REPAIR_ITEM", classify("gather honey"), "honey is not a hone");
+        assertNotEquals("REPAIR_ITEM", classify("whether it will rain"), "whether is not a whet");
+        assertNotEquals("REPAIR_ITEM", classify("eat the honeycomb"));
+
+        // How a tool is standing up: use_count and condition_state are on every item.
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("how worn is the knife"), "which always worked");
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("is the knife blunt"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("how sharp is the axe"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("how much use is left in it"));
+
+        // Whether the night is survivable is the body's own question.
+        assertEquals("SENSE_BODY", classify("will I be warm enough tonight"));
+        assertEquals("SENSE_BODY", classify("am I dry"));
+        // And lying down is sleeping, which "lie down to sleep" always was.
+        assertEquals("SLEEP", classify("lie down"));
+        assertEquals("SLEEP", classify("lie down to sleep"));
+    }
 }

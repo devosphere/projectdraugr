@@ -239,6 +239,116 @@ public class FireService {
         String plainWord = ((String) chosen.get("keywords")).split(",")[0].trim();
         return new CookedAtFire(cooked, plainWord.isEmpty() ? outName.toLowerCase(java.util.Locale.ROOT) : plainWord, true);
     }
+    /** What one branch adds, and what a feeding is worth — the same numbers {@link #feed} and {@link #light} use. */
+    private static final int MINUTES_PER_FEEDING = 45;
+    /** The fuel above which a fire throws embers, exactly as {@code scorchNearbyFlammables} applies it. */
+    private static final int ROARING_ENOUGH_TO_THROW_EMBERS = 120;
+
+    /**
+     * How the fire is (#37).
+     *
+     * <p><b>What the world already knew.</b> {@code fire_state.fuel_minutes} is the burning time remaining, to the
+     * minute: {@link #light} sets it, {@link #feed} adds to it, {@link #bank} rakes the coals tighter and raises
+     * both it and its ceiling, {@link #advanceTo} counts it down every turn of the world, the body reads it when
+     * it decides how fast a Chronicle loses heat, and the Auditor holds that a fire cannot be alight with none of
+     * it left. <b>Not one sentence could ask.</b> "Is the fire still going", "how long will it burn", "will it
+     * last the night" and "is there enough wood" all reached nothing — over a number the simulation maintains
+     * more carefully than almost any other.
+     *
+     * <p>Read-only. It reports the same fuel the tick spends and names what would add to it.
+     *
+     * @param darkHoursLeft hours until first light, or 0 by day — the caller owns the daylight convention, which
+     *                      lives in one place so this answer can never disagree with the sky reading
+     */
+    @Transactional(readOnly = true)
+    public String fireReading(UUID chronicle, UUID location, Instant now, int darkHoursLeft) {
+        java.util.Map<String,Object> fire = jdbc.query(
+            "SELECT fs.active, fs.fuel_minutes, w.display_name FROM fire_state fs " +
+            "JOIN construction_project cp ON cp.object_id = fs.construction_id " +
+            "JOIN world_object w ON w.id = cp.object_id " +
+            "WHERE w.current_location_id = ? AND w.lifecycle_state = 'ACTIVE' AND cp.state = 'COMPLETED' " +
+            "ORDER BY fs.active DESC, fs.fuel_minutes DESC LIMIT 1",
+            rs -> rs.next() ? java.util.Map.of("active", rs.getBoolean(1), "fuel", rs.getInt(2),
+                                               "what", rs.getString(3)) : null, location);
+
+        // Fuel to hand. dry_branch is what feed() consumes, so that is what is counted — the reading must not
+        // promise burning time from wood the fire will not take.
+        Integer held = chronicle == null ? 0 : jdbc.queryForObject(
+            "WITH RECURSIVE reach(id) AS (" +
+            "  SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' " +
+            "  UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reach r ON r.id=ic.container_id " +
+            "    JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') " +
+            "SELECT COUNT(*) FROM reach x JOIN item_instance i ON i.object_id=x.id WHERE i.item_key='dry_branch'",
+            Integer.class, chronicle);
+        int branches = held == null ? 0 : held;
+        String carried = branches > 0
+            ? "You have " + branches + " length" + (branches == 1 ? "" : "s") + " of wood by you, which is "
+              + (branches * MINUTES_PER_FEEDING / 60 > 0
+                 ? "something over " + (branches * MINUTES_PER_FEEDING / 60) + " hour"
+                   + (branches * MINUTES_PER_FEEDING / 60 == 1 ? "" : "s") + " of burning"
+                 : "under an hour of burning") + " if you put it all on."
+            : "You have no wood by you at all, and a fire eats what it is given.";
+
+        if (fire == null)
+            return "There is no hearth on this ground — nothing built to hold a fire, so there is none to ask "
+                + "after. A ring of stone comes first. " + carried;
+
+        String what = ((String) fire.get("what")).toLowerCase(java.util.Locale.ROOT);
+        int fuel = ((Number) fire.get("fuel")).intValue();
+        if (!Boolean.TRUE.equals(fire.get("active"))) {
+            // Cold — but a hearth that held heat recently is still worth something, and the catalogue says which
+            // kinds do and for how long. That is the difference between a dead fire and a usable one.
+            boolean warmStill = items.heatToWorkWith(location, now);
+            return "The " + what + " is cold" + (fuel > 0 ? ", though there is fuel in it still" : " and empty")
+                + ". " + (warmStill
+                    ? "The stone has not given up yesterday's heat yet, and work that wants warmth can still be done at it. "
+                    : "") + carried;
+        }
+
+        String howLong = fuel >= 120 ? "something over " + (fuel / 60) + " hours"
+                       : fuel >= 60 ? "about an hour" + (fuel >= 90 ? " and a half" : "")
+                       : fuel >= 20 ? "perhaps " + (fuel / 10 * 10) + " minutes"
+                       : "minutes only";
+        StringBuilder b = new StringBuilder();
+        b.append("The ").append(what).append(" is alight — ")
+         .append(fuel >= 180 ? "burning well" : fuel >= 60 ? "steady" : "low, and sinking")
+         .append(", with ").append(howLong).append(" of fuel in it. ");
+        // WHAT A ROARING FIRE WILL DO TO WHAT STANDS BESIDE IT (#219, and unaskable until now). All three
+        // conditions scorchNearbyFlammables applies are readable, and it is the same query: flammability is a
+        // property of the KIND (V274 made it so, after three hardcoded names left a reed hut fireproof), the
+        // hazard begins at 120 fuel-minutes, and wet weather puts the embers out before they catch. A keeper
+        // whose lean-to is quietly losing 4% an hour to their own hearth was told nothing at all.
+        if (fuel >= ROARING_ENOUGH_TO_THROW_EMBERS) {
+            String dryEnough = jdbc.query(
+                "SELECT ww.weather_kind FROM world_weather ww JOIN world_chunk wc ON wc.world_id=ww.world_id WHERE wc.id=?",
+                rs -> rs.next() ? rs.getString(1) : null, location);
+            boolean embersCatch = "CLEAR".equals(dryEnough) || "OVERCAST".equals(dryEnough);
+            java.util.List<String> atRisk = jdbc.queryForList(
+                "SELECT DISTINCT lower(w.display_name) FROM construction_project cp " +
+                "JOIN world_object w ON w.id=cp.object_id " +
+                "JOIN construction_kind ck ON ck.project_kind=cp.project_kind AND ck.flammable " +
+                "WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' AND cp.state='COMPLETED' " +
+                "  AND cp.integrity_percent>0 ORDER BY 1", String.class, location);
+            if (!atRisk.isEmpty())
+                b.append(embersCatch
+                    ? "It is throwing embers, and the " + String.join(" and the ", atRisk) + " stand"
+                      + (atRisk.size() == 1 ? "s" : "") + " close enough to catch in this dry air — left to burn "
+                      + "like this they char by the hour. "
+                    : "It is throwing embers, but the wet sky puts them out before they can catch in the "
+                      + String.join(" or the ", atRisk) + ". ");
+        }
+        if (darkHoursLeft > 0) {
+            // The question a keeper actually asks at dusk, answered by the two numbers that decide it.
+            int needed = darkHoursLeft * 60;
+            b.append(fuel >= needed
+                ? "That will see the night out with something to spare. "
+                : "That will not see the night out: " + darkHoursLeft + " hours of dark left and "
+                  + (needed - fuel) / 60 + " hour" + ((needed - fuel) / 60 == 1 ? "" : "s")
+                  + " short of fuel for it. Bank it, or put more on. ");
+        }
+        return b.append(carried).toString().trim();
+    }
+
     @Transactional
     public void advanceTo(Instant now) {
         // Collect the active fires under lock, then burn each down — and let a roaring one scorch what stands beside
@@ -266,7 +376,9 @@ public class FireService {
      * order never bites; only a big fire left alone does.
      */
     private void scorchNearbyFlammables(UUID pit, Instant last, Instant now, int fuelBefore) {
-        if (fuelBefore < 120) return; // only a well-fed, roaring fire throws enough heat and embers to catch nearby thatch
+        // Only a well-fed, roaring fire throws enough heat and embers to catch nearby thatch. The threshold is
+        // shared with fireReading, which must warn at exactly the fuel this begins to bite at.
+        if (fuelBefore < ROARING_ENOUGH_TO_THROW_EMBERS) return;
         long hours = Math.min(Duration.between(last, now).toHours(), fuelBefore / 60L);
         if (hours <= 0) return;
         UUID chunk = jdbc.query("SELECT current_location_id FROM world_object WHERE id=?", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, pit);

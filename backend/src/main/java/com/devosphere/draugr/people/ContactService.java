@@ -70,6 +70,12 @@ public class ContactService {
         Map.entry("call out to them", Act.ANNOUNCE_PRESENCE), Map.entry("call out to the", Act.ANNOUNCE_PRESENCE),
         Map.entry("call across the water", Act.ANNOUNCE_PRESENCE), Map.entry("hail them", Act.ANNOUNCE_PRESENCE),
         Map.entry("hail the", Act.ANNOUNCE_PRESENCE), Map.entry("greet them", Act.ANNOUNCE_PRESENCE), Map.entry("greet the", Act.ANNOUNCE_PRESENCE),
+        // The plainest ways of saying it (#114/#37), which reached nothing while "greet them" and "hail
+        // them" worked. A first meeting is the one thing in this game a player cannot avoid doing, and
+        // "say hello", "wave to them" and "introduce myself" are how most people would say it.
+        Map.entry("say hello", Act.ANNOUNCE_PRESENCE), Map.entry("wave to them", Act.ANNOUNCE_PRESENCE),
+        Map.entry("wave at them", Act.ANNOUNCE_PRESENCE), Map.entry("introduce myself", Act.ANNOUNCE_PRESENCE),
+        Map.entry("make myself known", Act.ANNOUNCE_PRESENCE), Map.entry("let them know i am here", Act.ANNOUNCE_PRESENCE),
         Map.entry("approach the edge", Act.APPROACH_BOUNDARY), Map.entry("approach the boundary", Act.APPROACH_BOUNDARY),
         Map.entry("approach the isle", Act.APPROACH_BOUNDARY), Map.entry("approach the village", Act.APPROACH_BOUNDARY),
         Map.entry("approach them", Act.APPROACH_BOUNDARY), Map.entry("walk to the edge", Act.APPROACH_BOUNDARY),
@@ -109,6 +115,10 @@ public class ContactService {
         Map.entry("respect the boundary", Act.RESPECT_BOUNDARY), Map.entry("stay outside the", Act.RESPECT_BOUNDARY),
         Map.entry("keep to the edge", Act.RESPECT_BOUNDARY), Map.entry("stay at the edge", Act.RESPECT_BOUNDARY),
         Map.entry("withdraw from the", Act.WITHDRAW), Map.entry("withdraw", Act.WITHDRAW), Map.entry("take my leave", Act.WITHDRAW),
+        // Parting, likewise: "take my leave" worked and "say goodbye" and "leave them be" did not.
+        Map.entry("say goodbye", Act.WITHDRAW), Map.entry("leave them be", Act.WITHDRAW),
+        Map.entry("leave them alone", Act.WITHDRAW), Map.entry("keep my distance", Act.WITHDRAW),
+        Map.entry("back off", Act.WITHDRAW), Map.entry("give them room", Act.WITHDRAW),
         Map.entry("leave them in peace", Act.WITHDRAW), Map.entry("back away from the isle", Act.WITHDRAW));
 
     /** How much understanding speech needs before it lands rather than misfires. Things shown are understood by sight. */
