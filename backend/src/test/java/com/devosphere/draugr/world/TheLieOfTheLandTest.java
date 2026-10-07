@@ -139,6 +139,33 @@ class TheLieOfTheLandTest {
         assertEquals(java.util.List.of("WETLAND"), v232.surroundings());
         assertNull(v232.land());
 
-        assertEquals(2, VisualContextService.VERSION, "the bands and the bearing are version 2");
+        // And the shape from before a skyline could carry anything: bands and bearings, no landmarks.
+        VisualContextService.VisualContext v2 = new VisualContextService.VisualContext(
+            2, "GRASSLAND", java.util.List.of(), "DAY", "SUMMER", "CLEAR", 18.0, true,
+            java.util.List.of("WETLAND"), new VisualContextService.Land("LOWLAND", "WET", false),
+            java.util.List.of(new VisualContextService.Nearby("north", "WETLAND", "LEVEL", "ADJACENT")), "abc");
+        assertEquals("LOWLAND", v2.land().elevation());
+        assertEquals(1, v2.nearby().size());
+        assertTrue(v2.landmarks().isEmpty(), "a version-2 payload reports no skyline, and empty is not absent");
+
+        // Pinned, not computed: the point is that a bump is deliberate. 2 was the bands and the bearing; 3 lets the
+        // next ground carry what is built or broken on it, which is the last line of #224's contract.
+        assertEquals(3, VisualContextService.VERSION, "the skyline is version 3");
+    }
+
+    @Test
+    void aLandmarkCarriesAKindAndABearingAndNeverAName() {
+        // The whole of what makes this tier safe to send. A ruin's identity — which ruin, what it was, what is left
+        // in it — is the discovery; its silhouette is only the invitation. So the record has nowhere to put a name,
+        // and that is enforced by its shape rather than by a reviewer noticing.
+        VisualContextService.Landmark seen = new VisualContextService.Landmark("RUIN", "south", "ADJACENT");
+        assertEquals("RUIN", seen.kind());
+        assertEquals("south", seen.direction());
+        assertEquals("ADJACENT", seen.distance());
+        assertEquals(3, VisualContextService.Landmark.class.getRecordComponents().length,
+            "a landmark carries a kind, a bearing and a band — a fourth component would be somewhere to leak a name");
+        for (var component : VisualContextService.Landmark.class.getRecordComponents())
+            assertTrue(java.util.List.of("kind", "direction", "distance").contains(component.getName()),
+                "unexpected landmark component: " + component.getName());
     }
 }

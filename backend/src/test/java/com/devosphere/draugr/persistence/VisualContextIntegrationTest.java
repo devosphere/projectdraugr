@@ -201,11 +201,18 @@ class VisualContextIntegrationTest {
     }
 
     /**
-     * #232's visible-nearby tier: by day a standing person sees what kind of country lies next door — and only that.
-     * The neighbours' sites stay unreported, and in the dark nothing beyond this ground is seen at all.
+     * #232's visible-nearby tier: by day a standing person sees what kind of country lies next door. In the dark
+     * nothing beyond this ground is seen at all.
+     *
+     * <p>The rule this test used to state — that nothing standing on the next ground is ever reported — was
+     * narrowed by #224's last clause, which asks for a visible "ruin, or structure with direction/distance band".
+     * What is still absolutely true, and is what this asserts, is that <b>the neighbour's contents never enter
+     * {@code features}</b>: that list is this ground and nothing else, and a caller reading it is reading where the
+     * Chronicle actually stands. Works of hands on the next ground arrive separately, by kind and bearing only, and
+     * are held by {@code AShapeOnTheNextGroundIntegrationTest} with fixtures of its own.
      */
     @Test
-    void byDayTheNextGroundIsSeenButNotWhatStandsOnIt() {
+    void byDayTheNextGroundIsSeenAndItsContentsStayOutOfFeatures() {
         world();
         UUID ground = plainGround();
         assertNotNull(ground);
@@ -220,9 +227,19 @@ class VisualContextIntegrationTest {
         assertEquals(neighbours, noon.surroundings(), "by day the kinds of the four neighbouring grounds are seen");
         assertTrue(noon.features().isEmpty(), () -> "and nothing standing on them is reported here: " + noon.features());
 
+        // Whatever this ground happens to have near it, a reported shape carries a category and never a name —
+        // which is the whole of what makes the tier safe to send, so it is asserted wherever landmarks appear.
+        for (var shape : noon.landmarks()) {
+            assertTrue(java.util.List.of("RUIN", "BUILT", "SETTLEMENT").contains(shape.kind()),
+                () -> "a skyline reports a kind, not a thing: " + shape.kind());
+            assertEquals("ADJACENT", shape.distance(), "only the one ring of ground can be made out from here");
+        }
+
         var midnight = visual.active(Instant.parse("2026-06-15T00:30:00Z"));
-        if (!midnight.lit())
+        if (!midnight.lit()) {
             assertTrue(midnight.surroundings().isEmpty(), "in the dark nothing beyond this ground can be seen");
+            assertTrue(midnight.landmarks().isEmpty(), "and a skyline is part of what the dark takes away");
+        }
         assertNotEquals(noon.fingerprint(), midnight.fingerprint(), "what is seen changed, so the fingerprint moves");
     }
 }
