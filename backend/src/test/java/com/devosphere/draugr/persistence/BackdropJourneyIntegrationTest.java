@@ -149,8 +149,15 @@ class BackdropJourneyIntegrationTest {
                     + ", served " + served.key() + ")");
             assertEquals(direct.candidates(), served.candidates(), () -> where + ": the eligibility chain drifted on the wire");
             assertEquals(here.fingerprint(), served.fingerprint(), () -> where + ": the served fingerprint is not this place's");
-            assertEquals(served.key(), served.candidates().get(served.candidates().size() - 1),
-                () -> where + ": the chain must end in its guaranteed key: " + served.candidates());
+            // The chain holds its key and bottoms out on the ground (#229). It used to be asserted to END in the
+            // key, which let a tier nothing answers — every `built.*`, and three site kinds — run out of
+            // candidates and fall to the registry root, showing a forest wherever you had built something.
+            assertTrue(served.candidates().contains(served.key()),
+                () -> where + ": the chain must hold the key it is a chain for: " + served.candidates());
+            String lastOffered = served.candidates().get(served.candidates().size() - 1);
+            assertTrue(lastOffered.equals(served.key()) || lastOffered.startsWith("biome.")
+                    || lastOffered.startsWith("interior."),
+                () -> where + ": a chain ends on its own key or on the ground: " + served.candidates());
 
             // A refresh — or a reload onto the same unchanged ground after save and resume — answers identically.
             VisualContextController.Backdrop again = controller.backdrop();

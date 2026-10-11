@@ -301,6 +301,11 @@ class BackdropResolverTest {
                 assertTrue(c.candidates().size() <= 8, "bounded: " + c.candidates());
                 assertEquals("biome.wetland", c.candidates().get(c.candidates().size() - 1),
                     "ends on the ground: " + c.candidates());
+                // The endpoint contract forbids offering the same candidate twice — a caller that tried one and
+                // failed must not be handed it again. Appending the ground could only break that by repeating a
+                // key, which is why the ground is skipped when the tier already IS the ground.
+                assertEquals(c.candidates().stream().distinct().toList(), c.candidates(),
+                    "no candidate offered twice: " + c.candidates());
             }
 
         // Inside the rock the interior tier answers and there is no biome backdrop to come down to, so the cave

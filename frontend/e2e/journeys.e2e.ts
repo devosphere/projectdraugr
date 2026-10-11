@@ -38,7 +38,17 @@ test('walking somewhere shows the scene the server chose, and a reload keeps eve
   await enterTheWorld(page);
   const arrived = await (await first).json() as Backdrop;
   expect(arrived.candidates.length, 'the server always offers a chain').toBeGreaterThan(0);
-  expect(arrived.candidates[arrived.candidates.length - 1]).toBe(arrived.key);
+  // The chain holds the key it is a chain FOR, and bottoms out somewhere a backdrop exists for.
+  //
+  // This used to assert `candidates[last] === key`, which was the contract until #229: a tier's chain held only
+  // variants of its own key, so when nothing answered that key the chain ran out and the frontend fell to the
+  // registry ROOT — a forest. Standing in a wetland and finishing a lean-to therefore showed a wood, and all 103
+  // construction kinds emit a `built.*` candidate that no backdrop answers. The chain now ends on the GROUND, so
+  // the last element is the tier's own key only when the tier IS the ground (or the cave interior).
+  expect(arrived.candidates, 'the chain is a chain for its key').toContain(arrived.key);
+  const last = arrived.candidates[arrived.candidates.length - 1];
+  expect(last === arrived.key || last.startsWith('biome.'),
+    `a chain ends on its own key or on the ground, not on nothing: ${arrived.candidates.join(' -> ')}`).toBe(true);
 
   // Walk until a step succeeds: whichever way the ground allows. Each try is typed where a player types it.
   let walked: { intent: string; outcome: string; perception: string } | null = null;
