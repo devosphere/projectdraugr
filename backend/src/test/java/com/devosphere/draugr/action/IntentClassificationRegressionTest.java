@@ -1484,4 +1484,121 @@ class IntentClassificationRegressionTest {
         assertEquals("SLEEP", classify("lie down"));
         assertEquals("SLEEP", classify("lie down to sleep"));
     }
+
+    /**
+     * #108 V410: the stall, the stable, the tack room and the harness rack are raised through the assembly
+     * matcher. Every keyword each one declares is replayed here, bare and in a sentence, because the integration
+     * guard that replays all 500-odd of them needs Docker and fifty minutes.
+     *
+     * <p>Three words were already owned and had to be worked around rather than discovered in CI:
+     *
+     * <ul>
+     *   <li><b>"pen"</b> belongs to BUILD_PEN, so none of these may contain it — the #513 trap, which already
+     *       cost six structures once;</li>
+     *   <li><b>"rack"</b> belongs to CRAFT_SHELF, whose exclusion list already names the drying, fuel, wood,
+     *       firewood, log, kindling, hay, fodder and smoke racks. The harness, yoke and tack racks are the tenth,
+     *       eleventh and twelfth, added in the same place for the same reason;</li>
+     *   <li><b>"harness"</b> and <b>"yoke"</b> belong to JUDGE_HAULAGE, but only beside a vehicle or a team — so
+     *       a rack to hang one on is free, while harnessing an actual beast to an actual cart must stay exactly
+     *       what it was. Both halves are asserted.</li>
+     * </ul>
+     */
+    @Test void theWorkingAnimalsStallAndItsGearAreRaisedNotCrafted() throws Exception {
+        for (String phrase : new String[]{
+                // the stall — the structure that carries holds_an_animal_still for a draft beast
+                "build a draft animal stall", "raise a draft animal stall", "build a draft stall",
+                "raise a draft stall", "build a handling stall", "build a handling bay",
+                "draft animal stall", "draft stall", "handling stall", "handling bay",
+                // the stable
+                "build a stable", "raise a stable", "build a horse stable", "raise a horse stable",
+                "build the stables", "horse stable", "stables",
+                // the tack room
+                "build a tack room", "raise a tack room", "build a tack store", "build a harness room",
+                "tack room", "tack store", "harness room",
+                // and the rack, which had to be named in CRAFT_SHELF's exclusion list to get here at all
+                "build a harness rack", "raise a harness rack", "build a yoke rack", "raise a yoke rack",
+                "build a tack rack", "harness rack", "yoke rack", "tack rack",
+                "work on the stable", "work on the harness rack"})
+            assertEquals("UNKNOWN", classify(phrase), phrase);
+
+        // The vocabulary these brush against must be unharmed. A shelf is still a shelf and a pen still a pen.
+        assertEquals("CRAFT_SHELF", classify("build a shelf"));
+        assertEquals("CRAFT_SHELF", classify("make some shelves"));
+        assertEquals("BUILD_PEN", classify("build a pen"));
+        assertEquals("BUILD_PEN", classify("build a paddock"));
+
+        // And harnessing a beast to a cart is still that — the half of JUDGE_HAULAGE's vocabulary that a rack
+        // must not take. If the exclusion above were written as a bare "!contains(harness)" this would break.
+        assertEquals("JUDGE_HAULAGE", classify("harness the oxen to the cart"));
+        assertEquals("JUDGE_HAULAGE", classify("yoke the beasts to the sledge"));
+    }
+
+    /**
+     * A word is not a substring (#37, found while building #108's stall).
+     *
+     * <p>CRAFT_DESK matched a bare {@code contains("table")} and CRAFT_SHELF a bare {@code contains("rack")}.
+     * "table" sits inside <b>stable, portable, comfortable, suitable, notable</b>; "rack" sits inside <b>track</b>
+     * and <b>racket</b>. So an ordinary family of sentences got a confidently wrong answer:
+     *
+     * <pre>
+     *   make a comfortable bed          -> CRAFT_DESK
+     *   construct a portable windbreak  -> CRAFT_DESK
+     *   build a notable marker          -> CRAFT_DESK
+     *   build a portable shelter        -> CRAFT_DESK
+     *   build a stable                  -> CRAFT_DESK   (how it was found)
+     *   build a track                   -> CRAFT_SHELF  (a laid track is a real staged structure here)
+     * </pre>
+     *
+     * <p>This is the same lesson as "hone" inside <i>honey</i> and "whet" inside <i>whether</i>, and it is the
+     * reason the fix is held both ways: every real craft phrase must still reach its own intent, or the cure is
+     * worse than the disease.
+     */
+    @Test void aWordIsNotASubstring() throws Exception {
+        // The six wrong answers, gone. UNKNOWN here means the assembly/process matchers get their turn.
+        assertEquals("UNKNOWN", classify("build a stable"));
+        assertEquals("UNKNOWN", classify("build a portable shelter"));
+        assertEquals("UNKNOWN", classify("build a suitable shelter"));
+        assertEquals("UNKNOWN", classify("make a comfortable bed"));
+        assertEquals("UNKNOWN", classify("build a notable marker"));
+        assertEquals("UNKNOWN", classify("make a racket"));
+
+        // And two that now reach the RIGHT intent rather than merely a different wrong one.
+        assertEquals("TRACK", classify("build a track"), "a track is read, not shelved");
+        assertEquals("PLACE_WINDBREAK", classify("construct a portable windbreak"));
+        assertEquals("PLACE_WINDBREAK", classify("place a windbreak"), "the verb in the intent's own name");
+
+        // THE OTHER HALF. Every genuine craft phrase must be untouched, including the plurals, which word() does
+        // not match for free — "tables" is not "table".
+        assertEquals("CRAFT_DESK", classify("make a table"));
+        assertEquals("CRAFT_DESK", classify("make tables"));
+        assertEquals("CRAFT_DESK", classify("assemble a desk"));
+        assertEquals("CRAFT_DESK", classify("build a bench"));
+        assertEquals("CRAFT_WORKSTATION", classify("build a workbench"));
+        assertEquals("CRAFT_SHELF", classify("build a shelf"));
+        assertEquals("CRAFT_SHELF", classify("make some shelves"));
+        assertEquals("CRAFT_SHELF", classify("build an archive"));
+        assertEquals("CRAFT_CHAIR", classify("make a stool"));
+        assertEquals("CRAFT_CHAIR", classify("build a seat"));
+        assertEquals("MAKE_BED", classify("make a bed"), "which always worked and must keep working");
+        assertEquals("MAKE_BED", classify("build a bed"));
+
+        // The named "X rack" exclusions are a different mechanism and all still needed: these are genuine uses of
+        // the whole word that belong elsewhere, and word boundaries cannot settle a real collision. Note the two
+        // destinations — a fuel rack has its own Java intent, while the hay and harness racks are staged
+        // structures and must reach the assembly matcher. Both are right; only "a shelf" would be wrong.
+        assertEquals("BUILD_FUEL_RACK", classify("build a fuel rack"), "which owns its own intent");
+        assertEquals("UNKNOWN", classify("build a hay rack"));
+        assertEquals("UNKNOWN", classify("build a harness rack"));
+        assertEquals("UNKNOWN", classify("build a drying rack"));
+        assertEquals("UNKNOWN", classify("build a sleeping bench"));
+
+        // EVERY keyword of every rack-and-bench assembly, replayed. Auditing the exclusion list against the
+        // catalogue — rather than trusting it — is what turned up "smoking rack": the smoke rack declares that
+        // word and the exclusion named only "smoke rack", so one of its five keywords was shadowed and the other
+        // four were not. A list of literal exceptions is only as good as its last audit.
+        assertEquals("UNKNOWN", classify("build a smoke rack"));
+        assertEquals("UNKNOWN", classify("make a smoking rack"), "the keyword that was shadowed");
+        assertEquals("UNKNOWN", classify("fodder rack"));
+        assertEquals("CRAFT_WORKSTATION", classify("build a sewing table"), "a workstation, not a desk");
+    }
 }
