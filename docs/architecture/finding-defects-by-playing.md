@@ -95,6 +95,36 @@ Every defect this project has found is the same defect: **the world knows someth
   a Java build intent, or the process matcher — runs before anything that could recognise a question. **The fix
   is to give the question its own branch, first, and send it to the reading that answers it.**
 
+  The tally has since reached **six**, and two more of them changed the world: `what am I wearing` reached EQUIP
+  and would have **dressed the Chronicle** in the first spare garment it found (the verb stem, not the noun —
+  "wearing" contains "wear"); and `is this safe to eat` reached EAT and was **answered by eating it**, which with
+  a death cap in the pack is the one outcome the asker was trying to avoid. The food case is the sharpest
+  statement of the whole face: the poison model is complete and acted on, and the eating rule's own comment says
+  *"the player had to know which mushroom before they ate it"* — a design that is right, and that the game gave
+  the player no way to satisfy.
+- **A SUBSTRING IN A *PRE*-CLASSIFIER MAKES A CATALOGUE ENTRY UNSPEAKABLE — and no audit in this repo can see
+  it.** `ActionInputClassifier` sorts input before `classify()` ever runs, so whatever it claims never reaches an
+  intent rule at all. Its list of physically impossible acts began with a bare `"fly "`, and **`fly agaric`
+  contains it**:
+
+  ```
+  gather the fly agaric        -> PHYSICALLY_IMPOSSIBLE
+  eat the fly agaric           -> PHYSICALLY_IMPOSSIBLE
+  pick the fly agaric          -> PHYSICALLY_IMPOSSIBLE
+  look at the fly agaric       -> PHYSICALLY_IMPOSSIBLE
+  is the fly agaric poisonous  -> PHYSICALLY_IMPOSSIBLE
+  ```
+
+  A real flora — gatherable, marked `is_poisonous`, wired to sicken whoever eats it — reduced to a pure
+  catalogue token by four characters and a space, in *every sentence naming it*. The routing-reachability probe,
+  the keyword replay and the catalogue guards all measure the intent classifier; none of them gets there.
+
+  **So audit the pre-classifier's lists against the catalogue too**, not just `classify()`: for each short entry,
+  check it against `flora_definition`, `item_definition`, `wildlife_species` and `construction_kind` names. And
+  note that the same sloppy substring was **too narrow as well as too broad** — bare `fly` and `I want to fly`
+  both fell *through* it to UNKNOWN. That is the usual signature: an entry loose enough to catch a mushroom is
+  rarely tight enough to catch the real thing.
+
 ---
 
 ## The shape of a good fix
@@ -194,8 +224,35 @@ Every defect this project has found is the same defect: **the world knows someth
   its method compiles as "annotation not applicable".
 - **Java files are CRLF.** Normalise before scripted multi-line edits, and write edit scripts to a file —
   PowerShell mangles here-strings and bash eats backticks and `$$`.
+- **A CRLF flip will put a many-thousand-line no-op on your PR, and `core.autocrlf=true` does not stop it.**
+  After a session of edits, `git diff --stat development` reported **4,885 insertions and 4,769 deletions** in
+  `ChronicleActionService.java` for a 151-line change: the repository stores that blob with LF, the working copy
+  had become CRLF, and `git ls-files --eol` reports the index entry as **`i/-text`** — git has decided the file
+  is not text (very long lines), so the autocrlf filter never normalises it on `add`. Staging it and reading
+  `git diff --cached` confirmed the CRLF was going into the commit.
+
+  ```sh
+  for f in <edited files>; do tr -d '\r' < "$f" > "$f.lf" && mv "$f.lf" "$f"; done
+  git diff --stat <base>     # must be about the number of lines you actually changed
+  ```
+
+  **Read `git diff --stat` before every push.** The insertion count is the cheapest detector there is: a diff an
+  order of magnitude larger than your edit is this bug, not your work. `git diff --ignore-cr-at-eol --stat`
+  confirms it in one command.
+- **A stale surefire report can fake a failure in a green run.** Aggregating `target/surefire-reports/*.txt` with
+  `grep "^Tests run:"` counted a **four-day-old** report for a scratch class that no longer exists, turning
+  339/339 into "1 error". Filter by mtime — `find target/surefire-reports -name '*.txt' -newermt '-12 minutes'` —
+  or `mvn clean` first. Same family as `target/classes/db/migration` holding another branch's migrations: the
+  build directory remembers things the source tree has forgotten.
 - **Widening a rule to catch one phrase reliably steals another.** Assert the phrase it must NOT take, in the
   same test, every time.
+- **Prove a keyword guard in a sentence where the thing you are guarding actually decides.** A migration added
+  the family word `cap` for head garments and argued it was safe because the matcher takes the LONGEST keyword
+  and `death cap` is longer — proving it with `gather a death cap`, which is a **Java gather intent that never
+  reaches the material matcher at all.** The guard therefore tested nothing, and one day later `is the death cap
+  poisonous` was answered *"sew a fur cap, weave a grass cap, or sew a leather cap"*. A longest-wins argument is
+  only tested by a sentence that reaches the longest-wins code; pick the test phrase by asking **which component
+  will make this decision**, not by which phrase reads most naturally.
 - **A test fixture that selects by `display_name` sweeps the whole world.** One replay broke on any database
   where somebody had gathered firewood, because it claimed every object called "Dry branch".
 - **Grep truncation hides call sites.** `items.workDraftBeasts` sat past column 140 on the MOVE line, so a fix
