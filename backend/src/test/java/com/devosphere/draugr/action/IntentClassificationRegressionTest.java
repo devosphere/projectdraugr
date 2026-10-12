@@ -1828,6 +1828,14 @@ class IntentClassificationRegressionTest {
         assertEquals("CRAFT_GARMENT", classify("make a cloak"));
         assertEquals("REPAIR_ITEM", classify("mend my cloak"));
         assertEquals("LINE_GARMENT", classify("line the cloak with fur"));
+
+        // A NEAR MISS THE REPLAY CAUGHT, held here because only ORDER resolves it. The new drying clause matches
+        // a drying word beside a named garment, and "stuff my boots with DRY grass" carries both "dry" and "my
+        // boots" — so it would be DRY_BODY if LINE_GARMENT did not claim it first. It does, and these assert
+        // that it keeps doing so; an ordering nobody tests is an ordering that will be changed.
+        assertEquals("LINE_GARMENT", classify("stuff my boots with dry grass"));
+        assertEquals("LINE_GARMENT", classify("stuff my clothes with moss"));
+        assertEquals("DRY_BODY", classify("get under cover and dry off"), "and real drying still dries");
     }
 
     @Test void theFoodChainAndTheKeepingQuestion() throws Exception {
