@@ -75,11 +75,31 @@ public class ActionInputClassifier {
     private static final List<String> PROFANITY = List.of(
         "fuck", "shit on", "piss on");
 
+    /**
+     * Acts the body cannot perform. This runs BEFORE the intent classifier, so anything caught here never
+     * reaches a rule at all — which is why the entries have to be exact.
+     *
+     * <p><b>The bare {@code "fly "} that used to head this list made the FLY AGARIC unreachable.</b> It is a real
+     * mushroom in this game's catalogue: poisonous, gatherable, and marked {@code is_poisonous} so that eating it
+     * sickens. Every sentence naming it — {@code gather the fly agaric}, {@code eat the fly agaric}, {@code pick
+     * the fly agaric}, {@code look at the fly agaric}, {@code is the fly agaric poisonous} — was answered
+     * "The body reaches toward that and finds no path", because four characters and a space sat inside its name.
+     * A catalogue token made by a substring.
+     *
+     * <p>And the same entry was too NARROW as well as too broad: bare {@code fly} and {@code I want to fly} both
+     * fell through it to UNKNOWN. So flight is named by its real forms here, and asked plainly below.
+     */
     private static final List<String> IMPOSSIBLE = List.of(
-        "fly ", "fly up", "fly away", "fly to", "take flight", "levitate",
+        "fly up", "fly away", "fly to", "fly over", "fly across", "fly higher", "fly off",
+        "fly north", "fly south", "fly east", "fly west", "take flight", "levitate",
         "teleport", "disappear", "turn invisible", "become invisible", "vanish",
         "cast a spell", "cast spell", "summon", "conjure", "breathe underwater",
         "time travel", "travel through time", "read minds", "shapeshift", "phase through");
+
+    /** Flight asked plainly rather than as a phrasal verb — what the bare {@code "fly "} entry never caught. */
+    private static final List<String> FLIGHT_PLAINLY = List.of(
+        "i fly", "want to fly", "try to fly", "trying to fly", "can i fly", "could i fly",
+        "let me fly", "going to fly", "start flying", "begin flying");
 
     private static final List<String> VOWELS = List.of("a", "e", "i", "o", "u", "y");
 
@@ -104,6 +124,9 @@ public class ActionInputClassifier {
         }
 
         if (containsAny(v, IMPOSSIBLE)) return InputClass.PHYSICALLY_IMPOSSIBLE;
+        // Flight asked plainly, and flight as the whole of what was said. Both were missed by the bare "fly "
+        // entry that this replaces, which caught a mushroom instead.
+        if (containsAny(v, FLIGHT_PLAINLY) || v.equals("fly") || v.equals("fly.")) return InputClass.PHYSICALLY_IMPOSSIBLE;
 
         return InputClass.VALID;
     }

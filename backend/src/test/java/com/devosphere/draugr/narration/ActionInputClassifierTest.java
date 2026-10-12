@@ -47,6 +47,26 @@ class ActionInputClassifierTest {
         assertEquals(InputClass.PHYSICALLY_IMPOSSIBLE, classifier.classify("cast a spell on the bear"));
         assertEquals(InputClass.PHYSICALLY_IMPOSSIBLE, classifier.classify("fly up over the trees"));
         assertEquals(InputClass.PHYSICALLY_IMPOSSIBLE, classifier.classify("turn invisible"));
+        // Flight asked plainly, and flight as the whole of what was said. Both FELL THROUGH the bare "fly "
+        // entry that used to head the list — it was too narrow as well as too broad.
+        assertEquals(InputClass.PHYSICALLY_IMPOSSIBLE, classifier.classify("I want to fly"));
+        assertEquals(InputClass.PHYSICALLY_IMPOSSIBLE, classifier.classify("fly"));
+        assertEquals(InputClass.PHYSICALLY_IMPOSSIBLE, classifier.classify("fly north over the ridge"));
+    }
+
+    /**
+     * The fly agaric is a mushroom, not an attempt at flight (#37).
+     *
+     * <p>A bare {@code "fly "} used to head the impossible list, and this classifier runs BEFORE the intent
+     * classifier — so every sentence naming the fly agaric was answered "The body reaches toward that and finds
+     * no path" and never reached a rule at all. It is a real catalogue flora: gatherable, marked
+     * {@code is_poisonous}, and wired to sicken whoever eats it. Four characters and a space made it a token.
+     */
+    @Test void theFlyAgaricIsAMushroomAndNotAnAttemptAtFlight() {
+        for (String said : new String[]{"gather the fly agaric", "eat the fly agaric", "pick the fly agaric",
+                                        "look at the fly agaric", "is the fly agaric poisonous",
+                                        "is the fly agaric safe to eat"})
+            assertEquals(InputClass.VALID, classifier.classify(said), said);
     }
 
     @Test void gibberishIsNonsensical() {

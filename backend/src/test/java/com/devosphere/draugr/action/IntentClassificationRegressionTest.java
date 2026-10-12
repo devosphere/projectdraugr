@@ -1952,6 +1952,60 @@ class IntentClassificationRegressionTest {
         assertEquals("STORE", classify("put the berries in the basket"), "unchanged");
     }
 
+    /**
+     * Asking whether a thing is poison is a question, not a meal (#37) — the food half of the water rule above.
+     *
+     * <p>The poison model is finished and was unreachable: {@code is_poisonous} sickens whoever eats the death
+     * cap, {@code toxic} leaves the flesh on a salamander, and the eating rule's own comment states the design —
+     * "the player had to know which mushroom before they ate it". Measured live, nine ways of asking reached
+     * nothing, and <b>five were answered by eating it</b>, which is the one outcome the asker was avoiding.
+     */
+    @Test void theWorldKnewItWasPoison() throws Exception {
+        // I. Asking outright. All of these reached nothing at all.
+        for (String p : new String[]{"is this poisonous", "is that plant poisonous", "is this mushroom poisonous",
+                                     "are these mushrooms safe", "is this toadstool safe", "is this berry safe",
+                                     "is the meat safe", "is it edible", "what here is edible",
+                                     "is this food still good", "is this still fresh", "has the meat turned"})
+            assertEquals("JUDGE_FOOD", classify(p), p);
+
+        // II. The five that were answered by EATING, because the late fallback matches the bare word "eat" and
+        // the whole doubt in these sentences is carried by the shape around it.
+        for (String p : new String[]{"is this safe to eat", "is the fish safe to eat", "can i eat this",
+                                     "which of these mushrooms can i eat", "what can i eat here"})
+            assertEquals("JUDGE_FOOD", classify(p), p + " — asked WHETHER, and was answered by eating");
+
+        // III. The verb the intent is named for, which is the trap JUDGE_WATER fell into.
+        assertEquals("JUDGE_FOOD", classify("judge the food"));
+        // But IDENTIFY is not available to borrow: it is a deliberate EXAMINE assertion with its own comment
+        // ("folds into the subject-scoped EXAMINE"), and my first cut took it and broke that test. The same
+        // lesson sniff and test taught the water rule. (EXAMINE answering about the GROUND rather than the named
+        // mushroom is a real defect and a different one — recorded, not fixed by taking the verb.)
+        assertEquals("EXAMINE", classify("identify the mushroom"), "identifying is EXAMINE's, by design");
+
+        // IV. "will this make me sick" went UNKNOWN because MAKING_SOMETHING matches the bare word "make". Held
+        // apart from that guard rather than widening it for every rule that shares it.
+        assertEquals("JUDGE_FOOD", classify("will this make me sick"));
+        assertEquals("JUDGE_FOOD", classify("will this make me ill"));
+
+        // V. WHAT MUST KEEP ITS OWN ANSWER. The water half is untouched, poisoning a weapon is still a craft,
+        // and plain eating is still eating — a question rule that swallowed the act would be a worse bug than
+        // the one it fixed.
+        assertEquals("JUDGE_WATER", classify("is this water safe"), "the water half is its own rule");
+        assertEquals("JUDGE_WATER", classify("is the water safe to drink"), "and still is");
+        assertEquals("EAT", classify("eat the berries"), "plain eating is still eating");
+        assertEquals("EAT", classify("eat something"));
+        assertEquals("EAT", classify("break my fast"));
+        // Spoilage already had an honest answer with real spans, and two voices on one question is how two
+        // answers start to disagree. These stay where they were.
+        assertEquals("TAKE_STOCK_OF_FOOD", classify("has this gone off"), "already answered, with spans");
+        assertEquals("TAKE_STOCK_OF_FOOD", classify("is the meat spoiled"), "likewise");
+        assertEquals("TAKE_STOCK_OF_FOOD", classify("check the food"), "likewise");
+        // AND THE SKY. "weather" contains EAT, so a bare contains() on that word routed "what is the weather" to
+        // JUDGE_FOOD. word() boundaries it. Asserted here because this rule is the reason it could break.
+        assertEquals("FEEL", classify("what is the weather"), "w-eat-her is not a question about food");
+        assertEquals("FEEL", classify("what is the temperature"));
+    }
+
     @Test void aBedIsThreeThings() throws Exception {
         // I. Somewhere to sleep. The first four always worked; the rest did not.
         for (String p : new String[]{"make a bed", "make the bed", "build a bed", "lay a bed",
