@@ -81,6 +81,31 @@ class ActionInputClassifierTest {
      * names end in those letters, and the perception layer says them out loud. So
      * {@code follow the mayfly to the water} contained "fly to". The token is bounded now.
      */
+    /**
+     * A floorboard is not a boar, and a steel axe is not an eel (#37).
+     *
+     * <p>Audited against the live catalogue, not guessed: {@code boar} sits inside <b>floorboard</b>,
+     * <b>hearth board</b> and <b>plough board</b>; {@code eel} inside <b>steel axe</b>, <b>steel cuirass</b> and
+     * <b>cart wheel</b>; {@code owl} inside <b>fired bowl</b>. A raw {@code contains} therefore classified
+     * swearing at a plank as an assault on an animal. Low stakes — it decides which flavour of venting comes
+     * back — and the same defect as the fly agaric, in the list immediately above it in the same file.
+     */
+    @Test void aFloorboardIsNotABoarAndASteelAxeIsNotAnEel() {
+        // The claim is that these are NOT animals. What they are instead is the intent classifier's business —
+        // none of these objects is in the inanimate-noun list either, so they fall through as VALID and the
+        // ordinary rules decide. My first assertion here guessed INANIMATE and was wrong about the code rather
+        // than finding anything wrong in it.
+        for (String said : new String[]{"fuck the floorboard", "fuck the steel axe", "fuck the fired bowl",
+                                        "fuck the plough board", "fuck the cart wheel"})
+            org.junit.jupiter.api.Assertions.assertNotEquals(
+                InputClass.AGGRESSION_TOWARD_WILDLIFE, classifier.classify(said),
+                said + " names no animal, and must not be read as an assault on one");
+        // And the animals the list exists for are still found, because in every one of them the animal is a
+        // whole word — which is why bounding costs nothing here.
+        for (String said : new String[]{"fuck the boar", "fuck the deer", "fuck the owl"})
+            assertEquals(InputClass.AGGRESSION_TOWARD_WILDLIFE, classifier.classify(said), said);
+    }
+
     @Test void fourInsectsEndInThoseThreeLettersAndNoneOfThemIsFlight() {
         for (String said : new String[]{"follow the mayfly to the water", "watch the dragonfly off the reed",
                                         "look at the damselfly up on the stem", "catch the caddisfly",

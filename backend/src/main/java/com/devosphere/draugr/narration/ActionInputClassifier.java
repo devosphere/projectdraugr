@@ -133,7 +133,9 @@ public class ActionInputClassifier {
 
         if (containsAny(v, SELF_ACT)) return InputClass.PERSONAL_PHYSICAL_ACT;
 
-        boolean namesAnimal = containsAny(v, ANIMAL_NOUNS);
+        // Word-bounded (#37): a raw contains() found "boar" in floorboard, "eel" in steel axe and "owl" in fired
+        // bowl, so swearing at a plank was classified as an assault on an animal.
+        boolean namesAnimal = namesAny(v, ANIMAL_NOUNS);
         if (namesAnimal && containsAny(v, SEXUAL_CONTACT)) return InputClass.AGGRESSION_TOWARD_WILDLIFE;
 
         // Profanity aimed at scenery, or bare venting with no constructive verb, is
@@ -218,6 +220,34 @@ public class ActionInputClassifier {
 
     private static boolean containsAny(String haystack, List<String> needles) {
         for (String n : needles) if (haystack.contains(n)) return true;
+        return false;
+    }
+
+    /**
+     * Like {@link #containsAny} but holding single words to WORD BOUNDARIES (#37).
+     *
+     * <p>Used for the animal nouns, where a raw {@code contains} was finding animals inside ordinary gear. Audited
+     * against the live catalogue rather than guessed, and these are real entries in it:
+     *
+     * <pre>
+     *   "boar"  inside  floorboard, hearth board, plough board, board panel
+     *   "eel"   inside  steel axe, steel cuirass, steel striker, cart wheel, peeled root
+     *   "owl"   inside  fired bowl
+     * </pre>
+     *
+     * <p>So <em>"fuck the floorboard"</em> was classified as an assault on an animal, and so was swearing at a
+     * steel axe. Low stakes — it only decides which flavour of venting the world narrates back — and the same
+     * defect as the one that made the fly agaric unspeakable, in the list immediately above it.
+     *
+     * <p>Every legitimate match survives bounding, because in each of them the animal IS a whole word:
+     * {@code boar hide}, {@code fowl egg}, {@code deer antler}. Multi-word needles keep plain containment, since
+     * a phrase carries its own boundaries.
+     */
+    private static boolean namesAny(String haystack, List<String> needles) {
+        for (String n : needles) {
+            if (n.indexOf(' ') >= 0) { if (haystack.contains(n)) return true; }
+            else if (com.devosphere.draugr.narration.Words.word(haystack, n)) return true;
+        }
         return false;
     }
 }
