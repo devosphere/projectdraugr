@@ -65,7 +65,26 @@ class ActionInputClassifierTest {
     @Test void theFlyAgaricIsAMushroomAndNotAnAttemptAtFlight() {
         for (String said : new String[]{"gather the fly agaric", "eat the fly agaric", "pick the fly agaric",
                                         "look at the fly agaric", "is the fly agaric poisonous",
-                                        "is the fly agaric safe to eat"})
+                                        "is the fly agaric safe to eat", "gather the fly-agaric"})
+            assertEquals(InputClass.VALID, classifier.classify(said), said);
+        // A WORD BOUNDARY CANNOT SAVE THIS ONE, and that is the lesson: the mushroom's name BEGINS with the
+        // whole word "fly", so a bounded token matches it perfectly. The third cut of this fix made the mushroom
+        // impossible all over again. Boundaries do the general work; names settle the genuine collisions.
+        assertEquals(InputClass.PHYSICALLY_IMPOSSIBLE, classifier.classify("fly"), "and real flight still cannot be done");
+    }
+
+    /**
+     * And neither is a dragonfly (#37).
+     *
+     * <p>My first fix for the mushroom replaced the bare {@code "fly "} with phrasal forms — {@code fly up},
+     * {@code fly to}, {@code fly off} — and that was <b>still wrong</b>: this catalogue holds four insects whose
+     * names end in those letters, and the perception layer says them out loud. So
+     * {@code follow the mayfly to the water} contained "fly to". The token is bounded now.
+     */
+    @Test void fourInsectsEndInThoseThreeLettersAndNoneOfThemIsFlight() {
+        for (String said : new String[]{"follow the mayfly to the water", "watch the dragonfly off the reed",
+                                        "look at the damselfly up on the stem", "catch the caddisfly",
+                                        "the mayfly away over the pool", "study the dragonfly north of here"})
             assertEquals(InputClass.VALID, classifier.classify(said), said);
     }
 

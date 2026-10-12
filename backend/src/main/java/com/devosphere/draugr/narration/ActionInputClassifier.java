@@ -87,19 +87,39 @@ public class ActionInputClassifier {
      * A catalogue token made by a substring.
      *
      * <p>And the same entry was too NARROW as well as too broad: bare {@code fly} and {@code I want to fly} both
-     * fell through it to UNKNOWN. So flight is named by its real forms here, and asked plainly below.
+     * fell through it to UNKNOWN. So flight is named by its real forms, below, and nothing about flight is
+     * matched by a raw substring any more.
      */
     private static final List<String> IMPOSSIBLE = List.of(
-        "fly up", "fly away", "fly to", "fly over", "fly across", "fly higher", "fly off",
-        "fly north", "fly south", "fly east", "fly west", "take flight", "levitate",
+        "take flight", "levitate",
         "teleport", "disappear", "turn invisible", "become invisible", "vanish",
         "cast a spell", "cast spell", "summon", "conjure", "breathe underwater",
         "time travel", "travel through time", "read minds", "shapeshift", "phase through");
 
-    /** Flight asked plainly rather than as a phrasal verb — what the bare {@code "fly "} entry never caught. */
-    private static final List<String> FLIGHT_PLAINLY = List.of(
-        "i fly", "want to fly", "try to fly", "trying to fly", "can i fly", "could i fly",
-        "let me fly", "going to fly", "start flying", "begin flying");
+    /**
+     * Flight, matched on a WHOLE WORD (#37).
+     *
+     * <p>My first cut at the fly-agaric fix replaced the bare {@code "fly "} with phrasal forms — {@code fly up},
+     * {@code fly to}, {@code fly off} and the rest — and <b>that was still wrong</b>, because this catalogue holds
+     * four insects whose names end in those three letters: <b>dragonfly, damselfly, mayfly, caddisfly</b>. The
+     * perception layer says them out loud (<em>"You pick out damselfly working the air above the ground"</em>), so
+     * {@code follow the mayfly to the water} contains "fly to" and {@code the dragonfly off the reed} contains
+     * "fly off". The audit that found this is the one the method doc now prescribes: check every short entry in
+     * this file against {@code wildlife_species}, {@code flora_definition} and {@code item_definition}.
+     *
+     * <p>So the token is bounded. {@code (?<!\w)} before it is what the project's {@code Words.word} uses and is
+     * deliberately not {@code \b} — a needle beside punctuation has no word boundary after it, and {@code \b}
+     * would refuse a name plainly present.
+     *
+     * <p><b>And the boundary alone is still not enough, which is the lesson.</b> The mushroom is "fly agaric" —
+     * its name BEGINS with the whole word "fly", so a bounded token matches it perfectly and the third cut of
+     * this fix made the mushroom impossible all over again. A word boundary cannot separate a word from a name
+     * that starts with that word. So the one name that collides is excluded BY NAME, which is what this
+     * project's rule actually says: boundaries do the general work, names settle the genuine collisions. There
+     * is exactly one, and the migration guards that there is still exactly one.
+     */
+    private static final java.util.regex.Pattern FLIGHT = java.util.regex.Pattern.compile(
+        "(?<!\\w)(?:fly|flying|flies)(?!\\w)(?!\\s*-?\\s*agaric)");
 
     private static final List<String> VOWELS = List.of("a", "e", "i", "o", "u", "y");
 
@@ -124,9 +144,9 @@ public class ActionInputClassifier {
         }
 
         if (containsAny(v, IMPOSSIBLE)) return InputClass.PHYSICALLY_IMPOSSIBLE;
-        // Flight asked plainly, and flight as the whole of what was said. Both were missed by the bare "fly "
-        // entry that this replaces, which caught a mushroom instead.
-        if (containsAny(v, FLIGHT_PLAINLY) || v.equals("fly") || v.equals("fly.")) return InputClass.PHYSICALLY_IMPOSSIBLE;
+        // Flight, on a whole word. The bare "fly " substring this replaces caught a mushroom and missed a plain
+        // "fly"; the phrasal forms I tried next still caught four insects whose names end in those letters.
+        if (FLIGHT.matcher(v).find()) return InputClass.PHYSICALLY_IMPOSSIBLE;
 
         return InputClass.VALID;
     }
