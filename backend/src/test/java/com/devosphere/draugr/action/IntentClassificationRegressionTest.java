@@ -1820,6 +1820,60 @@ class IntentClassificationRegressionTest {
         assertEquals("JUDGE_CROSSING", classify("can i get across here"));
     }
 
+    /**
+     * The feet under the beast (#106, V414) — the last model gap on that ticket.
+     *
+     * <p>The asking already worked: `is he lame` and `is she limping` have always reached CHECK_STOCK, which
+     * reports four real, maintained states and had nothing whatever to say about a foot. The ticket warned for
+     * four comments that routing this to grooming would claim the COAT improved, which is a lie — so the verb
+     * splits are asserted in both directions here.
+     */
+    @Test void theFeetUnderTheBeast() throws Exception {
+        for (String p : new String[]{"pare the hooves", "trim the hooves", "pare the goat's hooves",
+                                     "trim his hooves", "see to the goat's feet", "rasp the hooves",
+                                     "clip the goat's hooves", "do the hooves"})
+            assertEquals("PARE_HOOVES", classify(p), p);
+
+        // NOT THE COAT, which is the exact lie the ticket named. Combing and paring want different things in the
+        // hand and report different states, and a grooming answer to a foot question would say the coat came up
+        // clean when the keeper asked about a hoof.
+        assertEquals("GROOM_ANIMAL", classify("groom the goat"), "which always worked");
+        assertEquals("GROOM_ANIMAL", classify("comb the goat's coat"));
+        assertEquals("GROOM_ANIMAL", classify("brush the mane"));
+
+        // NOT THE PLAYER'S OWN FEET. What matters here is that this rule does not CLAIM them — a keeper asking
+        // after their own feet must not be handed a blade and an animal.
+        //
+        // `how are my feet` reaches nothing, and reached nothing before this slice: the body model keeps no
+        // foot state, so there is no honest answer to route it to and inventing one would be the opposite of
+        // this ticket's whole point. Asserted as UNKNOWN rather than quietly left out, so the gap is recorded
+        // where the next cycle will see it instead of being rediscovered.
+        assertEquals("UNKNOWN", classify("how are my feet", false),
+            "the player's own feet have no state in the body model — a real gap, and not this rule's to fill");
+        assertEquals("WARM_BODY", classify("warm my feet by the fire"), "but warming them works, and must keep working");
+
+        // AND "TRIM" STILL BELONGS TO THE WOOD. The coppice rule's own comment says it is gated on the wood "so
+        // that trimming a wick, a hoof or a hide stays with its own work" — this is the other side of that
+        // bargain, asserted rather than assumed.
+        assertEquals("COPPICE", classify("trim the hazel stool"), "trimming wood is still coppicing");
+
+        // THE WELFARE QUESTION, which is where the foot is now REPORTED. `is the goat lame` always routed;
+        // `is he limping` reached nothing, because the gate wanted a beast NAMED and a keeper standing beside
+        // their goat says "he". In this world nothing limps and nothing goes lame but a kept animal, so those
+        // two words now carry the subject themselves.
+        assertEquals("CHECK_STOCK", classify("is the goat lame"), "which always worked");
+        assertEquals("CHECK_STOCK", classify("is he limping"), "the pronoun half of the same sentence");
+        assertEquals("CHECK_STOCK", classify("is the goat limping"));
+
+        // ...AND NOT THE PLAYER'S OWN LEG, which is the one thing that widening could wrongly claim. Answering
+        // "my leg is lame" with a stock report would be face 6 exactly — a confidently wrong answer in the same
+        // even voice as every true one. All four reach nothing, which is a real gap in the body reading and is
+        // recorded on #37 rather than papered over here: a missing answer costs a turn, a wrong one costs the
+        // player their model of what the game heard.
+        for (String mine : new String[]{"my leg is lame", "am i lame", "is my leg lame", "i am limping"})
+            assertEquals("UNKNOWN", classify(mine, false), mine + " is the body's business, not the herd's");
+    }
+
     @Test void theClothingChain() throws Exception {
         // ASKING IS NOT DRESSING. The headline fix.
         assertEquals("TAKE_STOCK_OF_GEAR", classify("what am i wearing"));

@@ -551,10 +551,16 @@ public class PhysicalItemService {
             // And a BROKEN harness spread nothing, because a broken strap is a strap that parted: the draft
             // VEHICLE in the same statement was already checked for that, and the gear that hitches the beast
             // to it was not.
+            // AND A LAME BEAST DRAWS AS THOUGH IT HAD NO GEAR AT ALL (#106, V414). A collar spreads a load across
+            // the shoulder; it does nothing whatever for a foot the animal will not stand on. Written as a CASE
+            // around the gear rather than as a separate statement, so a lame beast cannot be charged twice — and
+            // so the gear's own figure is still what the sound ones pay.
             "UPDATE wildlife_bond wb SET draft_fatigue = LEAST(100, draft_fatigue + " +
-            "  COALESCE(" + gearOnBeast(easy) + ", ?)), draft_conditioning = LEAST(100, draft_conditioning + 3) " +
+            "  CASE WHEN wb.hoof_condition <= " + FOOT_IS_LAME + " THEN ? " +
+            "       ELSE COALESCE(" + gearOnBeast(easy) + ", ?) END), " +
+            "  draft_conditioning = LEAST(100, draft_conditioning + 3) " +
             beastsAtWork(),
-            hard, chronicle, chronicle);
+            hard, hard, chronicle, chronicle);
         return haulageReport(chronicle, easy);
     }
 
@@ -600,7 +606,10 @@ public class PhysicalItemService {
         java.util.List<java.util.Map<String,Object>> team = jdbc.queryForList(
             "SELECT (SELECT wp2.species_key FROM wildlife_population wp2 WHERE wp2.id=wb.population_id) AS species, " +
             "  (" + gearOnBeast(easy) + ") IS NOT NULL AS geared, wb.draft_fatigue AS spentness, " +
-            "  GREATEST(wb.draft_hunger, wb.draft_thirst) AS want, wb.draft_conditioning AS seasoned " +
+            "  GREATEST(wb.draft_hunger, wb.draft_thirst) AS want, wb.draft_conditioning AS seasoned, " +
+            "  wb.hoof_condition AS foot, " +
+            "  (SELECT ws7.feet_need_paring FROM wildlife_population wp7 JOIN wildlife_species ws7 " +
+            "     ON ws7.species_key=wp7.species_key WHERE wp7.id=wb.population_id) AS has_feet " +
             "FROM wildlife_bond wb WHERE wb.chronicle_id=? AND wb.bond_stage='TAMED' " +
             "AND EXISTS (SELECT 1 FROM wildlife_population wp JOIN draft_species ds ON ds.species_key=wp.species_key " +
             "            WHERE wp.id=wb.population_id) ORDER BY wb.draft_fatigue DESC",
@@ -627,13 +636,19 @@ public class PhysicalItemService {
                 + "sit where you left it until there is a beast that answers to you.";
 
         java.util.List<String> said = new java.util.ArrayList<>();
-        int geared = 0, blown = 0, wanting = 0;
+        int geared = 0, blown = 0, wanting = 0, lame = 0, longInTheFoot = 0;
         java.util.List<String> bare = new java.util.ArrayList<>();
         for (java.util.Map<String,Object> beast : team) {
             String name = String.valueOf(beast.get("species")).replace('_', ' ');
             if (Boolean.TRUE.equals(beast.get("geared"))) geared++; else bare.add(name);
             if (((Number) beast.get("spentness")).intValue() >= UNFIT_TO_CARRY) blown++;
             if (((Number) beast.get("want")).intValue() >= UNFIT_TO_CARRY) wanting++;
+            // The foot (#106, V414), counted here because this is the statement that charges the haul and so the
+            // one place the keeper is owed the reason their team is paying full rate in good gear.
+            boolean hasFeet = Boolean.TRUE.equals(beast.get("has_feet"));
+            int foot = beast.get("foot") == null ? 100 : ((Number) beast.get("foot")).intValue();
+            if (hasFeet && foot <= FOOT_IS_LAME) lame++;
+            else if (hasFeet && foot <= FEET_WANT_PARING) longInTheFoot++;
         }
         // The team and what it has to draw are ONE sentence, joined by a comma: said as two they read as
         // "You have 1 tamed to the draught. and a cart for them to draw", which is how the first cut read.
@@ -652,6 +667,18 @@ public class PhysicalItemService {
         else
             said.add("Your gear fits some of them; the " + joinAnd(bare) + " would pull bare alongside");
 
+        // THE FOOT BEFORE THE GEAR'S VERDICT MEANS ANYTHING (#106, V414). Said here rather than left to
+        // CHECK_STOCK because this is the statement that charges the haul, and a lame beast pays the ungeared
+        // rate no matter what is on its shoulders — so a keeper reading "the collar harness fits them" and still
+        // watching their team blow is owed the reason in the same breath.
+        if (lame > 0) said.add(lame == 1
+            ? "One of them is lame, and a foot it will not stand on is not helped by any strap you own — it pays "
+              + "the full rate of a bare-rope haul until the foot is pared"
+            : lame + " of them are lame, and feet they will not stand on are not helped by any strap you own — "
+              + "they pay the full rate of a bare-rope haul until those feet are pared");
+        if (longInTheFoot > 0) said.add(longInTheFoot == 1
+            ? "One of them is getting long in the foot and wants the knife before it goes lame"
+            : longInTheFoot + " of them are getting long in the foot and want the knife before they go lame");
         if (blown > 0) said.add(blown == 1 ? "One of them is blown and will haul nothing until it has stood a long while"
                                            : blown + " of them are blown and will haul nothing until they have stood a long while");
         if (wanting > 0) said.add(wanting == 1 ? "One of them wants feeding or watering before it draws well"
@@ -1286,6 +1313,137 @@ public class PhysicalItemService {
 
     /** What a verminous coat adds to an animal's illness each turn, or takes off its mending. */
     private static final int MATTED_COAT_SICKENS = 2;
+
+    /** A foot at or under this is lame: the animal will not put its weight on it (#106, V414). */
+    public static final int FOOT_IS_LAME = 30;
+    /** At or under this the horn is long and wants the knife, before it is a lameness. */
+    public static final int FEET_WANT_PARING = 60;
+    /** Horn grows faster than easy ground wears it, so a foot goes off on its own even standing still. */
+    private static final int HOOF_GROWS_OUT = 1;
+    /** Stony, broken going chips and bruises a foot rather than merely lengthening it. */
+    private static final int HOOF_WEARS_ON_STONE = 4;
+    /** Standing wet softens the horn and rots it, which is the one a keeper underestimates. */
+    private static final int HOOF_ROTS_IN_WET = 3;
+    /** What paring a foot properly puts back. */
+    private static final int PARING_PUTS_BACK = 45;
+    /** At or over this there is nothing to take off yet. */
+    private static final int FEET_ARE_SOUND = 95;
+
+    /**
+     * The feet under a working animal (#106, V414).
+     *
+     * <p><b>The last genuine model gap on #106</b>, and the asking already worked: `is he lame`, `is she limping`
+     * and `is the goat lame` have always reached CHECK_STOCK, which reports hunger, thirst, fatigue and sickness
+     * — four real, maintained states — and had nothing whatever to say about a foot. Its all-clear even read
+     * <em>"fed, watered, rested and sound"</em>, and *sound* is the husbandry word for *not lame*: the prose was
+     * already making the claim this makes true.
+     *
+     * <p>Horn grows faster than easy ground wears it, so a foot goes off <b>on its own</b> — that is the baseline,
+     * and it is why this is a chore and not an accident. Two kinds of ground make it worse, and they are opposite
+     * faults: stony, broken going <em>chips and bruises</em>, while standing wet <em>softens the horn and rots
+     * it</em>. Both are read from the ground the KEEPER stands on, exactly as thirst and hunger are, because a
+     * kept animal goes where its keeper goes.
+     *
+     * <p>Only for the kinds that have such feet, by {@code feet_need_paring} — a declared fact rather than a list
+     * in this file, because a list in this file is precisely how tending knew nine species, grooming knew none,
+     * and feeding knew seven and not the goat.
+     *
+     * <p>Set-based, one statement, so a foot cannot both grow out and be worn down in the same turn.
+     */
+    @Transactional
+    public void advanceHoofCondition(Instant now) {
+        jdbc.update(
+            "UPDATE wildlife_bond wb SET hoof_condition = GREATEST(0, wb.hoof_condition - (? "
+            + "  + CASE WHEN ch.biome IN ('MOUNTAIN','ALPINE','ROCKY','CAVE_INTERIOR','BADLANDS') THEN ? ELSE 0 END "
+            + "  + CASE WHEN ch.biome IN ('WETLAND','RIVER_BANK') THEN ? ELSE 0 END)) "
+            + "FROM world_object cw JOIN world_chunk ch ON ch.id = cw.current_location_id, "
+            + "     wildlife_population wp JOIN wildlife_species ws ON ws.species_key = wp.species_key "
+            + "WHERE cw.id = wb.chronicle_id AND wp.id = wb.population_id "
+            + "  AND wb.bond_stage = 'TAMED' AND ws.feet_need_paring AND wb.hoof_condition > 0",
+            HOOF_GROWS_OUT, HOOF_WEARS_ON_STONE, HOOF_ROTS_IN_WET);
+    }
+
+    /**
+     * Paring a foot (#106, V414) — the act the whole state exists for.
+     *
+     * <p>Modelled on {@link #groomAnimal} deliberately: a keeper's state that falls on its own, an act that puts
+     * it back, a tool that is required and that wears for being used. The tool here is any registered CUTTING
+     * edge rather than a named implement, because a hoof knife is not in this catalogue and a keeper pares a foot
+     * with whatever blade they have — and asking the tool registry rather than a hand-kept list is what keeps
+     * this from drifting the way the husbandry vocabularies did.
+     *
+     * <p>It takes the <b>worst</b> foot in the keeper's stock, which is the one that needs them, and it refuses
+     * honestly on a foot that has nothing to take off rather than quietly spending a tool's life on nothing.
+     *
+     * @return {outcome, narration}
+     */
+    @Transactional
+    public String[] pareHooves(UUID chronicle, Instant at) {
+        Map<String, Object> worst = jdbc.query(
+            "SELECT wb.id, wp.species_key, wb.hoof_condition FROM wildlife_bond wb "
+            + "JOIN wildlife_population wp ON wp.id = wb.population_id "
+            + "JOIN wildlife_species ws ON ws.species_key = wp.species_key "
+            + "WHERE wb.chronicle_id = ? AND wb.bond_stage = 'TAMED' AND ws.feet_need_paring "
+            + "ORDER BY wb.hoof_condition LIMIT 1 FOR UPDATE OF wb",
+            rs -> rs.next() ? Map.of("id", rs.getObject(1, UUID.class), "species", rs.getString(2),
+                                     "foot", rs.getInt(3)) : null, chronicle);
+        if (worst == null)
+            return new String[]{"FAILED", "You keep nothing here with feet that want paring — no hooved animal "
+                + "of yours, tamed and to hand."};
+
+        String beast = ((String) worst.get("species")).replace('_', ' ');
+        int foot = (Integer) worst.get("foot");
+        if (foot >= FEET_ARE_SOUND)
+            return new String[]{"PARTIAL", "You pick up each of the " + beast + "'s feet in turn and look them "
+                + "over. The horn is tight, the sole is hard, and there is nothing on any of them worth taking "
+                + "off yet."};
+
+        // A blade, by the registry rather than by name — and the same CUTTING class every other blade job asks
+        // for, so a knife that can skin a deer can pare a foot.
+        UUID blade = anyToolOfClass(chronicle, "CUTTING");
+        if (blade == null)
+            return new String[]{"FAILED", "You get the " + beast + "'s foot up onto your knee and have nothing to "
+                + "do it with. Overgrown horn wants a blade; a hand will not take it back."};
+
+        jdbc.update("UPDATE wildlife_bond SET hoof_condition = LEAST(100, hoof_condition + ?) WHERE id = ?",
+            PARING_PUTS_BACK, worst.get("id"));
+        wearTool(blade, at);
+
+        return new String[]{"SUCCEEDED", foot <= FOOT_IS_LAME
+            ? "You get the " + beast + " to lean its weight off the bad foot and work the blade in under the "
+              + "overgrown horn, a paring at a time. There is heat in it and the sole has carried the wall away "
+              + "from the quick. By the end it sets the foot down flat and stands on it, which it would not do "
+              + "before."
+            : "You take up each of the " + beast + "'s feet in turn, pare the long horn back to the sole and "
+              + "clean out what has packed into it. The animal shifts its weight once and then stands for the "
+              + "rest of it."};
+    }
+
+    /** The first sound tool of a class the Chronicle can reach, as an object id — the finder {@link #hasToolOfClass} answers yes/no for. */
+    private UUID anyToolOfClass(UUID chronicle, String toolClass) {
+        return jdbc.query(
+            "WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' "
+            + "  UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id "
+            + "  JOIN world_object n ON n.id=ic.item_id WHERE n.lifecycle_state='ACTIVE') "
+            + "SELECT x.id FROM reachable x JOIN item_instance i ON i.object_id=x.id "
+            + "  JOIN tool_profile t ON t.item_key=i.item_key "
+            + "  WHERE t.tool_class=? AND i.condition_state NOT IN ('BROKEN','DESTROYED') LIMIT 1",
+            rs -> rs.next() ? rs.getObject(1, UUID.class) : null, chronicle, toolClass);
+    }
+
+    /** Wear a tool one use, as every hand job in this class does, and record the step down if it takes one. */
+    private void wearTool(UUID tool, Instant at) {
+        Map<String, Object> row = jdbc.queryForMap(
+            "SELECT i.item_key, i.use_count, i.condition_state FROM item_instance i WHERE i.object_id=?", tool);
+        int uses = ((Number) row.get("use_count")).intValue() + 1;
+        int[] wears = toolWearThresholds((String) row.get("item_key"));
+        String was = (String) row.get("condition_state");
+        String now = uses >= wears[1] ? "BROKEN" : uses >= wears[0] ? "WORN" : was;
+        jdbc.update("UPDATE item_instance SET use_count=?, condition_state=? WHERE object_id=?", uses, now, tool);
+        if (!now.equals(was))
+            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) "
+                + "VALUES (?,?,'TOOL_WORN',jsonb_build_object('from',?,'to',?))", tool, Timestamp.from(at), was, now);
+    }
 
     /** Hard cold: at or below freezing, where a young animal without a roof cannot keep its own heat. */
     private static final double HARD_COLD_C = 0.0;
@@ -4043,9 +4201,14 @@ public class PhysicalItemService {
             || v.contains("lead the") || v.contains("catch the") || v.contains("hold the") || v.contains("restrain");
 
         java.util.List<java.util.Map<String,Object>> kinds = jdbc.queryForList(
+            // MIN for the foot, not MAX: every other column here counts UP into trouble and hoof_condition counts
+            // down out of it, so the animal that needs the keeper is the lowest one. The flag comes along so the
+            // report can keep quiet about the feet of a bird (#106, V414).
             "SELECT wp.species_key, COUNT(*) AS kept, MAX(wb.draft_hunger) AS hunger, MAX(wb.draft_thirst) AS thirst, " +
-            "       MAX(wb.draft_fatigue) AS fatigue, MAX(wb.sickness) AS sickness " +
+            "       MAX(wb.draft_fatigue) AS fatigue, MAX(wb.sickness) AS sickness, " +
+            "       MIN(wb.hoof_condition) AS foot, bool_or(ws.feet_need_paring) AS has_feet " +
             "FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id = wb.population_id " +
+            "JOIN wildlife_species ws ON ws.species_key = wp.species_key " +
             "WHERE wb.chronicle_id = ? AND wb.bond_stage = 'TAMED' " +
             "GROUP BY wp.species_key ORDER BY wp.species_key", chronicle);
         if (kinds.isEmpty())
@@ -4087,6 +4250,14 @@ public class PhysicalItemService {
             // Phrased so the sentence reads for one animal or for a dozen, and worst first: a sick beast matters
             // more than a tired one, and a keeper reading a list wants the thing that needs them at the front.
             java.util.List<String> wants = new java.util.ArrayList<>();
+            // THE FOOT COMES FIRST, ahead of even sickness: a lame beast cannot be moved to better ground, and
+            // everything else a keeper would do about the other four wants starts with walking the animal
+            // somewhere. Only for the kinds that HAVE such feet — V414's declared flag, so the report never
+            // offers to pare a duck (#106).
+            boolean hasFeet = Boolean.TRUE.equals(k.get("has_feet"));
+            int foot = k.get("foot") == null ? 100 : ((Number) k.get("foot")).intValue();
+            if (hasFeet && foot <= FOOT_IS_LAME) wants.add("lame, and not fit to be worked until the foot is seen to");
+            else if (hasFeet && foot <= FEET_WANT_PARING) wants.add("long in the foot and wanting the knife");
             if (sickness >= TOO_SICK_TO_GIVE) wants.add("sick enough to want tending");
             else if (sickness >= WORTH_NAMING) wants.add("off colour");
             if (thirst >= NOT_IN_CONDITION) wants.add("badly short of water");
