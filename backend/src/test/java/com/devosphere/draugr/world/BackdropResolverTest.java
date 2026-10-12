@@ -257,6 +257,61 @@ class BackdropResolverTest {
     @Test void theSettingDoesNotDecorateASiteOrABuild() {
         var onSite = new VisualContextService.VisualContext(VisualContextService.VERSION, "WETLAND", List.of(site("Still pond")),
             "DAY", "SUMMER", "CLEAR", 14.0, true, List.of("MOUNTAIN"), "fp");
-        assertEquals(List.of("site.still-pond"), BackdropResolver.resolve(onSite).candidates());
+        // No `site.still-pond.beside-mountain`: the setting refines bare ground only, which is this test's point.
+        // The ground itself DOES follow (#229) — a site with no image of its own must come down to the place it
+        // stands on rather than to the registry root, and the root is a forest.
+        assertEquals(List.of("site.still-pond", "biome.wetland"), BackdropResolver.resolve(onSite).candidates());
+        assertTrue(BackdropResolver.resolve(onSite).candidates().stream().noneMatch(c -> c.contains("beside")
+                || c.contains("edge")),
+            "the setting must not decorate a site");
+    }
+
+    /**
+     * A tier above the ground must come down TO the ground, not to the other side of the world (#229).
+     *
+     * <p>Every chain used to hold only variants of its own key, so when nothing answered that key
+     * {@code pickBackdrop} ran out of candidates and fell to the registry ROOT — which is a forest. Measured on a
+     * live world before the fix:
+     *
+     * <pre>
+     *   a bare wetland                          -> biome.wetland     a wetland
+     *   the same wetland, with a lean-to on it  -> built.lean-to     nothing answers -> THE ROOT: a forest
+     * </pre>
+     *
+     * <p><b>Finishing a shelter changed the view from the marsh you stand in to a wood you do not.</b> All 103
+     * construction kinds emit a {@code built.*} candidate that no backdrop answers; so do three of the 77 site
+     * kinds the world places, and one of the two peoples' settlements.
+     */
+    @Test void everyTierComesDownToTheGround() {
+        var built = new VisualContextService.VisualContext(VisualContextService.VERSION, "WETLAND",
+            List.of(built("LEAN_TO")), "DAY", "SUMMER", "CLEAR", 14.0, true, List.of(), "fp");
+        assertEquals(List.of("built.lean-to", "biome.wetland"), BackdropResolver.resolve(built).candidates(),
+            "a lean-to on a marsh is still, mostly, a marsh");
+
+        // The ground's OWN tier must not gain a redundant copy of itself.
+        var bare = new VisualContextService.VisualContext(VisualContextService.VERSION, "WETLAND", List.of(),
+            "DAY", "SUMMER", "CLEAR", 14.0, true, List.of(), "fp");
+        assertEquals(List.of("biome.wetland"), BackdropResolver.resolve(bare).candidates());
+
+        // Still bounded, and still ending on a bare biome key — which every generated biome has a backdrop for.
+        for (String weather : List.of("CLEAR", "SNOW"))
+            for (boolean lit : new boolean[]{true, false}) {
+                var c = BackdropResolver.resolve(new VisualContextService.VisualContext(VisualContextService.VERSION,
+                    "WETLAND", List.of(built("LEAN_TO")), "DAY", "WINTER", weather, -2.0, lit, List.of(), "fp"));
+                assertTrue(c.candidates().size() <= 8, "bounded: " + c.candidates());
+                assertEquals("biome.wetland", c.candidates().get(c.candidates().size() - 1),
+                    "ends on the ground: " + c.candidates());
+                // The endpoint contract forbids offering the same candidate twice — a caller that tried one and
+                // failed must not be handed it again. Appending the ground could only break that by repeating a
+                // key, which is why the ground is skipped when the tier already IS the ground.
+                assertEquals(c.candidates().stream().distinct().toList(), c.candidates(),
+                    "no candidate offered twice: " + c.candidates());
+            }
+
+        // Inside the rock the interior tier answers and there is no biome backdrop to come down to, so the cave
+        // keeps its own ending rather than gaining one nothing holds.
+        var cave = new VisualContextService.VisualContext(VisualContextService.VERSION, "CAVE_INTERIOR", List.of(),
+            "DAY", "SUMMER", "CLEAR", 9.0, true, List.of(), "fp");
+        assertEquals(List.of("interior.cave.lit"), BackdropResolver.resolve(cave).candidates());
     }
 }

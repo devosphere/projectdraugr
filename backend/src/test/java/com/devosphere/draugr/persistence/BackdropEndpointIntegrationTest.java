@@ -191,9 +191,21 @@ class BackdropEndpointIntegrationTest {
             VisualContextController.Backdrop served = controller.backdrop();
             assertNotNull(served.candidates(), () -> "no ground may be served without a chain: " + chunk);
             assertFalse(served.candidates().isEmpty(), () -> "an empty chain leaves a caller nothing to try: " + chunk);
-            assertEquals(served.key(), served.candidates().get(served.candidates().size() - 1),
-                () -> "the chain must end in the key the tiers guaranteed: " + served.candidates());
-            assertTrue(served.candidates().size() <= 4, () -> "the chain must stay bounded: " + served.candidates());
+            // The chain is a chain FOR its key, and it bottoms out somewhere a backdrop exists for.
+            //
+            // This asserted that the chain ENDS in the key, which was the contract until #229. A tier's chain held
+            // only variants of its own key, so when nothing answered that key the chain ran out and the frontend
+            // fell to the registry ROOT — a forest. Finishing a lean-to in a wetland therefore showed a wood, and
+            // all 103 construction kinds emit a `built.*` candidate no backdrop answers. The chain now ends on the
+            // GROUND, so the last element is the tier's own key only when the tier IS the ground or a cave.
+            assertTrue(served.candidates().contains(served.key()),
+                () -> "the chain must hold the key it is a chain for: " + served.candidates());
+            String last = served.candidates().get(served.candidates().size() - 1);
+            assertTrue(last.equals(served.key()) || last.startsWith("biome.") || last.startsWith("interior."),
+                () -> "a chain ends on its own key or on the ground, never on nothing: " + served.candidates());
+            // Bounded at eight rather than four: a tier above the ground contributes its own at-most-four
+            // variants and the ground contributes the same again, by the same helper.
+            assertTrue(served.candidates().size() <= 8, () -> "the chain must stay bounded: " + served.candidates());
             assertEquals(served.candidates().stream().distinct().toList(), served.candidates(),
                 () -> "no candidate may be offered twice: " + served.candidates());
         }

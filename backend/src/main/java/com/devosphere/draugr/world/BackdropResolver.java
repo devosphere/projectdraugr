@@ -68,7 +68,7 @@ public final class BackdropResolver {
             .map(f -> slug(f.kind().substring("SETTLEMENT:".length())))
             .sorted()
             .findFirst();
-        if (settlement.isPresent()) return outdoors("settlement." + settlement.get(), "SETTLEMENT_HERE", context);
+        if (settlement.isPresent()) return outdoors("settlement." + settlement.get(), "SETTLEMENT_HERE", context, null, groundKeyOf(context));
 
         // 3. A site on this ground. The most specific thing a standing person can actually see.
         Optional<String> site = context.features().stream()
@@ -76,7 +76,7 @@ public final class BackdropResolver {
             .map(f -> slug(f.name()))
             .sorted()                                  // ties break by name, so two sites never toss a coin
             .findFirst();
-        if (site.isPresent()) return outdoors("site." + site.get(), "SITE_HERE", context);
+        if (site.isPresent()) return outdoors("site." + site.get(), "SITE_HERE", context, null, groundKeyOf(context));
 
         // 4. Evidence of habitation: something a Chronicle has built and finished. Ranked under a natural site
         //    because a lean-to on a riverbank is still, mostly, a riverbank.
@@ -85,7 +85,7 @@ public final class BackdropResolver {
             .map(f -> slug(f.kind().substring("BUILT:".length())))
             .sorted()
             .findFirst();
-        if (built.isPresent()) return outdoors("built." + built.get(), "BUILT_HERE", context);
+        if (built.isPresent()) return outdoors("built." + built.get(), "BUILT_HERE", context, null, groundKeyOf(context));
 
         // 5. The ground itself — seen in its setting where the setting can be seen (#232/#234).
         if (context.biome() != null && !context.biome().isBlank())
@@ -135,6 +135,35 @@ public final class BackdropResolver {
      * within its bound.
      */
     private static Choice outdoors(String key, String reason, VisualContextService.VisualContext context, String setting) {
+        return outdoors(key, reason, context, setting, null);
+    }
+
+    /**
+     * The same, ending on the GROUND rather than on this tier's own key (#229).
+     *
+     * <p>The doc above promised that "the last is always the bare key, so the chain is bounded and can never end
+     * somewhere that might not exist". For the ground's own tier that is true. For the tiers ABOVE it, it was not:
+     * the chain held only variants of its own key, so if nothing answered that key the chain ran out and
+     * {@code pickBackdrop} fell to the registry ROOT — a forest. Measured:
+     *
+     * <pre>
+     *   a bare wetland                        -> biome.wetland        a wetland
+     *   the same wetland, with a lean-to on it -> built.lean-to        nothing answers it -> THE ROOT: a forest
+     * </pre>
+     *
+     * <p><b>So finishing a shelter changed the view from the marsh you are standing in to a wood you are not.</b>
+     * All 103 construction kinds emit a {@code built.*} candidate and no backdrop answers any of them; three of
+     * the 77 site kinds the world places are likewise unanswered, and so is one of the two peoples' settlements.
+     * Every one of those cases showed a forest.
+     *
+     * <p>The remedy is the one this file already states as its intent — tier 4's own comment says a lean-to on a
+     * riverbank "is still, mostly, a riverbank". The ground is appended after this tier's variants, so a tier with
+     * no image of its own degrades to the place it stands on instead of to the other side of the world. Bounded as
+     * before: the ground contributes the same at-most-four variants by the same rules, so the chain cannot exceed
+     * eight and still ends on a bare biome key, which every generated biome has a backdrop for.
+     */
+    private static Choice outdoors(String key, String reason, VisualContextService.VisualContext context,
+                                   String setting, String groundKey) {
         boolean dark = !context.lit();
         boolean snow = "SNOW".equals(context.weather()) || context.temperatureC() <= 0.0;
 
@@ -143,11 +172,32 @@ public final class BackdropResolver {
             if (snow) chain.add(key + "." + setting + ".snow");
             chain.add(key + "." + setting);
         }
-        if (dark && snow) chain.add(key + ".snow.night");
-        if (dark)         chain.add(key + ".night");
-        if (snow)         chain.add(key + ".snow");
-        chain.add(key);
+        chain.addAll(variantsOf(key, dark, snow));
+        // ...and then the ground, for a tier that is not the ground itself. One rule, one place: the variants are
+        // built by the same helper, so the two can never drift apart.
+        if (groundKey != null && !groundKey.equals(key)) chain.addAll(variantsOf(groundKey, dark, snow));
         return new Choice(key, reason, java.util.List.copyOf(chain));
+    }
+
+    /** One key's candidates, worst lie first, always ending on the bare key. Shared so no caller re-derives it. */
+    private static java.util.List<String> variantsOf(String key, boolean dark, boolean snow) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        if (dark && snow) out.add(key + ".snow.night");
+        if (dark)         out.add(key + ".night");
+        if (snow)         out.add(key + ".snow");
+        out.add(key);
+        return out;
+    }
+
+    /**
+     * The ground's own candidate key, for the tiers that must be able to fall back to it. Null inside the rock,
+     * where the interior tier answers instead and a {@code biome.cave-interior} key nothing holds would be a
+     * worse ending than the one it replaced.
+     */
+    private static String groundKeyOf(VisualContextService.VisualContext context) {
+        if (context.biome() == null || context.biome().isBlank()) return null;
+        if ("CAVE_INTERIOR".equals(context.biome())) return null;
+        return "biome." + slug(context.biome());
     }
 
     /** Landforms that dominate any view they are in: a mountain wall, the open sea. */
