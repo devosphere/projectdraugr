@@ -1476,6 +1476,17 @@ public class ChronicleActionService {
             if (direction == null)
                 return "You cannot work out which way you came onto this ground.";
         }
+        // Taking the stock somewhere (#106). Ahead of the crossing, because "take the herd to the river" is a
+        // drive and not a ford — the keeper is bringing the animals TO the water, not getting over it, and the
+        // crossing rule would otherwise claim the sentence and ford them across. The bearing comes from the same
+        // predicate the thirst and hunger ticks relieve on, so what the act reaches is what the model relieves.
+        boolean drivingTheStock = drivingStock(said);
+        if (direction == null && drivingTheStock) {
+            Toward it = towardStock(chronicle.location(), stockWantsWater(said));
+            if (it.refusal() != null) return it.refusal();
+            direction = it.direction();
+        }
+
         // A crossing names the WATER, not a bearing (#37). "wade across", "swim across" and "cross to the other
         // side" all reached nothing, while "can I get across here" answered in detail — the game could JUDGE a
         // crossing and not make one. judgeCrossing finds the water by looking at the neighbouring ground; so does
@@ -1520,6 +1531,8 @@ public class ChronicleActionService {
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'MOVED',jsonb_build_object('fromLocationId',?::text,'toLocationId',?::text,'direction',?))", chronicle.id(), occurredTs, chronicle.location().toString(), destination.toString(), direction.name());
         jdbc.update("INSERT INTO chronicle_event (chronicle_id,occurred_at,event_type,payload) VALUES (?,?,'CHRONICLE_MOVED',jsonb_build_object('fromLocationId',?::text,'toLocationId',?::text,'direction',?))", chronicle.id(), occurredTs, chronicle.location().toString(), destination.toString(), direction.name());
         recordVisit(chronicle.id(), destination, occurredAt);
+        if (drivingTheStock) return "You travel " + direction.description + wayItWalked(destination) + "."
+            + stockCameToo(chronicle.id(), stockWantsWater(said));
         return "You travel " + direction.description + wayItWalked(destination) + ".";
     }
     /**
@@ -2407,6 +2420,21 @@ public class ChronicleActionService {
         // ASKING and the watering; the three acts below keep their verbs, so "tend the goat" still tends and
         // "feed the goat" still feeds. Thirst falls by place and by structure rather than by a bucket, so the
         // honest answer to watering is what the animals' water depends on — which is what this says.
+        // TAKING THE STOCK TO WATER OR TO GRASS (#106). The model for this already works and only the player had
+        // no way into it: thirst and hunger both fall by WHERE THE KEEPER STANDS — the ticks read the bond's
+        // chronicle_id, not the animal — so a kept herd already goes where its keeper goes. What reached nothing
+        // was the saying of it: "take the stock to water", "drive the herd to the stream", "move the animals to
+        // fresh grass" and "take the goats to grass" all reached nothing, while "water the stock" answered with
+        // what their water depends on. The game could DESCRIBE the watering and not do it.
+        //
+        // So it is a MOVE, and the ground names the bearing exactly as it does for a crossing or a climb. The
+        // rule wants a verb of taking, a word for the stock AND a destination — a drive is only a drive if it has
+        // somewhere to go. "bring the herd in" names no destination and still reaches nothing; housing stock is
+        // the stall and pen work, not this.
+        //
+        // Placed ahead of CHECK_STOCK because that one answers on "the goats" alone, and ahead of FEED_ANIMAL
+        // because "put the animals out to graze" is a drive and not a feeding.
+        if(drivingStock(value)) return Intent.MOVE;
         if((value.contains("how is")||value.contains("how are")||value.contains("how do the")||value.contains("check on")
             ||value.contains("check over")||value.contains("look over")||value.contains("look in on")||value.contains("see to the")
             ||value.contains("are they well")||value.contains("are they all right")||value.contains("what state")
@@ -3474,6 +3502,100 @@ public class ChronicleActionService {
      */
     /** A direction the world chose, or the reason it could not. Exactly one of the two is set. */
     private record Toward(Direction direction, String refusal) { }
+
+    /**
+     * Which way the stock should be taken, for water or for grass (#106).
+     *
+     * <p>Thirst and hunger both fall by <b>where the keeper stands</b> — the ticks read
+     * {@code wb.chronicle_id}'s chunk, not the animal's — so a kept herd already goes where its keeper goes, and
+     * what was missing was never the following. It was the saying: {@code take the stock to water},
+     * {@code drive the herd to the stream} and {@code move the animals to fresh grass} all reached nothing.
+     *
+     * <p><b>This asks exactly what the ticks ask, which is the whole reason it is a separate query from
+     * {@link #toward}.</b> That one matches biomes only, and thirst is relieved by a biome OR a freshwater site OR
+     * a watering structure — so a neighbouring stream on grassland would have had the act saying "no water within
+     * a step" while standing one pace from the thing that waters them. The crossing rule has the same note for the
+     * same reason: if the game SAYS the water lies north, going north had better reach it.
+     *
+     * <p>{@link com.devosphere.draugr.ecology.FreshWater#sites} is shared with the thirst tick, so the two cannot
+     * drift apart; the construction kinds and the biomes are named here against that tick and asserted by test.
+     *
+     * @param forWater true for water, false for grazing
+     */
+    private Toward towardStock(UUID location, boolean forWater) {
+        String fit = forWater
+            ? "(next.biome IN ('WETLAND','RIVER_BANK') "
+              + " OR EXISTS (SELECT 1 FROM ecology_site es WHERE es.chunk_id=next.id AND "
+              + com.devosphere.draugr.ecology.FreshWater.sites("es") + ") "
+              + " OR EXISTS (SELECT 1 FROM construction_project cp JOIN world_object tw ON tw.id=cp.object_id "
+              + "            WHERE cp.project_kind IN ('WATERING_STATION','RAINWATER_CATCHMENT') "
+              + "              AND cp.state='COMPLETED' AND cp.integrity_percent>0 "
+              + "              AND tw.lifecycle_state='ACTIVE' AND tw.current_location_id=next.id))"
+            : "next.biome = 'GRASSLAND'";
+        java.util.List<java.util.Map<String,Object>> fits = jdbc.queryForList(
+            "SELECT next.grid_x - here.grid_x AS dx, next.grid_y - here.grid_y AS dy "
+            + "FROM world_chunk here JOIN world_chunk next ON next.world_id=here.world_id "
+            + "  AND abs(next.grid_x-here.grid_x) + abs(next.grid_y-here.grid_y) = 1 "
+            + "WHERE here.id=? AND " + fit + " ORDER BY dy, dx", location);
+        if (fits.isEmpty())
+            return new Toward(null, forWater
+                ? "There is no water within a step of this ground — nothing running, nothing standing, and "
+                  + "nothing built to hold it. Water further off than one step is a thing to be scouted first."
+                : "There is no open grazing within a step of this ground. Grass further off than one step is a "
+                  + "thing to be scouted first.");
+        java.util.Map<String,Object> n = fits.get(0);
+        return new Toward(Direction.of(((Number) n.get("dx")).intValue(), ((Number) n.get("dy")).intValue()), null);
+    }
+
+    /**
+     * What is said about the herd after a drive (#106), and it says only what is true.
+     *
+     * <p>The animals are not moved by this and nothing pretends they were: the thirst and hunger ticks read the
+     * KEEPER's chunk, so a kept beast is already wherever its keeper is, and the arrival is what relieves it on
+     * the next turn. Writing a position for each animal would invent a state the model does not keep — the same
+     * answer the restraint question got, and for the same reason.
+     *
+     * <p>A keeper with nothing kept is told so rather than left to read a line about stock they do not have.
+     */
+    private String stockCameToo(UUID chronicle, boolean forWater) {
+        Integer kept = jdbc.queryForObject(
+            "SELECT count(*) FROM wildlife_bond WHERE chronicle_id=? AND bond_stage='TAMED'", Integer.class, chronicle);
+        if (kept == null || kept == 0)
+            return " You keep no tamed animals, so there was nothing to bring with you.";
+        // SAID IN THE PRESENT AND NOT IN THE PAST, because the relief is the TURN's and not the arrival's. The
+        // first measurement of this had the prose claiming the beasts drank on arrival while draft_thirst had
+        // just risen from 70 to 74 — the tick had run before the move. Standing on the water it then fell 74 ->
+        // 34 -> 0 over the next two turns, which is the model working exactly as written. So the line reports
+        // what is true at the moment it is read: they are here, and the water is in front of them.
+        String them = kept == 1 ? "The one beast you keep comes" : "The " + kept + " beasts you keep come";
+        return forWater
+            ? " " + them + " along at your pace, and there is water in front of them now."
+            : " " + them + " along at your pace, and there is grazing under them now.";
+    }
+
+    /** Whether the sentence is a keeper taking their stock somewhere, and to water rather than to grass (#106). */
+    private static boolean drivingStock(String value) {
+        boolean takingThem = value.contains("take the")||value.contains("drive the")||value.contains("move the")
+            ||value.contains("lead the")||value.contains("bring the")||value.contains("walk the")
+            ||value.contains("turn the")||value.contains("put the");
+        boolean theStock = value.contains("stock")||value.contains("herd")||value.contains("flock")
+            ||value.contains("animal")||value.contains("beast")||value.contains("cattle")
+            ||value.contains("the goats")||value.contains("the sheep")||value.contains("the oxen");
+        return takingThem && theStock && (stockWantsWater(value) || stockWantsGrass(value));
+    }
+
+    /** The two places stock are taken. Water first, because thirst kills faster than hunger. */
+    private static boolean stockWantsWater(String value) {
+        return value.contains("to water")||value.contains("to the water")||value.contains("to drink")
+            ||value.contains("to the stream")||value.contains("to the river")||value.contains("to the pool")
+            ||value.contains("to the spring")||value.contains("to the trough");
+    }
+
+    private static boolean stockWantsGrass(String value) {
+        return value.contains("to grass")||value.contains("to the grass")||value.contains("to graze")
+            ||value.contains("to pasture")||value.contains("to the pasture")||value.contains("fresh grass")
+            ||value.contains("out to graze");
+    }
 
     /**
      * Which way the next piece of a KIND of ground lies, for the acts whose object is the ground (#37).

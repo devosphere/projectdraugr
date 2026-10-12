@@ -1785,6 +1785,41 @@ class IntentClassificationRegressionTest {
      * body and `I am cold` reached nothing; `am I wet` reached it and `is my cloak wet` did not; `dry my clothes`
      * worked and `dry the cloak by the fire` did not; `put on everything I have` worked and `get dressed` did not.
      */
+    /**
+     * Taking the stock to water or to grass (#106) — the player-side half of a model that already worked.
+     *
+     * <p>Thirst and hunger both fall by <b>where the keeper stands</b>: both ticks read the bond's
+     * {@code chronicle_id}'s chunk, not the animal's, so a kept herd already goes where its keeper goes. Nothing
+     * about the following was missing. What reached nothing was the <b>saying</b> of it — six of nine phrasings,
+     * including the three plainest.
+     *
+     * <p>So it is a MOVE, and the ground names the bearing exactly as it does for a crossing or a climb.
+     *
+     * <p><b>Placed ahead of the welfare and feeding rules, which is what makes it work.</b> On the first cut it
+     * sat after them, and `put the animals out to graze` was still answered by FEED_ANIMAL ("none of your animals
+     * is hungry") while `lead the stock to water` got the welfare reading — a reading in answer to a request to
+     * ACT. Measured, not assumed: the live replay showed both, which is why the rule moved.
+     */
+    @Test void takingTheStockToWaterOrGrass() throws Exception {
+        for (String p : new String[]{"take the stock to water", "drive the herd to the stream",
+                                     "move the animals to fresh grass", "take the goats to grass",
+                                     "lead the stock to water", "put the animals out to graze",
+                                     "walk the cattle to the pool", "turn the sheep out to pasture"})
+            assertEquals("MOVE", classify(p), p);
+
+        // THE NEIGHBOURS, which must keep their own answers. A drive names a DESTINATION; these do not, and
+        // `tie up the goat` in particular is the restraint reading — once the worst wrong answer in this project,
+        // so it is held here too.
+        assertEquals("CHECK_STOCK", classify("water the stock"), "the welfare reading, not a drive");
+        assertEquals("CHECK_STOCK", classify("check on the goats"));
+        assertEquals("CHECK_STOCK", classify("tie up the goat"), "the restraint answer");
+        assertEquals("FEED_ANIMAL", classify("feed the stock"), "hand-feeding is not grazing");
+
+        // And a crossing is still a crossing: the keeper getting OVER water, not bringing stock TO it.
+        assertEquals("MOVE", classify("wade across"));
+        assertEquals("JUDGE_CROSSING", classify("can i get across here"));
+    }
+
     @Test void theClothingChain() throws Exception {
         // ASKING IS NOT DRESSING. The headline fix.
         assertEquals("TAKE_STOCK_OF_GEAR", classify("what am i wearing"));
