@@ -1739,6 +1739,68 @@ class IntentClassificationRegressionTest {
         assertEquals("TEND_ANIMAL", classify("put a poultice on the ewe"));
     }
 
+    /**
+     * The food chain, and a complete subsystem nobody could ask about (#37).
+     *
+     * <p>Swept 36 sentences: finding food, cooking it, eating it, keeping it, counting it. The cooking and
+     * preserving half is in good order — `smoke the meat`, `dry the meat`, `salt the meat` and `bake bread` all
+     * reach their material process and refuse by naming exactly what is missing, and `cook supper` even asks
+     * which dish is meant. <b>The keeping half could not be asked at all.</b>
+     *
+     * <p>{@code foodStocktake} already answers every one of these precisely: per lot it reports the tier the food
+     * keeps on and the span left in it — <i>"(cooked) with two days left in it"</i> — says <i>"gone over and not
+     * safe"</i> for what is past, and warns <i>"they will sicken you if you try"</i>. The whole preservation
+     * subsystem is wired, RAW through SALTED. The rule reaching it listed literals that covered "the food", "the
+     * meat" and "it", and nothing else:
+     *
+     * <pre>
+     *   will it keep            -> answered     will this keep          -> nothing
+     *   is the meat still good  -> answered     is this still good      -> nothing
+     *   anything gone off       -> answered     has this gone off       -> nothing
+     *                                           is the meat spoiled     -> nothing; "spoil" appeared
+     *                                                                      nowhere in the rule
+     *   how long will the food  -> answered     how long will this keep -> MEASURE, which answered about
+     *                                                                      THE DARK: "it is too dark to see
+     *                                                                      the fine of it" — a wrong answer
+     * </pre>
+     */
+    @Test void theFoodChainAndTheKeepingQuestion() throws Exception {
+        // Spoiling words need no subject: nothing else in this world goes off, spoils or turns rancid.
+        assertEquals("TAKE_STOCK_OF_FOOD", classify("has this gone off"));
+        assertEquals("TAKE_STOCK_OF_FOOD", classify("is the meat spoiled"));
+        assertEquals("TAKE_STOCK_OF_FOOD", classify("has the fish turned bad"));
+        // The keeping and "still good" forms carry their demonstrative IN FULL, never a bare "still good",
+        // because the camp reading owns "is the shelter still good" and the gear reading owns "is my knife
+        // still good" — and this rule runs before both of them. Asserted in all three directions.
+        assertEquals("TAKE_STOCK_OF_FOOD", classify("will this keep"));
+        assertEquals("TAKE_STOCK_OF_FOOD", classify("how long will this keep"));
+        assertEquals("TAKE_STOCK_OF_FOOD", classify("is this still good"));
+        assertEquals("TAKE_STOCK_OF_CAMP", classify("is the shelter still good"), "the camp keeps its question");
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("is my knife still good"), "and so does the gear");
+        // Counting the days of it.
+        assertEquals("TAKE_STOCK_OF_FOOD", classify("how many days of food"));
+        assertEquals("TAKE_STOCK_OF_FOOD", classify("am i going to run out of food"));
+        assertEquals("TAKE_STOCK_OF_FOOD", classify("will it keep"), "which always worked");
+
+        // The verb FORAGE_GROUND is named for. Its rule wants a verb AND one of a dozen named objects, so the
+        // bare act reached nothing. Held as a word, because "cook foraged greens" is a real process.
+        assertEquals("FORAGE_GROUND", classify("forage"));
+        assertEquals("FORAGE_GROUND", classify("scavenge"));
+        assertEquals("FORAGE_GROUND", classify("search the forest floor"), "which always worked");
+
+        // Breaking a fast is eating, and "eat" is all the eating rule looks for.
+        assertEquals("EAT", classify("break my fast"));
+        assertEquals("EAT", classify("eat the meat"), "which always worked");
+        // "eat the cooked fish" must not cook ANOTHER fish — the past-participle rule, still holding.
+        assertEquals("EAT", classify("eat the cooked fish"));
+
+        // TWO OF MY OWN CHANGES MEET HERE, so the meeting is asserted: the drink rule claims "quench" and the
+        // fire rule claimed it first for "quench the fire". Order decides, and both must keep working.
+        assertEquals("DRINK", classify("quench my thirst"));
+        assertEquals("EXTINGUISH_FIRE", classify("quench the fire"));
+        assertEquals("EXTINGUISH_FIRE", classify("quench it"), "beside a fire, that is the fire");
+    }
+
     @Test void theWaterChain() throws Exception {
         // I. Judging it. The question forms worked; the verb the intent is NAMED for did not.
         assertEquals("JUDGE_WATER", classify("is this water safe"), "which always worked");

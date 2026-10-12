@@ -2717,7 +2717,31 @@ public class ChronicleActionService {
             ||value.contains("will the meat keep")||value.contains("will it keep")
             ||value.contains("is the meat still good")||value.contains("still good to eat")
             ||value.contains("what have i got to eat")||value.contains("have i anything to eat")
-            ||value.contains("go through the food")) return Intent.TAKE_STOCK_OF_FOOD;
+            ||value.contains("go through the food")
+            // THE KEEPING QUESTION, FOR THE WORDS A PERSON USES (#37). foodStocktake already answers all of this
+            // exactly — per lot it reports the tier it keeps on and the span left in it ("(cooked) with two days
+            // left in it"), says "gone over and not safe" for what is past, and warns "they will sicken you if
+            // you try". The whole preservation subsystem is wired, RAW through SALTED, and the phrasings above
+            // reached it only for "the food", "the meat" and "it":
+            //
+            //   will it keep           -> answered          will this keep        -> nothing
+            //   is the meat still good -> answered          is this still good    -> nothing
+            //   anything gone off      -> answered          has this gone off     -> nothing
+            //                                               is the meat spoiled   -> nothing ("spoil" was
+            //                                                                       nowhere in the rule at all)
+            //   how long will the food -> answered          how long will this keep -> MEASURE, which answered
+            //                                                 about the DARK: "it is too dark to see the fine
+            //                                                 of it" — a wrong answer, not a missing one
+            //
+            // SPOILING WORDS NEED NO SUBJECT: nothing else in this world goes off, spoils or turns rancid. The
+            // keeping and "still good" forms carry their demonstrative in full — "will this keep", never a bare
+            // "still good" — because the camp reading owns "is the shelter still good" and the gear reading owns
+            // "is my knife still good", and this rule runs before both of them.
+            ||value.contains("gone off")||value.contains("spoil")||value.contains("rotten")
+            ||value.contains("rancid")||value.contains("past eating")||value.contains("turned bad")
+            ||value.contains("will this keep")||value.contains("will these keep")||value.contains("does this keep")
+            ||value.contains("is this still good")||value.contains("are these still good")
+            ||value.contains("how many days of food")||value.contains("run out of food")) return Intent.TAKE_STOCK_OF_FOOD;
         // Which way a kind of ground lies (#37). The movement axis swept at 26 of 42 sentences reaching nothing,
         // and this was among them though every piece of the answer sits in world_chunk: the neighbouring biomes,
         // their elevations, and the grid offsets that say which way each one lies. planTravel only knows places
@@ -2956,6 +2980,10 @@ public class ChronicleActionService {
         // Slaking and quenching a thirst are drinking, and neither word contains "drink", which is the whole of
         // what the drink rule looks for (#37). Nothing else in the game is slaked or quenched.
         if(value.contains("slake")||value.contains("quench")) return Intent.DRINK;
+        // Breaking a fast is eating, and the word "eat" is the whole of what the eating rule looks for (#37).
+        // Placed beside its drinking twin for the same reason that one exists.
+        if(value.contains("break my fast")||value.contains("breakfast")||value.contains("breaking my fast"))
+            return Intent.EAT;
         // "find water" (#37). Looking for water and drawing it collapse to the same act the moment there is
         // water to draw, and COLLECT_WATER already answers honestly when there is none — "no stream, no spring,
         // only what the sky gives". That is a far better answer than silence. ("look for water" is left to
@@ -2978,6 +3006,15 @@ public class ChronicleActionService {
         if((value.contains("search")||value.contains("look for")||value.contains("forage")||value.contains("scavenge")||value.contains("comb the")||value.contains("comb under")||value.contains("pick up")||value.contains("collect")||value.contains("gather"))
            &&(value.contains("forest floor")||value.contains("leaf litter")||value.contains("under a log")||value.contains("under the log")||value.contains("under logs")||value.contains("loose bark")||value.contains("shed feather")||value.contains("loose feather")||value.contains("shed fur")||value.contains("loose fur")||value.contains("driftwood")||value.contains("deadwood")||value.contains("windfall")||value.contains("twig")||value.contains("kindling")||value.contains("tinder")||value.contains("dry wood")||value.contains("dry branch")||value.contains("shed antler")||value.contains("antler")||value.contains("gnawed bone")||value.contains("loose bone")||value.contains("bone on the ground")||value.contains("bone off the ground")||value.contains("scavenge bone")||value.contains("scavenge for bone")))
             return Intent.FORAGE_GROUND;
+        // ...and THE VERB THE INTENT IS NAMED FOR (#37). The rule above wants a verb AND one of a dozen named
+        // objects — leaf litter, under a log, loose bark, driftwood — so a bare "forage", which is the whole act
+        // and done where you stand, reached nothing at all. Placed after the specific form, so a pointed
+        // scavenge still resolves by its object.
+        //
+        // Held as a WORD, not a substring: "cook foraged greens" is a real process and "foraged" contains
+        // "forage". Yielded to the process matcher as well, which is the belt to that braces.
+        if((word(value,"forage")||word(value,"scavenge")||word(value,"forages")||word(value,"scavenges"))
+           &&!items.actionMatchesProcess(value)) return Intent.FORAGE_GROUND;
         // Terrain crossing (#72): wading/fording/swimming/climbing toward a direction is movement to the next ground.
         if(Direction.from(value)!=null && (value.contains("wade")||value.contains("ford")||value.contains("swim")||value.contains("cross")||value.contains("climb")||value.contains("scramble")||value.contains("clamber")||value.contains("traverse"))) return Intent.MOVE;
         // A crossing with no bearing in it (#37). "can I get across here" answered in detail — the load, the
