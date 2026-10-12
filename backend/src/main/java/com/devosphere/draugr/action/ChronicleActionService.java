@@ -2938,10 +2938,21 @@ public class ChronicleActionService {
            // project has deliberately left alone.
            ||((value.contains("sit")||value.contains("stand")||value.contains("stay")||value.contains("rest"))
               &&(value.contains("by the fire")||value.contains("at the fire")||value.contains("near the fire")))
-           ||value.contains("thaw")||value.contains("rub my hands")||value.contains("chafe my hands")) return Intent.WARM_BODY;
+           ||value.contains("thaw")||value.contains("rub my hands")||value.contains("chafe my hands")
+           // STATING THE CONDITION, not asking after it (#37). The body reading answers "am I cold"; a player who
+           // types "I am cold" is not asking, they are telling — and that reached nothing. Huddling is the same
+           // act in another word.
+           ||value.contains("i am cold")||value.contains("i'm cold")||value.contains("i am freezing")
+           ||value.contains("i'm freezing")||value.contains("huddle")) return Intent.WARM_BODY;
         // Act fourteen: three more ways of saying it, over the drying and warming that already work.
         if(value.contains("wring out")||value.contains("wring my")||value.contains("change into dry")
-           ||value.contains("dry clothes")||value.contains("dry things")) return Intent.DRY_BODY;
+           ||value.contains("dry clothes")||value.contains("dry things")
+           // ...and the ways a person says it about the garment rather than about themselves (#37).
+           // "dry my clothes" worked; "dry the cloak by the fire" and "hang my clothes to dry" did not.
+           ||value.contains("hang my clothes")||value.contains("hang the clothes")||value.contains("to dry")
+           ||((value.contains("dry")||value.contains("drying"))
+              &&(value.contains("the cloak")||value.contains("my cloak")||value.contains("the tunic")
+                 ||value.contains("my boots")||value.contains("my shoes")||value.contains("my clothes")))) return Intent.DRY_BODY;
         if(value.contains("rub the feeling")||value.contains("rub some feeling")||value.contains("get the feeling back")) return Intent.WARM_BODY;
         // Getting nearer the fire is warming yourself at it (#37). "sit by the fire" worked and "move closer to
         // the fire" reached nothing — the same act, said as a movement, and the move rule wanted a bearing.
@@ -3111,6 +3122,12 @@ public class ChronicleActionService {
            ||value.contains("how sick")||value.contains("do i have a fever")||value.contains("have i got a fever")
            ||value.contains("am i feverish")||value.contains("am i getting cold")||value.contains("am i cold")
            ||value.contains("are my feet wet")||value.contains("am i wet")||value.contains("going numb")
+           // Whether what you are WEARING is wet, which is the same reading (#37): the body's wetness is what
+           // decides how fast it loses heat, and a soaked cloak is how a body gets wet. "am I wet" and "are my
+           // feet wet" reached this; "is my cloak wet" and "are my clothes wet" reached nothing.
+           ||((value.contains("wet")||value.contains("soaked")||value.contains("damp"))
+              &&(value.contains("my cloak")||value.contains("my clothes")||value.contains("my tunic")
+                 ||value.contains("my boots")||value.contains("my shoes")||value.contains("what i am wearing")))
            ||value.contains("how tired")||value.contains("can i keep going")||value.contains("what state am i")
            ||value.contains("how do i feel")||value.contains("how am i bearing")
            // Whether the night will be survivable (#37). ChroniclePhysiologyService already weighs the weather,
@@ -3217,7 +3234,34 @@ public class ChronicleActionService {
               ||value.contains("my leg")||value.contains("my arm")||value.contains("my ankle")||value.contains("my wrist")
               ||value.contains("my ribs")||value.contains("my hand")||value.contains("my foot")||value.contains("my shoulder")
               ||value.contains("my knee")||value.contains("my side")||value.contains("dressing")||value.contains(" it"))) return Intent.TREAT_WOUND;
-        if((value.contains("equip")||value.contains("wear")||value.contains("put on")||value.contains("wield")||value.contains("hold my")||value.contains("hold the")||value.contains("carry on my back"))) return Intent.EQUIP;
+        // ASKING WHAT YOU WEAR IS NOT GETTING DRESSED (#37) — and "wearing" contains "wear", so this rule claimed
+        // the question by substring and EQUIP puts on the FIRST wearable it finds. With everything already on, it
+        // answered "you have nothing unequipped that can be worn"; with a spare garment to hand it would have put
+        // it on. The fifth time this project has found a question answered by doing the thing, and the third
+        // where doing it changes the world.
+        //
+        // It goes to the gear reading, which already walks what the Chronicle carries and reports its condition —
+        // "what is in my pack" is the same question about the other half of the same kit.
+        if(value.contains("what am i wearing")||value.contains("what have i got on")
+           ||value.contains("what i am wearing")||value.contains("am i wearing")
+           ||value.contains("what am i dressed in")) return Intent.TAKE_STOCK_OF_GEAR;
+        // IN PIECES, because the one-line form earned a paren fault on the first try — the fourth in this method,
+        // and the remedy is the one the other three settled on: named locals, one claim each.
+        boolean theEquipVerbs = value.contains("equip")||value.contains("wear")||value.contains("put on")
+            ||value.contains("wield")||value.contains("hold my")||value.contains("hold the")
+            ||value.contains("carry on my back");
+        // "DRESS" IS THREE THINGS, exactly as the bed was: getting dressed, dressing a WOUND, and dressing a
+        // CARCASS. My first cut took all three and the routing test caught it at once — `dress the boar` became
+        // EQUIP, when dressing a boar is butchering it. The clothing sense is the one with NO OBJECT: a person
+        // says "get dressed", never "dress the boar" when they mean their own clothes. So the bare verb is
+        // claimed and "dress the …" / "dress a …" are left to the wound and the carcass, which own them.
+        boolean gettingDressed = (word(value,"dress")||word(value,"dressed"))
+            &&!value.contains("dress the")&&!value.contains("dress a");
+        // The other ways of saying "put on what I have" (#37). "put on everything I have" worked; these did not.
+        boolean coveringUp = value.contains("layer up")||value.contains("wrap up warm")
+            ||value.contains("wrap myself")||value.contains("cover my head")
+            ||value.contains("cover my hands")||value.contains("hood up");
+        if(theEquipVerbs||((gettingDressed||coveringUp)&&!items.actionMatchesProcess(value))) return Intent.EQUIP;
         // "sling" also means equip (sling it over a shoulder) — but not when 'sling' is part of a thing being made,
         // i.e. a sling stone or a sling pouch ("shape a sling stone", "sew a sling stone pouch"). Those route to their
         // craft recipes; every other use of 'sling' is the equip verb.

@@ -1764,6 +1764,80 @@ class IntentClassificationRegressionTest {
      *                                                                      the fine of it" — a wrong answer
      * </pre>
      */
+    /**
+     * The clothing and warmth chain (#37) — a Chronicle freezes without it.
+     *
+     * <p>Swept 37 sentences: making garments, wearing them, asking after their state, being cold, drying them.
+     * <b>15 reached nothing or the wrong thing. Now 2</b>, and those two are a data gap recorded on the issue.
+     *
+     * <p>The worst was a question answered by doing the thing — the fifth time this project has found that shape:
+     *
+     * <pre>
+     *   what am I wearing  ->  EQUIP
+     * </pre>
+     *
+     * <b>"wearing" contains "wear"</b>, so the equip rule claimed it by substring — and EQUIP puts on the FIRST
+     * wearable it finds. With everything already worn it answered *"you have nothing unequipped that can be worn
+     * or wielded"*; with a spare garment to hand it would have put it on. Asking what you are dressed in is a
+     * reading, and the gear reading already walks the kit and reports its condition.
+     *
+     * <p>The rest were the familiar shape — a literal phrasing in, its plain twin out: `am I cold` reached the
+     * body and `I am cold` reached nothing; `am I wet` reached it and `is my cloak wet` did not; `dry my clothes`
+     * worked and `dry the cloak by the fire` did not; `put on everything I have` worked and `get dressed` did not.
+     */
+    @Test void theClothingChain() throws Exception {
+        // ASKING IS NOT DRESSING. The headline fix.
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("what am i wearing"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("what have i got on"));
+        // ...and the act it was stealing from must still work.
+        assertEquals("EQUIP", classify("wear the cloak"), "which always worked");
+        assertEquals("EQUIP", classify("put on my cloak"));
+        assertEquals("UNEQUIP", classify("take off my cloak"));
+
+        // "DRESS" IS THREE THINGS, and the object decides. My first cut took all three and the standing routing
+        // test caught it: `dress the boar` became EQUIP. The clothing sense is the one with NO object.
+        assertEquals("EQUIP", classify("get dressed"));
+        assertEquals("EQUIP", classify("dress"));
+        assertEquals("HARVEST_CARCASS", classify("dress the boar"), "dressing a boar is butchering it");
+        assertEquals("TREAT_WOUND", classify("dress the wound"), "and dressing a wound is medicine");
+
+        // Covering up is putting on what you have.
+        assertEquals("EQUIP", classify("layer up"));
+        assertEquals("EQUIP", classify("wrap up warm"));
+        assertEquals("EQUIP", classify("cover my hands"));
+        assertEquals("EQUIP", classify("put my hood up"));
+
+        // Stating the condition, not asking after it.
+        assertEquals("WARM_BODY", classify("i am cold"));
+        assertEquals("WARM_BODY", classify("i am freezing"));
+        assertEquals("WARM_BODY", classify("huddle down"));
+        assertEquals("SENSE_BODY", classify("am i cold"), "the question still reaches the reading");
+
+        // The garment's wetness is the body's question: a soaked cloak is how a body gets wet, and wetness is
+        // what decides how fast it loses heat.
+        assertEquals("SENSE_BODY", classify("is my cloak wet"));
+        assertEquals("SENSE_BODY", classify("are my clothes wet"));
+        assertEquals("SENSE_BODY", classify("am i wet"), "which always worked");
+
+        // Drying it, said about the garment rather than about yourself.
+        assertEquals("DRY_BODY", classify("dry my clothes"), "which always worked");
+        assertEquals("DRY_BODY", classify("dry the cloak by the fire"));
+        assertEquals("DRY_BODY", classify("hang my clothes to dry"));
+
+        // And the neighbours, unchanged.
+        assertEquals("CRAFT_GARMENT", classify("make a cloak"));
+        assertEquals("REPAIR_ITEM", classify("mend my cloak"));
+        assertEquals("LINE_GARMENT", classify("line the cloak with fur"));
+
+        // A NEAR MISS THE REPLAY CAUGHT, held here because only ORDER resolves it. The new drying clause matches
+        // a drying word beside a named garment, and "stuff my boots with DRY grass" carries both "dry" and "my
+        // boots" — so it would be DRY_BODY if LINE_GARMENT did not claim it first. It does, and these assert
+        // that it keeps doing so; an ordering nobody tests is an ordering that will be changed.
+        assertEquals("LINE_GARMENT", classify("stuff my boots with dry grass"));
+        assertEquals("LINE_GARMENT", classify("stuff my clothes with moss"));
+        assertEquals("DRY_BODY", classify("get under cover and dry off"), "and real drying still dries");
+    }
+
     @Test void theFoodChainAndTheKeepingQuestion() throws Exception {
         // Spoiling words need no subject: nothing else in this world goes off, spoils or turns rancid.
         assertEquals("TAKE_STOCK_OF_FOOD", classify("has this gone off"));
