@@ -1828,6 +1828,46 @@ class IntentClassificationRegressionTest {
      * four comments that routing this to grooming would claim the COAT improved, which is a lie — so the verb
      * splits are asserted in both directions here.
      */
+    /**
+     * Fitting gear to a beast is a question about gear you own, not a recipe (#106).
+     *
+     * <p>Measured across 14 phrasings, nine reached nothing or something wrong — and the two worst were
+     * answered by the recipe to MAKE a pack-saddle. The seventh "asking is not doing/making" on this project.
+     *
+     * <p>The answer already existed: {@code judgeHaulage} reports, per beast and by body size, whether the gear
+     * you keep fits it. The ticket called this a missing fitted-to-this-beast STATE; it is a missing word.
+     */
+    @Test void theGearQuestionIsNotARecipe() throws Exception {
+        for (String p : new String[]{"fit the pack saddle", "fit the pack saddle to the goat",
+                                     "put the panniers on", "put the pack saddle on the ox",
+                                     "does the harness fit", "fit the panniers",
+                                     "is the harness the right size", "how much can the ox carry",
+                                     "try the yoke on the ox"})
+            assertEquals("JUDGE_HAULAGE", classify(p), p);
+
+        // MAKING IS STILL MAKING, which is the whole hazard of a rule keyed on gear nouns. UNKNOWN is the
+        // CORRECT answer here and not a miss: it is what reaches the material matcher, which then resolves the
+        // recipe. Verified live on a booted backend, where all three come back PROCESS_MATERIAL.
+        assertEquals("UNKNOWN", classify("make a pack saddle", true), "a craft must reach the material matcher");
+        assertEquals("UNKNOWN", classify("make an ox-yoke", true));
+        assertEquals("UNKNOWN", classify("make a leather harness", true));
+
+        // AND PUTTING GEAR AWAY IS STORING IT. "put the" is broad, and the gear noun alone would have taken
+        // this off the container rules that own it.
+        assertEquals("STORE", classify("put the harness in the basket"));
+        assertEquals("STORE", classify("store the harness"));
+
+        // THE WELFARE QUESTION KEEPS THE BEAST, and the gear rule must not take it. "is the ox fit" asks after
+        // the animal and reached nothing before this — the welfare words knew "how is" and "what state" and not
+        // the plainest one a keeper says. The two rules share ONE gear vocabulary so they cannot drift apart on
+        // which sentence is which.
+        assertEquals("CHECK_STOCK", classify("is the ox fit"), "a beast's condition, not a strap's size");
+        assertEquals("CHECK_STOCK", classify("is the ox in condition"));
+        assertEquals("CHECK_STOCK", classify("how is the ox"), "which always worked");
+        // ...and the hoof work from the same ticket is untouched by any of it.
+        assertEquals("PARE_HOOVES", classify("pare the hooves"));
+    }
+
     @Test void theFeetUnderTheBeast() throws Exception {
         for (String p : new String[]{"pare the hooves", "trim the hooves", "pare the goat's hooves",
                                      "trim his hooves", "see to the goat's feet", "rasp the hooves",
