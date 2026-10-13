@@ -100,17 +100,36 @@ class NamingAFoodYouDoNotHaveIntegrationTest {
         //   "object_transition_object_id_fkey" ... still referenced from table "object_transition"
         //
         // The transition rows cannot be removed either — a trigger holds them immutable, which is right: what
-        // happened to an object happened. So an item this test fed to the Chronicle is ARCHIVED instead, which
-        // takes it out of reach exactly as a delete would, and one it never touched is deleted outright.
+        // happened to an object happened.
+        //
+        // AND AN EATEN ROW MUST BE LEFT EXACTLY AS THE WORLD LEFT IT. Archiving it was my second mistake here:
+        // eating writes a CONSUMED transition and leaves the object `DESTROYED` with no owner and no location,
+        // and `world_object_check` permits that combination ONLY for DESTROYED —
+        //
+        //   CHECK (current_location_id IS NOT NULL OR current_owner_id IS NOT NULL
+        //          OR lifecycle_state = 'DESTROYED')
+        //
+        // — so setting it to ARCHIVED violated the check. Read from the data rather than reasoned: of this
+        // catalogue's oyster mushrooms, every object carrying a CONSUMED transition is DESTROYED with both
+        // references null. A consumed item is already out of reach; there is nothing for this method to do to it.
+        //
+        // So: delete what the Chronicle never touched, archive what it touched but still holds, and leave what
+        // the world has already finished with. The middle case is the only one that needs this method at all.
         for (UUID id : given) {
+            String state = jdbc.query("SELECT lifecycle_state FROM world_object WHERE id=?",
+                rs -> rs.next() ? rs.getString(1) : null, id);
+            if (state == null) continue;                       // already gone
             boolean hasHistory = Boolean.TRUE.equals(jdbc.queryForObject(
                 "SELECT EXISTS(SELECT 1 FROM object_transition WHERE object_id=?)", Boolean.class, id));
-            if (hasHistory) {
-                jdbc.update("UPDATE world_object SET lifecycle_state='ARCHIVED' WHERE id=?", id);
-            } else {
+            if (!hasHistory) {
                 jdbc.update("DELETE FROM item_instance WHERE object_id=?", id);
                 jdbc.update("DELETE FROM world_object WHERE id=?", id);
+            } else if ("ACTIVE".equals(state)) {
+                // Still reachable, and it has a history that forbids deleting it. Archiving is legal here
+                // because the row still carries an owner or a location.
+                jdbc.update("UPDATE world_object SET lifecycle_state='ARCHIVED' WHERE id=?", id);
             }
+            // else: DESTROYED or already archived — the world took it out of reach and the row is legal as it is.
         }
         given.clear();
         // AND PUT BACK WHAT emptyThePack TOOK. Archiving every food the Chronicle could reach is how this test
