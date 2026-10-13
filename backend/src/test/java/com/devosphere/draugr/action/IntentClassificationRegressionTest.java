@@ -1994,6 +1994,28 @@ class IntentClassificationRegressionTest {
         assertEquals("FISH", classify("cast the net"));
         assertEquals("FISH", classify("fish"));
         assertEquals("FISH", classify("spear a pike"));
+
+        // AND THE PAIR V417's "hook" KEYWORD BROKE. Declaring "hook" for the four fish hooks made
+        // `hook an eel` an offer to carve tackle, because the FISH rule defers to the material matcher whenever
+        // the matcher claims the phrase. AFishYouAlreadyCaughtIntegrationTest caught it — that sentence has been
+        // asserted as FISH all along — so a sentence naming a fish by SPECIES no longer defers.
+        //
+        // Both directions, because this is the exact conflict: the species fishes, the family word crafts.
+        assertEquals("FISH", classify("hook an eel", true), "a named species is fishing, matcher or no matcher");
+        assertEquals("FISH", classify("land a trout", true));
+        assertEquals("FISH", classify("net some perch", true));
+        // ...and the family word still reaches its recipes. Stubbed as MATCHING, because that is the real case:
+        // V417 declares "hook" as both keyword and subject, so the live matcher does claim these phrases.
+        // (With the matcher stubbed ABSENT, `carve a hook` falls to MARK — "carve" is a marking verb, and
+        // `carve a spoon` reaching MARK is a defect this project has already fixed once. Asserting the absent
+        // case here would be asserting a world that does not exist now that the keyword is declared.)
+        assertEquals("UNKNOWN", classify("make a hook", true), "and the family word still reaches its recipes");
+        assertEquals("UNKNOWN", classify("carve a hook", true));
+
+        // ...and the SPECIES list is word-bounded, because "eel" sits inside STEEL, WHEEL and PEELED, and
+        // "perch" inside PERCHED. A raw contains() here would have made a steel axe into a fishing trip.
+        assertEquals("UNKNOWN", classify("make a steel axe", true), "steel is not an eel");
+        assertEquals("UNKNOWN", classify("make a cart wheel", true), "nor is a wheel");
     }
 
     @Test void theFoodChainAndTheKeepingQuestion() throws Exception {
