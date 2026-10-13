@@ -118,38 +118,61 @@ class TheFamilyWordsForArmourIntegrationTest {
         assertFalse(readsAsAMiss(prose), () -> "and it must still route: " + prose);
     }
 
+    /**
+     * A bowl is not a bow, and an elbow is not either — but the reason is the matcher, not the length (V416).
+     *
+     * <p>This assertion used to require that <b>no</b> bare "bow" keyword exist, on the grounds that "bow" sits
+     * inside ELBOW with nothing longer to outrank it. <b>That premise was wrong.</b> The process keyword matcher
+     * space-pads both sides, so {@code " bow "} is never found inside {@code " elbow "} or {@code " bowl "} —
+     * those are each one word. V416 adds the keyword, and 4 bows become reachable by the word a hunter would use.
+     *
+     * <p>Kept as a test rather than deleted, because the behaviour it guards is still worth guarding: whatever
+     * the reason, an elbow guard must not be answered with a bow.
+     */
     @Test
     void aBowlIsNotABowAndAnElbowIsNotEither() {
-        // THE REASON "bow" IS NOT IN V415, asserted through the matcher because that is where the argument lives.
-        // Five bows exist and `make a bow` reaches nothing — but "bow" sits inside ELBOW, and `make an elbow
-        // guard` reaches nothing today too, so a bare "bow" keyword would trade a missing answer for a WRONG
-        // one. "bowl" is safe by length (a declared four-character keyword beats a three-character one, the same
-        // argument that makes "hat" safe beside "thatch"); ELBOW has no such competitor.
         String bowl = said("make a bowl");
         assertFalse(readsAsAMiss(bowl), () -> "a bowl is makeable and must stay so: " + bowl);
         assertTrue(bowl.contains("bowl"), () -> "and it must be a bowl, not a bow: " + bowl);
 
+        String elbow = said("make an elbow guard");
+        assertFalse(elbow.contains("self bow") || elbow.contains("recurve"),
+            () -> "an elbow guard must not be answered with a bow: " + elbow);
+
         Integer bareBow = jdbc.queryForObject(
             "SELECT count(*) FROM material_process, unnest(string_to_array(keywords, ',')) k WHERE trim(k)='bow'",
             Integer.class);
-        assertTrue(bareBow != null && bareBow == 0,
-            "a bare \"bow\" keyword sits inside ELBOW with nothing longer to beat it — it needs a word-boundary "
-            + "matcher, not a keyword");
+        assertTrue(bareBow != null && bareBow > 0,
+            "V416 declares a bare \"bow\"; if it has gone, check whether it was reverted on the strength of the "
+            + "old substring argument, which measurement disproved");
     }
 
+    /**
+     * Fleeing a wolf is still not making a rain cape — and that was never at risk (V416).
+     *
+     * <p>V411 refused "cape" because it sits inside ESCAPE, and V415 kept refusing it and added "wrap" for the
+     * same reason. Both were wrong about the mechanism: the keyword matcher compares space-padded forms, so
+     * {@code " cape "} is not inside {@code " escape "} and {@code " wrap "} is not inside {@code " wrapped "}.
+     *
+     * <p>The decisive measurement, which cost one request and would have settled it at the time: "cap" has been
+     * a declared keyword since V411 and "es·cap·e" contains it as a raw substring — and {@code escape the wolf}
+     * reaches UNKNOWN while {@code escape from here} reaches DISENGAGE. Neither offers a hat.
+     */
     @Test
     void fleeingAWolfIsStillNotMakingARainCape() {
-        // V411 refused "cape" for this reason and V415 keeps refusing it. Held through the matcher as well as in
-        // the migration, because the migration can check the data and not the behaviour.
         String flee = said("escape the wolf");
         assertFalse(flee.contains("rain cape") || flee.contains("shoulder cape"),
             () -> "fleeing must not be answered by millinery: " + flee);
+        String wrapped = said("the meat is wrapped");
+        assertFalse(wrapped.contains("neck wrap") || wrapped.contains("face wrap"),
+            () -> "a past participle must not be read as a request to make one: " + wrapped);
+
         Integer bare = jdbc.queryForObject(
             "SELECT count(*) FROM material_process, unnest(string_to_array(keywords, ',')) k "
             + "WHERE trim(k) IN ('cape','wrap')", Integer.class);
-        assertTrue(bare != null && bare == 0,
-            "\"cape\" is inside ESCAPE and \"wrap\" inside WRAPPED, and in each case the colliding sentence "
-            + "reaches nothing today — so adding them would trade a missing answer for a wrong one");
+        assertTrue(bare != null && bare > 0,
+            "V416 declares both \"cape\" and \"wrap\"; if either has gone, check whether it was reverted on the "
+            + "strength of the old substring argument, which measurement disproved");
     }
 
     @Test

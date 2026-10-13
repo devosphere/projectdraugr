@@ -144,16 +144,44 @@ class TheFamilyWordForAHatIntegrationTest {
             () -> "a death cap is a mushroom, not three kinds of hat: " + cap);
     }
 
+    /**
+     * A bare "cape" keyword IS safe, and this assertion used to say the opposite (#37, V416).
+     *
+     * <p>V411 refused the family word "cape" on the grounds that it sits inside ESCAPE "with no longer keyword to
+     * outrank it", and this test guarded that decision. <b>The premise was wrong.</b>
+     * {@code ActivityClassifier.normalise} space-pads both sides and {@code containsTerm} compares the padded
+     * forms, so {@code " cape "} is never found inside {@code " escape "}. The process keyword matcher has held
+     * keywords to whole words all along; the longest-keyword rule is for choosing between competing
+     * <em>whole-word</em> matches, not for defending against substrings.
+     *
+     * <p>I had conflated it with {@code ChronicleActionService.classify}, which genuinely does use raw
+     * {@code contains} and is where every collision in this project has come from.
+     *
+     * <p>So the assertion is inverted: the keyword must now BE there, and the sentence it was supposed to
+     * protect is held through the <b>live matcher</b>, which is the only honest way to make a claim about what
+     * the matcher does. The same correction applies to "bow" and "wrap" in
+     * {@code TheFamilyWordsForArmourIntegrationTest}.
+     */
     @Test
-    void noBareCapeKeywordExistsBecauseEscapeContainsIt() {
-        // The one family word V411 deliberately refuses. "cape" is inside ESCAPE and there is no longer keyword
-        // to outrank it, so a bare "cape" would make fleeing a wolf into making a rain cape. The migration
-        // guards the data; this guards the intent of that decision surviving a later edit.
+    void aBareCapeKeywordIsSafeBecauseTheMatcherHoldsWholeWords() {
         Integer bare = jdbc.queryForObject(
             "SELECT count(*) FROM material_process, unnest(string_to_array(keywords, ',')) k WHERE trim(k)='cape'",
             Integer.class);
-        assertTrue(bare != null && bare == 0,
-            "a bare \"cape\" keyword is inside ESCAPE with nothing longer to beat it — it needs a "
-            + "word-boundary matcher, not a keyword");
+        assertTrue(bare != null && bare > 0,
+            "V416 declares a bare \"cape\"; if it has gone, check whether it was reverted on the strength of the "
+            + "old substring argument, which measurement disproved");
+
+        // THE PROOF, through the matcher rather than from the code. If it were raw-contains, fleeing would be
+        // answered with millinery.
+        String flee = said("escape the wolf");
+        assertFalse(flee.contains("rain cape") || flee.contains("shoulder cape"),
+            () -> "fleeing must not be answered by making a cape: " + flee);
+        String away = said("escape from here");
+        assertFalse(away.contains("rain cape") || away.contains("shoulder cape"),
+            () -> "nor must getting away: " + away);
+
+        // ...and the family word still does its own job.
+        String cape = said("make a cape");
+        assertFalse(readsAsAMiss(cape), () -> "\"make a cape\" must reach the seven capes: " + cape);
     }
 }
