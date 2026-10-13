@@ -224,6 +224,143 @@ public class PhysicalItemService {
     }
 
     /**
+     * What can be told about whether a thing is fit to eat, by looking at it (#37).
+     *
+     * <p>The poison model is finished and the player cannot reach it. {@code flora_definition.is_poisonous} marks
+     * the death cap and the fly agaric, {@code wildlife_species.toxic} marks the fire salamander, the toad and the
+     * great crested newt, and both are acted on: {@link #isPoisonousForage} sickens whoever eats the mushroom,
+     * harvesting a toxic carcass leaves the flesh, and a toxic catch is left in the snare. The comment on the
+     * eating rule states the design outright — <i>"The world applies physics, not a warning: the player had to
+     * know which mushroom before they ate it."</i>
+     *
+     * <p>That is the right design and the game never held up its end. Measured live, <b>every</b> way of asking
+     * reached nothing: {@code is this poisonous}, {@code is that plant poisonous}, {@code are these mushrooms
+     * safe}, {@code is this toadstool safe}, {@code will this make me sick} — and {@code examine the death cap}
+     * described the ground it stood on. Worse, five phrasings were answered by EATING it: {@code is this safe to
+     * eat}, {@code can I eat this}, {@code which of these mushrooms can I eat}, {@code what can I eat here},
+     * {@code is the fish safe to eat}. The Chronicle asked WHETHER, and the world took the risk on their behalf —
+     * the same defect {@code judgeWater} was written to end, on the other half of what goes in a mouth.
+     *
+     * <p>A forager knows a death cap by looking at it, so this tells them. Read-only, and nothing here is new
+     * information: it is {@code is_poisonous} and {@code toxic} said out loud, over the same growth the gathering
+     * rule picks from — the recorded stands on this ground PLUS the biome's general growth, because taking the
+     * stands alone would narrow what is judged to less than what can be gathered.
+     *
+     * <p>Spoilage is deliberately not repeated here. {@link #foodStocktake} already answers it with real spans,
+     * and {@code has this gone off} already reaches it — a second voice on the same question is how two answers
+     * start to disagree.
+     *
+     * @param named the thing the sentence asked about, lower-cased, or null to judge everything within reach
+     */
+    @Transactional(readOnly = true)
+    public String judgeFood(UUID chronicle, UUID location, String named) {
+        record Growth(String key, String display, boolean poisonous) { }
+        // The SAME two-part reach the gathering rule uses: the recorded stands, then the biome's general growth.
+        java.util.List<Growth> growing = jdbc.query(
+            "SELECT fd.flora_key, fd.is_poisonous, "
+            + "  (SELECT d2.display_name FROM flora_drop d JOIN item_definition d2 ON d2.item_key=d.item_key "
+            + "    WHERE d.flora_key=fd.flora_key ORDER BY d.item_key LIMIT 1) AS drop_name "
+            + "FROM flora_definition fd WHERE fd.organism_type <> 'TREE' AND ("
+            + "  EXISTS (SELECT 1 FROM chunk_flora cf WHERE cf.chunk_id=? AND cf.flora_key=fd.flora_key AND cf.quantity > 0) "
+            + "  OR fd.biome_affinity ILIKE '%' || (SELECT biome FROM world_chunk WHERE id=?) || '%') "
+            + "ORDER BY fd.is_poisonous DESC, fd.flora_key",
+            (rs, row) -> new Growth(rs.getString(1), rs.getString(3), rs.getBoolean(2)), location, location);
+
+        // What the sentence asked about, if it named anything: the plant's own name or what it yields, which is
+        // the same pair of handles the gathering rule answers to. A player says "death cap" or "the mushroom".
+        //
+        // MATCHED AGAINST THE WHOLE CATALOGUE AND NOT ONLY WHAT GROWS HERE. The first cut matched the reach
+        // only, so "is the death cap poisonous" asked in a wetland fell through to the general survey and read
+        // "there is nothing here that would poison you" — true of the ground and no answer at all to the
+        // question, from someone who may be holding one picked in the forest that morning. Whether a death cap
+        // is poison is not a property of where you are standing. So the catalogue answers, and where it grows
+        // is said separately.
+        if (named != null && !named.isBlank()) {
+            record Known(String key, String display, boolean poisonous, boolean here) { }
+            java.util.List<Known> asked = jdbc.query(
+                "SELECT fd.flora_key, fd.is_poisonous, "
+                + "  (SELECT d2.display_name FROM flora_drop d JOIN item_definition d2 ON d2.item_key=d.item_key "
+                + "    WHERE d.flora_key=fd.flora_key ORDER BY d.item_key LIMIT 1) AS drop_name, "
+                + "  (EXISTS (SELECT 1 FROM chunk_flora cf WHERE cf.chunk_id=? AND cf.flora_key=fd.flora_key AND cf.quantity > 0) "
+                + "   OR fd.biome_affinity ILIKE '%' || (SELECT biome FROM world_chunk WHERE id=?) || '%') AS here "
+                + "FROM flora_definition fd WHERE fd.organism_type <> 'TREE' "
+                // Longest name first, so "death cap" is settled before a bare "cap" could be — the same
+                // longest-wins rule the material matcher uses, and the reason V411's family words are safe.
+                + "ORDER BY length(fd.flora_key) DESC",
+                (rs, row) -> new Known(rs.getString(1), rs.getString(3), rs.getBoolean(2), rs.getBoolean(4)),
+                location, location);
+            for (Known g : asked) {
+                String plant = g.key().replace('_', ' ');
+                boolean match = named.contains(plant)
+                    || (g.display() != null && named.contains(g.display().toLowerCase(java.util.Locale.ROOT)));
+                if (!match) continue;
+                String where = g.here() ? "" : " It does not grow on this ground, so whatever you have of it came from elsewhere.";
+                return g.poisonous()
+                    ? "The " + plant + " is poison — not a thing that disagrees with you, but a thing that kills, "
+                      + "and no amount of cooking takes that out of it." + where
+                    : "There is nothing wrong with " + plant + ". It is food." + where;
+            }
+            // A species, for the other half of the model. Asked by name, answered by name.
+            String flesh = jdbc.query(
+                "SELECT ws.species_key, ws.toxic FROM wildlife_species ws "
+                + " WHERE position(replace(ws.species_key,'_',' ') in ?) > 0 "
+                + " ORDER BY length(ws.species_key) DESC LIMIT 1",
+                rs -> rs.next() ? rs.getString(1) + "|" + rs.getBoolean(2) : null, named);
+            if (flesh != null) {
+                String beast = flesh.substring(0, flesh.indexOf('|')).replace('_', ' ');
+                return "true".equals(flesh.substring(flesh.indexOf('|') + 1))
+                    ? "The flesh of a " + beast + " is not food. Whatever is in its skin stays in the meat, and "
+                      + "the fire does not drive it out — there is nothing to be had off one but the hide."
+                    : "A " + beast + " is good meat. Nothing in it will do you harm that cooking will not settle.";
+            }
+        }
+
+        java.util.List<String> poison = growing.stream().filter(Growth::poisonous)
+            .map(g -> g.key().replace('_', ' ')).toList();
+        // And what is already in your hands that came off one of them — the forage is gathered and carried long
+        // before it is eaten, so the dangerous moment is not always the one you are standing in.
+        java.util.List<String> carried = jdbc.queryForList(REACHABLE_CTE +
+            "SELECT DISTINCT d.display_name FROM reachable r JOIN item_instance i ON i.object_id=r.id "
+            + "JOIN item_definition d ON d.item_key=i.item_key "
+            + "WHERE EXISTS (SELECT 1 FROM flora_drop fdr JOIN flora_definition fl ON fl.flora_key=fdr.flora_key "
+            + "               WHERE fdr.item_key=i.item_key AND fl.is_poisonous) ORDER BY d.display_name",
+            String.class, chronicle, location);
+
+        StringBuilder said = new StringBuilder();
+        if (!carried.isEmpty())
+            said.append("You are carrying ").append(joinAnd(lower(carried))).append(", and that is poison — "
+                + "not a thing that disagrees with you, but a thing that kills. Put it out of the pack. ");
+        if (poison.isEmpty())
+            said.append(carried.isEmpty()
+                ? "You go over what grows within reach. There is nothing here that would poison you."
+                : "Of what grows here, nothing else is poison.");
+        else
+            said.append("Of what grows within reach, ").append(joinAnd(poison))
+                .append(poison.size() == 1 ? " is the one to know" : " are the ones to know")
+                .append(" — poison, and no amount of cooking takes it out.");
+
+        // AND WHAT IS ACTUALLY FOOD, because "what here is edible" and "what can I eat here" ask this rule now,
+        // and "nothing will poison you" is not an answer to either. Named by what it YIELDS rather than by the
+        // plant, since that is the word a hungry person uses and the word the gathering rule answers to. Only
+        // what drops something of category FOOD counts: a fibre plant is harmless and is not dinner.
+        java.util.List<String> edible = jdbc.queryForList(
+            "SELECT DISTINCT d2.display_name FROM flora_definition fd "
+            + " JOIN flora_drop d ON d.flora_key=fd.flora_key JOIN item_definition d2 ON d2.item_key=d.item_key "
+            + " WHERE NOT fd.is_poisonous AND fd.organism_type <> 'TREE' AND d2.category='FOOD' AND ("
+            + "   EXISTS (SELECT 1 FROM chunk_flora cf WHERE cf.chunk_id=? AND cf.flora_key=fd.flora_key AND cf.quantity > 0) "
+            + "   OR fd.biome_affinity ILIKE '%' || (SELECT biome FROM world_chunk WHERE id=?) || '%') "
+            + " ORDER BY d2.display_name LIMIT 6", String.class, location, location);
+        if (edible.isEmpty())
+            said.append(" Nothing growing here yields food, whatever else it is good for.");
+        else
+            said.append(" What is worth eating: ").append(joinAnd(lower(edible))).append(".");
+        // The limit of what looking can do, said plainly, exactly as the water judgement ends at boiling: a
+        // mushroom you cannot put a name to is not made safe by nobody having named it.
+        said.append(" What you cannot put a name to, you do not know — and that is not the same as it being safe.");
+        return said.toString();
+    }
+
+    /**
      * What food you have and how long it will keep (#37).
      *
      * <p>Spoilage is a complete subsystem: five tiers with their own spans (raw 18h, cooked 72h, smoked 30d,

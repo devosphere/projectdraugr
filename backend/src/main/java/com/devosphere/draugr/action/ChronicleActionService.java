@@ -577,6 +577,7 @@ public class ChronicleActionService {
         else if (intent == Intent.TAKE_STOCK_OF_FOOD) perception = items.foodStocktake(chronicle.id(), chronicle.location(), resolvedAt);
         else if (intent == Intent.JUDGE_HAULAGE) perception = items.judgeHaulage(chronicle.id());
         else if (intent == Intent.JUDGE_WATER) { String[] r = judgeWater(chronicle.location()); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.JUDGE_FOOD) perception = items.judgeFood(chronicle.id(), chronicle.location(), text.toLowerCase(java.util.Locale.ROOT));
         else if (intent == Intent.LINE_GARMENT) { String[] r = items.lineGarment(chronicle.id(), text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.WATER_CROP) { String[] r = items.waterCrop(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.SCARE_BIRDS) { String[] r = items.scareBirdsFromCrop(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
@@ -2910,6 +2911,79 @@ public class ChronicleActionService {
               ||value.contains("pack-saddle")||value.contains("pack saddle")||value.contains("team")||value.contains("beast")
               ||value.contains("ox")||value.contains("oxen")||value.contains("horse")||value.contains("donkey")||value.contains("yak"))
            &&!MAKING_SOMETHING.matcher(value).find()) return Intent.JUDGE_HAULAGE;
+
+        // ASKING WHETHER A THING IS POISON IS A QUESTION, NOT A MEAL (#37) — the other half of the rule below,
+        // and the same defect on the other thing that goes in a mouth. Measured live: "is this poisonous", "is
+        // that plant poisonous", "are these mushrooms safe", "is this toadstool safe" and "will this make me
+        // sick" all reached nothing, while FIVE phrasings were answered by EATING it — "is this safe to eat",
+        // "can I eat this", "which of these mushrooms can I eat", "what can I eat here", "is the fish safe to
+        // eat" — because the late fallback matches the bare word "eat". The Chronicle asked WHETHER, and the
+        // world ate the death cap on their behalf.
+        //
+        // The poison model is finished: is_poisonous sickens whoever eats it, toxic flesh is left on the carcass
+        // and in the snare, and the eating rule's own comment says "the player had to know which mushroom before
+        // they ate it". That is the right design; the game simply never offered the knowing.
+        //
+        // NAMED LOCALS, because this is three clauses deep and the last four precedence faults in this file were
+        // all one-line conditions. The gate is deliberately NARROW on the loose words: "turned" and "rotten"
+        // need a food noun beside them, since turning soil and rotten punk wood are both real work here.
+        boolean poisonWord = value.contains("poisonous")||value.contains("poison")||value.contains("toxic")
+            ||value.contains("toadstool");
+        boolean spoilWord = value.contains("gone off")||value.contains("spoiled")||value.contains("spoilt")
+            ||value.contains("still good")||value.contains("still fresh");
+        // "will this make me sick" is NOT making a thing, and it went UNKNOWN because MAKING_SOMETHING matches
+        // the bare word "make". Held apart so it can skip that guard rather than widening the guard for
+        // everything — the fifth paren-or-precedence fault in this file and the fifth fixed by naming it.
+        boolean sickenQuestion = value.contains("make me sick")||value.contains("make me ill")
+            ||value.contains("making me sick")||value.contains("make me unwell");
+        boolean foodNoun = value.contains("food")||value.contains("meat")||value.contains("fish")
+            ||value.contains("berry")||value.contains("berries")||value.contains("mushroom")
+            ||value.contains("toadstool")||value.contains("plant")||value.contains("forage")
+            ||value.contains("flesh")||value.contains("fruit")||value.contains("nut")||value.contains("root");
+        boolean looseWord = (value.contains("rotten")||value.contains("turned")) && foodNoun;
+        // word(), not contains(): "weather" contains EAT, and a bare contains here routed "what is the weather"
+        // to JUDGE_FOOD and broke a standing FEEL assertion. That is the ca-BIN / l-EGG-ings collision again,
+        // and the suite caught it in two seconds where a sweep would not have thought to try the sky.
+        boolean safeToEat = (value.contains("safe")||value.contains("edible")||value.contains("fit to eat"))
+            &&(word(value,"eat")||value.contains("edible")||foodNoun);
+        boolean askingWhether = value.startsWith("is ")||value.startsWith("are ")||value.startsWith("can i")
+            ||value.startsWith("could i")||value.startsWith("will ")||value.startsWith("would ")
+            ||value.startsWith("which")||value.startsWith("what")||value.contains("has this")
+            ||value.contains("has the");
+        // ...and by the VERB the intent is named for, which is the trap JUDGE_WATER fell into: "judge the water"
+        // reached nothing while "is this water safe" worked.
+        // JUDGING only, not IDENTIFYING. "identify the mushroom" is a deliberate EXAMINE assertion with its own
+        // comment — "folds into the subject-scoped EXAMINE" — and a perception verb that already has an intent is
+        // not available to borrow. That is the same lesson JUDGE_WATER learned from sniff and test. (EXAMINE
+        // turns out to answer about the GROUND rather than the named mushroom, which is a real defect and a
+        // different one; it is recorded on the ticket rather than fixed by quietly taking the verb.)
+        boolean judgingIt = value.contains("judge")&&foodNoun;
+        // "CAN I EAT THIS" IS THE QUESTION, and it was answered by eating. Three of these survived the first cut
+        // because none of them contains a word for safety or for spoiling — the whole question is carried by the
+        // question SHAPE around the word "eat". "which of these mushrooms can I eat" and "what can I eat here"
+        // are the same sentence with the doubt moved to the front.
+        boolean eatQuestion = value.startsWith("can i eat")||value.startsWith("could i eat")
+            ||value.startsWith("may i eat")||value.startsWith("should i eat")
+            ||((value.startsWith("which")||value.startsWith("what"))&&word(value,"eat"));
+        // POISONING A WEAPON IS A CRAFT, not a question — V98 gives this game poisoned arrows, and "poison" is
+        // the word for both. MAKING_SOMETHING is the guard for that, and it is the ONLY one this rule defers to.
+        //
+        // IT DELIBERATELY DOES NOT DEFER TO actionMatchesProcess, which every neighbouring rule does, because
+        // that deferral was answering "is the death cap poisonous" with "sew a fur cap, weave a grass cap, or
+        // sew a leather cap". That is V411's own doing — the family word "cap" I added for head garments sits
+        // inside DEATH CAP, and the migration's guard reasoned that "death cap" outranks "cap" on length and
+        // proved it with `gather a death cap`, which is a Java gather intent and never reaches the material
+        // matcher at all. In a sentence where the matcher gets first refusal, the three caps win. A question
+        // about poison is never a craft, so this rule answers it rather than handing it to a recipe.
+        if ((poisonWord||spoilWord||looseWord||safeToEat||judgingIt||eatQuestion)
+            && (askingWhether||judgingIt)
+            && !value.contains("the water")&&!value.contains("this water")&&!value.contains("to drink")
+            && !MAKING_SOMETHING.matcher(value).find())
+            return Intent.JUDGE_FOOD;
+        // And the sickness question, outside that guard for the reason named above.
+        if (sickenQuestion && askingWhether && !value.contains("the water")&&!value.contains("to drink"))
+            return Intent.JUDGE_FOOD;
+
         // Asking WHETHER the water is safe is a question, not a drink (#37). It reached DRINK and was answered
         // by drinking the marsh water, which is the one outcome the asker was trying to avoid. Gated on a
         // question shape AND water, and placed before anything that drinks.
@@ -4053,7 +4127,7 @@ public class ChronicleActionService {
         return refuse != null && refuse >= 25;
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;}
         /** The cardinal for a grid offset, for when the WORLD names the direction rather than the player (#37). */
         static Direction of(int dx,int dy){ for(Direction d:values()) if(d.dx==dx&&d.dy==dy) return d; return null; } }    /**     * The structured perception frame — the seam every future Simulation Agent reads
