@@ -2464,6 +2464,13 @@ public class ChronicleActionService {
         // Two named locals for the welfare gate below, because that gate is already four clauses deep and the
         // last five precedence faults in this file were all one-line conditions.
         boolean husbandryOnlyAilment = value.contains("lame")||value.contains("limping")||value.contains("limps");
+        // "is the ox fit" asks after the animal's condition and reached nothing — the welfare words knew "how
+        // is", "what state" and "are they well" and not the plainest one a keeper uses. Held OFF any sentence
+        // that names draught gear, because "does the harness fit" is a question about the strap and the haulage
+        // reading answers it; the two rules share one gear vocabulary so they cannot drift apart on which is
+        // which (#106). word() because "fit" sits inside PROFIT, OUTFIT and BENEFIT.
+        boolean askingIfInCondition = (word(value,"fit")||value.contains("in condition")
+            ||value.contains("out of condition")) && !namesDraughtGear(value);
         boolean aboutTheirOwnBody = value.contains(" my ")||value.startsWith("my ")||value.contains("am i")
             ||value.contains("i am")||value.contains("my own");
         if((value.contains("how is")||value.contains("how are")||value.contains("how do the")||value.contains("check on")
@@ -2471,6 +2478,7 @@ public class ChronicleActionService {
             ||value.contains("are they well")||value.contains("are they all right")||value.contains("what state")
             ||value.contains("do they need")||value.contains("what do they need")||value.contains("sick")||value.contains("ailing")
             ||value.contains("limping")||value.contains("lame")||value.contains("off its feed")||value.contains("off their feed")
+            ||askingIfInCondition
             ||value.contains("thirsty")||value.contains("water the")||value.contains("give the")&&value.contains("water")
             ||value.contains("check the")&&(value.contains(" over")||value.contains("for tick"))
             // ...and what a beast can be HELD with (#106). animal_restraint works by being CARRIED and no
@@ -2941,12 +2949,54 @@ public class ChronicleActionService {
         //   yoke the oxen           -> nothing at all
         //
         // Gated on the draught rather than on the vehicle noun alone, so that making one is still making one.
+        //
+        // FITTING GEAR TO A BEAST IS A QUESTION ABOUT GEAR YOU OWN, NOT A RECIPE (#106). Measured across 14
+        // phrasings, 9 reached nothing or something wrong, and the two worst were answered by the recipe to
+        // MAKE a pack-saddle:
+        //
+        //   fit the pack saddle            -> PROCESS_MATERIAL, offering to make one
+        //   fit the pack saddle to the goat-> the same
+        //   put the pack saddle on the ox  -> nothing
+        //   put the panniers on            -> nothing
+        //   does the harness fit           -> nothing
+        //   is the harness the right size  -> nothing
+        //   how much can the ox carry      -> nothing
+        //
+        // That is the seventh "asking is not doing/making" on this project, and the answer already existed:
+        // judgeHaulage reports, per beast and by BODY SIZE, whether the gear you keep fits it — "the collar
+        // harness you keep fits them", "goes on none of them, nothing you have will fit an animal that size".
+        // The ticket called this a missing fitted-to-this-beast STATE; it is not, it is a missing word.
+        //
+        // The fitting verbs are held to a GEAR noun rather than to the beast, because "is the ox fit" is a
+        // welfare question and CHECK_STOCK owns it. "fit" beside an animal would have taken it.
+        //
+        // word(), not contains(), for "fit": it sits inside PROFIT, OUTFIT and BENEFIT. Applied here before it
+        // bit rather than after, because this is the fifth time this cycle a bare contains() on a three- or
+        // four-letter word has been the defect.
+        boolean fittingVerb = word(value,"fit")||word(value,"fits")||value.contains("fitting")
+            ||value.contains("put the")||value.contains("putting")||value.contains("try the")
+            ||value.contains("right size")||value.contains("big enough")||value.contains("too small")
+            ||value.contains("too big")||value.contains("how much can");
+        // ...and PUTTING GEAR AWAY is storing it, not fitting it. "put the" is broad and the gear noun alone
+        // would have taken "put the harness in the basket" off the container rules, which own it.
+        boolean puttingItAway = value.contains(" in the")||value.contains(" into")||value.contains("away")
+            ||value.contains(" on the rack")||value.contains(" on the shelf")||value.contains(" in my");
+        if(fittingVerb && namesDraughtGear(value) && !puttingItAway && !MAKING_SOMETHING.matcher(value).find())
+            return Intent.JUDGE_HAULAGE;
+
         if((value.contains("harness")||value.contains("yoke")||value.contains("hitch")||value.contains("unhitch")
             ||value.contains("pull the")||value.contains("draw the")||value.contains("load the")||value.contains("unload the")
             ||value.contains("what can the")||value.contains("how is the team")||value.contains("how are the team")
-            ||value.contains("can they pull")||value.contains("what will they pull")||value.contains("how much can they pull"))
+            ||value.contains("can they pull")||value.contains("what will they pull")||value.contains("how much can they pull")
+            // ...and what a beast can CARRY, which is the other half of the same question and reached nothing.
+            // The honest answer is the gear report: this game models REACHABILITY and not carried load
+            // (docs/systems/06.3-Decision-Log.md:796), so there is no load figure for a pack animal to relieve
+            // and inventing one would reverse a standing decision. What the keeper can be told is what gear
+            // they own and whether it fits the animal — which is what they were really asking.
+            ||value.contains("can carry")||value.contains("can the ox carry")||value.contains("carry for me"))
            &&(value.contains("cart")||value.contains("travois")||value.contains("sledge")||value.contains("sled")
-              ||value.contains("pack-saddle")||value.contains("pack saddle")||value.contains("team")||value.contains("beast")
+              ||value.contains("pack-saddle")||value.contains("pack saddle")||value.contains("pannier")
+              ||value.contains("team")||value.contains("beast")
               ||value.contains("ox")||value.contains("oxen")||value.contains("horse")||value.contains("donkey")||value.contains("yak"))
            &&!MAKING_SOMETHING.matcher(value).find()) return Intent.JUDGE_HAULAGE;
 
@@ -3683,6 +3733,19 @@ public class ChronicleActionService {
         return forWater
             ? " " + them + " along at your pace, and there is water in front of them now."
             : " " + them + " along at your pace, and there is grazing under them now.";
+    }
+
+    /**
+     * The gear a beast is put into, as ONE vocabulary (#106).
+     *
+     * <p>Shared by the two rules that must never disagree about it: the welfare reading, which has to let a
+     * gear question past, and the haulage reading, which has to catch it. Two lists would drift — which is
+     * exactly how tending knew nine species, grooming knew none and feeding knew seven and not the goat.
+     */
+    private static boolean namesDraughtGear(String value) {
+        return value.contains("pack-saddle")||value.contains("pack saddle")
+            ||value.contains("pannier")||value.contains("harness")||value.contains("yoke")
+            ||value.contains("collar")||value.contains("draught gear")||value.contains("draft gear");
     }
 
     /** Whether the sentence is a keeper taking their stock somewhere, and to water rather than to grass (#106). */
