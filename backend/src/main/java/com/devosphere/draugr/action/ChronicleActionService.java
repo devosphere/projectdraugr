@@ -501,6 +501,7 @@ public class ChronicleActionService {
         // Tending a sick beast (#106/#108). V299 gave stock sickness with two ways out — clean ground and time —
         // and both are things a keeper does to the GROUND. This is the one they do to the animal.
         else if (intent == Intent.GROOM_ANIMAL) { String[] r = items.groomAnimal(chronicle.id(), resolvedAt); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.PARE_HOOVES) { String[] r = items.pareHooves(chronicle.id(), resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.TEND_ANIMAL) { String[] r = items.tendSickAnimal(chronicle.id(), resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.MARK) { String[] r = markLandmark(chronicle, text, actionId, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.URINATE || intent == Intent.DEFECATE) {
@@ -2421,6 +2422,30 @@ public class ChronicleActionService {
         // ASKING and the watering; the three acts below keep their verbs, so "tend the goat" still tends and
         // "feed the goat" still feeds. Thirst falls by place and by structure rather than by a bucket, so the
         // honest answer to watering is what the animals' water depends on — which is what this says.
+        // PARING A FOOT (#106, V414) — the last model gap on that ticket, and it runs AHEAD of both the welfare
+        // reading and grooming, because a sentence that names a FOOT is the more specific claim. "see to the
+        // goat's feet" went to CHECK_STOCK on the first try: that rule owns a generic "see to the", which is
+        // right for "see to the goats" and wrong the moment a foot is named. And routing this to GROOM_ANIMAL is
+        // exactly the lie the ticket warned about for four comments — it would report that the COAT came up clean
+        // when the keeper had asked about a hoof.
+        //
+        // Named locals, one claim each, as every rule in this file now is. The foot words are specific enough to
+        // stand alone — nothing else in this world has a hoof — but the verbs are not: "trim" belongs to a wick,
+        // a hide and a coppice stool as well, so it is held to a FOOT. (The coppice rule already carries the
+        // other side of that bargain: its own comment says it is gated on the wood "so that trimming a wick, a
+        // hoof or a hide stays with its own work".)
+        boolean theFoot = value.contains("hoof")||value.contains("hooves")||value.contains("hoofs")
+            ||value.contains("feet")||value.contains("foot");
+        boolean paringWork = value.contains("pare")||value.contains("paring")||value.contains("trim")
+            ||value.contains("rasp")||value.contains("clip")||value.contains("file down")
+            ||value.contains("see to")||value.contains("sort out")||value.contains("do the");
+        // A FOOT ON AN ANIMAL, not the player's own. "my feet are sore" is the body's business and SENSE_BODY
+        // owns it; so is "warm my feet". Held to a beast, or to a hoof, which only an animal has.
+        boolean someoneElsesFoot = namesABeast(value)||value.contains("hoof")||value.contains("hooves")
+            ||value.contains("hoofs");
+        if(theFoot && paringWork && someoneElsesFoot
+           && !value.contains("my foot")&&!value.contains("my feet")&&!value.contains("own feet"))
+            return Intent.PARE_HOOVES;
         // TAKING THE STOCK TO WATER OR TO GRASS (#106). The model for this already works and only the player had
         // no way into it: thirst and hunger both fall by WHERE THE KEEPER STANDS — the ticks read the bond's
         // chronicle_id, not the animal — so a kept herd already goes where its keeper goes. What reached nothing
@@ -2436,6 +2461,11 @@ public class ChronicleActionService {
         // Placed ahead of CHECK_STOCK because that one answers on "the goats" alone, and ahead of FEED_ANIMAL
         // because "put the animals out to graze" is a drive and not a feeding.
         if(drivingStock(value)) return Intent.MOVE;
+        // Two named locals for the welfare gate below, because that gate is already four clauses deep and the
+        // last five precedence faults in this file were all one-line conditions.
+        boolean husbandryOnlyAilment = value.contains("lame")||value.contains("limping")||value.contains("limps");
+        boolean aboutTheirOwnBody = value.contains(" my ")||value.startsWith("my ")||value.contains("am i")
+            ||value.contains("i am")||value.contains("my own");
         if((value.contains("how is")||value.contains("how are")||value.contains("how do the")||value.contains("check on")
             ||value.contains("check over")||value.contains("look over")||value.contains("look in on")||value.contains("see to the")
             ||value.contains("are they well")||value.contains("are they all right")||value.contains("what state")
@@ -2460,7 +2490,15 @@ public class ChronicleActionService {
             ||((value.contains("take stock")||value.contains("taking stock")||value.contains("stocktake"))
                &&(value.contains("animal")||value.contains("beast")||value.contains("the herd")
                   ||value.contains("the flock")||value.contains("livestock")||items.namesAKeptAnimal(value))))
-           &&namesABeast(value)
+           // The subject is normally a beast NAMED, but two words carry it on their own (#106, V414): in this
+           // world nothing limps and nothing goes lame except a kept animal, and a keeper standing beside their
+           // goat says "is he limping" rather than naming the species twice. Found by measurement — `is the goat
+           // lame` routed and `is he limping` reached nothing, which is the pronoun half of the same sentence.
+           //
+           // GUARDED AGAINST THE PLAYER'S OWN LEG, because that is the one thing it could wrongly claim: "my leg
+           // is lame" is the body's business and answering it with a stock report would be face 6 exactly. The
+           // Chronicle's own hurts belong to TREAT_WOUND and the body reading, which keep them.
+           &&(namesABeast(value) || (husbandryOnlyAilment && !aboutTheirOwnBody))
            // The acts keep their own verbs. Asking after a beast is not tending, grooming, feeding or milking one.
            &&!value.contains("tend")&&!value.contains("treat")&&!value.contains("groom")&&!value.contains("curry")
            &&!value.contains("feed the")&&!word(value,"milk")&&!value.contains("shear")
@@ -4127,7 +4165,7 @@ public class ChronicleActionService {
         return refuse != null && refuse >= 25;
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, PARE_HOOVES, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;}
         /** The cardinal for a grid offset, for when the WORLD names the direction rather than the player (#37). */
         static Direction of(int dx,int dy){ for(Direction d:values()) if(d.dx==dx&&d.dy==dy) return d; return null; } }    /**     * The structured perception frame — the seam every future Simulation Agent reads
