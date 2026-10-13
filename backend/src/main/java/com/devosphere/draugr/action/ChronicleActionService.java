@@ -2369,7 +2369,17 @@ public class ChronicleActionService {
                  ||value.contains("spear")||value.contains("take")||value.contains("get"))
                 && (value.contains("fish")||value.contains("trout")||value.contains("perch")||value.contains("pike")
                     ||value.contains("carp")||word(value,"eel")||value.contains("catfish")||value.contains("crayfish")));
-        if((usingNet||(fishingAct&&!value.contains("landing")&&!value.contains("jetty")&&!value.contains("shellfish"))||value.contains("angle")||((value.contains("catch")||value.contains("spear"))&&(value.contains("trout")||value.contains("perch")||value.contains("pike")||value.contains("carp")||value.contains("eel")||value.contains("catfish")||value.contains("crayfish"))))&&!items.actionMatchesProcess(action)) return Intent.FISH;
+        // MAKING THE TACKLE IS NOT FISHING WITH IT (#37). Measured: `make a fishing line` and `make a fish hook`
+        // both answered "You watch the ground a while. There is no water here that holds anything worth taking"
+        // — the request to MAKE a thing performed the activity its noun names. The recipes exist and declare
+        // plain keywords ("fish hook", "fish trap", "bast fishing line"), so they were reachable all along by
+        // any verb this rule does not claim: `carve a fish hook` worked the whole time.
+        //
+        // This is the inverse of the asking-is-not-doing family that has turned up seven times now, and it has
+        // the same cause: a sentence carries the NOUN of the thing it is about, and whatever owns that noun runs
+        // before the matcher. MAKING_SOMETHING is the predicate this file already keeps for it.
+        if((usingNet||(fishingAct&&!value.contains("landing")&&!value.contains("jetty")&&!value.contains("shellfish"))||value.contains("angle")||((value.contains("catch")||value.contains("spear"))&&(value.contains("trout")||value.contains("perch")||value.contains("pike")||value.contains("carp")||value.contains("eel")||value.contains("catfish")||value.contains("crayfish"))))
+           &&!MAKING_SOMETHING.matcher(value).find()&&!items.actionMatchesProcess(action)) return Intent.FISH;
         if(value.contains("snare")||value.contains("set a trap")||value.contains("set trap")||((value.contains("trap")||value.contains("noose"))&&(value.contains("rabbit")||value.contains("hare")||value.contains("bird")||value.contains("fowl")||value.contains("small")||value.contains("run")))) return Intent.SNARE;
         // A bird's nest and an insect's nest are the same word and not the same act (#122). The bird takes it when
         // the words name eggs or a bird and name nothing of a hive, so "rob the nest" beside a hive is still the hive.
@@ -3913,6 +3923,26 @@ public class ChronicleActionService {
         String named = items.namedFoodInReach(chronicle, text.toLowerCase(Locale.ROOT));
         // A named non-meat food is eaten directly; meat always routes through the spoilage-tracked service below.
         if (named != null && !named.contains("meat")) return eatItem(chronicle, named, actionId, at);
+
+        // NAMING A FOOD YOU DO NOT HAVE MUST NOT FEED YOU A DIFFERENT ONE (#37). `namedFoodInReach` returns null
+        // for two different situations — nothing was named, and the named thing is not in reach — and this rule
+        // could not tell them apart. Measured: `eat the fish` and `eat the trout`, with no fish in the pack, both
+        // answered "The mushroom is earthy and dense on the tongue, and you chew it down slowly." The Chronicle
+        // asked for a fish and the world fed them a mushroom, in the same even voice as every true line.
+        //
+        // PLACED HERE, ahead of the two meat attempts, and that position is the whole correctness of it: my first
+        // cut sat below them, so a keeper carrying cooked meat who asked for a trout would have been fed the meat
+        // instead — the same defect one food along, and invisible unless you happen to be carrying meat.
+        //
+        // A bare "eat" still takes whatever is to hand: that is right, and is why the fallback below exists. A
+        // sentence that NAMES a food is answered about that food.
+        if (named == null) {
+            String asked = items.foodTheSentenceAsksFor(text.toLowerCase(Locale.ROOT));
+            if (asked != null)
+                return new String[]{"FAILED", "You go looking for " + asked.toLowerCase(Locale.ROOT)
+                    + " and there is none within reach — not in the pack, not put by here. Eating something else "
+                    + "is a choice, and not one to be made for you."};
+        }
         FoodPreservationService.Consumption cooked = food.consume(chronicle, "cooked_game_meat", at);
         if (cooked.consumed()) { physiology.eatCookedMeal(chronicle, cooked.grade()); if (cooked.spoiled()) physiology.applyFoodborneIllness(chronicle, actionId, at); return new String[]{"SUCCEEDED", "The cooked meat is warm and dense, and the meal settles heavily but well."}; }
         FoodPreservationService.Consumption raw = food.consume(chronicle, "raw_game_meat", at);

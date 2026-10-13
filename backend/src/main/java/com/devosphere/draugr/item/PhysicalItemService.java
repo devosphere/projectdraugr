@@ -202,8 +202,26 @@ public class PhysicalItemService {
      */
     @Transactional(readOnly = true)
     public String namedFoodInReach(UUID chronicle, String lowerText) {
-        return reachableFoods(chronicle).stream()
+        if (lowerText == null) return null;
+        java.util.List<String[]> foods = reachableFoods(chronicle);
+        // The full name first, as the catalogue spells it or as its key reads.
+        String exact = foods.stream()
             .filter(f -> lowerText.contains(f[0].replace("_", " ")) || lowerText.contains(f[1].toLowerCase(java.util.Locale.ROOT)))
+            .map(f -> f[0]).findFirst().orElse(null);
+        if (exact != null) return exact;
+        // ...THEN THE HEAD NOUN, which is the word a hungry person actually says (#37). Without this,
+        // `eat the mushroom` with an OYSTER MUSHROOM in the pack found nothing — and once the rule above
+        // started refusing a named food it could not reach, that turned a wrong answer into a wrong refusal:
+        // the Chronicle was told there was no mushroom while carrying two. The fix for a family word has to be
+        // made on BOTH sides, the reach and the asking, or it only moves the defect.
+        String padded = " " + lowerText.replaceAll("[^a-z0-9]+", " ").trim() + " ";
+        return foods.stream()
+            .filter(f -> {
+                String name = f[1].toLowerCase(java.util.Locale.ROOT);
+                int cut = Math.max(name.lastIndexOf(' '), name.lastIndexOf('-'));
+                String head = cut < 0 ? name : name.substring(cut + 1);
+                return !head.isBlank() && padded.contains(" " + head + " ");
+            })
             .map(f -> f[0]).findFirst().orElse(null);
     }
 
@@ -212,6 +230,57 @@ public class PhysicalItemService {
     public String anyFoodInReach(UUID chronicle) {
         java.util.List<String[]> foods = reachableFoods(chronicle);
         return foods.isEmpty() ? null : foods.get(0)[0];
+    }
+
+    /**
+     * The name of a food the sentence ASKS FOR, whether or not it is in reach (#37).
+     *
+     * <p>{@link #namedFoodInReach} returns null for two different situations — the player named nothing, and the
+     * player named something they do not have — and the eating rule could not tell them apart. So
+     * {@code eat the fish} with no fish in the pack fell through to "any food" and answered <em>"The mushroom is
+     * earthy and dense on the tongue, and you chew it down slowly."</em> The Chronicle asked for a fish and the
+     * world fed them a mushroom, and said so plainly. Measured, with {@code eat the trout} doing the same.
+     *
+     * <p>That is the worst shape of defect this project has: not a missing answer but a confident wrong one, in
+     * the same even voice as every true line. A bare {@code eat} should still take whatever is to hand — that is
+     * the right behaviour and why the fallback exists — but a sentence that NAMES a food has to be answered about
+     * that food.
+     *
+     * <p>Asked of the whole FOOD catalogue rather than of a list in the caller, so every food added after this
+     * is covered; and the longest display name wins, so "dried fish" is preferred over "fish".
+     *
+     * <p><b>It matches the HEAD NOUN as well as the full name</b>, and that is not a nicety: the catalogue holds
+     * no food called "fish". It holds <em>raw fish, cooked fish, dried fish, gutted fish, salted fish, smoked
+     * fish</em> — so the first cut of this, matching full names only, returned null for {@code eat the fish} and
+     * the mushroom was still eaten. The word a hungry person says is the family word, which is the same lesson
+     * the hat, the cuirass and the bow each taught in the catalogue's other half.
+     *
+     * <p>The head noun is held to a WHOLE WORD on both sides — space-padded, the way the process matcher does
+     * it — so "eat the fish" finds it and a sentence that merely contains the letters does not.
+     *
+     * @return the display name as the catalogue spells it, or null if the sentence names no food at all
+     */
+    @Transactional(readOnly = true)
+    public String foodTheSentenceAsksFor(String lowerText) {
+        if (lowerText == null || lowerText.isBlank()) return null;
+        String padded = " " + lowerText.replaceAll("[^a-z0-9]+", " ").trim() + " ";
+        // IT RETURNS WHAT THE PLAYER SAID, not the catalogue's longest match on it. The first cut returned the
+        // display name and so answered "eat the fish" with "You go looking for SALTED FISH" — naming a thing the
+        // Chronicle never mentioned, which is its own small lie. If the match was on the head noun, the head
+        // noun is what comes back.
+        return jdbc.query(
+            "SELECT CASE WHEN position(lower(d.display_name) in ?) > 0 THEN d.display_name "
+            + "            WHEN position(replace(d.item_key,'_',' ') in ?) > 0 THEN replace(d.item_key,'_',' ') "
+            + "            ELSE lower(regexp_replace(d.display_name, '^.*[ -]', '')) END AS said "
+            + "FROM item_definition d WHERE d.category='FOOD' AND ("
+            + "     position(lower(d.display_name) in ?) > 0 "
+            + "  OR position(replace(d.item_key,'_',' ') in ?) > 0 "
+            + "  OR position(' ' || lower(regexp_replace(d.display_name, '^.*[ -]', '')) || ' ' in ?) > 0) "
+            // A full-name match outranks a head-noun one, so "eat the dried fish" names the dried fish while
+            // "eat the fish" names the fish.
+            + "ORDER BY (position(lower(d.display_name) in ?) > 0) DESC, length(d.display_name) DESC LIMIT 1",
+            rs -> rs.next() ? rs.getString(1) : null,
+            lowerText, lowerText, lowerText, lowerText, padded, lowerText);
     }
 
     /** True if eating this item is dangerous — it drops from a flora marked poisonous (e.g. death cap, fly agaric). */
