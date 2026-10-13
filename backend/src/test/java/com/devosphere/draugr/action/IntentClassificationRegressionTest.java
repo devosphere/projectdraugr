@@ -1967,6 +1967,35 @@ class IntentClassificationRegressionTest {
         assertEquals("DRY_BODY", classify("get under cover and dry off"), "and real drying still dries");
     }
 
+    /**
+     * Making the tackle is not fishing with it (#37).
+     *
+     * <p>Measured: {@code make a fishing line} and {@code make a fish hook} both answered <em>"You watch the
+     * ground a while. There is no water here that holds anything worth taking"</em> — the request to MAKE a thing
+     * performed the activity its noun names. The recipes exist and declare plain keywords ("fish hook", "fish
+     * trap", "bast fishing line"), so they were reachable all along by any verb the FISH rule does not claim:
+     * {@code carve a fish hook} worked the whole time.
+     *
+     * <p>The inverse of the asking-is-not-doing family, with the same cause — a sentence carries the noun of the
+     * thing it is about, and whatever owns that noun runs before the matcher.
+     */
+    @Test void makingTheTackleIsNotFishingWithIt() throws Exception {
+        // UNKNOWN is the correct answer in this DB-free test: it is what reaches the material matcher, which
+        // then resolves the recipe. Verified live, where `make a fish hook` comes back PROCESS_MATERIAL with
+        // "Carve a fish hook turns on a cutting edge".
+        assertEquals("UNKNOWN", classify("make a fish hook", false), "a craft must reach the material matcher");
+        assertEquals("UNKNOWN", classify("make a fishing line", false));
+        assertEquals("UNKNOWN", classify("craft a fish hook", false));
+
+        // AND FISHING ITSELF MUST STILL FISH, which is the whole hazard of excluding a verb from a noun-gated
+        // rule. All four of these were measured live as FISH after the change.
+        assertEquals("FISH", classify("go fishing"), "which always worked");
+        assertEquals("FISH", classify("catch a fish"));
+        assertEquals("FISH", classify("cast the net"));
+        assertEquals("FISH", classify("fish"));
+        assertEquals("FISH", classify("spear a pike"));
+    }
+
     @Test void theFoodChainAndTheKeepingQuestion() throws Exception {
         // Spoiling words need no subject: nothing else in this world goes off, spoils or turns rancid.
         assertEquals("TAKE_STOCK_OF_FOOD", classify("has this gone off"));
