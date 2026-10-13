@@ -86,15 +86,40 @@ class NamingAFoodYouDoNotHaveIntegrationTest {
     @Autowired JdbcTemplate jdbc;
 
     private final List<UUID> given = new ArrayList<>();
+    private final List<UUID> borrowed = new ArrayList<>();
 
     @AfterEach
     void takeBackWhatThisTestGave() {
         // One world, ~345 tests, and several of them count what the Chronicle carries or go looking for food.
+        //
+        // A CONSUMED ITEM CANNOT BE DELETED, and CI taught me that rather than the local suite, which skips
+        // every test in this file for want of Docker. Eating writes an `object_transition` row, and
+        // `object_transition_object_id_fkey` then refuses the delete:
+        //
+        //   DELETE FROM world_object WHERE id=? -> violates foreign key constraint
+        //   "object_transition_object_id_fkey" ... still referenced from table "object_transition"
+        //
+        // The transition rows cannot be removed either — a trigger holds them immutable, which is right: what
+        // happened to an object happened. So an item this test fed to the Chronicle is ARCHIVED instead, which
+        // takes it out of reach exactly as a delete would, and one it never touched is deleted outright.
         for (UUID id : given) {
-            jdbc.update("DELETE FROM item_instance WHERE object_id=?", id);
-            jdbc.update("DELETE FROM world_object WHERE id=?", id);
+            boolean hasHistory = Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM object_transition WHERE object_id=?)", Boolean.class, id));
+            if (hasHistory) {
+                jdbc.update("UPDATE world_object SET lifecycle_state='ARCHIVED' WHERE id=?", id);
+            } else {
+                jdbc.update("DELETE FROM item_instance WHERE object_id=?", id);
+                jdbc.update("DELETE FROM world_object WHERE id=?", id);
+            }
         }
         given.clear();
+        // AND PUT BACK WHAT emptyThePack TOOK. Archiving every food the Chronicle could reach is how this test
+        // makes "what is to hand" a known quantity rather than an assumption — but those items belong to the
+        // shared world and to whichever test gathered them. Leaving them archived would starve a later test of
+        // food it had every right to find, which is the fourth shape of order-dependence this project has
+        // recorded: a resource one test depleted and another needed.
+        for (UUID id : borrowed) jdbc.update("UPDATE world_object SET lifecycle_state='ACTIVE' WHERE id=?", id);
+        borrowed.clear();
     }
 
     private UUID aLivingChronicle() {
@@ -120,11 +145,23 @@ class NamingAFoodYouDoNotHaveIntegrationTest {
         given.add(id);
     }
 
-    /** Strip every food the Chronicle can reach, so "what is to hand" is known rather than assumed. */
+    /**
+     * Strip every food the Chronicle can reach, so "what is to hand" is known rather than assumed.
+     *
+     * <p>Each one is recorded and put back in {@code @AfterEach}: these items belong to the shared world and to
+     * whichever test gathered them, and leaving them archived would starve a later test of food it had every
+     * right to find.
+     */
     private void emptyThePack(UUID me) {
-        jdbc.update("UPDATE world_object SET lifecycle_state='ARCHIVED' WHERE current_owner_id=? AND id IN ("
-            + "  SELECT i.object_id FROM item_instance i JOIN item_definition d ON d.item_key=i.item_key "
-            + "  WHERE d.category='FOOD')", me);
+        List<UUID> theirs = jdbc.queryForList(
+            "SELECT w.id FROM world_object w JOIN item_instance i ON i.object_id=w.id "
+            + "JOIN item_definition d ON d.item_key=i.item_key "
+            + "WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND d.category='FOOD'",
+            UUID.class, me);
+        for (UUID id : theirs) {
+            jdbc.update("UPDATE world_object SET lifecycle_state='ARCHIVED' WHERE id=?", id);
+            borrowed.add(id);
+        }
     }
 
     private String said(String text) {
