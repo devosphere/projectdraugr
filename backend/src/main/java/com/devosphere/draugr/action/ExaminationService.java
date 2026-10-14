@@ -43,7 +43,30 @@ public class ExaminationService {
         double insight = capability.familiarity(chronicle, "INSIGHT");
         double knowledge = capability.familiarity(chronicle, "KNOWLEDGE");
 
+        // A THING IN THE WORLD, once the pack has been searched and come up empty (#37). Tried before the
+        // ground survey below, because a sentence that names something must be answered about that thing — and
+        // tried AFTER the pack, so a knife in hand still beats a knife lying in the grass.
         Map<String, Object> item = resolveItem(chronicle, lower);
+        if (item == null) {
+            String seen = resolveSeenThing(chronicle, location, lower);
+            if (seen != null) return new String[]{"SUCCEEDED", seen};
+            // AND A NAMED THING THAT IS NOWHERE IS SAID TO BE NOWHERE, rather than answered with a description
+            // of the marsh. `examine my bronze sword` was answered "You take a slow look at the ground and what
+            // stands on it..." — the same defect as `eat the fish` being answered with a mushroom: a subject
+            // that could not be found, quietly replaced by whatever was to hand.
+            //
+            // Only when the sentence names something the CATALOGUE knows. A bare "examine the ground" or "look
+            // around" names no thing and must still get the survey below, which is the right answer to it.
+            String named = jdbc.query(
+                "SELECT d.display_name FROM item_definition d "
+                + " WHERE position(lower(d.display_name) in ?) > 0 OR position(replace(d.item_key,'_',' ') in ?) > 0 "
+                + " ORDER BY length(d.display_name) DESC LIMIT 1",
+                rs -> rs.next() ? rs.getString(1) : null, lower, lower);
+            if (named != null)
+                return new String[]{"FAILED", "You look for " + named.toLowerCase(Locale.ROOT)
+                    + " to look over and there is none here — not in the pack, not on this ground. Describing "
+                    + "something else instead would tell you nothing about it."};
+        }
         if (item != null) {
             String out = switch (mode) {
                 case INSPECT     -> inspectItem(item, tier(perception + insight));
@@ -575,6 +598,90 @@ public class ExaminationService {
             if (lower.contains(key) || lower.contains(name)) return it;
         }
         return null;
+    }
+
+    /**
+     * Whether the sentence names something the Chronicle can SEE but does not carry (#37).
+     *
+     * <p>{@link #resolveItem} searches the pack and nothing else, so examining anything in the world fell
+     * through to the ground survey. Measured on a booted backend at midday, with a stone knife in hand as the
+     * control:
+     *
+     * <pre>
+     *   examine the stone knife -> "You take up the stone knife and look it over. It is whole and sound."
+     *   examine the death cap   -> "You take a slow look at the ground and what stands on it..."
+     *   examine the nettle      -> the same ground survey
+     *   examine the oak         -> the same
+     *   examine the goat        -> the same
+     *   examine my bronze sword -> the same, for a thing the Chronicle does not own at all
+     * </pre>
+     *
+     * <p>Every one of those is the shape this project calls its worst: the Chronicle asked about ONE thing and
+     * was answered about ANOTHER, in the same even voice as every true line. It is the same defect as
+     * {@code eat the fish} being answered with a mushroom — a named subject that could not be found, quietly
+     * replaced by whatever was to hand.
+     *
+     * <p>So the subject is looked for in the world as well: the flora growing on this ground, the structures
+     * standing on it, and the animals the keeper keeps. Each is asked of the same tables the rest of the game
+     * reads — {@code chunk_flora} plus the biome's growth for plants, exactly as the gathering rule does; a
+     * completed {@code construction_project} for a structure; a TAMED {@code wildlife_bond} for a beast — so
+     * what can be examined is what can be acted on, and the two cannot drift apart.
+     *
+     * @return a sentence about the named thing, or null if the sentence names nothing findable
+     */
+    private String resolveSeenThing(UUID chronicle, UUID location, String lower) {
+        // A PLANT GROWING HERE. Same two-part reach the gathering rule uses — the recorded stands on this
+        // ground plus the biome's general growth — so a plant you could pick is a plant you can look at.
+        String plant = jdbc.query(
+            "SELECT fd.flora_key, fd.is_poisonous, fd.organism_type FROM flora_definition fd "
+            + " WHERE fd.organism_type <> 'TREE' AND ("
+            + "   EXISTS (SELECT 1 FROM chunk_flora cf WHERE cf.chunk_id=? AND cf.flora_key=fd.flora_key AND cf.quantity > 0) "
+            + "   OR fd.biome_affinity ILIKE '%' || (SELECT biome FROM world_chunk WHERE id=?) || '%') "
+            + "   AND position(replace(fd.flora_key,'_',' ') in ?) > 0 "
+            // Longest name first, so "death cap" is settled before a bare "cap" could be.
+            + " ORDER BY length(fd.flora_key) DESC LIMIT 1",
+            rs -> rs.next()
+                ? "You look the " + rs.getString(1).replace('_', ' ') + " over where it grows. "
+                  + (rs.getBoolean(2)
+                     ? "It is poison — not a thing that disagrees with you, but a thing that kills, and no "
+                       + "amount of cooking takes that out of it."
+                     : "There is nothing wrong with it; it is the plain, sound growth of this ground.")
+                : null,
+            location, location, lower);
+        if (plant != null) return plant;
+
+        // A STRUCTURE STANDING HERE, with the integrity the camp stocktake would report.
+        String built = jdbc.query(
+            "SELECT ck.project_kind, cp.integrity_percent, cp.state FROM construction_project cp "
+            + " JOIN construction_kind ck ON ck.project_kind = cp.project_kind "
+            + " JOIN world_object w ON w.id = cp.object_id "
+            + " WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' "
+            + "   AND position(lower(replace(ck.project_kind,'_',' ')) in ?) > 0 "
+            + " ORDER BY length(ck.project_kind) DESC LIMIT 1",
+            rs -> rs.next()
+                ? "You walk round the " + rs.getString(1).toLowerCase(Locale.ROOT).replace('_', ' ')
+                  + " and look it over. " + ("COMPLETED".equals(rs.getString(3))
+                      ? "It stands at " + rs.getInt(2) + " of a hundred for soundness."
+                      : "It is not finished — the work stands where it was left.")
+                : null,
+            location, lower);
+        if (built != null) return built;
+
+        // AN ANIMAL THE KEEPER KEEPS. Read from the bond, so the thing examined is the thing the husbandry
+        // acts work on rather than a second notion of the same beast.
+        return jdbc.query(
+            "SELECT wp.species_key, wb.bond_stage, wb.sickness, wb.coat_condition FROM wildlife_bond wb "
+            + " JOIN wildlife_population wp ON wp.id = wb.population_id "
+            + " WHERE wb.chronicle_id=? AND wb.bond_stage='TAMED' "
+            + "   AND position(replace(wp.species_key,'_',' ') in ?) > 0 "
+            + " ORDER BY length(wp.species_key) DESC LIMIT 1",
+            rs -> rs.next()
+                ? "You look the " + rs.getString(1).replace('_', ' ') + " over, hand along its flank. "
+                  + (rs.getInt(3) > 20 ? "It is off colour and standing wrong."
+                     : rs.getInt(4) < 40 ? "The coat is matted and wants the comb."
+                     : "It is in good order, and stands quiet for the handling.")
+                : null,
+            chronicle, lower);
     }
 
     // ---- item ----------------------------------------------------------------------------------------
