@@ -411,7 +411,13 @@ public class ChronicleActionService {
         // it left behind. A chronicle who lies down hungry and wakes starving must
         // have that passage surfaced rather than silently swallowed.
         ChroniclePhysiologyService.BodyHudSnapshot beforeBody = physiology.activeBody();
-        String beforeWeather = jdbc.query("SELECT ww.weather_kind FROM world_weather ww JOIN world_chunk c ON c.world_id=ww.world_id WHERE c.id=?", rs -> rs.next() ? rs.getString(1) : null, chronicle.location());
+        // THE SKY AS FELT HERE, not the global front (#28/#37). This used to read world_weather raw, and the
+        // world then told the player two different things about one sky in the same minute: `read the sky` said
+        // "Snow is coming down" (it goes through BiomeClimate) while `look around` said "A rain falls" (it did
+        // not). BiomeClimate exists for exactly this — the same front "falls as snow where the lowland gets
+        // rain" — so every statement a player hears about the sky, and everything gated on it, now comes from
+        // the one reading the body is already charged against. Null-safe: localClimate COALESCEs to CLEAR.
+        String beforeWeather = localClimate(chronicle.location()).kind();
         Instant resolvedAt = ticks.advanceBy(Duration.ofMinutes(minutes)).simulatedAt();
         java.sql.Timestamp resolvedTs = java.sql.Timestamp.from(resolvedAt);
         UUID actionId = UUID.randomUUID(); String outcome = "SUCCEEDED"; String perception;
@@ -670,7 +676,31 @@ public class ChronicleActionService {
             } else { outcome = "FAILED"; perception = noWaterToDrink(chronicle.location(), beforeWeather); }
         }
         else if (intent == Intent.COLLECT_WATER) {
-            if (!waterInReach(chronicle.location())) { outcome = "FAILED"; perception = "There is no water here to fill from — no stream, spring, or standing water within reach."; }
+            // THE SKY IS A SOURCE (#37). Standing in a downpour with a vessel on your arm and being told "there
+            // is no water here to fill from" was the plainest falsehood in the water chain, and the world knew
+            // better in the same breath: DRINK already answered "rain wets your face and runs off your hands".
+            // The ground's own water comes first — a stream fills a skin faster than a held-out bowl ever will,
+            // and this branch only speaks where the old refusal spoke.
+            boolean groundWater = waterInReach(chronicle.location());
+            String sky = beforeWeather == null ? "CLEAR" : beforeWeather;
+            if (!groundWater && ("RAIN".equals(sky) || "STORM".equals(sky))) {
+                if (!items.hasWaterVessel(chronicle.id())) { outcome = "FAILED"; perception = "Rain is falling and you have nothing to catch it in; it runs off your hands as fast as it lands in them."; }
+                else {
+                    // Less than a stream gives, because this is what falls into the mouth of a vessel while you
+                    // hold it, not a vessel pushed under water. A storm drives more of it in.
+                    int n = items.makeWater(chronicle.id(), "raw_water", "Raw water", "STORM".equals(sky) ? 2 : 1, resolvedAt);
+                    outcome = n > 0 ? "SUCCEEDED" : "FAILED";
+                    perception = n == 0 ? "Your vessels are already brimful; the rain has nowhere to go but past you."
+                        : "STORM".equals(sky)
+                            ? "You set your vessel out in the storm and the rain drives into it; it fills faster than you could carry it from any stream — raw still, and better boiled."
+                            : "You hold your vessel out to the rain and let it fill. It comes in slowly, and it is raw, but it is the cleanest water this ground will give you.";
+                }
+            }
+            // Snow is water that will not pour. Said plainly, with what it would take, rather than refused as
+            // though the sky were empty — and melting it is BOIL_WATER's work, which this names instead of
+            // quietly duplicating.
+            else if (!groundWater && "SNOW".equals(sky)) { outcome = "FAILED"; perception = "Snow is coming down, and snow will not fill a vessel — it has to be melted first, over a fire and in something that can take the flame."; }
+            else if (!groundWater) { outcome = "FAILED"; perception = "There is no water here to fill from — no stream, spring, or standing water within reach, and nothing falling out of the sky."; }
             else if (!items.hasWaterVessel(chronicle.id())) { outcome = "FAILED"; perception = "The water is here, but nothing you carry will hold it; what you scoop up runs out between your fingers."; }
             else {
                 // A sand filter bed (#77) is drawn off beneath the sand, so what fills the vessel is already filtered.
@@ -1063,8 +1093,13 @@ public class ChronicleActionService {
         if (!others.isEmpty()) s.append(others.size() == 1 ? "Nearby stands " : "Nearby stand ").append(joinAnd(others)).append(" — the marks of a settlement you have raised here. ");
         s.append(biomeDescription(biome)).append(" ");
         s.append(timeOfDay(at)).append(" ");
-        String weather = jdbc.query("SELECT weather_kind,intensity FROM world_weather WHERE world_id=?", rs -> rs.next() ? weatherPhrase(rs.getString(1), rs.getInt(2)) : null, world);
-        if (weather != null) s.append(weather).append(" ");
+        // The KIND is the sky as felt on this ground (#28); the INTENSITY stays the front's, because how hard a
+        // system is driving is a property of the system and not of where you stand under it. Reading the kind
+        // raw here was the one place the world contradicted itself about the weather — this is the sentence a
+        // player gets from `look around`, which is how most of them ask what the sky is doing.
+        Integer intensity = jdbc.query("SELECT intensity FROM world_weather WHERE world_id=?", rs -> rs.next() ? rs.getInt(1) : null, world);
+        String weather = intensity == null ? null : weatherPhrase(localClimate(loc).kind(), intensity);
+        if (weather != null && !weather.isEmpty()) s.append(weather).append(" ");
         // A people's isle within sight (#112): what can be seen of it from here, and nothing that could not.
         String isle = contact == null ? null : contact.glimpse(loc, at);
         if (isle != null) s.append(isle).append(" ");
@@ -1346,7 +1381,10 @@ public class ChronicleActionService {
             case "OVERCAST" -> "A flat grey overcast holds the sky.";
             case "RAIN" -> "A " + strength + "rain falls, ticking against leaf and stone.";
             case "STORM" -> "A storm drives " + strength + "rain sidelong on a hard wind.";
-            case "SNOW" -> "A " + strength + "snow drifts down, muffling the ground.";
+            // No article before a bare "snow": at middling intensity the strength word is empty, and the sentence
+            // read "A snow drifts down". Visible far more often now that this sentence reports the LOCAL fall,
+            // since every chunk whose geography turns the front to snow reaches it.
+            case "SNOW" -> (strength.isEmpty() ? "Snow drifts down" : "A " + strength + "snow drifts down") + ", muffling the ground.";
             default -> "";
         };
     }
@@ -3216,6 +3254,28 @@ public class ChronicleActionService {
         // water to draw, and COLLECT_WATER already answers honestly when there is none — "no stream, no spring,
         // only what the sky gives". That is a far better answer than silence. ("look for water" is left to
         // SEARCH, which claims "look for" and answers about what it finds.)
+        // CATCHING WHAT THE SKY GIVES (#37). "collect rainwater" missed the rule below for a reason worth
+        // writing down: it looks for "collect water", and RAINWATER IS ONE WORD, so the phrase a person reaches
+        // for first contained neither "collect water" nor anything else the composer knew. Six phrasings landed
+        // on the generic miss while it was raining on them.
+        //
+        // THE SHADOW THIS RULE HAD TO DODGE. A Java intent runs ahead of both the process and the assembly
+        // matchers, so a loose rule here would silently swallow work the catalogue already owns — and the
+        // catalogue owns a great deal of rain: the `rainwater_catchment` assembly keys on the BARE phrase
+        // "rainwater catchment", the `rain_screen` assembly on "rain screen", and three capes, a hood and a
+        // stock sheet are named for the rain they turn. Worse, "catchment" CONTAINS "catch", so pairing a plain
+        // contains("catch") with "rain" would have stolen "build a rainwater catchment" from its own assembly.
+        // Hence: word-bounded verbs, the two assemblies excluded by name, and the catalogue asked before this
+        // rule answers. The 523-keyword replay is what proves it, not this comment.
+        // IT DOES NOT DEFER TO actionMatchesProcess, which almost every neighbouring rule does, and the reason is
+        // worth the line: "put out a bowl to catch the rain" was refused by that guard, because `carve_wooden_bowl`
+        // declares the BARE keyword "bowl" — so naming the vessel you catch rain IN made the sentence look like a
+        // craft of the vessel. The guard is the wrong instrument here. What protects the catalogue instead is that
+        // the rain must be the OBJECT of the verb: none of the rain-named recipes (three capes, a hood, a stock
+        // sheet) can satisfy that, and the two assemblies that could are excluded by name.
+        if(CATCHING_RAIN.matcher(value).find()
+           &&!value.contains("catchment")&&!value.contains("rain screen")&&!value.contains("cape")&&!value.contains("hood")&&!value.contains("sheet")
+           &&!MAKING_SOMETHING.matcher(value).find()) return Intent.COLLECT_WATER;
         if(value.contains("find water")||value.contains("find some water")||value.contains("find a stream")
            ||value.contains("collect water")||value.contains("fetch water")||value.contains("draw water")||value.contains("gather water")||value.contains("fill container")||value.contains("scoop water")||((value.contains("fill")||value.contains("refill"))&&(value.contains("waterskin")||value.contains("water skin")||value.contains("bucket")||value.contains("vessel")||value.contains("jar")||value.contains("with water")||value.contains("flask")||value.contains("gourd")
               // "fill the skin" is what somebody holding a waterskin says about it. The list named the thing in
@@ -3974,6 +4034,24 @@ public class ChronicleActionService {
           + "|assemble|assembles|assembling|weave|weaves|weaving|lash|lashes|lashing|haft|hafts|hafting"
           + "|repair|repairs|repairing|mend|mends|mending|dismantle|dismantles|dismantling)(?!\\w)");
     /**
+     * Asking for the water the sky is giving (#37).
+     *
+     * <p>The rain has to be the OBJECT of the verb, which is why this is a pattern and not the usual chain of
+     * {@code contains}. Pairing a bare "gather" with a bare "rain" reads <i>"gather firewood before the rain"</i>
+     * as an attempt to fill a waterskin — a sentence a person in this game says often, and one that belongs to
+     * GATHER_BRANCHES. So the noun must follow the verb across nothing but determiners.
+     *
+     * <p>The second alternative is the roundabout way people actually say it — "set out a vessel for the rain",
+     * "put a bowl out to catch the rain" — where the vessel stands between the verb and the water. It is bounded
+     * to a short run of words so it cannot reach across a whole sentence and claim an unrelated clause.
+     */
+    private static final java.util.regex.Pattern CATCHING_RAIN = java.util.regex.Pattern.compile(
+            "(?<!\\w)(?:catch|catches|catching|collect|collects|collecting|gather|gathers|gathering|take)"
+          + "(?:\\s+(?:the|some|a|my|up|more))*\\s+(?:rainwater|rain\\s+water|rain)(?!\\w)"
+          + "|(?<!\\w)(?:set|sets|setting|put|puts|putting|leave|leaves|leaving|stand|stands|standing)\\s+"
+          + "(?:\\w+\\s+){0,4}?(?:out|up)\\s+(?:\\w+\\s+){0,4}?(?:for|in|under|to\\s+catch)\\s+(?:the\\s+)?(?:rainwater|rain)(?!\\w)"
+          + "|(?<!\\w)(?:set|sets|setting|put|puts|putting)\\s+(?:out|up)\\s+(?:\\w+\\s+){0,4}?(?:for|in|under|to\\s+catch)\\s+(?:the\\s+)?(?:rainwater|rain)(?!\\w)");
+    /**
      * Whether a phrase asks for a carcass's yield by naming the yield and nothing else — "take the hide",
      * "keep the antlers", "save the sinew", "take the pelt off".
      *
@@ -4357,7 +4435,11 @@ public class ChronicleActionService {
             ((Number) env.get("grid_y")).intValue(), ((Number) env.get("height_chunks")).intValue(),
             globalKind, ((Number) env.get("t")).doubleValue(), ((Number) env.get("w")).intValue(),
             Boolean.TRUE.equals(env.get("sun_warmed")));
-        boolean weatherChanged = beforeWeather != null && globalKind != null && !beforeWeather.equals(globalKind);
+        // Both sides of this comparison are now the LOCAL sky. They have to be: beforeWeather became the local
+        // kind so that nothing gated on the weather could disagree with the prose, and comparing a local reading
+        // against the global front would then have reported the sky "changing" on every single turn at any chunk
+        // whose geography shifts the fall — which is most of the map above the lowland line.
+        boolean weatherChanged = beforeWeather != null && !beforeWeather.equals(local.kind());
         return narrationEngine.ground(core, biome, timeOfDayLabel(at), local.kind(), attention, weatherChanged);
     }
     /**
@@ -4446,7 +4528,10 @@ public class ChronicleActionService {
         UUID world = (UUID) here.get("world_id");
         String named = jdbc.query("SELECT name FROM chronicle_named_location WHERE chunk_id=? AND chronicle_id=? LIMIT 1", rs -> rs.next() ? rs.getString(1) : null, loc, chronicle.id());
         LocationView location = new LocationView(loc, named, (String) here.get("biome"), (int) here.get("grid_x"), (int) here.get("grid_y"));
-        WeatherView weather = jdbc.query("SELECT weather_kind, intensity FROM world_weather WHERE world_id=?", rs -> rs.next() ? new WeatherView(rs.getString(1), rs.getInt(2)) : null, world);
+        // The HUD's sky is the sky here, for the same reason the prose's is (#28/#37): the client showed the
+        // front while the narration described the local fall, so the panel and the paragraph disagreed.
+        Integer frontIntensity = jdbc.query("SELECT intensity FROM world_weather WHERE world_id=?", rs -> rs.next() ? rs.getInt(1) : null, world);
+        WeatherView weather = frontIntensity == null ? null : new WeatherView(localClimate(loc).kind(), frontIntensity);
         // ATTENTION scales what the frame reveals. A chronicle heads-down on a task
         // (LOW) witnesses only what the act touches, not the carcass in the treeline
         // they never looked at — the ignorance the design intends. Moving takes the
