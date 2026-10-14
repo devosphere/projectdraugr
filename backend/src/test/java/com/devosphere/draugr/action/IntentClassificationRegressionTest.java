@@ -579,6 +579,35 @@ class IntentClassificationRegressionTest {
     }
 
     /** M1 #65 read / measure / identify: the remaining perception verbs, with their substring boundaries. */
+    /**
+     * Examining a lean-to must not build one (#37).
+     *
+     * <p>The guard for this was written once already and covered question SHAPES — {@code is the lean-to still
+     * good} answered <em>"You mark out a low shelter frame against the weather"</em>, which STARTED BUILDING ONE.
+     * It left the imperative perception verbs to fall through, so a year later {@code examine the lean-to} still
+     * did it. Measured live before this fix.
+     *
+     * <p>A wrong answer that changes the world is the worst kind this project finds: a missing answer costs a
+     * turn, and this cost a turn and left a frame standing that nobody asked for.
+     */
+    @Test void examiningALeanToMustNotBuildOne() throws Exception {
+        for (String p : new String[]{"examine the lean-to", "inspect the lean-to", "look at the lean-to",
+                                     "look over the lean-to", "study the lean-to", "have a look at the lean-to"})
+            assertEquals("TAKE_STOCK_OF_CAMP", classify(p), p + " must not raise a frame");
+
+        // The question forms the first fix covered must keep working.
+        assertEquals("TAKE_STOCK_OF_CAMP", classify("is the lean-to still good"), "which the first fix covered");
+        assertEquals("TAKE_STOCK_OF_CAMP", classify("how is the lean-to"));
+
+        // ...AND BUILDING ONE MUST STILL BUILD ONE, which is the whole hazard of widening a rule that owns a
+        // construction verb. A guard that swallowed the act would be a worse bug than the one it fixed.
+        assertEquals("START_LEAN_TO", classify("make a lean-to"), "building is still building");
+        assertEquals("WORK_LEAN_TO", classify("work on the lean-to"));
+        assertEquals("WORK_LEAN_TO", classify("continue the lean-to"));
+        assertEquals("REPAIR_LEAN_TO", classify("repair the lean-to"));
+        assertEquals("ABANDON_LEAN_TO", classify("abandon the lean-to"));
+    }
+
     @Test void readMeasureIdentifyClassify() throws Exception {
         // read / review_record -> READ
         assertEquals("READ", classify("read my journal"));

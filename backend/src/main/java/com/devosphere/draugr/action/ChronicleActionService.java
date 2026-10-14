@@ -3977,7 +3977,17 @@ public class ChronicleActionService {
         if(value.startsWith("is ")||value.startsWith("how ")||value.startsWith("does ")||value.startsWith("will ")
            ||value.startsWith("what ")||value.contains("still good")||value.contains("still sound")
            ||value.contains("still standing")||value.contains("still hold")||value.contains("any good")
-           ||value.contains("sound enough")||value.contains("in good repair")) return Intent.TAKE_STOCK_OF_CAMP;
+           ||value.contains("sound enough")||value.contains("in good repair")
+           // ...AND THE PERCEPTION VERBS, which the first fix missed (#37). It covered question SHAPES and left
+           // the imperative forms to fall through, so `examine the lean-to` STILL BUILT ONE — "You mark out a
+           // low shelter frame against the weather" — a year's worth of the same defect, one verb family along.
+           // Measured, not assumed: that was the live answer before this line.
+           //
+           // They go to the camp stocktake for the same reason the questions do: it reports every structure
+           // standing here with its integrity, which is what someone looking a lean-to over wants to know.
+           ||value.contains("examine")||value.contains("inspect")||value.contains("look at")
+           ||value.contains("look over")||value.contains("study")||value.contains("check the")
+           ||value.contains("have a look")) return Intent.TAKE_STOCK_OF_CAMP;
         if(value.contains("repair")) return Intent.REPAIR_LEAN_TO;
         if(value.contains("abandon")||value.contains("leave")) return Intent.ABANDON_LEAN_TO;
         if(value.contains("resume")||value.contains("return to")) return Intent.RESUME_LEAN_TO;
