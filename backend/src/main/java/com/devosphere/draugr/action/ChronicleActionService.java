@@ -592,6 +592,12 @@ public class ChronicleActionService {
         else if (intent == Intent.CRAFT_GARMENT) { String[] r=items.craftGarment(chronicle.id(),text,resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.LURE) { WildlifeEncounterService.EncounterResult r=wildlife.lure(chronicle.id(),chronicle.location(),resolvedAt,text); outcome=r.outcome(); perception=r.narration(); }
         else if (intent == Intent.SET_TRAP) { WildlifeEncounterService.EncounterResult r=wildlife.setTrap(chronicle.id(),chronicle.location(),resolvedAt,text); outcome=r.outcome(); perception=r.narration(); }
+        // TAKING A TRAP UP IS NOT CHECKING IT (#37, V418). `take up the snare` answered "The trap stands as you
+        // left it" — the player asked to REMOVE it and was told it was still standing. Split here rather than by
+        // a new intent, because the two share every word of their subject and differ only in the verb: checking
+        // leaves the set standing, lifting takes it out of the run and recovers what it was built from.
+        else if (intent == Intent.CHECK_TRAP && liftingTheSet(text.toLowerCase(Locale.ROOT)))
+            { WildlifeEncounterService.EncounterResult r=wildlife.liftTrap(chronicle.id(),chronicle.location(),resolvedAt); outcome=r.outcome(); perception=r.narration(); }
         else if (intent == Intent.CHECK_TRAP) { WildlifeEncounterService.EncounterResult r=wildlife.checkTrap(chronicle.id(),chronicle.location(),actionId,resolvedAt); outcome=r.outcome(); perception=r.narration(); }
         else if (intent == Intent.TAME) { WildlifeEncounterService.EncounterResult r=wildlife.tame(chronicle.id(),chronicle.location(),actionId,resolvedAt,text); outcome=r.outcome(); perception=r.narration(); }
         else if (intent == Intent.TRACK) { WildlifeEncounterService.EncounterResult r=wildlife.track(chronicle.id(),chronicle.location(),actionId,resolvedAt,attentionLevel(text,intent),capability.familiarity(chronicle.id(),"ATTENTION")); outcome=r.outcome(); perception=r.narration(); }
@@ -3772,6 +3778,21 @@ public class ChronicleActionService {
                                            "chub", "dace", "cod", "salmon", "bream", "roach"})
             if (word(value, species) || word(value, species + "s")) return true;
         return false;
+    }
+
+    /**
+     * Whether the sentence asks for a trap to be TAKEN OUT of the run rather than looked at (#37, V418).
+     *
+     * <p>Held to the verbs that mean removal and nothing else. "check", "look at" and "is there anything in it"
+     * all leave the set standing and keep their own answer; these take it up.
+     */
+    private static boolean liftingTheSet(String value) {
+        return value.contains("take up")||value.contains("takes up")||value.contains("taking up")
+            ||value.contains("lift the")||value.contains("lift my")||value.contains("pull up")
+            ||value.contains("pick up the snare")||value.contains("pick up the trap")
+            ||value.contains("remove the snare")||value.contains("remove the trap")
+            ||value.contains("retrieve the snare")||value.contains("retrieve the trap")
+            ||value.contains("dismantle the snare")||value.contains("dismantle the trap");
     }
 
     /**

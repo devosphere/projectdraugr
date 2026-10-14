@@ -1544,27 +1544,31 @@ public class WildlifeEncounterService {
                     : v.contains("pit") ? "PIT"
                     : v.contains("fish") || v.contains("weir") ? "FISH_TRAP"
                     : v.contains("cage") || v.contains("box") ? "CAGE" : "SNARE";
+        // What this set actually cost, recorded so the lift can return it (#37, V418). Filled by `spend`,
+        // which consumes and remembers in one step — the branches below short-circuit, so whichever recipe
+        // succeeds is the only one that writes here.
+        java.util.List<String> spent = new java.util.ArrayList<>();
         // Every trap costs real material to build.
         boolean built = switch (kind) {
             // Raw stone + branch, OR a pre-made weight stone paired with a carved trigger (#93 deadfall components).
             case "DEADFALL" -> (items.hasAtLeast(chronicle,"field_stone",1) && items.hasAtLeast(chronicle,"dry_branch",1)
-                    && items.consumeOne(chronicle,"field_stone",at) && items.consumeOne(chronicle,"dry_branch",at))
+                    && spend(chronicle,"field_stone",at,spent) && spend(chronicle,"dry_branch",at,spent))
                 || (items.hasAtLeast(chronicle,"deadfall_weight_stone",1) && items.hasAtLeast(chronicle,"deadfall_trigger",1)
-                    && items.consumeOne(chronicle,"deadfall_weight_stone",at) && items.consumeOne(chronicle,"deadfall_trigger",at))
+                    && spend(chronicle,"deadfall_weight_stone",at,spent) && spend(chronicle,"deadfall_trigger",at,spent))
                 || (items.hasAtLeast(chronicle,"deadfall_weight_stone",1) && items.hasAtLeast(chronicle,"figure_four_trigger",1)
-                    && items.consumeOne(chronicle,"deadfall_weight_stone",at) && items.consumeOne(chronicle,"figure_four_trigger",at));
+                    && spend(chronicle,"deadfall_weight_stone",at,spent) && spend(chronicle,"figure_four_trigger",at,spent));
             // Two hazel rods woven on the spot, OR a pre-made cage frame carried in (#93 cage component).
             case "FISH_TRAP", "CAGE" -> (items.hasAtLeast(chronicle,"hazel_rod",2)
-                    && items.consumeOne(chronicle,"hazel_rod",at) && items.consumeOne(chronicle,"hazel_rod",at))
-                || (items.hasAtLeast(chronicle,"cage_trap_frame",1) && items.consumeOne(chronicle,"cage_trap_frame",at));
+                    && spend(chronicle,"hazel_rod",at,spent) && spend(chronicle,"hazel_rod",at,spent))
+                || (items.hasAtLeast(chronicle,"cage_trap_frame",1) && spend(chronicle,"cage_trap_frame",at,spent));
             case "PIT" -> items.hasAtLeast(chronicle,"dry_branch",2)
-                && items.consumeOne(chronicle,"dry_branch",at) && items.consumeOne(chronicle,"dry_branch",at);
+                && spend(chronicle,"dry_branch",at,spent) && spend(chronicle,"dry_branch",at,spent);
             // Two lengths of fibre, OR a pre-made running loop, OR a wire cord paired with a trigger (#93 snare components).
             default -> (items.hasAtLeast(chronicle,"plant_fiber",2)
-                    && items.consumeOne(chronicle,"plant_fiber",at) && items.consumeOne(chronicle,"plant_fiber",at))
-                || (items.hasAtLeast(chronicle,"snare_loop",1) && items.consumeOne(chronicle,"snare_loop",at))
+                    && spend(chronicle,"plant_fiber",at,spent) && spend(chronicle,"plant_fiber",at,spent))
+                || (items.hasAtLeast(chronicle,"snare_loop",1) && spend(chronicle,"snare_loop",at,spent))
                 || (items.hasAtLeast(chronicle,"snare_wire_fibre",1) && items.hasAtLeast(chronicle,"snare_trigger_stick",1)
-                    && items.consumeOne(chronicle,"snare_wire_fibre",at) && items.consumeOne(chronicle,"snare_trigger_stick",at));
+                    && spend(chronicle,"snare_wire_fibre",at,spent) && spend(chronicle,"snare_trigger_stick",at,spent));
         };
         if (!built) return new EncounterResult("FAILED","You work at it for a while, but you do not have what a trap of that kind needs.");
 
@@ -1579,10 +1583,93 @@ public class WildlifeEncounterService {
         UUID trap = UUID.randomUUID();
         String label = switch (kind) { case "DEADFALL" -> "Deadfall trap"; case "PIT" -> "Covered pit"; case "FISH_TRAP" -> "Woven fish trap"; case "CAGE" -> "Woven cage trap"; default -> "Set snare"; };
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'TRAP',?,?)", trap, label, chunk);
-        jdbc.update("INSERT INTO placed_trap (object_id,chunk_id,trap_kind,set_by,set_at,baited_with) VALUES (?,?,?,?,?,?)",
-            trap, chunk, kind, chronicle, Timestamp.from(at), bait);
+        // WRITE DOWN WHAT IT WAS BUILT FROM (#37, V418), so lifting it can give those back and nothing else.
+        // A SNARE can be built three ways — two plant fibre, one pre-made loop, or wire and a trigger — so a
+        // lift that guessed "plant fibre" would quietly TRANSFORM one catalogue item into another. That is
+        // matter from nothing wearing a different hat.
+        jdbc.update("INSERT INTO placed_trap (object_id,chunk_id,trap_kind,set_by,set_at,baited_with,built_from) VALUES (?,?,?,?,?,?,?)",
+            trap, chunk, kind, chronicle, Timestamp.from(at), bait,
+            spent.isEmpty() ? null : spent.toArray(new String[0]));
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'TRAP_SET',jsonb_build_object('kind',?))", trap, Timestamp.from(at), kind);
         return new EncounterResult("SUCCEEDED","You build the " + label.toLowerCase() + " and set it across the run" + (bait != null ? ", baited" : "") + ". It stands there after you have gone. What comes to it is not yours to decide.");
+    }
+
+    /** Consume one of an item AND remember that it went into the set, so the lift can give it back (#37, V418). */
+    private boolean spend(UUID chronicle, String itemKey, Instant at, java.util.List<String> spent) {
+        if (!items.consumeOne(chronicle, itemKey, at)) return false;
+        spent.add(itemKey);
+        return true;
+    }
+
+    /**
+     * Lift a trap you set, and recover what it was made of (#37, V418).
+     *
+     * <p>Measured before this existed: {@code take up the snare} answered <em>"The trap stands as you left
+     * it."</em> The player asked to REMOVE it and was told it was still standing. That is a recorded member of
+     * this project's asking-is-not-doing family — it was once worse, WORKING the snare when the player asked to
+     * remove it, and the fix made it report instead of act. Reporting is better than the wrong act and is still
+     * not the act: a trapper lifts a set to move the line, and there was no way to do it at all.
+     *
+     * <p><b>Recovery is always a net loss, by construction.</b> It returns the components {@code built_from}
+     * recorded at set time, minus one for the wear of cutting the set out — so it can give back only what was
+     * actually spent, and never all of it. That is honest about frayed cordage and incapable of adding matter,
+     * which this project's conservation rule forbids: a better process means better RECOVERY, never more matter.
+     *
+     * <p>A trap set before V418 has no record of its components. That is read as nothing recoverable and said
+     * plainly, rather than guessed — a SNARE can be built from fibre, a pre-made loop, or wire and a trigger,
+     * and handing back the wrong one would transform one catalogue item into another.
+     */
+    @Transactional
+    public EncounterResult liftTrap(UUID chronicle, UUID chunk, Instant at) {
+        java.util.Map<String,Object> trap = jdbc.query(
+            "SELECT object_id, trap_kind, built_from FROM placed_trap WHERE chunk_id=? AND set_by=? AND NOT sprung "
+            + "ORDER BY set_at LIMIT 1 FOR UPDATE",
+            rs -> {
+                if (!rs.next()) return null;
+                java.sql.Array a = rs.getArray(3);
+                java.util.Map<String,Object> m = new java.util.HashMap<>();
+                m.put("id", rs.getObject(1, UUID.class));
+                m.put("kind", rs.getString(2));
+                m.put("built", a == null ? null : (String[]) a.getArray());
+                return m;
+            }, chunk, chronicle);
+        if (trap == null)
+            return new EncounterResult("FAILED", "You have nothing of your own standing here to take up.");
+
+        UUID trapId = (UUID) trap.get("id");
+        String kind = String.valueOf(trap.get("kind")).toLowerCase(java.util.Locale.ROOT).replace('_', ' ');
+        String[] built = (String[]) trap.get("built");
+
+        // Take the set out of the world first, so the act is done whether or not anything comes back with it.
+        jdbc.update("UPDATE placed_trap SET sprung=true, checked_at=? WHERE object_id=?", Timestamp.from(at), trapId);
+        jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED', destroyed_at=?, "
+            + "destroyed_location_id=current_location_id, destroyed_cause='TRAP_LIFTED', current_location_id=NULL "
+            + "WHERE id=?", Timestamp.from(at), trapId);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) "
+            + "VALUES (?,?,'TRAP_LIFTED',jsonb_build_object('kind',?))", trapId, Timestamp.from(at), kind);
+
+        if (built == null || built.length == 0)
+            return new EncounterResult("SUCCEEDED", "You cut the " + kind + " out of the run and coil what is "
+                + "left of it. Nothing of it is worth carrying — you set this one before you were keeping count "
+                + "of what went into it.");
+
+        // All but one: the last is the wear of cutting it out. A single-component set gives nothing back, which
+        // is the honest answer for a trap that was one piece of cordage.
+        java.util.List<String> recovered = new java.util.ArrayList<>();
+        for (int i = 0; i < built.length - 1; i++) {
+            String key = built[i];
+            String name = jdbc.query("SELECT display_name FROM item_definition WHERE item_key=?",
+                rs -> rs.next() ? rs.getString(1) : null, key);
+            if (name == null) continue;
+            items.createCarriedItem(chronicle, key, name, at, "RECOVERED_FROM_TRAP");
+            recovered.add(name.toLowerCase(java.util.Locale.ROOT));
+        }
+        if (recovered.isEmpty())
+            return new EncounterResult("SUCCEEDED", "You cut the " + kind + " out of the run. What held it is "
+                + "frayed through and worth nothing now — a set this light does not come back twice.");
+        return new EncounterResult("SUCCEEDED", "You cut the " + kind + " out of the run and work "
+            + String.join(" and ", recovered) + " free of it. The rest is frayed past use and stays where it "
+            + "fell. The run is open again, and your line can go somewhere better.");
     }
 
     /**
