@@ -2379,7 +2379,18 @@ public class ChronicleActionService {
         // the same cause: a sentence carries the NOUN of the thing it is about, and whatever owns that noun runs
         // before the matcher. MAKING_SOMETHING is the predicate this file already keeps for it.
         if((usingNet||(fishingAct&&!value.contains("landing")&&!value.contains("jetty")&&!value.contains("shellfish"))||value.contains("angle")||((value.contains("catch")||value.contains("spear"))&&(value.contains("trout")||value.contains("perch")||value.contains("pike")||value.contains("carp")||value.contains("eel")||value.contains("catfish")||value.contains("crayfish"))))
-           &&!MAKING_SOMETHING.matcher(value).find()&&!items.actionMatchesProcess(action)) return Intent.FISH;
+           // A SENTENCE THAT NAMES A FISH BY SPECIES IS FISHING, and does not defer to the material matcher
+           // (#37, V417). That deferral exists so a craft phrase can reach its recipe, and it was right until
+           // "hook" became a declared keyword for the four fish hooks — at which point `hook an eel` stopped
+           // being a fishing act and became an offer to carve tackle. The standing suite caught it:
+           // AFishYouAlreadyCaughtIntegrationTest has asserted that sentence as FISH all along.
+           //
+           // The SPECIES and not the bare word "fish": "make a fish hook" names a fish too, and letting that
+           // win would put back the very defect the MAKING_SOMETHING guard beside it just removed. Word-bounded
+           // because "eel" sits inside STEEL, WHEEL and PEELED — the rule already used word() for it in one
+           // place and a raw contains() in another, and only one of those was safe.
+           &&!MAKING_SOMETHING.matcher(value).find()
+           &&(namesAFishByName(value) || !items.actionMatchesProcess(action))) return Intent.FISH;
         if(value.contains("snare")||value.contains("set a trap")||value.contains("set trap")||((value.contains("trap")||value.contains("noose"))&&(value.contains("rabbit")||value.contains("hare")||value.contains("bird")||value.contains("fowl")||value.contains("small")||value.contains("run")))) return Intent.SNARE;
         // A bird's nest and an insect's nest are the same word and not the same act (#122). The bird takes it when
         // the words name eggs or a bird and name nothing of a hive, so "rob the nest" beside a hive is still the hive.
@@ -3743,6 +3754,24 @@ public class ChronicleActionService {
         return forWater
             ? " " + them + " along at your pace, and there is water in front of them now."
             : " " + them + " along at your pace, and there is grazing under them now.";
+    }
+
+    /**
+     * Whether the sentence names a fish by its own species name (#37, V417).
+     *
+     * <p>Deliberately NOT the bare word "fish": {@code make a fish hook} names a fish and is a craft, and this
+     * predicate exists to let a fishing ACT outrank the material matcher. Including the generic word would put
+     * back the defect the FISH rule's {@code MAKING_SOMETHING} guard removes.
+     *
+     * <p>Word-bounded, because "eel" sits inside STEEL, WHEEL and PEELED — and "perch" inside PERCHED. The FISH
+     * rule above already used {@code word()} for "eel" in one of its two clauses and a raw {@code contains()} in
+     * the other; only one of those was ever safe.
+     */
+    private static boolean namesAFishByName(String value) {
+        for (String species : new String[]{"trout", "perch", "pike", "carp", "eel", "catfish", "crayfish",
+                                           "chub", "dace", "cod", "salmon", "bream", "roach"})
+            if (word(value, species) || word(value, species + "s")) return true;
+        return false;
     }
 
     /**
