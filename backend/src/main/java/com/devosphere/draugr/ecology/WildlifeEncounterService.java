@@ -1602,6 +1602,101 @@ public class WildlifeEncounterService {
     }
 
     /**
+     * The trap line, as a line (#37).
+     *
+     * <p><b>The line had no existence as a line.</b> Every question about it was answered about something else,
+     * and two of them were answered by ACTING:
+     *
+     * <pre>
+     *   how many traps have I set    -&gt; SET_TRAP — it tried to BUILD ANOTHER ONE
+     *   did anything come to my snare -&gt; SNARE   — it tried to BUILD ANOTHER ONE
+     *   how many traps do I have     -&gt; "nothing by that name is here to count"  (the PACK)
+     *   what did I catch             -&gt; the generic miss
+     *   what is in my traps          -&gt; the generic miss
+     *   how is the trap line         -&gt; the generic miss
+     *   check my traps               -&gt; "There is nothing of yours standing here to check."
+     * </pre>
+     *
+     * <p>The first two are the hardest form of this project's asking-is-not-doing family, because they do not
+     * merely answer wrongly — they would CHANGE THE WORLD in reply to a question. They failed only for want of
+     * cordage; with fibre in hand, asking how many traps you had set would have set another one.
+     *
+     * <p>And the last is true only of HERE. {@code checkTrap} is scoped to one chunk, while a trap line is by
+     * definition spread over ground — so a trapper with six sets across the valley was told there was nothing.
+     * This reads the whole line: what stands, where it stands relative to where you are, how long it has been
+     * out, and what the line has taken. Strictly read-only; it is an answer, not an act.
+     */
+    @Transactional(readOnly = true)
+    public EncounterResult trapLineStocktake(UUID chronicle, UUID chunk, Instant at) {
+        return trapLineStocktake(chronicle, chunk, at, false);
+    }
+
+    /**
+     * @param tallyFirst when the question was what the line has TAKEN rather than what stands, the take leads.
+     *     "what did I catch" was answered with three sentences about where the sets are and the word "nothing"
+     *     at the end — true, and not what was asked. Echo the player's question, not the fuller record.
+     */
+    @Transactional(readOnly = true)
+    public EncounterResult trapLineStocktake(UUID chronicle, UUID chunk, Instant at, boolean tallyFirst) {
+        // The age is measured against the SIMULATION clock, not the wall clock. set_at is written from simulated
+        // time, so `now()` here would have reported a trap set this morning as months old — or unset.
+        java.util.List<String> standing = jdbc.query(
+            "SELECT pt.trap_kind, c.grid_x - here.grid_x AS dx, c.grid_y - here.grid_y AS dy, "
+            + "       EXTRACT(EPOCH FROM (?::timestamptz - pt.set_at))/3600 AS hours "
+            + "FROM placed_trap pt JOIN world_chunk c ON c.id=pt.chunk_id "
+            + "CROSS JOIN (SELECT grid_x, grid_y FROM world_chunk WHERE id=?) here "
+            + "WHERE pt.set_by=? AND NOT pt.sprung ORDER BY pt.set_at",
+            (rs, i) -> {
+                String kind = rs.getString(1).toLowerCase(java.util.Locale.ROOT).replace('_', ' ');
+                int dx = rs.getInt(2), dy = rs.getInt(3);
+                String where = com.devosphere.draugr.world.Compass.of(dx, dy);
+                int steps = Math.max(Math.abs(dx), Math.abs(dy));
+                long hours = (long) rs.getDouble(4);
+                // How long it has stood is the thing that decides whether it is worth walking to, so it belongs
+                // in the answer. Said in the coarse words a person uses, not in a figure.
+                String age = hours >= 48 ? ", out " + (hours / 24) + " days"
+                           : hours >= 24 ? ", out since yesterday"
+                           : hours >= 2 ? ", out " + hours + " hours"
+                           : ", just set";
+                return kind + (where == null ? " on this ground"
+                     : " " + steps + (steps == 1 ? " chunk " : " chunks ") + where + " of here") + age;
+            }, Timestamp.from(at), chunk, chronicle);
+
+        // What the line has TAKEN. A sprung trap's row survives its object, so the catch is still on record —
+        // which is the whole of what "what did I catch" is asking.
+        java.util.List<String> taken = jdbc.queryForList(
+            "SELECT caught_species FROM placed_trap WHERE set_by=? AND sprung AND caught_species IS NOT NULL "
+            + "ORDER BY checked_at DESC NULLS LAST LIMIT 5", String.class, chronicle);
+
+        String sets = standing.isEmpty()
+            ? "You have nothing set. No trap of yours stands anywhere."
+            : (standing.size() == 1 ? "One set of yours stands: " : standing.size() + " sets of yours stand: ")
+              + String.join(", ", standing) + ".";
+
+        String tally;
+        if (taken.isEmpty()) tally = standing.isEmpty()
+            ? "Nothing has ever come to anything of yours."
+            : "Nothing has come to any of them yet.";
+        else {
+            java.util.List<String> named = new java.util.ArrayList<>();
+            for (String t : taken) named.add(display(t));
+            tally = (named.size() == 1 ? "Your line has taken one animal so far: " : "Your line has taken: ")
+                  + String.join(", ", named) + ".";
+        }
+
+        String said = tallyFirst ? tally + " " + sets : sets + " " + tally;
+        return new EncounterResult(standing.isEmpty() && taken.isEmpty() ? "PARTIAL" : "SUCCEEDED", said);
+    }
+
+    /** How many sets of this Chronicle's stand anywhere in the world — for an honest empty answer here. */
+    @Transactional(readOnly = true)
+    public int setsStandingElsewhere(UUID chronicle, UUID chunk) {
+        Integer n = jdbc.queryForObject(
+            "SELECT count(*) FROM placed_trap WHERE set_by=? AND NOT sprung AND chunk_id<>?", Integer.class, chronicle, chunk);
+        return n == null ? 0 : n;
+    }
+
+    /**
      * Lift a trap you set, and recover what it was made of (#37, V418).
      *
      * <p>Measured before this existed: {@code take up the snare} answered <em>"The trap stands as you left
@@ -1681,7 +1776,17 @@ public class WildlifeEncounterService {
         java.util.Map<String,Object> trap = jdbc.query(
             "SELECT object_id,trap_kind,set_at,baited_with FROM placed_trap WHERE chunk_id=? AND NOT sprung ORDER BY set_at LIMIT 1 FOR UPDATE",
             rs -> rs.next() ? java.util.Map.of("id",rs.getObject(1,UUID.class),"kind",rs.getString(2),"set_at",rs.getTimestamp(3).toInstant()) : null, chunk);
-        if (trap == null) return new EncounterResult("FAILED","There is nothing of yours standing here to check.");
+        if (trap == null) {
+            // "Nothing standing here" is TRUE OF HERE and was being offered as the whole answer, to a trapper
+            // whose line might be spread over half a valley. If anything of theirs stands anywhere else, say so
+            // — walking to the wrong chunk and being told you have no traps is the kind of answer that makes a
+            // player believe the game lost them.
+            int elsewhere = setsStandingElsewhere(chronicle, chunk);
+            return new EncounterResult("FAILED", elsewhere == 0
+                ? "There is nothing of yours standing here to check, and nothing of yours standing anywhere else either."
+                : "There is nothing of yours standing here to check — but " + (elsewhere == 1 ? "one set of yours stands" : elsewhere + " sets of yours stand")
+                  + " on other ground. Ask after your trap line to be told where.");
+        }
         Instant setAt = (Instant) trap.get("set_at");
         UUID trapId = (UUID) trap.get("id");
         long hoursOut = Duration.between(setAt, at).toHours();
