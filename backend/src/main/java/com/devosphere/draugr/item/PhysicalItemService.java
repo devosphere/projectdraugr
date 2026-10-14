@@ -3981,6 +3981,17 @@ public class PhysicalItemService {
                 "SELECT DISTINCT i.item_key FROM reach x JOIN item_instance i ON i.object_id=x.id", String.class)) {
             String spoken = key.replace('_', ' ');
             if (v.contains(" " + spoken + " ") || v.contains(" " + spoken + "s ")) return true;
+            // PAIRED GEAR NAMED ONLY A SIDE. The head noun of `hide_boot_left` is "left", so this could never
+            // recognise a boot, a mitten, a glove, a sock, a bracer, a guard, a wrap, a sandal or a snowshoe —
+            // 58 items in 29 kinds, every one of them worn, every one the sort of thing a person asks the state
+            // of. `check my boots` is written into this method's own doc as the example it was added to fix, and
+            // it had not in fact been fixed: the Chronicle wore two hide boots and was told that nothing within
+            // reach took the shape of what they were after. Strip the side, then take the head.
+            //
+            // Only the ITEM matcher needs this. The two methods below walk species keys, which have no sides.
+            if (spoken.endsWith(" left") || spoken.endsWith(" right"))
+                spoken = spoken.substring(0, spoken.lastIndexOf(' '));
+            if (v.contains(" " + spoken + " ") || v.contains(" " + spoken + "s ")) return true;
             int cut = spoken.lastIndexOf(' ');
             if (cut > 0) {
                 String head = spoken.substring(cut + 1);
