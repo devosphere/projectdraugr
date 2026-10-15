@@ -110,9 +110,26 @@ class NoWaterToDrinkSaysWhyIntegrationTest {
         Assumptions.assumeTrue(plain != null, "this world made no dry grassland");
         standAt(chronicle, plain);
         weather(worldId, "RAIN");
+
+        // THE FRONT IS NOT THE SKY HERE (#28/#37). This set the global front to RAIN and asserted the line said
+        // "Rain wets your face" — and after the drink reason moved onto the LOCAL reading, it failed on ground
+        // where that same front falls as snow. The expectation was describing world_weather; what the player is
+        // told describes the fall where they stand, which is the whole point of BiomeClimate.
+        //
+        // So the sky is read the way a player reads it, and the drink line is held to AGREE with it. That is
+        // stronger than the original assertion, not weaker: it fails if the two ever name different weather, and
+        // it holds on any ground the world happens to offer.
+        String sky = actions.resolve("read the sky").perception();
+        boolean fallingAsSnow = sky.contains("Snow is coming down");
+        assertTrue(fallingAsSnow || sky.contains("Rain is falling"),
+            () -> "the front was set to rain, so the sky here must be giving something: " + sky);
+
         var inTheRain = actions.resolve("drink water");
         assertEquals("FAILED", inTheRain.outcome(), () -> "rain on the face is not a drink: " + inTheRain.perception());
-        assertTrue(inTheRain.perception().contains("Rain wets your face"),
-            () -> "in a downpour the line must not claim the ground is dry: " + inTheRain.perception());
+        assertTrue(inTheRain.perception().contains(fallingAsSnow ? "Snow lies about" : "Rain wets your face"),
+            () -> "the drink reason must name the same sky the sky reading named (" + sky + "): " + inTheRain.perception());
+        // And whichever it is, the original point stands: ground the sky is giving water to is not dry ground.
+        assertFalse(inTheRain.perception().contains("dry ground"),
+            () -> "with the sky giving water, the line must not claim the ground is dry: " + inTheRain.perception());
     }
 }
