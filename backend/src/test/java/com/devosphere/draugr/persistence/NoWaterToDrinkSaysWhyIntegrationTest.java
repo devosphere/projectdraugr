@@ -109,10 +109,51 @@ class NoWaterToDrinkSaysWhyIntegrationTest {
         UUID plain = dryChunk(worldId, "GRASSLAND");
         Assumptions.assumeTrue(plain != null, "this world made no dry grassland");
         standAt(chronicle, plain);
-        weather(worldId, "RAIN");
-        var inTheRain = actions.resolve("drink water");
-        assertEquals("FAILED", inTheRain.outcome(), () -> "rain on the face is not a drink: " + inTheRain.perception());
-        assertTrue(inTheRain.perception().contains("Rain wets your face"),
-            () -> "in a downpour the line must not claim the ground is dry: " + inTheRain.perception());
+
+        // THE FRONT IS NOT THE SKY HERE (#28/#37), AND THE FRONT CANNOT BE FORCED ANYWAY.
+        //
+        // This used to write RAIN into world_weather and assert the drink refusal said "Rain wets your face".
+        // Two things were wrong with that, and the second only showed itself in CI:
+        //
+        //   1. The reason moved onto the LOCAL reading, so on ground where that same front falls as snow the
+        //      line correctly says snow. The expectation was describing world_weather; what the player is told
+        //      describes the fall where they stand, which is the whole point of BiomeClimate.
+        //   2. THE FORCED FRONT DOES NOT SURVIVE AN ACTION. Every resolve advances the clock, and the weather
+        //      simulation recomputes the front from (season, seed, day) — so a written-in RAIN is overwritten
+        //      by whatever the model says for that day. My first repair spent one action reading the sky and
+        //      then asserted about rain, by which time the sky had been recomputed to CLEAR.
+        //
+        // So nothing is forced. ONE action is spent, and its own frame carries the local sky it was computed
+        // from — that is what #778 put there — which means the reason and the sky cannot drift apart between
+        // two calls. Every weather is a real assertion, so this cannot pass by finding a sky it has nothing to
+        // say about.
+        var here = actions.resolve("drink water");
+        assertEquals("FAILED", here.outcome(), () -> "there is nothing fresh to drink on dry ground: " + here.perception());
+        assertNotNull(here.frame(), "the frame carries the sky the reason was built from");
+        assertNotNull(here.frame().weather(), "the frame must report a sky");
+
+        // The one case worth stepping around: if the sky genuinely turned DURING this action, the reason was
+        // built from the sky before and the frame reports the sky after, and the two are honestly different.
+        boolean skyTurned = here.frame().sinceLastFrame().stream().anyMatch(c -> "weather".equals(c.aspect()));
+        Assumptions.assumeFalse(skyTurned, "the sky turned during this very action");
+
+        String skyHere = here.frame().weather().kind();
+        switch (skyHere) {
+            case "RAIN", "STORM" -> {
+                assertTrue(here.perception().contains("Rain wets your face"),
+                    () -> "in rain the line must say so: " + here.perception());
+                assertFalse(here.perception().contains("dry ground"),
+                    () -> "and must not call ground the sky is wetting dry: " + here.perception());
+            }
+            case "SNOW" -> {
+                assertTrue(here.perception().contains("Snow lies about"),
+                    () -> "under snow the line must say so: " + here.perception());
+                assertFalse(here.perception().contains("dry ground"),
+                    () -> "and must not call snow-covered ground dry: " + here.perception());
+            }
+            // A dry sky is the one case where "dry ground" is the true answer, and it must still be given.
+            default -> assertTrue(here.perception().contains("dry ground"),
+                () -> "with a dry sky the ground is dry, and the line should say it (" + skyHere + "): " + here.perception());
+        }
     }
 }
