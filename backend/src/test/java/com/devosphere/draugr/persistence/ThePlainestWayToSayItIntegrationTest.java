@@ -160,6 +160,13 @@ class ThePlainestWayToSayItIntegrationTest {
         UUID me = aLivingChronicle();
         carry(me, "fur_mitten_left", "WORN");
         carry(me, "fur_mitten_right", "WORN");
+        // THE BOOTS MUST BE OWNED TO BE ASKED AFTER, and this test did not own them. It carried mittens and then
+        // asked "how are my boots", which the catalogue gate correctly refuses — the plural forms fire only when
+        // the sentence names something actually carried, so that a body part like "my feet" cannot be answered
+        // with a reading of a shirt. The fixture was measuring the gate rather than the grammar. CI caught it
+        // because @SpringBootTest skips here, which is the one failure mode a green local suite cannot see.
+        carry(me, "hide_boot_left", "WORN");
+        carry(me, "hide_boot_right", "WORN");
 
         for (String question : List.of("how are my mittens", "how are my boots", "what state are my boots in")) {
             String got = intentOf(question);
