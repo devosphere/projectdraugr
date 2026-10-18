@@ -79,6 +79,15 @@ public class ContactService {
         Map.entry("approach the edge", Act.APPROACH_BOUNDARY), Map.entry("approach the boundary", Act.APPROACH_BOUNDARY),
         Map.entry("approach the isle", Act.APPROACH_BOUNDARY), Map.entry("approach the village", Act.APPROACH_BOUNDARY),
         Map.entry("approach them", Act.APPROACH_BOUNDARY), Map.entry("walk to the edge", Act.APPROACH_BOUNDARY),
+        // "approach them" and "approach the isle" were here; "approach the people" — the plainest way to say it,
+        // and the one that does not require knowing the word this game uses for a settlement — was not (#37).
+        Map.entry("approach the people", Act.APPROACH_BOUNDARY), Map.entry("go to the people", Act.APPROACH_BOUNDARY),
+        Map.entry("go over to them", Act.APPROACH_BOUNDARY), Map.entry("walk over to them", Act.APPROACH_BOUNDARY),
+        // And a bare "call out" with no object. "call out to them" was known, but somebody standing within sight
+        // of an isle and calling out has named the only people there are to call to.
+        // "hail them" is NOT repeated here: it is already declared above, and Map.ofEntries throws on a
+        // duplicate key — so a second copy takes the whole service down at startup rather than being ignored.
+        Map.entry("call out", Act.ANNOUNCE_PRESENCE), Map.entry("shout to them", Act.ANNOUNCE_PRESENCE),
         Map.entry("wait for a response", Act.WAIT_FOR_RESPONSE), Map.entry("wait for them", Act.WAIT_FOR_RESPONSE),
         Map.entry("wait for an answer", Act.WAIT_FOR_RESPONSE), Map.entry("wait to be answered", Act.WAIT_FOR_RESPONSE),
         Map.entry("request a parley", Act.REQUEST_PARLEY), Map.entry("ask to parley", Act.REQUEST_PARLEY),

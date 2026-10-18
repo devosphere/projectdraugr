@@ -318,8 +318,34 @@ public class ChronicleActionService {
                 ||askedAboutStanding.contains("how do i stand")||askedAboutStanding.contains("where do i stand")
                 ||askedAboutStanding.contains("do they like me")||askedAboutStanding.contains("do they hate me")
                 ||askedAboutStanding.contains("what do i owe them")||askedAboutStanding.contains("do i owe them")
-                ||askedAboutStanding.contains("are we on good terms")||askedAboutStanding.contains("how are things with them"))
+                ||askedAboutStanding.contains("are we on good terms")||askedAboutStanding.contains("how are things with them")
+                // Their disposition, which is the same question in the words a player reaches for first (#37).
+                // Swept on open country: `are they friendly` and `what do they want` reached nothing, while
+                // `do they trust me` reached this — and community_relation carries exactly what both ask after.
+                ||askedAboutStanding.contains("are they friendly")||askedAboutStanding.contains("are they hostile")
+                ||askedAboutStanding.contains("what do they want")||askedAboutStanding.contains("do they mean me harm")
+                ||askedAboutStanding.contains("can i trust them")||askedAboutStanding.contains("are they dangerous"))
                 intent = Intent.CHECK_STANDING;
+
+            // ARE THERE PEOPLE HERE AT ALL (#37). The acts were wired and the presence QUESTION was not: `greet
+            // them` and `trade with them` both reached the people system and were honestly refused, while `are
+            // there people nearby`, `who lives here` and `is anyone about` reached the generic miss.
+            //
+            // Answered honestly BOTH ways, which is why this is not simply added to ContactService.recognise:
+            // making a question into a contact act would be asking-is-not-doing again, and would have a player
+            // announcing themselves to an isle for wondering whether one was there. With an isle in reach the
+            // survey carries the glimpse — "what can be seen of it from here, and nothing they could not" — and
+            // with none, the people refusal is already the exact answer: "there are none within reach of this
+            // ground — no isle on it or on any beside it, and nobody within hail."
+            if (intent != Intent.CHECK_STANDING
+                && (askedAboutStanding.contains("are there people")||askedAboutStanding.contains("any people")
+                    ||askedAboutStanding.contains("is anyone about")||askedAboutStanding.contains("is anybody about")
+                    ||askedAboutStanding.contains("is there anyone")||askedAboutStanding.contains("anyone nearby")
+                    ||askedAboutStanding.contains("who lives here")||askedAboutStanding.contains("who lives nearby")
+                    ||askedAboutStanding.contains("are we alone")||askedAboutStanding.contains("am i alone"))) {
+                if (contact != null && contact.communityInReach(chronicle.location()) != null) intent = Intent.OBSERVE;
+                else meantForPeople = true;
+            }
         }
         if (conduct != null && intent != Intent.MOVE && intent != Intent.TRAVEL && intent != Intent.CHECK_STANDING) {
             // recogniseHere, not the static recognise (#106): an offence whose phrase names no object — "tie up
