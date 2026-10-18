@@ -604,6 +604,13 @@ public class ChronicleActionService {
         // leaves the set standing, lifting takes it out of the run and recovers what it was built from.
         else if (intent == Intent.CHECK_TRAP && liftingTheSet(text.toLowerCase(Locale.ROOT)))
             { WildlifeEncounterService.EncounterResult r=wildlife.liftTrap(chronicle.id(),chronicle.location(),resolvedAt); outcome=r.outcome(); perception=r.narration(); }
+        // Asking after the LINE, rather than working the ground you stand on — the same dispatch split as the
+        // lift, and for the same reason: no new word distinguishes them, only the verb. A count, a tally of what
+        // has been taken, or "how is the trap line" is a question about ground you are NOT on, which is why the
+        // per-chunk check could never answer it: it reported "nothing of yours standing here" to a trapper with
+        // sets across the valley. Read-only, so asking can never spring or cost anything.
+        else if (intent == Intent.CHECK_TRAP && askingAfterTheLine(text.toLowerCase(Locale.ROOT)))
+            { WildlifeEncounterService.EncounterResult r=wildlife.trapLineStocktake(chronicle.id(),chronicle.location(),resolvedAt,askingWhatWasTaken(text.toLowerCase(Locale.ROOT))); outcome=r.outcome(); perception=r.narration(); }
         else if (intent == Intent.CHECK_TRAP) { WildlifeEncounterService.EncounterResult r=wildlife.checkTrap(chronicle.id(),chronicle.location(),actionId,resolvedAt); outcome=r.outcome(); perception=r.narration(); }
         else if (intent == Intent.TAME) { WildlifeEncounterService.EncounterResult r=wildlife.tame(chronicle.id(),chronicle.location(),actionId,resolvedAt,text); outcome=r.outcome(); perception=r.narration(); }
         else if (intent == Intent.TRACK) { WildlifeEncounterService.EncounterResult r=wildlife.track(chronicle.id(),chronicle.location(),actionId,resolvedAt,attentionLevel(text,intent),capability.familiarity(chronicle.id(),"ATTENTION")); outcome=r.outcome(); perception=r.narration(); }
@@ -2304,9 +2311,22 @@ public class ChronicleActionService {
         if((value.startsWith("is ")||value.startsWith("where ")||value.startsWith("has ")||value.startsWith("are ")
             ||value.contains("still set")||value.contains("still standing")||value.contains("anything in")
             ||value.contains("take up")||value.contains("take in")||value.contains("pick up the snare")
-            ||value.contains("lift the snare")||value.contains("pull up the snare"))
+            ||value.contains("lift the snare")||value.contains("pull up the snare")
+            // THE OPENERS THE LIST ABOVE MISSED, and the reason this comment is longer than the code. That list
+            // was written from the phrasings I had tested, so it covered "is", "where", "has" and "are" — and
+            // "how many traps have I set" went on to SET_TRAP, which tried to BUILD ANOTHER ONE in reply to a
+            // question about the count. It failed only for want of cordage; with fibre in hand it would have
+            // changed the world to answer a question. "did anything come to my snare" reached SNARE the same
+            // way. A guard assembled from the sentences in front of you covers those sentences and no others.
+            ||askingAfterTheLine(value))
            &&(value.contains("snare")||value.contains("trap")||value.contains("deadfall"))
            &&!value.contains("bait")) return Intent.CHECK_TRAP;
+        // "what did I catch" names no trap at all, and nothing else in the composer claims it. It is the trap
+        // line's tally — the one question whose whole subject is what the line has taken — so it is claimed here
+        // rather than left to the generic miss. Gated away from fishing and cooking, which have their own
+        // answers for a fish already in hand.
+        if((value.contains("what did i catch")||value.contains("what have i caught")||value.contains("what did i take"))
+           &&!value.contains("fish")&&!value.contains("cook")) return Intent.CHECK_TRAP;
         if((value.contains("build")||value.contains("set")||value.contains("make")||value.contains("place")||value.contains("construct")||value.contains("lay"))&&(value.contains("deadfall")||value.contains("pit trap")||value.contains("fish trap")||value.contains("cage trap")||value.contains("box trap")||value.contains("snare")||(value.contains("trap")&&!value.contains("check")))) return Intent.SET_TRAP;
         if(value.contains("lure")||value.contains("bait the")||((value.contains("leave")||value.contains("put")||value.contains("place")||value.contains("set"))&&(value.contains("bait")||value.contains("draw them")||value.contains("draw it")))) return Intent.LURE;
         // Taming by offering food, and the one case where the same words are not taming at all (#106). A keeper
@@ -3853,6 +3873,43 @@ public class ChronicleActionService {
             ||value.contains("remove the snare")||value.contains("remove the trap")
             ||value.contains("retrieve the snare")||value.contains("retrieve the trap")
             ||value.contains("dismantle the snare")||value.contains("dismantle the trap");
+    }
+
+    /**
+     * Whether the sentence asks after the trap LINE — the whole of it — rather than working this ground (#37).
+     *
+     * <p>Counting, tallying what has been taken, and asking how the line is doing are all questions about ground
+     * the asker is not standing on, so the per-chunk check could never answer any of them. It is deliberately
+     * NOT a list of question openers: the guard already in {@code classify} was built that way, from the
+     * phrasings in front of me at the time, and it covered "is", "where", "has" and "are" while missing "how",
+     * "what" and "did" — which is how {@code how many traps have I set} came to be answered by SETTING ONE.
+     * This asks what the sentence is FOR instead: a quantity, a tally, or the state of the line as a whole.
+     */
+    private static boolean askingAfterTheLine(String value) {
+        // Not a question about the LINE but about what is in the pack to build one with. "do I have enough fibre
+        // for a trap" would otherwise be answered with a tally of sets standing in the valley, which is true and
+        // beside the point. Checked first, because it disqualifies the sentence however it is phrased.
+        if (value.contains("to make")||value.contains("to build")||value.contains("to set")||value.contains("need")
+            ||value.contains("enough")||value.contains("material")) return false;
+        // `word`, not `contains`: a bare contains("count") is inside ACCOUNT, and this project's own audit
+        // queries have been caught by ca-BIN and l-EGG-ings before.
+        boolean quantity = value.contains("how many")||value.contains("how much")||word(value,"count")
+                        || value.contains("do i have")||value.contains("have i set")||value.contains("did i set");
+        boolean tally = value.contains("what did i catch")||value.contains("what have i caught")
+                     || value.contains("did i catch")||value.contains("what did i take")
+                     || value.contains("anything come to")||value.contains("come to my")
+                     || value.contains("what is in my")||value.contains("what's in my")||value.contains("anything in my");
+        boolean theLineItself = value.contains("trap line")||value.contains("trapline")
+                             || value.contains("my traps")||value.contains("my snares");
+        boolean stateOfIt = value.startsWith("how ")||value.contains("how is")||value.contains("how are");
+        return quantity || tally || (theLineItself && stateOfIt);
+    }
+
+    /** Whether the question is about what the line has TAKEN, rather than what of it is standing (#37). */
+    private static boolean askingWhatWasTaken(String value) {
+        return value.contains("what did i catch")||value.contains("what have i caught")||value.contains("did i catch")
+            || value.contains("what did i take")||value.contains("anything come to")||value.contains("come to my")
+            || value.contains("what is in my")||value.contains("what's in my")||value.contains("anything in my");
     }
 
     /**
