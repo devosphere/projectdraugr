@@ -2160,7 +2160,13 @@ public class ChronicleActionService {
             // Pouring is how you empty a thing that holds liquid, and no verb here covered it (#37).
             ||value.contains("pour out")||value.contains("pour the water out")||value.contains("pour it out")
             ||value.contains("pour away")||value.contains("tip it out"))
-           &&(containerNoun||value.contains("container")||value.contains("the water out"))) return Intent.EMPTY_CONTAINER;
+           &&(containerNoun||value.contains("container")||value.contains("the water out"))
+           // SAYING A VESSEL IS EMPTY IS NOT ASKING TO EMPTY IT — the plainest inversion in the composer.
+           // "my waterskin is empty" matched this rule's own word and was answered "There is no container
+           // within reach to empty": offered the chance to empty the thing whose emptiness was being reported.
+           // The statement is a request to FILL, and is routed as one below. Both sites read the same two
+           // lists, so they cannot drift into disagreeing about what a vessel is.
+           &&!saysOfThing(value, VESSELS, VESSEL_EMPTY)) return Intent.EMPTY_CONTAINER;
         // PICK_UP (#67 take/retrieve/unpack): explicit retrieval verbs, or "take/get/remove/unpack X out of/from
         // the <container/storage/ground>" — distinct from gathering raw growth from the world.
         if(value.contains("pick up")||value.contains("pick it up")||value.contains("pick them up")||value.contains("pick it back")||value.contains("picked up")||value.contains("grab")||value.contains("retrieve")||value.contains("recover")||value.contains("take back")||value.contains("take it back")||(value.contains("fetch")&&!value.contains("water"))||value.contains("lift the")||value.contains("lift it")||value.contains("lift up")
@@ -2381,10 +2387,41 @@ public class ChronicleActionService {
         // Mending a worn/broken item (#69 repair/fix/mend/reinforce/sharpen) — checked before the net/fish block
         // so "repair my fishing net" is a repair, not angling. Distinct from REPAIR_LEAN_TO (a shelter, routed by
         // the lean-to check above) and from REFINE (improving an already-sound thing).
+        // SAYING WHAT A THING IN THE CAMP IS DOING (#37). The same shape as a statement about one's own body,
+        // one level out — and two of these were not misses but acts in the wrong direction: `the trap is sprung`
+        // reached SNARE and tried to BUILD one, and `my waterskin is empty` reached EMPTY_CONTAINER and offered
+        // to EMPTY it, which is the plainest inversion in the composer. `the roof is leaking` and `the wall is
+        // crumbling` were answered with timber and wattle RECIPES.
+        //
+        // Each family goes where the camp's own nearest verb already goes, so nothing is invented here:
+        // `add wood to the fire` is FEED_FIRE, `relight the fire` is LIGHT_FIRE, `mend the fence` is
+        // REPAIR_STRUCTURE, `check the trap` is CHECK_TRAP, `fill my waterskin` is COLLECT_WATER. Every one of
+        // those answers a bare statement honestly when there is nothing to be done — "you look for something
+        // built here to set right, but the ground is bare" — so a statement is reported on when it is only a
+        // statement and acted on when there is something to act on.
+        //
+        // Placed BEFORE the repair rule and the trap and container rules, because those are what the wrong
+        // answers came from.
+        if(saysOfThing(value,"fire|fires|flames|embers|coals|hearth|fire pit|firepit","dying|low|burning low|down|guttering|weak|going out|getting low|sinking|failing"))
+            return Intent.FEED_FIRE;
+        if(saysOfThing(value,"fire|fires|flames|embers|coals|hearth|fire pit|firepit","out|gone out|dead|cold|gone cold|been out|stone cold"))
+            return Intent.LIGHT_FIRE;
+        if(saysOfThing(value,"shelter|shelters|lean to|lean-to|roof|wall|walls|fence|fences|hut|pen|gate|door|thatch|cabin|byre|coop|sty|stable|shed|barn|screen|windbreak|platform|rack|bridge|footbridge|catchment|wood store",
+                       "leaking|falling apart|broken|crumbling|sagging|coming apart|damaged|collapsing|wrecked|ruined|coming down|in a bad way|letting the rain in|letting in the rain|going to fall"))
+            return Intent.REPAIR_STRUCTURE;
+        if(saysOfThing(value,"trap|traps|snare|snares|deadfall|deadfalls|trap line|fish trap|pit trap","sprung|gone off|been sprung|triggered|tripped|shut|closed"))
+            return Intent.CHECK_TRAP;
+        if(saysOfThing(value, VESSELS, VESSEL_EMPTY))
+            return Intent.COLLECT_WATER;
         // Repairing / maintaining a standing structure here (#70) — before item repair, and scoped to structure
         // nouns, so "mend the fence" or "weatherproof the hut" works a construction, not a carried tool.
         if((value.contains("repair")||value.contains("mend")||value.contains("patch")||value.contains("shore up")||value.contains("reinforce")||value.contains("weatherproof")||value.contains("maintain")||(word(value,"fix")&&!value.contains("memory")&&!value.contains("mind")))
-           &&(value.contains("hut")||value.contains("wall")||value.contains("roof")||value.contains("thatch")||value.contains("fence")||value.contains("gate")||value.contains("hearth")||value.contains("bridge")||value.contains("platform")||value.contains("screen")||value.contains("catchment")||value.contains("wood store")||value.contains("landing")||value.contains("structure")||value.contains("daub"))) return Intent.REPAIR_STRUCTURE;
+           // "shelter" was not among the structure nouns, so `repair the shelter` reached nothing at all while
+           // `mend the fence` and `fix the roof` both worked — and a lean-to is the first thing most Chronicles
+           // build and the first thing the weather takes apart. The rest are the other roofed forms the
+           // catalogue holds, by the same omission.
+           &&(value.contains("hut")||value.contains("wall")||value.contains("roof")||value.contains("thatch")||value.contains("fence")||value.contains("gate")||value.contains("hearth")||value.contains("bridge")||value.contains("platform")||value.contains("screen")||value.contains("catchment")||value.contains("wood store")||value.contains("landing")||value.contains("structure")||value.contains("daub")
+             ||value.contains("shelter")||value.contains("lean-to")||value.contains("lean to")||value.contains("tent")||value.contains("cabin")||value.contains("byre")||value.contains("coop")||value.contains("sty")||value.contains("stable")||value.contains("shed")||value.contains("barn")||value.contains("pen")||value.contains("windbreak"))) return Intent.REPAIR_STRUCTURE;
         // The words for putting an edge back on a tool (#37). The rule knew "sharpen" and "abrade", and `hone the
         // blade` and `whet the blade` reached the MATERIAL MATCHER instead — which offered to **forge a bronze
         // knife**. Asked to sharpen what they hold, the player was offered to make a new one; `grind the axe`,
@@ -3669,6 +3706,39 @@ public class ChronicleActionService {
         return s.matches("(?:i am|i'm|im|i feel|i felt|i have gone|i've gone) (?:very |really |so |quite |a bit |getting |all )?(?:" + conditions + ")")
             || s.matches("my (?:" + MY_OWN + ") (?:is|are|feels|feel|has gone|have gone) (?:very |really |so |quite |a bit |all )?(?:" + conditions + ")")
             || s.matches("(?:my (?:" + MY_OWN + ")|it) (?:" + conditions + ")");
+    }
+
+    /**
+     * Whether the sentence is the player SAYING what a thing in their camp is doing (#37).
+     *
+     * <p>The same shape as a statement about one's own body, one level out, and two of these were not misses but
+     * acts in the wrong direction:
+     *
+     * <pre>
+     *   the trap is sprung     -&gt; SNARE — it tried to BUILD a snare
+     *   my waterskin is empty  -&gt; EMPTY_CONTAINER — it offered to EMPTY it
+     *   the roof is leaking    -&gt; the timber recipe, offering to rive roof shakes
+     *   the wall is crumbling  -&gt; the wattle recipe
+     *   the fire is dying / has gone out / is low -&gt; nothing at all
+     *   the shelter is leaking / falling apart    -&gt; nothing at all
+     *   the fence is broken                       -&gt; nothing at all
+     * </pre>
+     *
+     * <p>Saying a thing is empty, and being offered the chance to empty it, is the plainest inversion of the lot.
+     *
+     * <p>Matched on the WHOLE sentence, exactly as the body frame is, and for the same reason: the anchor is the
+     * guard. "the fire is dying" is a report on the fire; "the fire is dying down so I will gather wood" is a
+     * longer sentence this deliberately leaves alone rather than guessing at.
+     */
+    /** What holds water, and what it is when there is none in it — read by the two rules that must agree. */
+    private static final String VESSELS = "waterskin|water skin|waterskins|flask|gourd|bucket|vessel|jar|bottle";
+    private static final String VESSEL_EMPTY = "empty|dry|run dry|out of water|run out|finished";
+
+    private static boolean saysOfThing(String value, String things, String conditions) {
+        String s = value.strip().toLowerCase(Locale.ROOT).replaceAll("[.!?]+$", "").replaceAll("\\s+", " ");
+        return s.matches("(?:the|my|our|that|this) (?:" + things + ")"
+                       + " (?:is|are|was|were|has|have|has gone|have gone|is getting|are getting|has got|have got)"
+                       + " (?:all |nearly |almost |quite |very |getting |a bit |right )?(?:" + conditions + ")");
     }
 
     /**
