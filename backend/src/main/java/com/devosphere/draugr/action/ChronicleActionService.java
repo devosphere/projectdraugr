@@ -2310,7 +2310,11 @@ public class ChronicleActionService {
         // And ASKING what is on it is a look, not a taking: "what can I get off this" and "how much meat is on
         // it" were answered by neither. Examining a thing is the rule that exists for exactly this.
         if((value.contains("what can i get off")||value.contains("what will it give")||value.contains("how much meat")
-            ||value.contains("what is on it")||value.contains("what is left on"))
+            ||value.contains("what is on it")||value.contains("what is left on")
+            // "off" was in and "from" was not, which is the same preposition said the other way. `what can I get
+            // FROM this carcass` reached nothing while `what can I get OFF this carcass` was answered.
+            ||value.contains("what can i get from")||value.contains("what can i take from")
+            ||value.contains("what can i take off")||value.contains("what is there on"))
            &&!value.contains("cook")&&!value.contains("eat")) return Intent.EXAMINE;
         // ASKING ABOUT A TRAP IS NOT SETTING ONE, and TAKING ONE UP is not building it (#37). The same family as
         // the lean-to question that built a hut: `is the snare still set` and `where should I set a snare` were
@@ -3532,6 +3536,29 @@ public class ChronicleActionService {
         // to a question about the sky. FEEL answers them because FEEL is the sense that takes the reading.
         if(value.contains("how cold")||value.contains("how warm")||value.contains("how hot")||value.contains("what season")||value.contains("which season")||value.contains("season is it")||value.contains("time of year")||value.contains("the temperature")||value.contains("how is the air")||value.contains("what is the weather")||value.contains("what's the weather")||value.contains("how is the weather")||value.contains("what is the sky")
            ||value.contains("check the weather")||value.contains("check the sky")||value.contains("look at the weather")) return Intent.FEEL;
+        // ASKING WHAT IS OUT THERE (#37). The capability is already excellent and was reachable by one phrasing
+        // only. `look for game` goes to SEARCH and answers "A horse grazes the open ground. A wood pigeon grazes
+        // the open ground" — it names the wildlife actually standing on this chunk. Meanwhile:
+        //
+        //   is there game nearby   -> nothing at all        |  look for game     -> works
+        //   what animals are around -> nothing at all       |  listen for animals -> works
+        //   where are the deer     -> nothing at all        |  look for tracks   -> works
+        //   what lives here        -> nothing at all
+        //   go hunting             -> nothing at all        |  hunt a deer       -> works
+        //
+        // `go hunting` is the one worth dwelling on. Naming a quarry works, and the bare intent reached nothing
+        // — while CONFRONT_WILDLIFE, had it taken the sentence, would have answered about RED DEER specifically,
+        // because that is what a bare "deer" resolves to. An invented quarry is a worse answer than the true
+        // one, which is what is actually on this ground; and a player given that list can then name it.
+        //
+        // Placed before SEARCH's own rule so these forms reach it rather than falling past, and deliberately NOT
+        // claiming "where is the ..." — that belongs to the country and WHICH_WAY answers it.
+        if(value.contains("is there game")||value.contains("any game")||value.contains("is there anything to hunt")
+           ||value.contains("what animals")||value.contains("which animals")||value.contains("what game")
+           ||value.contains("where are the deer")||value.contains("what lives here")||value.contains("what lives around")
+           ||value.contains("what is on this ground")||value.contains("whats on this ground")
+           ||value.contains("go hunting")||value.contains("going hunting")||value.contains("do some hunting")
+           ||value.contains("find something to hunt")||value.contains("look for something to hunt")) return Intent.SEARCH;
         if(value.contains("search")||value.contains("look for")||value.contains("hunt for")||value.contains("check beneath")||value.contains("check under")||value.contains("look under")||value.contains("turn over")||value.contains("comb through")||value.contains("rummage")||value.contains("forage through")||value.contains("sift through the")) return Intent.SEARCH;
         // Reading a written document (#65 read/review_record). Word-boundary "read" so "bread" doesn't match;
         // "read the ground/tracks" already resolved to TRACK above.
