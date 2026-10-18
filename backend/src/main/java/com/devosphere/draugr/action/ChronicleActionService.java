@@ -580,6 +580,15 @@ public class ChronicleActionService {
                 : "There are no people within reach of this ground to have a view of you — no isle on it or on "
                 + "any beside it. How you stand with anybody is a thing to be found out where they live.";
         }
+        // ASKING WHERE A THING IS, rather than what you have (#37). A dispatch split, not a new intent — the two
+        // share every noun and differ only in the question word, which is the same shape as the trap lift and
+        // the trap line. `where is my knife` reached nothing at all, while the world has been telling players
+        // "what there is of it sits at your Wood Store" inside process refusals for some time: the knowledge
+        // existed and was reachable from exactly one place. Falls through to the stocktake when the sentence
+        // names no item, so "where is my gear" is still answered by listing it.
+        else if (intent == Intent.TAKE_STOCK_OF_GEAR && askingWhereAThingIs(text.toLowerCase(Locale.ROOT))
+                 && items.whereDidIPutIt(chronicle.id(), chronicle.location(), text) != null)
+            perception = items.whereDidIPutIt(chronicle.id(), chronicle.location(), text);
         else if (intent == Intent.TAKE_STOCK_OF_GEAR) perception = items.gearStocktake(chronicle.id(), text);
         else if (intent == Intent.TAKE_STOCK_OF_FOOD) perception = items.foodStocktake(chronicle.id(), chronicle.location(), resolvedAt);
         else if (intent == Intent.JUDGE_HAULAGE) perception = items.judgeHaulage(chronicle.id());
@@ -3358,6 +3367,11 @@ public class ChronicleActionService {
         if(CATCHING_RAIN.matcher(value).find()
            &&!value.contains("catchment")&&!value.contains("rain screen")&&!value.contains("cape")&&!value.contains("hood")&&!value.contains("sheet")
            &&!MAKING_SOMETHING.matcher(value).find()) return Intent.COLLECT_WATER;
+        // WHERE A THING OF YOURS IS (#37). Gated on the SAME resolver the answer uses, so the classifier can
+        // never route a sentence the answer cannot speak to — "where is my courage" names no item and is left
+        // alone rather than being handed a list of the pack. Placed here, above the water rules, because
+        // "where is my waterskin" is a question about the skin and not about finding a stream.
+        if(askingWhereAThingIs(value) && items.itemNamedIn(value) != null) return Intent.TAKE_STOCK_OF_GEAR;
         if(value.contains("find water")||value.contains("find some water")||value.contains("find a stream")
            ||value.contains("collect water")||value.contains("fetch water")||value.contains("draw water")||value.contains("gather water")||value.contains("fill container")||value.contains("scoop water")||((value.contains("fill")||value.contains("refill"))&&(value.contains("waterskin")||value.contains("water skin")||value.contains("bucket")||value.contains("vessel")||value.contains("jar")||value.contains("with water")||value.contains("flask")||value.contains("gourd")
               // "fill the skin" is what somebody holding a waterskin says about it. The list named the thing in
@@ -3595,6 +3609,18 @@ public class ChronicleActionService {
            ||value.contains("how wide")||value.contains("how thick")||value.contains("how tall")||value.contains("how big")
            ||value.contains("test the depth")||value.contains("estimate the distance")||value.contains("gauge")) return Intent.MEASURE;
         if(value.contains("refine")||value.contains("improve")||value.contains("upgrade")||value.contains("revise")||value.contains("enhance")||(value.contains("add")&&value.contains("holder"))) return Intent.REFINE;
+        // ASKING WHAT YOU CALLED A PLACE IS NOT NAMING IT (#37). `what did I name this place` reached DESIGNATE
+        // and answered "You mean to give this place a name, but no clear name forms" — it tried to RENAME the
+        // ground in reply to a question about the name it already has. The seventh member of this project's
+        // asking-is-not-doing family, after the lean-to that built a hut, the trap that set a trap, the snare
+        // that worked a snare, the waterskin that offered to make one, the mitten that offered to sew one, and
+        // the trap count that built another trap.
+        //
+        // The survey already reports it — "This is Camp Site, a place you named and made your own" — and
+        // `where am I` has always gone there, so the question goes where its own answer already lives.
+        if(value.contains("what did i name")||value.contains("what did i call")||value.contains("what have i named")
+           ||value.contains("what is this place called")||value.contains("whats this place called")
+           ||value.contains("what is this called")||value.contains("did i name this")||value.contains("have i named this")) return Intent.OBSERVE;
         if(value.contains("designate")||value.contains("christen")||((value.contains("name")||value.contains("call")||value.contains("establish")||value.contains("found")||value.contains("mark"))&&(value.contains("this place")||value.contains("this area")||value.contains("this spot")||value.contains("this location")||value.contains("here as")||value.contains("this as")||value.contains("this the")))) return Intent.DESIGNATE;
         // DROP / place (#67): set an object down on the ground here. STORE (into a container) and the trap/
         // marker verbs are already claimed above, so a bare place/lay/set-down here is a plain drop.
@@ -3663,6 +3689,20 @@ public class ChronicleActionService {
     }
     /** Whole-word containment, delegating to the one definition of it — see {@link com.devosphere.draugr.narration.Words}. */
     private static boolean word(String haystack, String w) { return com.devosphere.draugr.narration.Words.word(haystack, w); }
+
+    /**
+     * Whether the sentence asks WHERE a thing of yours is, rather than what you have (#37).
+     *
+     * <p>Deliberately NOT "where is the ...". {@code where is the nearest water} and {@code how far to the
+     * river} are questions about the country and WHICH_WAY answers them; claiming the bare form would answer a
+     * question about the land with a list of what is in the pack. Only the possessive forms, which are
+     * unambiguously about a thing of yours.
+     */
+    private static boolean askingWhereAThingIs(String value) {
+        return value.contains("where is my")||value.contains("where are my")||value.contains("where's my")
+            || value.contains("where did i put")||value.contains("where did i leave")||value.contains("where did i set")
+            || value.contains("where have i left")||value.contains("where did i last");
+    }
 
     /**
      * Whether the sentence is the player SAYING what their own body is doing (#37).

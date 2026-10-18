@@ -2731,6 +2731,147 @@ public class PhysicalItemService {
      * blank wall (DR-0022 reachability principle). Null when there is no such known store. Scoped to the
      * chronicle's own named settlements, never the whole world.
      */
+    /**
+     * Where a thing of yours is, asked directly (#37).
+     *
+     * <p><b>The world already knew this and would only say it by accident.</b> A process refusal has told
+     * players "what there is of it sits at your Wood Store" for some time, built on {@link #knownLocationOf} —
+     * so the knowledge was there, reachable from exactly one place, and the direct question reached nothing:
+     *
+     * <pre>
+     *   where is my knife       -&gt; nothing at all
+     *   where did I put the axe -&gt; nothing at all
+     * </pre>
+     *
+     * <p>This answers it properly, and more fully than the refusal could: in hand, inside a container that is
+     * itself named, here on the ground, at a place you have named, or on ground you have not named — in which
+     * case it is placed by bearing and distance from where you stand, the same way a trap line is. A thing you
+     * have never had is said to be a thing you have never had, rather than being silently absent.
+     *
+     * <p>Returns null when the sentence names no catalogue item at all, so the caller can fall through rather
+     * than inventing an answer about nothing.
+     */
+    /**
+     * The catalogue item a sentence names, longest name first, or null. One resolver read by both the question
+     * and the rule that decides whether to ask it, so the classifier can never route a sentence the answer
+     * cannot speak to.
+     *
+     * <p>Longest first so "where is my stone knife" is not answered about every knife in the world — the same
+     * rule the process matcher settles ties by, for the same reason.
+     */
+    @Transactional(readOnly = true)
+    public String[] itemNamedIn(String actionText) {
+        if (actionText == null || actionText.isBlank()) return null;
+        String v = " " + actionText.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim() + " ";
+        java.util.List<java.util.Map<String,Object>> all = jdbc.queryForList(
+                "SELECT item_key, display_name FROM item_definition ORDER BY length(display_name) DESC");
+        for (java.util.Map<String,Object> row : all) {
+            String k = (String) row.get("item_key");
+            String name = ((String) row.get("display_name")).toLowerCase(java.util.Locale.ROOT);
+            if (v.contains(" " + name + " ") || v.contains(" " + k.replace('_', ' ') + " ")) return new String[]{k, name};
+        }
+        // THE HEAD NOUN, as a second pass and never a first. The catalogue calls it an "Everyday shirt", so
+        // "where is my shirt" matched neither the name nor the key — the same omission that made paired gear
+        // unnameable, one table over. Second pass because the full name must always win: somebody asking after
+        // a stone knife is answered about the stone knife and not about the first knife in the catalogue.
+        for (java.util.Map<String,Object> row : all) {
+            String k = (String) row.get("item_key");
+            String name = ((String) row.get("display_name")).toLowerCase(java.util.Locale.ROOT);
+            String head = name;
+            if (head.endsWith(" (left)") || head.endsWith(" (right)")) head = head.substring(0, head.lastIndexOf(" ("));
+            int cut = head.lastIndexOf(' ');
+            if (cut <= 0) continue;
+            head = head.substring(cut + 1);
+            // THE KEY IS LEFT NULL AND THE ASKER'S OWN WORD RETURNED. The first cut returned the longest
+            // catalogue match, and told a Chronicle wearing an everyday shirt "you have no FIBRE WRAP SHIRT
+            // anywhere" — a confident falsehood about a shirt on their back, and about a garment they had not
+            // mentioned. Which particular knife or shirt is meant can only be settled by what the Chronicle
+            // actually has; the caller settles it and keeps the word that was used.
+            if (v.contains(" " + head + " ")) return new String[]{null, head};
+            // And in the number the asker used. "where are my shoes" was answered "You have your SHOE on you"
+            // about a pair, which reads as a loss rather than an answer.
+            if (v.contains(" " + head + "s ")) return new String[]{null, head + "s"};
+        }
+        return null;
+    }
+
+    /** The asker's word without its plural, for looking the catalogue up by a name it only holds in the singular. */
+    private static String singular(String word) {
+        return word.endsWith("s") && word.length() > 3 ? word.substring(0, word.length() - 1) : word;
+    }
+
+    @Transactional(readOnly = true)
+    public String whereDidIPutIt(UUID chronicle, UUID location, String actionText) {
+        String[] named = itemNamedIn(actionText);
+        if (named == null) return null;
+        String key = named[0], spoken = named[1];
+
+        // A FAMILY WORD IS SETTLED BY WHAT YOU HAVE. "where is my shirt" names no particular shirt, and the
+        // catalogue holds several — so the one meant is the one that exists somewhere for this Chronicle, in
+        // hand first, then on this ground, then anywhere at all. Only if none of them exists is the question
+        // answered in the negative, and then in the asker's own word rather than some garment they never named.
+        if (key == null) {
+            key = jdbc.query(
+                "SELECT i.item_key FROM item_instance i JOIN world_object w ON w.id=i.object_id "
+                + "JOIN item_definition d ON d.item_key=i.item_key "
+                + "WHERE w.lifecycle_state='ACTIVE' AND (w.current_owner_id=? OR w.current_location_id IS NOT NULL) "
+                + "  AND (lower(d.display_name) = ? OR lower(d.display_name) LIKE ? OR lower(d.display_name) LIKE ?) "
+                + "ORDER BY (w.current_owner_id=?) DESC, (w.current_location_id=?) DESC LIMIT 1",
+                rs -> rs.next() ? rs.getString(1) : null,
+                // The asker's number is kept for the ANSWER and dropped for the LOOKUP: the catalogue names a
+                // shoe, never shoes, so searching on "shoes" would match nothing and a worn pair would be
+                // reported missing — a wrong answer produced by being polite about grammar.
+                chronicle, singular(spoken), "% " + singular(spoken), "% " + singular(spoken) + " (%", chronicle, location);
+            if (key == null)
+                return "You have no " + spoken + " anywhere — none in hand, none set down, and none you have made.";
+        }
+
+        // In hand, or inside something you are carrying — and if inside, say what it is inside, because "in your
+        // pack" and "in the basket in your pack" are different answers to a person looking for it.
+        String container = jdbc.query(
+            "SELECT cd.display_name FROM item_instance i JOIN world_object w ON w.id=i.object_id "
+            + "JOIN item_containment ic ON ic.item_id=w.id JOIN world_object cw ON cw.id=ic.container_id "
+            + "JOIN item_instance ci ON ci.object_id=cw.id JOIN item_definition cd ON cd.item_key=ci.item_key "
+            + "WHERE i.item_key=? AND w.lifecycle_state='ACTIVE' AND cw.current_owner_id=? LIMIT 1",
+            rs -> rs.next() ? rs.getString(1) : null, key, chronicle);
+        if (container != null) return "Your " + spoken + " is in your " + container.toLowerCase(java.util.Locale.ROOT) + ".";
+
+        Integer carried = jdbc.queryForObject(
+            "SELECT count(*) FROM item_instance i JOIN world_object w ON w.id=i.object_id "
+            + "WHERE i.item_key=? AND w.current_owner_id=? AND w.lifecycle_state='ACTIVE'", Integer.class, key, chronicle);
+        if (carried != null && carried > 0)
+            return carried == 1 ? "You have your " + spoken + " on you." : "You are carrying " + carried + " of them.";
+
+        Integer here = jdbc.queryForObject(
+            "SELECT count(*) FROM item_instance i JOIN world_object w ON w.id=i.object_id "
+            + "WHERE i.item_key=? AND w.current_location_id=? AND w.lifecycle_state='ACTIVE'", Integer.class, key, location);
+        if (here != null && here > 0) return "Your " + spoken + " is here, on the ground at your feet.";
+
+        // Somewhere else in the world. A place you have named is named; ground you have not named is placed by
+        // bearing and distance, which is the only honest way to say where a thing is on open country.
+        String elsewhere = jdbc.query(
+            "SELECT nl.name, c.grid_x - here.grid_x AS dx, c.grid_y - here.grid_y AS dy "
+            + "FROM item_instance i JOIN world_object w ON w.id=i.object_id "
+            + "JOIN world_chunk c ON c.id=w.current_location_id "
+            + "CROSS JOIN (SELECT grid_x, grid_y FROM world_chunk WHERE id=?) here "
+            + "LEFT JOIN chronicle_named_location nl ON nl.chunk_id=c.id AND nl.chronicle_id=? "
+            + "WHERE i.item_key=? AND w.lifecycle_state='ACTIVE' LIMIT 1",
+            rs -> {
+                if (!rs.next()) return null;
+                String placeName = rs.getString(1);
+                if (placeName != null) return "Your " + spoken + " is at " + placeName + ".";
+                int dx = rs.getInt(2), dy = rs.getInt(3);
+                String bearing = com.devosphere.draugr.world.Compass.of(dx, dy);
+                int steps = Math.max(Math.abs(dx), Math.abs(dy));
+                return bearing == null
+                    ? "Your " + spoken + " is somewhere on this ground."
+                    : "Your " + spoken + " lies " + steps + (steps == 1 ? " chunk " : " chunks ") + bearing + " of here.";
+            }, location, chronicle, key);
+        if (elsewhere != null) return elsewhere;
+
+        return "You have no " + spoken + " anywhere — none in hand, none set down, and none you have made.";
+    }
+
     private String knownLocationOf(UUID chronicle, String itemKey, UUID currentLocation) {
         return jdbc.query(
             "SELECT nl.name FROM chronicle_named_location nl " +
