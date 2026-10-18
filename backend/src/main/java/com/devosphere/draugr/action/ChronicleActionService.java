@@ -3495,6 +3495,28 @@ public class ChronicleActionService {
            ||((value.contains("check")||value.contains("healing")||value.contains("gone bad")||value.contains("mending"))
               &&(value.contains("wound")||value.contains("the cut")||value.contains("the injury")
                  ||value.contains("the break")||value.contains("it gone bad")))) return Intent.SENSE_BODY;
+        // SAYING WHAT YOUR OWN BODY IS DOING (#37). The block above is a list of literal phrases, and it knew
+        // "I am tired", "I am hungry", "I am thirsty" and "I feel ill" while SIXTEEN of twenty such statements
+        // reached nothing at all: "I am bleeding", "I am hurt", "I am injured", "I am cut", "my arm hurts",
+        // "it hurts", "I am in pain", "my hands are cold", "my feet are cold", "I am wet", "I am soaked",
+        // "I am exhausted", "I am sick", "I am dizzy", "I am weak". In a survival game, a player reporting their
+        // own body is close to the most natural sentence there is, and the Chronicle has ten Body HUD fields and
+        // a tracked injury behind it.
+        //
+        // Each family goes where the game ALREADY sends its nearest synonym, so nothing here invents a routing
+        // decision: `stop the bleeding` is TREAT_WOUND, `I am freezing` is WARM_BODY, `dry my clothes` is
+        // DRY_BODY. Those acts all answer a bare statement honestly when there is nothing to be done — "you go
+        // over yourself and find nothing open and nothing bleeding" — so a statement is REPORTED on when it is
+        // only a statement, and acted on when there is something to act on. Where no act exists at all
+        // (exhausted, dizzy, weak), the body reading is the honest answer and is all this claims.
+        if(saysOfSelf(value,"bleeding|bleed|bleeds|hurt|injured|cut|wounded|in pain|sore|gashed|bruised|grazed|hurts"))
+            return Intent.TREAT_WOUND;
+        if(saysOfSelf(value,"cold|freezing|frozen|numb|chilled|chilly|perished"))
+            return Intent.WARM_BODY;
+        if(saysOfSelf(value,"wet|soaked|drenched|damp|dripping|sodden|wet through"))
+            return Intent.DRY_BODY;
+        if(saysOfSelf(value,"exhausted|dizzy|weak|faint|giddy|sick|ill|unwell|shaky|spent|aching|worn out|done in|light headed|lightheaded"))
+            return Intent.SENSE_BODY;
         // Whether the stock will get in calf (#37). Not an act — breeding is simulated and happens on its own
         // when the conditions are right — but a question with five real answers behind it, none of which the
         // keeper could see. Before this, "breed the goats" was caught by the bestiality filter and answered as
@@ -3604,6 +3626,50 @@ public class ChronicleActionService {
     }
     /** Whole-word containment, delegating to the one definition of it — see {@link com.devosphere.draugr.narration.Words}. */
     private static boolean word(String haystack, String w) { return com.devosphere.draugr.narration.Words.word(haystack, w); }
+
+    /**
+     * Whether the sentence is the player SAYING what their own body is doing (#37).
+     *
+     * <p>Sixteen of twenty such statements reached nothing, while {@code I am tired}, {@code I am hungry},
+     * {@code I am thirsty} and {@code I feel ill} all worked — because the body rule is a list of literal
+     * phrases, and its own comments already call that out twice as "the literal-phrasing trap". Adding a few
+     * more phrases would be the same defect with a longer list, so this is the FRAME instead: first person, a
+     * copula, and the condition word at the END of the sentence.
+     *
+     * <p><b>The end-anchor is the whole guard.</b> "I am cut" is a wound; "I am cutting the hide" is work, and a
+     * rule that merely looked for "cut" somewhere after "I am" would have taken both. Anchoring the condition as
+     * the last thing said separates them with nothing held back in a list of exceptions.
+     *
+     * <p>Each family is routed where the game ALREADY sends its own nearest synonym — bleeding to the dressing
+     * that {@code stop the bleeding} reaches, cold to the warming that {@code I am freezing} reaches, wet to the
+     * drying that {@code dry my clothes} reaches. Every one of those acts answers a bare statement honestly when
+     * there is nothing to do ("you go over yourself and find nothing open and nothing bleeding"), so a statement
+     * is reported on when it is only a statement and acted on when there is something to act on.
+     */
+    /**
+     * What a person can call a part of themselves, or the cloth on it — a CLOSED set, and closed on purpose.
+     *
+     * <p>The first cut of this allowed any {@code my <noun>}, and took <b>"my goat is sick"</b> as a reading of
+     * the player's own body. A keeper saying that about an animal, answered with their own chill and hunger, is
+     * precisely the confident wrong answer this whole slice exists to remove — and it would have been a new one.
+     *
+     * <p>Excluding animals instead would mean a list of species that misses whichever one I forgot. A person's
+     * parts do not grow, so naming them is honest and cannot take a sentence about a goat, a knife or a boot.
+     * The worn things are here beside them because drying is what the body and its cloth share: "dry my clothes"
+     * already reaches DRY_BODY.
+     */
+    private static final String MY_OWN =
+            "hand|hands|finger|fingers|thumb|arm|arms|elbow|shoulder|shoulders|foot|feet|toe|toes|ankle|leg|legs"
+          + "|knee|knees|head|face|ear|ears|eye|eyes|nose|mouth|lip|lips|neck|throat|back|side|ribs|chest|belly"
+          + "|stomach|gut|skin|wrist|hip|hips|scalp|jaw|tooth|teeth|body"
+          + "|clothes|clothing|boots|shoes|socks|cloak|coat|shirt|trousers|mittens|gloves|hood|cap|hat";
+
+    private static boolean saysOfSelf(String value, String conditions) {
+        String s = value.strip().toLowerCase(Locale.ROOT).replaceAll("[.!?]+$", "").replaceAll("\\s+", " ");
+        return s.matches("(?:i am|i'm|im|i feel|i felt|i have gone|i've gone) (?:very |really |so |quite |a bit |getting |all )?(?:" + conditions + ")")
+            || s.matches("my (?:" + MY_OWN + ") (?:is|are|feels|feel|has gone|have gone) (?:very |really |so |quite |a bit |all )?(?:" + conditions + ")")
+            || s.matches("(?:my (?:" + MY_OWN + ")|it) (?:" + conditions + ")");
+    }
 
     /**
      * The kinds of ground a person asks the way to, and the biomes each one means (#37).
