@@ -2939,6 +2939,22 @@ public class ChronicleActionService {
             ||value.contains("check my gear")||value.contains("look over my gear")||value.contains("what tools do i have")
             ||value.contains("what gear do i have")||value.contains("is anything broken")||value.contains("anything need mending")
             ||value.contains("what needs mending")||value.contains("how worn")||value.contains("how is my")
+            // THE GRAMMATICAL PLURAL, which was the only form that failed. "how is my" was matched as a literal
+            // string, so `how is my boots` — which nobody says — was answered, and `how are my boots` was not.
+            // Worse than a miss: `how are my mittens` reached the process matcher, which took the noun and
+            // offered TO SEW A NEW MITTEN. A question about the state of gear you are wearing answered by making
+            // another one, which is the fifth place this project has found that shape. Most worn gear is paired,
+            // so the plural is the form a player naturally uses for exactly the items most likely to be worn out.
+            //
+            // GATED ON THE CATALOGUE, unlike its singular neighbour above, and the reason is a guard written
+            // earlier in this ticket that this broke: `how are my feet` must stay UNKNOWN, because the player's
+            // own feet have no state in the body model and answering about a shirt and two boots would be a
+            // confident falsehood about the body. An unqualified plural catches every body part there is, so
+            // these forms only fire when the sentence names something the Chronicle is actually carrying.
+            ||((value.contains("how are my")||value.contains("how are the")
+                ||value.contains("what state is my")||value.contains("what state are my")
+                ||value.contains("what condition is my")||value.contains("what condition are my"))
+               &&items.namesSomethingYouCarry(value))
             // The other ways of asking how a tool is standing up (#37). use_count and condition_state are on
             // every item and "how worn is the knife" reached them; "is the knife blunt", "how sharp is the axe",
             // "is the axe worn", "will this hold" and "how much use is left in it" all reached nothing.
@@ -3368,7 +3384,17 @@ public class ChronicleActionService {
         // world are made. Only treat carving as a trail-mark when it does not resolve to
         // a material process; the deliberate marking words (blaze, cairn, landmark) stand
         // on their own regardless.
-        if((value.contains("carve")&&!items.actionMatchesProcess(action))||value.contains("blaze")||value.contains("cairn")||value.contains("landmark")||value.contains("drive a stake")||value.contains("leave a marker")||value.contains("leave a mark")||((value.contains("mark")||value.contains("pile")||value.contains("stack"))&&(value.contains("tree")||value.contains("stone")||value.contains("stake")||value.contains("post")))) return Intent.MARK;
+        if((value.contains("carve")&&!items.actionMatchesProcess(action))||value.contains("blaze")||value.contains("cairn")||value.contains("landmark")||value.contains("drive a stake")||value.contains("leave a marker")||value.contains("leave a mark")
+           // PUTTING A MARKER UP, not leaving one behind (#37). The list held "leave a marker" and nothing for
+           // the verbs a person uses when the point is that the marker should STAND: "build a marker", "set up a
+           // marker", "raise a marker" all reached nothing, though MARK is exactly the act they name. The one
+           // catalogue claim on this word is `make_tracking_marker_bundle`, whose own keyword is "marker bundle"
+           // — so the bundle is excluded by name and keeps its recipe.
+           ||((value.contains("marker")||value.contains("way marker")||value.contains("waymarker"))
+              &&(value.contains("build")||value.contains("place")||value.contains("set up")||value.contains("put up")
+                 ||value.contains("raise")||value.contains("erect")||value.contains("stand"))
+              &&!value.contains("bundle"))
+           ||((value.contains("mark")||value.contains("pile")||value.contains("stack"))&&(value.contains("tree")||value.contains("stone")||value.contains("stake")||value.contains("post")))) return Intent.MARK;
         // Reworking a flawed build, and inspecting quality (M3b), before the generic
         // OBSERVE catch in classifyLegacy — "inspect" alone is an OBSERVE word, so these
         // require a quality/assembly context to claim it.
@@ -4149,7 +4175,17 @@ public class ChronicleActionService {
         if(value.contains("resume")||value.contains("return to")) return Intent.RESUME_LEAN_TO;
         return (value.contains("work") || value.contains("continue") || value.contains("build") || value.contains("weave") || value.contains("bind")) ? Intent.WORK_LEAN_TO : Intent.START_LEAN_TO;
     }
-    private Intent classifyLegacy(String action) { String value = action.toLowerCase(Locale.ROOT); if (COOKING_VERB.matcher(value).find() && (value.contains("meat") || value.contains("game") || value.contains("flesh") || value.contains("carcass")
+    private Intent classifyLegacy(String action) { String value = action.toLowerCase(Locale.ROOT); if ((COOKING_VERB.matcher(value).find()
+            // ONTO THE FIRE IS A COOKING VERB, said the way a person standing over one says it (#37). The rule
+            // wanted a verb from the COOKING_VERB list, and "put the meat on the fire" has none — the fire is
+            // where the verb went. It reached nothing at all while "cook the meat" worked.
+            //
+            // Only with the food NAMED. "put it on the fire" is left alone deliberately: the composer has no
+            // pronoun resolution, so "it" could as easily be the fuel, and guessing would mean burning wood in
+            // answer to a request to cook — a wrong ACT rather than a near answer. Recorded on #37 as such.
+            || value.contains("on the fire") || value.contains("over the fire") || value.contains("on the coals")
+            || value.contains("in the embers") || value.contains("over the flame") || value.contains("on the spit"))
+            && (value.contains("meat") || value.contains("game") || value.contains("flesh") || value.contains("carcass")
             // V396 gave the fire a table of what it turns into what, so the other raw foods it can now cook are
             // reachable by the sentence a person would use. A fish was the sharpest case: every preservation
             // process would take it and nothing would simply cook it.

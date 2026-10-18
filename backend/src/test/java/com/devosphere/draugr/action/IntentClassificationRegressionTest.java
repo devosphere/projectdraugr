@@ -2230,8 +2230,12 @@ class IntentClassificationRegressionTest {
         assertEquals("UNKNOWN", classify("build a stable"));
         assertEquals("UNKNOWN", classify("build a portable shelter"));
         assertEquals("UNKNOWN", classify("build a suitable shelter"));
-        assertEquals("UNKNOWN", classify("build a notable marker"));
         assertEquals("UNKNOWN", classify("make a racket"));
+        // "build a notable marker" has moved on, and this test's point is kept rather than its letter. What it
+        // guards is that "notable" must not be read as a TABLE; UNKNOWN was only the state of things when it was
+        // written, and #37 recorded the phrase as a defect to fix. Putting a marker up is MARK's own act.
+        assertEquals("MARK", classify("build a notable marker"),
+            "a notable marker is a marker, and still not a table");
         // "make a comfortable bed" was the sixth, and it no longer stops at UNKNOWN: MAKE_BED is held as the
         // word "bed" rather than the literal "a bed", so the adjective no longer defeats it. See
         // {@link #aBedIsThreeThings}.
