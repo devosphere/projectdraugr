@@ -131,12 +131,23 @@ class AskingAboutTheNightIntegrationTest {
     void sleepingItselfStillSleeps() {
         // The hazard of putting a guard in front of the bare word "sleep": if it reached too far, a Chronicle
         // could not sleep at all — which in this game is fatal.
-        aLivingChronicle();
+        //
+        // AND THIS TEST KILLED ITS OWN SUBJECT PROVING IT. Each of these phrases does not merely route — it
+        // SLEEPS, eight hours a time. Five of them is forty hours with nothing drunk, and CI failed with "No
+        // living Chronicle exists" partway through the loop: the test asserting that sleeping still works
+        // demonstrated it by sleeping the Chronicle to death. Which is, in fairness, the behaviour it was
+        // written to protect.
+        //
+        // So a living Chronicle is ensured before EVERY phrase rather than once for the method. Each verb is
+        // still exercised for real — the point is that it reaches SLEEP and performs it — but no single
+        // Chronicle is made to bear all five nights.
         for (String phrase : List.of("sleep", "go to sleep", "bed down for the night", "take a nap",
                                      "sleep through the night here")) {
+            aLivingChronicle();
             String got = intentOf(phrase);
             assertTrue("SLEEP".equals(got), () -> "sleeping is still sleeping: '" + phrase + "' -> " + got);
         }
+        aLivingChronicle();
         assertTrue("REST".equals(intentOf("rest a while")), "and resting is still resting");
     }
 
