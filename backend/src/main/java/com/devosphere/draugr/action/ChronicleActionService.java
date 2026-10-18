@@ -2072,7 +2072,16 @@ public class ChronicleActionService {
         if((value.contains("craft")||value.contains("make")||value.contains("build")||value.contains("construct")||value.contains("assemble"))&&(value.contains("chair")||value.contains("stool")||value.contains("seat"))) return Intent.CRAFT_CHAIR;
         // A primitive utility belt (#35): a fibre strap with tool loops. A making verb + "belt" — never the
         // wearing of one (that carries no craft verb and falls to EQUIP below).
-        if((value.contains("make")||value.contains("craft")||value.contains("assemble")||value.contains("fashion")||value.contains("weave")||value.contains("build"))&&value.contains("belt")&&!value.contains("belt out")) return Intent.CRAFT_BELT;
+        // "girdle" beside "belt" (#37). The catalogue's own word for one of these is a GIRDLE —
+        // `make_cordage_belt` declares "cordage girdle", "make a cordage girdle", "tie a cordage girdle" — and
+        // the rule knew only "belt", so `make a girdle` reached nothing at all while `make a belt` worked. The
+        // game's word and the player's word were both right and only one of them was heard.
+        // The girdle half defers to the catalogue, which "belt" deliberately does not. `make_cordage_belt`
+        // declares "cordage girdle", "make a cordage girdle" and "tie a cordage girdle" — so claiming the word
+        // outright would have taken a recipe's own three phrases, which is the fault this very rule is meant to
+        // avoid. "make a girdle", which no recipe claims, still reaches the belt.
+        if((value.contains("make")||value.contains("craft")||value.contains("assemble")||value.contains("fashion")||value.contains("weave")||value.contains("build"))
+           &&(value.contains("belt")||(value.contains("girdle")&&!items.actionMatchesProcess(value)))&&!value.contains("belt out")) return Intent.CRAFT_BELT;
         // Physical logistics (#29/#40/#41). Storing something IN a container is checked before DROP and before
         // the gather verbs, so "put the stones in the basket" is containment, not dropping or gathering. It
         // needs a store verb, an in/into/inside, and a container noun together.
@@ -4068,6 +4077,14 @@ public class ChronicleActionService {
         // ("nothing here that will take your weight"). This rule walked north instead, and found higher
         // ground to do it on, so a Chronicle on open grass climbed a tree that was not there.
         if (value.contains("tree") || value.contains("trunk") || value.contains("branches")) return false;
+        // AND A ROPE IS A THING TOO, by the very same reasoning as the tree above. `make_climbing_rope` is a real
+        // recipe declaring "climbing rope", "make a climbing rope" and "lay up a climbing rope" — and the
+        // climbing VERB inside the word "climbing" took all three for a step, so `climbing rope` answered
+        // "You travel north" and `make a climbing rope` answered "There is nothing to climb from here". A Java
+        // intent eating a recipe's own three keywords, and the player sent walking for asking to make cordage
+        // into a rope. Gating on MAKING_SOMETHING would not do it: two of the three carry no making verb, and
+        // "make my way up" — listed in this method as a legitimate step — carries one.
+        if (value.contains("rope") || value.contains("ladder")) return false;
         boolean verb = CLIMB_OR_FOLLOW.matcher(value).find()
             || value.contains("go up") || value.contains("go down")
             || value.contains("head up") || value.contains("head down")
