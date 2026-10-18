@@ -2426,6 +2426,18 @@ public class ChronicleActionService {
             return Intent.CHECK_TRAP;
         if(saysOfThing(value, VESSELS, VESSEL_EMPTY))
             return Intent.COLLECT_WATER;
+        // THE THREE THE FIRST CUT LEFT OUT, each going where its own nearest verb already goes. `the crop needs
+        // water` reached WATER_CROP all along and `the crop is dry` reached nothing; `weed the crop` reached
+        // WEED_CROP and `the crop needs weeding` reached nothing. The repair rule above was given the gate, pen
+        // and fence NOUNS without the conditions a person actually reports them in, so `the gate is open` and
+        // `the fence is down` still fell through — a fence that is down and a pen standing open are the two
+        // failures a keeper notices first, and they are what lets the stock out.
+        if(saysOfThing(value,"crop|crops|field|fields|barley|wheat|grain|seedlings|sowing","dry|parched|wilting|drooping|thirsty|withering"))
+            return Intent.WATER_CROP;
+        if(saysOfThing(value,"crop|crops|field|fields|barley|wheat|grain","choked|overgrown|full of weeds|weedy|weeding|thick with weeds"))
+            return Intent.WEED_CROP;
+        if(saysOfThing(value,"pen|pens|gate|gates|fence|fences|paddock|fold|enclosure","open|standing open|down|flat|unlatched|unfastened|ajar|wide open"))
+            return Intent.REPAIR_STRUCTURE;
         // Repairing / maintaining a standing structure here (#70) — before item repair, and scoped to structure
         // nouns, so "mend the fence" or "weatherproof the hut" works a construction, not a carried tool.
         if((value.contains("repair")||value.contains("mend")||value.contains("patch")||value.contains("shore up")||value.contains("reinforce")||value.contains("weatherproof")||value.contains("maintain")||(word(value,"fix")&&!value.contains("memory")&&!value.contains("mind")))
@@ -3804,7 +3816,11 @@ public class ChronicleActionService {
     private static boolean saysOfThing(String value, String things, String conditions) {
         String s = value.strip().toLowerCase(Locale.ROOT).replaceAll("[.!?]+$", "").replaceAll("\\s+", " ");
         return s.matches("(?:the|my|our|that|this) (?:" + things + ")"
-                       + " (?:is|are|was|were|has|have|has gone|have gone|is getting|are getting|has got|have got)"
+                       // "needs" and "wants" beside the copulas, because a report and a request are the same
+                       // sentence here: "the crop needs weeding" says a thing about the crop exactly as "the
+                       // crop is dry" does, and it was the one form of the family that still reached nothing.
+                       + " (?:is|are|was|were|has|have|has gone|have gone|is getting|are getting|has got|have got"
+                       + "|needs|need|wants|want)"
                        + " (?:all |nearly |almost |quite |very |getting |a bit |right )?(?:" + conditions + ")");
     }
 
