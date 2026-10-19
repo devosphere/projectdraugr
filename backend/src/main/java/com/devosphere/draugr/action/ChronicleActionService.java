@@ -3475,7 +3475,12 @@ public class ChronicleActionService {
            // nothing while "fetch water" and "scoop water" worked.
            ||((value.contains("get some water")||value.contains("get water")||value.contains("scoop up")
                ||value.contains("dip")||value.contains("take some water"))&&value.contains("water"))) return Intent.COLLECT_WATER;
-        if(value.contains("charcoal")&&(value.contains("make")||value.contains("take")||value.contains("gather")||value.contains("get")||value.contains("collect"))&&!items.actionMatchesProcess(value)) return Intent.MAKE_CHARCOAL;
+        // BUILDING A CHARCOAL PIT IS HOW CHARCOAL IS MADE. #77 names `charcoal_pit` as a structure and the
+        // catalogue has none — because in this game the pit IS the making, and MAKE_CHARCOAL already carries it.
+        // So the verbs were "make", "take", "gather", "get", "collect" and not "build" or "dig", which are what
+        // somebody asks for when they picture the pit rather than the product.
+        if(value.contains("charcoal")&&(value.contains("make")||value.contains("take")||value.contains("gather")||value.contains("get")||value.contains("collect")
+            ||value.contains("build")||value.contains("dig")||value.contains("burn"))&&!items.actionMatchesProcess(value)) return Intent.MAKE_CHARCOAL;
         if(value.contains("bark")&&!value.contains("loose")&&(gatherVerb||value.contains("strip")||value.contains("peel")||value.contains("take"))) return Intent.STRIP_BARK;
         // Ambient ground scavenge (#133): search the forest floor / under a log for small survival materials — the
         // bare-hand pickup of the #192 litter (twigs, leaf litter/tinder, loose bark, shed feather/fur, driftwood,
