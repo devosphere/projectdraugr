@@ -114,6 +114,26 @@ public class ContactService {
         Map.entry("say their word", Act.ATTEMPT_SHARED_WORDS), Map.entry("speak their words", Act.ATTEMPT_SHARED_WORDS),
         Map.entry("try to speak their", Act.ATTEMPT_SHARED_WORDS), Map.entry("speak to them", Act.ATTEMPT_SHARED_WORDS),
         Map.entry("ask them", Act.ASK_QUESTION), Map.entry("ask the reedkin", Act.ASK_QUESTION), Map.entry("ask the headsperson", Act.ASK_QUESTION),
+        // "ask them about the land" worked and "ask about the land" did not — the pronoun-less form, which is
+        // what a player standing on somebody's isle actually types, because who else would they be asking (#37).
+        // Worse, `ask about the fishing` reached FISH and put the Chronicle in the water with open hands; these
+        // phrases take the sentence back from the acts it was being mistaken for.
+        Map.entry("ask about", Act.ASK_QUESTION), Map.entry("ask what they", Act.ASK_QUESTION),
+        Map.entry("ask after", Act.ASK_QUESTION), Map.entry("ask how they", Act.ASK_QUESTION),
+        Map.entry("ask where they", Act.ASK_QUESTION), Map.entry("ask whether they", Act.ASK_QUESTION),
+        Map.entry("tell them about myself", Act.STATE_INTENTION), Map.entry("tell them who i am", Act.STATE_INTENTION),
+        Map.entry("tell them about me", Act.STATE_INTENTION),
+        Map.entry("show respect", Act.RESPECT_BOUNDARY), Map.entry("be respectful", Act.RESPECT_BOUNDARY),
+        Map.entry("learn their language", Act.ATTEMPT_SHARED_WORDS), Map.entry("learn their words", Act.ATTEMPT_SHARED_WORDS),
+        Map.entry("learn their speech", Act.ATTEMPT_SHARED_WORDS), Map.entry("thank them", Act.ATTEMPT_SHARED_WORDS),
+        // TEACHING HAS NO MECHANIC IN THIS GAME, and `teach them to make rope` reached the ROPE RECIPE and tried
+        // to twist cordage. Attempting shared words is the nearest thing that is true: the reedkin's speech
+        // "runs in clicks and low calls, and you cannot yet part it into words", so showing somebody how to do
+        // a thing across that gap IS an attempt to be understood. It is not a claim that teaching works — it is
+        // a true answer to a near question instead of a false answer to the exact one, and it stops the game
+        // making rope when asked to teach.
+        Map.entry("teach them", Act.ATTEMPT_SHARED_WORDS), Map.entry("show them how", Act.ATTEMPT_SHARED_WORDS),
+        Map.entry("teach the reedkin", Act.ATTEMPT_SHARED_WORDS),
         Map.entry("state my intention", Act.STATE_INTENTION), Map.entry("tell them why", Act.STATE_INTENTION),
         Map.entry("tell them i come", Act.STATE_INTENTION), Map.entry("tell them i mean", Act.STATE_INTENTION),
         Map.entry("show them", Act.SHOW_ITEM), Map.entry("show them my map", Act.SHOW_MAP), Map.entry("show them the map", Act.SHOW_MAP),
