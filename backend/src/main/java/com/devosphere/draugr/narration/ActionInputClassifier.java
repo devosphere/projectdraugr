@@ -201,13 +201,37 @@ public class ActionInputClassifier {
     }
 
     /** True when the word contains four or more consecutive consonants — rare in real English, common in mash. */
+    /**
+     * A consonant run long enough to give away keyboard mash — and SIX, not four (#37/#99).
+     *
+     * <p>At four, this called real English gibberish. Measured on a booted backend, every one of these was
+     * answered "The body has no shape for that intent. Nothing moves.":
+     *
+     * <pre>
+     *   withdraw   wi(thdr)aw   — and WITHDRAW is a declared contact act
+     *   windbreak  wi(ndbr)eak  — and PLACE_WINDBREAK is a declared intent
+     *   sandstone  sa(ndst)one
+     *   birchbark  bi(rchb)ark
+     *   strength   stre(ngth)
+     *   handcraft  ha(ndcr)aft
+     * </pre>
+     *
+     * <p>Six still catches what this rule exists for, because the vowel test above does most of the work: mash
+     * with no vowel at all ({@code zxcvbnm}) never reaches here, and mash that does have one runs far longer
+     * than real words — {@code asdfghjkl} carries an eight-consonant run. Six also admits the longest clusters
+     * English actually has: {@code lengths} and {@code strengths} end in five.
+     *
+     * <p>The cost of being wrong is asymmetric, which is why the threshold moves outward rather than in. Letting
+     * a mash through costs a shrug from the generic fallback; refusing a real word tells a player their own
+     * language is nonsense, and does it in a voice that sounds certain.
+     */
     private boolean hasLongConsonantRun(String alpha) {
         int run = 0;
         for (int i = 0; i < alpha.length(); i++) {
             char c = alpha.charAt(i);
             boolean vowel = c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u' || c == 'y';
             run = vowel ? 0 : run + 1;
-            if (run >= 4) return true;
+            if (run >= 6) return true;
         }
         return false;
     }
