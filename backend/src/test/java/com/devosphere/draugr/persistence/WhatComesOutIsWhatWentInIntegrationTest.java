@@ -108,14 +108,43 @@ class WhatComesOutIsWhatWentInIntegrationTest {
 
     /** Raises a drainage ditch at the Chronicle's own place and returns its object id. */
     private UUID aDitchOfStone(UUID chronicle) {
+        // GROUND OF ITS OWN, BECAUSE THE COMPOSER PICKS BY NAME. Six methods in this class each raise a ditch,
+        // the suite shares one world, and `repair`/`take apart` choose among the structures standing at the
+        // Chronicle's feet by their display name — so a second drainage ditch is indistinguishable from this
+        // one. CI proved it exactly: `take apart the drainage ditch` SUCCEEDED while the ditch this method had
+        // returned was still ACTIVE, and a mending put its 25 back onto somebody else's ditch, leaving the
+        // tracked one at 50.
+        //
+        // The first version ordered by created_at and took the newest, which is not the same question as "the
+        // one standing where the Chronicle is". Rather than tear down the others — destructive SQL that would
+        // have to forge destroyed_at, a cause and a transition row to stay Auditor-consistent — the Chronicle is
+        // moved to a chunk with nothing built on it. Each call then finds the next empty one, so the tests
+        // distribute themselves and every ditch is the only thing where it stands.
+        UUID ground = jdbc.queryForObject(
+            "SELECT c.id FROM world_chunk c WHERE c.biome='GRASSLAND'"
+          + " AND NOT EXISTS (SELECT 1 FROM world_object w JOIN construction_project cp ON cp.object_id=w.id"
+          + "                  WHERE w.current_location_id=c.id AND w.lifecycle_state='ACTIVE')"
+          + " ORDER BY c.grid_y, c.grid_x LIMIT 1", UUID.class);
+        assertNotNull(ground, "the world must have open ground with nothing built on it");
+        jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", ground, chronicle);
+
         for (int i = 0; i < 2; i++) items.createCarriedItem(chronicle, "field_stone", "Field stone", now(), "TEST_SEED");
         ChronicleActionService.ActionResult built = actions.resolve("dig a drainage ditch", UUID.randomUUID());
         assertEquals("SUCCEEDED", built.outcome(), () -> "digging the ditch must succeed: " + built.perception());
+
+        // Scoped to this ground, not to "the newest in the world".
         UUID ditch = jdbc.queryForObject(
             "SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id"
-          + " WHERE cp.project_kind='DRAINAGE_DITCH' AND w.lifecycle_state='ACTIVE' ORDER BY w.created_at DESC LIMIT 1",
-            UUID.class);
+          + " WHERE cp.project_kind='DRAINAGE_DITCH' AND w.lifecycle_state='ACTIVE' AND w.current_location_id=?",
+            UUID.class, ground);
         assertNotNull(ditch, "the finished ditch must stand in the world");
+
+        Integer standingHere = jdbc.queryForObject(
+            "SELECT count(*) FROM construction_project cp JOIN world_object w ON w.id=cp.object_id"
+          + " WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' AND cp.state='COMPLETED'",
+            Integer.class, ground);
+        assertEquals(1, standingHere,
+            "the ditch must be the only thing standing here, or the composer cannot be asked for it by name");
         return ditch;
     }
 
