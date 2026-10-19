@@ -3096,7 +3096,16 @@ public class ChronicleActionService {
         boolean notAboutAnAnimal = !value.contains("animal")&&!value.contains("beast")&&!value.contains("the herd")
             &&!value.contains("the flock")&&!items.namesAKeptAnimal(value);
         boolean notAboutMyself = !value.contains("myself")&&!value.contains("of me")&&!value.contains("with me");
-        if((takingStockOfTheCamp||askingIfABuiltThingHolds)&&notAboutAnAnimal&&notAboutMyself)
+        // MAKING CAMP IS NOT ONE ACT, so the honest answer is what the ground still wants (#37). `make camp`,
+        // `set up camp` and `settle in for the night` all reached nothing, while `bed down for the night` slept.
+        // There is no single camp-making work in this game — a camp is a fire, a shelter, a bed and a store, each
+        // built separately — so rather than guess which one was meant, this walks the ground and names what is
+        // and is not there: "there is nothing of yours on it — no shelter, no pit, no pen, nothing begun." That
+        // is precisely the list somebody making camp needs, and it changes nothing while saying it.
+        boolean settlingIn = value.contains("make camp")||value.contains("making camp")||value.contains("set up camp")
+            ||value.contains("set up a camp")||value.contains("pitch camp")||value.contains("settle in for the night")
+            ||value.contains("settle down for the night")||value.contains("what is in my camp")||value.contains("whats in my camp");
+        if(((takingStockOfTheCamp||askingIfABuiltThingHolds||settlingIn))&&notAboutAnAnimal&&notAboutMyself)
             return Intent.TAKE_STOCK_OF_CAMP;
         // Asking WHETHER the water will let you over is a question, not a wade (#37). Placed before the
         // terrain-crossing rule, which turns "wade north" into movement: a question with a direction in it must
@@ -3499,6 +3508,21 @@ public class ChronicleActionService {
         // Exhausted — and a Chronicle who asked got prose about the reeds ("examine myself" resolved to OBSERVE
         // and described the ground) or "it is too dark to see the fine of it". The thing that kills you was the
         // one thing you could not ask about.
+        // ASKING ABOUT THE NIGHT YOU HAD MUST NOT COST YOU ANOTHER ONE (#37). `did I sleep well` and `how did I
+        // sleep` both reached SLEEP and SLEPT: "You settle onto the bare ground and drift through 8 HOURS of
+        // broken, shallow sleep." A question about the night just gone, answered by consuming eight hours of
+        // simulated time and the body's state with it — the most expensive member of this project's
+        // asking-is-not-doing family by a wide margin, since every other one of them failed harmlessly or merely
+        // answered wrongly.
+        //
+        // The body reading is the honest answer: sleep_debt_hours is tracked, and SENSE_BODY reports what
+        // presses. `I slept badly` is the same thing said as a statement, and goes the same way.
+        //
+        // Placed above the body block rather than inside it so that the SLEEP rule, which is further down and
+        // claims the bare word "sleep", can never see these forms at all.
+        if(value.contains("did i sleep")||value.contains("how did i sleep")||value.contains("i slept")
+           ||value.contains("did i rest")||value.contains("how did i rest")||value.contains("sleep well last")
+           ||value.contains("wake up")||value.contains("woke up")||value.contains("i am awake")) return Intent.SENSE_BODY;
         if(value.contains("how am i")||value.contains("how do i feel")||value.contains("how is my health")
            ||value.contains("check my injur")||value.contains("check my wound")||value.contains("check my body")||value.contains("check myself")
            ||value.contains("examine my body")||value.contains("inspect my body")||value.contains("examine myself")||value.contains("look at myself")
@@ -3625,6 +3649,18 @@ public class ChronicleActionService {
         if(value.contains("search")||value.contains("look for")||value.contains("hunt for")||value.contains("check beneath")||value.contains("check under")||value.contains("look under")||value.contains("turn over")||value.contains("comb through")||value.contains("rummage")||value.contains("forage through")||value.contains("sift through the")) return Intent.SEARCH;
         // Reading a written document (#65 read/review_record). Word-boundary "read" so "bread" doesn't match;
         // "read the ground/tracks" already resolved to TRACK above.
+        // LOOKING AT A THING YOU WROTE IS READING IT (#37). `read my map` and `read my journal` both worked,
+        // and `look at my map` reached OBSERVE — which answered about the trees overhead. A player who asks to
+        // look at their own map and is told about the leaf litter has been answered confidently about the wrong
+        // thing. `hand_drawn_map` is a real item and READ already handles it, refusing honestly when there is
+        // none ("you have nothing written within reach to read"), so this only needed the other verb.
+        //
+        // And "what have I written" is the question whose whole subject is the writing.
+        if(((value.contains("look at")||value.contains("looking at")||value.contains("check")||value.contains("study"))
+            &&(value.contains("my map")||value.contains("the map")||value.contains("my journal")||value.contains("the journal")
+               ||value.contains("my notes")||value.contains("my record")||value.contains("the record")))
+           ||value.contains("what have i written")||value.contains("what did i write")
+           ||value.contains("what have i set down")) return Intent.READ;
         if(word(value,"read")||word(value,"reread")||word(value,"peruse")||word(value,"consult")||value.contains("study the writing")||value.contains("study the tablet")||value.contains("study the page")||value.contains("study the journal")||value.contains("unfold and read")||value.contains("check the contents")||((value.contains("review")||value.contains("study"))&&(value.contains("tablet")||value.contains("journal")||value.contains("page")||value.contains("record")||value.contains("writing")||value.contains("document")||value.contains("note")||value.contains("inscription")))) return Intent.READ;
         // Estimation (#65 measure): weigh/count/pace-out/depth. Word-boundary the short verbs so "account"⊅count.
         // "how long have I been here" is the plainest way to ask it and reached nothing at all: the rule below
