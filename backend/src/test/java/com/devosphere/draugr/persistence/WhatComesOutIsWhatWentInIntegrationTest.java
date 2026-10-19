@@ -88,7 +88,13 @@ class WhatComesOutIsWhatWentInIntegrationTest {
         }
         var active = chronicles.active() != null ? chronicles.active() : chronicles.awaken();
         assertNotNull(active, "a living Chronicle is needed");
-        return jdbc.queryForObject("SELECT id FROM chronicle WHERE lifecycle_state='ACTIVE' ORDER BY created_at DESC LIMIT 1", UUID.class);
+        // TAKE THE ID FROM THE SUMMARY, not from a query of my own invention. The first version of this asked
+        // `WHERE lifecycle_state='ACTIVE' ORDER BY created_at DESC` — three mistakes in one line, because the
+        // chronicle table has life_state ('LIVING', not 'ACTIVE'), has no created_at, and orders by
+        // sequence_number. It threw BadSqlGrammar and took all nine tests in this class with it. The column
+        // names had already been established earlier the same session, in a shell script, and written down
+        // wrong here anyway — which is the whole argument for asking the object that already knows.
+        return active.id();
     }
 
     private Instant now() { return Instant.now(); }
