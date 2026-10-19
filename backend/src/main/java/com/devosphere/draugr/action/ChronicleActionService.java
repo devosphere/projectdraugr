@@ -2140,8 +2140,15 @@ public class ChronicleActionService {
         // carries, so seed held for a season is grain in a store and nothing else. Both reached nothing.
         if((value.contains("save")||value.contains("keep")||value.contains("hold back"))
            &&value.contains("seed")&&!value.contains("sow")&&!value.contains("plant")) return Intent.STORE;
-        if((value.contains("put")&&value.contains("away"))||value.contains("cache")||value.contains("stockpile")||value.contains("put in storage")||value.contains("stow away")||value.contains("stash away")
-           ||(value.contains("put")&&value.strip().endsWith(" by"))) return Intent.STORE;
+        // The build-verb exclusion is the sibling rule's, and for the same reason: as a NOUN a cache is a
+        // BUILDING. `build a root fodder cache` reached this bare `contains("cache")` and was answered "you have
+        // no container within reach to store anything in" — asking to raise a store, and being told you have
+        // nowhere to put things. The comment further down this method claimed there was no collision because the
+        // bare "cache" only ever stows an item; that held until the catalogue had a structure called a cache.
+        if(((value.contains("put")&&value.contains("away"))||value.contains("cache")||value.contains("stockpile")||value.contains("put in storage")||value.contains("stow away")||value.contains("stash away")
+           ||(value.contains("put")&&value.strip().endsWith(" by")))
+           &&!value.contains("build")&&!value.contains("construct")&&!value.contains("raise")
+           &&!value.contains("set up")&&!value.contains("put up")&&!value.contains("erect")&&!value.contains("dig")) return Intent.STORE;
         // "store the food" with no container named (#37). The rules above want a container noun or the words
         // "away"; a bare storage verb — the most ordinary way to say it — reached nothing.
         //
@@ -2501,7 +2508,7 @@ public class ChronicleActionService {
              // Null-guarded like the assembly matcher beside it: IntentClassificationRegressionTest builds this
              // service with null collaborators so routing can be asserted purely over text, with no world and no
              // Docker. A DB-driven name therefore cannot be tested there, and is held in the integration test.
-             ||(construction != null && construction.namesAStandingStructure(value)))) return Intent.REPAIR_STRUCTURE;
+             ||namesAStructureAndTheVerbIsNotPartOfItsName(value))) return Intent.REPAIR_STRUCTURE;
         // The words for putting an edge back on a tool (#37). The rule knew "sharpen" and "abrade", and `hone the
         // blade` and `whet the blade` reached the MATERIAL MATCHER instead — which offered to **forge a bronze
         // knife**. Asked to sharpen what they hold, the player was offered to make a new one; `grind the axe`,
@@ -4863,6 +4870,31 @@ public class ChronicleActionService {
     private boolean campIsGettingFoul(UUID location) {
         Integer refuse = jdbc.queryForObject("SELECT COALESCE((SELECT refuse_level FROM chunk_refuse WHERE chunk_id=?),0)", Integer.class, location);
         return refuse != null && refuse >= 25;
+    }
+
+    /**
+     * Does this sentence name a standing structure <em>and</em> carry a repair verb that is not simply part of
+     * that structure's own name? (#77/#108)
+     *
+     * <p>{@code wheel_repair_stand} has the word "repair" in its name, so once the repair gate began reading the
+     * catalogue, {@code build a wheel repair stand} satisfied both halves of it and came back REPAIR_STRUCTURE —
+     * a request to build answered as a request to mend, and caused by the fix that widened the gate. Taking the
+     * matched name out and re-testing the verb settles it: a build leaves nothing behind but "build a".
+     *
+     * <p>Null-guarded because IntentClassificationRegressionTest builds this service with null collaborators so
+     * routing can be asserted purely over text, with no world and no Docker.
+     */
+    private boolean namesAStructureAndTheVerbIsNotPartOfItsName(String value) {
+        if (construction == null) return false;
+        String name = construction.longestStructureNameIn(value);
+        return name != null && mendingVerb(value.replace(name, " "));
+    }
+
+    /** The words for setting a standing thing right. One list, so the gate and the guard above cannot drift. */
+    private static boolean mendingVerb(String v) {
+        return v.contains("repair") || v.contains("mend") || v.contains("patch") || v.contains("shore up")
+            || v.contains("reinforce") || v.contains("weatherproof") || v.contains("maintain")
+            || (word(v, "fix") && !v.contains("memory") && !v.contains("mind"));
     }
 
     private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, PARE_HOOVES, UNKNOWN }

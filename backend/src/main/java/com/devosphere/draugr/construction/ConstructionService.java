@@ -793,9 +793,15 @@ public class ConstructionService {
      * verb means the standing thing anyway.
      *
      * <p>Matched whole-word, because this project's richest seam is a family word reaching through a longer one.
+     * The <b>longest</b> match is returned rather than a bare yes, and the caller needs it: {@code
+     * wheel_repair_stand} carries the word
+     * <b>"repair"</b> inside its own name, so {@code build a wheel repair stand} satisfied the repair gate and
+     * came back REPAIR_STRUCTURE — a request to build answered by a request to mend, caused by the very fix that
+     * made the gate read the catalogue. Taking the matched name out of the sentence and asking whether a repair
+     * verb is still there settles it: for a build there is nothing left but "build a".
      */
-    public boolean namesAStandingStructure(String lower) {
-        if (lower == null || lower.isBlank()) return false;
+    public String longestStructureNameIn(String lower) {
+        if (lower == null || lower.isBlank()) return null;
         java.util.Set<String> names = structureNames;
         if (names == null) {
             // SINGLE WORDS THAT ALSO NAME A MATERIAL ARE LEFT OUT, and this was not caution — the first version
@@ -819,8 +825,11 @@ public class ConstructionService {
                 " WHERE position(' ' in w) > 0 OR NOT EXISTS (SELECT 1 FROM material m WHERE m.w = named.w)", String.class));
             structureNames = names;
         }
-        for (String n : names) if (com.devosphere.draugr.narration.Words.word(lower, n)) return true;
-        return false;
+        String best = null;
+        for (String n : names) {
+            if (com.devosphere.draugr.narration.Words.word(lower, n) && (best == null || n.length() > best.length())) best = n;
+        }
+        return best;
     }
 
     /** The catalogue's own name for an item, so a salvaged piece is not called by its key. */
