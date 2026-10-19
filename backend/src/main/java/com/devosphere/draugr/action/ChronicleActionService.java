@@ -2571,6 +2571,13 @@ public class ChronicleActionService {
            // because "eel" sits inside STEEL, WHEEL and PEELED — the rule already used word() for it in one
            // place and a raw contains() in another, and only one of those was safe.
            &&!MAKING_SOMETHING.matcher(value).find()
+           // ASKING ABOUT THE FISHING IS NOT FISHING (#37). `ask about the fishing` put the Chronicle in the
+           // water — "You stand in the cold water with your hands open, and whatever moves past is gone before
+           // you close them" — in answer to a question that was plainly addressed to somebody. The same shape as
+           // the MAKING_SOMETHING gate this rule already carries: a noun-driven activity must not claim a
+           // sentence whose verb belongs to someone else. Held here as well as in the people vocabulary, because
+           // the people phrases only fire within reach of an isle and this must hold on empty country too.
+           &&!askingAboutSomething(value)
            &&(namesAFishByName(value) || !items.actionMatchesProcess(action))) return Intent.FISH;
         if(value.contains("snare")||value.contains("set a trap")||value.contains("set trap")||((value.contains("trap")||value.contains("noose"))&&(value.contains("rabbit")||value.contains("hare")||value.contains("bird")||value.contains("fowl")||value.contains("small")||value.contains("run")))) return Intent.SNARE;
         // A bird's nest and an insect's nest are the same word and not the same act (#122). The bird takes it when
@@ -3749,7 +3756,11 @@ public class ChronicleActionService {
         if(value.contains("what did i name")||value.contains("what did i call")||value.contains("what have i named")
            ||value.contains("what is this place called")||value.contains("whats this place called")
            ||value.contains("what is this called")||value.contains("did i name this")||value.contains("have i named this")) return Intent.OBSERVE;
-        if(value.contains("designate")||value.contains("christen")||((value.contains("name")||value.contains("call")||value.contains("establish")||value.contains("found")||value.contains("mark"))&&(value.contains("this place")||value.contains("this area")||value.contains("this spot")||value.contains("this location")||value.contains("here as")||value.contains("this as")||value.contains("this the")))) return Intent.DESIGNATE;
+        // AND NOT WHEN THE QUESTION IS PUT TO SOMEBODY ELSE. `ask what they call this place` reached DESIGNATE
+        // and answered "You mean to give this place a name, but no clear name forms" — the same renaming of the
+        // ground in answer to a question, one pronoun over from the form already guarded above. On an isle the
+        // people vocabulary now takes it as a question asked of them; this keeps it from the naming either way.
+        if(value.contains("designate")||value.contains("christen")||((value.contains("name")||value.contains("call")||value.contains("establish")||value.contains("found")||value.contains("mark"))&&(value.contains("this place")||value.contains("this area")||value.contains("this spot")||value.contains("this location")||value.contains("here as")||value.contains("this as")||value.contains("this the"))&&!askingAboutSomething(value)&&!value.contains("what they call")&&!value.contains("what they name"))) return Intent.DESIGNATE;
         // DROP / place (#67): set an object down on the ground here. STORE (into a container) and the trap/
         // marker verbs are already claimed above, so a bare place/lay/set-down here is a plain drop.
         if(value.contains("drop")||value.contains("leave behind")||value.contains("set down")||value.contains("put down")||value.contains("discard")||value.contains("lay down")||value.contains("lay it down")||value.contains("lay them down")||((value.contains("place")||value.contains("set")||value.contains("put")||value.contains("lay")||value.contains("leave"))&&(value.contains("on the ground")||value.contains("down here")||value.contains(" aside")))) return Intent.DROP;
@@ -3826,6 +3837,23 @@ public class ChronicleActionService {
      * question about the land with a list of what is in the pack. Only the possessive forms, which are
      * unambiguously about a thing of yours.
      */
+    /**
+     * Whether the sentence ASKS ABOUT a thing rather than doing it (#37).
+     *
+     * <p>Read by the activity rules that are driven by a noun, so a question plainly addressed to somebody is
+     * not carried out as the act the noun belongs to. {@code ask about the fishing} reached FISH and put the
+     * Chronicle in the water with open hands; {@code ask what they call this place} reached DESIGNATE and tried
+     * to rename the ground.
+     *
+     * <p>Held in the composer as well as in the people vocabulary, because those phrases only fire within reach
+     * of an isle — and the sentence is no more an act of fishing on empty country than it is beside one.
+     */
+    private static boolean askingAboutSomething(String value) {
+        return value.startsWith("ask ")||value.contains("ask about")||value.contains("ask them")
+            || value.contains("ask what")||value.contains("ask how")||value.contains("ask after")
+            || value.contains("ask whether")||value.contains("ask where")||value.contains("ask the");
+    }
+
     private static boolean askingWhereAThingIs(String value) {
         return value.contains("where is my")||value.contains("where are my")||value.contains("where's my")
             || value.contains("where did i put")||value.contains("where did i leave")||value.contains("where did i set")
