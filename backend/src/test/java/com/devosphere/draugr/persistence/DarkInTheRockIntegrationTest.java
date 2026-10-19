@@ -95,11 +95,32 @@ class DarkInTheRockIntegrationTest {
         assertNotNull(cave, "the world must have a cave mouth");
         assertNotNull(open, "the world must have open ground to compare against");
 
-        // Broad daylight: whatever the clock says elsewhere, this is the hour the world is at.
+        // BROAD DAYLIGHT AND A FAIR SKY, PINNED RATHER THAN HOPED FOR, because this test owns both.
+        //
+        // It used to ASSUME the hour instead, reading the clock and skipping if it was night. That read one
+        // instant and the action resolved at another — every action costs simulated minutes — so a run that
+        // started at 19:50 passed the assumption and then did its work in the dark. It also never looked at the
+        // sky at all, and a snowstorm darkens the day enough that the refusal fires on open grass. CI found both
+        // at once: "close work on open ground in daylight must not be refused for want of light", answered with
+        // "the weather takes any flame you try to strike" and snow coming down.
+        //
+        // Neither was a fault in the world. The control simply was not a control. Pinned and restored on the
+        // #643 pattern, which the suite already uses for exactly this: the clock is shared by ~1,170 tests, so
+        // whatever ran before this decides what hour it is unless the test says.
+        //
+        // THE CLOCK PIN IS THE LOAD-BEARING HALF, and the weather pin is not — measured on a booted backend
+        // against a throwaway database, where a forced CLEAR was already back to RAIN by the time the action
+        // resolved, because WeatherSimulationService.advanceTo recomputes the sky from (season, seed, day). It
+        // did not matter: tooDarkForFineWork is `isDark(at) || a cave biome`, so at noon on open grass the
+        // refusal cannot fire whatever the sky is doing, and the weather only ever chose the WORDING of a
+        // refusal that is no longer reached. The pin is kept because it costs nothing and makes a failure
+        // message legible, but nothing here relies on it holding.
+        java.sql.Timestamp wasAt = jdbc.queryForObject("SELECT simulated_at FROM simulation_clock WHERE id=1", java.sql.Timestamp.class);
+        String wasWeather = jdbc.queryForObject("SELECT weather_kind FROM world_weather LIMIT 1", String.class);
+        try {
+        jdbc.update("UPDATE simulation_clock SET simulated_at = date_trunc('day', simulated_at) + interval '12 hours' WHERE id=1");
+        jdbc.update("UPDATE world_weather SET weather_kind='CLEAR', intensity=0");
         Instant now = ticks.current().simulatedAt();
-        Assumptions.assumeTrue(now.atZone(java.time.ZoneOffset.UTC).getHour() >= 6
-                            && now.atZone(java.time.ZoneOffset.UTC).getHour() < 20,
-            "this test is about daylight; the simulated clock is currently at night");
 
         // On open ground in daylight, close work needs no light at all — the control.
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", open, chronicle);
@@ -124,5 +145,10 @@ class DarkInTheRockIntegrationTest {
             () -> "with a torch raised, the rock is no longer what stops the work: " + lit.perception());
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
+        } finally {
+            // Put the hour and the sky back, or this test becomes the reason the next one fails.
+            jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", wasAt);
+            jdbc.update("UPDATE world_weather SET weather_kind=?", wasWeather);
+        }
     }
 }
