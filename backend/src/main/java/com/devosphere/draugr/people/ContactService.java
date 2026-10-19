@@ -146,6 +146,11 @@ public class ContactService {
         Map.entry("withdraw from the", Act.WITHDRAW), Map.entry("withdraw", Act.WITHDRAW), Map.entry("take my leave", Act.WITHDRAW),
         // Parting, likewise: "take my leave" worked and "say goodbye" and "leave them be" did not.
         Map.entry("say goodbye", Act.WITHDRAW), Map.entry("leave them be", Act.WITHDRAW),
+        // "leave them be" was here and the bare "leave them" was not, and "part ways" — the phrase for ending a
+        // meeting rather than walking off a boundary — was nowhere. The longest keyword still wins, so
+        // "leave them be" keeps its own entry.
+        Map.entry("leave them", Act.WITHDRAW), Map.entry("part ways", Act.WITHDRAW),
+        Map.entry("part from them", Act.WITHDRAW),
         Map.entry("leave them alone", Act.WITHDRAW), Map.entry("keep my distance", Act.WITHDRAW),
         Map.entry("back off", Act.WITHDRAW), Map.entry("give them room", Act.WITHDRAW),
         Map.entry("leave them in peace", Act.WITHDRAW), Map.entry("back away from the isle", Act.WITHDRAW));

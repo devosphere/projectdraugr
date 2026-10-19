@@ -2853,7 +2853,16 @@ public class ChronicleActionService {
         // down" and "cut rods" above, so those stay theirs.
         boolean gatherVerb = value.contains("gather")||value.contains("collect")||value.contains("forage")
             ||value.contains("harvest")||value.contains("take all")||value.contains("gather up")
-            ||GATHERING_VERB.matcher(value).find()||value.contains("dig up");
+            ||GATHERING_VERB.matcher(value).find()||value.contains("dig up")
+            // "get dry grass" reached nothing while "gather dry grass" worked — and "get" is the commonest verb
+            // in English for fetching a thing. Safe here because gatherVerb only decides anything once a plant,
+            // stone or mineral is NAMED beside it: "get water" and "get a fire going" name neither and keep
+            // their own rules, which the replay holds.
+            ||value.contains("get ")||value.contains("pick up some")||value.contains("fetch ")
+            // "crop" as the VERB — to cut something back — which "crop the watercress" means and the crop-as-a-
+            // FIELD rules above do not. Held to the transitive form so "the crop is dry" and "harvest the crop"
+            // are untouched: those are the field, and they are answered before this.
+            ||value.contains("crop the ")||value.contains("crop some ");
         // A tree named in the singular (#37). The nouns had "a tree" and "trees" but nothing for "an apple
         // tree", which contains neither. plantTree grows oak from an acorn and pine from a pine nut and nothing
         // else, and its refusal says so -- which is a far better answer to a Chronicle asking for an apple tree
