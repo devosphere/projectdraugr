@@ -247,10 +247,16 @@ class WhatCarriesYouIntegrationTest {
         assertEquals(0, (int) jdbc.queryForObject(
             "SELECT COUNT(*) FROM draft_species WHERE rideable AND species_key IN ('ox','aurochs')", Integer.class),
             "cattle are driven, not ridden");
-        assertEquals(1, (int) jdbc.queryForObject("SELECT COUNT(*) FROM construction_kind WHERE aids_mounting", Integer.class),
-            "there is one mounting aid");
+        // A GLOBAL COUNT IS NOT THE THING THIS TEST CARES ABOUT. It asserted there was exactly ONE mounting aid,
+        // and V423's animal loading ramp — a slope walled on both sides, raised to cart height — is honestly a
+        // second one, so a correct catalogue addition failed a test about rideability. What the slice actually
+        // rests on is that the block EXISTS and that nothing claiming to aid mounting is secretly a shelter or a
+        // fence, and both of those are asserted below without counting the world.
+        assertTrue(jdbc.queryForObject(
+            "SELECT COUNT(*) FROM construction_kind WHERE aids_mounting AND project_kind='MOUNTING_BLOCK'", Integer.class) == 1,
+            "the mounting block must still be a mounting aid");
         assertEquals(0, (int) jdbc.queryForObject(
             "SELECT COUNT(*) FROM construction_kind WHERE aids_mounting AND (is_shelter OR encloses OR is_barrier OR shelters_stock)", Integer.class),
-            "a mounting block is a step to climb from, nothing else");
+            "a thing you climb from is a step, nothing else");
     }
 }
