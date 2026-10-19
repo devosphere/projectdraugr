@@ -115,8 +115,15 @@ class DarkInTheRockIntegrationTest {
         // refusal cannot fire whatever the sky is doing, and the weather only ever chose the WORDING of a
         // refusal that is no longer reached. The pin is kept because it costs nothing and makes a failure
         // message legible, but nothing here relies on it holding.
-        java.sql.Timestamp wasAt = jdbc.queryForObject("SELECT simulated_at FROM simulation_clock WHERE id=1", java.sql.Timestamp.class);
-        String wasWeather = jdbc.queryForObject("SELECT weather_kind FROM world_weather LIMIT 1", String.class);
+        // queryForList, not queryForObject: world_weather can be EMPTY when this test runs, and the first
+        // version of this threw EmptyResultDataAccessException reading a row that was not there — breaking the
+        // test a different way than the one being fixed. A pin of something absent is simply not a pin.
+        java.util.List<java.sql.Timestamp> clockWas = jdbc.queryForList(
+            "SELECT simulated_at FROM simulation_clock WHERE id=1", java.sql.Timestamp.class);
+        java.util.List<String> skyWas = jdbc.queryForList(
+            "SELECT weather_kind FROM world_weather LIMIT 1", String.class);
+        java.sql.Timestamp wasAt = clockWas.isEmpty() ? null : clockWas.get(0);
+        String wasWeather = skyWas.isEmpty() ? null : skyWas.get(0);
         try {
         jdbc.update("UPDATE simulation_clock SET simulated_at = date_trunc('day', simulated_at) + interval '12 hours' WHERE id=1");
         jdbc.update("UPDATE world_weather SET weather_kind='CLEAR', intensity=0");
@@ -146,9 +153,10 @@ class DarkInTheRockIntegrationTest {
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
         } finally {
-            // Put the hour and the sky back, or this test becomes the reason the next one fails.
-            jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", wasAt);
-            jdbc.update("UPDATE world_weather SET weather_kind=?", wasWeather);
+            // Put the hour and the sky back, or this test becomes the reason the next one fails. Only what was
+            // actually read is restored — writing a null back would be inventing a world state, not restoring one.
+            if (wasAt != null) jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", wasAt);
+            if (wasWeather != null) jdbc.update("UPDATE world_weather SET weather_kind=?", wasWeather);
         }
     }
 }
