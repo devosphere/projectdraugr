@@ -2438,6 +2438,26 @@ public class ChronicleActionService {
             return Intent.WEED_CROP;
         if(saysOfThing(value,"pen|pens|gate|gates|fence|fences|paddock|fold|enclosure","open|standing open|down|flat|unlatched|unfastened|ajar|wide open"))
             return Intent.REPAIR_STRUCTURE;
+        // SAYING A TOOL IS FAILING (#37). The third face of this family: the body has one, the camp has one, and
+        // the gear in your hands had none. `mend my boots` and `sharpen my knife` both reach REPAIR_ITEM, while
+        // the way a person actually reports the trouble reached nothing at all:
+        //
+        //   my knife is broken        -> nothing   |  mend my boots    -> REPAIR_ITEM
+        //   my boots are worn through -> nothing   |  sharpen my knife -> REPAIR_ITEM
+        //   the handle has come loose -> nothing
+        //
+        // Placed AFTER the structure rule above, so a fence that is broken stays a structure and does not become
+        // an item in the pack — the two share the word and differ only in the noun.
+        //
+        // "empty" is deliberately absent from the conditions: a vessel that is empty wants filling, not mending,
+        // and that rule is the one above.
+        if(saysOfThing(value,
+                "knife|axe|hatchet|spear|bow|arrow|arrows|haft|handle|blade|edge|shaft|hammer|pick|awl|needle"
+                + "|boots|boot|shoes|shoe|cloak|coat|shirt|trousers|mittens|gloves|belt|strap|sling|pack|basket"
+                + "|rope|cord|cordage|net|snare line|waterskin|pot|bowl|cup|ladle|tools|gear|kit",
+                "broken|snapped|cracked|split|splitting|worn through|worn out|come loose|loose|coming apart"
+                + "|blunt|dull|frayed|fraying|torn|tearing|bent|chipped|rotten|perished|past mending|failing|giving out"))
+            return Intent.REPAIR_ITEM;
         // Repairing / maintaining a standing structure here (#70) — before item repair, and scoped to structure
         // nouns, so "mend the fence" or "weatherproof the hut" works a construction, not a carried tool.
         if((value.contains("repair")||value.contains("mend")||value.contains("patch")||value.contains("shore up")||value.contains("reinforce")||value.contains("weatherproof")||value.contains("maintain")||(word(value,"fix")&&!value.contains("memory")&&!value.contains("mind")))
@@ -3030,6 +3050,13 @@ public class ChronicleActionService {
             // every item and "how worn is the knife" reached them; "is the knife blunt", "how sharp is the axe",
             // "is the axe worn", "will this hold" and "how much use is left in it" all reached nothing.
             ||value.contains("blunt")||value.contains("how sharp")||value.contains("still sharp")
+            // "how sharp" and "still sharp" were in, and the plainest form of the question was not: `is my
+            // knife sharp` reached nothing. And `how long will my boots last` reached MEASURE, which answered
+            // "You pace it out and reckon by eye" — a DISTANCE reckoning in answer to a question about wear,
+            // while condition_state and use_count sit on every item and are what this reading reports.
+            ||value.contains("is my knife sharp")||value.contains("is my axe sharp")||value.contains("is it sharp")
+            ||value.contains("how long will my")||value.contains("how long will it last")
+            ||value.contains("how much life")||value.contains("how much wear")||value.contains("much is left in")
             ||value.contains("will it hold")||value.contains("will this hold")||value.contains("how much use")
             ||value.contains("much use left")||value.contains("how is the knife")||value.contains("how is the axe")
             // ...and for ANYTHING THE CHRONICLE IS CARRYING, not four nouns (#37). condition_state and use_count
