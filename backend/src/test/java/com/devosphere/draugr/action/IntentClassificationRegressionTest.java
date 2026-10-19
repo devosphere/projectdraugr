@@ -1897,6 +1897,38 @@ class IntentClassificationRegressionTest {
         assertEquals("PARE_HOOVES", classify("pare the hooves"));
     }
 
+    /**
+     * Asking about the night, and the night itself (#37).
+     *
+     * <p>These live HERE, and not in the integration test that owns this behaviour, for a reason worth writing
+     * down. Every one of the sleeping phrases does not merely route — it SLEEPS, eight hours a time. Asserting
+     * five of them through the composer drained the shared world: forty hours of simulated time with nothing
+     * drunk, Chronicles dying of thirst one after another, and eventually a sibling test in the same class
+     * failing with "No living Chronicle exists" before it had asserted anything of its own.
+     *
+     * <p>A routing claim is pure over the text. It belongs where it can be made without a world to spend, which
+     * is this reflective seam. The integration test keeps ONE real sleep, because that the act still performs is
+     * a different claim and worth paying for once.
+     */
+    @Test void askingAboutTheNightIsNotSleeping() throws Exception {
+        // The question forms, which used to reach SLEEP and sleep eight hours in answer to a question.
+        assertEquals("SENSE_BODY", classify("did I sleep well"));
+        assertEquals("SENSE_BODY", classify("how did I sleep"));
+        assertEquals("SENSE_BODY", classify("I slept badly"));
+        assertEquals("SENSE_BODY", classify("I slept well"));
+        assertEquals("SENSE_BODY", classify("did I rest"));
+        assertEquals("SENSE_BODY", classify("wake up"));
+
+        // And the act itself, all five phrasings, at no cost at all. A Chronicle who cannot sleep dies of it,
+        // so this is the half that must never quietly break.
+        assertEquals("SLEEP", classify("sleep"));
+        assertEquals("SLEEP", classify("go to sleep"));
+        assertEquals("SLEEP", classify("bed down for the night"));
+        assertEquals("SLEEP", classify("take a nap"));
+        assertEquals("SLEEP", classify("sleep through the night here"));
+        assertEquals("REST", classify("rest a while"));
+    }
+
     @Test void theFeetUnderTheBeast() throws Exception {
         for (String p : new String[]{"pare the hooves", "trim the hooves", "pare the goat's hooves",
                                      "trim his hooves", "see to the goat's feet", "rasp the hooves",

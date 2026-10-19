@@ -138,15 +138,16 @@ class AskingAboutTheNightIntegrationTest {
         // demonstrated it by sleeping the Chronicle to death. Which is, in fairness, the behaviour it was
         // written to protect.
         //
-        // So a living Chronicle is ensured before EVERY phrase rather than once for the method. Each verb is
-        // still exercised for real — the point is that it reaches SLEEP and performs it — but no single
-        // Chronicle is made to bear all five nights.
-        for (String phrase : List.of("sleep", "go to sleep", "bed down for the night", "take a nap",
-                                     "sleep through the night here")) {
-            aLivingChronicle();
-            String got = intentOf(phrase);
-            assertTrue("SLEEP".equals(got), () -> "sleeping is still sleeping: '" + phrase + "' -> " + got);
-        }
+        // Ensuring a living Chronicle before each phrase was the first repair, and it was not enough: the five
+        // nights still passed on the SHARED simulation clock, and a sibling test in this very class then failed
+        // with "No living Chronicle exists" before asserting anything of its own. Spending forty hours of the
+        // world to prove a routing claim was the mistake, not the dying.
+        //
+        // So the five phrasings are asserted in IntentClassificationRegressionTest, where classify() is reached
+        // reflectively and costs nothing at all. What is worth paying for ONCE is the other half of the claim:
+        // that the act still performs. One night, and the clock bears it.
+        aLivingChronicle();
+        assertTrue("SLEEP".equals(intentOf("sleep")), "sleeping is still sleeping");
         aLivingChronicle();
         assertTrue("REST".equals(intentOf("rest a while")), "and resting is still resting");
     }
