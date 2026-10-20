@@ -2140,12 +2140,23 @@ public class ChronicleActionService {
         // carries, so seed held for a season is grain in a store and nothing else. Both reached nothing.
         if((value.contains("save")||value.contains("keep")||value.contains("hold back"))
            &&value.contains("seed")&&!value.contains("sow")&&!value.contains("plant")) return Intent.STORE;
-        // The build-verb exclusion is the sibling rule's, and for the same reason: as a NOUN a cache is a
-        // BUILDING. `build a root fodder cache` reached this bare `contains("cache")` and was answered "you have
-        // no container within reach to store anything in" — asking to raise a store, and being told you have
-        // nowhere to put things. The comment further down this method claimed there was no collision because the
-        // bare "cache" only ever stows an item; that held until the catalogue had a structure called a cache.
-        if(((value.contains("put")&&value.contains("away"))||value.contains("cache")||value.contains("stockpile")||value.contains("put in storage")||value.contains("stow away")||value.contains("stash away")
+        // "CACHE" AND "STOCKPILE" ARE ANCHORED AS VERBS, which is the rule the sibling below already follows and
+        // states the reason for: as a NOUN the same word is a BUILDING. A wood store, a hay store and a fodder
+        // store are assemblies with their own keywords, and the catalogue now has a root fodder cache too.
+        //
+        // A bare contains("cache") took three of fodder_store's own words — "root fodder cache", "fodder cache",
+        // "root cache" — and noJavaIntentShadowsAnAssemblysOwnKeywords is the standing guard that exists to
+        // catch exactly that: an assembly that cannot be reached by its own name because a hard intent runs
+        // first. A build-verb exclusion was not enough, because the keyword IS A BARE NOUN PHRASE with no verb
+        // in it to exclude on; `build a root fodder cache` escaped while `root fodder cache` did not.
+        //
+        // The build-verb exclusion is kept as well: it costs nothing and covers "build a stockpile", which is a
+        // structure rather than an act of stowing.
+        String stowVerb = value.trim();
+        if(((value.contains("put")&&value.contains("away"))
+            ||stowVerb.startsWith("cache ")||value.contains(" cache the ")||value.contains(" cache my ")||value.contains("cache it")
+            ||stowVerb.startsWith("stockpile ")||value.contains(" stockpile the ")||value.contains(" stockpile my ")||value.contains("stockpile it")
+            ||value.contains("put in storage")||value.contains("stow away")||value.contains("stash away")
            ||(value.contains("put")&&value.strip().endsWith(" by")))
            &&!value.contains("build")&&!value.contains("construct")&&!value.contains("raise")
            &&!value.contains("set up")&&!value.contains("put up")&&!value.contains("erect")&&!value.contains("dig")) return Intent.STORE;
