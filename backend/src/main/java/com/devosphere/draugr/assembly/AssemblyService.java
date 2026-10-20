@@ -86,6 +86,11 @@ public class AssemblyService {
      * Narrow a tie the way the world already has. One already under way settles it — carrying on with the
      * half-built hut in front of you is not ambiguous — and otherwise the ones whose first stage could actually
      * be begun here, because a choice between four huts you have no materials for is not a choice.
+     *
+     * <p>But only what is IN HAND may narrow it (V427). A first stage that asks for nothing — the earth oven's
+     * is digging its pit — is "within reach" whatever is carried, so it used to survive every narrowing alone:
+     * with empty hands, {@code dig a pit} would have quietly begun an earth oven out of seven pits, a pick
+     * presented as a decision. Such an assembly stays among the choices, and never settles one by itself.
      */
     private List<String> narrow(UUID chronicle, UUID location, List<String> tied) {
         List<String> started = new ArrayList<>();
@@ -93,7 +98,20 @@ public class AssemblyService {
         if (!started.isEmpty()) return started;
         List<String> canBegin = new ArrayList<>();
         for (String k : tied) if (firstStageIsWithinReach(chronicle, k)) canBegin.add(k);
-        return canBegin.isEmpty() ? tied : canBegin;
+        return somethingInHandPointsAt(chronicle, tied) ? canBegin : tied;
+    }
+
+    /** Whether the Chronicle carries the makings of at least one of these whose first stage asks for anything. */
+    private boolean somethingInHandPointsAt(UUID chronicle, List<String> keys) {
+        for (String k : keys) if (firstStageAsksForSomething(k) && firstStageIsWithinReach(chronicle, k)) return true;
+        return false;
+    }
+
+    private boolean firstStageAsksForSomething(String assemblyKey) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM assembly_stage_requirement r WHERE r.stage_key = " +
+            "(SELECT stage_key FROM assembly_stage WHERE assembly_key=? ORDER BY stage_order LIMIT 1))",
+            Boolean.class, assemblyKey));
     }
 
     /**
@@ -107,7 +125,7 @@ public class AssemblyService {
         String choices = names.size() == 2 ? names.get(0) + ", or " + names.get(1)
             : String.join(", ", names.subList(0, names.size() - 1)) + ", or " + names.get(names.size() - 1);
         return new String[]{"FAILED", noneInReach
-            ? "Those words fit more than one thing you could build — " + choices + " — and you have the makings of none of them here. Say which you mean."
+            ? "Those words fit more than one thing you could build — " + choices + " — and nothing you carry settles which. Say which you mean."
             : "Those words fit more than one thing you could build here — " + choices + ". Say which you mean, and your hands will know where to begin."};
     }
 
@@ -174,7 +192,7 @@ public class AssemblyService {
         List<String> tied = tiedIn(hit);
         if (tied.size() > 1) {
             List<String> offer = narrow(chronicle, location, tied);
-            if (offer.size() > 1) return whichOfThese(offer, offer.size() == tied.size() && !firstStageIsWithinReach(chronicle, offer.get(0)));
+            if (offer.size() > 1) return whichOfThese(offer, !somethingInHandPointsAt(chronicle, tied));
             tied = offer;
         }
         String key = tied.isEmpty() ? hit[0] : tied.get(0);
