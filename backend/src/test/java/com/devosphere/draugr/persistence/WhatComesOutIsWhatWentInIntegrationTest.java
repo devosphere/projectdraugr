@@ -88,6 +88,13 @@ class WhatComesOutIsWhatWentInIntegrationTest {
         }
         var active = chronicles.active() != null ? chronicles.active() : chronicles.awaken();
         assertNotNull(active, "a living Chronicle is needed");
+        // WHOLE AND CAUGHT UP, because the lifecycle tests act on ONE Chronicle across several resolves — the
+        // structure belongs to it, so unlike routes() they cannot re-awaken between steps. CI found the body it
+        // inherited from the shared world spent: "No living Chronicle exists" at the take-apart, after a mend
+        // that was never the subject. Same reset as CoveringYourTrailIntegrationTest.
+        jdbc.update("UPDATE chronicle_physiology SET last_metabolic_update = (SELECT simulated_at FROM simulation_clock WHERE id=1), "
+            + "hours_without_food=0, hours_without_water=0, sleep_debt_hours=0, "
+            + "injury_severity=0, illness_severity=0, pain_level=0, blood_loss_ml=0, energy_level=100 WHERE chronicle_id=?", active.id());
         // TAKE THE ID FROM THE SUMMARY, not from a query of my own invention. The first version of this asked
         // `WHERE lifecycle_state='ACTIVE' ORDER BY created_at DESC` — three mistakes in one line, because the
         // chronicle table has life_state ('LIVING', not 'ACTIVE'), has no created_at, and orders by
