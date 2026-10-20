@@ -96,6 +96,11 @@ class TheTwelveThatWereReallyAbsentIntegrationTest {
     }
 
     private String intentOf(String text) {
+        // A LIVING CHRONICLE BEFORE EACH, because a routing assertion costs simulated time like any other
+        // action. A sibling class spent its Chronicle on the eleventh phrase of a loop and CI stopped with "No
+        // living Chronicle exists"; this class asks thirty-odd questions across its methods, so it was next.
+        // Routing does not care which Chronicle answers, only that one is there to answer.
+        aLivingChronicle();
         var r = actions.resolve(text, UUID.randomUUID());
         assertNotNull(r, () -> "the composer must answer: " + text);
         return r.intent();

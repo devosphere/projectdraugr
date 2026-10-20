@@ -99,6 +99,25 @@ class WhatComesOutIsWhatWentInIntegrationTest {
 
     private Instant now() { return Instant.now(); }
 
+    /**
+     * The intent a sentence reaches, with a living Chronicle guaranteed first.
+     *
+     * <p>A routing assertion costs simulated time like any other action, and eleven of them in one loop spent
+     * the Chronicle: CI stopped at the eleventh phrase with <em>"No living Chronicle exists"</em>. Routing does
+     * not care WHICH Chronicle answers — only that one is there to answer — so this re-awakens rather than
+     * rationing the phrases, which would have traded coverage for a run that happened to survive.
+     *
+     * <p>The pure {@link com.devosphere.draugr.action.IntentClassificationRegressionTest} is where routing
+     * belongs when it can go there. These phrases cannot: they are answered from catalogue data, and that test
+     * builds the service with null collaborators.
+     */
+    private String routes(String said) {
+        chronicle();
+        var r = actions.resolve(said, UUID.randomUUID());
+        assertNotNull(r, () -> "the composer must answer: " + said);
+        return r.intent();
+    }
+
     private int owned(UUID chronicle, String key) {
         Integer n = jdbc.queryForObject(
             "SELECT count(*) FROM world_object w JOIN item_instance i ON i.object_id=w.id"
@@ -259,7 +278,7 @@ class WhatComesOutIsWhatWentInIntegrationTest {
                                    "mend the quarry screen", "repair the washing place",
                                    "fix the water draw platform", "mend the hide scraping frame",
                                    "repair the gatehouse")) {
-            assertEquals("REPAIR_STRUCTURE", actions.resolve(said, UUID.randomUUID()).intent(),
+            assertEquals("REPAIR_STRUCTURE", routes(said),
                 () -> "'" + said + "' names something standing and must reach structure repair");
         }
     }
@@ -271,11 +290,11 @@ class WhatComesOutIsWhatWentInIntegrationTest {
         // is exactly how a widened noun list could have broken it.
         chronicle();
         for (String said : List.of("repair the structure", "mend the fence", "fix the roof", "repair the shelter")) {
-            assertEquals("REPAIR_STRUCTURE", actions.resolve(said, UUID.randomUUID()).intent(),
+            assertEquals("REPAIR_STRUCTURE", routes(said),
                 () -> "'" + said + "' worked before the noun list was widened");
         }
         for (String said : List.of("mend my boots", "my knife is broken", "sharpen my knife", "repair my pack")) {
-            assertEquals("REPAIR_ITEM", actions.resolve(said, UUID.randomUUID()).intent(),
+            assertEquals("REPAIR_ITEM", routes(said),
                 () -> "'" + said + "' is gear in the pack, not a thing on the ground");
         }
     }
