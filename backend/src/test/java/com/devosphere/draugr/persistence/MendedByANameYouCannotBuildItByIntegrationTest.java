@@ -155,7 +155,8 @@ class MendedByANameYouCannotBuildItByIntegrationTest {
         // NOT A FAILURE — the measurement that says why pit, frame and rack are out of scope. They are family
         // words with several members each, so they want the "name the one you mean" treatment V318 built, not a
         // longest-keyword pick. Held as a floor: if one of these ever drops to a single owner, a pick becomes
-        // the right answer and this test should be revisited rather than deleted.
+        // the right answer and this test should be revisited rather than deleted. V427 gave them that treatment;
+        // SayWhichPitYouMeanIntegrationTest holds it.
         aLivingChronicle();
         for (var pair : List.of(new String[]{"pit", "5"}, new String[]{"frame", "4"}, new String[]{"rack", "3"})) {
             Integer owners = jdbc.queryForObject(

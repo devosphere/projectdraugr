@@ -2063,6 +2063,11 @@ public class ChronicleActionService {
         // alloy_bronze both name it, so nothing metal is reachable without one.
         if(!value.contains("furnace")&&!value.contains("bloomery")
            &&(value.contains("craft")||value.contains("make")||value.contains("build")||value.contains("construct")||value.contains("assemble")||value.contains("set up"))&&(value.contains("loom")||value.contains("workbench")||value.contains("work bench")||((value.contains("woodworking")||value.contains("stoneworking")||value.contains("weaving")||value.contains("sewing")||value.contains("leatherwork"))&&(value.contains("bench")||value.contains("table")||value.contains("station"))))) return Intent.CRAFT_WORKSTATION;
+        // A BARE "rack" IS NO LONGER A SHELF (#77). It was, so one stone shelf answered for the four racks the
+        // catalogue raises -- drying, smoke, hay and harness -- and none of them is a shelf. `build a rack` now
+        // falls through to the assembly matcher, which names the four and asks which (V427). A shelf is still
+        // asked for as one: shelf, shelves, archive.
+        //
         // The same disease as the desk rule below, and found by the same probe: "rack" sat inside TRACK and
         // RACKET, so `build a track` asked for a shelf — and a laid track is a real staged structure in this
         // catalogue, which is as wrong as an answer gets. Held as a word now.
@@ -2070,7 +2075,7 @@ public class ChronicleActionService {
         // The named exclusions BELOW are a different thing and all still needed: a hay rack, a fuel rack and a
         // harness rack are genuine uses of the whole word "rack" that belong to other structures. Word boundaries
         // fix the accidents; only a name can settle a real collision.
-        if((value.contains("craft")||value.contains("make")||value.contains("build")||value.contains("construct")||value.contains("assemble"))&&(word(value,"shelf")||word(value,"shelves")||word(value,"rack")||word(value,"racks")||word(value,"archive"))&&!value.contains("drying")&&!value.contains("fuel rack")&&!value.contains("wood rack")&&!value.contains("firewood rack")&&!value.contains("log rack")&&!value.contains("kindling rack")&&!value.contains("hay rack")&&!value.contains("fodder rack")&&!value.contains("smoke rack")
+        if((value.contains("craft")||value.contains("make")||value.contains("build")||value.contains("construct")||value.contains("assemble"))&&(word(value,"shelf")||word(value,"shelves")||word(value,"archive"))&&!value.contains("drying")&&!value.contains("fuel rack")&&!value.contains("wood rack")&&!value.contains("firewood rack")&&!value.contains("log rack")&&!value.contains("kindling rack")&&!value.contains("hay rack")&&!value.contains("fodder rack")&&!value.contains("smoke rack")
            // "smoking rack" is the smoke rack's FIFTH declared keyword and the exclusion above names only "smoke
            // rack", so four of its five phrasings reached the assembly matcher and one came here instead. Found
            // by auditing this list against the catalogue rather than reading it: a list of literal exceptions is

@@ -768,7 +768,25 @@ class IntentClassificationRegressionTest {
     @Test void dryingRackIsNotAShelf() throws Exception {
         assertEquals("UNKNOWN", classify("build a drying rack", false));   // falls through to the assembly engine
         assertEquals("CRAFT_SHELF", classify("build a storage shelf", false));
-        assertEquals("CRAFT_SHELF", classify("make a rack", false));       // a bare rack is still a shelf
+        assertEquals("CRAFT_SHELF", classify("make a shelf", false));
+    }
+
+    /**
+     * #77 V427: pit, frame and rack are FAMILY words — seven pits, six frames, four racks — so the plain phrase
+     * must reach the assembly matcher, which names the family and asks which. A bare rack used to be a stone
+     * shelf, one specific thing answering for four that are not shelves. Each phrase is replayed here, and the
+     * shelf is still a shelf when it is asked for as one.
+     */
+    @Test void aFamilyWordReachesTheQuestionNotAPick() throws Exception {
+        for (String phrase : new String[]{"build a pit", "dig a pit", "work on the pit",
+                                          "build a frame", "raise a frame", "put up a frame",
+                                          "build a rack", "raise a rack", "make a rack", "put up a rack",
+                                          "work on the rack"})
+            assertEquals("UNKNOWN", classify(phrase, false), phrase);
+        for (String phrase : new String[]{"build a shelf", "make a shelf", "build some shelves", "build an archive"})
+            assertEquals("CRAFT_SHELF", classify(phrase, false), phrase);
+        assertEquals("BUILD_FUEL_RACK", classify("build a fuel rack", false));
+        assertEquals("BUILD_FIRE_PIT", classify("build a fire pit", false));
     }
 
     /** "plant " contains the insect token "ant " — gathering fibre is not collecting ants. */
