@@ -2995,7 +2995,23 @@ public class ChronicleActionService {
         // A perimeter fence (#127) — a barrier a predator must breach, not merely a warning. word("fence") avoids
         // the "defence"/"offence" substring trap; a build verb or a perimeter phrase confirms the intent. Placed
         // before MAINTAIN_CAMP so "fence the camp" rigs a barrier rather than tidying the site.
-        if((word(value,"pen")||word(value,"pens")||word(value,"paddock")||word(value,"corral")||value.contains("animal enclosure")||value.contains("livestock enclosure"))&&(value.contains("build")||value.contains("raise")||value.contains("set up")||value.contains("put up")||value.contains("make")||value.contains("construct")||value.contains("erect")||value.contains("pen the"))) return Intent.BUILD_PEN;
+        // A PEN IS A PEN — EXCEPT WHEN THE PLAYER NAMES A JOB THE CATALOGUE HAS A STRUCTURE FOR (#108).
+        //
+        // BUILD_PEN raises a real ring of posts and rails, and for `build a pig pen`, `build a paddock` or
+        // `build an exercise paddock` that is the right answer: a generic enclosure is genuinely what those are,
+        // and `build a calving pen` is deliberately left here too.
+        //
+        // But a QUARANTINE pen that does not isolate and a BOAR pen that does not separate are failures, not
+        // approximations — the player named the job and got a plain ring of rails. The catalogue already holds
+        // both: sick_animal_shelter carries isolates_sick and answers to "quarantine shelter";
+        // bull_isolation_yard carries separates_dangerous and answers to "boar yard". So those three words step
+        // aside and let the matcher reach them.
+        //
+        // Narrow on purpose. A bare "isolation" is NOT in this list: no assembly holds "isolation pen" as a
+        // keyword, so deferring on it would turn a working generic pen into UNKNOWN — a worse answer than the
+        // approximate one. Every word here was checked to have a structure that actually matches.
+        boolean namesAPenningJobOfItsOwn = value.contains("quarantine")||word(value,"boar")||word(value,"bull");
+        if((word(value,"pen")||word(value,"pens")||word(value,"paddock")||word(value,"corral")||value.contains("animal enclosure")||value.contains("livestock enclosure"))&&!namesAPenningJobOfItsOwn&&(value.contains("build")||value.contains("raise")||value.contains("set up")||value.contains("put up")||value.contains("make")||value.contains("construct")||value.contains("erect")||value.contains("pen the"))) return Intent.BUILD_PEN;
         if(!value.contains("rail fence")&&(word(value,"fence")||word(value,"fences")||value.contains("palisade")||value.contains("stockade"))&&(value.contains("build")||value.contains("raise")||value.contains("set up")||value.contains("put up")||value.contains("weave")||value.contains("erect")||value.contains("make")||value.contains("construct")||value.contains("throw up")||value.contains("fence off")||value.contains("fence the")||value.contains("fence around")||value.contains("around the camp")||value.contains("around the perimeter"))) return Intent.BUILD_FENCE;
         // A raised lookout (#127) — a lashed pole stand a Chronicle climbs to see past the near treeline, extending
         // the boundary scout a chunk further. The lookout noun plus a build verb; placed before MAINTAIN_CAMP and

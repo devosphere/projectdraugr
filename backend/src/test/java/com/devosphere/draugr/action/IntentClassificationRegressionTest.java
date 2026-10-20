@@ -1599,6 +1599,22 @@ class IntentClassificationRegressionTest {
     }
 
     /**
+     * #108 V428: a pen that names its own job steps aside from BUILD_PEN so the matcher can reach the structure
+     * that does that job — the sick-animal shelter for a quarantine pen, the bull isolation yard for a boar or
+     * bull pen. A generic pen is still a generic pen, and a pig pen, a paddock and a calving pen still get one.
+     */
+    @Test void aPenThatNamesItsJobReachesTheStructureForIt() throws Exception {
+        for (String phrase : new String[]{"build a quarantine pen", "quarantine pen", "build a boar pen",
+                "build a boar isolation pen", "build a bull pen", "boar pen", "bull pen"})
+            assertEquals("UNKNOWN", classify(phrase), phrase);
+        for (String phrase : new String[]{"build a pen", "build a pig pen", "build a paddock",
+                "build an exercise paddock", "build a calving pen", "make a goat pen"})
+            assertEquals("BUILD_PEN", classify(phrase), phrase);
+        // The boar outside a pen is still a beast to face, not a thing to build.
+        assertEquals("CONFRONT_WILDLIFE", classify("hunt the boar"));
+    }
+
+    /**
      * A word is not a substring (#37, found while building #108's stall).
      *
      * <p>CRAFT_DESK matched a bare {@code contains("table")} and CRAFT_SHELF a bare {@code contains("rack")}.
