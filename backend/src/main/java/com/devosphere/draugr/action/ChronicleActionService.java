@@ -2492,7 +2492,16 @@ public class ChronicleActionService {
            // build and the first thing the weather takes apart. The rest are the other roofed forms the
            // catalogue holds, by the same omission.
            &&(value.contains("hut")||value.contains("wall")||value.contains("roof")||value.contains("thatch")||value.contains("fence")||value.contains("gate")||value.contains("hearth")||value.contains("bridge")||value.contains("platform")||value.contains("screen")||value.contains("catchment")||value.contains("wood store")||value.contains("landing")||value.contains("structure")||value.contains("daub")
-             ||value.contains("shelter")||value.contains("lean-to")||value.contains("lean to")||value.contains("tent")||value.contains("cabin")||value.contains("byre")||value.contains("coop")||value.contains("sty")||value.contains("stable")||value.contains("shed")||value.contains("barn")||value.contains("pen")||value.contains("windbreak"))) return Intent.REPAIR_STRUCTURE;
+             ||value.contains("shelter")||value.contains("lean-to")||value.contains("lean to")||value.contains("tent")||value.contains("cabin")||value.contains("byre")||value.contains("coop")||value.contains("sty")||value.contains("stable")||value.contains("shed")||value.contains("barn")||value.contains("pen")||value.contains("windbreak")
+             // AND EVERY OTHER NAME THE CATALOGUE GIVES A STANDING THING. The twenty-eight nouns above were the
+             // whole list, against 115 construction kinds: `repair the drainage ditch` reached nothing, and
+             // `repair the ditch` fell through to item repair and went looking for a ditch in the pack. The data
+             // knows all 212 names, so it is asked. Kept last so the literal nouns above still decide first and
+             // nothing here can change what already worked.
+             // Null-guarded like the assembly matcher beside it: IntentClassificationRegressionTest builds this
+             // service with null collaborators so routing can be asserted purely over text, with no world and no
+             // Docker. A DB-driven name therefore cannot be tested there, and is held in the integration test.
+             ||(construction != null && construction.namesAStandingStructure(value)))) return Intent.REPAIR_STRUCTURE;
         // The words for putting an edge back on a tool (#37). The rule knew "sharpen" and "abrade", and `hone the
         // blade` and `whet the blade` reached the MATERIAL MATCHER instead — which offered to **forge a bronze
         // knife**. Asked to sharpen what they hold, the player was offered to make a new one; `grind the axe`,

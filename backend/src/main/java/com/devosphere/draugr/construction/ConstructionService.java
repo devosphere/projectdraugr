@@ -668,13 +668,18 @@ public class ConstructionService {
         String kind = (String) proj.get("project_kind");
         Integer integ = (Integer) proj.get("integrity_percent");
         if (integ != null && integ >= 100) return new String[]{"SUCCEEDED", "You look the " + name + " over, but it already stands sound — there is nothing here that needs setting right."};
-        // Kind-appropriate repair stock, best first — earth and clay for the fired forms, poles and binding for the rest.
-        String[] mats = switch (kind) {
+        // YOU MEND A THING WITH WHAT IT IS MADE OF. This was a switch over eight kinds with a `default` of rope,
+        // fiber, branch and sapling — so a stone-faced riverbank step or a stone-lined lime pit could not be
+        // mended with stone, and demanded cordage instead. A hundred construction kinds can have their own bill
+        // of materials read straight off their assembly stages, so that is what is asked for first; the old
+        // switch stays behind it for the handful of kinds the Java intents build, which have no assembly row.
+        java.util.List<String> mats = new java.util.ArrayList<>(billOfMaterials(kind).keySet());
+        for (String fallback : switch (kind) {
             case "CLAY_LINED_HEARTH", "RAINWATER_CATCHMENT", "SETTLING_BASIN", "SAND_FILTER_BED", "SPRING_HEAD_PROTECTION" -> new String[]{"clay_lump"};
             case "SPLIT_RAIL_FENCE" -> new String[]{"straight_sapling", "dry_branch"};
             case "WATTLE_AND_DAUB_HUT", "EARTH_SHELTERED_HUT" -> new String[]{"clay_lump", "straw_bundle", "withy_rope"};
             default -> new String[]{"withy_rope", "plant_fiber", "dry_branch", "straight_sapling"};
-        };
+        }) if (!mats.contains(fallback)) mats.add(fallback);
         String used = null;
         for (String m : mats) if (items.hasAtLeast(chronicle, m, 1)) { used = m; break; }
         if (used == null) return new String[]{"FAILED", "You set your hands to the " + name + ", but you have nothing fit to mend it with to hand."};
@@ -703,7 +708,15 @@ public class ConstructionService {
             .findFirst().orElse(projects.size() == 1 ? projects.get(0) : null);
         if (proj == null) return new String[]{"FAILED", "There is more than one thing built here — name the one to take apart."};
         UUID id = (UUID) proj.get("object_id"); String name = ((String) proj.get("display_name")).toLowerCase(java.util.Locale.ROOT); String kind = (String) proj.get("project_kind");
-        java.util.List<String[]> salvage = switch (kind) {
+        // WHAT COMES OUT IS WHAT WENT IN, LESS WHAT BREAKS. This was two hard-coded kinds and a `default` of one
+        // dry branch, so taking apart a stone-lined lime burning pit built from ten field stones handed back a
+        // branch that had never been in it — matter from nothing in one direction and ten stones destroyed in the
+        // other, which is precisely what the Auditor's conservation rule exists to forbid. A hundred kinds carry
+        // their own bill of materials on their assembly stages, so salvage is read from that: HALF of each
+        // material, rounded down, because some is always lost in the taking-apart. A better process means better
+        // recovery, never more matter.
+        java.util.List<String[]> salvage = salvageFromOwnBill(kind);
+        if (salvage.isEmpty()) salvage = switch (kind) {
             case "LEAN_TO" -> java.util.List.<String[]>of(new String[]{"dry_branch","Dry branch"}, new String[]{"dry_branch","Dry branch"}, new String[]{"plant_fiber","Plant fiber bundle"});
             case "STONE_FIRE_PIT" -> java.util.List.<String[]>of(new String[]{"field_stone","Field stone"}, new String[]{"field_stone","Field stone"}, new String[]{"field_stone","Field stone"});
             default -> java.util.List.<String[]>of(new String[]{"dry_branch","Dry branch"});
@@ -716,5 +729,104 @@ public class ConstructionService {
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'DISMANTLED',jsonb_build_object('recovered',?))", id, ts, recovered);
         String got = recovered == 0 ? "nothing worth keeping — your load is full" : recovered + " usable piece" + (recovered == 1 ? "" : "s") + " of material";
         return new String[]{"SUCCEEDED", "You take the " + name + " apart piece by piece, recovering " + got + ". Where it stood is bare ground again."};
+    }
+
+    /**
+     * What a construction kind is actually made of, read off its own assembly stages — material key to total
+     * quantity, most of it first. Empty for the handful of kinds the Java BUILD_ intents raise, which have no
+     * assembly row and keep their hard-coded lists.
+     *
+     * <p>A hundred of the catalogue's construction kinds can answer this question, and until now nothing asked
+     * it: both repair and salvage went through a {@code switch} that named eight kinds and two kinds
+     * respectively. The data was there the whole time.
+     */
+    private java.util.LinkedHashMap<String, Integer> billOfMaterials(String kind) {
+        java.util.LinkedHashMap<String, Integer> bill = new java.util.LinkedHashMap<>();
+        if (kind == null) return bill;
+        for (java.util.Map<String, Object> row : jdbc.queryForList(
+                "SELECT r.item_key, SUM(r.quantity)::int AS q FROM assembly_definition d " +
+                "JOIN assembly_stage s ON s.assembly_key=d.assembly_key " +
+                "JOIN assembly_stage_requirement r ON r.stage_key=s.stage_key " +
+                "WHERE d.construction_kind=? GROUP BY r.item_key ORDER BY q DESC, r.item_key", kind)) {
+            bill.put((String) row.get("item_key"), ((Number) row.get("q")).intValue());
+        }
+        return bill;
+    }
+
+    /**
+     * Half of each material a structure was built from, rounded down, as {key, display name} pairs ready to
+     * create. Rounding down means a stage that took one of something gives none of it back, which is the honest
+     * outcome for a single lashing or a single plank; but a dismantling that recovered nothing at all would read
+     * as a bug rather than as attrition, so the largest single material always yields one.
+     */
+    private java.util.List<String[]> salvageFromOwnBill(String kind) {
+        java.util.LinkedHashMap<String, Integer> bill = billOfMaterials(kind);
+        java.util.List<String[]> out = new java.util.ArrayList<>();
+        if (bill.isEmpty()) return out;
+        for (java.util.Map.Entry<String, Integer> e : bill.entrySet()) {
+            for (int i = 0; i < e.getValue() / 2; i++) out.add(new String[]{e.getKey(), displayNameOf(e.getKey())});
+        }
+        if (out.isEmpty()) {
+            String biggest = bill.keySet().iterator().next();
+            out.add(new String[]{biggest, displayNameOf(biggest)});
+        }
+        return out;
+    }
+
+    /** Every name the catalogue gives a thing that can stand on the ground. Read once and held. */
+    private volatile java.util.Set<String> structureNames;
+
+    /**
+     * Does this sentence name something built that stands here? (#77)
+     *
+     * <p>REPAIR_STRUCTURE was gated on a literal list of twenty-eight nouns — hut, wall, roof, fence, gate,
+     * hearth, bridge and so on — while the catalogue holds <b>115 construction kinds</b>. So {@code mend the
+     * fence} worked and {@code repair the drainage ditch} reached <em>nothing at all</em>, while {@code repair
+     * the ditch} fell through to item repair and failed looking for a ditch in the pack. The same was true of a
+     * culvert, a stile, a lime kiln, a loom frame, a weir, a cairn — anything the hard-coded list had not been
+     * told about, which was most of what a Chronicle can build.
+     *
+     * <p>This is the generic-word defect in a new place, and it gets the established fix: <b>ask the data.</b>
+     * The names come from each structure's own {@code subjects} — the curated short forms the catalogue already
+     * vets, so "ditch" and "drain" work as well as "drainage ditch" — plus every kind's display name. 212 names
+     * in all, of which exactly two also name an item ("smoke hood", "lime kiln"), and for both of those a repair
+     * verb means the standing thing anyway.
+     *
+     * <p>Matched whole-word, because this project's richest seam is a family word reaching through a longer one.
+     */
+    public boolean namesAStandingStructure(String lower) {
+        if (lower == null || lower.isBlank()) return false;
+        java.util.Set<String> names = structureNames;
+        if (names == null) {
+            // SINGLE WORDS THAT ALSO NAME A MATERIAL ARE LEFT OUT, and this was not caution — the first version
+            // of this method took `I repair the stone hammer.` away from item repair, because `boundary_stone`
+            // answers to the bare word "stone" and `Words.word` found it inside "stone hammer". The replay
+            // caught it against a test the suite has asserted for a year. THE FIX IS AS LIABLE TO THE DEFECT AS
+            // THE BUG.
+            //
+            // Only the one-word names are dropped (stone, water, clay, reed, daub, frame, screen, fold, shaft,
+            // hearth, wattle…), because a multi-word name is specific enough that no gear sentence contains it.
+            // It costs nothing: the common single words are in the literal list above this call anyway, so
+            // `fix the roof` and `mend the wall` are untouched — while ditch, culvert, stile, drain, gatehouse
+            // and path are not material words and survive.
+            names = new java.util.LinkedHashSet<>(jdbc.queryForList(
+                "WITH named AS (" +
+                "  SELECT DISTINCT lower(trim(s)) w FROM assembly_definition d, unnest(string_to_array(d.subjects,',')) s " +
+                "   WHERE d.construction_kind IS NOT NULL AND trim(s) <> '' " +
+                "  UNION SELECT DISTINCT lower(display_name) FROM construction_kind), " +
+                "material AS (SELECT DISTINCT lower(w) w FROM item_definition, unnest(string_to_array(display_name,' ')) w) " +
+                "SELECT w FROM named " +
+                " WHERE position(' ' in w) > 0 OR NOT EXISTS (SELECT 1 FROM material m WHERE m.w = named.w)", String.class));
+            structureNames = names;
+        }
+        for (String n : names) if (com.devosphere.draugr.narration.Words.word(lower, n)) return true;
+        return false;
+    }
+
+    /** The catalogue's own name for an item, so a salvaged piece is not called by its key. */
+    private String displayNameOf(String itemKey) {
+        java.util.List<String> names = jdbc.queryForList(
+            "SELECT display_name FROM item_definition WHERE item_key=?", String.class, itemKey);
+        return names.isEmpty() ? itemKey : names.get(0);
     }
 }
