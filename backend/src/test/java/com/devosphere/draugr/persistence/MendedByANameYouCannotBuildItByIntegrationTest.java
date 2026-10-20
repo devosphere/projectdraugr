@@ -84,6 +84,10 @@ class MendedByANameYouCannotBuildItByIntegrationTest {
     }
 
     private String intentOf(String text) {
+        // A LIVING CHRONICLE BEFORE EACH. A routing assertion costs simulated time like any other action, and a
+        // sibling class was stopped by CI at the eleventh phrase of one loop with "No living Chronicle exists" —
+        // nothing wrong with the routing, nobody left to ask. Routing does not care which Chronicle answers.
+        aLivingChronicle();
         var r = actions.resolve(text, UUID.randomUUID());
         assertNotNull(r, () -> "the composer must answer: " + text);
         return r.intent();
