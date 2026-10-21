@@ -201,9 +201,38 @@ public class AssemblyService {
         String matchedKeyword = hit[1];
 
         Map<String, Object> def = jdbc.queryForMap(
-            "SELECT subject_kind, produces_item_key, construction_kind, display_name, narration " +
+            "SELECT subject_kind, produces_item_key, construction_kind, display_name, narration, site_biomes " +
             "FROM assembly_definition WHERE assembly_key=?", key);
         String subjectKind = (String) def.get("subject_kind");
+
+        // SOME GROUND WILL NOT TAKE WHAT IS ASKED OF IT (#77), and now it is data rather than a switch.
+        //
+        // The comment on the well below used to end "the second such assembly is the one that should promote
+        // it to data". There are eight — a water draw platform, a washing place, a settling basin, a fishing
+        // landing, a weir, a duck house, riverbank steps and a footbridge — every one of which says in its own
+        // narration that it stands at the water. So assembly_definition.site_biomes carries the eligible
+        // ground and this reads it.
+        //
+        // Checked only when nothing is under way, following the well's own precedent: a structure cannot move
+        // once begun, so the first stage is where the ground has to be right, and asking again on every stage
+        // would refuse work on a thing already standing in the correct place.
+        String siteBiomes = (String) def.get("site_biomes");
+        if (siteBiomes != null && !siteBiomes.isBlank() && location != null && !underWay(chronicle, key)) {
+            String here = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
+            java.util.List<String> wanted = java.util.Arrays.stream(siteBiomes.split(","))
+                .map(String::trim).filter(s -> !s.isEmpty()).toList();
+            if (here != null && !wanted.contains(here)) {
+                // Name the ground it wants and the ground it is standing on, spelled from the catalogue's own
+                // words rather than a phrase table, so a biome added later needs no second list to be legible.
+                java.util.List<String> spoken = wanted.stream()
+                    .map(b -> b.toLowerCase(java.util.Locale.ROOT).replace('_', ' ')).toList();
+                String options = spoken.size() == 1 ? spoken.get(0)
+                    : String.join(", ", spoken.subList(0, spoken.size() - 1)) + " or " + spoken.get(spoken.size() - 1);
+                return new String[]{"FAILED", "This wants water at hand — " + options + " — and this is "
+                    + here.toLowerCase(java.util.Locale.ROOT).replace('_', ' ')
+                    + ". It would stand here and serve nothing."};
+            }
+        }
 
         // Some ground will not take what is asked of it (#37/#77). A well is the first assembly with a condition
         // on the PLACE rather than on what is carried, so this is a switch on the construction_kind rather than a
