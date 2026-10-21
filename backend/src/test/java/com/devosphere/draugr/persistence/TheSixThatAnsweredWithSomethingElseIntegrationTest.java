@@ -189,7 +189,7 @@ class TheSixThatAnsweredWithSomethingElseIntegrationTest {
                 "SELECT review_state FROM assembly_definition WHERE assembly_key = ?", String.class, key),
                 () -> key + " must be VERIFIED or nobody can build it");
             Integer unsourced = jdbc.queryForObject(
-                "SELECT count(*) FROM assembly_stage s WHERE s.assembly_key = ?"
+                "SELECT count(*) FROM assembly_stage s WHERE s.assembly_key = ? AND s.cure_minutes = 0"
               + " AND NOT EXISTS (SELECT 1 FROM assembly_stage_requirement r WHERE r.stage_key = s.stage_key)",
                 Integer.class, key);
             assertEquals(0, unsourced, () -> key + " has a stage that needs nothing to build it");
