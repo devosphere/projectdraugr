@@ -34,9 +34,11 @@ public class AssemblyService {
 
     private final JdbcTemplate jdbc;
     private final PhysicalItemService items;
+    private final com.devosphere.draugr.simulation.LocalWeatherService weather;
 
-    public AssemblyService(JdbcTemplate jdbc, PhysicalItemService items) {
-        this.jdbc = jdbc; this.items = items;
+    public AssemblyService(JdbcTemplate jdbc, PhysicalItemService items,
+                           com.devosphere.draugr.simulation.LocalWeatherService weather) {
+        this.jdbc = jdbc; this.items = items; this.weather = weather;
     }
 
     /**
@@ -253,7 +255,7 @@ public class AssemblyService {
             }
 
         List<Map<String, Object>> stages = jdbc.queryForList(
-            "SELECT stage_key, prerequisite_stage_key, cure_minutes, tool_class, requires_fire, narration " +
+            "SELECT stage_key, prerequisite_stage_key, cure_minutes, tool_class, requires_fire, weather_limit, narration " +
             "FROM assembly_stage WHERE assembly_key=? ORDER BY stage_order", key);
 
         Map<String, Object> next = null;
@@ -294,6 +296,27 @@ public class AssemblyService {
                 return new String[]{"FAILED", "The work wants " + toolPhrase(tool) + ", and you are not carrying one."};
             if (Boolean.TRUE.equals(next.get("requires_fire")) && !fireHere(location))
                 return new String[]{"FAILED", "It needs heat, and there is no fire burning here."};
+
+            // WEATHER LIMITS DURING CONSTRUCTION (#77). Until now a stage read its tool, its fire and its
+            // materials, and NOTHING consulted the sky — so a roof could be thatched in a storm and daub
+            // applied in driving rain, which is work that would be ruined before it set. #77 asks for weather
+            // limits and this is them: the stage declares what it cannot be done in, and this reads it.
+            //
+            // Declared AND read, in the same change. A property the data states and the code ignores is the
+            // defect this project keeps finding — V429 was exactly that, a stage declaring materials on a
+            // branch that never consumes them — so the column and its reader ship together, with a standing
+            // guard that every stage carrying a limit is one this code can actually refuse.
+            //
+            // Location, not the global front: a sheltered hollow and an open ridge do not share a sky (#778).
+            String limit = (String) next.get("weather_limit");
+            if (limit != null && location != null) {
+                if ("DRY".equals(limit) && weather.wetHere(location))
+                    return new String[]{"FAILED", "This is work that has to go on dry, and it is coming down too "
+                        + "hard — laid wet now it would be spoiled before it set. It will have to wait for the weather."};
+                if ("CALM".equals(limit) && weather.galeHere(location))
+                    return new String[]{"FAILED", "The wind is taking everything you lift. Long timbers overhead "
+                        + "in this is how people are hurt, and it will have to wait for the gale to pass."};
+            }
 
             List<Map<String, Object>> reqs = jdbc.queryForList(
                 "SELECT item_key, quantity FROM assembly_stage_requirement WHERE stage_key=?", stageKey);
