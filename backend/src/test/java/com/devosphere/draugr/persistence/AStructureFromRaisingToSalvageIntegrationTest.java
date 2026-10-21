@@ -134,21 +134,29 @@ class AStructureFromRaisingToSalvageIntegrationTest {
         for (int i = 0; i < n; i++) items.createCarriedItem(chronicle, key, name, Instant.now(), "TEST_SEED");
     }
 
-    private int owned(UUID chronicle, String key) {
-        Integer n = jdbc.queryForObject(
-            "SELECT count(*) FROM world_object w JOIN item_instance i ON i.object_id=w.id"
-          + " WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key=?", Integer.class, chronicle, key);
-        return n == null ? 0 : n;
+    /** Laid on the ground beside the work: assembly draws from reach, and reach is carried plus ground. */
+    private void lay(UUID chronicle, UUID ground, String key, String name, int n) {
+        for (int i = 0; i < n; i++)
+            items.drop(items.createCarriedItem(chronicle, key, name, Instant.now(), "TEST_SEED"), ground, Instant.now());
     }
 
-    /** Everything the whole assembly asks for, generously, so no stage stalls for want of one piece. */
-    private void stockUp(UUID chronicle, Subject s) {
+    /** In reach, carried or on the ground here — the same count the assembly itself draws from. */
+    private int owned(UUID chronicle, String key) {
+        UUID here = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+        return items.reachCountAt(chronicle, here, key);
+    }
+
+    /**
+     * Everything the whole assembly asks for, generously, so no stage stalls for want of one piece. The materials
+     * go on the ground, not on the back: four timber planks alone are 20.8 litres against a body's 18 (CI, #803).
+     */
+    private void stockUp(UUID chronicle, UUID ground, Subject s) {
         for (Map.Entry<String, String> m : s.materials().entrySet()) {
             Integer wants = jdbc.queryForObject(
                 "SELECT COALESCE(SUM(r.quantity),0) FROM assembly_stage st"
               + " JOIN assembly_stage_requirement r ON r.stage_key=st.stage_key"
               + " WHERE st.assembly_key=? AND r.item_key=?", Integer.class, s.assemblyKey(), m.getKey());
-            give(chronicle, m.getKey(), m.getValue(), (wants == null ? 1 : wants) + 2);
+            lay(chronicle, ground, m.getKey(), m.getValue(), (wants == null ? 1 : wants) + 2);
         }
         for (String tool : s.tools()) give(chronicle, tool, tool.replace('_', ' '), 1);
     }
@@ -159,7 +167,7 @@ class AStructureFromRaisingToSalvageIntegrationTest {
             UUID chronicle = chronicle();
             UUID ground = emptyGround();
             jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", ground, chronicle);
-            stockUp(chronicle, s);
+            stockUp(chronicle, ground, s);
 
             // ---- RAISING. One resolve per stage; the prerequisite chain decides the order, not the test.
             for (int stage = 0; stage < s.stages(); stage++) {
@@ -232,7 +240,21 @@ class AStructureFromRaisingToSalvageIntegrationTest {
             assertTrue(auditor.inspect().consistent(),
                 () -> "the Auditor must find the world sound after " + s.assemblyKey() + "'s whole life: "
                     + auditor.inspect().violations());
+
+            // ---- Set down what this walk left in hand. One Chronicle walks all four, so the salvage and an axe
+            // per walk would otherwise pile onto the next walk's load.
+            putDownWhatTheWalkLeft(chronicle, ground);
         }
+    }
+
+    /** Drop every carried thing that is not worn; dropping is a real, recorded move, so matter is conserved. */
+    private void putDownWhatTheWalkLeft(UUID chronicle, UUID ground) {
+        List<UUID> carried = jdbc.queryForList(
+            "SELECT w.id FROM world_object w JOIN item_instance i ON i.object_id=w.id"
+          + " WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE'"
+          + " AND NOT EXISTS (SELECT 1 FROM equipment_attachment e WHERE e.item_id=w.id)"
+          + " AND NOT EXISTS (SELECT 1 FROM item_containment c WHERE c.item_id=w.id)", UUID.class, chronicle);
+        for (UUID item : carried) items.drop(item, ground, Instant.now());
     }
 
     @Test
