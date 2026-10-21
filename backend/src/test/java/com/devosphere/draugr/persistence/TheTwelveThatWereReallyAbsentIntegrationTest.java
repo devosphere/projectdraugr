@@ -221,8 +221,10 @@ class TheTwelveThatWereReallyAbsentIntegrationTest {
             assertNotNull(stages);
             assertTrue(stages > 0, () -> key + " has no stages, so there is nothing to run");
 
+            // A curing stage is exempt: V429 made it PURE WAITING, and advance() never consumes materials there,
+            // so a cure stage must declare nothing (limepit_set). Only a working stage has to be made of something.
             Integer unsourced = jdbc.queryForObject(
-                "SELECT count(*) FROM assembly_stage s WHERE s.assembly_key = ?"
+                "SELECT count(*) FROM assembly_stage s WHERE s.assembly_key = ? AND s.cure_minutes = 0"
               + " AND NOT EXISTS (SELECT 1 FROM assembly_stage_requirement r WHERE r.stage_key = s.stage_key)",
                 Integer.class, key);
             assertEquals(0, unsourced, () -> key + " has a stage that needs nothing to build it");

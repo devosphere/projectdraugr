@@ -202,7 +202,7 @@ class TheElevenThatHadNowhereToGoIntegrationTest {
             assertTrue(stages > 0, () -> key + " has no stages, so there is nothing to run");
 
             Integer unsourced = jdbc.queryForObject(
-                "SELECT count(*) FROM assembly_stage s WHERE s.assembly_key = ?"
+                "SELECT count(*) FROM assembly_stage s WHERE s.assembly_key = ? AND s.cure_minutes = 0"
               + " AND NOT EXISTS (SELECT 1 FROM assembly_stage_requirement r WHERE r.stage_key = s.stage_key)",
                 Integer.class, key);
             assertEquals(0, unsourced, () -> key + " has a stage that needs nothing to build it");
