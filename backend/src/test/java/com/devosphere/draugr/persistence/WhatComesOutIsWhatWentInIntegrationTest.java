@@ -94,7 +94,11 @@ class WhatComesOutIsWhatWentInIntegrationTest {
         // that was never the subject. Same reset as CoveringYourTrailIntegrationTest.
         jdbc.update("UPDATE chronicle_physiology SET last_metabolic_update = (SELECT simulated_at FROM simulation_clock WHERE id=1), "
             + "hours_without_food=0, hours_without_water=0, sleep_debt_hours=0, "
-            + "injury_severity=0, illness_severity=0, pain_level=0, blood_loss_ml=0, energy_level=100 WHERE chronicle_id=?", active.id());
+            + "injury_severity=0, illness_severity=0, pain_level=0, blood_loss_ml=0, energy_level=100, "
+            + "core_temperature_c=37.0, wetness_level=0 WHERE chronicle_id=?", active.id());
+        // CORE TEMPERATURE TOO. This reset covered every death vector the physiology check reads except one, so on
+        // a rainy day the inherited body was still cold and soaked and froze during the dig — "No living Chronicle
+        // exists" at the mend, on development as well as on a PR, the morning the sky drew RAIN.
         // TAKE THE ID FROM THE SUMMARY, not from a query of my own invention. The first version of this asked
         // `WHERE lifecycle_state='ACTIVE' ORDER BY created_at DESC` — three mistakes in one line, because the
         // chronicle table has life_state ('LIVING', not 'ACTIVE'), has no created_at, and orders by

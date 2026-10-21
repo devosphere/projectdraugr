@@ -18,6 +18,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -74,7 +75,21 @@ class StructuresSheltersBatch3IntegrationTest {
         Instant now = Instant.now();
         for (int i = 0; i < 3; i++) items.createCarriedItem(chronicle, "reed_bundle", "Reed bundle", now, "TEST_FIXTURE");
 
-        var build = actions.resolve("build a thatch roof");
+        // A DRY DAY OF ITS OWN. Since V430 thatch is refused in rain, snow or storm, and the sky cannot be written
+        // directly: every resolve re-draws it from (seed, calendar day). So the CLOCK is pinned instead, to a day
+        // this world's fixed seed draws dry — 18 to 25 June 2026 are all CLEAR or OVERCAST, so noon on the 20th
+        // has days of margin either way. CI failed here on 2026-10-21, which draws RAIN.
+        Timestamp clockWas = jdbc.queryForObject("SELECT simulated_at FROM simulation_clock WHERE id=1", Timestamp.class);
+        jdbc.update("UPDATE simulation_clock SET simulated_at = TIMESTAMPTZ '2026-06-20T12:00:00Z' WHERE id=1");
+        jdbc.update("UPDATE chronicle_physiology SET last_metabolic_update = TIMESTAMPTZ '2026-06-20T12:00:00Z' WHERE chronicle_id=?", chronicle);
+        ChronicleActionService.ActionResult build;
+        try {
+            build = actions.resolve("build a thatch roof");
+        } finally {
+            // Restore, and bring the body's clock with it, or the next resolve charges four months of hunger.
+            jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", clockWas);
+            jdbc.update("UPDATE chronicle_physiology SET last_metabolic_update=? WHERE chronicle_id=?", clockWas, chronicle);
+        }
         assertEquals("SUCCEEDED", build.outcome(), () -> "building a thatch roof must succeed: " + build.perception());
 
         Boolean sited = jdbc.queryForObject(

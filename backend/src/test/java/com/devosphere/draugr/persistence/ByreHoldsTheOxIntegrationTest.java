@@ -106,6 +106,11 @@ class ByreHoldsTheOxIntegrationTest {
         assertEquals(80, (int) jdbc.queryForObject("SELECT draft_fatigue FROM wildlife_bond WHERE id=?", Integer.class, bond),
                 "with nowhere to be held, a tired beast does not recover");
 
+        // A DRY SKY OF ITS OWN. The byre's walls are thatched, and since V430 thatch is refused in rain, snow or
+        // storm — so on a wet calendar day this test failed for the weather, not the byre. Writing the sky directly
+        // holds here because advance() is called below with no tick between, and only a tick rewrites it.
+        jdbc.update("UPDATE world_weather SET weather_kind='CLEAR', intensity=8, wind_speed_kph=8 WHERE world_id=?", worldId);
+
         // Raise the byre through the real assembly boundary: posts set with a cutting tool, then walls and thatch.
         items.createCarriedItem(chronicle, "flint_knife", "Flint knife", now, "TEST_SEED"); // stage one is CUTTING work
         for (int i = 0; i < 4; i++) items.createCarriedItem(chronicle, "timber_log", "Timber log", now, "TEST_SEED");

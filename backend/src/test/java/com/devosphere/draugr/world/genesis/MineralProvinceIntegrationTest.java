@@ -273,6 +273,13 @@ class MineralProvinceIntegrationTest {
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", bar, chronicle);
         boolean found = false;
         for (int attempt = 0; attempt < 60 && !found; attempt++) {
+            // Sixty digs on an open river bar spend a body on a wet day — CI died here with "No living Chronicle
+            // exists". Which Chronicle digs does not matter, only that one stands on the bar, so re-awaken.
+            if (chronicles.active() == null) {
+                UUID digger = chronicles.awaken().id();
+                jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", digger);
+                jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", bar, digger);
+            }
             var dig = actions.resolve("gather iron sand");
             assertEquals("GATHER_MINERAL", dig.intent());
             found = "SUCCEEDED".equals(dig.outcome());
