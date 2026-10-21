@@ -194,4 +194,44 @@ class ConstructionRegistryCompleteIntegrationTest {
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
+
+    /**
+     * A cure is waiting, not working — so a curing stage may not declare work (#77/#108, V429).
+     *
+     * <p>{@code AssemblyService.advance()} branches on the cure:
+     *
+     * <pre>
+     *   if (cure > 0) { check elapsed time, record the stage, return; }
+     *   else          { check tool_class, check requires_fire, consume assembly_stage_requirement; }
+     * </pre>
+     *
+     * <p>So a stage with {@code cure_minutes > 0} <b>never checks a tool, never needs a fire, and never consumes
+     * its materials.</b> That is a sound design and the catalogue follows it — every long-standing cure stage is
+     * even named for waiting: "Let the backing cure", "Let the daub dry", "Let it fill".
+     *
+     * <p>Two stages broke it, both added by me, and both were named for <em>work</em> — which is the tell.
+     * {@code limepit_line} declared a hammer and eight field stones while curing for 90 minutes, so a lime
+     * burning pit was raised from the two stones of its first stage instead of ten; {@code yakshed_roof}
+     * declared four thatch bundles, so a roof was thatched out of nothing. <b>Matter from nothing, through a
+     * branch the Auditor's conservation rule never sees.</b>
+     *
+     * <p>Held here rather than only in V429, because a migration guard fires once and this has to hold for every
+     * stage anyone adds afterwards.
+     */
+    @Test
+    void noCuringStageDeclaresWorkTheEngineWillIgnore() {
+        world();
+        List<String> pretending = jdbc.queryForList(
+            "SELECT s.assembly_key || '/' || s.stage_key || ' (' || s.cure_minutes || 'min"
+          + (" ") + "' || COALESCE(s.tool_class,'-') || ' fire=' || s.requires_fire"
+          + " || ' materials=' || (SELECT count(*) FROM assembly_stage_requirement r WHERE r.stage_key = s.stage_key) || ')'"
+          + " FROM assembly_stage s WHERE s.cure_minutes > 0"
+          + " AND (s.tool_class IS NOT NULL OR s.requires_fire"
+          + "      OR EXISTS (SELECT 1 FROM assembly_stage_requirement r WHERE r.stage_key = s.stage_key))"
+          + " ORDER BY 1", String.class);
+        assertTrue(pretending.isEmpty(),
+            "advance() ignores tool_class, requires_fire and the material requirements on a CURING stage, so "
+          + "these stages would be built out of nothing and nothing at runtime would say so. Split the work "
+          + "from the waiting, as the rest of the catalogue does: " + pretending);
+    }
 }
