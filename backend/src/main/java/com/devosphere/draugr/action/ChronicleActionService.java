@@ -5315,22 +5315,22 @@ public class ChronicleActionService {
     }
 
     /** The climate as FELT on this ground — the same reading the body is charged against (#28/#159). */
+    /**
+     * The sky over one chunk, read from the one place that knows how (#77/V430).
+     *
+     * <p>This method used to carry its own copy of the environment query — one of SIX longhand copies across
+     * the services, each with its own COALESCE defaults. Six copies of one query is the shape that produced the
+     * unwearable-garment defect, where a catalogue and a CHECK constraint kept separate lists of the same
+     * thing, and it drifts the moment one copy learns something the others do not. The weather gate on
+     * construction needed the same reading, so rather than write a seventh it went into
+     * {@link com.devosphere.draugr.simulation.LocalWeatherService} and this delegates there.
+     *
+     * <p>Four older callers still hold their own copy — ExaminationService, ChroniclePhysiologyService,
+     * ChronicleService and VisualContextService — and folding those in is its own piece of work, recorded on
+     * #77 rather than smuggled into a feature.
+     */
     private com.devosphere.draugr.simulation.BiomeClimate.Local localClimate(UUID location) {
-        java.util.Map<String,Object> env = jdbc.queryForMap(
-            "SELECT wc.biome, COALESCE(wc.elevation,0) AS elevation, COALESCE(wc.moisture,500) AS moisture, " +
-            "COALESCE(wc.grid_y,0) AS grid_y, COALESCE(wg.height_chunks,1) AS height_chunks, " +
-            "COALESCE(ww.weather_kind,'CLEAR') AS weather_kind, COALESCE(ww.ambient_temperature_c,18.0) AS t, " +
-            "COALESCE(ww.wind_speed_kph,6) AS w, " +
-            "COALESCE((SELECT TRUE FROM world_chunk n WHERE n.world_id=wc.world_id AND n.grid_x=wc.grid_x " +
-            "          AND n.grid_y=wc.grid_y-1 AND n.elevation > wc.elevation + 40 LIMIT 1), FALSE) AS sun_warmed " +
-            "FROM world_chunk wc LEFT JOIN world_genesis wg ON wg.world_id=wc.world_id " +
-            "LEFT JOIN world_weather ww ON ww.world_id=wc.world_id WHERE wc.id=?", location);
-        return com.devosphere.draugr.simulation.BiomeClimate.at(
-            (String) env.get("biome"), ((Number) env.get("elevation")).intValue(),
-            ((Number) env.get("moisture")).intValue(), ((Number) env.get("grid_y")).intValue(),
-            ((Number) env.get("height_chunks")).intValue(), (String) env.get("weather_kind"),
-            ((Number) env.get("t")).doubleValue(), ((Number) env.get("w")).intValue(),
-            Boolean.TRUE.equals(env.get("sun_warmed")));
+        return com.devosphere.draugr.simulation.LocalWeatherService.at(jdbc, location);
     }
 
     private String campStocktake(UUID location) {
