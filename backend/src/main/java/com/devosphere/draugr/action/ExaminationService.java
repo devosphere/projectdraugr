@@ -445,23 +445,11 @@ public class ExaminationService {
      * What the air is doing, as a body standing in it would read it: the season it has got to, the felt
      * temperature of THIS ground, the wind on it, and the sky. The temperature comes from
      * {@link com.devosphere.draugr.simulation.BiomeClimate}, the same call the Body HUD makes — a peak is colder
-     * than the valley under the one sky, and the prose must not disagree with the HUD about which.
+     * than the valley under the one sky, and the prose must not disagree with the HUD about which. The reading
+     * itself lives in {@link com.devosphere.draugr.simulation.LocalWeatherService}, so this cannot drift from it.
      */
     com.devosphere.draugr.simulation.BiomeClimate.Local localClimate(UUID location) {
-        Map<String, Object> env = jdbc.queryForMap(
-            "SELECT wc.biome, COALESCE(wc.elevation,0) AS elevation, COALESCE(wc.moisture,500) AS moisture, " +
-            "COALESCE(wc.grid_y,0) AS grid_y, COALESCE(wg.height_chunks,1) AS height_chunks, " +
-            "COALESCE(ww.weather_kind,'CLEAR') AS weather_kind, COALESCE(ww.ambient_temperature_c,18.0) AS t, " +
-            "COALESCE(ww.wind_speed_kph,6) AS w, " +
-            "COALESCE((SELECT TRUE FROM world_chunk n WHERE n.world_id=wc.world_id AND n.grid_x=wc.grid_x " +
-            "          AND n.grid_y=wc.grid_y-1 AND n.elevation > wc.elevation + 40 LIMIT 1), FALSE) AS sun_warmed " +
-            "FROM world_chunk wc LEFT JOIN world_genesis wg ON wg.world_id=wc.world_id " +
-            "LEFT JOIN world_weather ww ON ww.world_id=wc.world_id WHERE wc.id=?", location);
-        return com.devosphere.draugr.simulation.BiomeClimate.at(
-            (String) env.get("biome"), ((Number) env.get("elevation")).intValue(), ((Number) env.get("moisture")).intValue(),
-            ((Number) env.get("grid_y")).intValue(), ((Number) env.get("height_chunks")).intValue(),
-            (String) env.get("weather_kind"), ((Number) env.get("t")).doubleValue(), ((Number) env.get("w")).intValue(),
-            Boolean.TRUE.equals(env.get("sun_warmed")));
+        return com.devosphere.draugr.simulation.LocalWeatherService.at(jdbc, location);
     }
 
     String airReading(UUID location) {
