@@ -62,14 +62,12 @@ public class ChroniclePhysiologyService {
                 ",(EXISTS(SELECT 1 FROM item_instance ii JOIN world_object hw ON hw.id=ii.object_id JOIN world_object body ON body.current_location_id=hw.current_location_id WHERE body.id=c.id AND ii.item_key='smoke_hood' AND hw.lifecycle_state='ACTIVE')" +
                 " OR EXISTS(SELECT 1 FROM construction_project cp JOIN world_object sv ON sv.id=cp.object_id JOIN world_object body ON body.current_location_id=sv.current_location_id WHERE body.id=c.id AND cp.project_kind='SMOKE_VENT' AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND sv.lifecycle_state='ACTIVE'))" +
                 ",EXISTS(SELECT 1 FROM equipment_attachment e JOIN item_instance ii ON ii.object_id=e.item_id WHERE e.chronicle_id=c.id AND ii.item_key='smoke_face_wrap')" +
-                // 13..18: the ground the body is actually standing on, so the weather it endures can be the
+                // 13: the ground the body is actually standing on, so the weather it endures can be the
                 // weather that falls THERE rather than the world's single sky. See the note on the extractor.
-                ",COALESCE(wc.biome,''),COALESCE(wc.elevation,0),COALESCE(wc.moisture,500),COALESCE(wc.grid_y,0),COALESCE(wg.height_chunks,1)" +
-                ",COALESCE((SELECT TRUE FROM world_chunk n WHERE n.world_id=wc.world_id AND n.grid_x=wc.grid_x AND n.grid_y=wc.grid_y-1 AND n.elevation > wc.elevation + 40 LIMIT 1), FALSE)" +
+                ",wc.id" +
                 " FROM chronicle c JOIN world_weather ww ON ww.world_id=c.world_id" +
                 " JOIN world_object standing ON standing.id=c.id" +
-                " LEFT JOIN world_chunk wc ON wc.id=standing.current_location_id" +
-                " LEFT JOIN world_genesis wg ON wg.world_id=c.world_id WHERE c.id=?", result -> {
+                " LEFT JOIN world_chunk wc ON wc.id=standing.current_location_id WHERE c.id=?", result -> {
                     if (!result.next()) return new Environment("CLEAR",0,18,0,0,false,false,false,false,false,false,false);
                     // The body endures the weather where it STANDS (#37). Everything else in the simulation had
                     // already learned this: the Body HUD, the prose, the backdrops and the senses all run the
@@ -82,9 +80,15 @@ public class ChroniclePhysiologyService {
                     // on mountain ground and averages -9.9C there; CAVE_INTERIOR carries a wind offset of -200,
                     // which is the entire reason anything dens in one. Altitude was decoration: climbing cost
                     // the body nothing, and a cave sheltered it from nothing.
-                    com.devosphere.draugr.simulation.BiomeClimate.Local here = com.devosphere.draugr.simulation.BiomeClimate.at(
-                        result.getString(13), result.getInt(14), result.getInt(15), result.getInt(16), result.getInt(17),
-                        result.getString(1), result.getBigDecimal(3).doubleValue(), result.getInt(4), result.getBoolean(18));
+                    //
+                    // The reading is LocalWeatherService's, the one the HUD, the prose and the build gates use, so
+                    // the body cannot be chilled by a different sky from the one it is told about. Only a body
+                    // standing nowhere falls back to the front unmodulated.
+                    UUID ground = result.getObject(13, UUID.class);
+                    com.devosphere.draugr.simulation.BiomeClimate.Local here = ground != null
+                        ? com.devosphere.draugr.simulation.LocalWeatherService.at(jdbc, ground)
+                        : com.devosphere.draugr.simulation.BiomeClimate.at(null, 0, 500, 0, 1,
+                            result.getString(1), result.getBigDecimal(3).doubleValue(), result.getInt(4));
                     // Phase comes from the local reading too: snow does not soak a body the way rain does, and a
                     // cold storm is a blizzard. Intensity stays global — that is the front's own strength.
                     return new Environment(here.kind(), result.getInt(2), here.temperatureC(), here.windKph(),

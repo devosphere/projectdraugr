@@ -4948,26 +4948,11 @@ public class ChronicleActionService {
      * One light read of the chunk's biome and the world's weather; the engine holds the punctuation rule.
      */
     private String groundPerception(String core, UUID location, String attention, String beforeWeather, Instant at) {
-        java.util.Map<String,Object> env = jdbc.queryForMap(
-            "SELECT wc.biome, wc.elevation, wc.moisture, wc.grid_y, wg.height_chunks, ww.weather_kind, " +
-            // Aspect (#159): ground that falls away to the south takes the light square-on and sits out of the
-            // north wind. Derived from the neighbour's stored elevation rather than a column of its own, so the
-            // pinned world needs no migration and no regeneration to have slopes it always had.
-            "EXISTS(SELECT 1 FROM world_chunk n WHERE n.world_id=wc.world_id AND n.grid_x=wc.grid_x " +
-            "       AND n.grid_y=wc.grid_y-1 AND n.elevation > wc.elevation + 40) AS sun_warmed, " +
-            "COALESCE(ww.ambient_temperature_c,18.0) AS t, COALESCE(ww.wind_speed_kph,6) AS w " +
-            "FROM world_chunk wc JOIN world_genesis wg ON wg.world_id=wc.world_id " +
-            "LEFT JOIN world_weather ww ON ww.world_id=wc.world_id WHERE wc.id=?", location);
-        String biome = (String) env.get("biome");
-        String globalKind = (String) env.get("weather_kind");
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
         // The prose reports the weather as FELT here (#28), derived from the chunk's own geography: altitude
         // cools it, latitude shifts it, humidity biases rain↔snow — so the same front that rains below falls
-        // as snow on the peak. A front CHANGING is a global event, so that flag stays global.
-        com.devosphere.draugr.simulation.BiomeClimate.Local local = com.devosphere.draugr.simulation.BiomeClimate.at(
-            biome, ((Number) env.get("elevation")).intValue(), ((Number) env.get("moisture")).intValue(),
-            ((Number) env.get("grid_y")).intValue(), ((Number) env.get("height_chunks")).intValue(),
-            globalKind, ((Number) env.get("t")).doubleValue(), ((Number) env.get("w")).intValue(),
-            Boolean.TRUE.equals(env.get("sun_warmed")));
+        // as snow on the peak. The same reading every gate is charged against, so the prose cannot disagree.
+        com.devosphere.draugr.simulation.BiomeClimate.Local local = localClimate(location);
         // Both sides of this comparison are now the LOCAL sky. They have to be: beforeWeather became the local
         // kind so that nothing gated on the weather could disagree with the prose, and comparing a local reading
         // against the global front would then have reported the sky "changing" on every single turn at any chunk
