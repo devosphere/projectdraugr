@@ -19,9 +19,9 @@ import java.util.UUID;
  * shape that produced the unwearable-garment defect (a catalogue and a CHECK constraint keeping two separate
  * lists of the same thing), and it will drift the moment one of them learns something the others do not. New
  * code asks here instead; {@code ChronicleActionService.localClimate} now delegates here too, so this change
- * removes a copy rather than adding a seventh. <b>Four older call sites still carry their own copy</b> —
- * ExaminationService, ChroniclePhysiologyService, ChronicleService and VisualContextService — and folding them
- * in is a separate piece of work, noted on #77 rather than smuggled into a feature.
+ * removes a copy rather than adding a seventh. The other five (ExaminationService, ChroniclePhysiologyService,
+ * ChronicleService, VisualContextService and ChronicleActionService's prose grounding) now ask here too, so this
+ * is the only place the query exists. Keep it that way: a caller that needs the local sky calls {@link #at}.
  */
 @Service
 public class LocalWeatherService {

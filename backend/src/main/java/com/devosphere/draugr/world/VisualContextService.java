@@ -179,27 +179,21 @@ public class VisualContextService {
         return there > here + 40 ? "ABOVE" : there < here - 40 ? "BELOW" : "LEVEL";
     }
 
-    /** The ground the Chronicle stands on, and the sky over it — a record because Map.of stops at ten pairs. */
+    /** The ground the Chronicle stands on — a record because Map.of stops at ten pairs. */
     private record Ground(java.util.UUID chunk, java.util.UUID worldId, String biome, int elevation, int moisture,
-                          int gridX, int gridY, int worldHeight, String weatherKind, double tempC, int windKph) { }
+                          int gridX, int gridY) { }
 
     @Transactional(readOnly = true)
     public VisualContext active(Instant at) {
         Ground here = jdbc.query(
-            "SELECT wc.id, wc.biome, wc.elevation, wc.moisture, wc.grid_y, wc.grid_x, wc.world_id, " +
-            "  COALESCE(wg.height_chunks,1) AS height, ww.weather_kind, " +
-            "  COALESCE(ww.ambient_temperature_c,18.0) AS t, COALESCE(ww.wind_speed_kph,6) AS w " +
+            "SELECT wc.id, wc.biome, wc.elevation, wc.moisture, wc.grid_y, wc.grid_x, wc.world_id " +
             "FROM chronicle c JOIN world_object o ON o.id=c.id " +
             "JOIN world_chunk wc ON wc.id=o.current_location_id " +
-            "LEFT JOIN world_genesis wg ON wg.world_id=wc.world_id " +
-            "LEFT JOIN world_weather ww ON ww.world_id=wc.world_id " +
             "WHERE c.life_state='LIVING'",
             rs -> rs.next() ? new Ground(
                 rs.getObject("id", java.util.UUID.class), rs.getObject("world_id", java.util.UUID.class),
                 rs.getString("biome"), rs.getInt("elevation"), rs.getInt("moisture"),
-                rs.getInt("grid_x"), rs.getInt("grid_y"), rs.getInt("height"),
-                rs.getString("weather_kind") == null ? "CLEAR" : rs.getString("weather_kind"),
-                rs.getBigDecimal("t").doubleValue(), rs.getInt("w")) : null);
+                rs.getInt("grid_x"), rs.getInt("grid_y")) : null);
         if (here == null) return null;
 
         java.util.UUID chunk = here.chunk();
@@ -212,8 +206,9 @@ public class VisualContextService {
             "AND n.elevation > ?)", Boolean.class,
             here.worldId(), here.gridX(), here.gridY() - 1, here.elevation() + 40));
 
-        BiomeClimate.Local local = BiomeClimate.at(biome, here.elevation(), here.moisture(),
-            here.gridY(), here.worldHeight(), here.weatherKind(), here.tempC(), here.windKph(), sunWarmed);
+        // The sky over this ground is LocalWeatherService's reading, the one the HUD and the body are charged
+        // against, so what the place looks like cannot drift from what it feels like.
+        BiomeClimate.Local local = com.devosphere.draugr.simulation.LocalWeatherService.at(jdbc, chunk);
 
         // Only what stands on THIS ground. No neighbour, no plan, no lair two chunks away.
         List<Feature> features = new java.util.ArrayList<>();
