@@ -161,10 +161,14 @@ class ABullAmongTheYoungIntegrationTest {
         assertTrue(jdbc.queryForObject(
             "SELECT COUNT(*) FROM assembly_definition WHERE assembly_key='bull_isolation_yard' AND keywords LIKE '%boar yard%'", Integer.class) > 0,
             "a keeper asking for a boar yard must get it");
-        // And BUILD_PEN must not be able to swallow it — the reason it is a yard and not a pen.
+        // And BUILD_PEN must not be able to swallow it. BUILD_PEN matches the whole word 'pen', and since V428 it
+        // steps aside when the sentence names a job the catalogue has a structure for — a boar, a bull, or a
+        // quarantine (#108). Only the first two can reach THIS yard, so a pen-word here is reachable only if it
+        // names one of them; a bare 'pen' would be swallowed whole.
         assertEquals(0, (int) jdbc.queryForObject(
             "SELECT COUNT(*) FROM assembly_definition, unnest(string_to_array(keywords, ',')) k " +
-            "WHERE assembly_key='bull_isolation_yard' AND trim(k) ~ '(^|\\s)pens?($|\\s)'", Integer.class),
-            "BUILD_PEN matches the whole word 'pen' and would swallow the phrase whole");
+            "WHERE assembly_key='bull_isolation_yard' AND trim(k) ~ '(^|\\s)pens?($|\\s)' " +
+            "AND trim(k) !~ '(^|\\s)(boar|bull)($|\\s)'", Integer.class),
+            "BUILD_PEN matches the whole word 'pen' and would swallow any pen-word that names neither boar nor bull");
     }
 }
