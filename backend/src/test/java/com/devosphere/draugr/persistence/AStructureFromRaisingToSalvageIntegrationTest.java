@@ -82,7 +82,7 @@ class AStructureFromRaisingToSalvageIntegrationTest {
         new Subject("quarry_safety_screen", "build a quarry safety screen", "quarry safety screen", "is_barrier",
             Map.of("dry_branch", "Dry branch", "fiber_cordage", "Processed fiber cordage"), List.of("stone_axe"), 1),
         new Subject("wheel_repair_stand", "build a wheel repair stand", "wheel repair stand", "is_workstation",
-            Map.of("timber_plank", "Timber plank", "field_stone", "Field stone"), List.of("stone_axe"), 2));
+            Map.of("timber_plank", "Timber plank", "field_stone", "Field stone"), List.of("stone_axe", "stone_hammer"), 2));
 
     @BeforeAll
     static void startDatabase() {
@@ -158,6 +158,8 @@ class AStructureFromRaisingToSalvageIntegrationTest {
               + " WHERE st.assembly_key=? AND r.item_key=?", Integer.class, s.assemblyKey(), m.getKey());
             lay(chronicle, ground, m.getKey(), m.getValue(), (wants == null ? 1 : wants) + 2);
         }
+        // Tools in hand, not on the ground: a tool class is read from what is carried, so the field stone laid
+        // beside the wheel stand is a STRIKING tool the stage cannot see — it wants a hammer carried (CI, #803).
         for (String tool : s.tools()) give(chronicle, tool, tool.replace('_', ' '), 1);
     }
 
