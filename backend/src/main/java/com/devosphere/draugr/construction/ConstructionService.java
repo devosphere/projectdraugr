@@ -721,14 +721,25 @@ public class ConstructionService {
             case "STONE_FIRE_PIT" -> java.util.List.<String[]>of(new String[]{"field_stone","Field stone"}, new String[]{"field_stone","Field stone"}, new String[]{"field_stone","Field stone"});
             default -> java.util.List.<String[]>of(new String[]{"dry_branch","Dry branch"});
         };
-        int recovered = 0;
-        for (String[] s : salvage) if (items.hasCarryRoomFor(chronicle, s[0])) { items.createCarriedItem(chronicle, s[0], s[1], at, "SALVAGED"); recovered++; }
+        // WHAT CANNOT BE CARRIED IS SET DOWN, NOT LOST. This skipped every piece the load had no room for, so a
+        // Chronicle with a full pack took a structure apart and the timber simply ceased to exist — the narration
+        // even said so ("nothing worth keeping — your load is full"). A craft never fails that way (#19): what does
+        // not fit lies at your feet. Salvage now does the same, on the ground where the structure stood.
+        int recovered = 0, setDown = 0;
+        for (String[] s : salvage) {
+            if (items.createCraftedItem(chronicle, location, UUID.randomUUID(), s[0], s[1], at, "SALVAGED", com.devosphere.draugr.quality.QualityGrade.SOUND)) recovered++;
+            else setDown++;
+        }
         Timestamp ts = Timestamp.from(at);
         jdbc.update("UPDATE construction_project SET state='DESTROYED' WHERE object_id=?", id);
         jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED', destroyed_at=?, destroyed_location_id=?, destroyed_cause='DISMANTLED', current_location_id=NULL WHERE id=?", ts, location, id);
-        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'DISMANTLED',jsonb_build_object('recovered',?))", id, ts, recovered);
-        String got = recovered == 0 ? "nothing worth keeping — your load is full" : recovered + " usable piece" + (recovered == 1 ? "" : "s") + " of material";
-        return new String[]{"SUCCEEDED", "You take the " + name + " apart piece by piece, recovering " + got + ". Where it stood is bare ground again."};
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'DISMANTLED',jsonb_build_object('recovered',?,'setDown',?))", id, ts, recovered, setDown);
+        int all = recovered + setDown;
+        String got = all + " usable piece" + (all == 1 ? "" : "s") + " of material";
+        String end = setDown == 0 ? " Where it stood is bare ground again."
+                   : setDown == all ? " Your load is full, so they lie where it stood."
+                   : " " + setDown + " will not fit in your load, so they lie where it stood.";
+        return new String[]{"SUCCEEDED", "You take the " + name + " apart piece by piece, recovering " + got + "." + end};
     }
 
     /**
