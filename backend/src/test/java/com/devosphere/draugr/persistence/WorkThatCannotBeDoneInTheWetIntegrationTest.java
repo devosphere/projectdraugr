@@ -139,19 +139,30 @@ class WorkThatCannotBeDoneInTheWetIntegrationTest {
     @Test
     void aStageWithNoLimitIsNeverRefusedForWeather() {
         // THE POSITIVE CONTROL, and the one that proves the gate is selective rather than refusing all work in
-        // the rain. Puddling clay into a settling basin is deliberately unlimited: it is work whose whole
-        // purpose is to hold water. If this ever starts being refused for weather, the limit has been
-        // blanket-applied to everything touching clay — which was the wrong answer V430 explicitly avoided.
+        // the rain. A woodworking stump carries no weather limit, so no sky may stop it.
+        //
+        // IT USED TO BE A SETTLING BASIN, which V431 then gave a site requirement — it must stand by water, and
+        // this test builds on grassland. The control would have gone on PASSING while proving nothing: the
+        // assertions below look for the weather refusal, and a SITE refusal is a different sentence, so a
+        // control that could never succeed would have read as a control that was never refused. A guard that
+        // cannot fail is worse than no guard. The stump is weather-free and site-free, so it can genuinely
+        // succeed here and genuinely fail if the gate over-reaches.
         UUID chronicle = chronicle();
         onEmptyGround(chronicle);
-        give(chronicle, "clay_lump", "Clay lump", 4);
+        give(chronicle, "dry_branch", "Dry branch", 4);
+        give(chronicle, "stone_axe", "Stone axe", 1);
 
-        var r = actions.resolve("dig a settling basin", UUID.randomUUID());
+        var r = actions.resolve("build a woodworking stump", UUID.randomUUID());
         assertNotNull(r);
         assertFalse(r.perception().contains("has to go on dry"),
-            () -> "lining a basin is not wet-sensitive work: " + r.perception());
+            () -> "sinking a stump is not wet-sensitive work: " + r.perception());
         assertFalse(r.perception().contains("wind is taking"),
             () -> "nor is it work held up by wind: " + r.perception());
+        // And it must be able to SUCCEED here, whatever the sky — that is what makes it a control rather than
+        // a sentence that merely avoids two phrases.
+        assertEquals("SUCCEEDED", r.outcome(),
+            () -> "a stump carries no weather limit and no site requirement, so nothing here may stop it: "
+                + r.perception());
     }
 
     @Test
