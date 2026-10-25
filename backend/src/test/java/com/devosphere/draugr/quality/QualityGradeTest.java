@@ -24,6 +24,30 @@ class QualityGradeTest {
         assertEquals(QualityGrade.SOUND, QualityGrade.attempt("back the bow with sinew"));
     }
 
+    /**
+     * Whole words only (#77). Every phrase here is one the catalogue declares as a keyword, and every one of them
+     * was graded DEFECTIVE while {@link QualityGrade#attempt} matched raw substrings: "rush" is inside b-RUSH,
+     * c-RUSH and bul-RUSH, and is the plant in a rush light.
+     */
+    @Test void theCataloguesOwnWordsDoNotSpoilTheWorkTheyName() {
+        for (String phrase : new String[]{"build a brush dome", "lay a brush path", "make a brush screen",
+                "crush yarrow", "crush the salt", "peel the rushes", "dip the rushes", "twist bulrush", "rushlight",
+                "rush light", "weave a rush mat"})
+            assertEquals(QualityGrade.SOUND, QualityGrade.attempt(phrase), phrase);
+    }
+
+    @Test void carelessWordsStillSpoilIt() {
+        for (String phrase : new String[]{"rush the brush dome", "build a brush dome hastily", "rushed it",
+                "botched the joint", "slap it together", "a half-hearted go at the hut", "just get it done",
+                "quickly lash a frame"})
+            assertEquals(QualityGrade.DEFECTIVE, QualityGrade.attempt(phrase), phrase);
+    }
+
+    @Test void unevenlyIsNotEvenly() {
+        assertEquals(QualityGrade.SOUND, QualityGrade.attempt("carve the handle unevenly, in a few strokes"));
+        assertEquals(QualityGrade.FINE, QualityGrade.attempt("build the brush dome slowly, one bough at a time"));
+    }
+
     @Test void ofDefaultsToSound() {
         assertEquals(QualityGrade.SOUND, QualityGrade.of(null));
         assertEquals(QualityGrade.SOUND, QualityGrade.of("nonsense"));
