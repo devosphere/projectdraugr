@@ -45,21 +45,27 @@ public enum QualityGrade {
      * the work outright; a careful, detailed one earns fine work; anything ordinary is
      * sound. This never lifts an output above its inputs — it is combined with the
      * input grade by {@link #worst}.
+     *
+     * <p>Whole words only (#77). This used to be a raw {@code contains}, and "rush" is inside b-RUSH, c-RUSH,
+     * bul-RUSH and RUSH-es: the catalogue's own words spoiled the work they named. {@code build a brush dome}
+     * finished defective, every {@code crush <herb>} poultice was defective, and {@code build a brush path} could
+     * never be finished at all — its first stage came out flawed, the next refused flawed work, and reworking it
+     * in the same words flawed it again. The same defect lifted "un-EVENLY" into fine work. And "rush" alone is
+     * not even a careless word: it is also the plant (a rush light, a rush mat), so only the senses that mean
+     * hurrying count.
      */
     public static QualityGrade attempt(String text) {
         String v = text == null ? "" : text.toLowerCase(Locale.ROOT);
-        for (String careless : CARELESS) if (v.contains(careless)) return DEFECTIVE;
+        if (CARELESS.matcher(v).find()) return DEFECTIVE;
         int words = v.isBlank() ? 0 : v.trim().split("\\s+").length;
-        for (String care : CAREFUL) if (v.contains(care)) return words >= 6 ? FINE : SOUND;
+        if (CAREFUL.matcher(v).find()) return words >= 6 ? FINE : SOUND;
         return SOUND;
     }
 
-    private static final String[] CARELESS = {
-        "rush", "hasty", "hastily", "quickly", "careless", "sloppy", "sloppily",
-        "botch", "slap together", "any old", "just get it done", "half-heart"
-    };
-    private static final String[] CAREFUL = {
-        "careful", "precise", "precisely", "evenly", "slowly", "patient", "patiently",
-        "deliberate", "meticulous", "take my time", "take care"
-    };
+    private static final java.util.regex.Pattern CARELESS = java.util.regex.Pattern.compile(
+        "\\b(rushed|rushing|in a rush|rush it|rush the|rush this|rush through|hasty|hastily|quickly|careless|carelessly|sloppy|sloppily|botch|botched|botching"
+      + "|slap together|slap it together|slapped together|any old|just get it done|half-hearted|half-heartedly)\\b");
+    private static final java.util.regex.Pattern CAREFUL = java.util.regex.Pattern.compile(
+        "\\b(careful|carefully|precise|precisely|evenly|slowly|patient|patiently|deliberate|deliberately"
+      + "|meticulous|meticulously|take my time|take care)\\b");
 }
