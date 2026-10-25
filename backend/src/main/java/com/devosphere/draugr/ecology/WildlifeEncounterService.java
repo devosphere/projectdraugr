@@ -1062,7 +1062,65 @@ public class WildlifeEncounterService {
 
         jdbc.update("UPDATE wildlife_population SET population_count = population_count - 1 WHERE id=? AND population_count > 1", herd.get("pop"));
         jdbc.update("UPDATE wildlife_bond SET last_strayed_at=? WHERE id=?", Timestamp.from(at), herd.get("bond"));
+        // AND THE TRACKS LEAD SOMEWHERE. The narration says "only tracks going out across the ground", and a
+        // decrement alone would make that a promise with nothing at the end of it — the animal would simply
+        // cease to exist. This project's standing defect is a declared capability nothing delivers, and prose
+        // that describes a trackable thing is exactly that in a new place.
+        //
+        // So the beast is put on neighbouring ground as a population of its own kind: it joins one of its
+        // species if there is one next door, and otherwise becomes one. That is the same "acting features
+        // materialise" rule the hunt and the taming already follow, and it means the existing TRACK can follow
+        // the tracks and a keeper can go and get their goat back.
+        strayOntoNeighbouringGround(chronicle, (String) herd.get("species"), at);
         return (String) herd.get("species");
+    }
+
+    /**
+     * Put a strayed beast on the ground next door (#108).
+     *
+     * <p>It joins a population of its own species on an adjoining chunk if one is there, and otherwise one is
+     * made for it with a single animal in it. Either way the animal still exists somewhere a keeper can track
+     * it to, which is what the morning's prose about tracks going out promises.
+     *
+     * <p>No biome gate. A domestic beast that wandered off in the night went where it went; whether that ground
+     * suits it in the long run is the ecology's own business, and the simulation already settles populations
+     * against their capacity.
+     */
+    private void strayOntoNeighbouringGround(UUID chronicle, String species, Instant at) {
+        UUID next = jdbc.query(
+            "SELECT n.id FROM world_chunk n JOIN world_object cw ON cw.id=? " +
+            "JOIN world_chunk here ON here.id = cw.current_location_id " +
+            "WHERE n.world_id = here.world_id AND n.id <> here.id " +
+            "  AND abs(n.grid_x - here.grid_x) <= 1 AND abs(n.grid_y - here.grid_y) <= 1 " +
+            // Ground that already holds its own kind first, so a strayed goat joins the goats rather than
+            // starting a second herd beside them.
+            "ORDER BY EXISTS(SELECT 1 FROM ecology_site es JOIN wildlife_population wp ON wp.site_id=es.id " +
+            "                WHERE es.chunk_id=n.id AND wp.species_key=?) DESC, n.grid_y, n.grid_x LIMIT 1",
+            rs -> rs.next() ? rs.getObject(1, UUID.class) : null, chronicle, species);
+        if (next == null) return;
+
+        UUID joined = jdbc.query(
+            "SELECT wp.id FROM wildlife_population wp JOIN ecology_site es ON es.id = wp.site_id " +
+            "WHERE es.chunk_id=? AND wp.species_key=? LIMIT 1",
+            rs -> rs.next() ? rs.getObject(1, UUID.class) : null, next, species);
+        if (joined != null) {
+            jdbc.update("UPDATE wildlife_population SET population_count = population_count + 1 WHERE id=?", joined);
+            return;
+        }
+
+        UUID world = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, next);
+        UUID siteId = UUID.randomUUID();
+        java.util.Map<String,Object> kind = jdbc.query(
+            "SELECT ecological_role, activity_cycle FROM wildlife_species WHERE species_key=? LIMIT 1",
+            rs -> rs.next() ? java.util.Map.of("role", rs.getString(1), "cycle", rs.getString(2)) : null, species);
+        if (kind == null) return;
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE',?,?)",
+            siteId, display(species) + " ground", next);
+        jdbc.update("INSERT INTO ecology_site (id,world_id,chunk_id,site_category,site_kind,baseline_abundance) VALUES (?,?,?,'WILDLIFE',?,?)",
+            siteId, world, next, display(species) + " ground", 400);
+        jdbc.update("INSERT INTO wildlife_population (id,site_id,species_key,ecological_role,activity_cycle,population_count,carrying_capacity,behavior_state,last_simulated_at) " +
+            "VALUES (?,?,?,?,?,1,6,'FORAGING',?)",
+            UUID.randomUUID(), siteId, species, kind.get("role"), kind.get("cycle"), Timestamp.from(at));
     }
 
     /**

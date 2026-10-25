@@ -106,6 +106,27 @@ class StockStrayIntegrationTest {
         assertNull(wildlife.strayFromUnheldGround(chronicle, now, true), "a herd is thinned, not scattered in a night");
         assertEquals(2, flockSize(goats));
 
+        // AND THE TRACKS LEAD SOMEWHERE. The morning's prose says "only tracks going out across the ground",
+        // and a decrement on its own would make that a promise with nothing at the end of it: the animal would
+        // simply cease to exist. A declared capability nothing delivers is this project's standing defect, and
+        // prose describing a trackable beast is exactly that in a new place.
+        //
+        // The strayed goat is now on adjoining ground as a population of its own kind — joining its species if
+        // one is next door, otherwise becoming one — so the existing TRACK can follow the tracks and a keeper
+        // can go and fetch their goat back.
+        UUID here = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+        Integer nextDoor = jdbc.queryForObject(
+            "SELECT COALESCE(SUM(wp.population_count),0) FROM wildlife_population wp"
+          + " JOIN ecology_site es ON es.id = wp.site_id"
+          + " JOIN world_chunk n ON n.id = es.chunk_id"
+          + " JOIN world_chunk h ON h.id = ?"
+          + " WHERE wp.species_key='mountain_goat' AND n.world_id = h.world_id AND n.id <> h.id"
+          + "   AND abs(n.grid_x - h.grid_x) <= 1 AND abs(n.grid_y - h.grid_y) <= 1", Integer.class, here);
+        assertNotNull(nextDoor);
+        assertTrue(nextDoor >= 1,
+            () -> "the strayed goat must be somewhere a keeper could track it to, not gone from the world: "
+                + nextDoor + " of its kind on adjoining ground");
+
         // A sound fence holds them.
         UUID fence = UUID.randomUUID();
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,lifecycle_state,current_location_id) VALUES (?,'CONSTRUCTION','Wattle fence','ACTIVE',?)", fence, chunk);
