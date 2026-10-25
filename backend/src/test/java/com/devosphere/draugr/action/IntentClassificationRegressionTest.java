@@ -2452,4 +2452,35 @@ class IntentClassificationRegressionTest {
         assertNotEquals("CHECK_STOCK", classify("feed the goat"));
         assertNotEquals("REST", classify("feed the goat"));
     }
+
+    /**
+     * Asking about the light is not striking one (#37, V437).
+     *
+     * <p>Four finished rules decided whether a Chronicle could see to work — the hour, the rock, the order
+     * carried lights are spent in, and whether weather would gut a bare flame — and not one of them could be
+     * asked about. Measured on a booted world: {@code is there enough light to work}, {@code it is too dark to
+     * see} and {@code what have I got to burn} reached nothing or spent an act on nothing.
+     */
+    @Test
+    void askingAboutTheLightIsNotStrikingOne() throws Exception {
+        assertEquals("JUDGE_LIGHT", classify("is there enough light to work"));
+        assertEquals("JUDGE_LIGHT", classify("it is too dark to see"));
+        assertEquals("JUDGE_LIGHT", classify("what have I got to burn"));
+        assertEquals("JUDGE_LIGHT", classify("can I see well enough to write"));
+        assertEquals("JUDGE_LIGHT", classify("is it dark in here"));
+        // AND THE SKY KEEPS THE SKY. "is it dark" with no place in it is the hour, and READ_THE_SKY answers it
+        // with the sun, the light left and the season — which is right outdoors and was being given inside a
+        // cave at noon to a question about the cave.
+        assertEquals("READ_THE_SKY", classify("is it dark"));
+        assertEquals("READ_THE_SKY", classify("is it getting dark"));
+        assertEquals("JUDGE_LIGHT", classify("have I got a light"));
+
+        // THE ACTS KEEP THEIRS, which is the half this could have broken: a question about the light must not
+        // take the lighting of a fire, and lighting one must not be answered with a reading.
+        assertEquals("LIGHT_FIRE", classify("light a fire"));
+        assertEquals("LIGHT_FIRE", classify("light the fire"));
+        assertNotEquals("JUDGE_LIGHT", classify("put out the fire"));
+        // And the body's own darkness words stay the body's: "I cannot see" is sight, not inventory.
+        assertNotEquals("JUDGE_LIGHT", classify("make a torch"));
+    }
 }

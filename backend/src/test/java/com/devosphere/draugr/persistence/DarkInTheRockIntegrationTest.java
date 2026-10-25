@@ -23,6 +23,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -158,5 +159,69 @@ class DarkInTheRockIntegrationTest {
             if (wasAt != null) jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", wasAt);
             if (wasWeather != null) jdbc.update("UPDATE world_weather SET weather_kind=?", wasWeather);
         }
+    }
+
+    /**
+     * The light reading answers from the same rules the work uses (#37, V437).
+     *
+     * <p>Four finished rules met in the dark and none could be asked about: the hour and the rock decide whether
+     * close work is possible, {@code consumePortableLight} spends a brand, a torch, a rushlight, a candle and
+     * last a lamp — in that order — {@code guttering} knows the weather takes a bare flame, and a stone lantern
+     * cover is what stops it. A Chronicle could learn all of it only by failing at close work and being told
+     * about whichever piece had gone wrong first.
+     *
+     * <p>What matters here is not the prose but the AGREEMENT: the reading must say there is nothing to burn
+     * exactly when there is nothing to burn, and name a light exactly when a light would be spent. A reading
+     * that kept its own copy of the rule could drift from it, and this test is what makes that impossible.
+     */
+    @Test
+    void theLightReadingAndTheWorkAgree() {
+        if (worldGenesis.current() == null) {
+            worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
+            ecology.seed();
+        }
+        var summary = chronicles.awaken();
+        assertNotNull(summary, "awakening must produce a living Chronicle");
+        UUID chronicle = summary.id();
+        jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
+
+        UUID cave = jdbc.queryForObject("SELECT id FROM world_chunk WHERE biome='CAVE_MOUTH' ORDER BY grid_y, grid_x LIMIT 1", UUID.class);
+        assertNotNull(cave, "the world must have a cave mouth");
+        jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", cave, chronicle);
+        douse(chronicle, cave);
+
+        // NOTHING TO BURN, and both halves must say so.
+        ChronicleActionService.ActionResult dark = actions.resolve("is there enough light to work");
+        assertEquals("JUDGE_LIGHT", dark.intent(), () -> "asking about the light must reach the reading: " + dark.perception());
+        assertTrue(dark.perception().contains("nothing on you that will burn"),
+            () -> "with every light set down, the reading must say so: " + dark.perception());
+        assertFalse(items.consumePortableLight(chronicle, Instant.now()),
+            "and the work must agree there is nothing to strike");
+
+        // A LIGHT IN HAND, and both halves must say that.
+        items.createCarriedItem(chronicle, "resin_torch", "Resin torch", Instant.now(), "TEST_SEED");
+        ChronicleActionService.ActionResult lit = actions.resolve("is there enough light to work");
+        assertEquals("JUDGE_LIGHT", lit.intent());
+        assertTrue(lit.perception().contains("resin torch"),
+            () -> "the reading must name the light that would be spent: " + lit.perception());
+        assertFalse(lit.perception().contains("nothing on you that will burn"),
+            () -> "and must not still claim there is nothing: " + lit.perception());
+
+        // THE ORDER IS THE SPENDING ORDER, not a list this reading keeps of its own. A brand outranks a torch in
+        // consumePortableLight, so it must be named first here too.
+        items.createCarriedItem(chronicle, "firebrand", "Firebrand", Instant.now(), "TEST_SEED");
+        ChronicleActionService.ActionResult both = actions.resolve("what have I got to burn");
+        assertEquals("JUDGE_LIGHT", both.intent());
+        assertTrue(both.perception().indexOf("burning brand") < both.perception().indexOf("resin torch"),
+            () -> "the brand is spent before the torch and must be named before it: " + both.perception());
+
+        // And the act spends the brand first, which is the fact the sentence above is reporting.
+        assertTrue(items.consumePortableLight(chronicle, Instant.now()), "a brand in hand is a light");
+        assertEquals(0, items.reachCountAt(chronicle, cave, "firebrand"),
+            "the brand is what was spent, before the torch");
+        assertTrue(items.hasAtLeast(chronicle, "resin_torch", 1), "and the torch is still there, unspent");
+
+        // Asking about the light is a reading and must not be an act on the world.
+        assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
 }

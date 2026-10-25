@@ -5165,7 +5165,10 @@ public class PhysicalItemService {
      * message unreachable whenever it happened to be raining outside. CI failed on exactly that, in a run whose
      * only other change was narration prose.
      */
-    private boolean guttering(UUID chronicle) {
+    /** Public since #37's light reading asks it, so what a Chronicle is TOLD about the weather taking a bare
+     *  flame is the same question that decides whether it does. A second copy of it in the reading is exactly
+     *  the drift this project keeps undoing. */
+    public boolean guttering(UUID chronicle) {
         return Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM world_object body JOIN world_chunk c ON c.id=body.current_location_id " +
             "JOIN world_weather ww ON ww.world_id=c.world_id " +
