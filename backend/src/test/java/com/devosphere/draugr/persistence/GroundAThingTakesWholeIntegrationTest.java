@@ -99,11 +99,19 @@ class GroundAThingTakesWholeIntegrationTest {
         return active.id();
     }
 
+    /**
+     * A chunk with nothing on it — and nothing BEGUN on it. A part-built structure has no world_object until it
+     * stands, so a poultry run another case left at its first stage made its ground look bare; the next case
+     * then raised its fold there, the half-built run counted as the one under way HERE, and the footprint gate
+     * was rightly skipped. That is how CI failed this class with "the work wants a cutting edge".
+     */
     private UUID bareGround() {
         UUID ground = jdbc.queryForObject(
             "SELECT c.id FROM world_chunk c WHERE c.biome='GRASSLAND'"
           + " AND NOT EXISTS (SELECT 1 FROM world_object w WHERE w.current_location_id=c.id"
           + "                  AND w.lifecycle_state='ACTIVE')"
+          + " AND NOT EXISTS (SELECT 1 FROM assembly_instance ai WHERE ai.location_id=c.id"
+          + "                  AND ai.state='IN_PROGRESS')"
           + " ORDER BY c.grid_y, c.grid_x LIMIT 1", UUID.class);
         assertNotNull(ground, "the world must have a chunk with nothing on it");
         return ground;
