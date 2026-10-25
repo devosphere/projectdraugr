@@ -150,6 +150,18 @@ class TheConditionOfTheThingIsWhatItDoesIntegrationTest {
         assertTrue(dry > 80,
             () -> "a trough coming apart holds no water, so the stock must grow thirstier (was 80, now " + dry + ")");
 
+        // AND THE REPORT MUST AGREE WITH THE TICK. stockWelfare tells a keeper what their stock's water
+        // depends on, and it asked the old existence question — so the report said "the watering station here
+        // keeps them" about the very trough the tick had just refused to water them from. A world that says one
+        // thing and does another is worse than one that does neither.
+        String comingApart = items.stockWelfare(chronicle, chunk, "how are the oxen fixed for water")[1];
+        assertTrue(comingApart.contains("nothing built to hold any"),
+            () -> "the report must not offer a trough that is coming apart: " + comingApart);
+        condition(trough, SOUND_ENOUGH);
+        String sound = items.stockWelfare(chronicle, chunk, "how are the oxen fixed for water")[1];
+        assertTrue(sound.contains("watering station here keeps them"),
+            () -> "and it must still name a trough that is standing: " + sound);
+
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
 

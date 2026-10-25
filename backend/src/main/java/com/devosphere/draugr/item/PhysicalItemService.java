@@ -4453,8 +4453,8 @@ public class PhysicalItemService {
             com.devosphere.draugr.ecology.FreshWater.sites("es") + "))))", Boolean.class, location));
         boolean watered = Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object tw ON tw.id=cp.object_id " +
-            "WHERE cp.project_kind IN ('WATERING_STATION','RAINWATER_CATCHMENT') AND cp.state='COMPLETED' " +
-            "  AND cp.integrity_percent>0 AND tw.lifecycle_state='ACTIVE' AND tw.current_location_id=?)",
+            "WHERE cp.project_kind IN ('WATERING_STATION','RAINWATER_CATCHMENT') " +
+            "  AND " + stillSound("cp") + " AND tw.lifecycle_state='ACTIVE' AND tw.current_location_id=?)",
             Boolean.class, location));
 
         StringBuilder b = new StringBuilder();
@@ -4564,7 +4564,7 @@ public class PhysicalItemService {
             boolean housed = Boolean.TRUE.equals(jdbc.queryForObject(
                 "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
                 "JOIN construction_kind ck ON ck.project_kind = cp.project_kind AND ck.shelters_stock " +
-                "WHERE cp.state = 'COMPLETED' AND cp.integrity_percent > 0 AND sw.lifecycle_state = 'ACTIVE' " +
+                "WHERE " + stillSound("cp") + " AND sw.lifecycle_state = 'ACTIVE' " +
                 "  AND sw.current_location_id = ? AND body_size_rank(ck.shelters_up_to_size) >= ?)",
                 Boolean.class, location, ((Number) k.get("body_rank")).intValue()));
             if (!housed) wanting.add("there is nothing standing here that would house stock their size");
