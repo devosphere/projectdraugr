@@ -23,6 +23,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -121,5 +122,48 @@ class AStepThatNamesTwoThingsIntegrationTest {
         assertEquals("SUCCEEDED", named.outcome(), () -> "naming the stone settles it: " + named.perception());
         assertEquals(1, owned(chronicle, "soapstone_bowl"));
         assertEquals(1, owned(chronicle, "wooden_component"), "and the wood is still there");
+    }
+
+    /**
+     * A sentence whose only matching keyword is the bare one (#37, V436).
+     *
+     * <p>V318 settles a tie by the named output, then by what is in reach, then by asking. What it cannot settle
+     * is a sentence where the only keyword that matches at all is a bare verb claimed by eleven processes — then
+     * the material the player NAMED counts for nothing. Measured on a booted world:
+     *
+     * <pre>
+     *   cut the hide into strips    -> "Dry meat turns on a cutting edge, and there is none within reach"
+     *   cut the leather into strips -> asked which work was meant, correctly
+     * </pre>
+     *
+     * <p>The difference is one keyword: {@code cut_leather_cord} declares "cut leather", so the leather sentence
+     * has something longer than the bare `cut` to win with, while the hide work declared only the whole phrase
+     * "cut the hide into pieces" — the same work, said the way a person does not happen to say it. V436 gives
+     * the hide the footing the leather already had.
+     *
+     * <p>Asserted on the PERCEPTION rather than on a process key, because what the defect did was tell a keeper
+     * about meat: the name of the work in the answer is the thing that was wrong.
+     */
+    @Test
+    void aHideIsNotMeat() {
+        UUID chronicle = awakenWithAKnife();
+
+        ChronicleActionService.ActionResult hide = actions.resolve("cut the hide into strips");
+        String said = hide.perception().toLowerCase(java.util.Locale.ROOT);
+        assertFalse(said.contains("dry meat") || said.contains("dried meat"),
+            () -> "cutting a hide must not be answered with the meat-drying work: " + hide.perception());
+        assertTrue(said.contains("hide"),
+            () -> "and the work it names must be the one the player asked for: " + hide.perception());
+
+        // THE CONTROL, and it is the sentence the defect was borrowing from: meat still dries.
+        ChronicleActionService.ActionResult meat = actions.resolve("cut the meat into strips");
+        assertTrue(meat.perception().toLowerCase(java.util.Locale.ROOT).contains("meat"),
+            () -> "cutting meat into strips is still the meat work: " + meat.perception());
+
+        // And the leather sentence, which was always right, still is: two works can cut leather cord, so it asks.
+        ChronicleActionService.ActionResult leather = actions.resolve("cut the leather into strips");
+        assertNotNull(leather.perception());
+        assertFalse(leather.perception().toLowerCase(java.util.Locale.ROOT).contains("dry meat"),
+            () -> "nor may leather reach the meat work: " + leather.perception());
     }
 }
