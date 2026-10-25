@@ -88,6 +88,20 @@ public class ConstructionService {
     /** Stones a ring takes. Public so the refusal can say the number rather than guess at it (#37). */
     public static final int FIRE_PIT_STONES = 4;
 
+    /**
+     * Below this, a structure is <b>coming apart</b> — and the game already says so out loud (#108).
+     *
+     * <p>The camp stocktake has long called anything under 35 "coming apart" and anything under 70
+     * "weathered", and {@code ChronicleActionService} tells a Chronicle as much when they look round what they
+     * have raised. Nothing else read the number: a pen rotted to 1 percent sheltered a herd from a night raid
+     * exactly as well as a new one, and a fence at 1 percent turned a wolf aside exactly as far. <b>The world
+     * said the thing was falling down while it went on working perfectly.</b>
+     *
+     * <p>Public and shared, because the alternative is the number written twice — the shape that made 45
+     * garments unwearable when a catalogue and a CHECK constraint each kept their own list.
+     */
+    public static final int COMING_APART_BELOW = 35;
+
     /** Returns false for an unsuccessful physical attempt without disclosing hidden prerequisites to narration. */
     @Transactional
     public boolean buildFirePit(UUID chronicleId, UUID locationId, UUID actionId, Instant occurredAt) {

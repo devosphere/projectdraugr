@@ -144,6 +144,44 @@ class StockPredationIntegrationTest {
             "a wattle fence is the thing a keeper actually builds to keep wolves off, and it must work");
         assertEquals(2, flockSize(flock), "fenced stock are not taken");
 
+        // AND A FENCE COMING APART KEEPS NOTHING OUT (#108).
+        //
+        // The raid asked only whether the barrier still STOOD — integrity_percent > 0 — so this same fence
+        // rotted to one percent gave the herd total immunity, exactly as a new one did. Meanwhile the camp
+        // stocktake was calling it "coming apart" to the keeper's face: the world said one thing and did
+        // another, and mending a fence bought a keeper nothing at all.
+        //
+        // #108 asks that escape risk and predation read the ACTUAL structure condition. The threshold is the
+        // one the game already speaks with — ConstructionService.COMING_APART_BELOW, the same number the
+        // stocktake has always used for "coming apart" — rather than a second number invented here.
+        jdbc.update("UPDATE wildlife_bond SET last_raid_at=NULL WHERE chronicle_id=?", chronicle);
+        jdbc.update("UPDATE construction_project SET integrity_percent=? WHERE object_id=?",
+            com.devosphere.draugr.construction.ConstructionService.COMING_APART_BELOW - 15, fence);
+        assertNotNull(wildlife.raidUnprotectedStock(chronicle, now, true),
+            "a fence coming apart is not a fence: it must stop keeping wolves off the herd");
+        assertEquals(1, flockSize(flock), "so another goat is taken through the gap");
+
+        // And mending it buys the protection back, which is what makes repair worth the materials.
+        jdbc.update("UPDATE wildlife_bond SET last_raid_at=NULL WHERE chronicle_id=?", chronicle);
+        jdbc.update("UPDATE construction_project SET integrity_percent=100 WHERE object_id=?", fence);
+        assertNull(wildlife.raidUnprotectedStock(chronicle, now, true),
+            "a mended fence keeps wolves off again");
+        assertEquals(1, flockSize(flock), "and nothing more is lost");
+
+        // The boundary itself, so the threshold is the rule rather than roughly the rule: exactly at
+        // "coming apart" the fence still holds, and one below it does not.
+        jdbc.update("UPDATE wildlife_bond SET last_raid_at=NULL WHERE chronicle_id=?", chronicle);
+        jdbc.update("UPDATE construction_project SET integrity_percent=? WHERE object_id=?",
+            com.devosphere.draugr.construction.ConstructionService.COMING_APART_BELOW, fence);
+        assertNull(wildlife.raidUnprotectedStock(chronicle, now, true),
+            "at the threshold the fence is weathered, not coming apart, and still holds");
+
+        jdbc.update("UPDATE wildlife_bond SET last_raid_at=NULL WHERE chronicle_id=?", chronicle);
+        jdbc.update("UPDATE construction_project SET integrity_percent=? WHERE object_id=?",
+            com.devosphere.draugr.construction.ConstructionService.COMING_APART_BELOW - 1, fence);
+        assertNotNull(wildlife.raidUnprotectedStock(chronicle, now, true),
+            "one below it, the same fence is coming apart and holds nothing");
+
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
 
