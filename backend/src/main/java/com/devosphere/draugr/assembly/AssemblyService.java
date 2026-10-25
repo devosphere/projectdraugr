@@ -216,6 +216,27 @@ public class AssemblyService {
         // Checked only when nothing is under way, following the well's own precedent: a structure cannot move
         // once begun, so the first stage is where the ground has to be right, and asking again on every stage
         // would refuse work on a thing already standing in the correct place.
+        // FOOTPRINT (#77): one thing may take a whole chunk of ground, and then nothing else may ring it.
+        //
+        // BUILD_PEN already refused a second pen on one chunk — "there is no room to ring another around this
+        // ground" — and was the only rule of its kind, hard-coded against ANIMAL_PEN. V432 promotes it to
+        // construction_kind.takes_the_whole_ground, and ConstructionService.buildPen now reads the same flag,
+        // so there is one rule rather than two.
+        //
+        // Deliberately NOT "nothing else may stand here": a pen ringing a byre is ordinary husbandry and a
+        // shelter inside a fold is the point of a fold. Two rings around one piece of ground is the incoherent
+        // thing, and that is all this refuses.
+        if ("STRUCTURE".equals(subjectKind) && location != null && !underWay(chronicle, key)
+                && groundIsTakenWhole(location, (String) def.get("construction_kind"))) {
+            String standing = jdbc.queryForObject(
+                "SELECT lower(ck.display_name) FROM construction_project cp JOIN world_object w ON w.id=cp.object_id "
+              + "JOIN construction_kind ck ON ck.project_kind=cp.project_kind "
+              + "WHERE w.current_location_id=? AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' "
+              + "AND ck.takes_the_whole_ground ORDER BY w.created_at LIMIT 1", String.class, location);
+            return new String[]{"FAILED", "A " + standing + " already takes this ground; there is no room to "
+                + "ring another around it. Somewhere else, or take that one apart first."};
+        }
+
         String siteBiomes = (String) def.get("site_biomes");
         if (siteBiomes != null && !siteBiomes.isBlank() && location != null && !underWay(chronicle, key)) {
             String here = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
@@ -571,6 +592,27 @@ public class AssemblyService {
             "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
             "WHERE w.current_location_id=? AND cp.project_kind=? AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE')",
             Boolean.class, location, constructionKind));
+    }
+
+    /**
+     * Would this kind be the second thing to ring this ground? (#77/V432)
+     *
+     * <p>True when the kind about to be raised takes a whole chunk and something that already takes this chunk
+     * stands on it. False when the kind takes no ground of its own — a rack or a hearth may go up beside a fold
+     * — and false when the ground is clear.
+     *
+     * <p>Shared with {@link com.devosphere.draugr.construction.ConstructionService#buildPen}, whose hard-coded
+     * one-pen-per-chunk refusal is what this generalises, so the two cannot drift apart.
+     */
+    private boolean groundIsTakenWhole(UUID location, String constructionKind) {
+        if (location == null || constructionKind == null) return false;
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM construction_kind mine WHERE mine.project_kind=? AND mine.takes_the_whole_ground) " +
+            "   AND EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "              JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
+            "              WHERE w.current_location_id=? AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' " +
+            "                AND ck.takes_the_whole_ground)",
+            Boolean.class, constructionKind, location));
     }
 
     /** This Chronicle has one of these already under way — whatever else stands here, that one is advanced. */

@@ -220,11 +220,20 @@ public class ConstructionService {
     @Transactional
     public String[] buildPen(UUID chronicle, UUID location, String text, Instant at) {
         Timestamp ts = Timestamp.from(at);
-        Integer existing = jdbc.queryForObject(
-            "SELECT COUNT(*) FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
-            "WHERE w.current_location_id=? AND cp.project_kind='ANIMAL_PEN' AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE'",
-            Integer.class, location);
-        if (existing != null && existing > 0) return new String[]{"FAILED", "A pen already stands here; there is no room to ring another around this ground."};
+        // THIS REFUSAL IS NOW THE GENERAL RULE (#77/V432). It used to count ANIMAL_PEN rows alone, and was the
+        // only footprint rule in the game. construction_kind.takes_the_whole_ground now carries it for seven
+        // kinds — the pen, the bull yard, the goat fold, the poultry and waterfowl runs, the wallow and the
+        // pool — and AssemblyService reads the same flag, so a pen cannot be ringed around a fold either.
+        //
+        // The wording is kept because it was already right; only what it counts has widened.
+        String takingIt = jdbc.query(
+            "SELECT lower(ck.display_name) FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
+            "WHERE w.current_location_id=? AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' " +
+            "AND ck.takes_the_whole_ground ORDER BY w.created_at LIMIT 1",
+            rs -> rs.next() ? rs.getString(1) : null, location);
+        if (takingIt != null) return new String[]{"FAILED", "A " + takingIt + " already takes this ground; "
+            + "there is no room to ring another around it."};
         if (!items.hasAtLeast(chronicle, "dry_branch", 8))
             return new String[]{"FAILED", "A pen wants a ring of stout posts — eight sound branches at least — and you have not the wood to hand."};
         String bind = null; for (String b : BRUSH_BIND) if (items.hasAtLeast(chronicle, b, 2)) { bind = b; break; }
