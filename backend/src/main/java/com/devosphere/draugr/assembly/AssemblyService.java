@@ -216,8 +216,29 @@ public class AssemblyService {
         // Checked only when nothing is under way, following the well's own precedent: a structure cannot move
         // once begun, so the first stage is where the ground has to be right, and asking again on every stage
         // would refuse work on a thing already standing in the correct place.
+        // FOOTPRINT (#77): one thing may take a whole chunk of ground, and then nothing else may ring it.
+        //
+        // BUILD_PEN already refused a second pen on one chunk — "there is no room to ring another around this
+        // ground" — and was the only rule of its kind, hard-coded against ANIMAL_PEN. V432 promotes it to
+        // construction_kind.takes_the_whole_ground, and ConstructionService.buildPen now reads the same flag,
+        // so there is one rule rather than two.
+        //
+        // Deliberately NOT "nothing else may stand here": a pen ringing a byre is ordinary husbandry and a
+        // shelter inside a fold is the point of a fold. Two rings around one piece of ground is the incoherent
+        // thing, and that is all this refuses.
+        if ("STRUCTURE".equals(subjectKind) && location != null && !underWayHere(chronicle, key, location)
+                && groundIsTakenWhole(location, (String) def.get("construction_kind"))) {
+            String standing = jdbc.queryForObject(
+                "SELECT lower(ck.display_name) FROM construction_project cp JOIN world_object w ON w.id=cp.object_id "
+              + "JOIN construction_kind ck ON ck.project_kind=cp.project_kind "
+              + "WHERE w.current_location_id=? AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' "
+              + "AND ck.takes_the_whole_ground ORDER BY w.created_at LIMIT 1", String.class, location);
+            return new String[]{"FAILED", "A " + standing + " already takes this ground; there is no room to "
+                + "ring another around it. Somewhere else, or take that one apart first."};
+        }
+
         String siteBiomes = (String) def.get("site_biomes");
-        if (siteBiomes != null && !siteBiomes.isBlank() && location != null && !underWay(chronicle, key)) {
+        if (siteBiomes != null && !siteBiomes.isBlank() && location != null && !underWayHere(chronicle, key, location)) {
             String here = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
             java.util.List<String> wanted = java.util.Arrays.stream(siteBiomes.split(","))
                 .map(String::trim).filter(s -> !s.isEmpty()).toList();
@@ -242,7 +263,7 @@ public class AssemblyService {
         // the ground. Refused at the first stage rather than allowed to finish dry, because a well that yields
         // nothing is the catalogue token this project exists to avoid — and because a refusal that names the
         // reason is how a Chronicle learns where to dig.
-        if ("WELL".equals(def.get("construction_kind")) && !underWay(chronicle, key)) {
+        if ("WELL".equals(def.get("construction_kind")) && !underWayHere(chronicle, key, location)) {
             String dry = groundTooDryToSink(location);
             if (dry != null) return new String[]{"FAILED", dry};
         }
@@ -573,10 +594,56 @@ public class AssemblyService {
             Boolean.class, location, constructionKind));
     }
 
+    /**
+     * Would this kind be the second thing to ring this ground? (#77/V432)
+     *
+     * <p>True when the kind about to be raised takes a whole chunk and something that already takes this chunk
+     * stands on it. False when the kind takes no ground of its own — a rack or a hearth may go up beside a fold
+     * — and false when the ground is clear.
+     *
+     * <p>Shared with {@link com.devosphere.draugr.construction.ConstructionService#buildPen}, whose hard-coded
+     * one-pen-per-chunk refusal is what this generalises, so the two cannot drift apart.
+     */
+    private boolean groundIsTakenWhole(UUID location, String constructionKind) {
+        if (location == null || constructionKind == null) return false;
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM construction_kind mine WHERE mine.project_kind=? AND mine.takes_the_whole_ground) " +
+            "   AND EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "              JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
+            "              WHERE w.current_location_id=? AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' " +
+            "                AND ck.takes_the_whole_ground)",
+            Boolean.class, constructionKind, location));
+    }
+
     /** This Chronicle has one of these already under way — whatever else stands here, that one is advanced. */
     private boolean underWay(UUID chronicle, String assemblyKey) {
         return Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM assembly_instance WHERE chronicle_id=? AND assembly_key=? AND state='IN_PROGRESS')",
             Boolean.class, chronicle, assemblyKey));
+    }
+
+    /**
+     * Is one of these part-built <b>on this ground</b>? (#77/#108)
+     *
+     * <p>Every condition on the PLACE — the well's water table, the site a structure must stand on, and the
+     * ground a thing takes whole — is checked only when the work is not already begun, because a structure
+     * cannot move once started and re-asking on each stage would refuse work on a thing already standing
+     * correctly. {@link #underWay} answers the wrong question for that: it asks whether the Chronicle is
+     * part-way through one of these <em>anywhere</em>.
+     *
+     * <p><b>That was a real hole, and CI found it through a test of the footprint rule.</b> With a poultry run
+     * half-built on one chunk, the place conditions were skipped everywhere — so a second run could be ringed
+     * around ground already holding a goat fold, a washing place could be raised inland, and a well sunk on dry
+     * gravel, purely because an unfinished one of the same kind existed somewhere else.
+     *
+     * <p>Asking per location preserves the original intent exactly and closes the hole: the checks are skipped
+     * only for the one you are actually building here.
+     */
+    private boolean underWayHere(UUID chronicle, String assemblyKey, UUID location) {
+        if (location == null) return underWay(chronicle, assemblyKey);
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM assembly_instance WHERE chronicle_id=? AND assembly_key=? " +
+            "AND state='IN_PROGRESS' AND location_id=?)",
+            Boolean.class, chronicle, assemblyKey, location));
     }
 }

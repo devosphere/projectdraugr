@@ -174,8 +174,10 @@ class NothingIsSpentOnWorkThatCannotGoOnIntegrationTest {
             assertTrue(!everyFirstStageMaterial.contains(t[0]), () -> "the " + t[0] + " is a material now, so it cannot stand in as the tool");
 
         List<Map<String, Object>> firstStages = jdbc.queryForList(
-            "SELECT DISTINCT ON (d.assembly_key) d.assembly_key, d.construction_kind, d.site_biomes, s.stage_key, s.weather_limit"
+            "SELECT DISTINCT ON (d.assembly_key) d.assembly_key, d.construction_kind, d.site_biomes, s.stage_key, s.weather_limit,"
+          + " COALESCE(ck.takes_the_whole_ground, FALSE) AS takes_the_whole_ground"
           + " FROM assembly_definition d JOIN assembly_stage s ON s.assembly_key=d.assembly_key"
+          + " LEFT JOIN construction_kind ck ON ck.project_kind=d.construction_kind"
           + " WHERE d.review_state='VERIFIED' ORDER BY d.assembly_key, s.stage_order");
 
         Map<String, UUID> grounds = new HashMap<>();
@@ -198,7 +200,11 @@ class NothingIsSpentOnWorkThatCannotGoOnIntegrationTest {
             String sites = (String) stage.get("site_biomes");
             String biome = sites == null || sites.isBlank() ? "GRASSLAND" : sites.split(",")[0].trim();
             boolean well = "WELL".equals(stage.get("construction_kind"));
-            UUID here = grounds.computeIfAbsent(biome + well, b -> bareGround(biome, well));
+            // A kind that takes the whole ground (V432) stands on ground of its own: a goat fold finished earlier
+            // in this sweep would otherwise refuse the mud wallow for room before it read a single material.
+            UUID here = Boolean.TRUE.equals(stage.get("takes_the_whole_ground"))
+                ? bareGround(biome, well)
+                : grounds.computeIfAbsent(biome + well, b -> bareGround(biome, well));
             jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", here, chronicle);
             spendAll(chronicle, new ArrayList<>(bill.keySet()), now);
             for (String k : bill.keySet())
