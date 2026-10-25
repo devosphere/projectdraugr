@@ -226,7 +226,7 @@ public class AssemblyService {
         // Deliberately NOT "nothing else may stand here": a pen ringing a byre is ordinary husbandry and a
         // shelter inside a fold is the point of a fold. Two rings around one piece of ground is the incoherent
         // thing, and that is all this refuses.
-        if ("STRUCTURE".equals(subjectKind) && location != null && !underWay(chronicle, key)
+        if ("STRUCTURE".equals(subjectKind) && location != null && !underWayHere(chronicle, key, location)
                 && groundIsTakenWhole(location, (String) def.get("construction_kind"))) {
             String standing = jdbc.queryForObject(
                 "SELECT lower(ck.display_name) FROM construction_project cp JOIN world_object w ON w.id=cp.object_id "
@@ -238,7 +238,7 @@ public class AssemblyService {
         }
 
         String siteBiomes = (String) def.get("site_biomes");
-        if (siteBiomes != null && !siteBiomes.isBlank() && location != null && !underWay(chronicle, key)) {
+        if (siteBiomes != null && !siteBiomes.isBlank() && location != null && !underWayHere(chronicle, key, location)) {
             String here = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
             java.util.List<String> wanted = java.util.Arrays.stream(siteBiomes.split(","))
                 .map(String::trim).filter(s -> !s.isEmpty()).toList();
@@ -263,7 +263,7 @@ public class AssemblyService {
         // the ground. Refused at the first stage rather than allowed to finish dry, because a well that yields
         // nothing is the catalogue token this project exists to avoid — and because a refusal that names the
         // reason is how a Chronicle learns where to dig.
-        if ("WELL".equals(def.get("construction_kind")) && !underWay(chronicle, key)) {
+        if ("WELL".equals(def.get("construction_kind")) && !underWayHere(chronicle, key, location)) {
             String dry = groundTooDryToSink(location);
             if (dry != null) return new String[]{"FAILED", dry};
         }
@@ -620,5 +620,30 @@ public class AssemblyService {
         return Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM assembly_instance WHERE chronicle_id=? AND assembly_key=? AND state='IN_PROGRESS')",
             Boolean.class, chronicle, assemblyKey));
+    }
+
+    /**
+     * Is one of these part-built <b>on this ground</b>? (#77/#108)
+     *
+     * <p>Every condition on the PLACE — the well's water table, the site a structure must stand on, and the
+     * ground a thing takes whole — is checked only when the work is not already begun, because a structure
+     * cannot move once started and re-asking on each stage would refuse work on a thing already standing
+     * correctly. {@link #underWay} answers the wrong question for that: it asks whether the Chronicle is
+     * part-way through one of these <em>anywhere</em>.
+     *
+     * <p><b>That was a real hole, and CI found it through a test of the footprint rule.</b> With a poultry run
+     * half-built on one chunk, the place conditions were skipped everywhere — so a second run could be ringed
+     * around ground already holding a goat fold, a washing place could be raised inland, and a well sunk on dry
+     * gravel, purely because an unfinished one of the same kind existed somewhere else.
+     *
+     * <p>Asking per location preserves the original intent exactly and closes the hole: the checks are skipped
+     * only for the one you are actually building here.
+     */
+    private boolean underWayHere(UUID chronicle, String assemblyKey, UUID location) {
+        if (location == null) return underWay(chronicle, assemblyKey);
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM assembly_instance WHERE chronicle_id=? AND assembly_key=? " +
+            "AND state='IN_PROGRESS' AND location_id=?)",
+            Boolean.class, chronicle, assemblyKey, location));
     }
 }
