@@ -2346,4 +2346,110 @@ class IntentClassificationRegressionTest {
         assertEquals("UNKNOWN", classify("fodder rack"));
         assertEquals("CRAFT_WORKSTATION", classify("build a sewing table"), "a workstation, not a desk");
     }
+
+    /**
+     * fo-REST (#37). The REST rule asked {@code value.contains("rest")}, and eight sentences about something
+     * else each cost the Chronicle an hour of simulated time — measured on a booted world, not guessed:
+     *
+     * <pre>
+     *   walk into the forest            -> "You remain still for an hour"
+     *   the forest floor is damp        -> an hour
+     *   restore the fence               -> an hour, and never reached the repair
+     *   wrestle the boar / arrest the thief / make restitution / restring my bow
+     *   the rest of the herd is fine    -> an hour
+     * </pre>
+     *
+     * <p>The worst is {@code walk into the forest}: a plain instruction to go somewhere, answered by sitting
+     * down, because the name of the ground contains the word. Same family as w-EAT-her, ca-BIN and o-PEN ground.
+     */
+    @Test
+    void theForestIsNotARest() throws Exception {
+        // NONE of these is a rest, and every one of them was.
+        assertNotEquals("REST", classify("walk into the forest"), "fo-REST");
+        assertNotEquals("REST", classify("the forest floor is damp"));
+        assertNotEquals("REST", classify("wrestle the boar"), "w-REST-le");
+        assertNotEquals("REST", classify("arrest the thief"), "ar-REST");
+        assertNotEquals("REST", classify("make restitution"), "REST-itution");
+        assertNotEquals("REST", classify("restring my bow"), "REST-ring");
+        assertNotEquals("REST", classify("the crest of the ridge"), "c-REST");
+        // "the rest of" is the whole word and still not a rest: it is a quantity.
+        assertNotEquals("REST", classify("the rest of the herd is fine"));
+        assertNotEquals("REST", classify("put the rest of the wood on the fire"));
+
+        // AND IT IS A JOURNEY, which is where this file already puts going to a named thing: `go to the river`
+        // and `head for the high ground` are asserted as TRAVEL two tests above, so a second path for walking
+        // to a kind of ground would have contradicted a decision this suite already holds. The first cut of
+        // this fix did exactly that and broke both of those assertions — the gap was never a missing rule but a
+        // missing FORM: every way of going TO a thing was listed and no way of going INTO one.
+        assertEquals("TRAVEL", classify("walk into the forest"));
+        assertEquals("TRAVEL", classify("go into the woods"));
+        assertEquals("TRAVEL", classify("head into the marsh"));
+        assertEquals("TRAVEL", classify("walk toward the shore"));
+        assertEquals("TRAVEL", classify("set off for the hills"));
+        assertEquals("TRAVEL", classify("go to the river"), "which this suite already asserted");
+        assertEquals("TRAVEL", classify("head for the high ground"), "and this");
+
+        // A BEARING IS STILL A STEP, not a journey: the TRAVEL rule is gated on there being no direction, and
+        // widening its verbs must not take the walking rule's own sentences.
+        assertEquals("MOVE", classify("walk north"));
+        assertEquals("MOVE", classify("head east"));
+        assertEquals("MOVE", classify("go into the north"));
+
+        // THE WORK VERBS KEEP THEIRS. "the wood", "the trees" and "timber" are all kinds of ground in this
+        // game's vocabulary and all objects of a day's work, so the gather rules must be untouched.
+        assertEquals("GATHER_BRANCHES", classify("go and gather wood"));
+        assertEquals("GATHER_BRANCHES", classify("go to the wood and cut timber"));
+
+        // AND RESTING STILL RESTS, which is the control: a word-boundary fix that broke the rule it guards
+        // would pass every assertion above.
+        assertEquals("REST", classify("rest for a while"));
+        assertEquals("REST", classify("take a rest"));
+        assertEquals("REST", classify("I need to rest"));
+        assertEquals("REST", classify("let me rest my legs"));
+        assertEquals("REST", classify("sit down for a while"));
+        assertEquals("REST", classify("resting here a moment"));
+        assertEquals("REST", classify("wait here"));
+
+        // Asking whether you have rested is not resting — the family #788 closed for sleep.
+        assertEquals("SENSE_BODY", classify("have I rested"));
+        assertEquals("SENSE_BODY", classify("am I rested"));
+
+        // And one that now reaches the RIGHT intent rather than a different wrong one: a fence is a standing
+        // thing and "restore" is the word a player reaches for.
+        assertEquals("REPAIR_STRUCTURE", classify("restore the fence"));
+        assertEquals("REPAIR_STRUCTURE", classify("repair the fence"), "which always worked");
+    }
+
+    /**
+     * What the keeper says about their stock (#37). #783 built the statement frame for the player's own body —
+     * "I am hungry", "I am tired" — and this ticket recorded the keeper's half as still open, leaving it to
+     * #106, which has since closed without it.
+     *
+     * <p>Measured on a booted world: {@code the goats are thirsty} and {@code the goat is sick} reached the
+     * stock reading, while {@code the goat is hungry}, {@code my goat is starving}, {@code the ox is tired} and
+     * {@code the animals need water} reached <b>nothing at all</b> — every one of them a real, maintained
+     * number that reading already reports.
+     */
+    @Test
+    void theKeeperSaysWhatTheirStockWants() throws Exception {
+        assertEquals("CHECK_STOCK", classify("the goat is hungry"));
+        assertEquals("CHECK_STOCK", classify("my goat is starving"));
+        assertEquals("CHECK_STOCK", classify("the ox is tired"));
+        assertEquals("CHECK_STOCK", classify("the animals need water"));
+        assertEquals("CHECK_STOCK", classify("the goats are thirsty"), "which already worked");
+        assertEquals("CHECK_STOCK", classify("the goat is sick"), "and so did this");
+
+        // THE PLAYER'S OWN BODY KEEPS ITS OWN, which is the one thing this could wrongly claim. "I am hungry"
+        // naming no beast must never reach a stock report — that would be face 6 exactly.
+        assertNotEquals("CHECK_STOCK", classify("I am hungry"));
+        assertNotEquals("CHECK_STOCK", classify("I am tired"));
+        assertNotEquals("CHECK_STOCK", classify("I need water"));
+
+        // And the acts keep their verbs: asking after a beast is not feeding one. (In this harness nothing is
+        // kept — `keepsSuchABeast` is stubbed false — so feeding a goat reaches the TAMING rule's feeding
+        // branch rather than FEED_ANIMAL. Which of the two it is depends on the world; that it is neither a
+        // stock report nor a rest is what this asserts.)
+        assertNotEquals("CHECK_STOCK", classify("feed the goat"));
+        assertNotEquals("REST", classify("feed the goat"));
+    }
 }
