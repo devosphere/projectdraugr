@@ -1023,6 +1023,48 @@ public class WildlifeEncounterService {
         return (String) herd.get("species");
     }
 
+    /** A herd that has lost one to wandering is not scattered further for a while — loose stock drift, they do not vanish. */
+    private static final int STRAY_REST_HOURS = 72;
+
+    /**
+     * Stock stray from ground that does not hold them (#108, V433). "Escape through a broken gate" had no mechanic:
+     * a tamed herd stayed put forever whatever stood around it, so a pen kept stock in exactly as well as no pen,
+     * and a pen rotted to nothing as well as a new one.
+     *
+     * <p>A night unwatched, with no barrier or enclosure on the keeper's ground that is sounder than <i>coming
+     * apart</i> — the same line the night raid and the stocktake use — and one animal wanders off. Fowl are left
+     * out: they go back to their roost at dusk. The last of a herd stays, since a lone tame beast follows its keeper.
+     * At most once per herd in {@link #STRAY_REST_HOURS}.
+     *
+     * @return the species that lost an animal, or null if nothing strayed
+     */
+    @Transactional
+    public String strayFromUnheldGround(UUID chronicle, Instant at, boolean dark) {
+        if (!dark) return null;
+        java.util.Map<String,Object> herd = jdbc.query(
+            "SELECT wb.id, wp.id AS pop, wp.species_key FROM wildlife_bond wb " +
+            "JOIN wildlife_population wp ON wp.id = wb.population_id " +
+            "JOIN wildlife_species ws ON ws.species_key = wp.species_key " +
+            "JOIN world_object cw ON cw.id = wb.chronicle_id " +
+            "WHERE wb.chronicle_id=? AND wb.bond_stage='TAMED' AND wp.population_count > 1 " +
+            "  AND ws.kingdom_class <> 'AVES' " +
+            "  AND (wb.last_strayed_at IS NULL OR wb.last_strayed_at <= ?) " +
+            "  AND NOT EXISTS (SELECT 1 FROM construction_project cp JOIN world_object pw ON pw.id=cp.object_id " +
+            "                  WHERE pw.current_location_id = cw.current_location_id AND cp.state='COMPLETED' " +
+            "                    AND cp.integrity_percent >= " + com.devosphere.draugr.construction.ConstructionService.COMING_APART_BELOW +
+            "                    AND pw.lifecycle_state='ACTIVE' " +
+            "                    AND EXISTS(SELECT 1 FROM construction_kind ck WHERE ck.project_kind=cp.project_kind AND (ck.is_barrier OR ck.encloses))) " +
+            "ORDER BY wb.last_strayed_at NULLS FIRST LIMIT 1 FOR UPDATE OF wb",
+            rs -> rs.next() ? java.util.Map.of("bond", rs.getObject(1, UUID.class), "pop", rs.getObject(2, UUID.class),
+                    "species", rs.getString(3)) : null,
+            chronicle, Timestamp.from(at.minus(java.time.Duration.ofHours(STRAY_REST_HOURS))));
+        if (herd == null) return null;
+
+        jdbc.update("UPDATE wildlife_population SET population_count = population_count - 1 WHERE id=? AND population_count > 1", herd.get("pop"));
+        jdbc.update("UPDATE wildlife_bond SET last_strayed_at=? WHERE id=?", Timestamp.from(at), herd.get("bond"));
+        return (String) herd.get("species");
+    }
+
     /**
      * What a bad-tempered beast does to a keeper who works on it with nothing holding it still.
      *
