@@ -91,6 +91,11 @@ class GroundAThingTakesWholeIntegrationTest {
         }
         var active = chronicles.active() != null ? chronicles.active() : chronicles.awaken();
         assertNotNull(active, "a living Chronicle is needed");
+        // Every case here hands the one shared Chronicle a fold's worth of rods and cordage, and the leftovers
+        // pile up across cases until give() throws "cannot physically carry that load". None of these cases
+        // tests a carry limit, so the Chronicle is given ample capacity rather than an order to run in.
+        jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=500000, direct_bulk_ml=500000, "
+            + "maximum_single_lift_grams=500000 WHERE chronicle_id=?", active.id());
         return active.id();
     }
 
