@@ -1472,6 +1472,19 @@ public class PhysicalItemService {
     private static final int HOOF_GROWS_OUT = 1;
     /** Stony, broken going chips and bruises a foot rather than merely lengthening it. */
     private static final int HOOF_WEARS_ON_STONE = 4;
+    /**
+     * SQL for "the keeper has taken the water off this ground" (#108, V435), correlated on the chunk alias
+     * {@code ch} that the hoof statement already stands the keeper on.
+     *
+     * <p>Condition is read, not merely existence: a ditch silted up and falling in is a ditch that drains
+     * nothing, which is the same rule the rest of the husbandry now keeps.
+     */
+    private static final String DRAINED_HERE =
+        "EXISTS (SELECT 1 FROM construction_project dcp JOIN world_object dw ON dw.id = dcp.object_id "
+      + "        JOIN construction_kind dck ON dck.project_kind = dcp.project_kind "
+      + "         WHERE dck.drains_the_ground AND " + stillSound("dcp")
+      + "           AND dw.lifecycle_state = 'ACTIVE' AND dw.current_location_id = ch.id)";
+
     /** Standing wet softens the horn and rots it, which is the one a keeper underestimates. */
     private static final int HOOF_ROTS_IN_WET = 3;
     /** What paring a foot properly puts back. */
@@ -1505,7 +1518,10 @@ public class PhysicalItemService {
         jdbc.update(
             "UPDATE wildlife_bond wb SET hoof_condition = GREATEST(0, wb.hoof_condition - (? "
             + "  + CASE WHEN ch.biome IN ('MOUNTAIN','ALPINE','ROCKY','CAVE_INTERIOR','BADLANDS') THEN ? ELSE 0 END "
-            + "  + CASE WHEN ch.biome IN ('WETLAND','RIVER_BANK') THEN ? ELSE 0 END)) "
+            // Standing wet, UNLESS THE KEEPER HAS DRAINED IT (#108, V435). The ditch has been buildable all
+            // along and read by nothing, while this very line charged a keeper by the river for the one thing
+            // a ditch is for.
+            + "  + CASE WHEN ch.biome IN ('WETLAND','RIVER_BANK') AND NOT " + DRAINED_HERE + " THEN ? ELSE 0 END)) "
             + "FROM world_object cw JOIN world_chunk ch ON ch.id = cw.current_location_id, "
             + "     wildlife_population wp JOIN wildlife_species ws ON ws.species_key = wp.species_key "
             + "WHERE cw.id = wb.chronicle_id AND wp.id = wb.population_id "
@@ -4587,6 +4603,26 @@ public class PhysicalItemService {
             b.append("They are packed in tighter than what you have raised for them holds — ").append(theRoom[0])
              .append(" head on ground with room for ").append(theRoom[1])
              .append(", and it is telling on their health and their coats. ");
+
+        // WET UNDERFOOT (#108, V435). The hoof rule has always charged standing wet, and a keeper had no way
+        // to learn that the ground was the reason or that a ditch would answer it. Only for stock that have
+        // such feet, by the same declared flag the tick reads, so the report never offers to drain a duck's.
+        if (asked.stream().anyMatch(k -> Boolean.TRUE.equals(k.get("has_feet")))) {
+            boolean wetUnderfoot = Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM world_chunk ch WHERE ch.id=? AND ch.biome IN ('WETLAND','RIVER_BANK'))",
+                Boolean.class, location));
+            boolean drained = Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object dw ON dw.id=cp.object_id "
+              + " JOIN construction_kind ck ON ck.project_kind=cp.project_kind "
+              + " WHERE ck.drains_the_ground AND " + stillSound("cp")
+              + "   AND dw.lifecycle_state='ACTIVE' AND dw.current_location_id=?)", Boolean.class, location));
+            if (wetUnderfoot && !drained)
+                b.append("The ground here lies wet, and standing in it is softening their feet faster than any ")
+                 .append("paring will keep up with — a ditch cut to take the water off this ground would stop it. ");
+            else if (wetUnderfoot)
+                b.append("The ground here would lie wet, and what you have cut to drain it is keeping it off ")
+                 .append("their feet. ");
+        }
 
         // And what the want depends on, which is the half a keeper can act on.
         if (aboutWater || asked.stream().anyMatch(k -> ((Number) k.get("thirst")).intValue() >= WORTH_NAMING)) {
