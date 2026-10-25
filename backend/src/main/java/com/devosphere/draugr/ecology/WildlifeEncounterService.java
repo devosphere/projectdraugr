@@ -484,8 +484,16 @@ public class WildlifeEncounterService {
         // at noon. That was never a rule anyone chose; it was two lists written at different times. Both now ask
         // the same catalogue: the raid asks whether a thing is a barrier, this asks how much of one. The strongest
         // single barrier counts, not the sum — a camp is only as closed as its stoutest ring.
+        // AND IT IS ONLY WORTH WHAT IT STILL STANDS AT (#108). This took MAX(barrier_strength) of anything with
+        // integrity_percent > 0, so a fence rotted to one percent turned a predator aside exactly as far as a
+        // new one. The camp stocktake was already telling the player that thing was "coming apart" while it
+        // went on working perfectly — the world said one thing and did another.
+        //
+        // Scaled by what is left of it, so letting a fence go costs something and mending it buys something
+        // back. The strongest single barrier still counts rather than the sum: a camp is only as closed as its
+        // stoutest ring, and a stout ring half fallen is half a ring.
         Integer fence = jdbc.queryForObject(
-            "SELECT MAX(ck.barrier_strength) FROM construction_project cp " +
+            "SELECT MAX(FLOOR(ck.barrier_strength * cp.integrity_percent / 100.0))::int FROM construction_project cp " +
             "JOIN world_object w ON w.id=cp.object_id " +
             "JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
             "WHERE w.current_location_id=? AND ck.barrier_strength > 0 AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE'",
@@ -991,7 +999,14 @@ public class WildlifeEncounterService {
             // nothing standing that would keep them off
             "  AND NOT EXISTS (SELECT 1 FROM construction_project cp JOIN world_object pw ON pw.id=cp.object_id " +
             "                  WHERE pw.current_location_id = cw.current_location_id AND cp.state='COMPLETED' " +
-            "                    AND cp.integrity_percent > 0 AND pw.lifecycle_state='ACTIVE' " +
+            // A THING COMING APART DOES NOT KEEP A WOLF OUT (#108). This asked only that the barrier still
+            // stood at all, so a pen rotted to one percent gave the herd TOTAL immunity from a night raid —
+            // the same as a new one — while the camp stocktake called it "coming apart" to the player's face.
+            // #108 asks that escape risk and predation read the ACTUAL structure condition, and this is the
+            // sharpest place it did not. The threshold is the one the game already speaks with, shared from
+            // ConstructionService rather than written here a second time.
+            "                    AND cp.integrity_percent >= " + com.devosphere.draugr.construction.ConstructionService.COMING_APART_BELOW +
+            "                    AND pw.lifecycle_state='ACTIVE' " +
             // Something a wolf must get past: a fence, a wall, a gate, the pen itself — or a roofed shelter, since
             // an animal indoors is out of reach too. This asked for is_shelter, which is neither question (V281):
             // every ordinary fence a keeper builds is is_shelter=false and so protected nothing, while a bark door

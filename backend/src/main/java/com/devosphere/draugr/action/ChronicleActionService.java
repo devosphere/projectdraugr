@@ -5198,7 +5198,7 @@ public class ChronicleActionService {
             (rs, row) -> {
                 int integrity = rs.getInt(2);
                 String name = rs.getString(1);
-                return integrity < 35 ? "a " + name + " that is coming apart"
+                return integrity < com.devosphere.draugr.construction.ConstructionService.COMING_APART_BELOW ? "a " + name + " that is coming apart"
                      : integrity < 70 ? "a weathered " + name
                      : "a " + name;
             }, location);
@@ -5322,7 +5322,8 @@ public class ChronicleActionService {
         java.util.List<String> sound = jdbc.query(
             // Parenthesised, not comma'd: in a joined list "drying rack, coming apart, well, weathered, and the
             // latrine" reads as five things rather than three.
-            "SELECT lower(ck.display_name) || CASE WHEN cp.integrity_percent < 35 THEN ' (coming apart)' " +
+            "SELECT lower(ck.display_name) || CASE WHEN cp.integrity_percent < "
+            + com.devosphere.draugr.construction.ConstructionService.COMING_APART_BELOW + " THEN ' (coming apart)' " +
             "       WHEN cp.integrity_percent < 70 THEN ' (weathered)' ELSE '' END " +
             "FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
             "JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
