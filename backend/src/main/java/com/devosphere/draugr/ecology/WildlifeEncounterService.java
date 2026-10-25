@@ -1023,6 +1023,106 @@ public class WildlifeEncounterService {
         return (String) herd.get("species");
     }
 
+    /** A herd that has lost one to wandering is not scattered further for a while — loose stock drift, they do not vanish. */
+    private static final int STRAY_REST_HOURS = 72;
+
+    /**
+     * Stock stray from ground that does not hold them (#108, V433). "Escape through a broken gate" had no mechanic:
+     * a tamed herd stayed put forever whatever stood around it, so a pen kept stock in exactly as well as no pen,
+     * and a pen rotted to nothing as well as a new one.
+     *
+     * <p>A night unwatched, with no barrier or enclosure on the keeper's ground that is sounder than <i>coming
+     * apart</i> — the same line the night raid and the stocktake use — and one animal wanders off. Fowl are left
+     * out: they go back to their roost at dusk. The last of a herd stays, since a lone tame beast follows its keeper.
+     * At most once per herd in {@link #STRAY_REST_HOURS}.
+     *
+     * @return the species that lost an animal, or null if nothing strayed
+     */
+    @Transactional
+    public String strayFromUnheldGround(UUID chronicle, Instant at, boolean dark) {
+        if (!dark) return null;
+        java.util.Map<String,Object> herd = jdbc.query(
+            "SELECT wb.id, wp.id AS pop, wp.species_key FROM wildlife_bond wb " +
+            "JOIN wildlife_population wp ON wp.id = wb.population_id " +
+            "JOIN wildlife_species ws ON ws.species_key = wp.species_key " +
+            "JOIN world_object cw ON cw.id = wb.chronicle_id " +
+            "WHERE wb.chronicle_id=? AND wb.bond_stage='TAMED' AND wp.population_count > 1 " +
+            "  AND ws.kingdom_class <> 'AVES' " +
+            "  AND (wb.last_strayed_at IS NULL OR wb.last_strayed_at <= ?) " +
+            "  AND NOT EXISTS (SELECT 1 FROM construction_project cp JOIN world_object pw ON pw.id=cp.object_id " +
+            "                  WHERE pw.current_location_id = cw.current_location_id AND cp.state='COMPLETED' " +
+            "                    AND cp.integrity_percent >= " + com.devosphere.draugr.construction.ConstructionService.COMING_APART_BELOW +
+            "                    AND pw.lifecycle_state='ACTIVE' " +
+            "                    AND EXISTS(SELECT 1 FROM construction_kind ck WHERE ck.project_kind=cp.project_kind AND (ck.is_barrier OR ck.encloses))) " +
+            "ORDER BY wb.last_strayed_at NULLS FIRST LIMIT 1 FOR UPDATE OF wb",
+            rs -> rs.next() ? java.util.Map.of("bond", rs.getObject(1, UUID.class), "pop", rs.getObject(2, UUID.class),
+                    "species", rs.getString(3)) : null,
+            chronicle, Timestamp.from(at.minus(java.time.Duration.ofHours(STRAY_REST_HOURS))));
+        if (herd == null) return null;
+
+        jdbc.update("UPDATE wildlife_population SET population_count = population_count - 1 WHERE id=? AND population_count > 1", herd.get("pop"));
+        jdbc.update("UPDATE wildlife_bond SET last_strayed_at=? WHERE id=?", Timestamp.from(at), herd.get("bond"));
+        // AND THE TRACKS LEAD SOMEWHERE. The narration says "only tracks going out across the ground", and a
+        // decrement alone would make that a promise with nothing at the end of it — the animal would simply
+        // cease to exist. This project's standing defect is a declared capability nothing delivers, and prose
+        // that describes a trackable thing is exactly that in a new place.
+        //
+        // So the beast is put on neighbouring ground as a population of its own kind: it joins one of its
+        // species if there is one next door, and otherwise becomes one. That is the same "acting features
+        // materialise" rule the hunt and the taming already follow, and it means the existing TRACK can follow
+        // the tracks and a keeper can go and get their goat back.
+        strayOntoNeighbouringGround(chronicle, (String) herd.get("species"), at);
+        return (String) herd.get("species");
+    }
+
+    /**
+     * Put a strayed beast on the ground next door (#108).
+     *
+     * <p>It joins a population of its own species on an adjoining chunk if one is there, and otherwise one is
+     * made for it with a single animal in it. Either way the animal still exists somewhere a keeper can track
+     * it to, which is what the morning's prose about tracks going out promises.
+     *
+     * <p>No biome gate. A domestic beast that wandered off in the night went where it went; whether that ground
+     * suits it in the long run is the ecology's own business, and the simulation already settles populations
+     * against their capacity.
+     */
+    private void strayOntoNeighbouringGround(UUID chronicle, String species, Instant at) {
+        UUID next = jdbc.query(
+            "SELECT n.id FROM world_chunk n JOIN world_object cw ON cw.id=? " +
+            "JOIN world_chunk here ON here.id = cw.current_location_id " +
+            "WHERE n.world_id = here.world_id AND n.id <> here.id " +
+            "  AND abs(n.grid_x - here.grid_x) <= 1 AND abs(n.grid_y - here.grid_y) <= 1 " +
+            // Ground that already holds its own kind first, so a strayed goat joins the goats rather than
+            // starting a second herd beside them.
+            "ORDER BY EXISTS(SELECT 1 FROM ecology_site es JOIN wildlife_population wp ON wp.site_id=es.id " +
+            "                WHERE es.chunk_id=n.id AND wp.species_key=?) DESC, n.grid_y, n.grid_x LIMIT 1",
+            rs -> rs.next() ? rs.getObject(1, UUID.class) : null, chronicle, species);
+        if (next == null) return;
+
+        UUID joined = jdbc.query(
+            "SELECT wp.id FROM wildlife_population wp JOIN ecology_site es ON es.id = wp.site_id " +
+            "WHERE es.chunk_id=? AND wp.species_key=? LIMIT 1",
+            rs -> rs.next() ? rs.getObject(1, UUID.class) : null, next, species);
+        if (joined != null) {
+            jdbc.update("UPDATE wildlife_population SET population_count = population_count + 1 WHERE id=?", joined);
+            return;
+        }
+
+        UUID world = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, next);
+        UUID siteId = UUID.randomUUID();
+        java.util.Map<String,Object> kind = jdbc.query(
+            "SELECT ecological_role, activity_cycle FROM wildlife_species WHERE species_key=? LIMIT 1",
+            rs -> rs.next() ? java.util.Map.of("role", rs.getString(1), "cycle", rs.getString(2)) : null, species);
+        if (kind == null) return;
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE',?,?)",
+            siteId, display(species) + " ground", next);
+        jdbc.update("INSERT INTO ecology_site (id,world_id,chunk_id,site_category,site_kind,baseline_abundance) VALUES (?,?,?,'WILDLIFE',?,?)",
+            siteId, world, next, display(species) + " ground", 400);
+        jdbc.update("INSERT INTO wildlife_population (id,site_id,species_key,ecological_role,activity_cycle,population_count,carrying_capacity,behavior_state,last_simulated_at) " +
+            "VALUES (?,?,?,?,?,1,6,'FORAGING',?)",
+            UUID.randomUUID(), siteId, species, kind.get("role"), kind.get("cycle"), Timestamp.from(at));
+    }
+
     /**
      * What a bad-tempered beast does to a keeper who works on it with nothing holding it still.
      *

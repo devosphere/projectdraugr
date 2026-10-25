@@ -572,6 +572,10 @@ public class ChronicleActionService {
             // is where an unpenned herd is thinned — and waking to a gap in the flock is how a keeper learns of it.
             String lost = wildlife.raidUnprotectedStock(chronicle.id(), resolvedAt, isDark(resolvedAt) || isDark(resolvedAt.plus(java.time.Duration.ofMinutes(minutes))));
             if (lost != null) perception += " The stock are uneasy in the grey light, and short: something came in the night and took one of them. There is blood on the ground where nothing stood between them and it.";
+            // And nothing sound around them is nothing holding them in (#108, V433): a night unwatched, one wanders.
+            String strayed = wildlife.strayFromUnheldGround(chronicle.id(), resolvedAt, isDark(resolvedAt) || isDark(resolvedAt.plus(java.time.Duration.ofMinutes(minutes))));
+            if (strayed != null) perception += " One " + strayed.replace('_', ' ') + " is gone from the herd by morning, with no blood anywhere: only tracks"
+                + " going out across the ground, where nothing sound stood to hold them in.";
         }
         else if (intent == Intent.GATHER_FIBER) { int bundles=items.gatherPlantFiber(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())); outcome=bundles>0?"SUCCEEDED":"FAILED"; perception=bundles>0?"You patiently separate usable plant fiber from the living growth around you."+tally(bundles,"bundle","bundles"):"You search through the growth, but leave it as it is."; gatherEffectType="PLANT_FIBER_GATHERED"; gatherPayloadKey="bundles"; gatherCount=bundles; }
         else if (intent == Intent.GATHER_STONE) {
