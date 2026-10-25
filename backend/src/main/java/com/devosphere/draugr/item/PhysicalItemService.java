@@ -1050,6 +1050,11 @@ public class PhysicalItemService {
             // And it is a shelter these bodies fit in (#108, V369). A hen house standing on the ground was what
             // let a keeper's aurochs settle to breed, because shelters_stock meant "animals, any of them".
             "                AND body_size_rank(ck.shelters_up_to_size) >= body_size_rank(ws.size_tier)) " +
+            // AND THERE IS ROOM IN IT (#108, V434). A shelter standing was the whole question, so a keeper with
+            // one byre could breed a herd of any size inside it and the herd would go on growing for ever. Stock
+            // packed in past what the pens hold do not settle — which is also the way out of the crowding the
+            // tick now charges them for: build more room, or keep fewer beasts.
+            "  AND " + HEAD_ON_THIS_GROUND + " <= " + ROOM_ON_THIS_GROUND + " " +
             "ON CONFLICT (bond_id) DO NOTHING",
             ts, ts, NOT_IN_CONDITION, NOT_IN_CONDITION, NOT_IN_CONDITION, TOO_SICK_TO_GIVE, ts);
 
@@ -1379,6 +1384,81 @@ public class PhysicalItemService {
             "              WHERE o.chronicle_id = wb.chronicle_id AND o.id <> wb.id AND o.bond_stage = 'TAMED' " +
             "                AND op.species_key = wp.species_key AND o.sickness >= ?)",
             SICKNESS_SPREAD, TOO_SICK_TO_GIVE, TOO_SICK_TO_GIVE);
+    }
+
+    /** What a night packed in tighter than the pens hold adds to an animal's illness. */
+    private static final int CROWDING_SICKENS = 4;
+    /** And what it costs the coat: stock pressed together rub, soil each other and go matted. */
+    private static final int CROWDING_WEARS_COAT = 3;
+
+    /**
+     * SQL for the head count a keeper has standing on their ground, young included (#108, V434).
+     *
+     * <p>Correlated on {@code cw}, the keeper's own world_object, which is how every husbandry rule in this
+     * file already asks where stock are: the bond names the KEEPER, not the chunk, so a kept herd goes where
+     * its keeper goes. The young are counted because they are animals in the pen — a sow and ten piglets in a
+     * creep built for one sow is the overcrowding a keeper would recognise first.
+     */
+    private static final String HEAD_ON_THIS_GROUND =
+        "(SELECT COALESCE(SUM(wp2.population_count),0) + " +
+        "        (SELECT COUNT(*) FROM tamed_young ty2 JOIN wildlife_bond wb3 ON wb3.id = ty2.bond_id " +
+        "          WHERE wb3.chronicle_id = cw.id) " +
+        "   FROM wildlife_bond wb2 JOIN wildlife_population wp2 ON wp2.id = wb2.population_id " +
+        "  WHERE wb2.chronicle_id = cw.id AND wb2.bond_stage = 'TAMED')";
+
+    /** SQL for how many beasts the sound stock structures on that same ground hold between them (#108, V434). */
+    private static final String ROOM_ON_THIS_GROUND =
+        "(SELECT COALESCE(SUM(ck2.holds_how_many),0) FROM construction_project cp2 " +
+        "   JOIN world_object sw2 ON sw2.id = cp2.object_id " +
+        "   JOIN construction_kind ck2 ON ck2.project_kind = cp2.project_kind " +
+        "  WHERE ck2.holds_how_many IS NOT NULL AND " + stillSound("cp2") + " " +
+        "    AND sw2.lifecycle_state = 'ACTIVE' AND sw2.current_location_id = cw.current_location_id)";
+
+    /**
+     * Overcrowding (#108, V434). The population half of #108's criterion that welfare, disease and breeding
+     * "use the actual structure condition AND ANIMAL POPULATION" — and nothing in this world asked how many
+     * went in. A keeper could hold forty goats in one nesting box: every structure was a boolean, standing or
+     * not, and the herd could grow without limit inside it.
+     *
+     * <p>Packed in, stock sicken and go matted. Both are states that already exist and already have ways out
+     * of them, so crowding costs a keeper exactly what neglect costs them, and the way out is the honest one:
+     * build more room, or keep fewer beasts.
+     *
+     * <p><b>It bites only where stock are shut in.</b> Ground with nothing built on it is not overcrowded
+     * however many animals stand on it — they spread out, and the costs of keeping them loose are the ones the
+     * stray and the night raid already charge. It is the PEN that concentrates them, which is also why the
+     * remedy is more pen rather than less.
+     *
+     * <p>Runs after {@link #advanceHerdSickness} in the tick, deliberately: that pass both sickens and mends in
+     * one statement, and crowding added before it would be half taken back off by the same turn's recovery.
+     */
+    @Transactional
+    public void crowdingTellsOnStock(Instant now) {
+        jdbc.update(
+            "UPDATE wildlife_bond wb SET sickness = LEAST(100, wb.sickness + ?), " +
+            "  coat_condition = GREATEST(0, wb.coat_condition - ?) " +
+            "FROM world_object cw " +
+            "WHERE cw.id = wb.chronicle_id AND wb.bond_stage = 'TAMED' " +
+            "  AND " + ROOM_ON_THIS_GROUND + " > 0 " +
+            "  AND " + HEAD_ON_THIS_GROUND + " > " + ROOM_ON_THIS_GROUND,
+            CROWDING_SICKENS, CROWDING_WEARS_COAT);
+    }
+
+    /**
+     * How many beasts a keeper has on this ground and how many the pens there hold (#108, V434) — for the
+     * welfare report and for nothing else to act on.
+     *
+     * <p>Read-only, and it asks the same two questions the tick asks, so what the keeper is told cannot drift
+     * from what the world does to their stock.
+     *
+     * @return {@code [head, room]}
+     */
+    @Transactional(readOnly = true)
+    public int[] theRoomTheStockHave(UUID chronicle) {
+        java.util.Map<String,Object> r = jdbc.queryForMap(
+            "SELECT " + HEAD_ON_THIS_GROUND + " AS head, " + ROOM_ON_THIS_GROUND + " AS room " +
+            "FROM world_object cw WHERE cw.id = ?", chronicle);
+        return new int[]{((Number) r.get("head")).intValue(), ((Number) r.get("room")).intValue()};
     }
 
     /** What a verminous coat adds to an animal's illness each turn, or takes off its mending. */
@@ -4499,6 +4579,15 @@ public class PhysicalItemService {
         // worked on, they do not stack, and a broken one holds nothing. That is a real mechanic that no sentence
         // could reach, so asking to tether or hobble an animal is answered with what you actually have for it and
         // what it actually does. An invented "the hobble is now on" would change nothing and say it had.
+        // PACKED IN (#108, V434). The crowding the tick charges for, said out loud with both numbers in it, so
+        // the keeper can see which way to mend it. Asking the same two questions the tick asks, so the report
+        // cannot tell them the stock have room while the world is making them ill for want of it.
+        int[] theRoom = theRoomTheStockHave(chronicle);
+        if (theRoom[1] > 0 && theRoom[0] > theRoom[1])
+            b.append("They are packed in tighter than what you have raised for them holds — ").append(theRoom[0])
+             .append(" head on ground with room for ").append(theRoom[1])
+             .append(", and it is telling on their health and their coats. ");
+
         // And what the want depends on, which is the half a keeper can act on.
         if (aboutWater || asked.stream().anyMatch(k -> ((Number) k.get("thirst")).intValue() >= WORTH_NAMING)) {
             b.append(wetGround
