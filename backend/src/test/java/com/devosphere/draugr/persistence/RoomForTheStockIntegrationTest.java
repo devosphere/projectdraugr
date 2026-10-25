@@ -97,10 +97,6 @@ class RoomForTheStockIntegrationTest {
 
     private int sickness(UUID bond) { return jdbc.queryForObject("SELECT sickness FROM wildlife_bond WHERE id=?", Integer.class, bond); }
     private int coat(UUID bond) { return jdbc.queryForObject("SELECT coat_condition FROM wildlife_bond WHERE id=?", Integer.class, bond); }
-    private int inKid(UUID a, UUID b) {
-        return jdbc.queryForObject("SELECT COUNT(*) FROM tamed_gestation WHERE bond_id IN (?,?)", Integer.class, a, b);
-    }
-
     @Test
     void stockPackedInTighterThanTheirPensHoldSickenAndDoNotBreed() {
         if (worldGenesis.current() == null) {
@@ -137,12 +133,21 @@ class RoomForTheStockIntegrationTest {
         assertTrue(sickness(one) > 0, () -> "stock packed in past what the pens hold must sicken, got " + sickness(one));
         assertTrue(coat(one) < 100, () -> "and their coats must suffer for it, got " + coat(one));
 
-        // 2. AND THEY DO NOT SETTLE. Every other gate on conception is met — two of a kind, in condition, a
-        //    sound fold big enough for a goat — so if a kid is got here it is got for want of this rule.
-        jdbc.update("UPDATE wildlife_bond SET sickness=0, draft_hunger=0, draft_thirst=0, draft_fatigue=0 WHERE id IN (?,?)", one, two);
-        jdbc.update("DELETE FROM tamed_gestation WHERE bond_id IN (?,?)", one, two);
-        items.advanceBreeding(now);
-        assertEquals(0, inKid(one, two), "stock with nowhere to stand do not get in kid");
+        // 2. AND IT IS NOT PAID OFF IN THE SAME TURN, which is the whole reason CROWDING_SICKENS is above
+        //    SICKNESS_RECOVERY. Clean ground mends an animal by seven a turn; a crowding cost under that would
+        //    fire every turn and change nothing a keeper could ever see. Left packed in, a herd goes downhill
+        //    until it is too ill to breed or to give — the gates that already exist on both.
+        jdbc.update("UPDATE wildlife_bond SET sickness=0 WHERE id IN (?,?)", one, two);
+        int turns = 0;
+        while (sickness(one) < PhysicalItemService.TOO_SICK_TO_GIVE && turns < 200) {
+            items.advanceHerdSickness(now);   // the mending half of the same turn, on clean ground
+            items.crowdingTellsOnStock(now);
+            turns++;
+        }
+        final int tookTurns = turns;
+        assertTrue(sickness(one) >= PhysicalItemService.TOO_SICK_TO_GIVE,
+            () -> "a herd left packed in must go downhill past giving and breeding, not hold steady: "
+                + sickness(one) + " after " + tookTurns + " turns");
 
         // 3. AND THE KEEPER IS TOLD, with both numbers, because a cost a player cannot see is a cost they
         //    cannot answer.
@@ -165,14 +170,16 @@ class RoomForTheStockIntegrationTest {
         assertEquals(0, sickness(one), "stock with room enough do not sicken for want of it");
         assertEquals(100, coat(one), "nor rub their coats off each other");
 
-        // The report first, then the breeding: a birth elsewhere in this shared world could add head between
-        // the two and make the crowding sentence true again for a reason that is nothing to do with this test.
         String settled = items.stockWelfare(chronicle, chunk, "check on the goats")[1];
         assertTrue(!settled.contains("packed in tighter"),
             () -> "the report must stop saying they are crowded once they are not: " + settled);
 
-        items.advanceBreeding(now);
-        assertTrue(inKid(one, two) > 0, "and with room enough they settle to breed");
+        // And with room, the same clean turn that mended nothing while they were packed in now holds them at
+        // nought: the cost is the crowding and not the keeping.
+        jdbc.update("UPDATE wildlife_bond SET sickness=0 WHERE id IN (?,?)", one, two);
+        items.advanceHerdSickness(now);
+        items.crowdingTellsOnStock(now);
+        assertEquals(0, sickness(one), "a herd with room enough does not go downhill at all");
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }

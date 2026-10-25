@@ -1050,11 +1050,6 @@ public class PhysicalItemService {
             // And it is a shelter these bodies fit in (#108, V369). A hen house standing on the ground was what
             // let a keeper's aurochs settle to breed, because shelters_stock meant "animals, any of them".
             "                AND body_size_rank(ck.shelters_up_to_size) >= body_size_rank(ws.size_tier)) " +
-            // AND THERE IS ROOM IN IT (#108, V434). A shelter standing was the whole question, so a keeper with
-            // one byre could breed a herd of any size inside it and the herd would go on growing for ever. Stock
-            // packed in past what the pens hold do not settle — which is also the way out of the crowding the
-            // tick now charges them for: build more room, or keep fewer beasts.
-            "  AND " + HEAD_ON_THIS_GROUND + " <= " + ROOM_ON_THIS_GROUND + " " +
             "ON CONFLICT (bond_id) DO NOTHING",
             ts, ts, NOT_IN_CONDITION, NOT_IN_CONDITION, NOT_IN_CONDITION, TOO_SICK_TO_GIVE, ts);
 
@@ -1386,8 +1381,16 @@ public class PhysicalItemService {
             SICKNESS_SPREAD, TOO_SICK_TO_GIVE, TOO_SICK_TO_GIVE);
     }
 
-    /** What a night packed in tighter than the pens hold adds to an animal's illness. */
-    private static final int CROWDING_SICKENS = 4;
+    /**
+     * What a night packed in tighter than the pens hold adds to an animal's illness.
+     *
+     * <p>More than {@link #SICKNESS_RECOVERY}, deliberately, and that is the whole of why this number is what
+     * it is: clean ground mends an animal by seven in the same turn, so a crowding cost of less than that would
+     * be paid off before the keeper could ever see it — a rule that fires every turn and changes nothing. Over
+     * the line, a herd left packed in goes slowly downhill until it is too ill to breed or to give, which is
+     * the <em>existing</em> gate on both and needs no new one.
+     */
+    private static final int CROWDING_SICKENS = 8;
     /** And what it costs the coat: stock pressed together rub, soil each other and go matted. */
     private static final int CROWDING_WEARS_COAT = 3;
 
