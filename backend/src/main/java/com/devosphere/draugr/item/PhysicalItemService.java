@@ -3,6 +3,7 @@ package com.devosphere.draugr.item;
 import com.devosphere.draugr.ecology.ResourceEcologyService;
 import com.devosphere.draugr.routing.ProcessMatcher;
 import com.devosphere.draugr.quality.QualityGrade;
+import static com.devosphere.draugr.construction.ConstructionService.stillSound;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -889,7 +890,7 @@ public class PhysicalItemService {
         jdbc.update(
             "UPDATE wildlife_bond wb SET draft_fatigue = GREATEST(0, draft_fatigue - ?) " +
             "WHERE wb.draft_fatigue > 0 AND EXISTS (" +
-            "  SELECT 1 FROM world_object cw JOIN construction_project cp ON cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
+            "  SELECT 1 FROM world_object cw JOIN construction_project cp ON " + stillSound("cp") + " " +
             "    AND EXISTS(SELECT 1 FROM construction_kind ck WHERE ck.project_kind=cp.project_kind AND ck.shelters_stock) " +
             "  JOIN world_object pw ON pw.id=cp.object_id AND pw.lifecycle_state='ACTIVE' AND pw.current_location_id=cw.current_location_id " +
             "  WHERE cw.id=wb.chronicle_id)", PEN_REST_RECOVERY);
@@ -913,7 +914,7 @@ public class PhysicalItemService {
             "     ch.biome IN ('WETLAND','RIVER_BANK') " +
             "     OR EXISTS(SELECT 1 FROM ecology_site es WHERE es.chunk_id=ch.id AND (" + com.devosphere.draugr.ecology.FreshWater.sites("es") + ")) " +
             "     OR EXISTS(SELECT 1 FROM construction_project cp JOIN world_object tw ON tw.id=cp.object_id " +
-            "               WHERE cp.project_kind IN ('WATERING_STATION','RAINWATER_CATCHMENT') AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
+            "               WHERE cp.project_kind IN ('WATERING_STATION','RAINWATER_CATCHMENT') AND " + stillSound("cp") + " " +
             "                 AND tw.lifecycle_state='ACTIVE' AND tw.current_location_id=ch.id))) " +
             "  THEN GREATEST(0, draft_thirst - ?) ELSE LEAST(100, draft_thirst + ? + " + heatOnStock() + ") END " +
             // Every kept animal (#122), for the same reason as hunger above: a beast that cannot be thirsty makes
@@ -951,7 +952,7 @@ public class PhysicalItemService {
             "                    JOIN construction_kind ck2 ON ck2.project_kind=cp2.project_kind " +
             "                    JOIN wildlife_population wp2 ON wp2.id=wb.population_id " +
             "                    JOIN wildlife_species ws2 ON ws2.species_key=wp2.species_key " +
-            "                    WHERE cp2.state='COMPLETED' AND cp2.integrity_percent>0 AND sw2.lifecycle_state='ACTIVE' " +
+            "                    WHERE " + stillSound("cp2") + " AND sw2.lifecycle_state='ACTIVE' " +
             "                      AND sw2.current_location_id=ch2.id " +
             "                      AND (CASE WHEN ws2.needs_a_wallow THEN ck2.is_wallow ELSE ck2.gives_shade END))" +
             ") THEN " + HEAT_THIRST + " ELSE 0 END)";
@@ -980,7 +981,7 @@ public class PhysicalItemService {
             "WHERE wb.bond_stage='TAMED' AND cw.current_location_id IS NOT NULL " +
             "AND EXISTS (SELECT 1 FROM wildlife_population wp JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wp.id=wb.population_id) " +
             "AND NOT EXISTS (SELECT 1 FROM construction_project cp JOIN world_object mw ON mw.id=cp.object_id " +
-            "                WHERE cp.project_kind IN ('MANURE_PIT','COMPOST_BAY') AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
+            "                WHERE cp.project_kind IN ('MANURE_PIT','COMPOST_BAY') AND " + stillSound("cp") + " " +
             "                  AND mw.lifecycle_state='ACTIVE' AND mw.current_location_id=cw.current_location_id) " +
             "GROUP BY cw.current_location_id " +
             "ON CONFLICT (chunk_id) DO UPDATE SET refuse_level = LEAST(100, chunk_refuse.refuse_level + ?), last_updated_at = ?",
@@ -1044,7 +1045,7 @@ public class PhysicalItemService {
             // Somewhere to be kept: a completed, intact stock shelter on the keeper's ground.
             "  AND EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
             "              JOIN construction_kind ck ON ck.project_kind = cp.project_kind AND ck.shelters_stock " +
-            "              WHERE cp.state = 'COMPLETED' AND cp.integrity_percent > 0 " +
+            "              WHERE " + stillSound("cp") + " " +
             "                AND sw.lifecycle_state = 'ACTIVE' AND sw.current_location_id = cw.current_location_id " +
             // And it is a shelter these bodies fit in (#108, V369). A hen house standing on the ground was what
             // let a keeper's aurochs settle to breed, because shelters_stock meant "animals, any of them".
@@ -1075,13 +1076,13 @@ public class PhysicalItemService {
         String birthingHouseHere =
             "EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
             "        JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
-            "        WHERE ck.shelters_birth AND cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
+            "        WHERE ck.shelters_birth AND " + stillSound("cp") + " " +
             "          AND sw.lifecycle_state='ACTIVE' AND sw.current_location_id = cw.current_location_id " +
             "          AND body_size_rank(ck.shelters_up_to_size) >= " + bodyBeingBorn + ")";
         String roofOverStockHere =
             "EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
             "        JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
-            "        WHERE ck.shelters_stock AND ck.encloses AND cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
+            "        WHERE ck.shelters_stock AND ck.encloses AND " + stillSound("cp") + " " +
             "          AND sw.lifecycle_state='ACTIVE' AND sw.current_location_id = cw.current_location_id " +
             "          AND body_size_rank(ck.shelters_up_to_size) >= " + bodyBeingBorn + ")";
         jdbc.update(
@@ -1234,7 +1235,7 @@ public class PhysicalItemService {
         boolean somethingToClimbFrom = Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id = cp.object_id " +
             "JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
-            "WHERE ck.aids_mounting AND cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
+            "WHERE ck.aids_mounting AND " + stillSound("cp") + " " +
             "  AND w.lifecycle_state='ACTIVE' AND w.current_location_id = ?)", Boolean.class, at));
         return somethingToClimbFrom ? beast : null;
     }
@@ -1284,7 +1285,7 @@ public class PhysicalItemService {
             "  AND i.condition_state IN ('SOUND','WORN') " +
             "  AND NOT EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
             "                  JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
-            "                  WHERE ck.shelters_gear AND cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
+            "                  WHERE ck.shelters_gear AND " + stillSound("cp") + " " +
             "                    AND sw.lifecycle_state='ACTIVE' AND sw.current_location_id = w.current_location_id)");
         for (java.util.Map<String,Object> r : exposed) {
             UUID id = (UUID) r.get("object_id");
@@ -1308,7 +1309,7 @@ public class PhysicalItemService {
             "  AND (w.current_owner_id IS NOT NULL OR EXISTS (" +
             "        SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
             "        JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
-            "        WHERE ck.shelters_gear AND cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
+            "        WHERE ck.shelters_gear AND " + stillSound("cp") + " " +
             "          AND sw.lifecycle_state='ACTIVE' AND sw.current_location_id = w.current_location_id))");
     }
 
@@ -1349,7 +1350,7 @@ public class PhysicalItemService {
         String isolationHere =
             "EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
             "        JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
-            "        WHERE ck.isolates_sick AND cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
+            "        WHERE ck.isolates_sick AND " + stillSound("cp") + " " +
             "          AND sw.lifecycle_state='ACTIVE' AND sw.current_location_id = cw.current_location_id " +
             "          AND body_size_rank(ck.shelters_up_to_size) >= " +
             "              body_size_rank((SELECT ws4.size_tier FROM wildlife_species ws4 WHERE ws4.species_key = wp.species_key)))";
@@ -1600,8 +1601,8 @@ public class PhysicalItemService {
             "WHERE ww.ambient_temperature_c <= ? " +
             "  AND NOT EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
             "                  JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
-            "                  WHERE ck.shelters_stock AND ck.encloses AND cp.state = 'COMPLETED' " +
-            "                    AND cp.integrity_percent > 0 AND sw.lifecycle_state = 'ACTIVE' " +
+            "                  WHERE ck.shelters_stock AND ck.encloses AND " + stillSound("cp") + " " +
+            "                    AND sw.lifecycle_state = 'ACTIVE' " +
             "                    AND sw.current_location_id = ch.id " +
             // Sized to the kind it will grow into (#108, V369): a calf is small for an aurochs and is still not
             // going to spend a frost inside a hen house.
@@ -1652,7 +1653,7 @@ public class PhysicalItemService {
             // Unless there is somewhere to keep it apart.
             "    AND NOT EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
             "                    JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
-            "                    WHERE ck.separates_dangerous AND cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
+            "                    WHERE ck.separates_dangerous AND " + stillSound("cp") + " " +
             "                      AND sw.lifecycle_state='ACTIVE' AND sw.current_location_id = cw.current_location_id) " +
             "  ORDER BY ty.born_at DESC LIMIT 1)");
     }
@@ -1721,7 +1722,7 @@ public class PhysicalItemService {
         String shelterHere =
             "SELECT 1 FROM construction_project cp3 JOIN world_object sw3 ON sw3.id=cp3.object_id " +
             "JOIN construction_kind ck3 ON ck3.project_kind=cp3.project_kind " +
-            "WHERE cp3.state='COMPLETED' AND cp3.integrity_percent>0 AND sw3.lifecycle_state='ACTIVE' " +
+            "WHERE " + stillSound("cp3") + " AND sw3.lifecycle_state='ACTIVE' " +
             "AND sw3.current_location_id=ch3.id AND ck3.shelters_stock " +
             // A roof is only a roof for a beast that fits under it (#108, V369).
             "AND body_size_rank(ck3.shelters_up_to_size) >= body_size_rank(" +
@@ -1767,7 +1768,7 @@ public class PhysicalItemService {
         // structure never feeds the beasts by itself — the bundle is still cut, carried, and consumed here.
         boolean racked = Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM world_object cw JOIN construction_project cp ON cp.project_kind IN ('HAY_RACK','FODDER_STORE') " +
-            "AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
+            "AND " + stillSound("cp") + " " +
             "JOIN world_object rw ON rw.id=cp.object_id AND rw.lifecycle_state='ACTIVE' AND rw.current_location_id=cw.current_location_id " +
             "WHERE cw.id=?)", Boolean.class, chronicle));
         jdbc.update("UPDATE wildlife_bond SET draft_hunger = GREATEST(0, draft_hunger - ?) WHERE chronicle_id=? AND bond_stage='TAMED'",
