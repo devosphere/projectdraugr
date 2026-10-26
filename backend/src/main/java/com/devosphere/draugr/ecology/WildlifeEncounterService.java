@@ -3,6 +3,7 @@ package com.devosphere.draugr.ecology;
 import com.devosphere.draugr.chronicle.ChroniclePhysiologyService;
 import com.devosphere.draugr.item.PhysicalItemService;
 import com.devosphere.draugr.survival.FoodPreservationService;
+import static com.devosphere.draugr.construction.ConstructionService.stillSound;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -1296,7 +1297,7 @@ public class WildlifeEncounterService {
             "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
             "JOIN world_object keeper ON keeper.id=? " +
             "JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
-            "WHERE ck.holds_an_animal_still AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
+            "WHERE ck.holds_an_animal_still AND " + stillSound("cp") + " " +
             "  AND w.lifecycle_state='ACTIVE' AND w.current_location_id=keeper.current_location_id)",
             Boolean.class, chronicle));
         // Something to hold it with (#106/V308). A stanchion above makes the work safe; carried gear only makes
@@ -1350,7 +1351,7 @@ public class WildlifeEncounterService {
                 "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
                 "JOIN world_object keeper ON keeper.id=? " +
                 "JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
-                "WHERE ck.gives_salt AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
+                "WHERE ck.gives_salt AND " + stillSound("cp") + " " +
                 "  AND w.lifecycle_state='ACTIVE' AND w.current_location_id=keeper.current_location_id)",
                 Boolean.class, chronicle))) {
             salted = Math.max(1, taken / 2);
@@ -2187,7 +2188,7 @@ public class WildlifeEncounterService {
                  com.devosphere.draugr.ecology.FreshWater.sites("es") + ") " +
             "    OR EXISTS(SELECT 1 FROM construction_project cp JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
             "              JOIN world_object pw ON pw.id=cp.object_id " +
-            "              WHERE ck.holds_open_water AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
+            "              WHERE ck.holds_open_water AND " + stillSound("cp") + " " +
             "                AND pw.lifecycle_state='ACTIVE' AND pw.current_location_id=ch.id)))",
             Boolean.class, chronicle));
     }

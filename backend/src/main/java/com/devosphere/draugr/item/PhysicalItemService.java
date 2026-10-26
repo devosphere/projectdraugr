@@ -3,6 +3,7 @@ package com.devosphere.draugr.item;
 import com.devosphere.draugr.ecology.ResourceEcologyService;
 import com.devosphere.draugr.routing.ProcessMatcher;
 import com.devosphere.draugr.quality.QualityGrade;
+import static com.devosphere.draugr.construction.ConstructionService.stillSound;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -889,7 +890,7 @@ public class PhysicalItemService {
         jdbc.update(
             "UPDATE wildlife_bond wb SET draft_fatigue = GREATEST(0, draft_fatigue - ?) " +
             "WHERE wb.draft_fatigue > 0 AND EXISTS (" +
-            "  SELECT 1 FROM world_object cw JOIN construction_project cp ON cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
+            "  SELECT 1 FROM world_object cw JOIN construction_project cp ON " + stillSound("cp") + " " +
             "    AND EXISTS(SELECT 1 FROM construction_kind ck WHERE ck.project_kind=cp.project_kind AND ck.shelters_stock) " +
             "  JOIN world_object pw ON pw.id=cp.object_id AND pw.lifecycle_state='ACTIVE' AND pw.current_location_id=cw.current_location_id " +
             "  WHERE cw.id=wb.chronicle_id)", PEN_REST_RECOVERY);
@@ -913,7 +914,7 @@ public class PhysicalItemService {
             "     ch.biome IN ('WETLAND','RIVER_BANK') " +
             "     OR EXISTS(SELECT 1 FROM ecology_site es WHERE es.chunk_id=ch.id AND (" + com.devosphere.draugr.ecology.FreshWater.sites("es") + ")) " +
             "     OR EXISTS(SELECT 1 FROM construction_project cp JOIN world_object tw ON tw.id=cp.object_id " +
-            "               WHERE cp.project_kind IN ('WATERING_STATION','RAINWATER_CATCHMENT') AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
+            "               WHERE cp.project_kind IN ('WATERING_STATION','RAINWATER_CATCHMENT') AND " + stillSound("cp") + " " +
             "                 AND tw.lifecycle_state='ACTIVE' AND tw.current_location_id=ch.id))) " +
             "  THEN GREATEST(0, draft_thirst - ?) ELSE LEAST(100, draft_thirst + ? + " + heatOnStock() + ") END " +
             // Every kept animal (#122), for the same reason as hunger above: a beast that cannot be thirsty makes
@@ -951,7 +952,7 @@ public class PhysicalItemService {
             "                    JOIN construction_kind ck2 ON ck2.project_kind=cp2.project_kind " +
             "                    JOIN wildlife_population wp2 ON wp2.id=wb.population_id " +
             "                    JOIN wildlife_species ws2 ON ws2.species_key=wp2.species_key " +
-            "                    WHERE cp2.state='COMPLETED' AND cp2.integrity_percent>0 AND sw2.lifecycle_state='ACTIVE' " +
+            "                    WHERE " + stillSound("cp2") + " AND sw2.lifecycle_state='ACTIVE' " +
             "                      AND sw2.current_location_id=ch2.id " +
             "                      AND (CASE WHEN ws2.needs_a_wallow THEN ck2.is_wallow ELSE ck2.gives_shade END))" +
             ") THEN " + HEAT_THIRST + " ELSE 0 END)";
@@ -980,7 +981,7 @@ public class PhysicalItemService {
             "WHERE wb.bond_stage='TAMED' AND cw.current_location_id IS NOT NULL " +
             "AND EXISTS (SELECT 1 FROM wildlife_population wp JOIN draft_species ds ON ds.species_key=wp.species_key WHERE wp.id=wb.population_id) " +
             "AND NOT EXISTS (SELECT 1 FROM construction_project cp JOIN world_object mw ON mw.id=cp.object_id " +
-            "                WHERE cp.project_kind IN ('MANURE_PIT','COMPOST_BAY') AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
+            "                WHERE cp.project_kind IN ('MANURE_PIT','COMPOST_BAY') AND " + stillSound("cp") + " " +
             "                  AND mw.lifecycle_state='ACTIVE' AND mw.current_location_id=cw.current_location_id) " +
             "GROUP BY cw.current_location_id " +
             "ON CONFLICT (chunk_id) DO UPDATE SET refuse_level = LEAST(100, chunk_refuse.refuse_level + ?), last_updated_at = ?",
@@ -1044,7 +1045,7 @@ public class PhysicalItemService {
             // Somewhere to be kept: a completed, intact stock shelter on the keeper's ground.
             "  AND EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
             "              JOIN construction_kind ck ON ck.project_kind = cp.project_kind AND ck.shelters_stock " +
-            "              WHERE cp.state = 'COMPLETED' AND cp.integrity_percent > 0 " +
+            "              WHERE " + stillSound("cp") + " " +
             "                AND sw.lifecycle_state = 'ACTIVE' AND sw.current_location_id = cw.current_location_id " +
             // And it is a shelter these bodies fit in (#108, V369). A hen house standing on the ground was what
             // let a keeper's aurochs settle to breed, because shelters_stock meant "animals, any of them".
@@ -1075,13 +1076,13 @@ public class PhysicalItemService {
         String birthingHouseHere =
             "EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
             "        JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
-            "        WHERE ck.shelters_birth AND cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
+            "        WHERE ck.shelters_birth AND " + stillSound("cp") + " " +
             "          AND sw.lifecycle_state='ACTIVE' AND sw.current_location_id = cw.current_location_id " +
             "          AND body_size_rank(ck.shelters_up_to_size) >= " + bodyBeingBorn + ")";
         String roofOverStockHere =
             "EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
             "        JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
-            "        WHERE ck.shelters_stock AND ck.encloses AND cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
+            "        WHERE ck.shelters_stock AND ck.encloses AND " + stillSound("cp") + " " +
             "          AND sw.lifecycle_state='ACTIVE' AND sw.current_location_id = cw.current_location_id " +
             "          AND body_size_rank(ck.shelters_up_to_size) >= " + bodyBeingBorn + ")";
         jdbc.update(
@@ -1234,7 +1235,7 @@ public class PhysicalItemService {
         boolean somethingToClimbFrom = Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id = cp.object_id " +
             "JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
-            "WHERE ck.aids_mounting AND cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
+            "WHERE ck.aids_mounting AND " + stillSound("cp") + " " +
             "  AND w.lifecycle_state='ACTIVE' AND w.current_location_id = ?)", Boolean.class, at));
         return somethingToClimbFrom ? beast : null;
     }
@@ -1284,7 +1285,7 @@ public class PhysicalItemService {
             "  AND i.condition_state IN ('SOUND','WORN') " +
             "  AND NOT EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
             "                  JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
-            "                  WHERE ck.shelters_gear AND cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
+            "                  WHERE ck.shelters_gear AND " + stillSound("cp") + " " +
             "                    AND sw.lifecycle_state='ACTIVE' AND sw.current_location_id = w.current_location_id)");
         for (java.util.Map<String,Object> r : exposed) {
             UUID id = (UUID) r.get("object_id");
@@ -1308,7 +1309,7 @@ public class PhysicalItemService {
             "  AND (w.current_owner_id IS NOT NULL OR EXISTS (" +
             "        SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
             "        JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
-            "        WHERE ck.shelters_gear AND cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
+            "        WHERE ck.shelters_gear AND " + stillSound("cp") + " " +
             "          AND sw.lifecycle_state='ACTIVE' AND sw.current_location_id = w.current_location_id))");
     }
 
@@ -1349,7 +1350,7 @@ public class PhysicalItemService {
         String isolationHere =
             "EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
             "        JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
-            "        WHERE ck.isolates_sick AND cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
+            "        WHERE ck.isolates_sick AND " + stillSound("cp") + " " +
             "          AND sw.lifecycle_state='ACTIVE' AND sw.current_location_id = cw.current_location_id " +
             "          AND body_size_rank(ck.shelters_up_to_size) >= " +
             "              body_size_rank((SELECT ws4.size_tier FROM wildlife_species ws4 WHERE ws4.species_key = wp.species_key)))";
@@ -1380,6 +1381,89 @@ public class PhysicalItemService {
             SICKNESS_SPREAD, TOO_SICK_TO_GIVE, TOO_SICK_TO_GIVE);
     }
 
+    /**
+     * What a night packed in tighter than the pens hold adds to an animal's illness.
+     *
+     * <p>More than {@link #SICKNESS_RECOVERY}, deliberately, and that is the whole of why this number is what
+     * it is: clean ground mends an animal by seven in the same turn, so a crowding cost of less than that would
+     * be paid off before the keeper could ever see it — a rule that fires every turn and changes nothing. Over
+     * the line, a herd left packed in goes slowly downhill until it is too ill to breed or to give, which is
+     * the <em>existing</em> gate on both and needs no new one.
+     */
+    private static final int CROWDING_SICKENS = 8;
+    /** And what it costs the coat: stock pressed together rub, soil each other and go matted. */
+    private static final int CROWDING_WEARS_COAT = 3;
+
+    /**
+     * SQL for the head count a keeper has standing on their ground, young included (#108, V434).
+     *
+     * <p>Correlated on {@code cw}, the keeper's own world_object, which is how every husbandry rule in this
+     * file already asks where stock are: the bond names the KEEPER, not the chunk, so a kept herd goes where
+     * its keeper goes. The young are counted because they are animals in the pen — a sow and ten piglets in a
+     * creep built for one sow is the overcrowding a keeper would recognise first.
+     */
+    private static final String HEAD_ON_THIS_GROUND =
+        "(SELECT COALESCE(SUM(wp2.population_count),0) + " +
+        "        (SELECT COUNT(*) FROM tamed_young ty2 JOIN wildlife_bond wb3 ON wb3.id = ty2.bond_id " +
+        "          WHERE wb3.chronicle_id = cw.id) " +
+        "   FROM wildlife_bond wb2 JOIN wildlife_population wp2 ON wp2.id = wb2.population_id " +
+        "  WHERE wb2.chronicle_id = cw.id AND wb2.bond_stage = 'TAMED')";
+
+    /** SQL for how many beasts the sound stock structures on that same ground hold between them (#108, V434). */
+    private static final String ROOM_ON_THIS_GROUND =
+        "(SELECT COALESCE(SUM(ck2.holds_how_many),0) FROM construction_project cp2 " +
+        "   JOIN world_object sw2 ON sw2.id = cp2.object_id " +
+        "   JOIN construction_kind ck2 ON ck2.project_kind = cp2.project_kind " +
+        "  WHERE ck2.holds_how_many IS NOT NULL AND " + stillSound("cp2") + " " +
+        "    AND sw2.lifecycle_state = 'ACTIVE' AND sw2.current_location_id = cw.current_location_id)";
+
+    /**
+     * Overcrowding (#108, V434). The population half of #108's criterion that welfare, disease and breeding
+     * "use the actual structure condition AND ANIMAL POPULATION" — and nothing in this world asked how many
+     * went in. A keeper could hold forty goats in one nesting box: every structure was a boolean, standing or
+     * not, and the herd could grow without limit inside it.
+     *
+     * <p>Packed in, stock sicken and go matted. Both are states that already exist and already have ways out
+     * of them, so crowding costs a keeper exactly what neglect costs them, and the way out is the honest one:
+     * build more room, or keep fewer beasts.
+     *
+     * <p><b>It bites only where stock are shut in.</b> Ground with nothing built on it is not overcrowded
+     * however many animals stand on it — they spread out, and the costs of keeping them loose are the ones the
+     * stray and the night raid already charge. It is the PEN that concentrates them, which is also why the
+     * remedy is more pen rather than less.
+     *
+     * <p>Runs after {@link #advanceHerdSickness} in the tick, deliberately: that pass both sickens and mends in
+     * one statement, and crowding added before it would be half taken back off by the same turn's recovery.
+     */
+    @Transactional
+    public void crowdingTellsOnStock(Instant now) {
+        jdbc.update(
+            "UPDATE wildlife_bond wb SET sickness = LEAST(100, wb.sickness + ?), " +
+            "  coat_condition = GREATEST(0, wb.coat_condition - ?) " +
+            "FROM world_object cw " +
+            "WHERE cw.id = wb.chronicle_id AND wb.bond_stage = 'TAMED' " +
+            "  AND " + ROOM_ON_THIS_GROUND + " > 0 " +
+            "  AND " + HEAD_ON_THIS_GROUND + " > " + ROOM_ON_THIS_GROUND,
+            CROWDING_SICKENS, CROWDING_WEARS_COAT);
+    }
+
+    /**
+     * How many beasts a keeper has on this ground and how many the pens there hold (#108, V434) — for the
+     * welfare report and for nothing else to act on.
+     *
+     * <p>Read-only, and it asks the same two questions the tick asks, so what the keeper is told cannot drift
+     * from what the world does to their stock.
+     *
+     * @return {@code [head, room]}
+     */
+    @Transactional(readOnly = true)
+    public int[] theRoomTheStockHave(UUID chronicle) {
+        java.util.Map<String,Object> r = jdbc.queryForMap(
+            "SELECT " + HEAD_ON_THIS_GROUND + " AS head, " + ROOM_ON_THIS_GROUND + " AS room " +
+            "FROM world_object cw WHERE cw.id = ?", chronicle);
+        return new int[]{((Number) r.get("head")).intValue(), ((Number) r.get("room")).intValue()};
+    }
+
     /** What a verminous coat adds to an animal's illness each turn, or takes off its mending. */
     private static final int MATTED_COAT_SICKENS = 2;
 
@@ -1391,6 +1475,19 @@ public class PhysicalItemService {
     private static final int HOOF_GROWS_OUT = 1;
     /** Stony, broken going chips and bruises a foot rather than merely lengthening it. */
     private static final int HOOF_WEARS_ON_STONE = 4;
+    /**
+     * SQL for "the keeper has taken the water off this ground" (#108, V435), correlated on the chunk alias
+     * {@code ch} that the hoof statement already stands the keeper on.
+     *
+     * <p>Condition is read, not merely existence: a ditch silted up and falling in is a ditch that drains
+     * nothing, which is the same rule the rest of the husbandry now keeps.
+     */
+    private static final String DRAINED_HERE =
+        "EXISTS (SELECT 1 FROM construction_project dcp JOIN world_object dw ON dw.id = dcp.object_id "
+      + "        JOIN construction_kind dck ON dck.project_kind = dcp.project_kind "
+      + "         WHERE dck.drains_the_ground AND " + stillSound("dcp")
+      + "           AND dw.lifecycle_state = 'ACTIVE' AND dw.current_location_id = ch.id)";
+
     /** Standing wet softens the horn and rots it, which is the one a keeper underestimates. */
     private static final int HOOF_ROTS_IN_WET = 3;
     /** What paring a foot properly puts back. */
@@ -1424,7 +1521,10 @@ public class PhysicalItemService {
         jdbc.update(
             "UPDATE wildlife_bond wb SET hoof_condition = GREATEST(0, wb.hoof_condition - (? "
             + "  + CASE WHEN ch.biome IN ('MOUNTAIN','ALPINE','ROCKY','CAVE_INTERIOR','BADLANDS') THEN ? ELSE 0 END "
-            + "  + CASE WHEN ch.biome IN ('WETLAND','RIVER_BANK') THEN ? ELSE 0 END)) "
+            // Standing wet, UNLESS THE KEEPER HAS DRAINED IT (#108, V435). The ditch has been buildable all
+            // along and read by nothing, while this very line charged a keeper by the river for the one thing
+            // a ditch is for.
+            + "  + CASE WHEN ch.biome IN ('WETLAND','RIVER_BANK') AND NOT " + DRAINED_HERE + " THEN ? ELSE 0 END)) "
             + "FROM world_object cw JOIN world_chunk ch ON ch.id = cw.current_location_id, "
             + "     wildlife_population wp JOIN wildlife_species ws ON ws.species_key = wp.species_key "
             + "WHERE cw.id = wb.chronicle_id AND wp.id = wb.population_id "
@@ -1600,8 +1700,8 @@ public class PhysicalItemService {
             "WHERE ww.ambient_temperature_c <= ? " +
             "  AND NOT EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
             "                  JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
-            "                  WHERE ck.shelters_stock AND ck.encloses AND cp.state = 'COMPLETED' " +
-            "                    AND cp.integrity_percent > 0 AND sw.lifecycle_state = 'ACTIVE' " +
+            "                  WHERE ck.shelters_stock AND ck.encloses AND " + stillSound("cp") + " " +
+            "                    AND sw.lifecycle_state = 'ACTIVE' " +
             "                    AND sw.current_location_id = ch.id " +
             // Sized to the kind it will grow into (#108, V369): a calf is small for an aurochs and is still not
             // going to spend a frost inside a hen house.
@@ -1652,7 +1752,7 @@ public class PhysicalItemService {
             // Unless there is somewhere to keep it apart.
             "    AND NOT EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
             "                    JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
-            "                    WHERE ck.separates_dangerous AND cp.state='COMPLETED' AND cp.integrity_percent > 0 " +
+            "                    WHERE ck.separates_dangerous AND " + stillSound("cp") + " " +
             "                      AND sw.lifecycle_state='ACTIVE' AND sw.current_location_id = cw.current_location_id) " +
             "  ORDER BY ty.born_at DESC LIMIT 1)");
     }
@@ -1721,7 +1821,7 @@ public class PhysicalItemService {
         String shelterHere =
             "SELECT 1 FROM construction_project cp3 JOIN world_object sw3 ON sw3.id=cp3.object_id " +
             "JOIN construction_kind ck3 ON ck3.project_kind=cp3.project_kind " +
-            "WHERE cp3.state='COMPLETED' AND cp3.integrity_percent>0 AND sw3.lifecycle_state='ACTIVE' " +
+            "WHERE " + stillSound("cp3") + " AND sw3.lifecycle_state='ACTIVE' " +
             "AND sw3.current_location_id=ch3.id AND ck3.shelters_stock " +
             // A roof is only a roof for a beast that fits under it (#108, V369).
             "AND body_size_rank(ck3.shelters_up_to_size) >= body_size_rank(" +
@@ -1767,7 +1867,7 @@ public class PhysicalItemService {
         // structure never feeds the beasts by itself — the bundle is still cut, carried, and consumed here.
         boolean racked = Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM world_object cw JOIN construction_project cp ON cp.project_kind IN ('HAY_RACK','FODDER_STORE') " +
-            "AND cp.state='COMPLETED' AND cp.integrity_percent>0 " +
+            "AND " + stillSound("cp") + " " +
             "JOIN world_object rw ON rw.id=cp.object_id AND rw.lifecycle_state='ACTIVE' AND rw.current_location_id=cw.current_location_id " +
             "WHERE cw.id=?)", Boolean.class, chronicle));
         jdbc.update("UPDATE wildlife_bond SET draft_hunger = GREATEST(0, draft_hunger - ?) WHERE chronicle_id=? AND bond_stage='TAMED'",
@@ -4452,8 +4552,8 @@ public class PhysicalItemService {
             com.devosphere.draugr.ecology.FreshWater.sites("es") + "))))", Boolean.class, location));
         boolean watered = Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object tw ON tw.id=cp.object_id " +
-            "WHERE cp.project_kind IN ('WATERING_STATION','RAINWATER_CATCHMENT') AND cp.state='COMPLETED' " +
-            "  AND cp.integrity_percent>0 AND tw.lifecycle_state='ACTIVE' AND tw.current_location_id=?)",
+            "WHERE cp.project_kind IN ('WATERING_STATION','RAINWATER_CATCHMENT') " +
+            "  AND " + stillSound("cp") + " AND tw.lifecycle_state='ACTIVE' AND tw.current_location_id=?)",
             Boolean.class, location));
 
         StringBuilder b = new StringBuilder();
@@ -4498,6 +4598,35 @@ public class PhysicalItemService {
         // worked on, they do not stack, and a broken one holds nothing. That is a real mechanic that no sentence
         // could reach, so asking to tether or hobble an animal is answered with what you actually have for it and
         // what it actually does. An invented "the hobble is now on" would change nothing and say it had.
+        // PACKED IN (#108, V434). The crowding the tick charges for, said out loud with both numbers in it, so
+        // the keeper can see which way to mend it. Asking the same two questions the tick asks, so the report
+        // cannot tell them the stock have room while the world is making them ill for want of it.
+        int[] theRoom = theRoomTheStockHave(chronicle);
+        if (theRoom[1] > 0 && theRoom[0] > theRoom[1])
+            b.append("They are packed in tighter than what you have raised for them holds — ").append(theRoom[0])
+             .append(" head on ground with room for ").append(theRoom[1])
+             .append(", and it is telling on their health and their coats. ");
+
+        // WET UNDERFOOT (#108, V435). The hoof rule has always charged standing wet, and a keeper had no way
+        // to learn that the ground was the reason or that a ditch would answer it. Only for stock that have
+        // such feet, by the same declared flag the tick reads, so the report never offers to drain a duck's.
+        if (asked.stream().anyMatch(k -> Boolean.TRUE.equals(k.get("has_feet")))) {
+            boolean wetUnderfoot = Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM world_chunk ch WHERE ch.id=? AND ch.biome IN ('WETLAND','RIVER_BANK'))",
+                Boolean.class, location));
+            boolean drained = Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object dw ON dw.id=cp.object_id "
+              + " JOIN construction_kind ck ON ck.project_kind=cp.project_kind "
+              + " WHERE ck.drains_the_ground AND " + stillSound("cp")
+              + "   AND dw.lifecycle_state='ACTIVE' AND dw.current_location_id=?)", Boolean.class, location));
+            if (wetUnderfoot && !drained)
+                b.append("The ground here lies wet, and standing in it is softening their feet faster than any ")
+                 .append("paring will keep up with — a ditch cut to take the water off this ground would stop it. ");
+            else if (wetUnderfoot)
+                b.append("The ground here would lie wet, and what you have cut to drain it is keeping it off ")
+                 .append("their feet. ");
+        }
+
         // And what the want depends on, which is the half a keeper can act on.
         if (aboutWater || asked.stream().anyMatch(k -> ((Number) k.get("thirst")).intValue() >= WORTH_NAMING)) {
             b.append(wetGround
@@ -4563,7 +4692,7 @@ public class PhysicalItemService {
             boolean housed = Boolean.TRUE.equals(jdbc.queryForObject(
                 "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
                 "JOIN construction_kind ck ON ck.project_kind = cp.project_kind AND ck.shelters_stock " +
-                "WHERE cp.state = 'COMPLETED' AND cp.integrity_percent > 0 AND sw.lifecycle_state = 'ACTIVE' " +
+                "WHERE " + stillSound("cp") + " AND sw.lifecycle_state = 'ACTIVE' " +
                 "  AND sw.current_location_id = ? AND body_size_rank(ck.shelters_up_to_size) >= ?)",
                 Boolean.class, location, ((Number) k.get("body_rank")).intValue()));
             if (!housed) wanting.add("there is nothing standing here that would house stock their size");

@@ -102,6 +102,20 @@ public class ConstructionService {
      */
     public static final int COMING_APART_BELOW = 35;
 
+    /**
+     * SQL for "this structure is standing well enough to still do its job" (#108), for one project alias.
+     *
+     * <p>The condition read, rather than merely the existence read. Nearly every affordance in the game asked
+     * {@code state='COMPLETED' AND integrity_percent > 0}, which is the same question as "was it ever
+     * finished": a trough with the bottom gone out of it watered stock exactly as well as a new one, a manure
+     * pit at one percent took every scrap of muck, and a quarantine pen in ruins kept a sick beast apart from
+     * the herd. One home for the question, so the line the stocktake already draws is the line husbandry
+     * reads, and a keeper told that a thing is coming apart finds that it is.
+     */
+    public static String stillSound(String projectAlias) {
+        return projectAlias + ".state='COMPLETED' AND " + projectAlias + ".integrity_percent >= " + COMING_APART_BELOW;
+    }
+
     /** Returns false for an unsuccessful physical attempt without disclosing hidden prerequisites to narration. */
     @Transactional
     public boolean buildFirePit(UUID chronicleId, UUID locationId, UUID actionId, Instant occurredAt) {
