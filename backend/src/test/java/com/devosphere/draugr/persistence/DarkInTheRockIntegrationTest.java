@@ -224,4 +224,77 @@ class DarkInTheRockIntegrationTest {
         // Asking about the light is a reading and must not be an act on the world.
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
+
+    /**
+     * The rock does not report a sky (#37).
+     *
+     * <p>Standing in a cave mouth at noon, {@code is it dark in here} was answered "The sun stands at its
+     * highest. You have about 8 hours of light left", and the sky reading went on to "Snow is coming down" — a
+     * report on a sky the Chronicle cannot see, about weather that is not falling on them. The world knew
+     * better the whole time: BiomeClimate has taken 20 kph of wind off a cave mouth and all of it off an
+     * interior since it existed, and tooDarkForFineWork knows the rock is dark at any hour. Only the prose
+     * claimed otherwise.
+     *
+     * <p>Precipitation is now localised the same way the wind always was, so nothing falls on a Chronicle under
+     * the rock — and the reading says what it can honestly say from where it stands: from a mouth you can see
+     * out, and in the interior there is no sky to read at all.
+     *
+     * <p>THE FIRST FIX WAS WRONG IN THE OTHER DIRECTION and this test is what the correction is held to: with
+     * the local weather reading CLEAR inside a cave, the prose printed "The sky is open, with nothing in it
+     * that threatens rain" while it was snowing outside — one false claim about an unseen sky swapped for
+     * another.
+     */
+    @Test
+    void theRockDoesNotReportASky() {
+        if (worldGenesis.current() == null) {
+            worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
+            ecology.seed();
+        }
+        var summary = chronicles.awaken();
+        assertNotNull(summary, "awakening must produce a living Chronicle");
+        UUID chronicle = summary.id();
+
+        UUID cave = jdbc.queryForObject("SELECT id FROM world_chunk WHERE biome='CAVE_MOUTH' ORDER BY grid_y, grid_x LIMIT 1", UUID.class);
+        UUID inner = jdbc.queryForObject("SELECT id FROM world_chunk WHERE biome='CAVE_INTERIOR' ORDER BY grid_y, grid_x LIMIT 1", UUID.class);
+        UUID open = jdbc.queryForObject("SELECT id FROM world_chunk WHERE biome='GRASSLAND' ORDER BY grid_y, grid_x LIMIT 1", UUID.class);
+        assertNotNull(cave, "the world must have a cave mouth");
+        assertNotNull(open, "and open ground to compare against");
+
+        // FROM THE MOUTH: the sky is readable and is named as OUTSIDE, whatever it happens to be doing.
+        jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", cave, chronicle);
+        ChronicleActionService.ActionResult atMouth = actions.resolve("read the sky");
+        assertEquals("READ_THE_SKY", atMouth.intent());
+        assertTrue(atMouth.perception().contains("mouth of the cave"),
+            () -> "the reading must say where it is read from: " + atMouth.perception());
+        assertTrue(atMouth.perception().contains("outside"),
+            () -> "and must place the weather outside the rock rather than on the Chronicle: " + atMouth.perception());
+
+        // FROM OPEN GROUND: unchanged, and it must NOT have learned to talk about being under rock.
+        jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", open, chronicle);
+        ChronicleActionService.ActionResult outside = actions.resolve("read the sky");
+        assertEquals("READ_THE_SKY", outside.intent());
+        assertFalse(outside.perception().contains("under the rock") || outside.perception().contains("mouth of the cave"),
+            () -> "on open grass there is no rock to be under: " + outside.perception());
+        assertTrue(outside.perception().contains("sun") || outside.perception().contains("dark"),
+            () -> "and the hour is still read off the light: " + outside.perception());
+
+        // FROM THE INTERIOR, if this world has one: no sky at all, and no bearing to take from a sun nobody
+        // can see. Skipped rather than failed where the world generated none — the mouth is the case that
+        // always exists.
+        if (inner != null) {
+            jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", inner, chronicle);
+            ChronicleActionService.ActionResult deep = actions.resolve("read the sky");
+            assertEquals("READ_THE_SKY", deep.intent());
+            assertTrue(deep.perception().contains("no sky to read"),
+                () -> "in under the rock there is no sky: " + deep.perception());
+            assertFalse(deep.perception().contains("The sky is open"),
+                () -> "and it must not claim an open sky it cannot see: " + deep.perception());
+            assertFalse(deep.perception().contains("Snow is coming down.") || deep.perception().contains("Rain is falling and"),
+                () -> "nor report weather falling on a Chronicle under a hill: " + deep.perception());
+            assertTrue(deep.perception().contains("nothing in here to take a bearing from"),
+                () -> "nor offer a bearing off a sun nobody can see: " + deep.perception());
+        }
+
+        assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
 }

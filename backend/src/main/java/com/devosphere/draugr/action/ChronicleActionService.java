@@ -3163,6 +3163,18 @@ public class ChronicleActionService {
            ||value.contains("what month")||value.contains("is it near winter")||value.contains("how near winter")
            ||value.contains("what is the wind")||value.contains("is the wind")||value.contains("how hard is the wind")
            ||value.contains("is it going to rain")||value.contains("will it rain")||value.contains("is there frost")
+           // THE PLAINEST FORMS OF ALL, which reached NOTHING (#37). The rule knew "is it going to rain" and
+           // "will it rain" — the forecast — and not one way of asking what the weather is DOING. Measured on a
+           // booted world: six of eight plain weather questions answered "your hands find no purchase on it"
+           // while weather_kind, wind_speed_kph and ambient_temperature_c sat on the row behind them.
+           //
+           // "out" and "outside" carry their weight here: `is it cold out` is the sky, and `I am cold` is the
+           // body's own statement and must stay WARM_BODY — which is why no bare "cold" or "freezing" goes in
+           // this list. This rule runs long before the body block, so a bare word would have taken it.
+           ||value.contains("is it raining")||value.contains("is it snowing")||value.contains("is it hailing")
+           ||value.contains("still raining")||value.contains("stopped raining")||value.contains("is it windy")
+           ||value.contains("is it wet out")||value.contains("is it cold out")||value.contains("is it warm out")
+           ||value.contains("doing outside")||value.contains("doing out there")||value.contains("weather turning")
            ||value.contains("will it freeze")||value.contains("read the sky")||value.contains("look at the sky")
            ||value.contains("what is the sky")||value.contains("which way is north")||value.contains("which way is south")||value.contains("take a bearing")) return Intent.READ_THE_SKY;
         // What you are carrying and what state it is in (#37, act fifteen). condition_state, use_count and
@@ -5363,8 +5375,32 @@ public class ChronicleActionService {
         com.devosphere.draugr.simulation.BiomeClimate.Local local = localClimate(location);
 
         java.util.List<String> said = new java.util.ArrayList<>();
+        // WHERE YOU ARE READING IT FROM (#37). Inside a cave mouth at noon this reading used to open "The sun
+        // stands at its highest. You have about 8 hours of light left" and go on to "Snow is coming down" — a
+        // report on a sky the Chronicle cannot see, about weather that is not falling on them. The world knew:
+        // BiomeClimate has taken the wind off a cave since it existed, and tooDarkForFineWork knows the rock is
+        // dark at noon. Only the prose claimed otherwise.
+        //
+        // The two biomes are not the same place and are not described as one. At a mouth you can see out; in the
+        // interior there is no sky to read at all, and what the reading can honestly offer is the hour you have
+        // been keeping and the stillness of the rock.
+        String standingIn = jdbc.query("SELECT biome FROM world_chunk WHERE id=?",
+            rs -> rs.next() ? rs.getString(1) : null, location);
+        boolean insideTheRock = "CAVE_INTERIOR".equals(standingIn);
+        boolean underTheRock = "CAVE_MOUTH".equals(standingIn);
+        // What the SKY is doing is a different question from what is falling on YOU, and under the rock those
+        // two answers differ — which is the whole point. BiomeClimate now returns CLEAR for a cave because
+        // nothing lands on you in one, and the first cut of this reading printed that as "the sky is open, with
+        // nothing in it that threatens rain" while it was snowing outside: one false claim about an unseen sky
+        // swapped for another. From a cave MOUTH a person can see out, so the useful answer is both at once.
+        String outsideKind = jdbc.query(
+            "SELECT ww.weather_kind FROM world_weather ww JOIN world_chunk c ON c.world_id=ww.world_id WHERE c.id=?",
+            rs -> rs.next() ? rs.getString(1) : null, location);
+        if (insideTheRock) said.add("You are in under the rock, where there is no sky to read");
+        else if (underTheRock) said.add("You read it from the mouth of the cave, with the rock over you");
         // The hour, as a person tells it — by where the light is, not by a number nobody here could read.
-        said.add(hour < 6 ? "It is still dark, the small hours before any light"
+        said.add(insideTheRock ? "By your own reckoning of the hours, it is around " + hour + ":00"
+               : hour < 6 ? "It is still dark, the small hours before any light"
                : hour < 9 ? "The light is new and low, the morning not long up"
                : hour < 12 ? "The sun is climbing and the morning is well on"
                : hour < 14 ? "The sun stands at its highest, as near noon as makes no difference"
@@ -5386,7 +5422,8 @@ public class ChronicleActionService {
 
         // The wind, FELT here rather than the world's figure — the thing nothing could ask.
         int wind = local.windKph();
-        said.add(wind < 5 ? "The air is almost still"
+        // Not inside the rock, where the stillness is said below in the rock\x27s own terms rather than twice.
+        if (!insideTheRock) said.add(wind < 5 ? "The air is almost still"
                : wind < 15 ? "There is a steady breeze, enough to feel and no more"
                : wind < 30 ? "The wind is up and working at everything loose"
                : "The wind is hard enough to lean on, and it will take heat out of you faster than the cold alone");
@@ -5395,12 +5432,28 @@ public class ChronicleActionService {
         if (t <= 0) said.add("It is below freezing, and there is frost on everything that holds it");
         else if (t <= 3) said.add("It is near enough freezing that there will be frost before morning");
         String kind = local.kind() == null ? "CLEAR" : local.kind();
-        if (kind.contains("RAIN") || kind.contains("STORM")) said.add("Rain is falling and shows no sign of easing");
+        String sky = outsideKind == null ? "CLEAR" : outsideKind;
+        if (insideTheRock) {
+            // No claim about a sky, because none can be made from here. The stillness and the even cold of the
+            // rock are what a person in one would remark on, and BiomeClimate already models both.
+            said.add("The air in here is dead still, and the cold is the stone's own rather than the wind's");
+        } else if (underTheRock) {
+            said.add(sky.contains("RAIN") || sky.contains("STORM")
+                       ? "Rain is falling outside, and none of it reaches you under the rock"
+                   : sky.contains("SNOW")
+                       ? "Snow is coming down outside, and none of it reaches you under the rock"
+                   : sky.contains("OVERCAST") || sky.contains("CLOUD")
+                       ? "The sky outside is closed over and could turn to rain"
+                   : "The sky outside is open, with nothing in it that threatens rain");
+        }
+        else if (kind.contains("RAIN") || kind.contains("STORM")) said.add("Rain is falling and shows no sign of easing");
         else if (kind.contains("SNOW")) said.add("Snow is coming down");
         else if (kind.contains("OVERCAST") || kind.contains("CLOUD")) said.add("The sky is closed over and could turn to rain");
         else said.add("The sky is open, with nothing in it that threatens rain");
-        // Which way is north, which the sun answers at any hour of the day it is up.
-        if (hour >= 6 && hour < 20) said.add(hour < 11 ? "The sun is in the east, so north is to your left as you face it"
+        // Which way is north, which the sun answers at any hour of the day it is up — and cannot in the rock,
+        // where there is no sun to take it from.
+        if (insideTheRock) said.add("There is nothing in here to take a bearing from");
+        else if (hour >= 6 && hour < 20) said.add(hour < 11 ? "The sun is in the east, so north is to your left as you face it"
                                     : hour < 14 ? "The sun is due south at this hour, so north is at your back as you face it"
                                     : "The sun is in the west, so north is to your right as you face it");
         else said.add("With the sun down there is nothing to take a bearing from but the stars");

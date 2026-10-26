@@ -2483,4 +2483,32 @@ class IntentClassificationRegressionTest {
         // And the body's own darkness words stay the body's: "I cannot see" is sight, not inventory.
         assertNotEquals("JUDGE_LIGHT", classify("make a torch"));
     }
+
+    /**
+     * The plainest weather questions of all (#37).
+     *
+     * <p>The sky rule knew the FORECAST — "is it going to rain", "will it rain", "will it freeze" — and not one
+     * way of asking what the weather is DOING. Measured on a booted world, six of eight reached nothing at all
+     * while {@code weather_kind}, {@code wind_speed_kph} and {@code ambient_temperature_c} sat on the row
+     * behind them: "your hands find no purchase on it", to `is it raining`.
+     */
+    @Test
+    void thePlainestWeatherQuestions() throws Exception {
+        assertEquals("READ_THE_SKY", classify("is it raining"));
+        assertEquals("READ_THE_SKY", classify("is it snowing"));
+        assertEquals("READ_THE_SKY", classify("is it windy"));
+        assertEquals("READ_THE_SKY", classify("is it cold out"));
+        assertEquals("READ_THE_SKY", classify("what is it doing outside"));
+        assertEquals("READ_THE_SKY", classify("is the weather turning"));
+        assertEquals("READ_THE_SKY", classify("has it stopped raining"));
+
+        // THE BODY KEEPS ITS OWN, which is why no bare "cold" or "freezing" went into that list: this rule runs
+        // long before the body block, so a bare word would have taken "I am freezing" off WARM_BODY.
+        assertEquals("WARM_BODY", classify("I am cold"));
+        assertEquals("WARM_BODY", classify("I am freezing"));
+        assertEquals("DRY_BODY", classify("I am soaked"));
+
+        // And the place question stays the light reading's, not the sky's.
+        assertEquals("JUDGE_LIGHT", classify("is it dark in here"));
+    }
 }
