@@ -644,6 +644,7 @@ public class ChronicleActionService {
         else if (intent == Intent.SCARE_BIRDS) { String[] r = items.scareBirdsFromCrop(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_CROSSING) { String[] r = judgeCrossing(chronicle, text); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_LIGHT) { String[] r = judgeLight(chronicle, resolvedAt); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.JUDGE_MAKING) { String[] r = items.judgeMaking(chronicle.id(), chronicle.location(), text); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.HIDE_TRAIL) { String[] r = wildlife.hideTrail(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.WEED_CROP) { String[] r=items.tendCrop(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.CLEAR_LAND) { String[] r=items.clearLand(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
@@ -3299,6 +3300,29 @@ public class ChronicleActionService {
             ||((value.startsWith("can i")||value.startsWith("could i")||value.startsWith("is "))
                &&(value.contains("cross")||value.contains("wade")||value.contains("swim")||value.contains("ford"))))
            ) return Intent.JUDGE_CROSSING;
+        // WHAT A THING TAKES, AND WHAT A MATERIAL IS FOR (#37). Every bill in this game is data — two tables
+        // of it — and a Chronicle could not ask. Measured on a booted world:
+        //
+        //     what do I need for a basket  -> SENSE_BODY, "There is a hard pressure low in you…"
+        //     what does a basket take      -> nothing
+        //     what is clay good for        -> nothing
+        //     what can I do with the clay  -> nothing
+        //
+        // The first is the worst wrong answer in this sweep: a question about materials answered with the state
+        // of the player's bowels, in the same even voice as every true answer. It comes of "what do i need"
+        // sitting inside the body block's frame, so this rule is deliberately ABOVE it.
+        //
+        // Not "what can I make here", which would be a menu of the catalogue: both forms here are about a thing
+        // the player NAMED. The reading itself refuses honestly when it cannot find that thing.
+        boolean askingWhatItTakes =
+            value.contains("what do i need for")||value.contains("what do i need to make")
+            ||value.contains("what does it take")||value.contains("what would it take")
+            ||value.contains("what goes into")||value.contains("what is needed for")
+            ||((value.contains("what does")||value.contains("what do"))&&value.contains(" take"))
+            ||((value.contains("what is")||value.contains("what are"))&&value.contains("good for"))
+            ||value.contains("what can i do with")||value.contains("what use is")
+            ||value.contains("what is it for")||value.contains("what are they for");
+        if (askingWhatItTakes) return Intent.JUDGE_MAKING;
         // WHETHER YOU CAN SEE TO WORK (#37). consumePortableLight is a finished, careful rule — a firebrand,
         // then a resin torch, then a rushlight, then a candle, then a lamp burning fish oil or rendered tallow,
         // and a bare flame gutted by weather unless a stone lantern cover hoods it — and tooDarkForFineWork
@@ -5055,7 +5079,7 @@ public class ChronicleActionService {
             || (word(v, "fix") && !v.contains("memory") && !v.contains("mind"));
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, PARE_HOOVES, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, PARE_HOOVES, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;}
         /** The cardinal for a grid offset, for when the WORLD names the direction rather than the player (#37). */
         static Direction of(int dx,int dy){ for(Direction d:values()) if(d.dx==dx&&d.dy==dy) return d; return null; } }    /**     * The structured perception frame — the seam every future Simulation Agent reads

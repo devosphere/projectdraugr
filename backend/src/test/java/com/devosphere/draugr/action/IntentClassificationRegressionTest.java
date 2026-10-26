@@ -2511,4 +2511,38 @@ class IntentClassificationRegressionTest {
         // And the place question stays the light reading's, not the sky's.
         assertEquals("JUDGE_LIGHT", classify("is it dark in here"));
     }
+
+    /**
+     * Asking what a thing takes (#37, V438).
+     *
+     * <p>Every bill of materials in this game is data, in two tables, and a Chronicle could not ask. Measured
+     * on a booted world, the worst answer of that sweep:
+     *
+     * <pre>
+     *   what do I need for a basket  ->  SENSE_BODY: "There is a hard pressure low in you…"
+     * </pre>
+     *
+     * <p>A question about materials answered with the state of the player's bowels, in the same even voice as
+     * every true answer. "what do i need" sits inside the body block's frame, so the making rule goes above it
+     * — and the body must keep the sentences that really are about the body, which is the other half here.
+     */
+    @Test
+    void askingWhatAThingTakes() throws Exception {
+        assertEquals("JUDGE_MAKING", classify("what do I need for a basket"));
+        assertEquals("JUDGE_MAKING", classify("what do I need to make cordage"));
+        assertEquals("JUDGE_MAKING", classify("what does tanning a hide take"));
+        assertEquals("JUDGE_MAKING", classify("what goes into a leather pouch"));
+        assertEquals("JUDGE_MAKING", classify("what is clay good for"));
+        assertEquals("JUDGE_MAKING", classify("what can I do with the oak bark"));
+
+        // THE BODY KEEPS ITS OWN. "I need water" and "I need to rest" are the body's business and were never
+        // the catalogue's; the making rule is held to the "what do I need FOR" frame for exactly this reason.
+        assertNotEquals("JUDGE_MAKING", classify("I need water"));
+        assertNotEquals("JUDGE_MAKING", classify("I need to rest"));
+        assertNotEquals("JUDGE_MAKING", classify("I am hungry"));
+
+        // And the ACTS keep theirs: asking what a basket takes is not weaving one.
+        assertNotEquals("JUDGE_MAKING", classify("weave a basket"));
+        assertNotEquals("JUDGE_MAKING", classify("tan the hide"));
+    }
 }

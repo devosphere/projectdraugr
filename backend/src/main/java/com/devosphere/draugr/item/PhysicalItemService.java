@@ -5051,6 +5051,198 @@ public class PhysicalItemService {
     @Transactional public ItemView craftPrimitiveSpear(Instant at) { UUID chronicle=activeChronicle(); if(!hasAtLeast(chronicle,"dry_branch",1)||!hasAtLeast(chronicle,"field_stone",1)||!hasAtLeast(chronicle,"plant_fiber",1))throw new IllegalStateException("Insufficient physical material."); if(!consumeOne(chronicle,"dry_branch",at)||!consumeOne(chronicle,"field_stone",at)||!consumeOne(chronicle,"plant_fiber",at))throw new IllegalStateException("Material changed."); UUID spear=UUID.randomUUID(); createCraftedItem(chronicle,chronicleLocation(chronicle),spear,"primitive_spear","Primitive spear",at,"CRAFTED",QualityGrade.SOUND); return new ItemView(spear,"Primitive spear","primitive_spear",chronicle,null); }
     @Transactional public ItemView craftPrimitiveTool(String itemKey, String displayName, boolean needsBranch, Instant at) { UUID chronicle=activeChronicle(); if(!hasAtLeast(chronicle,"field_stone",1)||!hasAtLeast(chronicle,"plant_fiber",1)||(needsBranch&&!hasAtLeast(chronicle,"dry_branch",1)))throw new IllegalStateException("Insufficient physical material."); if(!consumeOne(chronicle,"field_stone",at)||!consumeOne(chronicle,"plant_fiber",at)||(needsBranch&&!consumeOne(chronicle,"dry_branch",at)))throw new IllegalStateException("Material changed."); UUID tool=UUID.randomUUID(); createCraftedItem(chronicle,chronicleLocation(chronicle),tool,itemKey,displayName,at,"CRAFTED",QualityGrade.SOUND); return new ItemView(tool,displayName,itemKey,chronicle,null); }
 
+    /**
+     * What a thing takes, and what a material is for (#37).
+     *
+     * <p>The bill of every piece of work in this game is data — {@code material_process_input} for what is
+     * always wanted, {@code material_process_input_group} for "any one of these will do" — and a Chronicle
+     * could not ask. Measured on a booted world:
+     *
+     * <pre>
+     *   what do I need for a basket  -> SENSE_BODY: "There is a hard pressure low in you…"
+     *   what does a basket take      -> nothing
+     *   what is clay good for        -> nothing
+     *   what can I do with the clay  -> nothing
+     * </pre>
+     *
+     * <p>The first of those is the worst kind of wrong answer there is: a question about materials answered
+     * with the state of the player's bowels, in the same even voice as every true answer.
+     *
+     * <p>Two directions, because a player asks it both ways round. Name a piece of WORK and this reads its
+     * bill and says which of it is within reach; name a MATERIAL and it says what that material goes into.
+     * Both are readings of a thing the player NAMED — it is deliberately not "what can I make here", which
+     * would be a menu of the catalogue, and this project answers questions rather than offering menus.
+     */
+    @Transactional(readOnly = true)
+    public String[] judgeMaking(UUID chronicle, UUID location, String text) {
+        String v = text == null ? "" : text.toLowerCase(java.util.Locale.ROOT);
+
+        // ---- WHICH THING IS BEING ASKED ABOUT. Not {@code matcher.match}, which is the right tool for an
+        // instruction and the wrong one for a question: it asks ActivityClassifier for a VERB first, and "what
+        // do I need for a stone axe" has none. Measured — the matcher answered that one (the output's own name
+        // is in the sentence) and refused `what do I need for a basket`, `what does tanning a hide take` and
+        // `what is clay good for`: three of the four sentences that started this.
+        //
+        // A question names a THING, so the catalogue is searched by name: the longest process keyword, process
+        // name or output name the sentence contains. Longest wins, which is how the keyword matcher settles its
+        // own ties, so the two cannot disagree about which work a name belongs to. Four characters is the floor,
+        // because below it every sentence contains somebody's keyword.
+        String process = jdbc.query(
+            "SELECT mp.process_key FROM material_process mp " +
+            "LEFT JOIN item_definition o ON o.item_key = mp.output_item_key " +
+            "CROSS JOIN LATERAL (SELECT GREATEST(" +
+            "   COALESCE((SELECT MAX(length(k)) FROM unnest(string_to_array(mp.keywords, ',')) k " +
+            "              WHERE position(lower(k) in ?) > 0), 0), " +
+            "   CASE WHEN position(lower(mp.display_name) in ?) > 0 THEN length(mp.display_name) ELSE 0 END, " +
+            "   CASE WHEN o.display_name IS NOT NULL AND position(lower(o.display_name) in ?) > 0 " +
+            "        THEN length(o.display_name) ELSE 0 END) AS hit) h " +
+            "WHERE h.hit >= 4 ORDER BY h.hit DESC, mp.process_key LIMIT 1",
+            rs -> rs.next() ? rs.getString(1) : null, v, v, v);
+        if (process != null) return judgeNamedWork(chronicle, location, process);
+
+        // ---- Asked about a MATERIAL: what does this stuff go into? On the catalogue's own names, so a material
+        // added later is askable the day it exists.
+        java.util.List<java.util.Map<String,Object>> named = jdbc.queryForList(
+            "SELECT d.item_key, d.display_name FROM item_definition d " +
+            "WHERE position(lower(d.display_name) in ?) > 0 OR position(replace(d.item_key,'_',' ') in ?) > 0 " +
+            "ORDER BY length(d.display_name) DESC LIMIT 1", v, v);
+        if (!named.isEmpty()) {
+            String key = (String) named.get(0).get("item_key");
+            String name = lower((String) named.get(0).get("display_name"));
+            java.util.List<String> into = jdbc.queryForList(
+                "SELECT DISTINCT COALESCE(o.display_name, mp.display_name) FROM material_process mp " +
+                "LEFT JOIN item_definition o ON o.item_key = mp.output_item_key " +
+                "WHERE EXISTS (SELECT 1 FROM material_process_input i WHERE i.process_key=mp.process_key AND i.item_key=?) " +
+                "   OR EXISTS (SELECT 1 FROM material_process_input_group g WHERE g.process_key=mp.process_key AND g.item_key=?) " +
+                "ORDER BY 1 LIMIT 6", String.class, key, key);
+            if (into.isEmpty()) return new String[]{"SUCCEEDED",
+                "You turn the " + name + " over and cannot think of a thing in your experience that is made from it."};
+            java.util.List<String> said = new java.util.ArrayList<>();
+            for (String thing : into) said.add(lower(thing));
+            return new String[]{"SUCCEEDED", "The " + name + " goes into " + joinAnd(said)
+                + (into.size() >= 6 ? ", and more besides." : ".")};
+        }
+
+        // ---- A FAMILY WORD IS NOT A FAILURE. "what do I need for a basket" names no single thing — the
+        // catalogue holds a large basket, a burden basket, a lidded basket, a backpack basket — and the honest
+        // answer is the one V318 settled on for the same problem in the ACTS: say which works it could be and
+        // let the player name one. Searched the other way round from the block above: the sentence's own head
+        // word inside the catalogue's names, rather than a catalogue name inside the sentence.
+        String head = nameAskedAbout(v);
+        if (head.length() >= 3) {
+            java.util.List<java.util.Map<String,Object>> couldBe = jdbc.queryForList(
+                "SELECT mp.process_key, COALESCE(o.display_name, mp.display_name) AS name FROM material_process mp " +
+                "LEFT JOIN item_definition o ON o.item_key = mp.output_item_key " +
+                "WHERE position(?::text in lower(COALESCE(o.display_name, mp.display_name))) > 0 " +
+                "ORDER BY 2 LIMIT 6", head);
+            if (couldBe.size() == 1) return judgeNamedWork(chronicle, location, (String) couldBe.get(0).get("process_key"));
+            if (couldBe.size() > 1) {
+                java.util.List<String> said = new java.util.ArrayList<>();
+                for (java.util.Map<String,Object> row : couldBe) said.add(lower((String) row.get("name")));
+                return new String[]{"SUCCEEDED", "There is more than one of those: " + joinOr(said)
+                    + ". Name which, and what it takes can be reckoned."};
+            }
+        }
+
+        return new String[]{"FAILED", "You cast about for what that would take, and cannot bring the thing itself to mind "
+            + "clearly enough to reckon it. Name the work or the stuff of it."};
+    }
+
+    /** The bill of one named piece of work, from BOTH input tables, against what is within reach (#37). */
+    private String[] judgeNamedWork(UUID chronicle, UUID location, String process) {
+        java.util.Map<String,Object> head = jdbc.queryForMap(
+            "SELECT display_name, output_item_key, COALESCE(tool_class,'') AS tool_class, " +
+            "       requires_fire, requires_water FROM material_process WHERE process_key=?", process);
+        StringBuilder b = new StringBuilder(((String) head.get("display_name")));
+
+        java.util.List<String> wants = new java.util.ArrayList<>();
+        for (java.util.Map<String,Object> row : jdbc.queryForList(
+                "SELECT i.item_key, i.quantity, COALESCE(d.display_name, i.item_key) AS name " +
+                "FROM material_process_input i LEFT JOIN item_definition d ON d.item_key=i.item_key " +
+                "WHERE i.process_key=? ORDER BY i.item_key", process)) {
+            String key = (String) row.get("item_key");
+            int quantity = ((Number) row.get("quantity")).intValue();
+            int have = reachCountAt(chronicle, location, key);
+            wants.add(quantity + " " + lower((String) row.get("name"))
+                + (have >= quantity ? " (you have them)" : have > 0 ? " (you have " + have + ")" : " (you have none)"));
+        }
+        // AND THE OTHER INPUT TABLE. A bill read from one of the two reads as matter from nothing — tanning
+        // looks like two pieces of oak bark and no hide at all. The group is an "any one of these", and saying
+        // it that way is the useful half: a keeper wants to know a boar hide will do.
+        for (String group : jdbc.queryForList(
+                "SELECT DISTINCT group_name FROM material_process_input_group WHERE process_key=? ORDER BY group_name",
+                String.class, process)) {
+            java.util.List<String> options = new java.util.ArrayList<>();
+            int quantity = 1;
+            for (java.util.Map<String,Object> row : jdbc.queryForList(
+                    "SELECT g.item_key, g.quantity, COALESCE(d.display_name, g.item_key) AS name " +
+                    "FROM material_process_input_group g LEFT JOIN item_definition d ON d.item_key=g.item_key " +
+                    "WHERE g.process_key=? AND g.group_name=? ORDER BY g.item_key", process, group)) {
+                options.add(lower((String) row.get("name")));
+                quantity = ((Number) row.get("quantity")).intValue();
+            }
+            if (!options.isEmpty()) wants.add(quantity + " of any one of " + joinOr(options));
+        }
+
+        b.append(wants.isEmpty() ? " takes nothing but the working of it" : " takes " + joinAnd(wants));
+        String tool = (String) head.get("tool_class");
+        if (!tool.isBlank()) b.append(", and it turns on ").append(toolSaid(tool))
+            .append(hasToolOfClass(chronicle, tool) ? " — which you are carrying" : " — which you have not got");
+        if (Boolean.TRUE.equals(head.get("requires_fire"))) b.append(". It wants a fire");
+        if (Boolean.TRUE.equals(head.get("requires_water"))) b.append(". It wants water at hand");
+        b.append('.');
+        return new String[]{"SUCCEEDED", b.toString()};
+    }
+
+    /**
+     * The head word of what is being asked about (#37) — "what do I need for a basket" -> "basket".
+     *
+     * <p>Only the words after the frame, with articles dropped, because the frame's own words are in every one
+     * of these sentences and would match half the catalogue. The LAST word is taken: in this game's names the
+     * head noun comes last ("burden basket", "stone axe", "fiber cordage"), which is the same reason the
+     * husbandry vocabulary matches on the last word of a species key.
+     */
+    private static String nameAskedAbout(String v) {
+        String after = v;
+        for (String frame : new String[]{"what do i need to make", "what do i need for", "what is needed for",
+                                         "what can i do with the", "what can i do with", "what goes into",
+                                         "what does it take to make", "what would it take to make",
+                                         "what does", "what do", "what is", "what are", "what use is"}) {
+            int at = after.indexOf(frame);
+            if (at >= 0) { after = after.substring(at + frame.length()); break; }
+        }
+        after = (" " + after + " ").replace("good for", " ").replace(" take ", " ").replace("?", " ")
+                     .replace(" for ", " ").replace(" the ", " ").replace(" a ", " ").replace(" an ", " ")
+                     .replace(" some ", " ").replace(" my ", " ").trim();
+        if (after.isBlank()) return "";
+        String[] words = after.split("\\s+");
+        String last = words[words.length - 1];
+        // A plural reads as its singular in this catalogue's names, and nothing here is named with a trailing
+        // s that carries meaning.
+        if (last.length() > 3 && last.endsWith("s") && !last.endsWith("ss")) last = last.substring(0, last.length() - 1);
+        return last;
+    }
+
+    /** A tool class as a person would say it, rather than the enum the row carries. */
+    private static String toolSaid(String toolClass) {
+        return switch (toolClass) {
+            case "CUTTING" -> "a cutting edge";
+            case "STRIKING" -> "something to strike with";
+            case "AXE" -> "an axe";
+            case "DIGGING" -> "something to dig with";
+            case "POUNDING" -> "something to pound with";
+            default -> toolClass.toLowerCase(java.util.Locale.ROOT).replace('_', ' ');
+        };
+    }
+
+    private static String lower(String s) { return s == null ? "" : s.toLowerCase(java.util.Locale.ROOT); }
+
+    /** "a, b or c" — the group reading wants OR where the bill wants AND. */
+    private static String joinOr(java.util.List<String> parts) {
+        if (parts.size() == 1) return parts.get(0);
+        return String.join(", ", parts.subList(0, parts.size() - 1)) + " or " + parts.get(parts.size() - 1);
+    }
+
     /** Reachable count of a material — carried, in carried containers, or on the ground/store at {@code location}. */
     @Transactional(readOnly = true)
     public int reachCountAt(UUID chronicle, UUID location, String itemKey) { return reachCount(chronicle, location, itemKey); }
