@@ -152,8 +152,14 @@ class AStepThatNamesTwoThingsIntegrationTest {
         String said = hide.perception().toLowerCase(java.util.Locale.ROOT);
         assertFalse(said.contains("dry meat") || said.contains("dried meat"),
             () -> "cutting a hide must not be answered with the meat-drying work: " + hide.perception());
-        assertTrue(said.contains("hide"),
-            () -> "and the work it names must be the one the player asked for: " + hide.perception());
+        // The hide work's input is TANNED LEATHER (V436 guard 5: the catalogue calls a tanned hide "the hide"), so a
+        // keeper with only a knife is refused for want of that — and the refusal names the input, not the word
+        // "hide". Read the input from the catalogue rather than spelling it here, so the test follows the row.
+        String hideInput = jdbc.queryForObject(
+            "SELECT replace(item_key, '_', ' ') FROM material_process_input WHERE process_key='lay_out_hide' ORDER BY item_key LIMIT 1",
+            String.class);
+        assertTrue(said.contains("hide") || said.contains(hideInput),
+            () -> "and the work it reaches must be the hide work, which wants " + hideInput + ": " + hide.perception());
 
         // THE CONTROL, and it is the sentence the defect was borrowing from: meat still dries.
         ChronicleActionService.ActionResult meat = actions.resolve("cut the meat into strips");
