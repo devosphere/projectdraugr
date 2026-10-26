@@ -3287,7 +3287,19 @@ public class ChronicleActionService {
         // FEEL already owns the season and the temperature, and IntentClassificationRegressionTest holds it to
         // them — "what time OF YEAR is it" is a season question and my "what time" took it. The hour and the
         // year are different questions and the guard was right to say so.
+        // THE HOURS TO DARK, BY WHATEVER NAME (#37). This rule held the exact words "until dark" and nothing
+        // else, and the length rule further down takes any other "how long" — so eight ways of asking the one
+        // question were answered "you pace it out and reckon by eye", a question about the light answered by
+        // pacing out the ground. Measured live, all eight: until nightfall, until dusk, until sundown, until
+        // sunset, until dawn, until first light, until daylight, until it gets dark.
+        //
+        // The sky reading answers every one of them already — "the light has gone and the dark is full in,
+        // first light is some 10 hours off" — so this is the one place the words were missing. The comment on
+        // the length rule says it is safe because the time questions run earlier; that was true of "dark" alone.
         if((value.contains("what time")&&!value.contains("time of year"))||value.contains("how long until dark")||value.contains("until dark")
+           ||value.contains("until nightfall")||value.contains("until dusk")||value.contains("until sundown")
+           ||value.contains("until sunset")||value.contains("until dawn")||value.contains("until first light")
+           ||value.contains("until daylight")||value.contains("until it gets dark")||value.contains("until light goes")
            ||value.contains("is it getting dark")
            // ...but NOT about the place you are standing in (#37). "is it dark in here", asked inside a cave
            // mouth at noon, was answered "The sun stands at its highest. You have about 8 hours of light left"
@@ -5423,7 +5435,14 @@ public class ChronicleActionService {
         UUID loc = chronicle.location();
         java.util.Map<String,Object> here = jdbc.queryForMap("SELECT world_id, grid_x, grid_y, biome FROM world_chunk WHERE id=?", loc);
         UUID world = (UUID) here.get("world_id");
-        String named = jdbc.query("SELECT name FROM chronicle_named_location WHERE chunk_id=? AND chronicle_id=? LIMIT 1", rs -> rs.next() ? rs.getString(1) : null, loc, chronicle.id());
+        // THE NAME YOU GAVE IT LAST (#37). A chunk can carry several names on purpose — naming inserts, so an
+        // old name stays an alias and `travel to Stonefield` still works after a renaming — but this query had
+        // no ORDER BY, so which of them the HUD showed was whatever the database handed back first, and it could
+        // differ from the name the prose and the place reading use. Both of those take the latest; so does this.
+        String named = jdbc.query("SELECT name FROM chronicle_named_location WHERE chunk_id=? AND chronicle_id=? " +
+                                  "ORDER BY designated_at DESC LIMIT 1",
+                                  rs -> rs.next() ? rs.getString(1) : null, loc, chronicle.id());
+
         LocationView location = new LocationView(loc, named, (String) here.get("biome"), (int) here.get("grid_x"), (int) here.get("grid_y"));
         // The HUD's sky is the sky here, for the same reason the prose's is (#28/#37): the client showed the
         // front while the narration described the local fall, so the panel and the paragraph disagreed.

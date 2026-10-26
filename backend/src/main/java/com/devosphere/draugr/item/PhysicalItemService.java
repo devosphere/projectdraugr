@@ -5222,8 +5222,10 @@ public class PhysicalItemService {
 
         StringBuilder b = new StringBuilder();
         if (have == 0) b.append("You have no ").append(word).append(" in reach, so there is none of it to be ready. ");
-        else b.append("A ").append(singular(word)).append(" is not a thing that comes on by waiting — nothing happens ")
-              .append("to it until it is worked. You have ").append(have).append(have == 1 ? " to hand. " : " to hand. ");
+        // Said without an article, because the asker's word may be a count noun or not: "a leather is not a
+        // thing that comes on by waiting" is not English, and echoing the player's own word is the rule here.
+        else b.append("Waiting does nothing to ").append(word).append(": nothing happens to it until it is ")
+              .append("worked. You have ").append(have).append(" to hand. ");
         if (next.isEmpty()) {
             b.append(have == 0 ? "" : "Nothing in your knowledge works it further; it is as finished as it gets.");
             return new String[]{"SUCCEEDED", b.toString().trim()};

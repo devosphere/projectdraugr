@@ -2721,6 +2721,34 @@ class IntentClassificationRegressionTest {
         assertEquals("JUDGE_WORK_IN_HAND", classify("how long until the hide is leather"));
         // ...while the hours to dark stay with the sky reading, which has always answered them.
         assertEquals("READ_THE_SKY", classify("how long until dark"));
-        assertEquals("MEASURE", classify("how long until nightfall"));
+        assertEquals("READ_THE_SKY", classify("how long until nightfall"), "the sky reading holds every name for dark");
+    }
+
+    /**
+     * The hours to dark, by whatever name (#37).
+     *
+     * <p>The sky rule held the exact words "until dark" and the length rule takes any other "how long", so
+     * eight ways of asking one question were answered "you pace it out and reckon by eye" — a question about
+     * the light answered by pacing out the ground. Measured live, all eight at once.
+     *
+     * <p>One of them was mine: {@code how long until first light} reached the work-in-hand reading, because
+     * that rule borrows "how long until" when the sentence names a catalogue thing and this catalogue holds a
+     * rush LIGHT. The sky rule runs before it and now holds the words, which settles it in the right order.
+     */
+    @Test
+    void theHoursToDarkByWhateverName() throws Exception {
+        for (String askedInItsOwnWords : new String[]{
+                "how long until dark", "how long until nightfall", "how long until dusk",
+                "how long until sundown", "how long until sunset", "how long until dawn",
+                "how long until first light", "how long until daylight", "how long until it gets dark"}) {
+            assertEquals("READ_THE_SKY", classify(askedInItsOwnWords), askedInItsOwnWords);
+        }
+
+        // AND THE MEASUREMENTS KEEP THEIRS: a length is still a length, and the days since waking are still
+        // reckoned, which is what the length rule's own comment says it is left with.
+        assertEquals("MEASURE", classify("how long is this plank"));
+        assertEquals("MEASURE", classify("how long have I been here"));
+        // ...and a distance to a thing in the country is the bearing reading's, which answers both at once.
+        assertEquals("WHICH_WAY", classify("how far is the river"));
     }
 }

@@ -302,7 +302,7 @@ class WorkThatCannotBeDoneInTheWetIntegrationTest {
         var r = actions.resolve("is the hide ready", UUID.randomUUID());
         assertEquals("JUDGE_WORK_IN_HAND", r.intent(),
             () -> "the question must reach the reading: " + r.perception());
-        assertTrue(r.perception().contains("comes on by waiting"),
+        assertTrue(r.perception().contains("Waiting does nothing to"),
             () -> "a material must be said to be a material: " + r.perception());
         assertFalse(r.perception().toLowerCase(java.util.Locale.ROOT).contains("stages set into it"),
             () -> "and must not be answered about a staged piece nobody asked after: " + r.perception());
