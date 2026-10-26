@@ -301,4 +301,58 @@ class WhichWayTheGroundLiesIntegrationTest {
                 "and it must arrive in the wood, not beside it");
         }
     }
+
+    /**
+     * The place reading and the travel rule agree (#37, V441).
+     *
+     * <p>Whether a named place can be found again is decided by planTravel and was invisible: a Chronicle
+     * learned that a name had faded by setting out and being told "you cannot call the way to mind clearly
+     * enough to set out", which is a day spent on finding out. JUDGE_PLACE answers it from the same clauses,
+     * and this is what holds the two to each other — if the reading ever says a place is findable while the
+     * journey refuses it, the game is lying in one of them.
+     *
+     * <p>Driven through the world's own record of arrivals rather than through a stubbed flag:
+     * {@code chronicle_chunk_visit.visit_count} is what makes a way routine, and it is what this test moves.
+     */
+    @Test
+    void thePlaceReadingAndTheTravelRuleAgree() {
+        UUID me = awaken();
+        UUID here = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, me);
+        whoMoved = me;
+        stoodAt = here;
+
+        // Name the ground through the real act, so the fixture is the game's own naming.
+        ChronicleActionService.ActionResult named = actions.resolve("call this place Waymark Field");
+        assertEquals("DESIGNATE", named.intent(), () -> "naming must reach the naming: " + named.perception());
+
+        // ---- NOT YET FINDABLE: named, not memorised, no marker, not walked often. Both halves must say so.
+        jdbc.update("UPDATE chronicle_chunk_visit SET visit_count=1 WHERE chronicle_id=? AND chunk_id=?", me, here);
+        jdbc.update("UPDATE chronicle_named_location SET memorized=FALSE WHERE chronicle_id=? AND chunk_id=?", me, here);
+        ChronicleActionService.ActionResult faint = actions.resolve("could I find my way back here");
+        assertEquals("JUDGE_PLACE", faint.intent(), () -> "the question must reach the reading: " + faint.perception());
+        assertTrue(faint.perception().contains("could not call the way back"),
+            () -> "a name with nothing holding it must read as faded: " + faint.perception());
+
+        // ---- WALKED OFTEN ENOUGH TO BE ROUTINE, which is the world's own count and not a flag.
+        jdbc.update("UPDATE chronicle_chunk_visit SET visit_count=9 WHERE chronicle_id=? AND chunk_id=?", me, here);
+        ChronicleActionService.ActionResult known = actions.resolve("could I find my way back here");
+        assertEquals("JUDGE_PLACE", known.intent());
+        assertTrue(known.perception().contains("could make your way back"),
+            () -> "ground walked nine times must read as findable: " + known.perception());
+        assertTrue(known.perception().contains("feet that know the way") || known.perception().contains("by the map"),
+            () -> "and must say what makes it findable: " + known.perception());
+
+        // ---- AND THE JOURNEY AGREES. Standing elsewhere, travelling to the name must not be refused for want
+        // of being able to call the way to mind — the refusal the reading has just promised is not coming.
+        UUID elsewhere = jdbc.queryForObject(
+            "SELECT c.id FROM world_chunk c JOIN world_chunk h ON h.id=? WHERE c.world_id=h.world_id " +
+            "  AND abs(c.grid_x-h.grid_x)+abs(c.grid_y-h.grid_y) BETWEEN 3 AND 6 AND c.biome <> 'OCEAN' LIMIT 1",
+            UUID.class, here);
+        if (elsewhere != null) {
+            jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", elsewhere, me);
+            ChronicleActionService.ActionResult journey = actions.resolve("travel to Waymark Field");
+            assertFalse(journey.perception().contains("cannot call the way to mind"),
+                () -> "the reading said the way was known, and the journey must not say otherwise: " + journey.perception());
+        }
+    }
 }

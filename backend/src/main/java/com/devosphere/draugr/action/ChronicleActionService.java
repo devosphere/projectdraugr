@@ -646,6 +646,7 @@ public class ChronicleActionService {
         else if (intent == Intent.JUDGE_LIGHT) { String[] r = judgeLight(chronicle, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_MAKING) { String[] r = items.judgeMaking(chronicle.id(), chronicle.location(), text); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_CLOTHING) { String[] r = judgeClothing(chronicle, resolvedAt); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.JUDGE_PLACE) { String[] r = judgePlace(chronicle); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.HIDE_TRAIL) { String[] r = wildlife.hideTrail(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.WEED_CROP) { String[] r=items.tendCrop(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.CLEAR_LAND) { String[] r=items.clearLand(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
@@ -1896,6 +1897,73 @@ public class ChronicleActionService {
     }
 
     /** Register the chronicle's presence in a chunk — the raw material of route memory and the decay clock on named places. */
+    /** How many visits make a way routine — planTravel's own figure, shared so the two cannot disagree. */
+    private static final int VISITS_THAT_MAKE_A_ROUTINE = 5;
+
+    /**
+     * What you know of the ground you stand on, and whether you could find it again (#37).
+     *
+     * <p>{@link #planTravel} already decides the second question, carefully: a place is locatable if it is on
+     * a map you carry, or marked AND memorised, or walked often enough to be routine, or memorised and visited
+     * recently. {@code chronicle_chunk_visit} has counted every arrival since the table existed and
+     * {@code chronicle_named_location} knows which names were committed to memory — and none of it could be
+     * asked. The only way to learn that a name had faded was to try to travel to it and be told "you cannot
+     * call the way to mind clearly enough to set out", by which time the Chronicle is standing somewhere else
+     * with a day spent.
+     *
+     * <p>Every clause here is the clause travel uses, including the five-visit threshold, which is shared as a
+     * constant rather than written twice.
+     */
+    private String[] judgePlace(ActiveChronicle chronicle) {
+        java.util.Map<String,Object> here = jdbc.queryForMap(
+            "SELECT c.biome, COALESCE(v.visit_count,0) AS visits, v.last_visited_at, " +
+            // THE LATEST NAME, because a chunk can carry MORE THAN ONE. The naming act inserts rather than
+            // replaces, so a place named twice has two rows — and the first cut of this reading used a bare
+            // scalar subquery and died on "more than one row returned by a subquery used as an expression" the
+            // moment it met one. planTravel iterates every named row and so never noticed. Recorded on the
+            // ticket; here the most recent name is the one a person would give you.
+            "       (SELECT n.name FROM chronicle_named_location n WHERE n.chronicle_id=? AND n.chunk_id=c.id " +
+            "         ORDER BY n.designated_at DESC LIMIT 1) AS name, " +
+            "       COALESCE((SELECT n.memorized FROM chronicle_named_location n WHERE n.chronicle_id=? AND n.chunk_id=c.id " +
+            "                  ORDER BY n.designated_at DESC LIMIT 1), FALSE) AS memorized, " +
+            "       EXISTS(SELECT 1 FROM location_marker m WHERE m.chunk_id=c.id) AS marker " +
+            "FROM world_chunk c LEFT JOIN chronicle_chunk_visit v ON v.chunk_id=c.id AND v.chronicle_id=? " +
+            "WHERE c.id=?", chronicle.id(), chronicle.id(), chronicle.id(), chronicle.location());
+        int visits = ((Number) here.get("visits")).intValue();
+        String name = (String) here.get("name");
+        boolean memorized = Boolean.TRUE.equals(here.get("memorized"));
+        boolean marker = Boolean.TRUE.equals(here.get("marker"));
+        boolean onMap = name != null && Boolean.TRUE.equals(jdbc.queryForObject(
+            "WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' " +
+            " UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id " +
+            " JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') " +
+            "SELECT EXISTS(SELECT 1 FROM reachable x JOIN literature_document d ON d.object_id=x.id " +
+            " JOIN literature_revision rv ON rv.id=d.current_revision_id " +
+            " WHERE d.document_kind='MAP' AND rv.content ILIKE ?)", Boolean.class, chronicle.id(), "%" + name + "%"));
+        boolean routine = visits >= VISITS_THAT_MAKE_A_ROUTINE;
+
+        StringBuilder b = new StringBuilder();
+        b.append(visits <= 1 ? "You have not stood here before today"
+               : visits == 2 ? "You have been here once before"
+               : routine ? "You have walked this ground often enough to know it"
+               : "You have been here " + (visits - 1) + " times before").append(". ");
+
+        if (name == null) b.append("You have put no name to it. ");
+        else b.append("You call it ").append(name)
+              .append(memorized ? ", and you have it by heart. " : ", though you have not fixed it in memory. ");
+        if (marker) b.append("There is a marker standing here. ");
+        if (onMap) b.append("It is on a map you are carrying. ");
+
+        // AND THE ANSWER THE TRAVEL RULE WOULD GIVE, which is the point of asking.
+        boolean locatable = onMap || (marker && memorized) || routine || memorized;
+        b.append(name == null
+            ? "Unnamed, there is nothing to call to mind from a distance: you would have to find your way back by the country itself."
+            : locatable
+              ? "You could make your way back to it from elsewhere" + (onMap ? ", by the map." : routine ? ", by feet that know the way." : marker && memorized ? ", by the marker and by memory." : ", so long as the memory stays fresh.")
+              : "You could not call the way back to mind from elsewhere — it wants a marker, a map, or walking often enough to learn it.");
+        return new String[]{"SUCCEEDED", b.toString().trim()};
+    }
+
     private void recordVisit(UUID chronicle, UUID chunk, Instant at) {
         java.sql.Timestamp ts = java.sql.Timestamp.from(at);
         jdbc.update("INSERT INTO chronicle_chunk_visit (chronicle_id,chunk_id,visit_count,last_visited_at) VALUES (?,?,1,?) ON CONFLICT (chronicle_id,chunk_id) DO UPDATE SET visit_count=chronicle_chunk_visit.visit_count+1, last_visited_at=EXCLUDED.last_visited_at", chronicle, chunk, ts);
@@ -1927,7 +1995,7 @@ public class ChronicleActionService {
             boolean markerHere = Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM location_marker WHERE chunk_id=?)", Boolean.class, chunk));
             boolean onMap = Boolean.TRUE.equals(jdbc.queryForObject("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT EXISTS(SELECT 1 FROM reachable x JOIN literature_document d ON d.object_id=x.id JOIN literature_revision rv ON rv.id=d.current_revision_id WHERE d.document_kind='MAP' AND rv.content ILIKE ?)", Boolean.class, chronicle.id(), "%"+name+"%"));
             Integer visits = jdbc.queryForObject("SELECT COALESCE((SELECT visit_count FROM chronicle_chunk_visit WHERE chronicle_id=? AND chunk_id=?),0)", Integer.class, chronicle.id(), chunk);
-            boolean routine = visits != null && visits >= 5;
+            boolean routine = visits != null && visits >= VISITS_THAT_MAKE_A_ROUTINE;  // shared with judgePlace, which reports it
             boolean locatable = onMap || (markerHere && memorized) || routine || (memorized && recent);
             if (!locatable) continue;
             int gx=(int)n.get("grid_x"), gy=(int)n.get("grid_y");
@@ -3768,7 +3836,11 @@ public class ChronicleActionService {
         // (or a specific feature) and falls back to the place gracefully when there is no such subject.
         boolean examineScenery = value.contains("area")||value.contains("clearing")||value.contains("surrounding")||value.contains("around")||value.contains("horizon")||value.contains("distance")||value.contains("landscape")||value.contains("terrain")||value.contains("the view")||value.contains("the scene")||value.contains("whole place")||value.contains("everything");
         // Identifying (#65 identify) is a focused naming — it resolves to the same subject-scoped EXAMINE.
-        if(value.contains("identify")||value.contains("what is this")||value.contains("what kind of")||value.contains("what sort of")||value.contains("tell apart")||value.contains("distinguish")) return Intent.EXAMINE;
+        // ...AND NOT WHEN THE QUESTION IS ABOUT THE GROUND'S NAME (#37). `what is this place called` is listed
+        // by the naming question below, which answers with the name the Chronicle gave this chunk — but
+        // this identify rule sits above it and "what is this" is a substring of it, so the sentence was
+        // answered as though a held object had been held up: EXAMINE. The clause below was dead.
+        if(value.contains("identify")||(value.contains("what is this")&&!value.contains("place called"))||value.contains("what kind of")||value.contains("what sort of")||value.contains("tell apart")||value.contains("distinguish")) return Intent.EXAMINE;
         if((value.contains("inspect")||value.contains("examine"))&&(value.contains(" this ")||value.contains(" that ")||value.contains(" my ")||value.contains(" these ")||value.contains(" those "))) return Intent.EXAMINE;
         if((value.contains("inspect")||value.contains("examine"))&&!examineScenery&&(value.contains(" the ")||value.contains(" a ")||value.contains(" an ")||value.contains(" its ")||value.contains(" his ")||value.contains(" her ")||value.contains(" their "))) return Intent.EXAMINE;
         // The non-visual senses (#65). LISTEN/SMELL/FEEL own their verbs; SEARCH is a careful going-over of the
@@ -3964,6 +4036,23 @@ public class ChronicleActionService {
         //
         // The survey already reports it — "This is Camp Site, a place you named and made your own" — and
         // `where am I` has always gone there, so the question goes where its own answer already lives.
+        // WHETHER YOU COULD FIND THIS PLACE AGAIN (#37). planTravel already decides it, carefully and
+        // invisibly: a place is locatable if it is on a map you carry, or marked AND memorised, or walked
+        // often enough to be routine (five visits), or memorised and visited recently. chronicle_chunk_visit
+        // has counted every arrival since the table existed and chronicle_named_location knows which names
+        // were committed to memory — and a Chronicle could not ask any of it. Measured on a booted world:
+        // `what do I know about this place` reached nothing at all, so the only way to learn that a name had
+        // faded was to try to travel to it and be told "you cannot call the way to mind".
+        //
+        // Placed above the naming question, which owns "what did I call this place": that one answers with the
+        // NAME, and this one with whether the place is still findable, which is the half nothing could reach.
+        boolean askingWhatTheyKnowOfHere =
+            value.contains("what do i know about")||value.contains("do i know this place")
+            ||value.contains("have i been here")||value.contains("was i here")||value.contains("been here before")
+            ||value.contains("find my way back")||value.contains("find this place again")
+            ||value.contains("will i find my way")||value.contains("can i find my way")
+            ||value.contains("is this place on my map")||value.contains("do i remember this place");
+        if (askingWhatTheyKnowOfHere) return Intent.JUDGE_PLACE;
         if(value.contains("what did i name")||value.contains("what did i call")||value.contains("what have i named")
            ||value.contains("what is this place called")||value.contains("whats this place called")
            ||value.contains("what is this called")||value.contains("did i name this")||value.contains("have i named this")) return Intent.OBSERVE;
@@ -5130,7 +5219,7 @@ public class ChronicleActionService {
             || (word(v, "fix") && !v.contains("memory") && !v.contains("mind"));
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, JUDGE_CLOTHING, PARE_HOOVES, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, JUDGE_CLOTHING, JUDGE_PLACE, PARE_HOOVES, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;}
         /** The cardinal for a grid offset, for when the WORLD names the direction rather than the player (#37). */
         static Direction of(int dx,int dy){ for(Direction d:values()) if(d.dx==dx&&d.dy==dy) return d; return null; } }    /**     * The structured perception frame — the seam every future Simulation Agent reads

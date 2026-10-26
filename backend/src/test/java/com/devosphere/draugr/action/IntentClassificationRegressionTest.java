@@ -2624,4 +2624,41 @@ class IntentClassificationRegressionTest {
         assertEquals("TRACK", classify("note the tracks"));
         assertNotEquals("WRITE", classify("observe the tracks"));
     }
+
+    /**
+     * Asking what you know of this ground (#37, V441).
+     *
+     * <p>planTravel decides whether a place can be found again — on a map you carry, or marked and memorised,
+     * or walked often enough to be routine, or memorised and visited recently — and chronicle_chunk_visit has
+     * counted every arrival since the table existed. None of it could be asked: {@code what do I know about
+     * this place} reached nothing, so the only way to learn that a name had faded was to try to travel to it
+     * and be told "you cannot call the way to mind", a day's walk later.
+     */
+    @Test
+    void askingWhatYouKnowOfThisGround() throws Exception {
+        assertEquals("JUDGE_PLACE", classify("what do I know about this place"));
+        assertEquals("JUDGE_PLACE", classify("have I been here before"));
+        assertEquals("JUDGE_PLACE", classify("could I find my way back here"));
+        assertEquals("JUDGE_PLACE", classify("do I remember this place"));
+        assertEquals("JUDGE_PLACE", classify("is this place on my map"));
+
+        // THE NAMING QUESTION KEEPS ITS OWN. "what did I call this place" answers with the NAME and has done
+        // since #37's earlier act; this rule sits above it and must not take it.
+        assertEquals("OBSERVE", classify("what did I call this place"));
+        // And one of the forms it claims was never reaching it: "what is this" is a substring of
+        // "what is this place called", and the identify rule holds that substring and sits higher — so a
+        // question about the name of the ground was answered as though an object had been held up to the
+        // light. The clause that was meant to own it had been dead since it was written.
+        assertEquals("OBSERVE", classify("what is this place called"));
+        assertEquals("OBSERVE", classify("whats this place called"));
+        // ...and the identify rule keeps everything else it had.
+        assertEquals("EXAMINE", classify("what is this"));
+        assertEquals("EXAMINE", classify("what is this plant"));
+        assertEquals("EXAMINE", classify("identify this mushroom"));
+
+        // And the acts are untouched: naming is naming, mapping is mapping, and looking round is looking round.
+        assertEquals("DESIGNATE", classify("call this place Stonefield"));
+        assertEquals("SKETCH_MAP", classify("mark this place on my map"));
+        assertEquals("OBSERVE", classify("where am I"));
+    }
 }
