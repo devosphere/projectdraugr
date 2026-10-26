@@ -64,7 +64,7 @@ public class AssemblyService {
      */
     private String[] matchWithKeyword(String text) {
         List<String> tied = new ArrayList<>();
-        String v = ActivityClassifier.normalise(text);
+        String v = ActivityClassifier.normalise(asBuildingWords(text));
         String bestKeyword = null; int bestLen = -1;
         for (Map<String, Object> row : jdbc.queryForList(
                 "SELECT assembly_key, keywords FROM assembly_definition WHERE review_state='VERIFIED' ORDER BY assembly_key")) {
@@ -77,6 +77,30 @@ public class AssemblyService {
             }
         }
         return tied.isEmpty() ? null : new String[]{tied.get(0), bestKeyword, String.join(",", tied)};
+    }
+
+    /**
+     * The verbs for beginning a thing, said as the catalogue says them (#37/#99).
+     *
+     * <p>Every assembly's keywords are written with "build", "make", "raise" or "put up", so {@code build a
+     * shelter} reaches the lean-to and {@code start a shelter} and {@code begin a shelter} reached nothing at
+     * all — while {@code start a lean-to} worked, because the lean-to has a Java branch of its own and the
+     * other ninety-nine builds do not. Measured live.
+     *
+     * <p>One rewrite here rather than a hundred keywords in a migration: a beginning verb in front of a thing
+     * is a building verb. The fire keeps its own words — {@code start a fire} is LIGHT_FIRE and the classifier
+     * answers it long before anything reaches this matcher.
+     */
+    private static String asBuildingWords(String text) {
+        if (text == null) return null;
+        String v = text;
+        for (String begin : new String[]{"start building ", "begin building ", "start to build ",
+                                         "get started on ", "set about building ", "set about ",
+                                         "start ", "begin "}) {
+            int at = v.toLowerCase(java.util.Locale.ROOT).indexOf(begin);
+            if (at >= 0) return v.substring(0, at) + "build " + v.substring(at + begin.length());
+        }
+        return v;
     }
 
     /** Every assembly the words fit equally, in catalogue order. One entry means the words named one thing. */

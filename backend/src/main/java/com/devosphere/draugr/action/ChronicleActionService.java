@@ -1949,6 +1949,11 @@ public class ChronicleActionService {
             ||value.contains("still in hand")||value.contains("what is left to do")||value.contains("whats left to do")
             ||value.contains("what remains to be done")||value.contains("what still needs doing")
             ||value.contains("still needs doing")||value.contains("how far along")
+            // ...and the question asked of oneself rather than of the work (#99). `what should I do next` and
+            // `what should I do` reached nothing; what is waiting on you is the honest answer to both, and
+            // when nothing is begun the reading says exactly that rather than offering advice.
+            ||value.contains("what should i do")||value.contains("what do i do next")
+            ||value.contains("what is there to do")
             ||value.contains("how much more does")||value.contains("what next for")
             // AND "how long until", but only of a thing. The elapsed-time reading owns the hours — `how long
             // until dark` is its question and stays its own — while `how long until the hide is leather` was
@@ -2608,6 +2613,12 @@ public class ChronicleActionService {
         // way they came was shown somebody else's feathers. object_transition has recorded the direction of every
         // move since the table existed, so the way back is a thing the world knows.
         if(BACKTRACKING.matcher(value).find()) return Intent.MOVE;
+        // WHAT CAME THROUGH, which is the question form of reading the ground (#37/#99). `what tracks are
+        // here` and `read the tracks` both reach the tracking reading; `what has been through here` reached
+        // nothing, and it is the way a person asks it when they have not thought of the word "tracks".
+        if(value.contains("been through here")||value.contains("what came through")
+           ||value.contains("what has been here")||value.contains("anything been through")
+           ||value.contains("what passed through")) return Intent.TRACK;
         if(value.contains("track")||value.contains("follow the trail")||value.contains("read the ground")||value.contains("look for sign")||value.contains("look for tracks")||((value.contains("print")||value.contains("spoor")||value.contains("scat")||value.contains("droppings")||value.contains("trail"))&&(value.contains("find")||value.contains("read")||value.contains("follow")||value.contains("search")||value.contains("look")))) return Intent.TRACK;
         // Scan the boundary of the ground for a way clear of danger before moving into it (#128/#123: grounded
         // evidence before forced contact). Reads a predator ONE tile out by directional sense — scent on the
@@ -2615,6 +2626,13 @@ public class ChronicleActionService {
         // and TRACK (sign on THIS ground); owns the boundary / escape-route / scouting phrasing.
         // Watching a dangerous place from cover is scouting, which is exactly the act that exists for it (#37).
         if(((value.contains("watch")||value.contains("observe")||value.contains("study"))&&(value.contains("lair")||value.contains("den")||value.contains("from cover")||value.contains("under cover")))
+           // ...AND WHAT LIES BEYOND A RIDGE OR A TREELINE, asked as a question (#37/#99). `scout the
+           // ridge` reached this and `what is over that ridge` reached nothing. Only the question forms are
+           // taken, so `look over the ridge` keeps the survey it has always had.
+           ||((value.startsWith("what is")||value.startsWith("whats")||value.startsWith("what lies"))
+              &&(value.contains("over that ridge")||value.contains("over the ridge")
+                 ||value.contains("beyond that ridge")||value.contains("beyond the ridge")
+                 ||value.contains("beyond the treeline")||value.contains("over the hill")))
            ||value.contains("scout")||value.contains("observe the boundary")||value.contains("read the boundary")||value.contains("check the boundary")||value.contains("survey the boundary")||value.contains("escape route")||value.contains("survey the escape")||value.contains("safe route")||value.contains("safe way")||value.contains("way out")||value.contains("which way is safe")||value.contains("scan the ridge")||value.contains("scan the treeline")||value.contains("scan the tree line")||value.contains("scan the horizon")||((value.contains("scan")||value.contains("check the way")||value.contains("look"))&&(value.contains("for danger")||value.contains("for a way out")))) return Intent.SCOUT;
         // "salt the fish", "gut the fish", "weave a fish trap" all contain "fish" but
         // are processing, not angling. Defer to the material-process matcher, which
@@ -3379,6 +3397,12 @@ public class ChronicleActionService {
             ||value.contains("check my gear")||value.contains("look over my gear")||value.contains("what tools do i have")
             ||value.contains("what gear do i have")||value.contains("is anything broken")||value.contains("anything need mending")
             ||value.contains("what needs mending")||value.contains("how worn")||value.contains("how is my")
+            // WHAT YOU CAN STILL CARRY (#37/#99). The reading reports the load on every answer — "you are
+            // travelling light" — and `how heavy is my pack` reached it while `how much can I carry` and
+            // `can I carry all this` reached nothing. Same reading, the words people actually use.
+            ||value.contains("how much can i carry")||value.contains("can i carry all")
+            ||value.contains("how much more can i carry")||value.contains("am i overloaded")
+            ||value.contains("is my pack too heavy")||value.contains("carrying too much")
             // THE GRAMMATICAL PLURAL, which was the only form that failed. "how is my" was matched as a literal
             // string, so `how is my boots` — which nobody says — was answered, and `how are my boots` was not.
             // Worse than a miss: `how are my mittens` reached the process matcher, which took the noun and
@@ -3874,6 +3898,12 @@ public class ChronicleActionService {
         //
         // Held as a WORD, not a substring: "cook foraged greens" is a real process and "foraged" contains
         // "forage". Yielded to the process matcher as well, which is the belt to that braces.
+        // ...AND SAID WITHOUT THE WORD AT ALL (#37/#99). `gather what is useful` is a forage in every
+        // respect and holds neither the verb nor one of the named objects, so it reached nothing while
+        // `forage around here` combed the ground and came back with three dry twigs.
+        if(value.contains("gather what is useful")||value.contains("gather anything useful")
+           ||value.contains("pick up what is useful")||value.contains("gather whatever is useful")
+           ||value.contains("see what is lying about")||value.contains("gather what i can")) return Intent.FORAGE_GROUND;
         if((word(value,"forage")||word(value,"scavenge")||word(value,"forages")||word(value,"scavenges"))
            &&!items.actionMatchesProcess(value)) return Intent.FORAGE_GROUND;
         // Terrain crossing (#72): wading/fording/swimming/climbing toward a direction is movement to the next ground.
@@ -5009,7 +5039,13 @@ public class ChronicleActionService {
             // V396 gave the fire a table of what it turns into what, so the other raw foods it can now cook are
             // reachable by the sentence a person would use. A fish was the sharpest case: every preservation
             // process would take it and nothing would simply cook it.
-            || value.contains("fish") || value.contains("fowl") || word(value, "bird"))) return Intent.COOK_MEAT; if ((value.contains("harvest") || value.contains("butcher") || value.contains("skin") || value.contains("gut") || value.contains("quarter") || value.contains("dress")
+            || value.contains("fish") || value.contains("fowl") || word(value, "bird"))) return Intent.COOK_MEAT;
+        // AND COOKING WHAT YOU HAPPEN TO HAVE (#37/#99). The rule wants a cooking verb AND a named food, and
+        // `cook what I have` names none — it is the sentence of somebody sitting down at a fire with a pack.
+        // The handler already picks from what is carried, so the words were the only thing missing.
+        if (value.contains("cook what i have")||value.contains("cook what i am carrying")
+            ||value.contains("cook something")||value.contains("make something to eat")
+            ||value.contains("cook whatever i have")||value.contains("cook up what i have")) return Intent.COOK_MEAT; if ((value.contains("harvest") || value.contains("butcher") || value.contains("skin") || value.contains("gut") || value.contains("quarter") || value.contains("dress")
 ) && (value.contains("carcass") || value.contains("remains") || value.contains("animal") || value.contains("the kill") || value.contains("the game") || word(value, "deer") || word(value, "boar") || word(value, "elk") || word(value, "aurochs") || word(value, "hare") || word(value, "rabbit") || word(value, "goat") || word(value, "wolf") || word(value, "bear") || word(value, "fox"))
             // Act eleven: "take the hide" reached nothing standing over a deer this same rule would have skinned,
             // because every phrasing it knew named the animal. Naming the yield is naming the act; when nothing

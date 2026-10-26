@@ -2751,4 +2751,65 @@ class IntentClassificationRegressionTest {
         // ...and a distance to a thing in the country is the bearing reading's, which answers both at once.
         assertEquals("WHICH_WAY", classify("how far is the river"));
     }
+
+    /**
+     * The words a player reaches for first (#37/#99).
+     *
+     * <p>#99's release gate asks that every supported action resolve or fail with a specific observed fact and
+     * that nothing fall through to the generic handler. Swept 97 ordinary sentences across fifteen families on
+     * a booted world: 76 were answered and <b>15 reached nothing</b> — and for five of those the reading they
+     * wanted was already there, reachable only by a different form of words:
+     *
+     * <pre>
+     *   what tracks are here   -&gt; TRACK          |  what has been through here  -&gt; nothing
+     *   how heavy is my pack   -&gt; gear reading   |  how much can I carry         -&gt; nothing
+     *   scout the ridge        -&gt; SCOUT          |  what is over that ridge      -&gt; nothing
+     *   forage around here     -&gt; FORAGE_GROUND  |  gather what is useful        -&gt; nothing
+     *   build a shelter        -&gt; the assembly   |  start a shelter              -&gt; nothing
+     * </pre>
+     *
+     * <p>Each of these is the same reading reached by the words people actually use. The last is a verb rather
+     * than a phrase: every assembly's keywords are written with "build", "make" or "raise", so one rewrite in
+     * the matcher serves all hundred builds instead of a hundred keywords in a migration.
+     */
+    @Test
+    void theWordsAPlayerReachesForFirst() throws Exception {
+        // What came through — the question form of reading the ground.
+        assertEquals("TRACK", classify("what has been through here"));
+        assertEquals("TRACK", classify("what came through here"));
+        assertEquals("TRACK", classify("what tracks are here"), "which already worked");
+
+        // What you can still carry, which the gear reading reports on every answer.
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("how much can I carry"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("can I carry all this"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("am I overloaded"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("how heavy is my pack"), "which already worked");
+
+        // What lies beyond the ridge, asked as a question — and the looking keeps its own.
+        assertEquals("SCOUT", classify("what is over that ridge"));
+        assertEquals("SCOUT", classify("what lies beyond the treeline"));
+        assertEquals("SCOUT", classify("scout the ridge"), "which already worked");
+        assertNotEquals("SCOUT", classify("climb the ridge"), "climbing is not scouting");
+
+        // A forage said without naming what to pick up.
+        assertEquals("FORAGE_GROUND", classify("gather what is useful"));
+        assertEquals("FORAGE_GROUND", classify("see what is lying about"));
+        assertEquals("FORAGE_GROUND", classify("forage around here"), "which already worked");
+
+        // Cooking what you happen to have, which is the sentence of somebody with a pack at a fire.
+        assertEquals("COOK_MEAT", classify("cook what I have"));
+        assertEquals("COOK_MEAT", classify("cook something"));
+        assertEquals("COOK_MEAT", classify("roast the meat"), "which already worked");
+
+        // And what is waiting on you, asked of yourself rather than of the work.
+        assertEquals("JUDGE_WORK_IN_HAND", classify("what should I do next"));
+        assertEquals("JUDGE_WORK_IN_HAND", classify("what is there to do"));
+
+        // THE ACTS THESE SIT BESIDE ARE UNTOUCHED: a drink is a drink, a fire is lit and not built, and
+        // gathering a named thing still gathers that thing.
+        assertEquals("DRINK", classify("drink some water"));
+        assertEquals("LIGHT_FIRE", classify("start a fire"), "a fire is lit, not raised");
+        assertEquals("GATHER_PLANT", classify("pick the berries"), "the plant gather owns the berry picking");
+        assertEquals("GATHER_BRANCHES", classify("gather branches"));
+    }
 }
