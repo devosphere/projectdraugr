@@ -2245,7 +2245,17 @@ public class PhysicalItemService {
             "SELECT d.flora_key, regexp_replace(regexp_replace(replace(d.item_key,'_',' '), " +
             "         ' (bundle|tuft|head|piece|strip|sprig|handful)$', ''), '^.* ', ''), d.item_key " +
             "  FROM flora_drop d WHERE d.item_key LIKE '%\\_%' " +
-            "   AND regexp_replace(d.item_key, '^.*_', '') NOT IN ('bundle','tuft','head','piece','strip','sprig','handful')");
+            "   AND regexp_replace(d.item_key, '^.*_', '') NOT IN ('bundle','tuft','head','piece','strip','sprig','handful') " +
+            "UNION ALL " +
+            // ...AND THE WORD IN FRONT OF THE KIND WORD, which is the complement of the pass above and the
+            // other half of the same rule (#37). Where the last word says WHAT A THING IS — plantain HERB,
+            // chickweed PLANT, elder SHRUB — the first word is what it is CALLED, and only the last was ever
+            // indexed. Measured live: `pick the plantain`, standing on six plantain, came back "you gather 5
+            // chickweed from the chickweed plant growing here". Asked for one plant, given another, in the same
+            // even voice as a true answer.
+            "SELECT fd.flora_key, regexp_replace(replace(fd.flora_key,'_',' '), ' .*$', ''), CAST(NULL AS varchar) " +
+            "  FROM flora_definition fd WHERE fd.flora_key LIKE '%\\_%' " +
+            "   AND regexp_replace(fd.flora_key, '^.*_', '') IN ('shrub','plant','fungus','tree','bed','bush','herb')");
 
         // Every phrase that matches at the LONGEST length, not merely the first of them. Head nouns tie by
         // construction — meadow_grass and wild_grass are both "grass", dog_rose and wild_rose both "rose" — and
@@ -2257,7 +2267,13 @@ public class PhysicalItemService {
         for (java.util.Map<String,Object> word : vocabulary) {
             String phrase = (String) word.get("phrase");
             if (phrase == null || phrase.length() < 4 || phrase.length() < longest) continue;
-            if ((" " + lower + " ").contains(" " + phrase + " ") || (" " + lower + " ").contains(" " + phrase + "s ")) {
+            // The plural a person says, including the one that is not an s (#37): the catalogue holds a
+            // plantain LEAF and nobody asks for plantain leafs.
+            String irregular = phrase.endsWith("f") ? phrase.substring(0, phrase.length() - 1) + "ves"
+                             : phrase.endsWith("fe") ? phrase.substring(0, phrase.length() - 2) + "ves"
+                             : phrase.endsWith("s") || phrase.endsWith("sh") || phrase.endsWith("ch") ? phrase + "es" : null;
+            if ((" " + lower + " ").contains(" " + phrase + " ") || (" " + lower + " ").contains(" " + phrase + "s ")
+                || (irregular != null && (" " + lower + " ").contains(" " + irregular + " "))) {
                 if (phrase.length() > longest) { spokenAll.clear(); longest = phrase.length(); }
                 spokenAll.add(word);
             }
@@ -2335,8 +2351,19 @@ public class PhysicalItemService {
         // The drop the Chronicle NAMED, where they named one (#37). Meadow grass yields dry grass, green grass,
         // straw and thatch, and this took whichever sorted first — so asking for thatch got you dry grass, and
         // the four drops the catalogue carefully distinguishes were one drop with three spare names.
+        // ...and failing that, THE DROP THE PLANT IS KNOWN FOR rather than the one that sorts first (#37). A
+        // hazel yields hazelnuts, hazel rods, loose bark, shed BIRCH bark, leaf litter and dry twig, and
+        // `pick the hazel` came back "you gather 2 shed birch bark from the hazel growing here" — birch bark
+        // off a hazel, because birch_bark_shed sorts before hazelnut. A drop that carries the plant's own name
+        // is what the plant is for; after that, food before material; after that, the catalogue's order.
+        String plantWord = floraKey.contains("_") ? floraKey.substring(0, floraKey.indexOf('_')) : floraKey;
         java.util.Map<String,Object> drop = drops.stream()
-            .filter(d -> d.get("item_key").equals(wantedDrop)).findFirst().orElse(drops.get(0));
+            .filter(d -> d.get("item_key").equals(wantedDrop)).findFirst()
+            .or(() -> drops.stream().filter(d -> ((String) d.get("item_key")).startsWith(plantWord)).findFirst())
+            .or(() -> drops.stream().filter(d -> "FOOD".equals(jdbc.queryForObject(
+                    "SELECT category FROM item_definition WHERE item_key=?", String.class, d.get("item_key"))))
+                .findFirst())
+            .orElse(drops.get(0));
         String itemKey = (String) drop.get("item_key");
         int yieldMin = ((Number) drop.get("yield_min")).intValue();
         int yieldMax = ((Number) drop.get("yield_max")).intValue();

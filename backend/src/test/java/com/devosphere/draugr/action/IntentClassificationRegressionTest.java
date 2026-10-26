@@ -2834,4 +2834,27 @@ class IntentClassificationRegressionTest {
         assertEquals("CRAFT_KNIFE", classify("make a knife"));
         assertEquals("JUDGE_WORK_IN_HAND", classify("what am I working on"));
     }
+
+    /**
+     * Asking what grows here (#37/#99, V445).
+     *
+     * <p>chunk_flora carries 1,440 rows and flora_definition 102 kinds with their tools, their poisons and
+     * their regrowth; every gathering act reads all of it and the question reached nothing. A keeper could
+     * strip a patch of plantain and never be told what was growing under their feet.
+     */
+    @Test
+    void askingWhatGrowsHere() throws Exception {
+        assertEquals("JUDGE_FLORA", classify("what grows here"));
+        assertEquals("JUDGE_FLORA", classify("what plants are here"));
+        assertEquals("JUDGE_FLORA", classify("what plants grow here"));
+        assertEquals("JUDGE_FLORA", classify("what is growing here"));
+        assertEquals("JUDGE_FLORA", classify("what can I pick here"));
+
+        // AND THE PICKING IS STILL THE PICKING. Nothing is gathered by asking, and asking is not gathering:
+        // both directions, because this rule sits among the gathering verbs.
+        assertEquals("GATHER_PLANT", classify("pick the plantain"));
+        assertEquals("GATHER_PLANT", classify("gather berries"), "the plant gather owns the berries");
+        assertEquals("FORAGE_GROUND", classify("forage around here"));
+        assertEquals("GATHER_PLANT", classify("gather plant fibre"), "and the fibre, when it is said that way");
+    }
 }

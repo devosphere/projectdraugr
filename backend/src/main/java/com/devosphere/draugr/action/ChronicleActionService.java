@@ -666,6 +666,7 @@ public class ChronicleActionService {
         else if (intent == Intent.JUDGE_PLACE) { String[] r = judgePlace(chronicle); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_WORK_IN_HAND) { String[] r = judgeWorkInHand(chronicle, text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_LEARNING) { String[] r = judgeLearning(chronicle); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.JUDGE_FLORA) { String[] r = judgeFlora(chronicle.location()); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.HIDE_TRAIL) { String[] r = wildlife.hideTrail(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.WEED_CROP) { String[] r=items.tendCrop(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.CLEAR_LAND) { String[] r=items.clearLand(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
@@ -1963,6 +1964,58 @@ public class ChronicleActionService {
      * keys are resolved back through the catalogue, so the answer is in the names a keeper would use rather
      * than in process keys.
      */
+    /**
+     * What grows on this ground (#37/#99).
+     *
+     * <p>{@code chunk_flora} carries what grows where, how much of it stands and how much the patch can hold;
+     * {@code flora_definition} says whether each wants a tool, whether it is poisonous and how many days it
+     * takes to come back. Every gathering act reads all of it, and the QUESTION reached nothing: a keeper could
+     * strip a patch of plantain and never once be told what was growing under their feet.
+     *
+     * <p>Says how much is LEFT as well as what is there, because the quantity against the capacity is the
+     * difference between a patch untouched and one picked bare, and the days are the catalogue's own figures
+     * rather than an adjective. The tree stand is left to {@link #groundWoodland}, which already says it and
+     * says it from the natural stand where nothing has been recorded yet — so a forest is never reported bare
+     * for want of a row.
+     */
+    private String[] judgeFlora(UUID location) {
+        java.util.List<java.util.Map<String,Object>> growing = jdbc.queryForList(
+            "SELECT cf.flora_key, cf.quantity, cf.capacity, fd.organism_type, fd.is_poisonous, " +
+            "       fd.regrowth_days, COALESCE(fd.tool_required,'') AS tool " +
+            "FROM chunk_flora cf JOIN flora_definition fd ON fd.flora_key=cf.flora_key " +
+            "WHERE cf.chunk_id=? AND fd.organism_type <> 'TREE' AND cf.quantity > 0 " +
+            "ORDER BY cf.quantity DESC, cf.flora_key", location);
+        String wood = groundWoodland(location);
+
+        if (growing.isEmpty())
+            return new String[]{"SUCCEEDED", (wood.isBlank()
+                ? "Nothing worth the picking is growing on this ground — no herb, no berry, no useful shrub "
+                + "within sight of where you stand."
+                : "Nothing low is growing here worth the picking. " + wood).trim()};
+
+        java.util.List<String> said = new java.util.ArrayList<>();
+        java.util.List<String> poisonous = new java.util.ArrayList<>();
+        for (java.util.Map<String,Object> row : growing) {
+            String name = ((String) row.get("flora_key")).replace('_', ' ');
+            int left = ((Number) row.get("quantity")).intValue();
+            int full = Math.max(1, ((Number) row.get("capacity")).intValue());
+            int days = ((Number) row.get("regrowth_days")).intValue();
+            String tool = (String) row.get("tool");
+            StringBuilder one = new StringBuilder(name).append(" (").append(left);
+            if (left < full) one.append(" of ").append(full).append(", the patch worked over");
+            one.append(days > 0 && left < full ? "; it comes back in " + days + " days" : "");
+            if (!tool.isBlank()) one.append("; it wants ").append(tool.toLowerCase(Locale.ROOT));
+            said.add(one.append(')').toString());
+            if (Boolean.TRUE.equals(row.get("is_poisonous"))) poisonous.add(name);
+        }
+        StringBuilder b = new StringBuilder("Growing here: ").append(joinAnd(said)).append('.');
+        if (!poisonous.isEmpty())
+            b.append(poisonous.size() == 1 ? " The " : " The ").append(joinAnd(poisonous))
+             .append(poisonous.size() == 1 ? " is poison, whatever else it is good for." : " are poison.");
+        if (!wood.isBlank()) b.append(' ').append(wood.trim());
+        return new String[]{"SUCCEEDED", b.toString()};
+    }
+
     private String[] judgeLearning(ActiveChronicle chronicle) {
         java.util.List<String> worked = jdbc.queryForList(
             "SELECT COALESCE(mp.display_name, ad.display_name, " +
@@ -3439,6 +3492,18 @@ public class ChronicleActionService {
             ||value.contains("what do i know how to do")||value.contains("what have i worked out")
             ||value.contains("what can i make now")||value.contains("what have i figured out"))
             return Intent.JUDGE_LEARNING;
+        // WHAT GROWS ON THIS GROUND (#37/#99). chunk_flora carries 1,440 rows — what grows where, how much of
+        // it, and how much the patch can hold — and flora_definition says for each whether it wants a tool,
+        // whether it is poisonous and how many days it takes to come back. The gathering acts read all of it.
+        // The QUESTION reached nothing: `what grows here`, `what plants are here` and `what plants grow here`
+        // were all misses on a booted world, while `forage around here` combed the ground and came back with
+        // three dry twigs. A keeper could harvest a patch and never be told what was in it.
+        if (value.contains("what grows here")||value.contains("what grows on this")
+            ||value.contains("what plants are here")||value.contains("what plants grow")
+            ||value.contains("what is growing here")||value.contains("whats growing here")
+            ||value.contains("anything growing here")||value.contains("what is growing on this")
+            ||value.contains("what can i pick here")||value.contains("what is there to pick"))
+            return Intent.JUDGE_FLORA;
         if (asksWhatRemainsOfTheWork(value)) return Intent.JUDGE_WORK_IN_HAND;
         // What you are carrying and what state it is in (#37, act fifteen). condition_state, use_count and
         // quality_grade have been on every item since the table existed, and the LOAD is computed on every
@@ -5431,7 +5496,7 @@ public class ChronicleActionService {
             || (word(v, "fix") && !v.contains("memory") && !v.contains("mind"));
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, JUDGE_CLOTHING, JUDGE_PLACE, JUDGE_WORK_IN_HAND, JUDGE_LEARNING, PARE_HOOVES, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, JUDGE_CLOTHING, JUDGE_PLACE, JUDGE_WORK_IN_HAND, JUDGE_LEARNING, JUDGE_FLORA, PARE_HOOVES, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;}
         /** The cardinal for a grid offset, for when the WORLD names the direction rather than the player (#37). */
         static Direction of(int dx,int dy){ for(Direction d:values()) if(d.dx==dx&&d.dy==dy) return d; return null; } }    /**     * The structured perception frame — the seam every future Simulation Agent reads
