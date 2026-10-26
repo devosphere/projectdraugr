@@ -667,6 +667,7 @@ public class ChronicleActionService {
         else if (intent == Intent.JUDGE_WORK_IN_HAND) { String[] r = judgeWorkInHand(chronicle, text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_LEARNING) { String[] r = judgeLearning(chronicle); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_FLORA) { String[] r = judgeFlora(chronicle.location()); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.JUDGE_RAISING) { String[] r = judgeRaising(chronicle); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.HIDE_TRAIL) { String[] r = wildlife.hideTrail(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.WEED_CROP) { String[] r=items.tendCrop(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.CLEAR_LAND) { String[] r=items.clearLand(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
@@ -1978,6 +1979,74 @@ public class ChronicleActionService {
      * says it from the natural stand where nothing has been recorded yet — so a forest is never reported bare
      * for want of a row.
      */
+    /**
+     * What could be raised on this ground (#37/#99).
+     *
+     * <p>{@code assembly_definition} holds 110 verified builds and {@code assembly_stage} the first stage of
+     * each with exactly what it wants; eight of the builds are gated to particular ground by
+     * {@code site_biomes}. Every bit of it is read when a keeper NAMES something to build, and the question
+     * the other way round reached nothing — so the only way to learn what this ground would take was to guess
+     * a name and be refused, one guess at a time.
+     *
+     * <p>One query, not a hundred and ten: what is within reach is counted once and the first stage's bill is
+     * compared against it in the same statement. A build whose first stage wants nothing counts as ready,
+     * which is what V427 settled for the pits and frames.
+     *
+     * <p>Names what could be begun NOW and counts the rest, because a list of a hundred and ten names is not
+     * an answer. The ground's own refusals are kept separate: a thing that wants water you have not got here
+     * is a different answer from a thing that wants materials you have not got yet.
+     */
+    private String[] judgeRaising(ActiveChronicle chronicle) {
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, chronicle.location());
+        java.util.List<java.util.Map<String,Object>> rows = jdbc.queryForList(
+            "WITH reach AS (" +
+            "  SELECT i.item_key, COUNT(*) AS n FROM item_instance i JOIN world_object w ON w.id=i.object_id " +
+            "   WHERE w.lifecycle_state='ACTIVE' AND (w.current_owner_id=? OR w.current_location_id=?) " +
+            "   GROUP BY i.item_key) " +
+            "SELECT d.display_name AS name, " +
+            "       (d.site_biomes IS NULL OR (','||d.site_biomes||',') LIKE '%,'||?||',%') AS onThisGround, " +
+            "       COALESCE(bool_and(COALESCE(r.n,0) >= req.quantity), TRUE) AS inHand " +
+            "FROM assembly_definition d " +
+            "  JOIN assembly_stage s ON s.assembly_key=d.assembly_key AND s.stage_order=1 " +
+            "  LEFT JOIN assembly_stage_requirement req ON req.stage_key=s.stage_key " +
+            "  LEFT JOIN reach r ON r.item_key=req.item_key " +
+            "WHERE d.review_state='VERIFIED' " +
+            "GROUP BY d.display_name, d.site_biomes " +
+            "ORDER BY d.display_name", chronicle.id(), chronicle.location(), biome);
+
+        java.util.List<String> ready = new java.util.ArrayList<>();
+        int waitingOnMaterials = 0, wrongGround = 0;
+        for (java.util.Map<String,Object> row : rows) {
+            boolean here = Boolean.TRUE.equals(row.get("onthisground"));
+            boolean inHand = Boolean.TRUE.equals(row.get("inhand"));
+            if (!here) { wrongGround++; continue; }
+            // Named with its article, because "you could begin earth oven" is not a sentence anybody says.
+            if (inHand) {
+                String name = ((String) row.get("name")).toLowerCase(Locale.ROOT);
+                ready.add("aeiou".indexOf(name.charAt(0)) >= 0 ? "an " + name : "a " + name);
+            }
+            else waitingOnMaterials++;
+        }
+
+        StringBuilder b = new StringBuilder();
+        if (ready.isEmpty()) b.append("There is nothing you could begin raising here with what is to hand.");
+        else {
+            java.util.List<String> named = ready.size() > 6 ? ready.subList(0, 6) : ready;
+            b.append("With what is within reach you could begin ").append(joinAnd(named));
+            if (ready.size() > named.size())
+                b.append(" — and ").append(ready.size() - named.size()).append(" more besides");
+            b.append('.');
+        }
+        if (waitingOnMaterials > 0)
+            b.append(' ').append(waitingOnMaterials).append(waitingOnMaterials == 1
+                ? " other thing wants materials you have not got yet."
+                : " other things want materials you have not got yet.");
+        if (wrongGround > 0)
+            b.append(' ').append(wrongGround).append(wrongGround == 1
+                ? " wants different ground than this." : " want different ground than this.");
+        return new String[]{"SUCCEEDED", b.toString()};
+    }
+
     private String[] judgeFlora(UUID location) {
         java.util.List<java.util.Map<String,Object>> growing = jdbc.queryForList(
             "SELECT cf.flora_key, cf.quantity, cf.capacity, fd.organism_type, fd.is_poisonous, " +
@@ -3492,6 +3561,17 @@ public class ChronicleActionService {
             ||value.contains("what do i know how to do")||value.contains("what have i worked out")
             ||value.contains("what can i make now")||value.contains("what have i figured out"))
             return Intent.JUDGE_LEARNING;
+        // WHAT COULD BE RAISED HERE (#37/#99). assembly_definition holds 110 verified builds, 8 of them gated
+        // to particular ground, and each one's first stage declares exactly what it wants. All of it is read
+        // when a keeper names a thing to build — and nothing could ask the question the other way round:
+        // `what can I build here`, `what could I build here` and `what can be built here` were all misses on a
+        // booted world, so the only way to find out what this ground would take was to guess a name and be
+        // refused. Gated to the QUESTION forms, so every building verb still builds.
+        if (value.contains("what can i build")||value.contains("what could i build")
+            ||value.contains("what can be built")||value.contains("what could be built")
+            ||value.contains("what can i raise here")||value.contains("what could i raise")
+            ||value.contains("what is there to build")||value.contains("what could i put up"))
+            return Intent.JUDGE_RAISING;
         // WHAT GROWS ON THIS GROUND (#37/#99). chunk_flora carries 1,440 rows — what grows where, how much of
         // it, and how much the patch can hold — and flora_definition says for each whether it wants a tool,
         // whether it is poisonous and how many days it takes to come back. The gathering acts read all of it.
@@ -5496,7 +5576,7 @@ public class ChronicleActionService {
             || (word(v, "fix") && !v.contains("memory") && !v.contains("mind"));
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, JUDGE_CLOTHING, JUDGE_PLACE, JUDGE_WORK_IN_HAND, JUDGE_LEARNING, JUDGE_FLORA, PARE_HOOVES, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, JUDGE_CLOTHING, JUDGE_PLACE, JUDGE_WORK_IN_HAND, JUDGE_LEARNING, JUDGE_FLORA, JUDGE_RAISING, PARE_HOOVES, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;}
         /** The cardinal for a grid offset, for when the WORLD names the direction rather than the player (#37). */
         static Direction of(int dx,int dy){ for(Direction d:values()) if(d.dx==dx&&d.dy==dy) return d; return null; } }    /**     * The structured perception frame — the seam every future Simulation Agent reads

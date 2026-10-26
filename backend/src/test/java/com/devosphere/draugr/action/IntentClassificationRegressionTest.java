@@ -2857,4 +2857,28 @@ class IntentClassificationRegressionTest {
         assertEquals("FORAGE_GROUND", classify("forage around here"));
         assertEquals("GATHER_PLANT", classify("gather plant fibre"), "and the fibre, when it is said that way");
     }
+
+    /**
+     * Asking what could be raised here (#37/#99, V446).
+     *
+     * <p>110 verified builds, each with a first stage that declares what it wants, eight of them gated to
+     * particular ground — all read when a keeper NAMES a thing to build, and nothing could ask the question
+     * the other way round. The only way to learn what this ground would take was to guess a name and be
+     * refused, one guess at a time.
+     */
+    @Test
+    void askingWhatCouldBeRaisedHere() throws Exception {
+        assertEquals("JUDGE_RAISING", classify("what can I build here"));
+        assertEquals("JUDGE_RAISING", classify("what could I build here"));
+        assertEquals("JUDGE_RAISING", classify("what can be built here"));
+        assertEquals("JUDGE_RAISING", classify("what could I put up here"));
+
+        // AND EVERY BUILDING VERB STILL BUILDS, which is the boundary: nothing is raised by asking, and asking
+        // is not raising. The rule is held to the question forms for exactly this reason.
+        assertEquals("BUILD_FIRE_PIT", classify("build a fire pit"));
+        assertEquals("WORK_LEAN_TO", classify("build a lean-to"), "the lean-to branch reads \"build\" as working on it");
+        assertEquals("BUILD_FENCE", classify("build a fence"));
+        assertEquals("JUDGE_WORK_IN_HAND", classify("what am I working on"));
+        assertEquals("JUDGE_FLORA", classify("what grows here"));
+    }
 }
