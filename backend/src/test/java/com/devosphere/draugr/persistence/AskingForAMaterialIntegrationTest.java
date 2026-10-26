@@ -94,7 +94,35 @@ class AskingForAMaterialIntegrationTest {
             "a living Chronicle is needed");
     }
 
+    /**
+     * An item laid on the ground where the Chronicle stands, which is "within reach" for every process.
+     *
+     * <p>On the ground rather than in the pack ON PURPOSE: the suite shares one Chronicle, a hide is 2.6kg, and
+     * a fixture that loads the keeper up gets "you cannot physically carry that load" from a capacity check
+     * that has nothing to do with what the test is measuring. #812 lost a CI round to exactly that.
+     */
+    private void layOnTheGround(UUID location, String itemKey) {
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) " +
+                    "VALUES (?,'ITEM',(SELECT display_name FROM item_definition WHERE item_key=?),?)",
+                    id, itemKey, location);
+        jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state,quality_grade) " +
+                    "VALUES (?,?,'SOUND','SOUND')", id, itemKey);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) " +
+                    "VALUES (?,now(),'TEST_SEED',jsonb_build_object('itemKey',?))", id, itemKey);
+    }
+
+    /** How many of a thing are within reach — carried or lying here, which is what a process counts. */
+    private int inReach(UUID chronicle, UUID location, String itemKey) {
+        Integer n = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM item_instance i JOIN world_object w ON w.id=i.object_id " +
+            "WHERE w.lifecycle_state='ACTIVE' AND i.item_key=? " +
+            "  AND (w.current_owner_id=? OR w.current_location_id=?)", Integer.class, itemKey, chronicle, location);
+        return n == null ? 0 : n;
+    }
+
     private String said(String text) {
+
         var r = actions.resolve(text, java.util.UUID.randomUUID());
         assertNotNull(r, () -> "the composer must answer: " + text);
         return (r.perception() == null ? "" : r.perception()).toLowerCase(Locale.ROOT);
@@ -294,5 +322,72 @@ class AskingForAMaterialIntegrationTest {
             () -> "a cape named in full reads its own bill: " + named);
         assertFalse(named.contains("more than one"),
             () -> "and is not asked back as a tie: " + named);
+    }
+
+    /**
+     * The words for working a hide soft, and the work behind them (#37, V443).
+     *
+     * <p>Swept the hide axis on a booted world. Nine sentences reached their process — scraping, dehairing,
+     * tanning, stretching, salting — and five reached nothing at all:
+     *
+     * <pre>
+     *   soften the hide / work the hide soft / break the hide      -&gt; nothing at all
+     *   dress the hide with fat / rub fat into the hide            -&gt; nothing at all
+     * </pre>
+     *
+     * <p>Not a routing gap: the catalogue held bark tanning and <b>no softening work at all</b>, so the words
+     * had nothing to reach. V443 adds fat tanning — a hide and two rendered tallow, no bark, no water, no tool,
+     * five hours — which is a real second route to the same leather and gives rendered tallow a use that does
+     * not burn or eat it.
+     *
+     * <p>This asserts the thing that matters about any catalogue addition in this project: not that a row
+     * exists, but that a keeper with the materials in hand can say it in their own words and come away holding
+     * the leather.
+     */
+    @Test
+    void theWordsForWorkingAHideSoft() {
+        aLivingChronicle();
+        UUID chronicle = chronicles.active().id();
+
+        // Every phrasing reaches the work, and the refusal when empty-handed names the fat — which is what
+        // tells this process from the bark tanning beside it.
+        for (String phrase : new String[]{"soften the hide", "work the hide soft", "break the hide",
+                                          "dress the hide with fat", "rub fat into the hide",
+                                          "fat tan the hide", "brain tan the hide"}) {
+            assertEquals("PROCESS_MATERIAL", intentOf(phrase),
+                () -> "\"" + phrase + "\" must reach the material matcher");
+        }
+
+        // AND THE BARK TANNING BESIDE IT KEEPS ITS OWN SENTENCES. Two processes now answer about one hide, and
+        // the words must still part them: tanning is bark and water, softening is fat and hours.
+        String tanning = said("tan the hide");
+        assertFalse(tanning.contains("tallow"),
+            () -> "bark tanning must not start asking for fat: " + tanning);
+        String fleshing = said("scrape the hide");
+        assertFalse(fleshing.contains("tallow"),
+            () -> "nor must fleshing: " + fleshing);
+
+        // THE WHOLE OF IT, ONCE. A hide and two tallow in hand, said in the plainest of the five words, and the
+        // keeper must end up holding leather with the hide and the fat gone into it.
+        UUID here = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+        int leatherBefore = inReach(chronicle, here, "tanned_leather");
+        int tallowBefore = inReach(chronicle, here, "rendered_tallow");
+        layOnTheGround(here, "deer_hide");
+        layOnTheGround(here, "rendered_tallow");
+        layOnTheGround(here, "rendered_tallow");
+        assertEquals(tallowBefore + 2, inReach(chronicle, here, "rendered_tallow"), "the fat must be within reach");
+
+        var worked = actions.resolve("soften the hide", UUID.randomUUID());
+        assertEquals("SUCCEEDED", worked.outcome(),
+            () -> "with the hide and the fat within reach it must go through: " + worked.perception());
+        assertTrue(inReach(chronicle, here, "tanned_leather") > leatherBefore,
+            () -> "and must leave leather behind it: " + worked.perception());
+        assertEquals(tallowBefore, inReach(chronicle, here, "rendered_tallow"),
+            () -> "the fat goes into the hide, both of the tallow: " + worked.perception());
+
+        // A better process means better recovery, never more matter — and one catalogue row that breaks that
+        // rule fails nearly every integration test in this suite, so it is asserted here where it was added.
+        assertTrue(auditor.inspect().consistent(),
+            () -> "the new process must keep mass balance: " + auditor.inspect().violations());
     }
 }
