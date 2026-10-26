@@ -5177,6 +5177,68 @@ public class PhysicalItemService {
     }
 
     /** The bill of one named piece of work, from BOTH input tables, against what is within reach (#37). */
+    /**
+     * A thing that does not come on by waiting (#37).
+     *
+     * <p>{@code is the hide ready} is the question a player asks after a kill, and it has an answer the game
+     * had no way to give: a hide does not become leather by being left. It becomes leather by fleshing,
+     * dehairing and tanning, each of which turns on a tool, and the catalogue holds every step of it. The
+     * sentence reached nothing, and {@code how far along is the hide} reached MEASURE — "you pace it out and
+     * reckon by eye", a progress question answered by pacing out the ground.
+     *
+     * <p>So this says the true thing and then the useful thing: nothing is happening to it, and here is what
+     * the next working of it would be. Read from both input tables, because a bill read from one of the two
+     * reads as matter from nothing.
+     *
+     * <p>Returns null when the sentence names no catalogue item, so the caller can fall through rather than
+     * answer about nothing.
+     */
+    @Transactional(readOnly = true)
+    public String[] whatWaitingWillNotDo(UUID chronicle, UUID location, String text) {
+        String[] named = itemNamedIn(text);
+        if (named == null) return null;
+        String word = named[1];
+        java.util.List<String> keys = named[0] != null ? java.util.List.of(named[0])
+            : jdbc.queryForList("SELECT item_key FROM item_definition WHERE lower(display_name)=? " +
+                                "   OR lower(display_name) LIKE ? ORDER BY length(display_name) LIMIT 8",
+                                String.class, singular(word), "% " + singular(word));
+        if (keys.isEmpty()) return null;
+
+        int have = 0;
+        for (String key : keys) have += reachCountAt(chronicle, location, key);
+
+        StringBuilder in = new StringBuilder();
+        for (int i = 0; i < keys.size(); i++) in.append(i == 0 ? "?" : ",?");
+        java.util.List<java.util.Map<String,Object>> next = jdbc.queryForList(
+            "SELECT DISTINCT mp.display_name AS work, COALESCE(o.display_name, mp.output_item_key) AS makes, " +
+            "       COALESCE(mp.tool_class,'') AS tool " +
+            "FROM material_process mp LEFT JOIN item_definition o ON o.item_key=mp.output_item_key " +
+            "WHERE EXISTS (SELECT 1 FROM material_process_input i WHERE i.process_key=mp.process_key " +
+            "                AND i.item_key IN (" + in + ")) " +
+            "   OR EXISTS (SELECT 1 FROM material_process_input_group g WHERE g.process_key=mp.process_key " +
+            "                AND g.item_key IN (" + in + ")) " +
+            "ORDER BY work LIMIT 3",
+            java.util.stream.Stream.concat(keys.stream(), keys.stream()).toArray());
+
+        StringBuilder b = new StringBuilder();
+        if (have == 0) b.append("You have no ").append(word).append(" in reach, so there is none of it to be ready. ");
+        else b.append("A ").append(singular(word)).append(" is not a thing that comes on by waiting — nothing happens ")
+              .append("to it until it is worked. You have ").append(have).append(have == 1 ? " to hand. " : " to hand. ");
+        if (next.isEmpty()) {
+            b.append(have == 0 ? "" : "Nothing in your knowledge works it further; it is as finished as it gets.");
+            return new String[]{"SUCCEEDED", b.toString().trim()};
+        }
+        java.util.List<String> steps = new java.util.ArrayList<>();
+        for (java.util.Map<String,Object> row : next) {
+            String tool = (String) row.get("tool");
+            steps.add(lower((String) row.get("work")) + ", which makes " + lower((String) row.get("makes"))
+                + (tool.isBlank() ? "" : " and turns on " + toolSaid(tool)
+                    + (hasToolOfClass(chronicle, tool) ? " (you are carrying one)" : " (you have none)")));
+        }
+        b.append(steps.size() == 1 ? "The working of it is " : "The workings of it are ").append(joinAnd(steps)).append('.');
+        return new String[]{"SUCCEEDED", b.toString()};
+    }
+
     private String[] judgeNamedWork(UUID chronicle, UUID location, String process) {
         java.util.Map<String,Object> head = jdbc.queryForMap(
             "SELECT display_name, output_item_key, COALESCE(tool_class,'') AS tool_class, " +

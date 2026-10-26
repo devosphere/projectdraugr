@@ -647,6 +647,7 @@ public class ChronicleActionService {
         else if (intent == Intent.JUDGE_MAKING) { String[] r = items.judgeMaking(chronicle.id(), chronicle.location(), text); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_CLOTHING) { String[] r = judgeClothing(chronicle, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_PLACE) { String[] r = judgePlace(chronicle); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.JUDGE_WORK_IN_HAND) { String[] r = judgeWorkInHand(chronicle, text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.HIDE_TRAIL) { String[] r = wildlife.hideTrail(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.WEED_CROP) { String[] r=items.tendCrop(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.CLEAR_LAND) { String[] r=items.clearLand(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
@@ -1897,6 +1898,59 @@ public class ChronicleActionService {
     }
 
     /** Register the chronicle's presence in a chunk — the raw material of route memory and the decay clock on named places. */
+    /**
+     * What is waiting on you (#37) — the stage records first, then the material, then an honest nothing.
+     *
+     * <p>Three sources in the order a player means them. A begun assembly or an unfinished raising is work in
+     * the proper sense and {@link AssemblyService#whatRemains} answers it in the terms advance refuses on. A
+     * hide is not: it is a material, and the true answer is that nothing is happening to it and what the next
+     * working would be. And when the sentence names neither, saying so is the answer — a reading that invents
+     * work to report is worse than one that reaches nothing.
+     */
+    /**
+     * Whether a sentence is asking what remains of a work (#37). One rule, because two callers need it: the
+     * general classifier, and the lean-to branch, which diverts EVERY sentence holding the word to itself.
+     *
+     * <p>That branch sends questions to the camp stocktake on purpose — "is the lean-to still good" wants the
+     * integrity it reports, and before #37's earlier act that sentence BUILT a lean-to. A progress question is
+     * the one kind it answers badly: `how far along is the lean-to` was told what already stands, which is the
+     * opposite of what was asked. So the exception lives here, where both paths can read the same rule.
+     */
+    private boolean asksWhatRemainsOfTheWork(String value) {
+        return value.contains("what am i working on")||value.contains("what was i working on")
+            ||value.contains("what is unfinished")||value.contains("whats unfinished")
+            ||value.contains("what have i started")||value.contains("half done")||value.contains("half finished")
+            ||value.contains("how is the work")||value.contains("how goes the work")
+            ||value.contains("still in hand")||value.contains("what is left to do")||value.contains("whats left to do")
+            ||value.contains("what remains to be done")||value.contains("what still needs doing")
+            ||value.contains("still needs doing")||value.contains("how far along")
+            ||value.contains("how much more does")||value.contains("what next for")
+            // AND "how long until", but only of a thing. The elapsed-time reading owns the hours — `how long
+            // until dark` is its question and stays its own — while `how long until the hide is leather` was
+            // being answered "you pace it out and reckon by eye". What settles it is whether the sentence names
+            // something in the catalogue at all, which is the same resolver the gear reading is gated on.
+            ||(value.contains("how long until")&&items.itemNamedIn(value)!=null)
+            // ...and the plainest form of all, which is a question shape and a finishing word. The subjects that
+            // have their own reading are claimed above the call site; food is kept out by name because
+            // JUDGE_FOOD answers whether a thing is safe to eat and is the better answer to "is the food ready".
+            ||((value.contains("finished")||value.contains("ready")||value.contains(" done"))
+               &&(value.startsWith("is the")||value.startsWith("is my")||value.startsWith("is this")
+                  ||value.startsWith("is it")||value.startsWith("are the"))
+               &&!value.contains("food")&&!value.contains("safe")&&!value.contains("spoil")
+               &&!value.contains("poison")&&!value.contains("water")&&!value.contains("drink"));
+    }
+
+    private String[] judgeWorkInHand(ActiveChronicle chronicle, String text, Instant resolvedAt) {
+        boolean namesAThingOfItsOwn = items.itemNamedIn(text) != null;
+        String[] begun = assembly.whatRemains(chronicle.id(), chronicle.location(), text, resolvedAt,
+                                              !namesAThingOfItsOwn);
+        if (begun != null) return begun;
+        String[] material = items.whatWaitingWillNotDo(chronicle.id(), chronicle.location(), text);
+        if (material != null) return material;
+        return new String[]{"SUCCEEDED", "You have nothing begun and left standing: no piece part-made, no "
+            + "raising half up. Whatever is waiting on you here, it is not work you have already started."};
+    }
+
     /** How many visits make a way routine — planTravel's own figure, shared so the two cannot disagree. */
     private static final int VISITS_THAT_MAKE_A_ROUTINE = 5;
 
@@ -2966,11 +3020,18 @@ public class ChronicleActionService {
                                       ||value.contains("seed")||value.contains("sow")||value.contains("plant"))))
             &&!namesAnAssembly(value);
         boolean notAnEarthHouse = !value.contains("earth sheltered")&&!value.contains("earth-sheltered");
+        // AND NOT A BUILD THAT HAPPENS TO NAME EARTH (#37). The exclusion above names ONE such build, and
+        // the catalogue holds others: `work on the earth oven` was answered "breaking ground wants a tool —
+        // a digging stick or a shovel", tillage, while an earth oven stood half-built on that very ground
+        // with its next stage waiting. Measured live while building V442's reading, which had just said
+        // what the oven wanted. A named assembly settles it the way it settles the seedbed clause below:
+        // if the sentence names a thing being built, the words are about that thing.
+        boolean notABuildOfItsOwn = !namesAnAssembly(value);
         // Insects, grubs and worms are a grub hunt, not a seedbed — the ground and the verb are tillage's, the
         // object is not (#37, V401).
         boolean notAGrubHunt = !value.contains("insect")&&!value.contains("grub")&&!value.contains("worm")&&!value.contains("bait");
         if((word(value,"till")||value.contains("plough")||value.contains("plow")
-            ||(breakingGround&&someGroundToBreak)||diggingABed)
+            ||(breakingGround&&someGroundToBreak&&notABuildOfItsOwn)||diggingABed)
            &&notAnEarthHouse&&notAGrubHunt) return Intent.TILL_GROUND;
         // Sow a grain crop (#162 agriculture) — before PLANT_TREE, which also claims "sow"+"seed": a crop needs
         // grain/cereal/field context, so tree-planting ("sow an acorn", "plant a sapling") still falls through to it.
@@ -3028,7 +3089,13 @@ public class ChronicleActionService {
         // climbs with every day nothing is taken off, faster on a floodplain, faster again beside a manure pit.
         // And "how long until harvest" off MEASURE, which answered "you pace it out and reckon by eye" and gave
         // no figure, while crop_stand holds the sowing date and the maturity in days.
-        if(value.contains("how is the crop")||value.contains("how is the field")||value.contains("how is the plot")
+        // AND IN THE PLURAL, which was the only form that failed (#37). "how is the crop" was matched as a
+        // literal string, so the singular worked and `how are the crops` — which is how a person with a field
+        // says it — reached nothing at all. Same shape as the gear reading's own plural defect, one table over.
+        if(value.contains("how are the crop")||value.contains("how are my crop")||value.contains("how do the crop")
+           ||value.contains("how are things in the field")||value.contains("how is the crop coming")
+           ||value.contains("how is the crop")||value.contains("how is the field")||value.contains("how is the plot")
+
            ||value.contains("how is the ground")||value.contains("how does the crop")
            ||value.contains("is anything growing")||value.contains("what did i sow")||value.contains("what is sown")
            ||value.contains("is the soil")||value.contains("how is the soil")||value.contains("plot worn")
@@ -3247,6 +3314,25 @@ public class ChronicleActionService {
            ||value.contains("doing outside")||value.contains("doing out there")||value.contains("weather turning")
            ||value.contains("will it freeze")||value.contains("read the sky")||value.contains("look at the sky")
            ||value.contains("what is the sky")||value.contains("which way is north")||value.contains("which way is south")||value.contains("take a bearing")) return Intent.READ_THE_SKY;
+        // WHAT YOU HAVE BEGUN AND NOT FINISHED (#37). assembly_instance keeps every piece a Chronicle has
+        // started, assembly_stage_completion keeps which stages are in it, assembly_stage keeps what the next
+        // one wants — tool, fire, the span it must cure, the weather it cannot be worked in — and
+        // construction_project keeps a raising at its percentage. None of it could be asked. Swept live:
+        //
+        //     what am I working on / what is unfinished / what jobs are half done -> nothing at all
+        //     is the shelter finished / what is left to do on the shelter         -> nothing at all
+        //     how far along is the lean-to  -> TAKE_STOCK_OF_CAMP, a list of what is already raised
+        //     how far along is the hide     -> MEASURE, "you pace it out and reckon by eye"
+        //     how is my shelter holding up  -> TAKE_STOCK_OF_GEAR, the clothes on your back
+        //
+        // The last three are the worse half: a question about a work in progress answered in the same even
+        // voice with something else entirely.
+        //
+        // PLACED HERE ON PURPOSE. Below CHECK_FIRE, CHECK_CROP and CHECK_STOCK, so `is the fire ready` and the
+        // ripeness questions keep the readings that already answer them; above the gear reading, which holds
+        // the bare "how is my" and answered a question about a shelter with a list of clothes, and above the
+        // camp reading, which holds "how far along" and answers it with what already stands.
+        if (asksWhatRemainsOfTheWork(value)) return Intent.JUDGE_WORK_IN_HAND;
         // What you are carrying and what state it is in (#37, act fifteen). condition_state, use_count and
         // quality_grade have been on every item since the table existed, and the LOAD is computed on every
         // action — and "how heavy is my pack" was answered "you have nothing by that name in hand to weigh".
@@ -4845,6 +4931,9 @@ public class ChronicleActionService {
     private static final java.util.regex.Pattern YIELD_ASKED_FOR_BY_NAME = java.util.regex.Pattern.compile(
             "\\b(take|keep|save)\\b[^.]*?\\b(hide|pelt|skin|antler|antlers|sinew)\\b(\\s+(off|from)\\b|\\s*[.!?]?\\s*$)");
     private Intent classifyLeanTo(String value) {
+        // HOW FAR ALONG IT IS, which the camp stocktake below cannot say (V442). It reports what stands here
+        // with its integrity; a lean-to still going up wants its stages and its percentage instead.
+        if (asksWhatRemainsOfTheWork(value)) return Intent.JUDGE_WORK_IN_HAND;
         // ASKING ABOUT A LEAN-TO IS NOT BUILDING ONE (#37). "is the lean-to still good" fell to the last branch
         // below and answered "You mark out a low shelter frame against the weather" — it STARTED BUILDING ONE.
         // A wrong answer that changes the world is the worst kind this project has found: a missing answer costs
@@ -5219,7 +5308,7 @@ public class ChronicleActionService {
             || (word(v, "fix") && !v.contains("memory") && !v.contains("mind"));
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, JUDGE_CLOTHING, JUDGE_PLACE, PARE_HOOVES, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, JUDGE_CLOTHING, JUDGE_PLACE, JUDGE_WORK_IN_HAND, PARE_HOOVES, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;}
         /** The cardinal for a grid offset, for when the WORLD names the direction rather than the player (#37). */
         static Direction of(int dx,int dy){ for(Direction d:values()) if(d.dx==dx&&d.dy==dy) return d; return null; } }    /**     * The structured perception frame — the seam every future Simulation Agent reads

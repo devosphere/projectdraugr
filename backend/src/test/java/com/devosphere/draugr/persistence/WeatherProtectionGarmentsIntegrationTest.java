@@ -8,6 +8,7 @@ import com.devosphere.draugr.world.genesis.WorldEcologyGenesisService;
 import com.devosphere.draugr.world.genesis.WorldGenesisService;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -152,13 +153,44 @@ class WeatherProtectionGarmentsIntegrationTest {
         return active.id();
     }
 
-    /** Put a garment on outright, by the catalogue's own position for it where there is one. */
+    /**
+     * Put a garment on outright, by the catalogue's own position for it where there is one.
+     *
+     * <p>ONE GARMENT TO A PLACE ON THE BODY, and the Chronicle arrives already dressed. The first cut of this
+     * inserted straight into TORSO/OUTER and passed locally — where every @SpringBootTest skips for want of
+     * Docker — then failed in CI on equipment_attachment's own unique key, because the keeper was already
+     * wearing their arrival shirt there. The suite shares one world and one Chronicle: a fixture has to make
+     * room for what it puts on, and put back what it took off.
+     */
     private void wearOutright(UUID chronicle, String itemKey) {
+        if (displacedFromTorso == null) displacedFromTorso = jdbc.query(
+            "SELECT item_id FROM equipment_attachment WHERE chronicle_id=? AND body_position='TORSO' AND layer='OUTER'",
+            rs -> rs.next() ? rs.getObject(1, UUID.class) : null, chronicle);
+        jdbc.update("DELETE FROM equipment_attachment WHERE chronicle_id=? AND body_position='TORSO' AND layer='OUTER'", chronicle);
         UUID id = UUID.randomUUID();
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,lifecycle_state,current_owner_id) " +
                     "VALUES (?,'ITEM',(SELECT display_name FROM item_definition WHERE item_key=?),'ACTIVE',?)", id, itemKey, chronicle);
         jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,?,'SOUND')", id, itemKey);
         jdbc.update("INSERT INTO equipment_attachment (item_id,chronicle_id,body_position,layer,attached_at) " +
                     "VALUES (?,?,'TORSO','OUTER',?)", id, chronicle, Timestamp.from(Instant.now()));
+        woreForTheTest.add(id);
+    }
+
+    /** What was on the torso before this test dressed over it, so the next test finds the keeper as it left them. */
+    private UUID displacedFromTorso;
+    private final java.util.List<UUID> woreForTheTest = new java.util.ArrayList<>();
+
+    @AfterEach
+    void undress() {
+        for (UUID id : woreForTheTest)
+            jdbc.update("DELETE FROM equipment_attachment WHERE item_id=?", id);
+        woreForTheTest.clear();
+        if (displacedFromTorso != null) {
+            jdbc.update("INSERT INTO equipment_attachment (item_id,chronicle_id,body_position,layer,attached_at) " +
+                        "SELECT ?, w.current_owner_id, 'TORSO', 'OUTER', ? FROM world_object w WHERE w.id=? " +
+                        "  AND w.current_owner_id IS NOT NULL ON CONFLICT DO NOTHING",
+                        displacedFromTorso, Timestamp.from(Instant.now()), displacedFromTorso);
+            displacedFromTorso = null;
+        }
     }
 }

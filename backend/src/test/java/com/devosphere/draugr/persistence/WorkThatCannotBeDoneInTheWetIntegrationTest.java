@@ -219,4 +219,107 @@ class WorkThatCannotBeDoneInTheWetIntegrationTest {
         assertTrue(freeOfMaterials.isEmpty(),
             () -> "a weather limit is an extra gate, not a replacement for needing materials: " + freeOfMaterials);
     }
+
+    /**
+     * The reading of unfinished work says what the work itself would say (#37, V442).
+     *
+     * <p>The stage records have held every begun piece since V58 and could not be asked. Swept live:
+     * {@code what am I working on}, {@code what is unfinished} and {@code what jobs are half done} reached
+     * nothing at all, while {@code how far along is the lean-to} was answered with a list of what already
+     * stands and {@code how far along is the hide} with MEASURE — "you pace it out and reckon by eye".
+     *
+     * <p><b>Driven from the records, not from a sentence I expect.</b> The stage count, the next stage's name
+     * and whether it declares a tool are all read out of {@code assembly_stage} here and the reading is held to
+     * them, so this keeps working when the catalogue changes and fails if the reading starts inventing.
+     *
+     * <p>And the agreement that matters: when the reading says the next step wants a tool you have not got,
+     * the work must actually refuse for that tool. A reading that disagrees with the act is worse than none.
+     */
+    @Test
+    void theReadingSaysWhatTheWorkWouldSay() {
+        UUID chronicle = chronicle();
+        onEmptyGround(chronicle);
+
+        // An earth oven: three stages, no weather limit on any of them, and nothing required to dig the pit —
+        // so what this measures is the reading, not a refusal.
+        var begun = actions.resolve("build an earth oven", UUID.randomUUID());
+        assertEquals("SUCCEEDED", begun.outcome(), () -> "the pit must be dug: " + begun.perception());
+        UUID instance = jdbc.query(
+            "SELECT id FROM assembly_instance WHERE chronicle_id=? AND assembly_key='earth_oven' " +
+            "  AND state='IN_PROGRESS' ORDER BY updated_at DESC LIMIT 1",
+            rs -> rs.next() ? rs.getObject(1, UUID.class) : null, chronicle);
+        assertNotNull(instance, "a first stage must leave a piece begun: " + begun.perception());
+
+        int setIn = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM assembly_stage_completion WHERE instance_id=?", Integer.class, instance);
+        int stages = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM assembly_stage WHERE assembly_key='earth_oven'", Integer.class);
+        List<java.util.Map<String,Object>> next = jdbc.queryForList(
+            "SELECT s.name, COALESCE(s.tool_class,'') AS tool FROM assembly_stage s " +
+            "WHERE s.assembly_key='earth_oven' AND s.stage_key NOT IN " +
+            "      (SELECT stage_key FROM assembly_stage_completion WHERE instance_id=?) " +
+            "ORDER BY s.stage_order LIMIT 1", instance);
+        assertFalse(next.isEmpty(), "three stages and one set in leaves a next one");
+
+        var read = actions.resolve("how is the work going", UUID.randomUUID());
+        assertEquals("JUDGE_WORK_IN_HAND", read.intent(),
+            () -> "the question must reach the reading: " + read.perception());
+        assertTrue(read.perception().contains(setIn + " of " + stages),
+            () -> "the reading must count what the records count (" + setIn + " of " + stages + "): " + read.perception());
+        assertTrue(read.perception().toLowerCase(java.util.Locale.ROOT).contains("earth oven"),
+            () -> "and name the piece: " + read.perception());
+        String stageName = ((String) next.get(0).get("name")).toLowerCase(java.util.Locale.ROOT);
+        assertTrue(read.perception().toLowerCase(java.util.Locale.ROOT).contains(stageName),
+            () -> "and name the stage that is next (" + stageName + "): " + read.perception());
+
+        // THE AGREEMENT. Whatever the reading claims about the tool, the work must do the same.
+        if (read.perception().contains("which you have not got")) {
+            var tried = actions.resolve("work on the earth oven", UUID.randomUUID());
+            assertEquals("FAILED", tried.outcome(),
+                () -> "the reading said a tool was wanting, so the work must refuse: " + tried.perception());
+            assertTrue(tried.perception().contains("not carrying one") || tried.perception().contains("wants"),
+                () -> "and refuse for that want, naming it: " + tried.perception());
+        }
+    }
+
+    /**
+     * A hide does not come on by waiting (#37, V442).
+     *
+     * <p>{@code is the hide ready} is what a player asks after a kill, and it reached nothing, while
+     * {@code how far along is the hide} was answered by pacing out the ground. A hide is not a staged piece:
+     * nothing happens to it until it is worked, and the true answer says so and then says what the working
+     * would be. Held to the catalogue's own next step rather than to a sentence.
+     *
+     * <p>AND NOT ABOUT SOMETHING ELSE. A sentence naming a material must never be answered about a half-built
+     * oven standing somewhere — the reading looks for a begun piece only when the question named none.
+     */
+    @Test
+    void aHideDoesNotComeOnByWaiting() {
+        UUID chronicle = chronicle();
+        onEmptyGround(chronicle);
+        give(chronicle, "deer_hide", "Deer Hide", 1);
+
+        var r = actions.resolve("is the hide ready", UUID.randomUUID());
+        assertEquals("JUDGE_WORK_IN_HAND", r.intent(),
+            () -> "the question must reach the reading: " + r.perception());
+        assertTrue(r.perception().contains("comes on by waiting"),
+            () -> "a material must be said to be a material: " + r.perception());
+        assertFalse(r.perception().toLowerCase(java.util.Locale.ROOT).contains("stages set into it"),
+            () -> "and must not be answered about a staged piece nobody asked after: " + r.perception());
+
+        // And the working of it is the catalogue's, not a guess: every process that takes a hide as an input is
+        // a true answer here, so the reading must name one of them.
+        List<String> workings = jdbc.queryForList(
+            "SELECT DISTINCT lower(mp.display_name) FROM material_process mp " +
+            "WHERE EXISTS (SELECT 1 FROM material_process_input i WHERE i.process_key=mp.process_key " +
+            "                AND i.item_key IN ('deer_hide','boar_hide','rawhide')) " +
+            "   OR EXISTS (SELECT 1 FROM material_process_input_group g WHERE g.process_key=mp.process_key " +
+            "                AND g.item_key IN ('deer_hide','boar_hide','rawhide'))", String.class);
+        if (!workings.isEmpty()) {
+            String said = r.perception().toLowerCase(java.util.Locale.ROOT);
+            assertTrue(workings.stream().anyMatch(said::contains),
+                () -> "the reading must name a working the catalogue actually holds, one of " + workings
+                    + ": " + r.perception());
+        }
+    }
 }

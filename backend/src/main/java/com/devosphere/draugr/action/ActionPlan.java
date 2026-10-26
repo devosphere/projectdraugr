@@ -28,14 +28,16 @@ public final class ActionPlan {
     public static final int MAX_STEPS = 8;
 
     /**
-     * Separators that genuinely mean "next step". Sentence ends require the following space so a decimal or an
-     * abbreviation does not split; sequencing words are matched whole and may carry their own comma.
+     * Separators that genuinely mean "next step", in their two kinds, because only one kind can be mistaken.
+     *
+     * <p>A line break, a semicolon and a full stop are unambiguous: a person who writes one has ended a step
+     * whatever the words were. A sequencing WORD is a word, and a word can belong to what is being said — which
+     * is why these are applied in two passes, punctuation first.
      */
-    private static final Pattern SEPARATOR = Pattern.compile(
-        "\\R+"                                                        // any line break
-      + "|\\s*;\\s*"                                                  // semicolon
-      + "|(?<=[\\p{Alnum}\\)\\]\"'])\\.(?:\\s+|$)"                    // end of a sentence
-      + "|\\s*,?\\s+(?i:and\\s+then|then|after\\s+that|afterwards?|next|finally|lastly"
+    private static final Pattern PUNCTUATION_SEPARATOR = Pattern.compile(
+        "\\R+|\\s*;\\s*|(?<=[\\p{Alnum}\\)\\]\"'])\\.(?:\\s+|$)");
+    private static final Pattern WORD_SEPARATOR = Pattern.compile(
+        "\\s*,?\\s+(?i:and\\s+then|then|after\\s+that|afterwards?|next|finally|lastly"
       + "|once\\s+that\\s+is\\s+done|once\\s+that's\\s+done|when\\s+that\\s+is\\s+done)\\s*,?\\s+");
 
     /** A list marker opening a step: "1.", "2)", "-", "*", "•". */
@@ -59,7 +61,7 @@ public final class ActionPlan {
         if (trimmed.isEmpty()) return List.of();
 
         List<String> steps = new ArrayList<>();
-        for (String raw : SEPARATOR.split(trimmed)) {
+        for (String raw : pieces(trimmed)) {
             String step = LEADER.matcher(ENUMERATOR.matcher(raw).replaceFirst("").trim()).replaceFirst("").trim();
             // Strip a trailing comma or sentence punctuation left by the split.
             while (!step.isEmpty() && ",;.".indexOf(step.charAt(step.length() - 1)) >= 0)
@@ -71,6 +73,44 @@ public final class ActionPlan {
         // that is meant to answer it.
         if (steps.isEmpty()) return List.of(trimmed);
         return List.copyOf(steps);
+    }
+
+    /**
+     * The text cut at its separators, except where a sequencing word is plainly part of what is being said.
+     *
+     * <p><b>A sequencing word needs a step in front of it.</b> "next" means "and after that" when it follows an
+     * instruction — "gather reeds, next lash the frame" — and means nothing of the kind when it follows a
+     * question word. {@code what next for the hide} was cut into "what" and "for the hide", two fragments that
+     * name nothing, so a reading that answers that question perfectly was never reached: the sentence came back
+     * "you spend the effort and come back with only the effort" (#37, found while measuring V442 live, after the
+     * routing test for the same sentence had passed — the unit test calls the classifier, and the splitter runs
+     * before it).
+     *
+     * <p>So a word separator is only honoured when at least three words stand before it, which is the shortest
+     * thing that can be an instruction with an object. Line breaks, semicolons and sentence ends are untouched:
+     * those are unambiguous, and a person who writes a full stop has ended a step whatever the words were.
+     */
+    private static List<String> pieces(String trimmed) {
+        List<String> out = new ArrayList<>();
+        for (String part : PUNCTUATION_SEPARATOR.split(trimmed)) {
+            java.util.regex.Matcher m = WORD_SEPARATOR.matcher(part);
+            int from = 0;
+            while (m.find()) {
+                String piece = part.substring(from, m.start());
+                if (wordsIn(piece) < 3) continue;   // the word belongs to what is being said
+                out.add(piece);
+                from = m.end();
+            }
+            out.add(part.substring(from));
+        }
+        return out;
+    }
+
+    /** How many words stand in a piece — three is the shortest thing that can be an instruction with an object. */
+    private static int wordsIn(String piece) {
+        String v = piece.trim();
+        if (v.isEmpty()) return 0;
+        return v.split("\\s+").length;
     }
 
     /**

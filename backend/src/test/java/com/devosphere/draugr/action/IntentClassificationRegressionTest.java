@@ -37,6 +37,15 @@ class IntentClassificationRegressionTest {
         com.devosphere.draugr.item.PhysicalItemService items =
             new com.devosphere.draugr.item.PhysicalItemService(null, null, null) {
                 @Override public boolean actionMatchesProcess(String t) { return processMatches; }
+                // THE CATALOGUE RESOLVER, faked the same way and for the same reason (V442). The work-in-hand
+                // rule borrows "how long until" only when the sentence names a thing, which is what tells a
+                // hide becoming leather from the sun going down. Four names are enough to assert both ways.
+                @Override public String[] itemNamedIn(String t) {
+                    String v = t == null ? "" : " " + t.toLowerCase(java.util.Locale.ROOT) + " ";
+                    for (String name : new String[]{"hide", "leather", "basket", "meat"})
+                        if (v.contains(" " + name + " ")) return new String[]{name, name};
+                    return null;
+                }
                 @Override public boolean namesADugMineral(String t) {
                     String v = t == null ? "" : t.toLowerCase(java.util.Locale.ROOT);
                     return v.contains("fire clay") || v.contains("limestone");
@@ -2660,5 +2669,58 @@ class IntentClassificationRegressionTest {
         assertEquals("DESIGNATE", classify("call this place Stonefield"));
         assertEquals("SKETCH_MAP", classify("mark this place on my map"));
         assertEquals("OBSERVE", classify("where am I"));
+    }
+
+    /**
+     * What is waiting on you (#37, V442).
+     *
+     * <p>The stage records have held every unfinished piece since V58 — which stages are set in, what the next
+     * one wants, the span it must cure, the weather it cannot be worked in — and construction_project has held
+     * a raising at its percentage. Swept on a booted world, none of it could be asked, and three sentences got
+     * a confident answer about something else:
+     *
+     * <pre>
+     *   what am I working on / what is unfinished / what jobs are half done -&gt; nothing at all
+     *   how far along is the lean-to  -&gt; TAKE_STOCK_OF_CAMP, a list of what already stands
+     *   how far along is the hide     -&gt; MEASURE, "you pace it out and reckon by eye"
+     *   how is my shelter holding up  -&gt; TAKE_STOCK_OF_GEAR, the clothes on your back
+     * </pre>
+     */
+    @Test
+    void askingWhatIsWaitingOnYou() throws Exception {
+        assertEquals("JUDGE_WORK_IN_HAND", classify("what am I working on"));
+        assertEquals("JUDGE_WORK_IN_HAND", classify("what is unfinished"));
+        assertEquals("JUDGE_WORK_IN_HAND", classify("what jobs are half done"));
+        assertEquals("JUDGE_WORK_IN_HAND", classify("how is the work going"));
+        assertEquals("JUDGE_WORK_IN_HAND", classify("what is left to do on the shelter"));
+        assertEquals("JUDGE_WORK_IN_HAND", classify("how far along is the lean-to"));
+        assertEquals("JUDGE_WORK_IN_HAND", classify("how much more does the fence need"));
+        assertEquals("JUDGE_WORK_IN_HAND", classify("is the shelter finished"));
+        assertEquals("JUDGE_WORK_IN_HAND", classify("is the hide ready"));
+        assertEquals("JUDGE_WORK_IN_HAND", classify("what next for the hide"));
+
+        // THE READINGS THAT ALREADY OWN THEIR SUBJECTS KEEP THEM. This rule sits below every one of these on
+        // purpose, and the boundary is the whole reason it is placed where it is rather than earlier.
+        assertEquals("CHECK_FIRE", classify("is the fire ready"));
+        assertEquals("CHECK_CROP", classify("how is the crop"));
+        assertEquals("TAKE_STOCK_OF_CAMP", classify("take stock of the camp"));
+        assertEquals("INSPECT", classify("check my work"));
+        assertEquals("JUDGE_WATER", classify("is this water safe to drink"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("how is my shirt"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("what am I carrying"));
+
+        // AND THE CROPS IN THE PLURAL, which was the only form of that question that failed: "how is the crop"
+        // was matched as a literal string, so the singular answered and the way a person with a field says it
+        // reached nothing at all.
+        assertEquals("CHECK_CROP", classify("how are the crops"));
+        assertEquals("CHECK_CROP", classify("how are my crops doing"));
+
+        // THE HOURS STAY WITH THE HOURS. "how long until" is the elapsed-time reading's own question; it is
+        // borrowed here only when the sentence names a thing out of the catalogue, which is what tells a hide
+        // becoming leather from the sun going down.
+        assertEquals("JUDGE_WORK_IN_HAND", classify("how long until the hide is leather"));
+        // ...while the hours to dark stay with the sky reading, which has always answered them.
+        assertEquals("READ_THE_SKY", classify("how long until dark"));
+        assertEquals("MEASURE", classify("how long until nightfall"));
     }
 }
