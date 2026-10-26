@@ -453,7 +453,11 @@ public class AssemblyService {
                     obj, ts, def.get("construction_kind"), key);
                 jdbc.update("UPDATE assembly_instance SET object_id=? WHERE id=?", obj, instanceId);
             }
-            return new String[]{"SUCCEEDED", (String) def.get("narration")};
+            // THE FINISHED PIECE IS A THING LEARNED (#37/#99), carried back as a third element the same way a
+            // process carries its key. Only on the LAST stage: a keeper has not learned to make a hut by
+            // digging its post holes.
+            return new String[]{"SUCCEEDED", (String) def.get("narration"), "ASSEMBLY:" + key};
+
         }
         jdbc.update("UPDATE assembly_instance SET updated_at=? WHERE id=?", Timestamp.from(at), instanceId);
         return new String[]{"SUCCEEDED", (String) next.get("narration")};

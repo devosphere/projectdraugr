@@ -2676,7 +2676,21 @@ public class PhysicalItemService {
         // to the witness line for the second. Washing a bowl is not a failed carving; it is a thing the world does
         // not know how to do.
         if (key != null && sentenceMeantSomethingElse(actionText, key)) key = null;
-        if (key != null) return executeProcess(chronicle, location, key, actionText, at);
+        if (key != null) {
+            String[] ran = executeProcess(chronicle, location, key, actionText, at);
+            // AND WHAT WAS LEARNED BY RUNNING IT (#37/#99), carried back as a third element so the caller can
+            // record it. chronicle_discovery has existed since the beginning and was written in exactly TWO
+            // places — a woven basket and a stone fire pit — out of a hundred and forty intents and five
+            // hundred processes. A keeper who had tanned a hide, fired pottery, knapped a blade and raised a
+            // shelter had, by the world's own record, learned nothing: `what have I discovered` had nothing to
+            // answer from, and the journey summary's discovery count was 0 for every playthrough.
+            //
+            // Appended rather than returned in place, because a dozen tests and two call sites read [0] and [1].
+            return "SUCCEEDED".equals(ran[0]) && ran.length == 2
+                 ? new String[]{ran[0], ran[1], "PROCESS:" + key}
+                 : ran;
+        }
+
         // A deterministic miss. The AI Procedure Interpreter may compose this from existing processes
         // (DR-0021), but that orchestration lives in ChronicleActionService where the AI seam is; here
         // the world simply does not yet know how, and says so.

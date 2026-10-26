@@ -2812,4 +2812,26 @@ class IntentClassificationRegressionTest {
         assertEquals("GATHER_PLANT", classify("pick the berries"), "the plant gather owns the berry picking");
         assertEquals("GATHER_BRANCHES", classify("gather branches"));
     }
+
+    /**
+     * Asking what you have worked out for yourself (#37/#99, V444).
+     *
+     * <p>{@code chronicle_discovery} was written in two places out of five hundred processes, so the question
+     * had almost nothing to answer from AND no words to reach it by. Measured live: {@code what have I
+     * discovered}, {@code what do I know how to make} and {@code what can I make} were all misses.
+     */
+    @Test
+    void askingWhatYouHaveWorkedOut() throws Exception {
+        assertEquals("JUDGE_LEARNING", classify("what have I learned"));
+        assertEquals("JUDGE_LEARNING", classify("what have I discovered"));
+        assertEquals("JUDGE_LEARNING", classify("what do I know how to make"));
+        assertEquals("JUDGE_LEARNING", classify("what can I make"));
+        assertEquals("JUDGE_LEARNING", classify("what have I worked out"));
+
+        // AND THE MAKING ITSELF IS UNTOUCHED, which is the boundary that matters: asking what you know how to
+        // make is not asking to make something, and MAKING IS NOT DOING cuts both ways (#37).
+        assertEquals("CRAFT_BASKET", classify("make a basket"));
+        assertEquals("CRAFT_KNIFE", classify("make a knife"));
+        assertEquals("JUDGE_WORK_IN_HAND", classify("what am I working on"));
+    }
 }

@@ -447,6 +447,10 @@ public class ChronicleActionService {
         Instant resolvedAt = ticks.advanceBy(Duration.ofMinutes(minutes)).simulatedAt();
         java.sql.Timestamp resolvedTs = java.sql.Timestamp.from(resolvedAt);
         UUID actionId = UUID.randomUUID(); String outcome = "SUCCEEDED"; String perception;
+        // WHAT THIS ACTION TAUGHT, if anything (#37/#99). A completed process or a finished build carries
+        // its own key back, and the record is written once, below, where the ledger rows are — rather than
+        // in each of the hundred and forty branches, which is how it came to be written in only two.
+        String learned = null;
         // chronicle_action_effect has a foreign key to chronicle_action, and the
         // action row is written only after intent resolution. Gather effects are
         // therefore captured here and inserted after the parent row exists.
@@ -661,10 +665,11 @@ public class ChronicleActionService {
         else if (intent == Intent.JUDGE_CLOTHING) { String[] r = judgeClothing(chronicle, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_PLACE) { String[] r = judgePlace(chronicle); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_WORK_IN_HAND) { String[] r = judgeWorkInHand(chronicle, text, resolvedAt); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.JUDGE_LEARNING) { String[] r = judgeLearning(chronicle); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.HIDE_TRAIL) { String[] r = wildlife.hideTrail(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.WEED_CROP) { String[] r=items.tendCrop(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.CLEAR_LAND) { String[] r=items.clearLand(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
-        else if (intent == Intent.PROCESS_MATERIAL) { String[] r=items.runProcess(chronicle.id(),chronicle.location(),text,resolvedAt); outcome=r[0]; perception=r[1]; }
+        else if (intent == Intent.PROCESS_MATERIAL) { String[] r=items.runProcess(chronicle.id(),chronicle.location(),text,resolvedAt); outcome=r[0]; perception=r[1]; if (r.length > 2) learned = r[2]; }
         else if (intent == Intent.CRAFT_FIRE_TOOL) { String[] r=items.craftFireTool(chronicle.id(),text,resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.GATHER_MINERAL) { String[] r=items.gatherMineral(chronicle.id(),chronicle.location(),text,resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.CRAFT_GARMENT) { String[] r=items.craftGarment(chronicle.id(),text,resolvedAt); outcome=r[0]; perception=r[1]; }
@@ -996,7 +1001,7 @@ public class ChronicleActionService {
             // processes, assemblies live in data, so a new one is playable by migration
             // alone. A null here means the text names no assembly.
             String[] a = assembly.advance(chronicle.id(), chronicle.location(), text, resolvedAt);
-            if (a != null) { intent = Intent.ADVANCE_ASSEMBLY; outcome = a[0]; perception = a[1]; }
+            if (a != null) { intent = Intent.ADVANCE_ASSEMBLY; outcome = a[0]; perception = a[1]; if (a.length > 2) learned = a[2]; }
             else {
                 // Before calling an action unresolvable, see whether it names a material
                 // process (V52). Those live in a table rather than in this chain, so a new
@@ -1006,6 +1011,7 @@ public class ChronicleActionService {
                 String[] r = items.runProcess(chronicle.id(), chronicle.location(), text, resolvedAt);
                 if ("SUCCEEDED".equals(r[0]) || !r[1].startsWith("You turn the material over")) {
                     intent = Intent.PROCESS_MATERIAL; outcome = r[0]; perception = r[1];
+                    if (r.length > 2) learned = r[2];
                 } else {
                     // Deterministic miss. The runtime authoring pipeline (DR-0021) may compose it from
                     // EXISTING processes, or — if authoring is enabled — author a new scoped mechanic under
@@ -1082,6 +1088,9 @@ public class ChronicleActionService {
         jdbc.update("INSERT INTO chronicle_event (chronicle_id, occurred_at, event_type, payload) VALUES (?, ?, 'CHRONICLE_ACTION_RESOLVED', jsonb_build_object('actionId', ?::text, 'intent', ?, 'outcome', ?))", chronicle.id(), resolvedTs, actionId.toString(), intent.name(), outcome);
         if ("SUCCEEDED".equals(outcome) && intent == Intent.CRAFT_BASKET) discoveries.record(chronicle.id(), "WOVEN_BASKET", actionId, resolvedAt);
         if ("SUCCEEDED".equals(outcome) && intent == Intent.BUILD_FIRE_PIT) discoveries.record(chronicle.id(), "STONE_FIRE_PIT", actionId, resolvedAt);
+        // ...AND EVERY OTHER THING A KEEPER CARRIES THROUGH. Those two lines above were the whole of what the
+        // world recorded as learning, out of five hundred processes and a hundred builds.
+        if ("SUCCEEDED".equals(outcome) && learned != null) discoveries.record(chronicle.id(), learned, actionId, resolvedAt);
         // Personal acts and venting build no capability — there is no skill in them.
         boolean buildsCapability = intent != Intent.PERSONAL_ACT && intent != Intent.AGGRESSION_INANIMATE && intent != Intent.AGGRESSION_WILDLIFE;
         if ("SUCCEEDED".equals(outcome) && buildsCapability) {
@@ -1939,6 +1948,39 @@ public class ChronicleActionService {
             ||value.contains("what have i named")||value.contains("what is this place called")
             ||value.contains("whats this place called")||value.contains("what is this called")
             ||value.contains("did i name this")||value.contains("have i named this");
+    }
+
+    /**
+     * What you have worked out for yourself (#37/#99).
+     *
+     * <p>{@code chronicle_discovery} has existed since the beginning and was written in exactly TWO places — a
+     * woven basket and a stone fire pit — out of a hundred and forty intents and five hundred processes. So a
+     * keeper who had tanned a hide, fired pottery, knapped a blade and raised a shelter had learned nothing by
+     * the world's record: {@code what have I discovered} and {@code what do I know how to make} reached nothing
+     * at all, and the journey summary's discovery count read 0 for every playthrough ever run.
+     *
+     * <p>Every completed process and every finished build is recorded now, and this is the reading of it. The
+     * keys are resolved back through the catalogue, so the answer is in the names a keeper would use rather
+     * than in process keys.
+     */
+    private String[] judgeLearning(ActiveChronicle chronicle) {
+        java.util.List<String> worked = jdbc.queryForList(
+            "SELECT COALESCE(mp.display_name, ad.display_name, " +
+            "                initcap(replace(replace(replace(d.discovery_key,'PROCESS:',''),'ASSEMBLY:',''),'_',' '))) AS said " +
+            "FROM chronicle_discovery d " +
+            "  LEFT JOIN material_process mp ON 'PROCESS:' || mp.process_key = d.discovery_key " +
+            "  LEFT JOIN assembly_definition ad ON 'ASSEMBLY:' || ad.assembly_key = d.discovery_key " +
+            "WHERE d.chronicle_id=? ORDER BY d.acquired_at", String.class, chronicle.id());
+        if (worked.isEmpty())
+            return new String[]{"SUCCEEDED", "You have worked nothing out yet that you could set your hand to "
+                + "again from memory. It comes by doing: the first time you carry a piece of work through, you "
+                + "have it."};
+        java.util.List<String> said = new java.util.ArrayList<>();
+        for (String w : worked) { String one = w.toLowerCase(Locale.ROOT); if (!said.contains(one)) said.add(one); }
+        StringBuilder b = new StringBuilder("You have carried these through yourself, and could again: ");
+        b.append(joinAnd(said)).append('.');
+        if (said.size() == 1) b.append(" One thing, and it is more than you knew when you woke here.");
+        return new String[]{"SUCCEEDED", b.toString()};
     }
 
     private boolean asksWhatRemainsOfTheWork(String value) {
@@ -3387,6 +3429,16 @@ public class ChronicleActionService {
         // ripeness questions keep the readings that already answer them; above the gear reading, which holds
         // the bare "how is my" and answered a question about a shelter with a list of clothes, and above the
         // camp reading, which holds "how far along" and answers it with what already stands.
+        // WHAT YOU HAVE WORKED OUT FOR YOURSELF (#37/#99). chronicle_discovery was written in two places out of
+        // five hundred processes, so the question had nothing to answer from and reached nothing either way:
+        // `what have I discovered`, `what do I know how to make` and `what can I make` were all misses on a
+        // booted world. Both halves are fixed together — the recording and the reading — because a reading of an
+        // empty table would have been a true answer that is always "nothing".
+        if (value.contains("what have i learned")||value.contains("what have i discovered")
+            ||value.contains("what do i know how to make")||value.contains("what can i make")
+            ||value.contains("what do i know how to do")||value.contains("what have i worked out")
+            ||value.contains("what can i make now")||value.contains("what have i figured out"))
+            return Intent.JUDGE_LEARNING;
         if (asksWhatRemainsOfTheWork(value)) return Intent.JUDGE_WORK_IN_HAND;
         // What you are carrying and what state it is in (#37, act fifteen). condition_state, use_count and
         // quality_grade have been on every item since the table existed, and the LOAD is computed on every
@@ -5379,7 +5431,7 @@ public class ChronicleActionService {
             || (word(v, "fix") && !v.contains("memory") && !v.contains("mind"));
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, JUDGE_CLOTHING, JUDGE_PLACE, JUDGE_WORK_IN_HAND, PARE_HOOVES, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, JUDGE_CLOTHING, JUDGE_PLACE, JUDGE_WORK_IN_HAND, JUDGE_LEARNING, PARE_HOOVES, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;}
         /** The cardinal for a grid offset, for when the WORLD names the direction rather than the player (#37). */
         static Direction of(int dx,int dy){ for(Direction d:values()) if(d.dx==dx&&d.dy==dy) return d; return null; } }    /**     * The structured perception frame — the seam every future Simulation Agent reads

@@ -322,4 +322,51 @@ class WorkThatCannotBeDoneInTheWetIntegrationTest {
                     + ": " + r.perception());
         }
     }
+
+    /**
+     * What you carry through is remembered (#37/#99, V444).
+     *
+     * <p>{@code chronicle_discovery} has existed since the first migrations and was written in exactly two
+     * places — a woven basket and a stone fire pit — out of a hundred and forty intents, five hundred material
+     * processes and a hundred staged builds. A keeper who had tanned a hide, fired pottery and smelted iron had
+     * learned nothing by the world's record, and the journey summary's discovery count, which the client shows,
+     * read 0 for every playthrough that has ever run.
+     *
+     * <p>Rawhide is the process this test owns: one dehaired hide, no tool, no fire, no water, so what is
+     * measured is the recording and not a refusal. Asserted as the keeper's own row keyed by that process,
+     * because the suite shares one Chronicle and other tests run processes of their own.
+     */
+    @Test
+    void whatYouCarryThroughIsRemembered() {
+        UUID chronicle = chronicle();
+        onEmptyGround(chronicle);
+        jdbc.update("DELETE FROM chronicle_discovery WHERE chronicle_id=? AND discovery_key=?",
+                    chronicle, "PROCESS:make_rawhide");
+        give(chronicle, "dehaired_hide", "Dehaired hide", 1);
+
+        var worked = actions.resolve("stretch the hide", UUID.randomUUID());
+        assertEquals("SUCCEEDED", worked.outcome(), () -> "the work must go through: " + worked.perception());
+        assertEquals(1, (int) jdbc.queryForObject(
+            "SELECT COUNT(*) FROM chronicle_discovery WHERE chronicle_id=? AND discovery_key=?",
+            Integer.class, chronicle, "PROCESS:make_rawhide"),
+            "a process carried through must leave exactly one record of itself");
+
+        // Twice is still once: a thing is learned, not counted.
+        give(chronicle, "dehaired_hide", "Dehaired hide", 1);
+        actions.resolve("stretch the hide", UUID.randomUUID());
+        assertEquals(1, (int) jdbc.queryForObject(
+            "SELECT COUNT(*) FROM chronicle_discovery WHERE chronicle_id=? AND discovery_key=?",
+            Integer.class, chronicle, "PROCESS:make_rawhide"),
+            "learning a thing twice is learning it once");
+
+        // AND THE READING NAMES IT, in the catalogue's words rather than in a key.
+        var asked = actions.resolve("what have I learned", UUID.randomUUID());
+        assertEquals("JUDGE_LEARNING", asked.intent(),
+            () -> "the question must reach the reading: " + asked.perception());
+        String said = asked.perception().toLowerCase(java.util.Locale.ROOT);
+        assertTrue(said.contains("make rawhide"),
+            () -> "the reading must name the work in the catalogue's words: " + asked.perception());
+        assertFalse(said.contains("process:"),
+            () -> "and never in a key: " + asked.perception());
+    }
 }
