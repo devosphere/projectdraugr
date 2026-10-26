@@ -115,8 +115,18 @@ class ALifePerSpeciesFamilyIntegrationTest {
         return ground;
     }
 
-    /** Everything the whole assembly asks for, laid on the ground beside the work, with a margin. */
+    /**
+     * Everything the whole assembly asks for, laid on the ground beside the work, with a margin.
+     *
+     * <p>Laid there, not carried there and dropped. The suite shares one Chronicle, and whatever earlier tests left
+     * in its hands counts against the lift: in CI this fixture failed "cannot physically carry that load" before a
+     * single stage was tried (a timber log alone is 5 kg). The materials go where the build reads them from, and
+     * the keeper's loose load is set down beside them, so the only thing the body is asked to lift is the hatchet.
+     */
     private void stockUp(UUID chronicle, UUID ground, Family f) {
+        jdbc.update("UPDATE world_object w SET current_owner_id=NULL, current_location_id=? WHERE w.current_owner_id=?"
+                  + " AND w.object_type='ITEM' AND w.lifecycle_state='ACTIVE'"
+                  + " AND NOT EXISTS (SELECT 1 FROM equipment_attachment e WHERE e.item_id=w.id)", ground, chronicle);
         List<java.util.Map<String,Object>> bill = jdbc.queryForList(
             "SELECT r.item_key, SUM(r.quantity) AS wants FROM assembly_stage st"
           + " JOIN assembly_stage_requirement r ON r.stage_key=st.stage_key"
@@ -125,14 +135,20 @@ class ALifePerSpeciesFamilyIntegrationTest {
         for (java.util.Map<String,Object> row : bill) {
             String key = (String) row.get("item_key");
             int wants = ((Number) row.get("wants")).intValue() + 2;
-            for (int i = 0; i < wants; i++)
-                items.drop(items.createCarriedItem(chronicle, key, key.replace('_', ' '), Instant.now(), "TEST_SEED"),
-                    ground, Instant.now());
+            for (int i = 0; i < wants; i++) layOnGround(ground, key);
         }
         // A tool class is read from what is CARRIED, so the tool goes in hand and not on the ground. A stone
         // hatchet rather than a stone axe: tool_profile gives the axe class AXE alone, and these stages want
         // CUTTING, which the hatchet carries as well (the kind of thing only a live measurement finds).
         if (f.wantsACuttingTool()) items.createCarriedItem(chronicle, "stone_hatchet", "Stone hatchet", Instant.now(), "TEST_SEED");
+    }
+
+    private void layOnGround(UUID ground, String key) {
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ITEM',?,?)", id, key.replace('_', ' '), ground);
+        jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state,quality_grade) VALUES (?,?,'SOUND','SOUND')", id, key);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'TEST_SEED',jsonb_build_object('itemKey',?))",
+            id, Timestamp.from(Instant.now()), key);
     }
 
     /**
