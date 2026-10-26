@@ -18,10 +18,12 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -87,5 +89,76 @@ class WeatherProtectionGarmentsIntegrationTest {
         assertEquals(7, (int) withStats, "all seven weather garments must be equippable clothing with climate stats");
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
+
+    /**
+     * The clothing reading says what the model charges (#37, V440).
+     *
+     * <p>The warmth rule caps insulation at 80% of the cold kept out and water resistance at 60% of the rain
+     * shed, and makes wet clothing insulate 1.6x worse. Those three facts decide whether a Chronicle lives
+     * through a night, and a player could not learn any of them: more layers simply stopped helping, nothing
+     * ever stayed dry, and the cloak they were proud of was worth a fraction of itself while soaked.
+     *
+     * <p>So the reading says them out loud, and this holds it to the same numbers rather than to its prose: a
+     * Chronicle wearing enough to pass the cap must be told the cap has been reached, and the same Chronicle
+     * soaked must be told that it counts for little until they dry.
+     */
+    @Test
+    void theClothingReadingSaysWhatTheModelCharges() {
+        UUID chronicle = aDressedChronicle();
+        UUID here = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+        assertNotNull(here);
+
+        // Enough insulation to pass the 80% cap, from the catalogue's own warmest garments rather than numbers
+        // written here.
+        String warmest = jdbc.queryForObject(
+            "SELECT item_key FROM item_definition WHERE insulation_value >= 20 ORDER BY insulation_value DESC LIMIT 1", String.class);
+        assertNotNull(warmest, "the catalogue must hold a warm garment for this to assert anything");
+        for (int i = 0; i < 3; i++) wearOutright(chronicle, warmest);
+        int worn = jdbc.queryForObject(
+            "SELECT COALESCE(SUM(d.insulation_value + COALESCE(i.lining_bonus,0)),0) FROM equipment_attachment e " +
+            "JOIN item_instance i ON i.object_id=e.item_id JOIN item_definition d ON d.item_key=i.item_key " +
+            "WHERE e.chronicle_id=?", Integer.class, chronicle);
+        assertTrue(worn >= 80, () -> "the fixture must pass the cap for the cap to be assertable, got " + worn);
+
+        jdbc.update("UPDATE chronicle_physiology SET wetness_level=0 WHERE chronicle_id=?", chronicle);
+        ChronicleActionService.ActionResult dry = actions.resolve("am I dressed for this weather");
+        assertEquals("JUDGE_CLOTHING", dry.intent(), () -> "the question must reach the reading: " + dry.perception());
+        assertTrue(dry.perception().contains("as much of the cold as any clothing can"),
+            () -> "past the cap, the reading must say the cap has been reached: " + dry.perception());
+        assertFalse(dry.perception().contains("worth a fraction"),
+            () -> "and must not claim a dry Chronicle is soaked: " + dry.perception());
+
+        // SOAKED, which is the fact that kills and the one nothing said.
+        jdbc.update("UPDATE chronicle_physiology SET wetness_level=75 WHERE chronicle_id=?", chronicle);
+        ChronicleActionService.ActionResult wet = actions.resolve("am I dressed for this weather");
+        assertEquals("JUDGE_CLOTHING", wet.intent());
+        assertTrue(wet.perception().contains("worth a fraction"),
+            () -> "wet through, the reading must say what that costs: " + wet.perception());
+        assertFalse(wet.perception().contains("dressed for it so long as you keep dry"),
+            () -> "and must not also call them dressed for it — two halves of one answer disagreeing: " + wet.perception());
+
+        assertTrue(auditor.inspect().consistent(), () -> "a reading alters nothing: " + auditor.inspect().violations());
+    }
+
+    /** A Chronicle wearing their arrival clothes, awakened if the suite spent the last one. */
+    private UUID aDressedChronicle() {
+        if (worldGenesis.current() == null) {
+            worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
+            ecology.seed();
+        }
+        var active = chronicles.active() != null ? chronicles.active() : chronicles.awaken();
+        assertNotNull(active, "a living Chronicle is needed");
+        return active.id();
+    }
+
+    /** Put a garment on outright, by the catalogue's own position for it where there is one. */
+    private void wearOutright(UUID chronicle, String itemKey) {
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,lifecycle_state,current_owner_id) " +
+                    "VALUES (?,'ITEM',(SELECT display_name FROM item_definition WHERE item_key=?),'ACTIVE',?)", id, itemKey, chronicle);
+        jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,?,'SOUND')", id, itemKey);
+        jdbc.update("INSERT INTO equipment_attachment (item_id,chronicle_id,body_position,layer,attached_at) " +
+                    "VALUES (?,?,'TORSO','OUTER',?)", id, chronicle, Timestamp.from(Instant.now()));
     }
 }

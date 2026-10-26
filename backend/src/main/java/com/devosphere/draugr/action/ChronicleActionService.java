@@ -645,6 +645,7 @@ public class ChronicleActionService {
         else if (intent == Intent.JUDGE_CROSSING) { String[] r = judgeCrossing(chronicle, text); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_LIGHT) { String[] r = judgeLight(chronicle, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_MAKING) { String[] r = items.judgeMaking(chronicle.id(), chronicle.location(), text); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.JUDGE_CLOTHING) { String[] r = judgeClothing(chronicle, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.HIDE_TRAIL) { String[] r = wildlife.hideTrail(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.WEED_CROP) { String[] r=items.tendCrop(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.CLEAR_LAND) { String[] r=items.clearLand(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
@@ -3323,6 +3324,35 @@ public class ChronicleActionService {
             ||value.contains("what can i do with")||value.contains("what use is")
             ||value.contains("what is it for")||value.contains("what are they for");
         if (askingWhatItTakes) return Intent.JUDGE_MAKING;
+        // WHETHER WHAT YOU ARE WEARING SUITS THE SKY (#37). The warmth model is finished and careful:
+        // insulation_value per garment plus whatever THIS one has been lined with, summed and capped at 80% of
+        // the cold kept out; water_resistance summed and capped at 60% of the rain shed; wind cut to a quarter
+        // under cover and to a half behind a windbreak; and wet clothing insulating 1.6x worse, which is how
+        // people actually die of cold in weather that is not itself lethal. Measured on a booted world, a
+        // Chronicle could not ask any of it:
+        //
+        //     will these clothes keep me warm   -> nothing at all
+        //     is my cloak keeping the rain off  -> nothing at all
+        //     am I dressed for this weather     -> EQUIP: "You have nothing unequipped that can be worn"
+        //
+        // That last is a question answered by an act that found nothing to do, which is the shape this ticket
+        // keeps turning up. Held to the WEARING vocabulary, and placed above the light reading so neither takes
+        // the other's "warm": a question about a fire's warmth is the fire's, and `warm my hands` is the body's.
+        // HELD TO THE CLOTHES, not to how the body feels — a boundary the suite already drew twice and my first
+        // cut of this walked through. `will I be warm enough tonight` is SENSE_BODY because whether the night is
+        // survivable is the body's own question, and `are my clothes wet` is SENSE_BODY because a soaked cloak
+        // is how a body gets wet and wetness is what decides how fast it loses heat. Both are reasoned and both
+        // are asserted, so this rule wants a sentence about the DRESSING or the KEEPING OFF, and yields every
+        // form about warmth-as-felt and about wetness.
+        boolean askingAboutWhatTheyWear =
+            (value.contains("dressed for")||value.contains("dressed warm")||value.contains("dressed right")
+             ||value.contains("keep me warm")||value.contains("keeps me warm")
+             ||value.contains("keep the rain off")||value.contains("keeping the rain off")
+             ||value.contains("enough clothes")||value.contains("clothes keep")||value.contains("clothing keep")
+             ||value.contains("what should i wear"))
+            && !value.contains("wet")
+            && !value.contains("warm the")&&!value.contains("warm my")&&!value.contains("warm up the");
+        if (askingAboutWhatTheyWear) return Intent.JUDGE_CLOTHING;
         // WHETHER YOU CAN SEE TO WORK (#37). consumePortableLight is a finished, careful rule — a firebrand,
         // then a resin torch, then a rushlight, then a candle, then a lamp burning fish oil or rendered tallow,
         // and a bare flame gutted by weather unless a stone lantern cover hoods it — and tooDarkForFineWork
@@ -5079,7 +5109,7 @@ public class ChronicleActionService {
             || (word(v, "fix") && !v.contains("memory") && !v.contains("mind"));
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, PARE_HOOVES, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, JUDGE_CLOTHING, PARE_HOOVES, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;}
         /** The cardinal for a grid offset, for when the WORLD names the direction rather than the player (#37). */
         static Direction of(int dx,int dy){ for(Direction d:values()) if(d.dx==dx&&d.dy==dy) return d; return null; } }    /**     * The structured perception frame — the seam every future Simulation Agent reads
@@ -5639,6 +5669,89 @@ public class ChronicleActionService {
      * caller of that is the night predator raid, and a cave being dark inside must not make wolves take your
      * stock at noon. Same flag, two questions, is the mistake this cycle has spent its time undoing.
      */
+    /**
+     * Whether what you are wearing suits the sky (#37).
+     *
+     * <p>Every number here is read from the rule that charges the body, not described a second time: summed
+     * {@code insulation_value} plus whatever each garment has been lined with, capped at 80% of the cold kept
+     * out; summed {@code water_resistance} capped at 60% of the rain shed; the wind cut to a quarter under
+     * cover and a half behind a windbreak; and the 1.6x penalty for wearing it wet, which is how people
+     * actually die of cold in weather that is not itself lethal.
+     *
+     * <p>The caps are the point of saying it at all. A player cannot otherwise learn that a stack of rags does
+     * not repeal the cold, that no outfit stays dry in a storm, or that the cloak they are proud of is worth
+     * nothing while it is soaked — and all three are already true of their body every turn.
+     */
+    private String[] judgeClothing(ActiveChronicle chronicle, java.time.Instant at) {
+        com.devosphere.draugr.simulation.BiomeClimate.Local local = localClimate(chronicle.location());
+        java.util.Map<String,Object> worn = jdbc.queryForMap(
+            "SELECT COALESCE(SUM(d.insulation_value + COALESCE(i.lining_bonus,0)),0) AS warmth, " +
+            "       COALESCE(SUM(d.water_resistance),0) AS shed, COUNT(*) AS pieces, " +
+            "       COALESCE(SUM(CASE WHEN COALESCE(i.lining_bonus,0) > 0 THEN 1 ELSE 0 END),0) AS lined " +
+            "FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id " +
+            "JOIN item_definition d ON d.item_key=i.item_key " +
+            "JOIN world_object w ON w.id=e.item_id AND w.lifecycle_state='ACTIVE' " +
+            "WHERE e.chronicle_id=?", chronicle.id());
+        int warmth = ((Number) worn.get("warmth")).intValue();
+        int shed = ((Number) worn.get("shed")).intValue();
+        int pieces = ((Number) worn.get("pieces")).intValue();
+        int lined = ((Number) worn.get("lined")).intValue();
+        int wetness = jdbc.queryForObject(
+            "SELECT COALESCE(wetness_level,0) FROM chronicle_physiology WHERE chronicle_id=?", Integer.class, chronicle.id());
+
+        // The same two caps the body is charged against, said as a fraction a person could reason with.
+        int coldKeptOut = (int) Math.round(Math.min(0.80, warmth / 100.0) * 100);
+        int rainKeptOff = (int) Math.round(Math.min(0.60, shed / 40.0) * 100);
+
+        StringBuilder b = new StringBuilder();
+        if (pieces == 0) return new String[]{"SUCCEEDED",
+            "You are wearing nothing at all, so the weather has you exactly as it finds you."};
+
+        b.append("You have ").append(pieces).append(pieces == 1 ? " thing on" : " things on")
+         .append(lined > 0 ? ", " + (lined == 1 ? "one of them lined" : lined + " of them lined") : "").append(". ");
+
+        b.append(coldKeptOut <= 0 ? "They keep out none of the cold"
+               : coldKeptOut < 20 ? "They keep out very little of the cold"
+               : coldKeptOut < 45 ? "They keep out some of the cold"
+               : coldKeptOut < 80 ? "They keep out a good deal of the cold"
+               : "They keep out as much of the cold as any clothing can — the rest is fire, shelter and food")
+         .append(". ");
+
+        // THE WET PENALTY, which is the one a player would never guess and the one that kills.
+        if (wetness >= 60) b.append("Soaked as they are, they are worth a fraction of that until they dry. ");
+
+        double t = local.temperatureC();
+        String kind = local.kind() == null ? "CLEAR" : local.kind();
+        boolean raining = kind.contains("RAIN") || kind.contains("STORM") || kind.contains("SNOW");
+        if (raining) b.append(rainKeptOff <= 0
+            ? "Nothing you have on sheds water, so what is falling is reaching your skin. "
+            : rainKeptOff < 35 ? "A little of the wet runs off and the rest soaks in. "
+            : "Most of the wet runs off, which is as much as anything sheds. ");
+
+        // And whether it is enough FOR THIS SKY, which is the question actually asked. Soaked counts against
+        // the verdict and not only against the garments: the first cut of this said "you are dressed for it so
+        // long as you keep dry" to a Chronicle who was already wet through, which is two sentences of the same
+        // answer disagreeing with each other.
+        boolean soaked = wetness >= 60;
+        if (t <= 0) b.append(soaked
+            ? "It is below freezing and you are soaked, and that is not being dressed for it whatever you have on:"
+                + " dry out by a fire before the cold finds its way in."
+            : coldKeptOut >= 45
+            ? "It is below freezing, and you are dressed for it so long as you keep dry and fed."
+            : "It is below freezing and you are not dressed for it: another layer, or a lining in what you have.");
+        else if (t <= 10) b.append(soaked
+            ? "It is cold out and you are wet through, which will tell on you long before the air alone would."
+            : coldKeptOut >= 20
+            ? "It is cold out, and what you have will serve."
+            : "It is cold out and you are thinly dressed for it.");
+        else if (t >= 26) b.append(coldKeptOut >= 45
+            ? "It is hot, and you are dressed for cold — you will work the harder for it."
+            : "It is hot, and you are dressed lightly enough for it.");
+        else b.append("The air is mild, and what you have on is beside the point for now.");
+
+        return new String[]{"SUCCEEDED", b.toString().trim()};
+    }
+
     /**
      * Whether you can see to work, and what you have to burn (#37).
      *

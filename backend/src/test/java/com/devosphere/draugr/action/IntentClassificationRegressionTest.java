@@ -2545,4 +2545,39 @@ class IntentClassificationRegressionTest {
         assertNotEquals("JUDGE_MAKING", classify("weave a basket"));
         assertNotEquals("JUDGE_MAKING", classify("tan the hide"));
     }
+
+    /**
+     * Asking whether you are dressed for it (#37, V440).
+     *
+     * <p>153 items carry insulation and 131 shed water; the body is charged against both every turn, with a cap
+     * on each and a 1.6x penalty for wearing them wet. None of it could be asked about. Measured on a booted
+     * world: {@code will these clothes keep me warm} and {@code is my cloak keeping the rain off} reached
+     * nothing, and {@code am I dressed for this weather} reached EQUIP — "You have nothing unequipped that can
+     * be worn or wielded", a question answered by an act that found nothing to do.
+     */
+    @Test
+    void askingWhetherYouAreDressedForIt() throws Exception {
+        assertEquals("JUDGE_CLOTHING", classify("will these clothes keep me warm"));
+        assertEquals("JUDGE_CLOTHING", classify("am I dressed for this weather"));
+        assertEquals("JUDGE_CLOTHING", classify("is my cloak keeping the rain off"));
+        assertEquals("JUDGE_CLOTHING", classify("what should I wear"));
+        assertEquals("JUDGE_CLOTHING", classify("will this cloak keep me warm"));
+
+        // AND THE BODY KEEPS WARMTH-AS-FELT AND WETNESS, which this suite had already decided twice — whether
+        // the night is survivable is the body's question, and a soaked cloak is how a body gets wet. My first
+        // cut of this rule took both, and these two assertions are what caught it.
+        assertEquals("SENSE_BODY", classify("will I be warm enough tonight"));
+        assertEquals("SENSE_BODY", classify("are my clothes wet"));
+        assertEquals("SENSE_BODY", classify("is my cloak wet"));
+
+        // THE ACTS AND THE OTHER READINGS KEEP THEIRS. "warm my hands" is the body's, a fire's warmth is the
+        // fire's, and putting a thing on is still an act — this rule sits above the light reading and must not
+        // take either of their sentences.
+        assertEquals("WARM_BODY", classify("warm my hands"));
+        assertEquals("WARM_BODY", classify("I am cold"));
+        assertNotEquals("JUDGE_CLOTHING", classify("warm the water"));
+        assertNotEquals("JUDGE_CLOTHING", classify("put on my boots"));
+        assertNotEquals("JUDGE_CLOTHING", classify("take off my shoes"));
+        assertNotEquals("JUDGE_CLOTHING", classify("is there enough light to work"));
+    }
 }
