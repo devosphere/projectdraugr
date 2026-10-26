@@ -355,4 +355,44 @@ class WhichWayTheGroundLiesIntegrationTest {
                 () -> "the reading said the way was known, and the journey must not say otherwise: " + journey.perception());
         }
     }
+
+    /**
+     * The naming question is answered either way (#37).
+     *
+     * <p>The survey opens with the name where there is one — "This is Reedwatch, a place you named and made
+     * your own" — so {@code what is this place called} has been answered for as long as a name existed. On
+     * unnamed ground it opened with the reeds and the weather instead: a scene, and not an answer. Measured
+     * live on a marsh nobody had named, the reply ran the whole country and never said it had no name.
+     *
+     * <p>Both directions, on ground this test chooses for the property it needs: one chunk this Chronicle has
+     * never named, and then the same chunk after naming it through the real act.
+     */
+    @Test
+    void theNamingQuestionIsAnsweredEitherWay() {
+        UUID me = awaken();
+        UUID unnamed = jdbc.queryForObject(
+            "SELECT c.id FROM world_chunk c WHERE c.biome <> 'OCEAN' " +
+            "  AND NOT EXISTS (SELECT 1 FROM chronicle_named_location n WHERE n.chronicle_id=? AND n.chunk_id=c.id) " +
+            "ORDER BY c.grid_y, c.grid_x LIMIT 1", UUID.class, me);
+        assertNotNull(unnamed, "the world must hold ground this Chronicle has not named");
+        whoMoved = me;
+        stoodAt = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, me);
+        jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", unnamed, me);
+
+        ChronicleActionService.ActionResult asked = actions.resolve("what is this place called");
+        assertEquals("OBSERVE", asked.intent(),
+            () -> "the naming question belongs to the survey: " + asked.perception());
+        assertTrue(asked.perception().contains("no name"),
+            () -> "and on unnamed ground it must say there is none: " + asked.perception());
+
+        // AND WITH A NAME IT GIVES THE NAME, which is what the survey has always done — asserted here so the
+        // clause above can never be the whole answer.
+        ChronicleActionService.ActionResult named = actions.resolve("call this place Fenwatch");
+        assertEquals("DESIGNATE", named.intent(), () -> "naming must reach the naming: " + named.perception());
+        ChronicleActionService.ActionResult again = actions.resolve("what did I call this place");
+        assertTrue(again.perception().contains("Fenwatch"),
+            () -> "the survey must open with the name once there is one: " + again.perception());
+        assertFalse(again.perception().contains("no name"),
+            () -> "and must not still be saying there is none: " + again.perception());
+    }
 }

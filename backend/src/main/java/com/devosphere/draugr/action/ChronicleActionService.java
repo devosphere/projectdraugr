@@ -496,7 +496,20 @@ public class ChronicleActionService {
                 outcome = "FAILED";
                 perception = "You look for something to climb and there is nothing here that will take your weight — "
                     + "no trunk, no standing timber, nothing above the height of your own head.";
-            } else perception = climbing + survey(chronicle, resolvedAt);
+            } else {
+                perception = climbing + survey(chronicle, resolvedAt);
+                // AND THE NAMING QUESTION, ANSWERED WHEN THE ANSWER IS "NOTHING" (#37). The survey opens with
+                // the name where there is one — "This is Reedwatch, a place you named and made your own" — and
+                // on unnamed ground it opened with the reeds and the weather, which is a scene and not an
+                // answer. Measured live: `what is this place called`, standing on a marsh nobody had named,
+                // came back with the whole country and never said that it had no name.
+                if (asksWhatThisPlaceIsCalled(text.toLowerCase(Locale.ROOT))
+                    && !jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM chronicle_named_location " +
+                                            "WHERE chronicle_id=? AND chunk_id=?)",
+                                            Boolean.class, chronicle.id(), chronicle.location()))
+                    perception = "You have put no name to this place. " + perception;
+            }
+
         }
         else if (intent == Intent.MOVE) {
             // A haul tired the team in silence, which made draft gear that does not fit the animal
@@ -1916,6 +1929,18 @@ public class ChronicleActionService {
      * the one kind it answers badly: `how far along is the lean-to` was told what already stands, which is the
      * opposite of what was asked. So the exception lives here, where both paths can read the same rule.
      */
+    /**
+     * Whether a sentence is asking what this place is called (#37). One rule, two readers: the classifier sends
+     * it to the survey, which opens "This is Reedwatch, a place you named and made your own" — and the survey
+     * needs the same rule to know when the honest answer is that there is no name.
+     */
+    private static boolean asksWhatThisPlaceIsCalled(String value) {
+        return value.contains("what did i name")||value.contains("what did i call")
+            ||value.contains("what have i named")||value.contains("what is this place called")
+            ||value.contains("whats this place called")||value.contains("what is this called")
+            ||value.contains("did i name this")||value.contains("have i named this");
+    }
+
     private boolean asksWhatRemainsOfTheWork(String value) {
         return value.contains("what am i working on")||value.contains("what was i working on")
             ||value.contains("what is unfinished")||value.contains("whats unfinished")
@@ -4151,9 +4176,7 @@ public class ChronicleActionService {
             ||value.contains("will i find my way")||value.contains("can i find my way")
             ||value.contains("is this place on my map")||value.contains("do i remember this place");
         if (askingWhatTheyKnowOfHere) return Intent.JUDGE_PLACE;
-        if(value.contains("what did i name")||value.contains("what did i call")||value.contains("what have i named")
-           ||value.contains("what is this place called")||value.contains("whats this place called")
-           ||value.contains("what is this called")||value.contains("did i name this")||value.contains("have i named this")) return Intent.OBSERVE;
+        if (asksWhatThisPlaceIsCalled(value)) return Intent.OBSERVE;
         // AND NOT WHEN THE QUESTION IS PUT TO SOMEBODY ELSE. `ask what they call this place` reached DESIGNATE
         // and answered "You mean to give this place a name, but no clear name forms" — the same renaming of the
         // ground in answer to a question, one pronoun over from the form already guarded above. On an isle the
