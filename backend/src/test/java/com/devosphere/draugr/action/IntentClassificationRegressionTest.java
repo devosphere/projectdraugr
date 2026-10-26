@@ -2580,4 +2580,48 @@ class IntentClassificationRegressionTest {
         assertNotEquals("JUDGE_CLOTHING", classify("take off my shoes"));
         assertNotEquals("JUDGE_CLOTHING", classify("is there enough light to work"));
     }
+
+    /**
+     * Naming a place is not mapping it, and a note is a writing (#37).
+     *
+     * <p>Swept the records chain on a booted world. The naming rule wanted a naming verb and "this place", and
+     * {@code mark this place on my map} has both — so it took the sentence and read the rest as the NAME:
+     *
+     * <pre>
+     *   mark this place on my map  ->  "You fix a name to this place: on my map."
+     * </pre>
+     *
+     * <p>Nobody calls a place "on my map". Two more forms of the same intention reached nothing at all
+     * ({@code add this place to my map}, {@code note this place on the map}), and so did the plainest way of
+     * saying you want something written down ({@code make a note of this place}, {@code note down what I
+     * found}) — while {@code write this down} had always worked.
+     */
+    @Test
+    void namingAPlaceIsNotMappingIt() throws Exception {
+        // Putting a place ON the map is mapping.
+        assertEquals("SKETCH_MAP", classify("mark this place on my map"));
+        assertEquals("SKETCH_MAP", classify("add this place to my map"));
+        assertEquals("SKETCH_MAP", classify("note this place on the map"));
+        assertEquals("SKETCH_MAP", classify("draw a map"), "which always worked");
+
+        // Giving it a name is naming.
+        assertEquals("DESIGNATE", classify("call this place Stonefield"));
+        assertEquals("DESIGNATE", classify("name this place Stonefield"));
+
+        // AND THE MARKER VERBS KEEP THEIRS. The map noun is what the widened rule is gated on, so a trail
+        // marker — which has no map in it — is still MARK's.
+        assertEquals("MARK", classify("mark the trail"));
+        assertEquals("MARK", classify("leave a marker here"));
+
+        // A note is a writing...
+        assertEquals("WRITE", classify("make a note of this place"));
+        assertEquals("WRITE", classify("note down what I found"));
+        assertEquals("WRITE", classify("keep a record of the herd"));
+        assertEquals("WRITE", classify("write this down"), "which always worked");
+
+        // ...but the bare word "note" is also how a person says they have observed something, and that belongs
+        // to the tracking and the looking. This is why the rule is held to the noting PHRASES.
+        assertEquals("TRACK", classify("note the tracks"));
+        assertNotEquals("WRITE", classify("observe the tracks"));
+    }
 }
