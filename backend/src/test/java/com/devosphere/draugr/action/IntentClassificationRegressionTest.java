@@ -2346,4 +2346,203 @@ class IntentClassificationRegressionTest {
         assertEquals("UNKNOWN", classify("fodder rack"));
         assertEquals("CRAFT_WORKSTATION", classify("build a sewing table"), "a workstation, not a desk");
     }
+
+    /**
+     * fo-REST (#37). The REST rule asked {@code value.contains("rest")}, and eight sentences about something
+     * else each cost the Chronicle an hour of simulated time — measured on a booted world, not guessed:
+     *
+     * <pre>
+     *   walk into the forest            -> "You remain still for an hour"
+     *   the forest floor is damp        -> an hour
+     *   restore the fence               -> an hour, and never reached the repair
+     *   wrestle the boar / arrest the thief / make restitution / restring my bow
+     *   the rest of the herd is fine    -> an hour
+     * </pre>
+     *
+     * <p>The worst is {@code walk into the forest}: a plain instruction to go somewhere, answered by sitting
+     * down, because the name of the ground contains the word. Same family as w-EAT-her, ca-BIN and o-PEN ground.
+     */
+    @Test
+    void theForestIsNotARest() throws Exception {
+        // NONE of these is a rest, and every one of them was.
+        assertNotEquals("REST", classify("walk into the forest"), "fo-REST");
+        assertNotEquals("REST", classify("the forest floor is damp"));
+        assertNotEquals("REST", classify("wrestle the boar"), "w-REST-le");
+        assertNotEquals("REST", classify("arrest the thief"), "ar-REST");
+        assertNotEquals("REST", classify("make restitution"), "REST-itution");
+        assertNotEquals("REST", classify("restring my bow"), "REST-ring");
+        assertNotEquals("REST", classify("the crest of the ridge"), "c-REST");
+        // "the rest of" is the whole word and still not a rest: it is a quantity.
+        assertNotEquals("REST", classify("the rest of the herd is fine"));
+        assertNotEquals("REST", classify("put the rest of the wood on the fire"));
+
+        // AND IT IS A JOURNEY, which is where this file already puts going to a named thing: `go to the river`
+        // and `head for the high ground` are asserted as TRAVEL two tests above, so a second path for walking
+        // to a kind of ground would have contradicted a decision this suite already holds. The first cut of
+        // this fix did exactly that and broke both of those assertions — the gap was never a missing rule but a
+        // missing FORM: every way of going TO a thing was listed and no way of going INTO one.
+        assertEquals("TRAVEL", classify("walk into the forest"));
+        assertEquals("TRAVEL", classify("go into the woods"));
+        assertEquals("TRAVEL", classify("head into the marsh"));
+        assertEquals("TRAVEL", classify("walk toward the shore"));
+        assertEquals("TRAVEL", classify("set off for the hills"));
+        assertEquals("TRAVEL", classify("go to the river"), "which this suite already asserted");
+        assertEquals("TRAVEL", classify("head for the high ground"), "and this");
+
+        // A BEARING IS STILL A STEP, not a journey: the TRAVEL rule is gated on there being no direction, and
+        // widening its verbs must not take the walking rule's own sentences.
+        assertEquals("MOVE", classify("walk north"));
+        assertEquals("MOVE", classify("head east"));
+        assertEquals("MOVE", classify("go into the north"));
+
+        // THE WORK VERBS KEEP THEIRS. "the wood", "the trees" and "timber" are all kinds of ground in this
+        // game's vocabulary and all objects of a day's work, so the gather rules must be untouched.
+        assertEquals("GATHER_BRANCHES", classify("go and gather wood"));
+        assertEquals("GATHER_BRANCHES", classify("go to the wood and cut timber"));
+
+        // AND RESTING STILL RESTS, which is the control: a word-boundary fix that broke the rule it guards
+        // would pass every assertion above.
+        assertEquals("REST", classify("rest for a while"));
+        assertEquals("REST", classify("take a rest"));
+        assertEquals("REST", classify("I need to rest"));
+        assertEquals("REST", classify("let me rest my legs"));
+        assertEquals("REST", classify("sit down for a while"));
+        assertEquals("REST", classify("resting here a moment"));
+        assertEquals("REST", classify("wait here"));
+
+        // Asking whether you have rested is not resting — the family #788 closed for sleep.
+        assertEquals("SENSE_BODY", classify("have I rested"));
+        assertEquals("SENSE_BODY", classify("am I rested"));
+
+        // And one that now reaches the RIGHT intent rather than a different wrong one: a fence is a standing
+        // thing and "restore" is the word a player reaches for.
+        assertEquals("REPAIR_STRUCTURE", classify("restore the fence"));
+        assertEquals("REPAIR_STRUCTURE", classify("repair the fence"), "which always worked");
+    }
+
+    /**
+     * What the keeper says about their stock (#37). #783 built the statement frame for the player's own body —
+     * "I am hungry", "I am tired" — and this ticket recorded the keeper's half as still open, leaving it to
+     * #106, which has since closed without it.
+     *
+     * <p>Measured on a booted world: {@code the goats are thirsty} and {@code the goat is sick} reached the
+     * stock reading, while {@code the goat is hungry}, {@code my goat is starving}, {@code the ox is tired} and
+     * {@code the animals need water} reached <b>nothing at all</b> — every one of them a real, maintained
+     * number that reading already reports.
+     */
+    @Test
+    void theKeeperSaysWhatTheirStockWants() throws Exception {
+        assertEquals("CHECK_STOCK", classify("the goat is hungry"));
+        assertEquals("CHECK_STOCK", classify("my goat is starving"));
+        assertEquals("CHECK_STOCK", classify("the ox is tired"));
+        assertEquals("CHECK_STOCK", classify("the animals need water"));
+        assertEquals("CHECK_STOCK", classify("the goats are thirsty"), "which already worked");
+        assertEquals("CHECK_STOCK", classify("the goat is sick"), "and so did this");
+
+        // THE PLAYER'S OWN BODY KEEPS ITS OWN, which is the one thing this could wrongly claim. "I am hungry"
+        // naming no beast must never reach a stock report — that would be face 6 exactly.
+        assertNotEquals("CHECK_STOCK", classify("I am hungry"));
+        assertNotEquals("CHECK_STOCK", classify("I am tired"));
+        assertNotEquals("CHECK_STOCK", classify("I need water"));
+
+        // And the acts keep their verbs: asking after a beast is not feeding one. (In this harness nothing is
+        // kept — `keepsSuchABeast` is stubbed false — so feeding a goat reaches the TAMING rule's feeding
+        // branch rather than FEED_ANIMAL. Which of the two it is depends on the world; that it is neither a
+        // stock report nor a rest is what this asserts.)
+        assertNotEquals("CHECK_STOCK", classify("feed the goat"));
+        assertNotEquals("REST", classify("feed the goat"));
+    }
+
+    /**
+     * Asking about the light is not striking one (#37, V437).
+     *
+     * <p>Four finished rules decided whether a Chronicle could see to work — the hour, the rock, the order
+     * carried lights are spent in, and whether weather would gut a bare flame — and not one of them could be
+     * asked about. Measured on a booted world: {@code is there enough light to work}, {@code it is too dark to
+     * see} and {@code what have I got to burn} reached nothing or spent an act on nothing.
+     */
+    @Test
+    void askingAboutTheLightIsNotStrikingOne() throws Exception {
+        assertEquals("JUDGE_LIGHT", classify("is there enough light to work"));
+        assertEquals("JUDGE_LIGHT", classify("it is too dark to see"));
+        assertEquals("JUDGE_LIGHT", classify("what have I got to burn"));
+        assertEquals("JUDGE_LIGHT", classify("can I see well enough to write"));
+        assertEquals("JUDGE_LIGHT", classify("is it dark in here"));
+        // AND THE SKY KEEPS THE SKY. "is it dark" with no place in it is the hour, and READ_THE_SKY answers it
+        // with the sun, the light left and the season — which is right outdoors and was being given inside a
+        // cave at noon to a question about the cave.
+        assertEquals("READ_THE_SKY", classify("is it dark"));
+        assertEquals("READ_THE_SKY", classify("is it getting dark"));
+        assertEquals("JUDGE_LIGHT", classify("have I got a light"));
+
+        // THE ACTS KEEP THEIRS, which is the half this could have broken: a question about the light must not
+        // take the lighting of a fire, and lighting one must not be answered with a reading.
+        assertEquals("LIGHT_FIRE", classify("light a fire"));
+        assertEquals("LIGHT_FIRE", classify("light the fire"));
+        assertNotEquals("JUDGE_LIGHT", classify("put out the fire"));
+        // And the body's own darkness words stay the body's: "I cannot see" is sight, not inventory.
+        assertNotEquals("JUDGE_LIGHT", classify("make a torch"));
+    }
+
+    /**
+     * The plainest weather questions of all (#37).
+     *
+     * <p>The sky rule knew the FORECAST — "is it going to rain", "will it rain", "will it freeze" — and not one
+     * way of asking what the weather is DOING. Measured on a booted world, six of eight reached nothing at all
+     * while {@code weather_kind}, {@code wind_speed_kph} and {@code ambient_temperature_c} sat on the row
+     * behind them: "your hands find no purchase on it", to `is it raining`.
+     */
+    @Test
+    void thePlainestWeatherQuestions() throws Exception {
+        assertEquals("READ_THE_SKY", classify("is it raining"));
+        assertEquals("READ_THE_SKY", classify("is it snowing"));
+        assertEquals("READ_THE_SKY", classify("is it windy"));
+        assertEquals("READ_THE_SKY", classify("is it cold out"));
+        assertEquals("READ_THE_SKY", classify("what is it doing outside"));
+        assertEquals("READ_THE_SKY", classify("is the weather turning"));
+        assertEquals("READ_THE_SKY", classify("has it stopped raining"));
+
+        // THE BODY KEEPS ITS OWN, which is why no bare "cold" or "freezing" went into that list: this rule runs
+        // long before the body block, so a bare word would have taken "I am freezing" off WARM_BODY.
+        assertEquals("WARM_BODY", classify("I am cold"));
+        assertEquals("WARM_BODY", classify("I am freezing"));
+        assertEquals("DRY_BODY", classify("I am soaked"));
+
+        // And the place question stays the light reading's, not the sky's.
+        assertEquals("JUDGE_LIGHT", classify("is it dark in here"));
+    }
+
+    /**
+     * Asking what a thing takes (#37, V438).
+     *
+     * <p>Every bill of materials in this game is data, in two tables, and a Chronicle could not ask. Measured
+     * on a booted world, the worst answer of that sweep:
+     *
+     * <pre>
+     *   what do I need for a basket  ->  SENSE_BODY: "There is a hard pressure low in you…"
+     * </pre>
+     *
+     * <p>A question about materials answered with the state of the player's bowels, in the same even voice as
+     * every true answer. "what do i need" sits inside the body block's frame, so the making rule goes above it
+     * — and the body must keep the sentences that really are about the body, which is the other half here.
+     */
+    @Test
+    void askingWhatAThingTakes() throws Exception {
+        assertEquals("JUDGE_MAKING", classify("what do I need for a basket"));
+        assertEquals("JUDGE_MAKING", classify("what do I need to make cordage"));
+        assertEquals("JUDGE_MAKING", classify("what does tanning a hide take"));
+        assertEquals("JUDGE_MAKING", classify("what goes into a leather pouch"));
+        assertEquals("JUDGE_MAKING", classify("what is clay good for"));
+        assertEquals("JUDGE_MAKING", classify("what can I do with the oak bark"));
+
+        // THE BODY KEEPS ITS OWN. "I need water" and "I need to rest" are the body's business and were never
+        // the catalogue's; the making rule is held to the "what do I need FOR" frame for exactly this reason.
+        assertNotEquals("JUDGE_MAKING", classify("I need water"));
+        assertNotEquals("JUDGE_MAKING", classify("I need to rest"));
+        assertNotEquals("JUDGE_MAKING", classify("I am hungry"));
+
+        // And the ACTS keep theirs: asking what a basket takes is not weaving one.
+        assertNotEquals("JUDGE_MAKING", classify("weave a basket"));
+        assertNotEquals("JUDGE_MAKING", classify("tan the hide"));
+    }
 }

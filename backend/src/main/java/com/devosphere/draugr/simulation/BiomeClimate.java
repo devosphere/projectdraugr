@@ -100,6 +100,17 @@ public final class BiomeClimate {
         if ("RAIN".equals(kind) && temp <= snowThreshold) kind = "SNOW";               // rain freezes to snow
         else if ("STORM".equals(kind) && temp <= snowThreshold - 1.0) kind = "SNOW";   // a cold storm is a blizzard
         else if ("SNOW".equals(kind) && temp >= 4.0) kind = "RAIN";                    // snow melts to rain when warm
+
+        // AND NOTHING FALLS ON YOU INSIDE THE ROCK (#37). The wind has been localised here since this class
+        // existed — a cave mouth takes 20 kph off it and an interior takes all of it — while the PRECIPITATION
+        // was passed through untouched, so every reader of this reading was told snow was coming down on a
+        // Chronicle standing under a hundred feet of limestone. Measured: the sky reading said "Snow is coming
+        // down" inside a cave mouth, and the same figure gates whether thatching may go on.
+        //
+        // The two cave biomes are the whole of it. A forest canopy is shelter from the wind and from some of the
+        // rain, but a Chronicle under trees in a storm is wet, and the ordinary weather is the truthful answer
+        // for them.
+        if ("CAVE_MOUTH".equals(biome) || "CAVE_INTERIOR".equals(biome)) kind = "CLEAR";
         return new Local(kind, temp, wind);
     }
 

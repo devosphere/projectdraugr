@@ -27,6 +27,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -243,5 +244,61 @@ class WhichWayTheGroundLiesIntegrationTest {
         UUID ended = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, me);
         assertEquals(start, ended,
             () -> "going back the way you came must arrive where you came from: " + back.perception());
+    }
+
+    /** Ground with a wood on exactly one side, so a journey into it has only one way it could mean. */
+    private static final String ONE_SIDE_OF_WOOD =
+        "c.biome <> 'TEMPERATE_FOREST' AND (SELECT count(*) FROM world_chunk n WHERE n.world_id=c.world_id " +
+        "  AND abs(n.grid_x-c.grid_x)+abs(n.grid_y-c.grid_y)=1 AND n.biome='TEMPERATE_FOREST') = 1";
+
+    /**
+     * A journey to a KIND OF GROUND (#37), and the two defects that met in it.
+     *
+     * <p>{@code walk into the forest} reached the REST rule — because "fo-REST" contains the word — and the
+     * Chronicle sat down for an hour. Eight sentences did that; see {@code restingHere}. With the word boundary
+     * in place the sentence reaches TRAVEL, which wants a place it can call to mind: a map sketch, a marker, a
+     * routine, somewhere visited. A kind of ground is none of those, so the answer became "you cannot call the
+     * way to mind clearly enough to set out" — about a wood the game can see from where it stands.
+     *
+     * <p>So a journey that names ground rather than a place is now answered from the ground, by the same
+     * vocabulary WHICH_WAY reports from. This asserts the two cannot disagree: whichever way the asking says
+     * the wood lies, that is the way the walking goes, and it arrives in the wood rather than beside it.
+     */
+    @Test
+    void aJourneyToAKindOfGroundGoesThatWay() {
+        UUID me = awaken();
+        standOn(me, ONE_SIDE_OF_WOOD);
+
+        // Which way the wood lies, said out loud.
+        ChronicleActionService.ActionResult asked = actions.resolve("which way is the forest");
+        assertEquals("WHICH_WAY", asked.intent(), () -> "asking the way must answer: " + asked.perception());
+        String bearing = null;
+        for (String point : com.devosphere.draugr.world.Compass.RING)
+            if (asked.perception().toLowerCase(Locale.ROOT).contains(point)) { bearing = point; break; }
+        assertNotNull(bearing, () -> "and must name a bearing: " + asked.perception());
+
+        UUID before = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, me);
+        ChronicleActionService.ActionResult went = actions.resolve("walk into the forest");
+
+        // NOT A REST. This is the whole of the fo-REST defect, asserted where it happened rather than only in
+        // the classifier: an hour of simulated time spent on a sentence about going somewhere.
+        assertNotEquals("REST", went.intent(),
+            () -> "walking into the forest must not be a rest: " + went.perception());
+        assertFalse(went.perception().contains("You remain still"),
+            () -> "nor may it sit the Chronicle down: " + went.perception());
+
+        // And it must not be the travel refusal either — the world knows which way the wood is.
+        assertFalse(went.perception().contains("cannot call the way to mind"),
+            () -> "the game can see the wood from here and must not claim it cannot find it: " + went.perception());
+
+        UUID after = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, me);
+        if (!before.equals(after)) {
+            String finalBearing = bearing;
+            assertTrue(went.perception().toLowerCase(Locale.ROOT).contains(finalBearing),
+                () -> "the journey went a different way than the asking reported (" + finalBearing + "): " + went.perception());
+            assertEquals("TEMPERATE_FOREST",
+                jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, after),
+                "and it must arrive in the wood, not beside it");
+        }
     }
 }

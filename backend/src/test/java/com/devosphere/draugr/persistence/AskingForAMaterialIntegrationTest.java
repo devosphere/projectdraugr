@@ -1,7 +1,9 @@
 package com.devosphere.draugr.persistence;
 
 import com.devosphere.draugr.action.ChronicleActionService;
+import com.devosphere.draugr.audit.PersistentStateAuditor;
 import com.devosphere.draugr.chronicle.ChronicleService;
+import com.devosphere.draugr.item.PhysicalItemService;
 import com.devosphere.draugr.world.genesis.WorldEcologyGenesisService;
 import com.devosphere.draugr.world.genesis.WorldGenesisService;
 import org.junit.jupiter.api.AfterAll;
@@ -18,6 +20,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -77,6 +80,8 @@ class AskingForAMaterialIntegrationTest {
     @Autowired WorldEcologyGenesisService ecology;
     @Autowired ChronicleService chronicles;
     @Autowired ChronicleActionService actions;
+    @Autowired PhysicalItemService items;
+    @Autowired PersistentStateAuditor auditor;
     @Autowired JdbcTemplate jdbc;
 
     private void aLivingChronicle() {
@@ -182,5 +187,59 @@ class AskingForAMaterialIntegrationTest {
         // And a girdle nothing claims still reaches the belt.
         assertTrue("CRAFT_BELT".equals(intentOf("make a girdle")),
             () -> "the catalogue's own word for a belt: -> " + intentOf("make a girdle"));
+    }
+
+    /**
+     * A bill is read from BOTH input tables (#37, V438).
+     *
+     * <p>Inputs live in two places in this schema — {@code material_process_input} for what is always wanted,
+     * {@code material_process_input_group} for "any one of these will do" — and a reading that consults one of
+     * them claims matter from nothing. Tanning is the clearest case in the catalogue: two pieces of oak bark
+     * from the first table, and a hide from the second. Read from the first alone, the game would say a hide
+     * can be tanned out of bark and nothing else.
+     *
+     * <p>Asserted against the live rows rather than a fixture, because the point is that the reading agrees
+     * with the catalogue the acts consume from.
+     */
+    @Test
+    void aBillIsReadFromBothTables() {
+        aLivingChronicle();
+        UUID chronicle = chronicles.active().id();
+        UUID here = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+
+        // The catalogue's own two halves of the tanning bill, so the test cannot drift from the data.
+        String direct = jdbc.queryForObject(
+            "SELECT COALESCE(d.display_name, i.item_key) FROM material_process_input i " +
+            "LEFT JOIN item_definition d ON d.item_key=i.item_key WHERE i.process_key='tan_hide' LIMIT 1", String.class);
+        String grouped = jdbc.queryForObject(
+            "SELECT COALESCE(d.display_name, g.item_key) FROM material_process_input_group g " +
+            "LEFT JOIN item_definition d ON d.item_key=g.item_key WHERE g.process_key='tan_hide' ORDER BY g.item_key LIMIT 1",
+            String.class);
+        assertNotNull(direct, "tanning must have a direct input to read");
+        assertNotNull(grouped, "and a grouped one, or this test is asserting nothing");
+
+        String said = items.judgeMaking(chronicle, here, "what does tanning a hide take")[1].toLowerCase(java.util.Locale.ROOT);
+        assertTrue(said.contains(direct.toLowerCase(java.util.Locale.ROOT)),
+            () -> "the bill must name what the first table holds (" + direct + "): " + said);
+        assertTrue(said.contains(grouped.toLowerCase(java.util.Locale.ROOT)),
+            () -> "and what the second holds (" + grouped + "), or it claims matter from nothing: " + said);
+        assertTrue(said.contains("any one of"),
+            () -> "a group is an \"any one of these\" and must be said that way: " + said);
+
+        // A FAMILY WORD IS ANSWERED, NOT REFUSED: "a basket" is four works in this catalogue, and the reading
+        // asks which — the same settlement V318 made for the acts.
+        String basket = items.judgeMaking(chronicle, here, "what do I need for a basket")[1];
+        assertTrue(basket.toLowerCase(java.util.Locale.ROOT).contains("basket"),
+            () -> "asking about a basket must answer about baskets: " + basket);
+        assertTrue(basket.contains("more than one") || basket.contains("takes"),
+            () -> "and must either name the works it could be or read one bill: " + basket);
+
+        // A MATERIAL, the other way round: what does this stuff go into?
+        String bark = items.judgeMaking(chronicle, here, "what can I do with the oak bark")[1];
+        assertTrue(bark.toLowerCase(java.util.Locale.ROOT).contains("oak bark"),
+            () -> "the material reading must name the material: " + bark);
+
+        // And a reading alters nothing it touches.
+        assertTrue(auditor.inspect().consistent(), () -> "asking is not acting: " + auditor.inspect().violations());
     }
 }

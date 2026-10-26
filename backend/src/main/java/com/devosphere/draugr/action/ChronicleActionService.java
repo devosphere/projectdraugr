@@ -515,6 +515,21 @@ public class ChronicleActionService {
         }
         else if (intent == Intent.TRAVEL) {
             if (localZone != null) { jdbc.update("UPDATE chronicle SET current_zone=? WHERE id=?", localZone, chronicle.id()); perception = "You cross the settlement to " + localZone + ", a short walk over ground you know by heart."; }
+            // A JOURNEY TO A KIND OF GROUND (#37). `walk into the forest`, `go to the river`, `head into the
+            // marsh` — all of them reach TRAVEL, and TRAVEL wants a place it can call to mind: a map sketch, a
+            // marker, a routine, somewhere visited. A kind of ground is none of those, so every one of them was
+            // answered "you cannot call the way to mind clearly enough to set out" — while world_chunk has
+            // always known exactly which way the forest lies, and WHICH_WAY says so when asked outright.
+            //
+            // The world knowing and not saying is this ticket's fifth face. So a journey that names ground
+            // rather than a place is handed to the step, which resolves the bearing from GROUND_ASKED_FOR — the
+            // same vocabulary WHICH_WAY answers from, so what the game SAYS lies north is what walking there
+            // reaches. The remembered-place journey is untouched: this is only what happens when there is no
+            // such place and the sentence named ground instead.
+            else if (travel == null && namesGroundAsked(text.toLowerCase(Locale.ROOT))) {
+                perception = move(chronicle, text, actionId, resolvedAt);
+                perception = withCompanion(chronicle.id(), perception, resolvedAt);
+            }
             else {
                 String[] r = travelTo(chronicle, travel, resolvedAt); outcome = r[0]; perception = r[1];
                 // A haul used to tire the team in silence, which made draft gear that does not fit the animal
@@ -628,6 +643,8 @@ public class ChronicleActionService {
         else if (intent == Intent.WATER_CROP) { String[] r = items.waterCrop(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.SCARE_BIRDS) { String[] r = items.scareBirdsFromCrop(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_CROSSING) { String[] r = judgeCrossing(chronicle, text); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.JUDGE_LIGHT) { String[] r = judgeLight(chronicle, resolvedAt); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.JUDGE_MAKING) { String[] r = items.judgeMaking(chronicle.id(), chronicle.location(), text); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.HIDE_TRAIL) { String[] r = wildlife.hideTrail(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.WEED_CROP) { String[] r=items.tendCrop(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.CLEAR_LAND) { String[] r=items.clearLand(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
@@ -1595,7 +1612,12 @@ public class ChronicleActionService {
         //
         // A named kind of ground decides it (the same vocabulary WHICH_WAY answers from, so what the game SAYS
         // lies north is what walking north reaches). Failing a name, bare "up" and "down" go by the elevation.
-        if (direction == null && wantsGroundStep(said)) {
+        // The CLASSIFIER's gate is wantsGroundStep, which wants a climbing or following verb; the HANDLER's is
+        // wider on purpose. Anything that got here naming a kind of ground can be answered from the ground —
+        // including a journey with no place to call to mind, which is sent here deliberately (see the TRAVEL
+        // branch in resolve). Before that, "you do not commit to a direction" was the answer to a sentence that
+        // had named the marsh.
+        if (direction == null && (wantsGroundStep(said) || namesGroundAsked(said))) {
             String biomes = null;
             for (String[] kind : GROUND_ASKED_FOR)
                 if (groundNamed(said, kind[0]) && (biomes == null || kind[0].length() > biomes.length())) biomes = kind[1];
@@ -2513,7 +2535,7 @@ public class ChronicleActionService {
             return Intent.REPAIR_ITEM;
         // Repairing / maintaining a standing structure here (#70) — before item repair, and scoped to structure
         // nouns, so "mend the fence" or "weatherproof the hut" works a construction, not a carried tool.
-        if((value.contains("repair")||value.contains("mend")||value.contains("patch")||value.contains("shore up")||value.contains("reinforce")||value.contains("weatherproof")||value.contains("maintain")||(word(value,"fix")&&!value.contains("memory")&&!value.contains("mind")))
+        if((value.contains("repair")||value.contains("mend")||value.contains("patch")||value.contains("restor")||value.contains("shore up")||value.contains("reinforce")||value.contains("weatherproof")||value.contains("maintain")||(word(value,"fix")&&!value.contains("memory")&&!value.contains("mind")))
            // "shelter" was not among the structure nouns, so `repair the shelter` reached nothing at all while
            // `mend the fence` and `fix the roof` both worked — and a lean-to is the first thing most Chronicles
            // build and the first thing the weather takes apart. The rest are the other roofed forms the
@@ -2718,13 +2740,35 @@ public class ChronicleActionService {
             ||value.contains("out of condition")) && !namesDraughtGear(value);
         boolean aboutTheirOwnBody = value.contains(" my ")||value.startsWith("my ")||value.contains("am i")
             ||value.contains("i am")||value.contains("my own");
+        // WHAT THE KEEPER SAYS ABOUT THEIR STOCK (#37). #783 built the statement frame for the player's own
+        // body — "I am hungry", "I am tired" — and #37 recorded the keeper's half as still open, leaving it to
+        // #106, which has since closed without it. Measured on a booted world: `the goats are thirsty` and
+        // `the goat is sick` reach this reading (THIRSTY and SICK are in the frame below), while
+        //
+        //     the goat is hungry        -> nothing at all
+        //     my goat is starving      -> nothing at all
+        //     the ox is tired          -> nothing at all
+        //     the animals need water   -> nothing at all
+        //
+        // every one of which is a real, maintained number this reading already reports — draft_hunger,
+        // draft_fatigue, draft_thirst — and three of the four are the plainest words a keeper would use.
+        //
+        // Reported rather than acted on, as the body statements are: the acts keep their own verbs below, so
+        // `feed the goat` still feeds and `water the stock` still takes them to water. The report answers a
+        // want with the want AND what it depends on, which is the half the keeper can do something about.
+        boolean keeperSaysOfTheirStock = word(value,"hungry")||word(value,"starving")||word(value,"famished")
+            ||word(value,"underfed")||word(value,"tired")||word(value,"weary")||value.contains("worn out")
+            ||value.contains("need water")||value.contains("needs water")||value.contains("want water")
+            ||value.contains("wants water")||value.contains("need feeding")||value.contains("needs feeding")
+            ||value.contains("need fodder")||value.contains("needs fodder");
         if((value.contains("how is")||value.contains("how are")||value.contains("how do the")||value.contains("check on")
             ||value.contains("check over")||value.contains("look over")||value.contains("look in on")||value.contains("see to the")
             ||value.contains("are they well")||value.contains("are they all right")||value.contains("what state")
             ||value.contains("do they need")||value.contains("what do they need")||value.contains("sick")||value.contains("ailing")
             ||value.contains("limping")||value.contains("lame")||value.contains("off its feed")||value.contains("off their feed")
             ||askingIfInCondition
-            ||value.contains("thirsty")||value.contains("water the")||value.contains("give the")&&value.contains("water")
+            ||value.contains("thirsty")||keeperSaysOfTheirStock
+            ||value.contains("water the")||value.contains("give the")&&value.contains("water")
             ||value.contains("check the")&&(value.contains(" over")||value.contains("for tick"))
             // ...and what a beast can be HELD with (#106). animal_restraint works by being CARRIED and no
             // sentence could reach it, so these are answered with what you have for it and what it does. There
@@ -3108,11 +3152,30 @@ public class ChronicleActionService {
         // them — "what time OF YEAR is it" is a season question and my "what time" took it. The hour and the
         // year are different questions and the guard was right to say so.
         if((value.contains("what time")&&!value.contains("time of year"))||value.contains("how long until dark")||value.contains("until dark")
-           ||value.contains("is it getting dark")||value.contains("is it dark")||value.contains("how high is the sun")
+           ||value.contains("is it getting dark")
+           // ...but NOT about the place you are standing in (#37). "is it dark in here", asked inside a cave
+           // mouth at noon, was answered "The sun stands at its highest. You have about 8 hours of light left"
+           // — a report on a sky the Chronicle cannot see from where they are, while the rock they are in is
+           // dark at any hour. The sky keeps every form about the SKY; the light reading takes the ones about
+           // HERE, and tooDarkForFineWork is what knows the difference.
+           ||(value.contains("is it dark")&&!value.contains("in here")&&!value.contains("inside")&&!value.contains("in this"))
+           ||value.contains("how high is the sun")
            ||value.contains("where is the sun")||value.contains("how much light")||value.contains("light is left")
            ||value.contains("what month")||value.contains("is it near winter")||value.contains("how near winter")
            ||value.contains("what is the wind")||value.contains("is the wind")||value.contains("how hard is the wind")
            ||value.contains("is it going to rain")||value.contains("will it rain")||value.contains("is there frost")
+           // THE PLAINEST FORMS OF ALL, which reached NOTHING (#37). The rule knew "is it going to rain" and
+           // "will it rain" — the forecast — and not one way of asking what the weather is DOING. Measured on a
+           // booted world: six of eight plain weather questions answered "your hands find no purchase on it"
+           // while weather_kind, wind_speed_kph and ambient_temperature_c sat on the row behind them.
+           //
+           // "out" and "outside" carry their weight here: `is it cold out` is the sky, and `I am cold` is the
+           // body's own statement and must stay WARM_BODY — which is why no bare "cold" or "freezing" goes in
+           // this list. This rule runs long before the body block, so a bare word would have taken it.
+           ||value.contains("is it raining")||value.contains("is it snowing")||value.contains("is it hailing")
+           ||value.contains("still raining")||value.contains("stopped raining")||value.contains("is it windy")
+           ||value.contains("is it wet out")||value.contains("is it cold out")||value.contains("is it warm out")
+           ||value.contains("doing outside")||value.contains("doing out there")||value.contains("weather turning")
            ||value.contains("will it freeze")||value.contains("read the sky")||value.contains("look at the sky")
            ||value.contains("what is the sky")||value.contains("which way is north")||value.contains("which way is south")||value.contains("take a bearing")) return Intent.READ_THE_SKY;
         // What you are carrying and what state it is in (#37, act fifteen). condition_state, use_count and
@@ -3237,6 +3300,48 @@ public class ChronicleActionService {
             ||((value.startsWith("can i")||value.startsWith("could i")||value.startsWith("is "))
                &&(value.contains("cross")||value.contains("wade")||value.contains("swim")||value.contains("ford"))))
            ) return Intent.JUDGE_CROSSING;
+        // WHAT A THING TAKES, AND WHAT A MATERIAL IS FOR (#37). Every bill in this game is data — two tables
+        // of it — and a Chronicle could not ask. Measured on a booted world:
+        //
+        //     what do I need for a basket  -> SENSE_BODY, "There is a hard pressure low in you…"
+        //     what does a basket take      -> nothing
+        //     what is clay good for        -> nothing
+        //     what can I do with the clay  -> nothing
+        //
+        // The first is the worst wrong answer in this sweep: a question about materials answered with the state
+        // of the player's bowels, in the same even voice as every true answer. It comes of "what do i need"
+        // sitting inside the body block's frame, so this rule is deliberately ABOVE it.
+        //
+        // Not "what can I make here", which would be a menu of the catalogue: both forms here are about a thing
+        // the player NAMED. The reading itself refuses honestly when it cannot find that thing.
+        boolean askingWhatItTakes =
+            value.contains("what do i need for")||value.contains("what do i need to make")
+            ||value.contains("what does it take")||value.contains("what would it take")
+            ||value.contains("what goes into")||value.contains("what is needed for")
+            ||((value.contains("what does")||value.contains("what do"))&&value.contains(" take"))
+            ||((value.contains("what is")||value.contains("what are"))&&value.contains("good for"))
+            ||value.contains("what can i do with")||value.contains("what use is")
+            ||value.contains("what is it for")||value.contains("what are they for");
+        if (askingWhatItTakes) return Intent.JUDGE_MAKING;
+        // WHETHER YOU CAN SEE TO WORK (#37). consumePortableLight is a finished, careful rule — a firebrand,
+        // then a resin torch, then a rushlight, then a candle, then a lamp burning fish oil or rendered tallow,
+        // and a bare flame gutted by weather unless a stone lantern cover hoods it — and tooDarkForFineWork
+        // knows that inside the rock is dark at noon. A Chronicle could not ask about any of it. Measured on a
+        // booted world: `is there enough light to work`, `it is too dark to see`, `what have I got to burn` and
+        // `put out the torch` all reached nothing or spent an act on nothing.
+        //
+        // Held to LIGHT and SEEING words. "light the fire" and "light a torch" are acts and keep their rules,
+        // which is why the lighting VERB is excluded here rather than the noun: the question is whether there is
+        // light, not a request to strike one.
+        boolean askingAboutTheLight =
+            (value.contains("enough light")||value.contains("enough to see")||value.contains("too dark")
+             ||value.contains("can i see")||value.contains("can i work")||value.contains("is it dark")
+             ||value.contains("how dark")||value.contains("any light")||value.contains("have i a light")
+             ||value.contains("dark in here")||value.contains("dark inside")||value.contains("dark in this")
+             ||value.contains("have i got a light")||value.contains("what light")||value.contains("got to burn")
+             ||value.contains("will my light")||value.contains("how long will the light"))
+            && !value.contains("light the fire")&&!value.contains("light a fire");
+        if (askingAboutTheLight) return Intent.JUDGE_LIGHT;
         // What the team can pull (#37). The draft subsystem is finished and almost entirely invisible: gear is
         // sized to the body, four vehicles have four beds, rough ground tires a team half again as hard, and
         // fatigue, hunger, thirst and conditioning all scale the draw. All of it is computed inside an UPDATE
@@ -3590,7 +3695,16 @@ public class ChronicleActionService {
         // Chronicle asking to sleep was told "you cannot call the way to mind", which is a travel failure in
         // answer to lying down. Bed is the same: you go to bed where you already are.
         if(!value.contains("go to sleep")&&!value.contains("go to bed")
-           &&(value.contains("go to")||value.contains("head to")||value.contains("head for")||value.contains("make for")||value.contains("travel to")||value.contains("walk to")||value.contains("return to")||value.contains("go back to")||value.contains("head back to")||value.contains("journey to")||value.contains("set out for"))&&Direction.from(value)==null) return Intent.TRAVEL;
+           &&(value.contains("go to")||value.contains("head to")||value.contains("head for")||value.contains("make for")||value.contains("travel to")||value.contains("walk to")||value.contains("return to")||value.contains("go back to")||value.contains("head back to")||value.contains("journey to")||value.contains("set out for")
+             // INTO AND TOWARD (#37). The verb list held every form of going TO a thing and none of going INTO
+             // one, so `walk into the forest` fell past this rule, past the ground step above it (which wants a
+             // climbing or following verb), and all the way down to the REST rule — where "fo-REST" matched and
+             // the Chronicle sat down for an hour. Measured on a booted world, not guessed. `set off for` is
+             // the same omission in the set-out family, whose "set out for" was already here.
+             ||value.contains("walk into")||value.contains("go into")||value.contains("head into")
+             ||value.contains("walk toward")||value.contains("go toward")||value.contains("head toward")
+             ||value.contains("make my way to")||value.contains("set off for")||value.contains("set off to")
+             )&&Direction.from(value)==null) return Intent.TRAVEL;
         // "carve" alone is not marking — it is how half the tools and containers in the
         // world are made. Only treat carving as a trail-mark when it does not resolve to
         // a material process; the deliberate marking words (blaze, cairn, landmark) stand
@@ -3648,6 +3762,7 @@ public class ChronicleActionService {
         // claims the bare word "sleep", can never see these forms at all.
         if(value.contains("did i sleep")||value.contains("how did i sleep")||value.contains("i slept")
            ||value.contains("did i rest")||value.contains("how did i rest")||value.contains("sleep well last")
+           ||value.contains("have i rested")||value.contains("am i rested")||value.contains("i am rested")
            ||value.contains("wake up")||value.contains("woke up")||value.contains("i am awake")) return Intent.SENSE_BODY;
         if(value.contains("how am i")||value.contains("how do i feel")||value.contains("how is my health")
            ||value.contains("check my injur")||value.contains("check my wound")||value.contains("check my body")||value.contains("check myself")
@@ -4451,6 +4566,37 @@ public class ChronicleActionService {
      * <p>As words: "follow" is harmless but "up" and "down" are not — "down" sits inside "downstream" and
      * "sundown", and a bare {@code contains} would make every sentence with a sundown in it a descent.
      */
+    /**
+     * Whether this sentence is about taking a rest (#37).
+     *
+     * <p>It used to be {@code value.contains("rest")}, and that is this project's signature defect in its
+     * purest form. Measured on a booted world, EIGHT sentences about something else each cost the Chronicle an
+     * hour of simulated time:
+     *
+     * <pre>
+     *   walk into the forest            -> "You remain still for an hour"   (fo-REST)
+     *   the forest floor is damp        -> an hour
+     *   restore the fence               -> an hour, and never reached the repair
+     *   wrestle the boar                -> an hour
+     *   arrest the thief                -> an hour
+     *   make restitution                -> an hour
+     *   restring my bow                 -> an hour
+     *   the rest of the herd is fine    -> an hour
+     * </pre>
+     *
+     * <p>The worst of them is {@code walk into the forest}: a plain instruction to go somewhere, answered by
+     * sitting down, because the name of the ground contains the word. The same family as w-EAT-her, ca-BIN and
+     * o-PEN ground, and the remedy is the same one — word boundaries.
+     *
+     * <p>"the rest of" is excluded by name rather than by boundary, because there it IS the whole word and
+     * still is not a rest: it is a quantity. {@code put the rest of the wood on the fire} was an hour's sitting
+     * too.
+     */
+    private static boolean restingHere(String value) {
+        if (value.contains("the rest of")) return false;
+        return word(value, "rest") || word(value, "rests") || word(value, "resting");
+    }
+
     private static final java.util.regex.Pattern CLIMB_OR_FOLLOW = java.util.regex.Pattern.compile(
             "(?<!\\w)(climb|climbs|climbing|scramble|scrambles|scrambling|clamber|clambers|clambering"
             + "|follow|follows|following|ascend|ascends|descend|descends)(?!\\w)");
@@ -4615,7 +4761,7 @@ public class ChronicleActionService {
             // here is dead, the harvest says so, which is a better answer than no answer.
             || namesTheYieldItself(value)) return Intent.HARVEST_CARCASS; if ((value.contains("bind") || value.contains("bandage") || value.contains("dress") || value.contains("clean") || value.contains("tend") || value.contains("treat") || value.contains("see to") || value.contains("wash")) && !value.contains("woundwort") && (value.contains("wound") || value.contains("injury") || value.contains("bleeding") || value.contains("the cut") || value.contains("my cut") || value.contains("gash"))) return Intent.TREAT_WOUND; if ((value.contains("feed") || value.contains("stoke") || value.contains("add wood")) && value.contains("fire")) return Intent.FEED_FIRE; if ((value.contains("light")||value.contains("ignite")) && value.contains("fire")) return Intent.LIGHT_FIRE; if (value.contains("fire pit") || value.contains("firepit")) return Intent.BUILD_FIRE_PIT; if ((value.contains("fight")||value.contains("attack")||value.contains("strike")||value.contains("spear ")||value.contains("shoot")||value.contains("hurl")||value.contains("throw the")||value.contains("throw my")||word(value,"kill")||word(value,"hunt")||word(value,"stalk")) && (value.contains("animal")||value.contains("wildlife")||value.contains("creature")||value.contains("beast")||word(value,"deer")||word(value,"boar")||word(value,"wolf")||word(value,"hare")||word(value,"rabbit")||word(value,"fox")||word(value,"elk")||word(value,"aurochs")||word(value,"bear")||word(value,"goat")||word(value,"bird"))) return Intent.CONFRONT_WILDLIFE; if ((value.contains("weave") || value.contains("craft") || value.contains("make")) && value.contains("basket") && !value.contains("burden") && !value.contains("pack") && !value.contains("large") && !value.contains("big") && !value.contains("pannier") && !value.contains("carrying") && !value.contains("back basket") && !value.contains("shoulder") && !value.contains("lidded") && !value.contains("covered") && !value.contains("with a lid")) return Intent.CRAFT_BASKET; if ((value.contains("gather")||value.contains("collect")) && value.contains("fiber")) return Intent.GATHER_FIBER; if (((value.contains("gather")||value.contains("collect")) && (value.contains("branch")||value.contains("stick")))
             // Act twelve, before a storm: "lay in more wood" is the same act as gathering it, and reached nothing.
-            || ((value.contains("lay in")||value.contains("stock up")||value.contains("bring in")) && (value.contains("wood")||value.contains("fuel")||value.contains("firewood")))) return Intent.GATHER_BRANCHES; if ((value.contains("gather")||value.contains("collect")) && (value.contains("berry")||value.contains("berries"))) return Intent.GATHER_BERRIES; if ((value.contains("gather")||value.contains("collect")) && (value.contains("stone")||value.contains("rock"))) return Intent.GATHER_STONE; if (word(value,"eat")||value.contains("consume")) return Intent.EAT; if (value.contains("drink") && !MAKING_SOMETHING.matcher(value).find()) return Intent.DRINK; if (Direction.from(value) != null && (value.contains("walk") || value.contains("travel") || value.contains("go ") || value.contains("move"))) return Intent.MOVE; if (value.contains("observe") || value.contains("look") || value.contains("inspect") || value.contains("survey") || value.contains("scout") || value.contains("scan") || value.contains("explore") || value.contains("examine") || value.contains("study the") || value.contains("take in")) return Intent.OBSERVE; if ((value.contains("sleep") && !value.contains("platform") && !value.contains("sleeping bench") && !value.contains("sleeping mat") && !value.contains("sleeping pad")) || word(value,"nap") || value.contains("lie down to sleep") || value.contains("lie down") || value.contains("lay down to") || value.contains("bed down") || value.contains("go to sleep") || value.contains("go to bed")) return Intent.SLEEP; if (value.contains("rest") || value.contains("wait") || value.contains("sit down") || value.contains("sit for a") || value.contains("take the weight off")) return Intent.REST; if (value.contains("where am i") || value.contains("what is this place") || value.contains("what place is this") || value.contains("where do i stand")) return Intent.OBSERVE; if ((value.contains("write") || value.contains("inscribe") || value.contains("jot")) && !value.contains("map")) return Intent.WRITE; if (value.contains("urinate") || word(value, "pee")) return Intent.URINATE; if (value.contains("defecate") || value.contains("poop")) return Intent.DEFECATE;
+            || ((value.contains("lay in")||value.contains("stock up")||value.contains("bring in")) && (value.contains("wood")||value.contains("fuel")||value.contains("firewood")))) return Intent.GATHER_BRANCHES; if ((value.contains("gather")||value.contains("collect")) && (value.contains("berry")||value.contains("berries"))) return Intent.GATHER_BERRIES; if ((value.contains("gather")||value.contains("collect")) && (value.contains("stone")||value.contains("rock"))) return Intent.GATHER_STONE; if (word(value,"eat")||value.contains("consume")) return Intent.EAT; if (value.contains("drink") && !MAKING_SOMETHING.matcher(value).find()) return Intent.DRINK; if (Direction.from(value) != null && (value.contains("walk") || value.contains("travel") || value.contains("go ") || value.contains("move"))) return Intent.MOVE; if (value.contains("observe") || value.contains("look") || value.contains("inspect") || value.contains("survey") || value.contains("scout") || value.contains("scan") || value.contains("explore") || value.contains("examine") || value.contains("study the") || value.contains("take in")) return Intent.OBSERVE; if ((value.contains("sleep") && !value.contains("platform") && !value.contains("sleeping bench") && !value.contains("sleeping mat") && !value.contains("sleeping pad")) || word(value,"nap") || value.contains("lie down to sleep") || value.contains("lie down") || value.contains("lay down to") || value.contains("bed down") || value.contains("go to sleep") || value.contains("go to bed")) return Intent.SLEEP; if (restingHere(value) || value.contains("wait") || value.contains("sit down") || value.contains("sit for a") || value.contains("take the weight off")) return Intent.REST; if (value.contains("where am i") || value.contains("what is this place") || value.contains("what place is this") || value.contains("where do i stand")) return Intent.OBSERVE; if ((value.contains("write") || value.contains("inscribe") || value.contains("jot")) && !value.contains("map")) return Intent.WRITE; if (value.contains("urinate") || word(value, "pee")) return Intent.URINATE; if (value.contains("defecate") || value.contains("poop")) return Intent.DEFECATE;
         // "take off my boots" was an unequip and "take my boots off" reached nothing — the same sentence in the
         // word order English actually prefers for a separable particle. Deliberately the LAST rule in the chain,
         // so that everything with a better claim on a trailing "off" has already taken it: the lid comes off a
@@ -4933,7 +5079,7 @@ public class ChronicleActionService {
             || (word(v, "fix") && !v.contains("memory") && !v.contains("mind"));
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, PARE_HOOVES, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, PARE_HOOVES, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;}
         /** The cardinal for a grid offset, for when the WORLD names the direction rather than the player (#37). */
         static Direction of(int dx,int dy){ for(Direction d:values()) if(d.dx==dx&&d.dy==dy) return d; return null; } }    /**     * The structured perception frame — the seam every future Simulation Agent reads
@@ -5253,8 +5399,32 @@ public class ChronicleActionService {
         com.devosphere.draugr.simulation.BiomeClimate.Local local = localClimate(location);
 
         java.util.List<String> said = new java.util.ArrayList<>();
+        // WHERE YOU ARE READING IT FROM (#37). Inside a cave mouth at noon this reading used to open "The sun
+        // stands at its highest. You have about 8 hours of light left" and go on to "Snow is coming down" — a
+        // report on a sky the Chronicle cannot see, about weather that is not falling on them. The world knew:
+        // BiomeClimate has taken the wind off a cave since it existed, and tooDarkForFineWork knows the rock is
+        // dark at noon. Only the prose claimed otherwise.
+        //
+        // The two biomes are not the same place and are not described as one. At a mouth you can see out; in the
+        // interior there is no sky to read at all, and what the reading can honestly offer is the hour you have
+        // been keeping and the stillness of the rock.
+        String standingIn = jdbc.query("SELECT biome FROM world_chunk WHERE id=?",
+            rs -> rs.next() ? rs.getString(1) : null, location);
+        boolean insideTheRock = "CAVE_INTERIOR".equals(standingIn);
+        boolean underTheRock = "CAVE_MOUTH".equals(standingIn);
+        // What the SKY is doing is a different question from what is falling on YOU, and under the rock those
+        // two answers differ — which is the whole point. BiomeClimate now returns CLEAR for a cave because
+        // nothing lands on you in one, and the first cut of this reading printed that as "the sky is open, with
+        // nothing in it that threatens rain" while it was snowing outside: one false claim about an unseen sky
+        // swapped for another. From a cave MOUTH a person can see out, so the useful answer is both at once.
+        String outsideKind = jdbc.query(
+            "SELECT ww.weather_kind FROM world_weather ww JOIN world_chunk c ON c.world_id=ww.world_id WHERE c.id=?",
+            rs -> rs.next() ? rs.getString(1) : null, location);
+        if (insideTheRock) said.add("You are in under the rock, where there is no sky to read");
+        else if (underTheRock) said.add("You read it from the mouth of the cave, with the rock over you");
         // The hour, as a person tells it — by where the light is, not by a number nobody here could read.
-        said.add(hour < 6 ? "It is still dark, the small hours before any light"
+        said.add(insideTheRock ? "By your own reckoning of the hours, it is around " + hour + ":00"
+               : hour < 6 ? "It is still dark, the small hours before any light"
                : hour < 9 ? "The light is new and low, the morning not long up"
                : hour < 12 ? "The sun is climbing and the morning is well on"
                : hour < 14 ? "The sun stands at its highest, as near noon as makes no difference"
@@ -5276,7 +5446,8 @@ public class ChronicleActionService {
 
         // The wind, FELT here rather than the world's figure — the thing nothing could ask.
         int wind = local.windKph();
-        said.add(wind < 5 ? "The air is almost still"
+        // Not inside the rock, where the stillness is said below in the rock\x27s own terms rather than twice.
+        if (!insideTheRock) said.add(wind < 5 ? "The air is almost still"
                : wind < 15 ? "There is a steady breeze, enough to feel and no more"
                : wind < 30 ? "The wind is up and working at everything loose"
                : "The wind is hard enough to lean on, and it will take heat out of you faster than the cold alone");
@@ -5285,12 +5456,28 @@ public class ChronicleActionService {
         if (t <= 0) said.add("It is below freezing, and there is frost on everything that holds it");
         else if (t <= 3) said.add("It is near enough freezing that there will be frost before morning");
         String kind = local.kind() == null ? "CLEAR" : local.kind();
-        if (kind.contains("RAIN") || kind.contains("STORM")) said.add("Rain is falling and shows no sign of easing");
+        String sky = outsideKind == null ? "CLEAR" : outsideKind;
+        if (insideTheRock) {
+            // No claim about a sky, because none can be made from here. The stillness and the even cold of the
+            // rock are what a person in one would remark on, and BiomeClimate already models both.
+            said.add("The air in here is dead still, and the cold is the stone's own rather than the wind's");
+        } else if (underTheRock) {
+            said.add(sky.contains("RAIN") || sky.contains("STORM")
+                       ? "Rain is falling outside, and none of it reaches you under the rock"
+                   : sky.contains("SNOW")
+                       ? "Snow is coming down outside, and none of it reaches you under the rock"
+                   : sky.contains("OVERCAST") || sky.contains("CLOUD")
+                       ? "The sky outside is closed over and could turn to rain"
+                   : "The sky outside is open, with nothing in it that threatens rain");
+        }
+        else if (kind.contains("RAIN") || kind.contains("STORM")) said.add("Rain is falling and shows no sign of easing");
         else if (kind.contains("SNOW")) said.add("Snow is coming down");
         else if (kind.contains("OVERCAST") || kind.contains("CLOUD")) said.add("The sky is closed over and could turn to rain");
         else said.add("The sky is open, with nothing in it that threatens rain");
-        // Which way is north, which the sun answers at any hour of the day it is up.
-        if (hour >= 6 && hour < 20) said.add(hour < 11 ? "The sun is in the east, so north is to your left as you face it"
+        // Which way is north, which the sun answers at any hour of the day it is up — and cannot in the rock,
+        // where there is no sun to take it from.
+        if (insideTheRock) said.add("There is nothing in here to take a bearing from");
+        else if (hour >= 6 && hour < 20) said.add(hour < 11 ? "The sun is in the east, so north is to your left as you face it"
                                     : hour < 14 ? "The sun is due south at this hour, so north is at your back as you face it"
                                     : "The sun is in the west, so north is to your right as you face it");
         else said.add("With the sun down there is nothing to take a bearing from but the stars");
@@ -5452,6 +5639,72 @@ public class ChronicleActionService {
      * caller of that is the night predator raid, and a cave being dark inside must not make wolves take your
      * stock at noon. Same flag, two questions, is the mistake this cycle has spent its time undoing.
      */
+    /**
+     * Whether you can see to work, and what you have to burn (#37).
+     *
+     * <p>Four finished rules met here and none of them could be asked about. {@link #tooDarkForFineWork} knows
+     * that night is dark and that inside the rock is dark at noon. {@code consumePortableLight} spends what you
+     * carry in a considered order — a burning brand first, then a resin torch, a rushlight, a tallow candle, and
+     * last a lamp burning fish oil or rendered tallow. {@code guttering} knows that weather takes a bare flame,
+     * and that a stone lantern cover is what stops it. And a fire already burning where you stand needs none of
+     * it. A Chronicle could spend an hour of an evening finding all that out by failing at close work, and
+     * could not ask.
+     *
+     * <p>Read-only, and it reads the same rules the acts read rather than describing them a second time: the
+     * order recited here IS the order they are spent in, and the hood question is the one guttering asks. A
+     * reading that kept its own copy of either would be the drift this project has spent cycles undoing.
+     */
+    private String[] judgeLight(ActiveChronicle chronicle, java.time.Instant at) {
+        boolean dark = tooDarkForFineWork(chronicle.location(), at);
+        boolean night = isDark(at);
+        boolean fireHere = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM fire_state fs JOIN world_object pit ON pit.id=fs.construction_id " +
+            "WHERE fs.active=true AND pit.current_location_id=? AND pit.lifecycle_state='ACTIVE')",
+            Boolean.class, chronicle.location()));
+
+        // What is to hand, in the order it would be spent. Named from the same list consumePortableLight walks.
+        java.util.List<String> toBurn = new java.util.ArrayList<>();
+        if (items.hasAtLeast(chronicle.id(), "firebrand", 1)) toBurn.add("a burning brand");
+        if (items.hasAtLeast(chronicle.id(), "resin_torch", 1)) toBurn.add("a resin torch");
+        if (items.hasAtLeast(chronicle.id(), "rush_light", 1)) toBurn.add("a rushlight");
+        if (items.hasAtLeast(chronicle.id(), "tallow_candle", 1)) toBurn.add("a tallow candle");
+        boolean lamp = items.hasAtLeast(chronicle.id(), "oil_lamp", 1);
+        boolean oil = items.hasAtLeast(chronicle.id(), "fish_oil", 1);
+        boolean tallow = items.hasAtLeast(chronicle.id(), "rendered_tallow", 1);
+        if (lamp && (oil || tallow)) toBurn.add("an oil lamp with " + (oil ? "fish oil" : "rendered tallow") + " to burn in it");
+
+        StringBuilder b = new StringBuilder();
+        if (!dark) b.append("There is light enough here for close work. ");
+        else if (!night) b.append("It is daylight outside, but in here the light gets a few paces in and no further, "
+            + "and close work wants better than that. ");
+        else b.append("It is dark, and close work — reading, writing, sketching, fine measuring — wants a light. ");
+
+        if (fireHere) b.append("A fire is burning where you stand, and that is light enough to work by without "
+            + "spending anything you carry. ");
+
+        if (toBurn.isEmpty()) {
+            b.append(lamp
+                ? "You have a lamp and nothing to burn in it; it wants fish oil or rendered tallow. "
+                : "You have nothing on you that will burn for a light. ");
+            if (dark && !fireHere) b.append("A resin torch, a rushlight, a tallow candle or a lamp with oil would "
+                + "answer it, and so would a fire lit where you are working. ");
+        } else {
+            b.append("You are carrying ").append(joinAnd(toBurn)).append(", which would be spent in that order. ");
+        }
+
+        // The weather question, which is the half nobody could have guessed at: a bare flame does not stand in a
+        // gale, and the one thing that answers that is a stone cover the catalogue already describes.
+        if (!toBurn.isEmpty() && items.guttering(chronicle.id())) {
+            boolean hooded = items.hasAtLeast(chronicle.id(), "stone_lantern_cover", 1);
+            boolean coveredFlame = lamp && (oil || tallow);
+            if (hooded) b.append("The weather would take a bare flame, but the stone cover you carry hoods it. ");
+            else if (coveredFlame) b.append("The weather would take a bare flame; the lamp is a covered flame and holds. ");
+            else b.append("And the weather would have a bare flame out before it lit anything — a stone lantern "
+                + "cover, or the lamp, would hold it. ");
+        }
+        return new String[]{"SUCCEEDED", b.toString().trim()};
+    }
+
     private boolean tooDarkForFineWork(UUID location, java.time.Instant at) {
         if (isDark(at)) return true;
         return Boolean.TRUE.equals(jdbc.queryForObject(
