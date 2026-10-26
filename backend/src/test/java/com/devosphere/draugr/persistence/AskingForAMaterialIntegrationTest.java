@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -241,5 +242,57 @@ class AskingForAMaterialIntegrationTest {
 
         // And a reading alters nothing it touches.
         assertTrue(auditor.inspect().consistent(), () -> "asking is not acting: " + auditor.inspect().violations());
+    }
+
+    /**
+     * A cape is not a cap (#37).
+     *
+     * <p>The bill reading I added in V438 looked a catalogue name up with {@code position(name in sentence)},
+     * and so answered {@code what do I need for a fur CAPE} with the bill for a fur CAP — "fur cap" is inside
+     * "fur cape", and this catalogue holds both. The project's signature defect, committed inside the very
+     * reading built to fix another instance of it, and found by playing the clothing chain rather than by
+     * reading the code.
+     *
+     * <p>Fixing the boundary then exposed the second half: several processes declare the bare keyword "cape"
+     * (the shoulder capes own it outright), so a fur cape — a thing the catalogue does not hold — tied with all
+     * of them and the lookup answered with whichever sorted first, "Shingle a bark rain cape". A tie decided by
+     * name order is what V318 settled for the acts; the reading now says which works it could be, as the
+     * family-word branch beneath it already did.
+     */
+    @Test
+    void aCapeIsNotACap() {
+        aLivingChronicle();
+        UUID chronicle = chronicles.active().id();
+        UUID here = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+
+        // The pair must exist for this test to mean anything: the whole defect is that one name sits inside
+        // the other. Read from the catalogue rather than assumed.
+        assertEquals(1, (int) jdbc.queryForObject(
+            "SELECT COUNT(*) FROM item_definition WHERE item_key='fur_cap'", Integer.class),
+            "the fur cap must exist, or there is no pair to confuse");
+        assertEquals(0, (int) jdbc.queryForObject(
+            "SELECT COUNT(*) FROM item_definition WHERE lower(display_name)='fur cape'", Integer.class),
+            "and no fur CAPE, which is why asking for one must not be answered with the cap");
+
+        String cape = items.judgeMaking(chronicle, here, "what do I need for a fur cape")[1].toLowerCase(java.util.Locale.ROOT);
+        assertFalse(cape.contains("fur cap takes") || cape.contains("sew a fur cap"),
+            () -> "asking about a cape must not be answered with a cap's bill: " + cape);
+        assertTrue(cape.contains("cape"),
+            () -> "and it must be answered about capes: " + cape);
+
+        // THE CAP ITSELF STILL ANSWERS, which is the control: a boundary fix that broke the shorter name would
+        // pass the assertion above and be worse than the defect.
+        String cap = items.judgeMaking(chronicle, here, "what do I need for a fur cap")[1].toLowerCase(java.util.Locale.ROOT);
+        assertTrue(cap.contains("fur cap"),
+            () -> "a fur cap is still a thing that can be asked about: " + cap);
+        assertFalse(cap.contains("more than one"),
+            () -> "and it is one piece of work, not a tie: " + cap);
+
+        // AND A NAMED CAPE READS ITS OWN BILL — a longer name beats the bare keyword every cape shares.
+        String named = items.judgeMaking(chronicle, here, "what do I need for a bark rain cape")[1].toLowerCase(java.util.Locale.ROOT);
+        assertTrue(named.contains("bark rain cape"),
+            () -> "a cape named in full reads its own bill: " + named);
+        assertFalse(named.contains("more than one"),
+            () -> "and is not asked back as a tie: " + named);
     }
 }
