@@ -889,7 +889,11 @@ public class PhysicalItemService {
     public void restPennedDraftBeasts(Instant now) {
         jdbc.update(
             "UPDATE wildlife_bond wb SET draft_fatigue = GREATEST(0, draft_fatigue - ?) " +
-            "WHERE wb.draft_fatigue > 0 AND EXISTS (" +
+            // A KEEPING, NOT MERELY A BOND (#108). This pass and exposeYoungToTheCold were the two of ten that
+            // never read the stage, so they rested and watched over animals that were never tamed — and, once
+            // the death path began releasing a dead keeper's stock, would have gone on resting a corpse's ox in
+            // a byre nobody owned while the other eight correctly stopped.
+            "WHERE wb.draft_fatigue > 0 AND wb.bond_stage = 'TAMED' AND wb.released_at IS NULL AND EXISTS (" +
             "  SELECT 1 FROM world_object cw JOIN construction_project cp ON " + stillSound("cp") + " " +
             "    AND EXISTS(SELECT 1 FROM construction_kind ck WHERE ck.project_kind=cp.project_kind AND ck.shelters_stock) " +
             "  JOIN world_object pw ON pw.id=cp.object_id AND pw.lifecycle_state='ACTIVE' AND pw.current_location_id=cw.current_location_id " +
@@ -1693,7 +1697,9 @@ public class PhysicalItemService {
         // once and is not restarted while the spell holds, which is what makes it a spell.
         String exposed =
             "SELECT ty.id FROM tamed_young ty " +
-            "JOIN wildlife_bond wb ON wb.id = ty.bond_id " +
+            // The young of a KEEPING, by the same reasoning as restPennedDraftBeasts above: a released bond's
+            // young are feral young, and the keeper who would have housed them is dead.
+            "JOIN wildlife_bond wb ON wb.id = ty.bond_id AND wb.bond_stage = 'TAMED' AND wb.released_at IS NULL " +
             "JOIN world_object cw ON cw.id = wb.chronicle_id " +
             "JOIN world_chunk ch ON ch.id = cw.current_location_id " +
             "JOIN world_weather ww ON ww.world_id = ch.world_id " +

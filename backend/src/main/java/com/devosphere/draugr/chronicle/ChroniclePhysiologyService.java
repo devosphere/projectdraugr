@@ -182,6 +182,7 @@ public class ChroniclePhysiologyService {
                 String cause = water > DEHYDRATION_DEATH_HOURS ? "Critical Dehydration" : food > STARVATION_DEATH_HOURS ? "Critical Starvation" : bloodLoss > 3500 ? "Critical Blood Loss" : injury >= 100 ? "Fatal Trauma" : core < 28.0 ? "Severe Hypothermia" : core > 42.0 ? "Severe Hyperthermia" : "Systemic Illness";
                 UUID deathLocation = jdbc.query("SELECT current_location_id FROM world_object WHERE id=?", result -> result.next() ? result.getObject(1, UUID.class) : null, id);
                 relocatePossessions(id, deathLocation, now);
+                releaseTheirStock(id, ts);
                 jdbc.update("INSERT INTO chronicle_death_snapshot (chronicle_id,died_at,death_location_id,cause,body_snapshot) VALUES (?,?,?,?,jsonb_build_object('health',?,'condition',?,'hunger',?,'thirst',?,'energy',?,'temperature',?,'wetness',?,'bladder',?,'bowel',?,'hygiene',?))",id,ts,deathLocation,cause,health(injury,illness,bloodLoss),condition(rs.getString(12),pain,stress,sleepDebt),hunger(food),thirst(water),energy(energy),temperature(core),wetness(wetness),bladder(bladder),bowel(bowel),hygiene(hygiene));
                 jdbc.update("UPDATE chronicle SET life_state = 'DEAD', died_at = ?, death_cause = ? WHERE id = ?", ts, cause, id);
                 jdbc.update("UPDATE chronicle_body SET health = 'Dying', condition_summary = ? WHERE chronicle_id = ?", cause, id);
@@ -491,6 +492,38 @@ public class ChroniclePhysiologyService {
     private void refreshBody(UUID chronicleId) {
         jdbc.query("SELECT b.condition_summary,p.hours_without_food,p.hours_without_water,p.energy_level,p.core_temperature_c,p.wetness_level,p.bladder_level,p.bowel_level,p.hygiene_level,p.sleep_debt_hours,p.pain_level,p.stress_level,p.injury_severity,p.illness_severity,p.blood_loss_ml FROM chronicle_body b JOIN chronicle_physiology p ON p.chronicle_id=b.chronicle_id WHERE b.chronicle_id=?",rs->{if(rs.next()){String health=health(rs.getInt(13),rs.getInt(14),rs.getInt(15));String condition=condition(rs.getString(1),rs.getInt(11),rs.getInt(12),rs.getBigDecimal(10).doubleValue());BodyHudSnapshot body=snapshot(health,condition,rs.getBigDecimal(2).doubleValue(),rs.getBigDecimal(3).doubleValue(),rs.getInt(4),rs.getBigDecimal(5).doubleValue(),rs.getInt(6),rs.getInt(7),rs.getInt(8),rs.getInt(9));jdbc.update("UPDATE chronicle_body SET health=?,condition_summary=?,hunger=?,thirst=?,energy=?,temperature=?,wetness=?,bladder=?,bowel=?,hygiene=? WHERE chronicle_id=?",health,condition,body.hunger(),body.thirst(),body.energy(),body.temperature(),body.wetness(),body.bladder(),body.bowel(),body.hygiene(),chronicleId);}return null;},chronicleId);
     }
+    /**
+     * A keeper's death ends the keeping, and the animals go on living (#108).
+     *
+     * <p>The death path has always been careful about THINGS — the possessions are set down on the ground where
+     * the Chronicle fell, with their identity and history — and said nothing whatever about ANIMALS. Measured on
+     * a booted world, killing a keeper of one tamed ox through this very path:
+     *
+     * <pre>
+     *   before death          thirst 4,  hunger 3
+     *   three turns later     thirst 16, hunger 12,  bond_stage still TAMED
+     * </pre>
+     *
+     * <p>The ox went on getting thirstier and hungrier for ever, tamed to a corpse, and would have gone on
+     * breeding, fouling the ground and wanting a byre nobody owned.
+     *
+     * <p>Eight of the ten husbandry passes filter on {@code bond_stage='TAMED'}, so ENDING THE KEEPING stops
+     * all of them at once — which is why this is one statement rather than a filter added in eight places.
+     * {@code keepsSuchABeast} already asked whether the keeper was LIVING, so the world's own convention was
+     * there to follow.
+     *
+     * <p>The bond is NOT deleted. The animals were tamed, and that happened: the stage goes back to WILD (a
+     * value the CHECK has always allowed) and {@code released_at} records when the keeping ended, so a later
+     * cycle can tell a herd that was never tamed from one whose keeper died. {@code trust_level} is left where
+     * it was, which is the honest basis for the next Chronicle taming the same animals: they knew a person
+     * once. The POPULATION is untouched — the animals remain in the world, findable and tameable by whoever
+     * comes after.
+     */
+    private void releaseTheirStock(UUID chronicle, Timestamp at) {
+        jdbc.update("UPDATE wildlife_bond SET bond_stage='WILD', released_at=? " +
+                    "WHERE chronicle_id=? AND released_at IS NULL", at, chronicle);
+    }
+
     private void relocatePossessions(UUID chronicleId, UUID locationId, Instant occurredAt) {
         if (locationId == null) return;
         Timestamp occurred = Timestamp.from(occurredAt);
