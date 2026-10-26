@@ -3159,7 +3159,7 @@ public class ChronicleActionService {
            // dark at any hour. The sky keeps every form about the SKY; the light reading takes the ones about
            // HERE, and tooDarkForFineWork is what knows the difference.
            ||(value.contains("is it dark")&&!value.contains("in here")&&!value.contains("inside")&&!value.contains("in this"))
-           ||value.contains("how high is the sun")
+           ||value.contains("how high is the sun")
            ||value.contains("where is the sun")||value.contains("how much light")||value.contains("light is left")
            ||value.contains("what month")||value.contains("is it near winter")||value.contains("how near winter")
            ||value.contains("what is the wind")||value.contains("is the wind")||value.contains("how hard is the wind")
