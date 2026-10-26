@@ -5093,25 +5093,47 @@ public class PhysicalItemService {
         // name or output name the sentence contains. Longest wins, which is how the keyword matcher settles its
         // own ties, so the two cannot disagree about which work a name belongs to. Four characters is the floor,
         // because below it every sentence contains somebody's keyword.
-        String process = jdbc.query(
-            "SELECT mp.process_key FROM material_process mp " +
-            "LEFT JOIN item_definition o ON o.item_key = mp.output_item_key " +
-            "CROSS JOIN LATERAL (SELECT GREATEST(" +
-            "   COALESCE((SELECT MAX(length(k)) FROM unnest(string_to_array(mp.keywords, ',')) k " +
-            "              WHERE position(lower(k) in ?) > 0), 0), " +
-            "   CASE WHEN position(lower(mp.display_name) in ?) > 0 THEN length(mp.display_name) ELSE 0 END, " +
-            "   CASE WHEN o.display_name IS NOT NULL AND position(lower(o.display_name) in ?) > 0 " +
-            "        THEN length(o.display_name) ELSE 0 END) AS hit) h " +
-            "WHERE h.hit >= 4 ORDER BY h.hit DESC, mp.process_key LIMIT 1",
-            rs -> rs.next() ? rs.getString(1) : null, v, v, v);
-        if (process != null) return judgeNamedWork(chronicle, location, process);
+        // AS WHOLE WORDS, NOT AS SUBSTRINGS. The first cut of this asked `position(lower(name) in sentence) > 0`
+        // and so answered `what do I need for a fur CAPE` with the bill for a fur CAP — "fur cap" is inside
+        // "fur cape", and the catalogue holds both. That is this project's signature defect, committed inside
+        // the very reading I built to fix another one of it, and found by playing the clothing chain.
+        //
+        // The sentence and the name are both padded and stripped to words, so a name only matches where it ends
+        // at a word boundary — the same trick keepsSuchABeast uses on species keys for the same reason.
+        String words = asWholeWords(v);
+        java.util.List<java.util.Map<String,Object>> tiedOnTheSameWords = jdbc.queryForList(
+            "WITH scored AS (" +
+            "  SELECT mp.process_key, COALESCE(o.display_name, mp.display_name) AS name, GREATEST(" +
+            "     COALESCE((SELECT MAX(length(k)) FROM unnest(string_to_array(mp.keywords, ',')) k " +
+            "                WHERE ? LIKE '% ' || lower(trim(k)) || ' %'), 0), " +
+            "     CASE WHEN ? LIKE '% ' || lower(mp.display_name) || ' %' THEN length(mp.display_name) ELSE 0 END, " +
+            "     CASE WHEN o.display_name IS NOT NULL AND ? LIKE '% ' || lower(o.display_name) || ' %' " +
+            "          THEN length(o.display_name) ELSE 0 END) AS hit " +
+            "    FROM material_process mp LEFT JOIN item_definition o ON o.item_key = mp.output_item_key) " +
+            "SELECT process_key, name FROM scored " +
+            " WHERE hit >= 4 AND hit = (SELECT MAX(hit) FROM scored) ORDER BY name LIMIT 6",
+            words, words, words);
+        // ONE WORK, OR THE ASK — never the lexically first of several. Several processes declare the bare
+        // keyword "cape" (the shoulder capes own it outright), so `what do I need for a fur cape` — a thing the
+        // catalogue does not hold — matched them all equally and the old LIMIT 1 answered with whichever sorted
+        // first: "Shingle a bark rain cape takes 3 bark sheet". A tie settled by name order is exactly what V318
+        // settled for the ACTS, and the same answer serves here: say which works it could be.
+        if (tiedOnTheSameWords.size() == 1)
+            return judgeNamedWork(chronicle, location, (String) tiedOnTheSameWords.get(0).get("process_key"));
+        if (tiedOnTheSameWords.size() > 1) {
+            java.util.List<String> said = new java.util.ArrayList<>();
+            for (java.util.Map<String,Object> row : tiedOnTheSameWords) said.add(lower((String) row.get("name")));
+            return new String[]{"SUCCEEDED", "Those words fit more than one piece of work: " + joinOr(said)
+                + ". Name which, and what it takes can be reckoned."};
+        }
 
         // ---- Asked about a MATERIAL: what does this stuff go into? On the catalogue's own names, so a material
         // added later is askable the day it exists.
         java.util.List<java.util.Map<String,Object>> named = jdbc.queryForList(
             "SELECT d.item_key, d.display_name FROM item_definition d " +
-            "WHERE position(lower(d.display_name) in ?) > 0 OR position(replace(d.item_key,'_',' ') in ?) > 0 " +
-            "ORDER BY length(d.display_name) DESC LIMIT 1", v, v);
+            "WHERE ? LIKE '% ' || lower(d.display_name) || ' %' " +
+            "   OR ? LIKE '% ' || replace(d.item_key,'_',' ') || ' %' " +
+            "ORDER BY length(d.display_name) DESC LIMIT 1", words, words);
         if (!named.isEmpty()) {
             String key = (String) named.get(0).get("item_key");
             String name = lower((String) named.get(0).get("display_name"));
@@ -5139,7 +5161,7 @@ public class PhysicalItemService {
             java.util.List<java.util.Map<String,Object>> couldBe = jdbc.queryForList(
                 "SELECT mp.process_key, COALESCE(o.display_name, mp.display_name) AS name FROM material_process mp " +
                 "LEFT JOIN item_definition o ON o.item_key = mp.output_item_key " +
-                "WHERE position(?::text in lower(COALESCE(o.display_name, mp.display_name))) > 0 " +
+                "WHERE ' ' || lower(COALESCE(o.display_name, mp.display_name)) || ' ' LIKE '% ' || ?::text || ' %' " +
                 "ORDER BY 2 LIMIT 6", head);
             if (couldBe.size() == 1) return judgeNamedWork(chronicle, location, (String) couldBe.get(0).get("process_key"));
             if (couldBe.size() > 1) {
@@ -5227,6 +5249,17 @@ public class PhysicalItemService {
         // s that carries meaning.
         if (last.length() > 3 && last.endsWith("s") && !last.endsWith("ss")) last = last.substring(0, last.length() - 1);
         return last;
+    }
+
+    /**
+     * A sentence reduced to padded words, so a catalogue name can only match where a word ends (#37).
+     *
+     * <p>Non-letters become spaces and the whole is padded, which makes {@code LIKE '% name %'} a whole-word
+     * test: "fur cap" no longer matches inside "what do I need for a fur cape", and a trailing question mark no
+     * longer defeats the last word.
+     */
+    private static String asWholeWords(String v) {
+        return " " + (v == null ? "" : v.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim()) + " ";
     }
 
     /** A tool class as a person would say it, rather than the enum the row carries. */
