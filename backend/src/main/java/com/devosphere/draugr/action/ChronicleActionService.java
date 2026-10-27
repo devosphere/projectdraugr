@@ -664,6 +664,9 @@ public class ChronicleActionService {
         else if (intent == Intent.JUDGE_MAKING) { String[] r = items.judgeMaking(chronicle.id(), chronicle.location(), text); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_CLOTHING) { String[] r = judgeClothing(chronicle, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_PLACE) { String[] r = judgePlace(chronicle); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.JUDGE_CAMP_GROUND) { String[] r = judgeCampGround(chronicle, resolvedAt); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.JUDGE_TOOLS) { String[] r = judgeTools(chronicle); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.JUDGE_UNSEEN) { String[] r = judgeUnseen(chronicle, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_WORK_IN_HAND) { String[] r = judgeWorkInHand(chronicle, text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_LEARNING) { String[] r = judgeLearning(chronicle); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_FLORA) { String[] r = judgeFlora(chronicle.location()); outcome = r[0]; perception = r[1]; }
@@ -839,7 +842,12 @@ public class ChronicleActionService {
                 ? "You have nothing to bind it with — no poultice, no roll of bandage, not so much as a length of plant fibre. The blood keeps its own time."
                 : "You go over yourself and find nothing open and nothing bleeding."; } }
         else if (intent == Intent.EDIT_DOCUMENT) { try { reviseDocument(chronicle.id(), actionId, resolvedAt, text); perception="Your marks remain on the physical page."; } catch (IllegalArgumentException | IllegalStateException ignored) { outcome="FAILED"; perception="You handle the page for a while, then set it aside unchanged."; } }
-        else if (intent == Intent.CONFRONT_WILDLIFE) { double spec=SuccessModel.specificity(text,HUNT_SIGNALS); double fam=capability.familiarity(chronicle.id(),"AIM"); int tactic=(int)Math.round(spec*30 + Math.min(0.20,fam*3.0)*100); // The TEXT, so the hunt closes with what the hunter named (#37): "hunt the deer" in a wood that
+        else if (intent == Intent.CONFRONT_WILDLIFE) { double spec=SuccessModel.specificity(text,HUNT_SIGNALS); double fam=capability.familiarity(chronicle.id(),"AIM"); int tactic=(int)Math.round(spec*30 + Math.min(0.20,fam*3.0)*100)
+            // ...AND WHAT KEEPS YOU UNSEEN (#37/#93). The camouflage cloak and the hide screen — whose own
+            // keywords include "stalking screen" — were read by the ambush odds and by nothing else, so the
+            // gear made expressly for closing with an animal did nothing for closing with an animal. It is
+            // the same number the ambush reads, named once in WildlifeEncounterService.unseenBonus.
+            + wildlife.unseenBonus(chronicle.id()); // The TEXT, so the hunt closes with what the hunter named (#37): "hunt the deer" in a wood that
             // also held a boar closed with the boar, because the quarry was picked carnivores-first and the
             // words were never read. The most consequential act in the game, answered about the wrong animal.
             WildlifeEncounterService.EncounterResult result=wildlife.confront(chronicle.id(),chronicle.location(),actionId,resolvedAt,tactic,text); outcome=result.outcome(); perception=result.narration(); wildlife.recordEmissionDrift(chronicle.location(),"PREDATION",40,resolvedAt); }
@@ -2143,6 +2151,182 @@ public class ChronicleActionService {
         if (material != null) return material;
         return new String[]{"SUCCEEDED", "You have nothing begun and left standing: no piece part-made, no "
             + "raising half up. Whatever is waiting on you here, it is not work you have already started."};
+    }
+
+    /**
+     * Whether this ground is worth camping on (#37/#99).
+     *
+     * <p>Five things decide it and the world records every one: water on the ground or a catchment standing on
+     * it, a tree stand to burn, a roof that encloses, the biome you would be lying on, and the carnivores whose
+     * range this is. Each is already read by some act — {@link #naturalWaterHere} by the drinking,
+     * {@link #standingTreesHere} by the felling, {@code Shelters.ENCLOSING} by the sleeping, the species roles
+     * by the hunting — and the QUESTION reached nothing, so the only way to learn whether ground was worth
+     * camping on was to spend the night on it.
+     *
+     * <p>It REPORTS rather than advises. The verdict counts what is here and says what is missing by name,
+     * because "poor ground" tells a keeper nothing they can act on, while "no water within reach and nothing
+     * to burn" sends them twenty minutes downhill.
+     */
+    /**
+     * What tools you still want (#37/#99).
+     *
+     * <p>Three tool classes gate two hundred works — CUTTING on 157 material processes, STRIKING on 34, AXE on
+     * 9, and more again on the assembly stages — and {@code tool_profile} says exactly which items satisfy
+     * each. The gear reading answers what a keeper HAS. Nothing answered what they lack, so the way to find out
+     * was one refusal at a time, each costing the walk to the work.
+     *
+     * <p>Counted from the catalogue in one query per class rather than written down here, so a new process that
+     * wants a cutting edge raises the figure by itself. The simplest thing that would do is named from
+     * {@code tool_profile} — the shortest key, which in this catalogue is the stone flake and the field stone:
+     * both are a morning's work, and that is the useful half of the answer.
+     */
+    /**
+     * How unseen you are (#37/#93).
+     *
+     * <p>The ambush odds read a camouflage cloak, a set hide screen and a scent-mask bundle — twelve off for
+     * the outline, eight for the scent — and {@code chronicle.trail_hidden_at} keeps the hours a covered trail
+     * stays covered. None of it could be asked, so gear made expressly for not being seen was invisible in
+     * both senses: a Chronicle who had spent a hide and an evening on a cloak had no way to learn it was doing
+     * anything at all.
+     *
+     * <p><b>In the model's own numbers, and no others.</b> There is no stalking-DISTANCE model in this world —
+     * nothing anywhere converts concealment into paces — so the reading says what the gear is worth against
+     * being noticed and says plainly that it cannot give a distance. A true answer to the near question beats
+     * an invented answer to the exact one, which is the rule the waterskin's fill level set.
+     */
+    private String[] judgeUnseen(ActiveChronicle chronicle, Instant at) {
+        int unseen = wildlife.unseenBonus(chronicle.id());
+        java.util.List<String> wearing = new java.util.ArrayList<>();
+        if (items.hasAtLeast(chronicle.id(), "camouflage_cloak", 1)) wearing.add("the camouflage cloak breaks your outline");
+        else if (items.hasAtLeast(chronicle.id(), "hide_screen", 1)) wearing.add("the hide screen breaks your outline");
+        if (items.hasAtLeast(chronicle.id(), "scent_mask_bundle", 1)) wearing.add("the scent mask covers what your nose-led quarry would follow");
+
+        Integer hoursLeft = jdbc.query(
+            // The window is the hunting service\x27s own figure, asked for rather than repeated: a reading that
+            // keeps its own copy of a number is a second source of truth, and this one would drift the first
+            // time the trail rule changed. My first cut said twelve hours where the rule says four.
+            "SELECT GREATEST(0, ? - FLOOR(EXTRACT(EPOCH FROM (?::timestamptz - c.trail_hidden_at)) / 3600))::int " +
+            "FROM chronicle c WHERE c.id=? AND c.trail_hidden_at IS NOT NULL",
+            rs -> rs.next() ? rs.getInt(1) : null,
+            com.devosphere.draugr.ecology.WildlifeEncounterService.trailStaysHiddenHours(),
+            java.sql.Timestamp.from(at), chronicle.id());
+
+        StringBuilder b = new StringBuilder();
+        if (wearing.isEmpty())
+            b.append("You are carrying nothing that hides you: no cloak to break your outline, no screen, no "
+                   + "scent mask. What sees you, sees you.");
+        else b.append("What hides you: ").append(joinAnd(wearing))
+              .append(wearing.size() == 1 ? ". It takes " : ". Together they take ")
+              .append(unseen).append(" off the odds of anything closing on you unseen.");
+        if (hoursLeft != null && hoursLeft > 0)
+            b.append(" Your trail is covered for about ").append(hoursLeft)
+             .append(hoursLeft == 1 ? " hour more." : " hours more.");
+        // THE LIMIT, SAID OUT LOUD. Nothing in this world turns concealment into paces, and inventing a figure
+        // here would be the catalogue token in prose: a number with nothing behind it.
+        b.append(" How near you could come to a particular animal is not a thing you can reckon in paces —")
+         .append(" it is cover, wind and patience, and you will know when it lifts its head.");
+        return new String[]{"SUCCEEDED", b.toString()};
+    }
+
+    private String[] judgeTools(ActiveChronicle chronicle) {
+        java.util.List<java.util.Map<String,Object>> classes = jdbc.queryForList(
+            "SELECT t.tool_class, " +
+            "       (SELECT COUNT(*) FROM material_process mp WHERE mp.tool_class=t.tool_class " +
+            "          AND mp.review_state='VERIFIED') " +
+            "     + (SELECT COUNT(*) FROM assembly_stage s WHERE s.tool_class=t.tool_class) AS works, " +
+            "       EXISTS(SELECT 1 FROM tool_profile p JOIN item_instance i ON i.item_key=p.item_key " +
+            "              JOIN world_object w ON w.id=i.object_id " +
+            "              WHERE p.tool_class=t.tool_class AND w.lifecycle_state='ACTIVE' " +
+            "                AND w.current_owner_id=?) AS carried, " +
+            // WHAT WOULD DO IS THE ONE A KEEPER CAN GET TODAY, not the shortest name. Ordering by key
+            // length first said "an iron axe would do" to somebody with no axe at all, which is true and
+            // useless. So: a tool that is simply PICKED UP off the ground first (a field stone is a
+            // striking tool and costs a stoop), then one the catalogue can make with NO tool in hand
+            // (the knapped blades), and only then the shortest name.
+            "       (SELECT replace(p2.item_key,'_',' ') FROM tool_profile p2 WHERE p2.tool_class=t.tool_class " +
+            "         ORDER BY (NOT EXISTS(SELECT 1 FROM item_source s WHERE s.item_key=p2.item_key " +
+            "                                AND s.source_kind IN ('CODE','MINERAL'))), " +
+            "                  (NOT EXISTS(SELECT 1 FROM material_process m2 WHERE m2.output_item_key=p2.item_key " +
+            "                                AND m2.review_state='VERIFIED' AND COALESCE(m2.tool_class,'')='')), " +
+            "                  length(p2.item_key), p2.item_key LIMIT 1) AS simplest " +
+            "FROM (SELECT DISTINCT tool_class FROM tool_profile) t ORDER BY works DESC", chronicle.id());
+
+        java.util.List<String> wanting = new java.util.ArrayList<>();
+        java.util.List<String> carried = new java.util.ArrayList<>();
+        for (java.util.Map<String,Object> row : classes) {
+            String said = toolSaidPlainly((String) row.get("tool_class"));
+            if (Boolean.TRUE.equals(row.get("carried"))) { carried.add(said); continue; }
+            int works = ((Number) row.get("works")).intValue();
+            String simplest = (String) row.get("simplest");
+            wanting.add(said + " — " + works + (works == 1 ? " piece of work wants one" : " pieces of work want one")
+                + (simplest == null ? "" : ", and a " + simplest + " would do"));
+        }
+
+        StringBuilder b = new StringBuilder();
+        if (wanting.isEmpty())
+            b.append("You are carrying something for every kind of work the world asks a tool for: ")
+             .append(joinAnd(carried)).append('.');
+        else {
+            // Semicolons between the classes: each clause already holds a comma of its own, and joinAnd made
+            // one long sentence out of three readings.
+            b.append("You have nothing to answer for ").append(String.join("; ", wanting)).append('.');
+            if (!carried.isEmpty()) b.append(" You do carry ").append(joinAnd(carried)).append('.');
+        }
+        return new String[]{"SUCCEEDED", b.toString()};
+    }
+
+    /** A tool class in the words a keeper uses, for a reading that is about what they have not got. */
+    private static String toolSaidPlainly(String toolClass) {
+        return switch (toolClass == null ? "" : toolClass) {
+            case "CUTTING" -> "a cutting edge";
+            case "STRIKING" -> "something to strike with";
+            case "AXE" -> "an axe";
+            default -> toolClass.toLowerCase(Locale.ROOT).replace('_', ' ');
+        };
+    }
+
+    private String[] judgeCampGround(ActiveChronicle chronicle, Instant at) {
+        UUID loc = chronicle.location();
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, loc);
+        boolean water = naturalWaterHere(loc) || catchmentInReach(loc);
+        boolean wood = standingTreesHere(loc);
+        boolean roof = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' AND cp.state='COMPLETED' " +
+            "  AND cp.integrity_percent > 0 AND " + com.devosphere.draugr.construction.Shelters.ENCLOSING + ")",
+            Boolean.class, loc));
+        boolean inTheRock = "CAVE_MOUTH".equals(biome) || "CAVE_INTERIOR".equals(biome);
+        boolean wetBed = "WETLAND".equals(biome) || "RIVER_BANK".equals(biome) || "OCEAN".equals(biome);
+        java.util.List<String> carnivores = jdbc.queryForList(
+            "SELECT DISTINCT replace(p.species_key,'_',' ') FROM wildlife_population p " +
+            "JOIN ecology_site s ON s.id=p.site_id JOIN wildlife_species sp ON sp.species_key=p.species_key " +
+            "WHERE s.chunk_id=? AND p.population_count > 0 AND sp.ecological_role='CARNIVORE' ORDER BY 1 LIMIT 3",
+            String.class, loc);
+
+        java.util.List<String> has = new java.util.ArrayList<>();
+        java.util.List<String> wants = new java.util.ArrayList<>();
+        (water ? has : wants).add(water ? "water within reach" : "no water within reach");
+        (wood ? has : wants).add(wood ? "standing timber to burn" : "nothing standing to burn");
+        if (roof) has.add("a roof already up");
+        else if (inTheRock) has.add("rock over your head");
+        else wants.add("no roof but what you raise");
+        if (wetBed) wants.add("wet ground to lie on");
+
+        StringBuilder b = new StringBuilder();
+        b.append(has.isEmpty() ? "This ground gives you nothing to camp by: " : "For a camp here you have ");
+        if (!has.isEmpty()) b.append(joinAnd(has)).append('.');
+        if (!wants.isEmpty()) b.append(has.isEmpty() ? joinAnd(wants) + "." : " Against it: " + joinAnd(wants) + ".");
+        if (!carnivores.isEmpty())
+            b.append(carnivores.size() == 1 ? " This is " : " This is ").append(joinAnd(carnivores))
+             .append(carnivores.size() == 1 ? " country, which is worth knowing before dark." : " country, which is worth knowing before dark.");
+        // The verdict in the keeper's own terms: the two that decide a night are water and fuel, and the roof
+        // decides whether the night is survivable in weather. Counted, never invented.
+        int kept = (water ? 1 : 0) + (wood ? 1 : 0) + (roof || inTheRock ? 1 : 0);
+        b.append(kept >= 3 ? " As good a place as you will find to stop."
+               : kept == 2 ? " It would serve for a night."
+               : kept == 1 ? " It would be a hard night here."
+               : " Better ground is worth the walk.");
+        return new String[]{"SUCCEEDED", b.toString()};
     }
 
     /** How many visits make a way routine — planTravel's own figure, shared so the two cannot disagree. */
@@ -3585,6 +3769,40 @@ public class ChronicleActionService {
             ||value.contains("what can i pick here")||value.contains("what is there to pick"))
             return Intent.JUDGE_FLORA;
         if (asksWhatRemainsOfTheWork(value)) return Intent.JUDGE_WORK_IN_HAND;
+        // IS THIS GROUND WORTH CAMPING ON (#37/#99). Everything the question wants is recorded: water on the
+        // ground or a catchment standing on it, a tree stand to burn, a roof that encloses, the biome you would
+        // be lying on, and the carnivores whose range this is. Every one of those is read by some act already
+        // — and the question reached nothing. Measured live: `is this a good place to camp`, `is this a good
+        // camp` and `good place to camp` were all misses, so a keeper could only learn it by spending the night.
+        //
+        // The reading REPORTS and does not advise: it says what is here and what is not, and the player decides.
+        if (value.contains("good place to camp")||value.contains("good camp")||value.contains("good ground to camp")
+            ||value.contains("camp here")&&(value.startsWith("should")||value.startsWith("can")||value.startsWith("is"))
+            ||value.contains("good place to sleep")||value.contains("good place for a camp")
+            ||value.contains("is this ground good")||value.contains("worth camping"))
+            return Intent.JUDGE_CAMP_GROUND;
+        // WHAT TOOLS YOU STILL WANT (#37/#99). Three tool classes gate two hundred works — CUTTING on 157
+        // material processes, STRIKING on 34, AXE on 9, and more again on the assembly stages — and
+        // tool_profile says exactly which items satisfy each. The gear reading answers what you HAVE; nothing
+        // answered what you LACK, and `what tools do I need` reached nothing at all on a booted world. A keeper
+        // could only find out one refusal at a time, each costing the walk to the work.
+        //
+        // Gated on a WANTING word, so `what tools do I have` and `check my tools` stay with the gear reading
+        // they have always had.
+        if ((value.contains("tool")||value.contains("tools"))
+            &&(value.contains("do i need")||value.contains("do i want")||value.contains("am i missing")
+               ||value.contains("do i lack")||value.contains("should i make")||value.contains("are missing")
+               ||value.contains("would i need")))
+            return Intent.JUDGE_TOOLS;
+        // HOW UNSEEN YOU ARE (#37/#93). The ambush odds read a camouflage cloak, a set hide screen and a
+        // scent-mask bundle, and a hidden trail keeps its own hours in chronicle.trail_hidden_at — and a keeper
+        // could not ask any of it. `how close can I get`, `am I hidden` and `will they see me` all reached
+        // nothing, so gear made expressly for not being seen was invisible in both senses.
+        if (value.contains("how close can i get")||value.contains("am i hidden")||value.contains("will they see me")
+            ||value.contains("will it see me")||value.contains("can they see me")||value.contains("am i out of sight")
+            ||value.contains("how well am i hidden")||value.contains("am i well hidden")
+            ||value.contains("can i get close")||value.contains("how near can i get"))
+            return Intent.JUDGE_UNSEEN;
         // What you are carrying and what state it is in (#37, act fifteen). condition_state, use_count and
         // quality_grade have been on every item since the table existed, and the LOAD is computed on every
         // action — and "how heavy is my pack" was answered "you have nothing by that name in hand to weigh".
@@ -5576,7 +5794,7 @@ public class ChronicleActionService {
             || (word(v, "fix") && !v.contains("memory") && !v.contains("mind"));
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, JUDGE_CLOTHING, JUDGE_PLACE, JUDGE_WORK_IN_HAND, JUDGE_LEARNING, JUDGE_FLORA, JUDGE_RAISING, PARE_HOOVES, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, JUDGE_CLOTHING, JUDGE_PLACE, JUDGE_WORK_IN_HAND, JUDGE_LEARNING, JUDGE_FLORA, JUDGE_RAISING, JUDGE_CAMP_GROUND, JUDGE_TOOLS, JUDGE_UNSEEN, PARE_HOOVES, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;}
         /** The cardinal for a grid offset, for when the WORLD names the direction rather than the player (#37). */
         static Direction of(int dx,int dy){ for(Direction d:values()) if(d.dx==dx&&d.dy==dy) return d; return null; } }    /**     * The structured perception frame — the seam every future Simulation Agent reads
