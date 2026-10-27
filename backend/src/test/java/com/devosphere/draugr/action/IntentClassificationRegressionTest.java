@@ -2905,4 +2905,29 @@ class IntentClassificationRegressionTest {
         assertEquals("JUDGE_PLACE", classify("what do I know about this place"));
         assertEquals("JUDGE_FLORA", classify("what grows here"));
     }
+
+    /**
+     * Asking what tools you still want (#37/#99, V448).
+     *
+     * <p>Three tool classes gate two hundred works and tool_profile says which items satisfy each. The gear
+     * reading answers what a keeper HAS; nothing answered what they LACK, and `what tools do I need` reached
+     * nothing — so the way to find out was one refusal at a time, each costing the walk to the work.
+     */
+    @Test
+    void askingWhatToolsYouStillWant() throws Exception {
+        assertEquals("JUDGE_TOOLS", classify("what tools do I need"));
+        assertEquals("JUDGE_TOOLS", classify("what tools am I missing"));
+        assertEquals("JUDGE_TOOLS", classify("what tool do I need"));
+        assertEquals("JUDGE_TOOLS", classify("what tools should I make"));
+
+        // AND THE GEAR READING KEEPS WHAT IT HAS ALWAYS ANSWERED, which is the boundary this rule is gated for:
+        // what you HAVE is the gear reading's, what you LACK is this one's.
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("what tools do I have"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("check my tools"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("what am I carrying"));
+
+        // ...and making a tool is still making it.
+        assertEquals("CRAFT_KNIFE", classify("make a knife"));
+        assertEquals("CRAFT_HATCHET", classify("make a hatchet"));
+    }
 }
