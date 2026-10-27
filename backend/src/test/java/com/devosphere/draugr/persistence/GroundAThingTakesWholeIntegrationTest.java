@@ -96,6 +96,11 @@ class GroundAThingTakesWholeIntegrationTest {
         // tests a carry limit, so the Chronicle is given ample capacity rather than an order to run in.
         jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=500000, direct_bulk_ml=500000, "
             + "maximum_single_lift_grams=500000 WHERE chronicle_id=?", active.id());
+        // A part-built structure now stands where it was begun (#77), so a poultry run another case left at its
+        // first stage answers the next "build a poultry run" with which way it lies, not with the footprint rule
+        // this class measures. Each case starts with nothing of the Chronicle's under way anywhere.
+        jdbc.update("UPDATE assembly_instance SET state='ABANDONED' WHERE chronicle_id=? AND state='IN_PROGRESS'",
+            active.id());
         return active.id();
     }
 

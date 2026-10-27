@@ -969,7 +969,7 @@ public class ChronicleActionService {
         else if (intent == Intent.REPAIR_ITEM) { String[] r = items.repairNamedItem(chronicle.id(), chronicle.location(), text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.REPAIR_STRUCTURE) { String[] r = construction.repairStructure(chronicle.id(), chronicle.location(), text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.DISMANTLE) { String[] r = construction.dismantle(chronicle.id(), chronicle.location(), text, resolvedAt); outcome = r[0]; perception = r[1]; }
-        else if (intent == Intent.INSPECT) { String[] r = assembly.inspect(chronicle.id(), text); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.INSPECT) { String[] r = assembly.inspect(chronicle.id(), chronicle.location(), text); outcome = r[0]; perception = r[1]; }
         // The examination verbs (#25): a focused read of one subject — a reachable item the text names,
         // else the place itself — at a depth set by the relevant mastery. Perception (EXAMINE) sees the
         // surface, insight (ANALYZE) reads what a thing is and does, knowledge (INVESTIGATE) infers its
@@ -987,7 +987,7 @@ public class ChronicleActionService {
         else if (intent == Intent.FEEL)   { String[] r = examination.sense(chronicle.id(), chronicle.location(), text, ExaminationService.Sense.FEEL);   outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.READ)    { String[] r = readDocument(chronicle, text); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.MEASURE) { String[] r = examination.measure(chronicle.id(), chronicle.location(), text); outcome = r[0]; perception = r[1]; }
-        else if (intent == Intent.REWORK) { String[] r = assembly.rework(chronicle.id(), text, resolvedAt); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.REWORK) { String[] r = assembly.rework(chronicle.id(), chronicle.location(), text, resolvedAt); outcome = r[0]; perception = r[1]; }
         // A personal physical act: time passes and the body pays for it. The narrator
         // witnesses without comment; the physiology tick will, in time, do the rest.
         else if (intent == Intent.PERSONAL_ACT) { physiology.applyPersonalActExertion(chronicle.id()); perception = inputClassifier.narrate(ActionInputClassifier.InputClass.PERSONAL_PHYSICAL_ACT, text); }

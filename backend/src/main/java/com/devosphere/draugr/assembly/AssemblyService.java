@@ -229,6 +229,46 @@ public class AssemblyService {
             "FROM assembly_definition WHERE assembly_key=?", key);
         String subjectKind = (String) def.get("subject_kind");
 
+        // Naming a thing that already stands is USING it, not building another (#77).
+        //
+        // An assembly's keywords include its bare name — "drying rack", "smoke rack", "causeway" — so that "work on
+        // the drying rack" advances one being built. But this matcher runs before the material processes, and once
+        // a structure is finished no stage is left in progress, so the next mention of it started a NEW one: "dry
+        // the fish on the drying rack", with a rack standing right there, began raising a second rack and the fish
+        // never dried. Every station named while it was being used had the same trap, and so did every way named
+        // while it was being walked.
+        //
+        // So a structure that already stands on this ground, named only by its bare name, is a reference and not a
+        // request: this returns null and the caller tries the material process the text names. What counts as a
+        // request is the assembly's OWN data — its keywords include the verb forms that build it ("make a drying
+        // rack", "raise a smoke rack"), and the longest keyword wins, so a text that says one of those matched one
+        // of those. A word list on the text would have misfired both ways: "make" and "lay" are how half the
+        // processes are phrased ("make cordage at the post", "lay out the hide"). Asking for "another", a
+        // "second" or a "new" one still builds, and one already under way HERE is always advanced — "work on the
+        // drying rack" must reach a half-built second rack.
+        //
+        // It runs BEFORE the place conditions, because a reference builds nothing and so has no ground to be
+        // refused on. After them, the footprint rule answered "feed the hens in the poultry run", with the run
+        // standing right there, by saying a poultry run already takes this ground — true, and the reason the
+        // hens were in it. And it asks about this ground only: a second rack half-built a day's walk off does
+        // not make the one in front of you anything other than a rack.
+        if ("STRUCTURE".equals(subjectKind) && !isBuildPhrase(matchedKeyword) && !asksForAnother(text)
+                && !underWayHere(chronicle, key, location) && standsHere(location, (String) def.get("construction_kind")))
+            return null;
+
+        // A PART-BUILT STRUCTURE STANDS WHERE IT WAS BEGUN (#77).
+        //
+        // One of a kind may be under way per Chronicle (assembly_one_active_per_chronicle), and the instance was
+        // looked up by Chronicle and kind alone — so posts set on one piece of ground took their bars on another,
+        // and the finished rack went up wherever the last stage happened to be worked, built of work done
+        // somewhere else entirely. The place conditions were already asked per location (underWayHere); the
+        // work itself was not. A thing raised on the ground cannot follow its maker, so it is refused here and
+        // the refusal says which way it lies. A craft carries no location and travels in the hand, as it should.
+        if ("STRUCTURE".equals(subjectKind)) {
+            String elsewhere = standsElsewhere(chronicle, key, location);
+            if (elsewhere != null) return new String[]{"FAILED", elsewhere};
+        }
+
         // SOME GROUND WILL NOT TAKE WHAT IS ASKED OF IT (#77), and now it is data rather than a switch.
         //
         // The comment on the well below used to end "the second such assembly is the one that should promote
@@ -291,27 +331,6 @@ public class AssemblyService {
             String dry = groundTooDryToSink(location);
             if (dry != null) return new String[]{"FAILED", dry};
         }
-
-        // Naming a thing that already stands is USING it, not building another (#77).
-        //
-        // An assembly's keywords include its bare name — "drying rack", "smoke rack", "causeway" — so that "work on
-        // the drying rack" advances one being built. But this matcher runs before the material processes, and once
-        // a structure is finished no stage is left in progress, so the next mention of it started a NEW one: "dry
-        // the fish on the drying rack", with a rack standing right there, began raising a second rack and the fish
-        // never dried. Every station named while it was being used had the same trap, and so did every way named
-        // while it was being walked.
-        //
-        // So a structure that already stands on this ground, named only by its bare name, is a reference and not a
-        // request: this returns null and the caller tries the material process the text names. What counts as a
-        // request is the assembly's OWN data — its keywords include the verb forms that build it ("make a drying
-        // rack", "raise a smoke rack"), and the longest keyword wins, so a text that says one of those matched one
-        // of those. A word list on the text would have misfired both ways: "make" and "lay" are how half the
-        // processes are phrased ("make cordage at the post", "lay out the hide"). Asking for "another", a
-        // "second" or a "new" one still builds, and one already under way is always advanced — "work on the drying
-        // rack" must reach a half-built second rack.
-        if ("STRUCTURE".equals(subjectKind) && !isBuildPhrase(matchedKeyword) && !asksForAnother(text)
-                && !underWay(chronicle, key) && standsHere(location, (String) def.get("construction_kind")))
-            return null;
 
         UUID instanceId = jdbc.query(
             "SELECT id FROM assembly_instance WHERE chronicle_id=? AND assembly_key=? AND state='IN_PROGRESS' LIMIT 1 FOR UPDATE",
@@ -484,14 +503,13 @@ public class AssemblyService {
      * carried — witness-stance, no advice (M3b). Returns [outcome, narration].
      */
     @Transactional(readOnly = true)
-    public String[] inspect(UUID chronicle, String text) {
+    public String[] inspect(UUID chronicle, UUID location, String text) {
+        // A part-built structure is looked over where it stands (#77): from a day's walk off, "you look over the
+        // poultry run" reported the grade of work nobody could see.
         String key = match(text);
-        UUID instanceId = key != null ? jdbc.query(
-            "SELECT id FROM assembly_instance WHERE chronicle_id=? AND assembly_key=? AND state='IN_PROGRESS' LIMIT 1",
-            rs -> rs.next() ? rs.getObject(1, UUID.class) : null, chronicle, key) : null;
-        if (instanceId == null) instanceId = jdbc.query(
-            "SELECT id FROM assembly_instance WHERE chronicle_id=? AND state='IN_PROGRESS' ORDER BY updated_at DESC LIMIT 1",
-            rs -> rs.next() ? rs.getObject(1, UUID.class) : null, chronicle);
+        String elsewhere = key == null ? null : standsElsewhere(chronicle, key, location);
+        if (elsewhere != null) return new String[]{"FAILED", elsewhere};
+        UUID instanceId = instanceWithinReach(chronicle, key, location, false);
 
         if (instanceId != null) {
             String name = jdbc.queryForObject(
@@ -703,14 +721,12 @@ public class AssemblyService {
      * undone, not discarded.
      */
     @Transactional
-    public String[] rework(UUID chronicle, String text, Instant at) {
+    public String[] rework(UUID chronicle, UUID location, String text, Instant at) {
+        // Stripping work back out is done with the hands, on the thing (#77) — never to a structure out of sight.
         String key = match(text);
-        UUID instanceId = key != null ? jdbc.query(
-            "SELECT id FROM assembly_instance WHERE chronicle_id=? AND assembly_key=? AND state='IN_PROGRESS' LIMIT 1 FOR UPDATE",
-            rs -> rs.next() ? rs.getObject(1, UUID.class) : null, chronicle, key) : null;
-        if (instanceId == null) instanceId = jdbc.query(
-            "SELECT id FROM assembly_instance WHERE chronicle_id=? AND state='IN_PROGRESS' ORDER BY updated_at DESC LIMIT 1 FOR UPDATE",
-            rs -> rs.next() ? rs.getObject(1, UUID.class) : null, chronicle);
+        String elsewhere = key == null ? null : standsElsewhere(chronicle, key, location);
+        if (elsewhere != null) return new String[]{"FAILED", elsewhere};
+        UUID instanceId = instanceWithinReach(chronicle, key, location, true);
         if (instanceId == null) return new String[]{"FAILED", "You have nothing half-made to rework."};
 
         Map<String, Object> flaw = jdbc.query(
@@ -838,5 +854,63 @@ public class AssemblyService {
             "SELECT EXISTS(SELECT 1 FROM assembly_instance WHERE chronicle_id=? AND assembly_key=? " +
             "AND state='IN_PROGRESS' AND location_id=?)",
             Boolean.class, chronicle, assemblyKey, location));
+    }
+
+    /**
+     * Why this part-built structure cannot be worked from here, or null when it can (#77).
+     *
+     * <p>Null when nothing of this kind is under way, when it is under way on this ground, and when it carries no
+     * location at all (a craft, which travels in the hand). Otherwise the sentence names the thing and which way
+     * it lies, from {@link com.devosphere.draugr.world.Compass} so the bearing agrees with every other one the
+     * world gives.
+     */
+    private String standsElsewhere(UUID chronicle, String assemblyKey, UUID location) {
+        // Nowhere to stand is nowhere to measure from; the old unscoped behaviour holds rather than a guess.
+        if (location == null) return null;
+        Map<String, Object> there = jdbc.query(
+            "SELECT lower(d.display_name) AS name, c.grid_x AS x, c.grid_y AS y FROM assembly_instance ai " +
+            "JOIN assembly_definition d ON d.assembly_key=ai.assembly_key JOIN world_chunk c ON c.id=ai.location_id " +
+            "WHERE ai.chronicle_id=? AND ai.assembly_key=? AND ai.state='IN_PROGRESS' " +
+            "AND ai.location_id IS DISTINCT FROM ?::uuid",
+            rs -> rs.next() ? Map.of("name", rs.getString("name"), "x", rs.getInt("x"), "y", rs.getInt("y")) : null,
+            chronicle, assemblyKey, location);
+        return there == null ? null : liesElsewhere((String) there.get("name"), (int) there.get("x"), (int) there.get("y"), location);
+    }
+
+    /** The sentence for a part-built structure on other ground: what it is, and which way it lies from here. */
+    private String liesElsewhere(String name, int x, int y, UUID location) {
+        String way = null;
+        int far = 0;
+        if (location != null) {
+            Map<String, Object> here = jdbc.query("SELECT grid_x, grid_y FROM world_chunk WHERE id=?",
+                rs -> rs.next() ? Map.of("x", rs.getInt(1), "y", rs.getInt(2)) : null, location);
+            if (here != null) {
+                int dx = x - (int) here.get("x"), dy = y - (int) here.get("y");
+                way = com.devosphere.draugr.world.Compass.of(dx, dy);
+                far = Math.max(Math.abs(dx), Math.abs(dy));
+            }
+        }
+        String where = way == null ? "on other ground"
+            : far <= 1 ? "on the next ground to the " + way : "some way off to the " + way;
+        return "Your " + name + " stands half-raised where you began it, " + where + ". A thing set into the ground "
+            + "stays where it was begun; the work goes on there.";
+    }
+
+    /**
+     * The in-progress instance a Chronicle means, among those within reach of where they stand: a craft (no
+     * location) wherever they are, a structure only on its own ground. By kind when the words name one, else
+     * the most recently worked.
+     */
+    private UUID instanceWithinReach(UUID chronicle, String key, UUID location, boolean lock) {
+        String reach = " AND (location_id IS NULL OR location_id = ?::uuid)";
+        String forUpdate = lock ? " FOR UPDATE" : "";
+        UUID id = key == null ? null : jdbc.query(
+            "SELECT id FROM assembly_instance WHERE chronicle_id=? AND assembly_key=? AND state='IN_PROGRESS'" + reach + " LIMIT 1" + forUpdate,
+            rs -> rs.next() ? rs.getObject(1, UUID.class) : null, chronicle, key, location);
+        if (id == null) id = jdbc.query(
+            "SELECT id FROM assembly_instance WHERE chronicle_id=? AND state='IN_PROGRESS'" + reach +
+            " ORDER BY updated_at DESC LIMIT 1" + forUpdate,
+            rs -> rs.next() ? rs.getObject(1, UUID.class) : null, chronicle, location);
+        return id;
     }
 }
