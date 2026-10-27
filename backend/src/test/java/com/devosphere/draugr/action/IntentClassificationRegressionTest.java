@@ -2881,4 +2881,28 @@ class IntentClassificationRegressionTest {
         assertEquals("JUDGE_WORK_IN_HAND", classify("what am I working on"));
         assertEquals("JUDGE_FLORA", classify("what grows here"));
     }
+
+    /**
+     * Asking whether this ground is worth stopping on (#37/#99, V447).
+     *
+     * <p>Water, fuel, a roof, the bed and whose country it is — five records, every one of them already read by
+     * some act, and the question reached nothing. The only way to learn whether ground was worth camping on was
+     * to spend the night on it and find out.
+     */
+    @Test
+    void askingWhetherThisGroundIsWorthStoppingOn() throws Exception {
+        assertEquals("JUDGE_CAMP_GROUND", classify("is this a good place to camp"));
+        assertEquals("JUDGE_CAMP_GROUND", classify("is this a good camp"));
+        assertEquals("JUDGE_CAMP_GROUND", classify("is this a good place to sleep"));
+        assertEquals("JUDGE_CAMP_GROUND", classify("should I camp here"));
+        assertEquals("JUDGE_CAMP_GROUND", classify("is this ground good enough to camp on"));
+
+        // AND THE ACTS OF STOPPING KEEP THEIRS. Asking where to lie down is not lying down, and the sleeping,
+        // the resting and the bed-making all still answer their own sentences.
+        assertEquals("SLEEP", classify("sleep until morning"));
+        assertEquals("REST", classify("rest a while"));
+        assertEquals("MAKE_BED", classify("make a bed"));
+        assertEquals("JUDGE_PLACE", classify("what do I know about this place"));
+        assertEquals("JUDGE_FLORA", classify("what grows here"));
+    }
 }
