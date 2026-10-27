@@ -94,7 +94,21 @@ class WorkThatCannotBeDoneInTheWetIntegrationTest {
         }
         var active = chronicles.active() != null ? chronicles.active() : chronicles.awaken();
         assertNotNull(active, "a living Chronicle is needed");
+        setDown(active.id());
         return active.id();
+    }
+
+    /**
+     * Every test here gives the one shared Chronicle things and none takes them back, so by the later tests the
+     * keeper was carrying the earlier ones' hides, branches and axes — and {@code give} threw "cannot physically
+     * carry that load" in CI. Each test starts with empty hands; what is worn stays worn.
+     */
+    private void setDown(UUID chronicle) {
+        jdbc.update("UPDATE world_object w SET current_owner_id=NULL, "
+          + " current_location_id=(SELECT k.current_location_id FROM world_object k WHERE k.id=?) "
+          + "WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' "
+          + " AND EXISTS (SELECT 1 FROM item_instance i WHERE i.object_id=w.id) "
+          + " AND NOT EXISTS (SELECT 1 FROM equipment_attachment e WHERE e.item_id=w.id)", chronicle, chronicle);
     }
 
     /** Open ground with nothing built on it, so the composer has one thing to work on. */

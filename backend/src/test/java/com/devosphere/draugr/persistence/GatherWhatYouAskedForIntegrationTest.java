@@ -81,7 +81,21 @@ class GatherWhatYouAskedForIntegrationTest {
         }
         ChronicleService.ChronicleSummary summary = chronicles.awaken();
         assertNotNull(summary, "awakening must produce a living Chronicle");
+        setDown(summary.id());
         return summary.id();
+    }
+
+    /**
+     * Every test here gathers into the one shared Chronicle and none puts it down, so once the plantain and hazel
+     * tests joined the class the keeper reached the grass test already full — "you cannot carry any more of what
+     * you find here" — in CI. Each test starts with empty hands; what is worn stays worn.
+     */
+    private void setDown(UUID chronicle) {
+        jdbc.update("UPDATE world_object w SET current_owner_id=NULL, "
+          + " current_location_id=(SELECT k.current_location_id FROM world_object k WHERE k.id=?) "
+          + "WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' "
+          + " AND EXISTS (SELECT 1 FROM item_instance i WHERE i.object_id=w.id) "
+          + " AND NOT EXISTS (SELECT 1 FROM equipment_attachment e WHERE e.item_id=w.id)", chronicle, chronicle);
     }
 
     private UUID where(UUID chronicle) {
