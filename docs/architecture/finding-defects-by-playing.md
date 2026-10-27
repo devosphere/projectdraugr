@@ -355,6 +355,80 @@ Every defect this project has found is the same defect: **the world knows someth
 
 ---
 
+## Build the reading and it audits the act
+
+Face 5 — *the world knew and would not say* — is usually written up as a gap to be filled. It is also the
+cheapest audit of the mechanic behind it, and that turned out to be worth more than the readings themselves.
+**Every reading added in the #37/#99 cycle exposed a defect in the act standing beside it**, because writing the
+reading forces you to read the same records the act reads, in the same order, and then to say them out loud
+where a player can compare them to what the act does.
+
+| the reading built | the defect it found in the act |
+|---|---|
+| what is waiting on you (work in hand) | `ActionPlan` cut `what next for the hide` into "what" and "for the hide" — a sequencing word with no step in front of it |
+| the same | tillage took `work on the earth oven`, because the ground-breaking rule holds `earth` and excluded exactly one build by name |
+| what grows here | `pick the plantain` gathered **chickweed**: where a flora name ends in a kind word (plantain HERB, chickweed PLANT), only the kind word was indexed |
+| the same | `pick the hazel` yielded **shed birch bark** — the drop was `ORDER BY item_key LIMIT 1`, and birch sorts before hazel |
+| the same | `gather plantain leaves` matched nothing, because the matcher tried "plantain leaf" and "plantain leafs" |
+| what you have learned | `chronicle_discovery` was written in **two** places out of 140 intents, 500 processes and 100 builds |
+
+So: when a reading is built, replay the ACTS around its subject in the same sitting. The reading tells you what
+the records say; the acts tell you whether anything agrees with them.
+
+### The reading contract
+
+Four rules, each of which was learned by nearly shipping its opposite.
+
+- **Read the records the act refuses on, through the same helpers.** The work-in-hand reading names the cure,
+  the tool, the fire, the weather limit and the stage's bill by calling what `AssemblyService.advance` calls. A
+  reading with its own copy of the rule is a second source of truth that will drift, and the drift shows up as
+  the game lying in one of two sentences.
+- **Ship the recording with the reading.** A reading of an empty table is a true answer that is always
+  "nothing". `what have I learned` was worth building only because the same change made every completed process
+  and finished build record itself — one write where the ledger rows are written, rather than in each of the 140
+  branches, which is exactly how it came to be written in only two.
+- **Keep the kinds of "no" apart.** *You have not got the materials*, *this is the wrong ground* and *you have
+  begun nothing of that name* send a keeper to do three completely different things. A reading that collapses
+  them into "you cannot" has answered nothing.
+- **Nothing is picked, built or learned by asking.** Every reading's `activity_impact` card carries no
+  footprint, and the migration asserts it. This is the other half of *asking about a thing is not making it*:
+  the acts must not answer questions, and the questions must not perform acts.
+
+### Three traps in measuring a reading
+
+- **A green routing test is not evidence that a sentence arrives.** `IntentClassificationRegressionTest` calls
+  `classify` directly. The live path is `resolvePlan` → `ActionPlan.steps` → `ActionInputClassifier` →
+  `classify`, and the splitter runs first: the routing test for `what next for the hide` passed while the
+  sentence itself reached nothing in play. Anything containing `then`, `next`, `finally`, `lastly`, `after
+  that`, a semicolon or a full stop must be measured **live**.
+- **A long sweep kills the keeper, and every reply after that is empty.** Two sweeps ended in
+  `{"status":409,"message":"No living Chronicle exists."}` — December, no shelter, each action spending warmth
+  and time. The harness must count the no-reply answers *and* re-awaken on 409, or the tail of the sweep is a
+  row of false negatives.
+- **A hand-patched scratch database stops validating when you switch branches.** Boot branch A against a
+  database that already has branch B's migration applied and Flyway refuses the applied-but-missing version.
+  Deleting that one row from `flyway_schema_history` is enough when the migration was additive; otherwise take a
+  fresh container.
+
+### The sweep that answers #99's gate
+
+#99 asks that every supported action resolve or fail with a specific observed fact, with nothing falling through
+to the generic handler. The way to hold it to that is a list of ordinary sentences — the words a player reaches
+for first, not the words the catalogue uses — replayed against a booted world, counting the misses:
+
+```
+76 sentences across fifteen families:  61 answered, 15 reached nothing
+after one cycle of fixes:              68 answered,  8 reached nothing
+```
+
+Seven of those fifteen wanted a reading that **already existed** and was reachable only by other words
+(`what has been through here` → TRACK, `how much can I carry` → the gear reading, `what is over that ridge` →
+SCOUT, `gather what is useful` → FORAGE_GROUND, `cook what I have` → COOK_MEAT, `start a shelter` → the
+assembly matcher, `what should I do next` → work in hand). **Check that first**: a miss whose answer exists is
+a line of keywords, while a miss with nothing behind it is a mechanic.
+
+---
+
 ## Two rules of the world that a fixture must obey
 
 Both are enforced by `PersistentStateAuditor`, and nearly every integration test asserts `auditor.consistent()`,
