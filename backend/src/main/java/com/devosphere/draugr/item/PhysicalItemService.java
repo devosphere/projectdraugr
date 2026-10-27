@@ -2245,7 +2245,17 @@ public class PhysicalItemService {
             "SELECT d.flora_key, regexp_replace(regexp_replace(replace(d.item_key,'_',' '), " +
             "         ' (bundle|tuft|head|piece|strip|sprig|handful)$', ''), '^.* ', ''), d.item_key " +
             "  FROM flora_drop d WHERE d.item_key LIKE '%\\_%' " +
-            "   AND regexp_replace(d.item_key, '^.*_', '') NOT IN ('bundle','tuft','head','piece','strip','sprig','handful')");
+            "   AND regexp_replace(d.item_key, '^.*_', '') NOT IN ('bundle','tuft','head','piece','strip','sprig','handful') " +
+            "UNION ALL " +
+            // ...AND THE WORD IN FRONT OF THE KIND WORD, which is the complement of the pass above and the
+            // other half of the same rule (#37). Where the last word says WHAT A THING IS — plantain HERB,
+            // chickweed PLANT, elder SHRUB — the first word is what it is CALLED, and only the last was ever
+            // indexed. Measured live: `pick the plantain`, standing on six plantain, came back "you gather 5
+            // chickweed from the chickweed plant growing here". Asked for one plant, given another, in the same
+            // even voice as a true answer.
+            "SELECT fd.flora_key, regexp_replace(replace(fd.flora_key,'_',' '), ' .*$', ''), CAST(NULL AS varchar) " +
+            "  FROM flora_definition fd WHERE fd.flora_key LIKE '%\\_%' " +
+            "   AND regexp_replace(fd.flora_key, '^.*_', '') IN ('shrub','plant','fungus','tree','bed','bush','herb')");
 
         // Every phrase that matches at the LONGEST length, not merely the first of them. Head nouns tie by
         // construction — meadow_grass and wild_grass are both "grass", dog_rose and wild_rose both "rose" — and
@@ -2257,7 +2267,13 @@ public class PhysicalItemService {
         for (java.util.Map<String,Object> word : vocabulary) {
             String phrase = (String) word.get("phrase");
             if (phrase == null || phrase.length() < 4 || phrase.length() < longest) continue;
-            if ((" " + lower + " ").contains(" " + phrase + " ") || (" " + lower + " ").contains(" " + phrase + "s ")) {
+            // The plural a person says, including the one that is not an s (#37): the catalogue holds a
+            // plantain LEAF and nobody asks for plantain leafs.
+            String irregular = phrase.endsWith("f") ? phrase.substring(0, phrase.length() - 1) + "ves"
+                             : phrase.endsWith("fe") ? phrase.substring(0, phrase.length() - 2) + "ves"
+                             : phrase.endsWith("s") || phrase.endsWith("sh") || phrase.endsWith("ch") ? phrase + "es" : null;
+            if ((" " + lower + " ").contains(" " + phrase + " ") || (" " + lower + " ").contains(" " + phrase + "s ")
+                || (irregular != null && (" " + lower + " ").contains(" " + irregular + " "))) {
                 if (phrase.length() > longest) { spokenAll.clear(); longest = phrase.length(); }
                 spokenAll.add(word);
             }
@@ -2335,8 +2351,19 @@ public class PhysicalItemService {
         // The drop the Chronicle NAMED, where they named one (#37). Meadow grass yields dry grass, green grass,
         // straw and thatch, and this took whichever sorted first — so asking for thatch got you dry grass, and
         // the four drops the catalogue carefully distinguishes were one drop with three spare names.
+        // ...and failing that, THE DROP THE PLANT IS KNOWN FOR rather than the one that sorts first (#37). A
+        // hazel yields hazelnuts, hazel rods, loose bark, shed BIRCH bark, leaf litter and dry twig, and
+        // `pick the hazel` came back "you gather 2 shed birch bark from the hazel growing here" — birch bark
+        // off a hazel, because birch_bark_shed sorts before hazelnut. A drop that carries the plant's own name
+        // is what the plant is for; after that, food before material; after that, the catalogue's order.
+        String plantWord = floraKey.contains("_") ? floraKey.substring(0, floraKey.indexOf('_')) : floraKey;
         java.util.Map<String,Object> drop = drops.stream()
-            .filter(d -> d.get("item_key").equals(wantedDrop)).findFirst().orElse(drops.get(0));
+            .filter(d -> d.get("item_key").equals(wantedDrop)).findFirst()
+            .or(() -> drops.stream().filter(d -> ((String) d.get("item_key")).startsWith(plantWord)).findFirst())
+            .or(() -> drops.stream().filter(d -> "FOOD".equals(jdbc.queryForObject(
+                    "SELECT category FROM item_definition WHERE item_key=?", String.class, d.get("item_key"))))
+                .findFirst())
+            .orElse(drops.get(0));
         String itemKey = (String) drop.get("item_key");
         int yieldMin = ((Number) drop.get("yield_min")).intValue();
         int yieldMax = ((Number) drop.get("yield_max")).intValue();
@@ -2676,7 +2703,21 @@ public class PhysicalItemService {
         // to the witness line for the second. Washing a bowl is not a failed carving; it is a thing the world does
         // not know how to do.
         if (key != null && sentenceMeantSomethingElse(actionText, key)) key = null;
-        if (key != null) return executeProcess(chronicle, location, key, actionText, at);
+        if (key != null) {
+            String[] ran = executeProcess(chronicle, location, key, actionText, at);
+            // AND WHAT WAS LEARNED BY RUNNING IT (#37/#99), carried back as a third element so the caller can
+            // record it. chronicle_discovery has existed since the beginning and was written in exactly TWO
+            // places — a woven basket and a stone fire pit — out of a hundred and forty intents and five
+            // hundred processes. A keeper who had tanned a hide, fired pottery, knapped a blade and raised a
+            // shelter had, by the world's own record, learned nothing: `what have I discovered` had nothing to
+            // answer from, and the journey summary's discovery count was 0 for every playthrough.
+            //
+            // Appended rather than returned in place, because a dozen tests and two call sites read [0] and [1].
+            return "SUCCEEDED".equals(ran[0]) && ran.length == 2
+                 ? new String[]{ran[0], ran[1], "PROCESS:" + key}
+                 : ran;
+        }
+
         // A deterministic miss. The AI Procedure Interpreter may compose this from existing processes
         // (DR-0021), but that orchestration lives in ChronicleActionService where the AI seam is; here
         // the world simply does not yet know how, and says so.
@@ -5177,6 +5218,70 @@ public class PhysicalItemService {
     }
 
     /** The bill of one named piece of work, from BOTH input tables, against what is within reach (#37). */
+    /**
+     * A thing that does not come on by waiting (#37).
+     *
+     * <p>{@code is the hide ready} is the question a player asks after a kill, and it has an answer the game
+     * had no way to give: a hide does not become leather by being left. It becomes leather by fleshing,
+     * dehairing and tanning, each of which turns on a tool, and the catalogue holds every step of it. The
+     * sentence reached nothing, and {@code how far along is the hide} reached MEASURE — "you pace it out and
+     * reckon by eye", a progress question answered by pacing out the ground.
+     *
+     * <p>So this says the true thing and then the useful thing: nothing is happening to it, and here is what
+     * the next working of it would be. Read from both input tables, because a bill read from one of the two
+     * reads as matter from nothing.
+     *
+     * <p>Returns null when the sentence names no catalogue item, so the caller can fall through rather than
+     * answer about nothing.
+     */
+    @Transactional(readOnly = true)
+    public String[] whatWaitingWillNotDo(UUID chronicle, UUID location, String text) {
+        String[] named = itemNamedIn(text);
+        if (named == null) return null;
+        String word = named[1];
+        java.util.List<String> keys = named[0] != null ? java.util.List.of(named[0])
+            : jdbc.queryForList("SELECT item_key FROM item_definition WHERE lower(display_name)=? " +
+                                "   OR lower(display_name) LIKE ? ORDER BY length(display_name) LIMIT 8",
+                                String.class, singular(word), "% " + singular(word));
+        if (keys.isEmpty()) return null;
+
+        int have = 0;
+        for (String key : keys) have += reachCountAt(chronicle, location, key);
+
+        StringBuilder in = new StringBuilder();
+        for (int i = 0; i < keys.size(); i++) in.append(i == 0 ? "?" : ",?");
+        java.util.List<java.util.Map<String,Object>> next = jdbc.queryForList(
+            "SELECT DISTINCT mp.display_name AS work, COALESCE(o.display_name, mp.output_item_key) AS makes, " +
+            "       COALESCE(mp.tool_class,'') AS tool " +
+            "FROM material_process mp LEFT JOIN item_definition o ON o.item_key=mp.output_item_key " +
+            "WHERE EXISTS (SELECT 1 FROM material_process_input i WHERE i.process_key=mp.process_key " +
+            "                AND i.item_key IN (" + in + ")) " +
+            "   OR EXISTS (SELECT 1 FROM material_process_input_group g WHERE g.process_key=mp.process_key " +
+            "                AND g.item_key IN (" + in + ")) " +
+            "ORDER BY work LIMIT 3",
+            java.util.stream.Stream.concat(keys.stream(), keys.stream()).toArray());
+
+        StringBuilder b = new StringBuilder();
+        if (have == 0) b.append("You have no ").append(word).append(" in reach, so there is none of it to be ready. ");
+        // Said without an article, because the asker's word may be a count noun or not: "a leather is not a
+        // thing that comes on by waiting" is not English, and echoing the player's own word is the rule here.
+        else b.append("Waiting does nothing to ").append(word).append(": nothing happens to it until it is ")
+              .append("worked. You have ").append(have).append(" to hand. ");
+        if (next.isEmpty()) {
+            b.append(have == 0 ? "" : "Nothing in your knowledge works it further; it is as finished as it gets.");
+            return new String[]{"SUCCEEDED", b.toString().trim()};
+        }
+        java.util.List<String> steps = new java.util.ArrayList<>();
+        for (java.util.Map<String,Object> row : next) {
+            String tool = (String) row.get("tool");
+            steps.add(lower((String) row.get("work")) + ", which makes " + lower((String) row.get("makes"))
+                + (tool.isBlank() ? "" : " and turns on " + toolSaid(tool)
+                    + (hasToolOfClass(chronicle, tool) ? " (you are carrying one)" : " (you have none)")));
+        }
+        b.append(steps.size() == 1 ? "The working of it is " : "The workings of it are ").append(joinAnd(steps)).append('.');
+        return new String[]{"SUCCEEDED", b.toString()};
+    }
+
     private String[] judgeNamedWork(UUID chronicle, UUID location, String process) {
         java.util.Map<String,Object> head = jdbc.queryForMap(
             "SELECT display_name, output_item_key, COALESCE(tool_class,'') AS tool_class, " +

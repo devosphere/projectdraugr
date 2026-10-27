@@ -64,7 +64,7 @@ public class AssemblyService {
      */
     private String[] matchWithKeyword(String text) {
         List<String> tied = new ArrayList<>();
-        String v = ActivityClassifier.normalise(text);
+        String v = ActivityClassifier.normalise(asBuildingWords(text));
         String bestKeyword = null; int bestLen = -1;
         for (Map<String, Object> row : jdbc.queryForList(
                 "SELECT assembly_key, keywords FROM assembly_definition WHERE review_state='VERIFIED' ORDER BY assembly_key")) {
@@ -77,6 +77,30 @@ public class AssemblyService {
             }
         }
         return tied.isEmpty() ? null : new String[]{tied.get(0), bestKeyword, String.join(",", tied)};
+    }
+
+    /**
+     * The verbs for beginning a thing, said as the catalogue says them (#37/#99).
+     *
+     * <p>Every assembly's keywords are written with "build", "make", "raise" or "put up", so {@code build a
+     * shelter} reaches the lean-to and {@code start a shelter} and {@code begin a shelter} reached nothing at
+     * all — while {@code start a lean-to} worked, because the lean-to has a Java branch of its own and the
+     * other ninety-nine builds do not. Measured live.
+     *
+     * <p>One rewrite here rather than a hundred keywords in a migration: a beginning verb in front of a thing
+     * is a building verb. The fire keeps its own words — {@code start a fire} is LIGHT_FIRE and the classifier
+     * answers it long before anything reaches this matcher.
+     */
+    private static String asBuildingWords(String text) {
+        if (text == null) return null;
+        String v = text;
+        for (String begin : new String[]{"start building ", "begin building ", "start to build ",
+                                         "get started on ", "set about building ", "set about ",
+                                         "start ", "begin "}) {
+            int at = v.toLowerCase(java.util.Locale.ROOT).indexOf(begin);
+            if (at >= 0) return v.substring(0, at) + "build " + v.substring(at + begin.length());
+        }
+        return v;
     }
 
     /** Every assembly the words fit equally, in catalogue order. One entry means the words named one thing. */
@@ -448,7 +472,11 @@ public class AssemblyService {
                     obj, ts, def.get("construction_kind"), key);
                 jdbc.update("UPDATE assembly_instance SET object_id=? WHERE id=?", obj, instanceId);
             }
-            return new String[]{"SUCCEEDED", (String) def.get("narration")};
+            // THE FINISHED PIECE IS A THING LEARNED (#37/#99), carried back as a third element the same way a
+            // process carries its key. Only on the LAST stage: a keeper has not learned to make a hut by
+            // digging its post holes.
+            return new String[]{"SUCCEEDED", (String) def.get("narration"), "ASSEMBLY:" + key};
+
         }
         jdbc.update("UPDATE assembly_instance SET updated_at=? WHERE id=?", Timestamp.from(at), instanceId);
         return new String[]{"SUCCEEDED", (String) next.get("narration")};
@@ -520,6 +548,171 @@ public class AssemblyService {
         if (p > 0) sb.append(p).append(p == 1 ? " is only poor" : " are only poor");
         sb.append(".");
         return new String[]{"SUCCEEDED", sb.toString()};
+    }
+
+    /**
+     * What you have begun and not finished, and what the next step of it wants (#37).
+     *
+     * <p>{@code assembly_instance} keeps every piece a Chronicle has started, {@code assembly_stage_completion}
+     * keeps which stages are set into it, and {@code assembly_stage} keeps what the next one wants — its tool,
+     * its fire, the span it must cure, and the weather it cannot be worked in. {@code construction_project}
+     * keeps a raising at its percentage. None of it could be asked. Swept on a booted world:
+     *
+     * <pre>
+     *   what am I working on / what is unfinished / what jobs are half done -&gt; nothing at all
+     *   is the shelter finished / what is left to do on the shelter         -&gt; nothing at all
+     *   how far along is the lean-to  -&gt; TAKE_STOCK_OF_CAMP, a list of what is already raised
+     *   how far along is the hide     -&gt; MEASURE, "you pace it out and reckon by eye"
+     *   how is my shelter holding up  -&gt; TAKE_STOCK_OF_GEAR, the clothes on your back
+     * </pre>
+     *
+     * <p>The last three are the worse half: a question about a work in progress answered in the same even voice
+     * with something else entirely.
+     *
+     * <p><b>Every clause here is a clause {@link #advance} refuses on</b> — the flawed prior stage, the cure not
+     * yet run, the named tool, the fire, the weather limit, the stage's own bill of materials — read through the
+     * same helpers, so what a keeper is told is waiting is what would actually stop them. {@link #inspect}
+     * reports the QUALITY of the work already set in; this reports what remains.
+     *
+     * <p>Returns null when the text names no assembly and nothing is under way, so the caller can answer about
+     * a material instead of inventing an answer about nothing.
+     */
+    @Transactional(readOnly = true)
+    public String[] whatRemains(UUID chronicle, UUID location, String text, Instant at,
+                                boolean mayTakeAnyWorkInHand) {
+        String[] hit = matchWithKeyword(text);
+        String key = hit == null ? null : hit[0];
+        UUID instanceId = key != null ? jdbc.query(
+            "SELECT id FROM assembly_instance WHERE chronicle_id=? AND assembly_key=? AND state='IN_PROGRESS' LIMIT 1",
+            rs -> rs.next() ? rs.getObject(1, UUID.class) : null, chronicle, key) : null;
+        // ...AND THE LAST THING WORKED, but only when the sentence named nothing of its own. "what am I working
+        // on" means whatever is nearest finishing; "is the hide ready" names a material, and answering it with
+        // the half-built oven two valleys back would be the same even-voiced wrong answer this reading exists to
+        // end. The caller settles which kind of sentence it is, because the caller holds the catalogue.
+        if (instanceId == null && key == null && mayTakeAnyWorkInHand) instanceId = jdbc.query(
+            "SELECT id FROM assembly_instance WHERE chronicle_id=? AND state='IN_PROGRESS' ORDER BY updated_at DESC LIMIT 1",
+            rs -> rs.next() ? rs.getObject(1, UUID.class) : null, chronicle);
+
+        String raising = mayTakeAnyWorkInHand || key != null ? raisingsHere(location) : "";
+        if (instanceId != null) {
+            String said = stageByStage(chronicle, location, instanceId, at);
+            return new String[]{"SUCCEEDED", raising.isEmpty() ? said : said + " " + raising};
+        }
+        if (key != null) {
+            String name = jdbc.queryForObject(
+                "SELECT display_name FROM assembly_definition WHERE assembly_key=?", String.class, key);
+            String said = "You have begun no " + name.toLowerCase(java.util.Locale.ROOT)
+                + ". Nothing of it stands, so nothing of it is waiting on you.";
+            return new String[]{"SUCCEEDED", raising.isEmpty() ? said : said + " " + raising};
+        }
+        if (!raising.isEmpty()) return new String[]{"SUCCEEDED", raising};
+        return null;
+    }
+
+    /** A raising here that is not finished, read from its own record rather than from a list of what stands. */
+    private String raisingsHere(UUID location) {
+        if (location == null) return "";
+        List<String> said = new ArrayList<>();
+        for (Map<String, Object> row : jdbc.queryForList(
+                "SELECT ck.display_name AS name, cp.progress_percent AS pct, cp.state " +
+                "FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+                "  JOIN construction_kind ck ON ck.project_kind=cp.project_kind " +
+                "WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' " +
+                "  AND cp.state IN ('PLANNED','IN_PROGRESS') ORDER BY cp.progress_percent DESC, ck.display_name",
+                location)) {
+            String name = ((String) row.get("name")).toLowerCase(java.util.Locale.ROOT);
+            int pct = ((Number) row.get("pct")).intValue();
+            said.add("PLANNED".equals(row.get("state"))
+                ? "the " + name + " is planned and not begun"
+                : "the " + name + " stands at " + pct + " in the hundred");
+        }
+        if (said.isEmpty()) return "";
+        return "On this ground: " + String.join("; ", said) + ".";
+    }
+
+    /** How far a begun piece has come, and what the next stage wants of you, in advance's own terms. */
+    private String stageByStage(UUID chronicle, UUID location, UUID instanceId, Instant at) {
+        Map<String, Object> head = jdbc.queryForMap(
+            "SELECT ai.assembly_key, d.display_name FROM assembly_instance ai " +
+            "JOIN assembly_definition d ON d.assembly_key=ai.assembly_key WHERE ai.id=?", instanceId);
+        String key = (String) head.get("assembly_key");
+        String name = ((String) head.get("display_name")).toLowerCase(java.util.Locale.ROOT);
+
+        List<String> done = new ArrayList<>();
+        Map<String, Timestamp> doneAt = new java.util.HashMap<>();
+        Map<String, QualityGrade> doneGrade = new java.util.HashMap<>();
+        for (Map<String, Object> row : jdbc.queryForList(
+                "SELECT c.stage_key, c.completed_at, c.quality_grade FROM assembly_stage_completion c " +
+                "JOIN assembly_stage s ON s.stage_key=c.stage_key WHERE c.instance_id=? ORDER BY s.stage_order",
+                instanceId)) {
+            String stage = (String) row.get("stage_key");
+            done.add(stage);
+            doneAt.put(stage, (Timestamp) row.get("completed_at"));
+            doneGrade.put(stage, QualityGrade.of((String) row.get("quality_grade")));
+        }
+        List<Map<String, Object>> stages = jdbc.queryForList(
+            "SELECT stage_key, name, prerequisite_stage_key, cure_minutes, COALESCE(tool_class,'') AS tool_class, " +
+            "       requires_fire, weather_limit FROM assembly_stage WHERE assembly_key=? ORDER BY stage_order", key);
+
+        StringBuilder b = new StringBuilder("The " + name + " has " + done.size() + " of " + stages.size()
+            + (stages.size() == 1 ? " stage" : " stages") + " set into it.");
+
+        Map<String, Object> next = null;
+        for (Map<String, Object> s : stages) {
+            if (done.contains((String) s.get("stage_key"))) continue;
+            String prereq = (String) s.get("prerequisite_stage_key");
+            if (prereq == null || done.contains(prereq)) { next = s; break; }
+        }
+        if (next == null) return b + " Nothing of it is left to do.";
+
+        String prereqKey = (String) next.get("prerequisite_stage_key");
+        if (prereqKey != null && doneGrade.get(prereqKey) == QualityGrade.DEFECTIVE)
+            return b + " The work before it came out defective, and nothing more can go in until that is"
+                 + " reworked.";
+
+        String stageName = ((String) next.get("name")).toLowerCase(java.util.Locale.ROOT);
+        int cure = ((Number) next.get("cure_minutes")).intValue();
+        if (cure > 0) {
+            Timestamp since = prereqKey == null ? null : doneAt.get(prereqKey);
+            long elapsed = since == null ? Long.MAX_VALUE : (at.toEpochMilli() - since.getTime()) / 60000L;
+            if (elapsed < cure) {
+                long hours = Math.max(1, (cure - elapsed + 59) / 60);
+                return b + " What it wants next is nothing of your hands: the " + stageName + " is still running,"
+                     + " about " + hours + " more hour" + (hours == 1 ? "" : "s") + " before it can be worked.";
+            }
+            return b + " The " + stageName + " has had its time and the work can go on.";
+        }
+
+        b.append(" Next: ").append(stageName).append('.');
+        List<String> wants = new ArrayList<>();
+        String tool = (String) next.get("tool_class");
+        if (!tool.isBlank()) wants.add(toolPhrase(tool)
+            + (hasTool(chronicle, tool) ? " — which you are carrying" : " — which you have not got"));
+        if (Boolean.TRUE.equals(next.get("requires_fire")))
+            wants.add(fireHere(location) ? "heat — and there is a fire burning here" : "heat — and there is no fire here");
+        for (Map<String, Object> r : jdbc.queryForList(
+                "SELECT item_key, quantity FROM assembly_stage_requirement WHERE stage_key=? ORDER BY item_key",
+                next.get("stage_key"))) {
+            String itemKey = (String) r.get("item_key");
+            int quantity = ((Number) r.get("quantity")).intValue();
+            int have = items.reachCountAt(chronicle, location, itemKey);
+            wants.add(quantity + " " + itemKey.replace('_', ' ')
+                + (have >= quantity ? " (you have them)" : have > 0 ? " (you have " + have + ")" : " (you have none)"));
+        }
+        if (!wants.isEmpty()) b.append(" It wants ").append(String.join(", and ", wants)).append('.');
+
+        // AND THE SKY, which advance refuses on and nothing could be asked about beforehand. A keeper who is
+        // told what a stage wants and not that it cannot be laid in this rain learns it by losing the work.
+        String limit = (String) next.get("weather_limit");
+        if (limit != null && location != null) {
+            if ("DRY".equals(limit)) b.append(weather.wetHere(location)
+                ? " It has to go on dry, and it is coming down too hard for it now."
+                : " It has to go on dry, and the weather is holding.");
+            if ("CALM".equals(limit)) b.append(weather.galeHere(location)
+                ? " It cannot be worked in this wind."
+                : " It wants calm air, and the wind is down.");
+        }
+        return b.toString();
     }
 
     /**

@@ -19,6 +19,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -80,7 +81,21 @@ class GatherWhatYouAskedForIntegrationTest {
         }
         ChronicleService.ChronicleSummary summary = chronicles.awaken();
         assertNotNull(summary, "awakening must produce a living Chronicle");
+        setDown(summary.id());
         return summary.id();
+    }
+
+    /**
+     * Every test here gathers into the one shared Chronicle and none puts it down, so once the plantain and hazel
+     * tests joined the class the keeper reached the grass test already full — "you cannot carry any more of what
+     * you find here" — in CI. Each test starts with empty hands; what is worn stays worn.
+     */
+    private void setDown(UUID chronicle) {
+        jdbc.update("UPDATE world_object w SET current_owner_id=NULL, "
+          + " current_location_id=(SELECT k.current_location_id FROM world_object k WHERE k.id=?) "
+          + "WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' "
+          + " AND EXISTS (SELECT 1 FROM item_instance i WHERE i.object_id=w.id) "
+          + " AND NOT EXISTS (SELECT 1 FROM equipment_attachment e WHERE e.item_id=w.id)", chronicle, chronicle);
     }
 
     private UUID where(UUID chronicle) {
@@ -183,5 +198,74 @@ class GatherWhatYouAskedForIntegrationTest {
         assertEquals("STRIP_BARK", actions.resolve("gather willow bark").intent(), "even when the willow is named");
         assertEquals("FELL_TREE", actions.resolve("fell a tree").intent(), "felling is felling");
         assertEquals("EAT", actions.resolve("eat the blackberries").intent(), "eating is not gathering");
+    }
+
+    /**
+     * The name in front of the kind word (#37, V445's measurement).
+     *
+     * <p>The gather vocabulary indexes whole names and HEAD nouns, and where the head noun is a kind word —
+     * plantain HERB, chickweed PLANT, elder SHRUB — the kind word was all that was indexed, so the name itself
+     * reached nothing. Found while measuring the new flora reading, which had just listed six plantain on the
+     * ground the Chronicle stood on:
+     *
+     * <pre>
+     *   pick the plantain  ->  "You gather 5 chickweed from the chickweed plant growing here."
+     * </pre>
+     *
+     * <p>Asked for one plant and given another, in the same even voice as a true answer, with the plant asked
+     * for standing right there. Both halves asserted: the named plant is taken, and the other patch is left
+     * alone.
+     */
+    @Test
+    void theNameInFrontOfTheKindWord() {
+        UUID chronicle = awaken();
+        clearGrowth(chronicle);
+        plant(chronicle, "plantain_herb", 6);
+        plant(chronicle, "chickweed_plant", 4);
+        int plantainBefore = owned(chronicle, "plantain_leaf");
+        int chickweedBefore = owned(chronicle, "chickweed");
+
+        var r = actions.resolve("pick the plantain", UUID.randomUUID());
+        assertEquals("SUCCEEDED", r.outcome(), () -> "the plantain is right here: " + r.perception());
+        assertTrue(owned(chronicle, "plantain_leaf") > plantainBefore,
+            () -> "the plant NAMED must be the plant taken: " + r.perception());
+        assertEquals(chickweedBefore, owned(chronicle, "chickweed"),
+            () -> "and the other patch must be left alone: " + r.perception());
+        assertTrue(r.perception().toLowerCase(java.util.Locale.ROOT).contains("plantain"),
+            () -> "the answer must say what was picked: " + r.perception());
+
+        // AND THE PLURAL A PERSON SAYS, which is not always an s: the catalogue holds a plantain LEAF.
+        plant(chronicle, "plantain_herb", 6);
+        int again = owned(chronicle, "plantain_leaf");
+        var leaves = actions.resolve("gather plantain leaves", UUID.randomUUID());
+        assertEquals("SUCCEEDED", leaves.outcome(), () -> leaves.perception());
+        assertTrue(owned(chronicle, "plantain_leaf") > again,
+            () -> "\"leaves\" is the plural of leaf: " + leaves.perception());
+    }
+
+    /**
+     * A plant gives you what it is known for (#37).
+     *
+     * <p>A hazel yields hazelnuts, hazel rods, loose bark, shed BIRCH bark, leaf litter and dry twig, and the
+     * drop was chosen by {@code ORDER BY item_key LIMIT 1} wherever the sentence named no particular yield —
+     * so {@code pick the hazel} came back "you gather 2 shed birch bark from the hazel growing here". Birch
+     * bark, off a hazel, because birch_bark_shed sorts before hazelnut.
+     *
+     * <p>Held to the catalogue rather than to a sentence: whatever the hazel's drops are, the one taken must
+     * carry the plant's own name.
+     */
+    @Test
+    void aPlantGivesYouWhatItIsKnownFor() {
+        UUID chronicle = awaken();
+        clearGrowth(chronicle);
+        plant(chronicle, "hazel", 4);
+
+        var r = actions.resolve("pick the hazel", UUID.randomUUID());
+        assertEquals("SUCCEEDED", r.outcome(), () -> "a hazel stands here: " + r.perception());
+        String said = r.perception().toLowerCase(java.util.Locale.ROOT);
+        assertTrue(said.contains("hazel"),
+            () -> "what comes off a hazel must be the hazel's own: " + r.perception());
+        assertFalse(said.contains("birch"),
+            () -> "and never the birch bark that happens to sort first: " + r.perception());
     }
 }

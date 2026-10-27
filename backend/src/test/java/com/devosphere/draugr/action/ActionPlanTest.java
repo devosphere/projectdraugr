@@ -103,4 +103,40 @@ class ActionPlanTest {
             assertFalse(ActionPlan.isResumeRequest(no), "means something else and must not be taken: " + no);
         assertFalse(ActionPlan.isResumeRequest(null));
     }
+
+    /**
+     * A sequencing word needs a step in front of it (#37).
+     *
+     * <p>Found live while measuring V442, and the routing unit test for the very same sentence had already
+     * passed — because the unit test calls the classifier and this splitter runs before it. {@code what next for
+     * the hide} was cut into "what" and "for the hide", two fragments that name nothing, so the question came
+     * back "you spend the effort and come back with only the effort" while a reading that answers it exactly sat
+     * one call further on.
+     *
+     * <p>"next" means "and after that" when an instruction stands in front of it and nothing of the kind when a
+     * question word does. Three words is the shortest thing that can be an instruction with an object.
+     */
+    @Test
+    void aSequencingWordNeedsAStepInFrontOfIt() {
+        for (String oneQuestion : new String[]{
+                "what next for the hide",
+                "whats next for the fence",
+                "what next",
+                "how is the work going, then"}) {
+            assertEquals(List.of(oneQuestion), ActionPlan.steps(oneQuestion),
+                "\"" + oneQuestion + "\" is one question, and cutting it leaves fragments that name nothing");
+        }
+
+        // AND THE SPLITTING THAT MATTERS IS UNTOUCHED: a real instruction before the word still ends a step.
+        assertEquals(List.of("cut the withies", "weave the panel"),
+            ActionPlan.steps("cut the withies, next weave the panel"));
+        assertEquals(List.of("gather dry grass", "strike the flint"),
+            ActionPlan.steps("gather dry grass then strike the flint"));
+        // ...and punctuation is never second-guessed, whatever words surround it: a person who writes a full
+        // stop or a line break has ended a step.
+        assertEquals(List.of("what next", "weave the panel"),
+            ActionPlan.steps("what next. weave the panel"));
+        assertEquals(List.of("what next", "weave the panel"),
+            ActionPlan.steps("what next\nweave the panel"));
+    }
 }

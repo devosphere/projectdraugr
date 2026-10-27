@@ -111,6 +111,16 @@ class WhichWayTheGroundLiesIntegrationTest {
         return summary.id();
     }
 
+    /**
+     * Set how often this ground has been walked, making the row if there is none. A bare UPDATE passed locally
+     * and changed nothing in CI, where the Chronicle awoke on ground with no arrival recorded yet — and the
+     * reading said "You have not stood here before today" to a test that thought it had walked it nine times.
+     */
+    private void visited(UUID chronicle, UUID chunk, int times) {
+        jdbc.update("INSERT INTO chronicle_chunk_visit (chronicle_id,chunk_id,visit_count,last_visited_at) VALUES (?,?,?,now()) " +
+                    "ON CONFLICT (chronicle_id,chunk_id) DO UPDATE SET visit_count=EXCLUDED.visit_count", chronicle, chunk, times);
+    }
+
     /** Stand the Chronicle on the first chunk satisfying a predicate over its neighbours, remembering where it was. */
     private Map<String, Object> standOn(UUID chronicle, String having) {
         Map<String, Object> ground = jdbc.query(
@@ -300,5 +310,99 @@ class WhichWayTheGroundLiesIntegrationTest {
                 jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, after),
                 "and it must arrive in the wood, not beside it");
         }
+    }
+
+    /**
+     * The place reading and the travel rule agree (#37, V441).
+     *
+     * <p>Whether a named place can be found again is decided by planTravel and was invisible: a Chronicle
+     * learned that a name had faded by setting out and being told "you cannot call the way to mind clearly
+     * enough to set out", which is a day spent on finding out. JUDGE_PLACE answers it from the same clauses,
+     * and this is what holds the two to each other — if the reading ever says a place is findable while the
+     * journey refuses it, the game is lying in one of them.
+     *
+     * <p>Driven through the world's own record of arrivals rather than through a stubbed flag:
+     * {@code chronicle_chunk_visit.visit_count} is what makes a way routine, and it is what this test moves.
+     */
+    @Test
+    void thePlaceReadingAndTheTravelRuleAgree() {
+        UUID me = awaken();
+        UUID here = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, me);
+        whoMoved = me;
+        stoodAt = here;
+
+        // Name the ground through the real act, so the fixture is the game's own naming.
+        ChronicleActionService.ActionResult named = actions.resolve("call this place Waymark Field");
+        assertEquals("DESIGNATE", named.intent(), () -> "naming must reach the naming: " + named.perception());
+
+        // ---- NOT YET FINDABLE: named, not memorised, no marker, not walked often. Both halves must say so.
+        visited(me, here, 1);
+        jdbc.update("UPDATE chronicle_named_location SET memorized=FALSE WHERE chronicle_id=? AND chunk_id=?", me, here);
+        ChronicleActionService.ActionResult faint = actions.resolve("could I find my way back here");
+        assertEquals("JUDGE_PLACE", faint.intent(), () -> "the question must reach the reading: " + faint.perception());
+        assertTrue(faint.perception().contains("could not call the way back"),
+            () -> "a name with nothing holding it must read as faded: " + faint.perception());
+
+        // ---- WALKED OFTEN ENOUGH TO BE ROUTINE, which is the world's own count and not a flag.
+        visited(me, here, 9);
+        ChronicleActionService.ActionResult known = actions.resolve("could I find my way back here");
+        assertEquals("JUDGE_PLACE", known.intent());
+        assertTrue(known.perception().contains("could make your way back"),
+            () -> "ground walked nine times must read as findable: " + known.perception());
+        assertTrue(known.perception().contains("feet that know the way") || known.perception().contains("by the map"),
+            () -> "and must say what makes it findable: " + known.perception());
+
+        // ---- AND THE JOURNEY AGREES. Standing elsewhere, travelling to the name must not be refused for want
+        // of being able to call the way to mind — the refusal the reading has just promised is not coming.
+        UUID elsewhere = jdbc.queryForObject(
+            "SELECT c.id FROM world_chunk c JOIN world_chunk h ON h.id=? WHERE c.world_id=h.world_id " +
+            "  AND abs(c.grid_x-h.grid_x)+abs(c.grid_y-h.grid_y) BETWEEN 3 AND 6 AND c.biome <> 'OCEAN' LIMIT 1",
+            UUID.class, here);
+        if (elsewhere != null) {
+            jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", elsewhere, me);
+            ChronicleActionService.ActionResult journey = actions.resolve("travel to Waymark Field");
+            assertFalse(journey.perception().contains("cannot call the way to mind"),
+                () -> "the reading said the way was known, and the journey must not say otherwise: " + journey.perception());
+        }
+    }
+
+    /**
+     * The naming question is answered either way (#37).
+     *
+     * <p>The survey opens with the name where there is one — "This is Reedwatch, a place you named and made
+     * your own" — so {@code what is this place called} has been answered for as long as a name existed. On
+     * unnamed ground it opened with the reeds and the weather instead: a scene, and not an answer. Measured
+     * live on a marsh nobody had named, the reply ran the whole country and never said it had no name.
+     *
+     * <p>Both directions, on ground this test chooses for the property it needs: one chunk this Chronicle has
+     * never named, and then the same chunk after naming it through the real act.
+     */
+    @Test
+    void theNamingQuestionIsAnsweredEitherWay() {
+        UUID me = awaken();
+        UUID unnamed = jdbc.queryForObject(
+            "SELECT c.id FROM world_chunk c WHERE c.biome <> 'OCEAN' " +
+            "  AND NOT EXISTS (SELECT 1 FROM chronicle_named_location n WHERE n.chronicle_id=? AND n.chunk_id=c.id) " +
+            "ORDER BY c.grid_y, c.grid_x LIMIT 1", UUID.class, me);
+        assertNotNull(unnamed, "the world must hold ground this Chronicle has not named");
+        whoMoved = me;
+        stoodAt = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, me);
+        jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", unnamed, me);
+
+        ChronicleActionService.ActionResult asked = actions.resolve("what is this place called");
+        assertEquals("OBSERVE", asked.intent(),
+            () -> "the naming question belongs to the survey: " + asked.perception());
+        assertTrue(asked.perception().contains("no name"),
+            () -> "and on unnamed ground it must say there is none: " + asked.perception());
+
+        // AND WITH A NAME IT GIVES THE NAME, which is what the survey has always done — asserted here so the
+        // clause above can never be the whole answer.
+        ChronicleActionService.ActionResult named = actions.resolve("call this place Fenwatch");
+        assertEquals("DESIGNATE", named.intent(), () -> "naming must reach the naming: " + named.perception());
+        ChronicleActionService.ActionResult again = actions.resolve("what did I call this place");
+        assertTrue(again.perception().contains("Fenwatch"),
+            () -> "the survey must open with the name once there is one: " + again.perception());
+        assertFalse(again.perception().contains("no name"),
+            () -> "and must not still be saying there is none: " + again.perception());
     }
 }

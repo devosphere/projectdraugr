@@ -37,6 +37,15 @@ class IntentClassificationRegressionTest {
         com.devosphere.draugr.item.PhysicalItemService items =
             new com.devosphere.draugr.item.PhysicalItemService(null, null, null) {
                 @Override public boolean actionMatchesProcess(String t) { return processMatches; }
+                // THE CATALOGUE RESOLVER, faked the same way and for the same reason (V442). The work-in-hand
+                // rule borrows "how long until" only when the sentence names a thing, which is what tells a
+                // hide becoming leather from the sun going down. Four names are enough to assert both ways.
+                @Override public String[] itemNamedIn(String t) {
+                    String v = t == null ? "" : " " + t.toLowerCase(java.util.Locale.ROOT) + " ";
+                    for (String name : new String[]{"hide", "leather", "basket", "meat"})
+                        if (v.contains(" " + name + " ")) return new String[]{name, name};
+                    return null;
+                }
                 @Override public boolean namesADugMineral(String t) {
                     String v = t == null ? "" : t.toLowerCase(java.util.Locale.ROOT);
                     return v.contains("fire clay") || v.contains("limestone");
@@ -2544,5 +2553,332 @@ class IntentClassificationRegressionTest {
         // And the ACTS keep theirs: asking what a basket takes is not weaving one.
         assertNotEquals("JUDGE_MAKING", classify("weave a basket"));
         assertNotEquals("JUDGE_MAKING", classify("tan the hide"));
+    }
+
+    /**
+     * Asking whether you are dressed for it (#37, V440).
+     *
+     * <p>153 items carry insulation and 131 shed water; the body is charged against both every turn, with a cap
+     * on each and a 1.6x penalty for wearing them wet. None of it could be asked about. Measured on a booted
+     * world: {@code will these clothes keep me warm} and {@code is my cloak keeping the rain off} reached
+     * nothing, and {@code am I dressed for this weather} reached EQUIP — "You have nothing unequipped that can
+     * be worn or wielded", a question answered by an act that found nothing to do.
+     */
+    @Test
+    void askingWhetherYouAreDressedForIt() throws Exception {
+        assertEquals("JUDGE_CLOTHING", classify("will these clothes keep me warm"));
+        assertEquals("JUDGE_CLOTHING", classify("am I dressed for this weather"));
+        assertEquals("JUDGE_CLOTHING", classify("is my cloak keeping the rain off"));
+        assertEquals("JUDGE_CLOTHING", classify("what should I wear"));
+        assertEquals("JUDGE_CLOTHING", classify("will this cloak keep me warm"));
+
+        // AND THE BODY KEEPS WARMTH-AS-FELT AND WETNESS, which this suite had already decided twice — whether
+        // the night is survivable is the body's question, and a soaked cloak is how a body gets wet. My first
+        // cut of this rule took both, and these two assertions are what caught it.
+        assertEquals("SENSE_BODY", classify("will I be warm enough tonight"));
+        assertEquals("SENSE_BODY", classify("are my clothes wet"));
+        assertEquals("SENSE_BODY", classify("is my cloak wet"));
+
+        // THE ACTS AND THE OTHER READINGS KEEP THEIRS. "warm my hands" is the body's, a fire's warmth is the
+        // fire's, and putting a thing on is still an act — this rule sits above the light reading and must not
+        // take either of their sentences.
+        assertEquals("WARM_BODY", classify("warm my hands"));
+        assertEquals("WARM_BODY", classify("I am cold"));
+        assertNotEquals("JUDGE_CLOTHING", classify("warm the water"));
+        assertNotEquals("JUDGE_CLOTHING", classify("put on my boots"));
+        assertNotEquals("JUDGE_CLOTHING", classify("take off my shoes"));
+        assertNotEquals("JUDGE_CLOTHING", classify("is there enough light to work"));
+    }
+
+    /**
+     * Naming a place is not mapping it, and a note is a writing (#37).
+     *
+     * <p>Swept the records chain on a booted world. The naming rule wanted a naming verb and "this place", and
+     * {@code mark this place on my map} has both — so it took the sentence and read the rest as the NAME:
+     *
+     * <pre>
+     *   mark this place on my map  ->  "You fix a name to this place: on my map."
+     * </pre>
+     *
+     * <p>Nobody calls a place "on my map". Two more forms of the same intention reached nothing at all
+     * ({@code add this place to my map}, {@code note this place on the map}), and so did the plainest way of
+     * saying you want something written down ({@code make a note of this place}, {@code note down what I
+     * found}) — while {@code write this down} had always worked.
+     */
+    @Test
+    void namingAPlaceIsNotMappingIt() throws Exception {
+        // Putting a place ON the map is mapping.
+        assertEquals("SKETCH_MAP", classify("mark this place on my map"));
+        assertEquals("SKETCH_MAP", classify("add this place to my map"));
+        assertEquals("SKETCH_MAP", classify("note this place on the map"));
+        assertEquals("SKETCH_MAP", classify("draw a map"), "which always worked");
+
+        // Giving it a name is naming.
+        assertEquals("DESIGNATE", classify("call this place Stonefield"));
+        assertEquals("DESIGNATE", classify("name this place Stonefield"));
+
+        // AND THE MARKER VERBS KEEP THEIRS. The map noun is what the widened rule is gated on, so a trail
+        // marker — which has no map in it — is still MARK's.
+        assertEquals("MARK", classify("mark the trail"));
+        assertEquals("MARK", classify("leave a marker here"));
+
+        // A note is a writing...
+        assertEquals("WRITE", classify("make a note of this place"));
+        assertEquals("WRITE", classify("note down what I found"));
+        assertEquals("WRITE", classify("keep a record of the herd"));
+        assertEquals("WRITE", classify("write this down"), "which always worked");
+
+        // ...but the bare word "note" is also how a person says they have observed something, and that belongs
+        // to the tracking and the looking. This is why the rule is held to the noting PHRASES.
+        assertEquals("TRACK", classify("note the tracks"));
+        assertNotEquals("WRITE", classify("observe the tracks"));
+    }
+
+    /**
+     * Asking what you know of this ground (#37, V441).
+     *
+     * <p>planTravel decides whether a place can be found again — on a map you carry, or marked and memorised,
+     * or walked often enough to be routine, or memorised and visited recently — and chronicle_chunk_visit has
+     * counted every arrival since the table existed. None of it could be asked: {@code what do I know about
+     * this place} reached nothing, so the only way to learn that a name had faded was to try to travel to it
+     * and be told "you cannot call the way to mind", a day's walk later.
+     */
+    @Test
+    void askingWhatYouKnowOfThisGround() throws Exception {
+        assertEquals("JUDGE_PLACE", classify("what do I know about this place"));
+        assertEquals("JUDGE_PLACE", classify("have I been here before"));
+        assertEquals("JUDGE_PLACE", classify("could I find my way back here"));
+        assertEquals("JUDGE_PLACE", classify("do I remember this place"));
+        assertEquals("JUDGE_PLACE", classify("is this place on my map"));
+
+        // THE NAMING QUESTION KEEPS ITS OWN. "what did I call this place" answers with the NAME and has done
+        // since #37's earlier act; this rule sits above it and must not take it.
+        assertEquals("OBSERVE", classify("what did I call this place"));
+        // And one of the forms it claims was never reaching it: "what is this" is a substring of
+        // "what is this place called", and the identify rule holds that substring and sits higher — so a
+        // question about the name of the ground was answered as though an object had been held up to the
+        // light. The clause that was meant to own it had been dead since it was written.
+        assertEquals("OBSERVE", classify("what is this place called"));
+        assertEquals("OBSERVE", classify("whats this place called"));
+        // ...and the identify rule keeps everything else it had.
+        assertEquals("EXAMINE", classify("what is this"));
+        assertEquals("EXAMINE", classify("what is this plant"));
+        assertEquals("EXAMINE", classify("identify this mushroom"));
+
+        // And the acts are untouched: naming is naming, mapping is mapping, and looking round is looking round.
+        assertEquals("DESIGNATE", classify("call this place Stonefield"));
+        assertEquals("SKETCH_MAP", classify("mark this place on my map"));
+        assertEquals("OBSERVE", classify("where am I"));
+    }
+
+    /**
+     * What is waiting on you (#37, V442).
+     *
+     * <p>The stage records have held every unfinished piece since V58 — which stages are set in, what the next
+     * one wants, the span it must cure, the weather it cannot be worked in — and construction_project has held
+     * a raising at its percentage. Swept on a booted world, none of it could be asked, and three sentences got
+     * a confident answer about something else:
+     *
+     * <pre>
+     *   what am I working on / what is unfinished / what jobs are half done -&gt; nothing at all
+     *   how far along is the lean-to  -&gt; TAKE_STOCK_OF_CAMP, a list of what already stands
+     *   how far along is the hide     -&gt; MEASURE, "you pace it out and reckon by eye"
+     *   how is my shelter holding up  -&gt; TAKE_STOCK_OF_GEAR, the clothes on your back
+     * </pre>
+     */
+    @Test
+    void askingWhatIsWaitingOnYou() throws Exception {
+        assertEquals("JUDGE_WORK_IN_HAND", classify("what am I working on"));
+        assertEquals("JUDGE_WORK_IN_HAND", classify("what is unfinished"));
+        assertEquals("JUDGE_WORK_IN_HAND", classify("what jobs are half done"));
+        assertEquals("JUDGE_WORK_IN_HAND", classify("how is the work going"));
+        assertEquals("JUDGE_WORK_IN_HAND", classify("what is left to do on the shelter"));
+        assertEquals("JUDGE_WORK_IN_HAND", classify("how far along is the lean-to"));
+        assertEquals("JUDGE_WORK_IN_HAND", classify("how much more does the fence need"));
+        assertEquals("JUDGE_WORK_IN_HAND", classify("is the shelter finished"));
+        assertEquals("JUDGE_WORK_IN_HAND", classify("is the hide ready"));
+        assertEquals("JUDGE_WORK_IN_HAND", classify("what next for the hide"));
+
+        // THE READINGS THAT ALREADY OWN THEIR SUBJECTS KEEP THEM. This rule sits below every one of these on
+        // purpose, and the boundary is the whole reason it is placed where it is rather than earlier.
+        assertEquals("CHECK_FIRE", classify("is the fire ready"));
+        assertEquals("CHECK_CROP", classify("how is the crop"));
+        assertEquals("TAKE_STOCK_OF_CAMP", classify("take stock of the camp"));
+        assertEquals("INSPECT", classify("check my work"));
+        assertEquals("JUDGE_WATER", classify("is this water safe to drink"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("how is my shirt"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("what am I carrying"));
+
+        // AND THE CROPS IN THE PLURAL, which was the only form of that question that failed: "how is the crop"
+        // was matched as a literal string, so the singular answered and the way a person with a field says it
+        // reached nothing at all.
+        assertEquals("CHECK_CROP", classify("how are the crops"));
+        assertEquals("CHECK_CROP", classify("how are my crops doing"));
+
+        // THE HOURS STAY WITH THE HOURS. "how long until" is the elapsed-time reading's own question; it is
+        // borrowed here only when the sentence names a thing out of the catalogue, which is what tells a hide
+        // becoming leather from the sun going down.
+        assertEquals("JUDGE_WORK_IN_HAND", classify("how long until the hide is leather"));
+        // ...while the hours to dark stay with the sky reading, which has always answered them.
+        assertEquals("READ_THE_SKY", classify("how long until dark"));
+        assertEquals("READ_THE_SKY", classify("how long until nightfall"), "the sky reading holds every name for dark");
+    }
+
+    /**
+     * The hours to dark, by whatever name (#37).
+     *
+     * <p>The sky rule held the exact words "until dark" and the length rule takes any other "how long", so
+     * eight ways of asking one question were answered "you pace it out and reckon by eye" — a question about
+     * the light answered by pacing out the ground. Measured live, all eight at once.
+     *
+     * <p>One of them was mine: {@code how long until first light} reached the work-in-hand reading, because
+     * that rule borrows "how long until" when the sentence names a catalogue thing and this catalogue holds a
+     * rush LIGHT. The sky rule runs before it and now holds the words, which settles it in the right order.
+     */
+    @Test
+    void theHoursToDarkByWhateverName() throws Exception {
+        for (String askedInItsOwnWords : new String[]{
+                "how long until dark", "how long until nightfall", "how long until dusk",
+                "how long until sundown", "how long until sunset", "how long until dawn",
+                "how long until first light", "how long until daylight", "how long until it gets dark"}) {
+            assertEquals("READ_THE_SKY", classify(askedInItsOwnWords), askedInItsOwnWords);
+        }
+
+        // AND THE MEASUREMENTS KEEP THEIRS: a length is still a length, and the days since waking are still
+        // reckoned, which is what the length rule's own comment says it is left with.
+        assertEquals("MEASURE", classify("how long is this plank"));
+        assertEquals("MEASURE", classify("how long have I been here"));
+        // ...and a distance to a thing in the country is the bearing reading's, which answers both at once.
+        assertEquals("WHICH_WAY", classify("how far is the river"));
+    }
+
+    /**
+     * The words a player reaches for first (#37/#99).
+     *
+     * <p>#99's release gate asks that every supported action resolve or fail with a specific observed fact and
+     * that nothing fall through to the generic handler. Swept 97 ordinary sentences across fifteen families on
+     * a booted world: 76 were answered and <b>15 reached nothing</b> — and for five of those the reading they
+     * wanted was already there, reachable only by a different form of words:
+     *
+     * <pre>
+     *   what tracks are here   -&gt; TRACK          |  what has been through here  -&gt; nothing
+     *   how heavy is my pack   -&gt; gear reading   |  how much can I carry         -&gt; nothing
+     *   scout the ridge        -&gt; SCOUT          |  what is over that ridge      -&gt; nothing
+     *   forage around here     -&gt; FORAGE_GROUND  |  gather what is useful        -&gt; nothing
+     *   build a shelter        -&gt; the assembly   |  start a shelter              -&gt; nothing
+     * </pre>
+     *
+     * <p>Each of these is the same reading reached by the words people actually use. The last is a verb rather
+     * than a phrase: every assembly's keywords are written with "build", "make" or "raise", so one rewrite in
+     * the matcher serves all hundred builds instead of a hundred keywords in a migration.
+     */
+    @Test
+    void theWordsAPlayerReachesForFirst() throws Exception {
+        // What came through — the question form of reading the ground.
+        assertEquals("TRACK", classify("what has been through here"));
+        assertEquals("TRACK", classify("what came through here"));
+        assertEquals("TRACK", classify("what tracks are here"), "which already worked");
+
+        // What you can still carry, which the gear reading reports on every answer.
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("how much can I carry"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("can I carry all this"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("am I overloaded"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("how heavy is my pack"), "which already worked");
+
+        // What lies beyond the ridge, asked as a question — and the looking keeps its own.
+        assertEquals("SCOUT", classify("what is over that ridge"));
+        assertEquals("SCOUT", classify("what lies beyond the treeline"));
+        assertEquals("SCOUT", classify("scout the ridge"), "which already worked");
+        assertNotEquals("SCOUT", classify("climb the ridge"), "climbing is not scouting");
+
+        // A forage said without naming what to pick up.
+        assertEquals("FORAGE_GROUND", classify("gather what is useful"));
+        assertEquals("FORAGE_GROUND", classify("see what is lying about"));
+        assertEquals("FORAGE_GROUND", classify("forage around here"), "which already worked");
+
+        // Cooking what you happen to have, which is the sentence of somebody with a pack at a fire.
+        assertEquals("COOK_MEAT", classify("cook what I have"));
+        assertEquals("COOK_MEAT", classify("cook something"));
+        assertEquals("COOK_MEAT", classify("roast the meat"), "which already worked");
+
+        // And what is waiting on you, asked of yourself rather than of the work.
+        assertEquals("JUDGE_WORK_IN_HAND", classify("what should I do next"));
+        assertEquals("JUDGE_WORK_IN_HAND", classify("what is there to do"));
+
+        // THE ACTS THESE SIT BESIDE ARE UNTOUCHED: a drink is a drink, a fire is lit and not built, and
+        // gathering a named thing still gathers that thing.
+        assertEquals("DRINK", classify("drink some water"));
+        assertEquals("LIGHT_FIRE", classify("start a fire"), "a fire is lit, not raised");
+        assertEquals("GATHER_PLANT", classify("pick the berries"), "the plant gather owns the berry picking");
+        assertEquals("GATHER_BRANCHES", classify("gather branches"));
+    }
+
+    /**
+     * Asking what you have worked out for yourself (#37/#99, V444).
+     *
+     * <p>{@code chronicle_discovery} was written in two places out of five hundred processes, so the question
+     * had almost nothing to answer from AND no words to reach it by. Measured live: {@code what have I
+     * discovered}, {@code what do I know how to make} and {@code what can I make} were all misses.
+     */
+    @Test
+    void askingWhatYouHaveWorkedOut() throws Exception {
+        assertEquals("JUDGE_LEARNING", classify("what have I learned"));
+        assertEquals("JUDGE_LEARNING", classify("what have I discovered"));
+        assertEquals("JUDGE_LEARNING", classify("what do I know how to make"));
+        assertEquals("JUDGE_LEARNING", classify("what can I make"));
+        assertEquals("JUDGE_LEARNING", classify("what have I worked out"));
+
+        // AND THE MAKING ITSELF IS UNTOUCHED, which is the boundary that matters: asking what you know how to
+        // make is not asking to make something, and MAKING IS NOT DOING cuts both ways (#37).
+        assertEquals("CRAFT_BASKET", classify("make a basket"));
+        assertEquals("CRAFT_KNIFE", classify("make a knife"));
+        assertEquals("JUDGE_WORK_IN_HAND", classify("what am I working on"));
+    }
+
+    /**
+     * Asking what grows here (#37/#99, V445).
+     *
+     * <p>chunk_flora carries 1,440 rows and flora_definition 102 kinds with their tools, their poisons and
+     * their regrowth; every gathering act reads all of it and the question reached nothing. A keeper could
+     * strip a patch of plantain and never be told what was growing under their feet.
+     */
+    @Test
+    void askingWhatGrowsHere() throws Exception {
+        assertEquals("JUDGE_FLORA", classify("what grows here"));
+        assertEquals("JUDGE_FLORA", classify("what plants are here"));
+        assertEquals("JUDGE_FLORA", classify("what plants grow here"));
+        assertEquals("JUDGE_FLORA", classify("what is growing here"));
+        assertEquals("JUDGE_FLORA", classify("what can I pick here"));
+
+        // AND THE PICKING IS STILL THE PICKING. Nothing is gathered by asking, and asking is not gathering:
+        // both directions, because this rule sits among the gathering verbs.
+        assertEquals("GATHER_PLANT", classify("pick the plantain"));
+        assertEquals("GATHER_PLANT", classify("gather berries"), "the plant gather owns the berries");
+        assertEquals("FORAGE_GROUND", classify("forage around here"));
+        assertEquals("GATHER_PLANT", classify("gather plant fibre"), "and the fibre, when it is said that way");
+    }
+
+    /**
+     * Asking what could be raised here (#37/#99, V446).
+     *
+     * <p>110 verified builds, each with a first stage that declares what it wants, eight of them gated to
+     * particular ground — all read when a keeper NAMES a thing to build, and nothing could ask the question
+     * the other way round. The only way to learn what this ground would take was to guess a name and be
+     * refused, one guess at a time.
+     */
+    @Test
+    void askingWhatCouldBeRaisedHere() throws Exception {
+        assertEquals("JUDGE_RAISING", classify("what can I build here"));
+        assertEquals("JUDGE_RAISING", classify("what could I build here"));
+        assertEquals("JUDGE_RAISING", classify("what can be built here"));
+        assertEquals("JUDGE_RAISING", classify("what could I put up here"));
+
+        // AND EVERY BUILDING VERB STILL BUILDS, which is the boundary: nothing is raised by asking, and asking
+        // is not raising. The rule is held to the question forms for exactly this reason.
+        assertEquals("BUILD_FIRE_PIT", classify("build a fire pit"));
+        assertEquals("WORK_LEAN_TO", classify("build a lean-to"), "the lean-to branch reads \"build\" as working on it");
+        assertEquals("BUILD_FENCE", classify("build a fence"));
+        assertEquals("JUDGE_WORK_IN_HAND", classify("what am I working on"));
+        assertEquals("JUDGE_FLORA", classify("what grows here"));
     }
 }
