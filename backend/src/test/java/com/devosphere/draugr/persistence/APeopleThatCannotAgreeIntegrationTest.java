@@ -107,6 +107,16 @@ class APeopleThatCannotAgreeIntegrationTest {
         // not stop a forager; injury does, which is the rule this leans on rather than working around.
         jdbc.update("UPDATE native_individual SET condition='INJURED' WHERE community_id=? " +
             "AND role IN ('FORAGER','FISHER','HUNTER') AND condition <> 'DEAD'", community);
+        // And someone old enough to hold to the ground. The suite shares one world, and another test's famine or
+        // years can bury this isle's elders before this one runs (CI found voices_to_stay = 0) — so if none is
+        // left, the eldest adult has grown old, by the same 55 years the world's own ageing rule uses.
+        if (jdbc.queryForObject("SELECT COUNT(*) FROM native_individual WHERE community_id=? AND condition<>'DEAD' AND life_stage='ELDER'",
+                Integer.class, community) == 0)
+            jdbc.update("UPDATE native_individual SET life_stage='ELDER', born_on=? WHERE object_id=(" +
+                "SELECT object_id FROM native_individual WHERE community_id=? AND condition<>'DEAD' AND life_stage='ADULT' " +
+                "ORDER BY born_on, object_id LIMIT 1) " +
+                "AND (SELECT COUNT(*) FROM native_individual WHERE community_id=? AND condition<>'DEAD' AND life_stage='ADULT') >= 2",
+                java.sql.Date.valueOf(java.time.LocalDate.ofInstant(day, java.time.ZoneOffset.UTC).minusYears(60)), community, community);
         return community;
     }
 
