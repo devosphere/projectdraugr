@@ -666,6 +666,7 @@ public class ChronicleActionService {
         else if (intent == Intent.JUDGE_PLACE) { String[] r = judgePlace(chronicle); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_CAMP_GROUND) { String[] r = judgeCampGround(chronicle, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_TOOLS) { String[] r = judgeTools(chronicle); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.JUDGE_UNSEEN) { String[] r = judgeUnseen(chronicle, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_WORK_IN_HAND) { String[] r = judgeWorkInHand(chronicle, text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_LEARNING) { String[] r = judgeLearning(chronicle); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_FLORA) { String[] r = judgeFlora(chronicle.location()); outcome = r[0]; perception = r[1]; }
@@ -841,7 +842,12 @@ public class ChronicleActionService {
                 ? "You have nothing to bind it with — no poultice, no roll of bandage, not so much as a length of plant fibre. The blood keeps its own time."
                 : "You go over yourself and find nothing open and nothing bleeding."; } }
         else if (intent == Intent.EDIT_DOCUMENT) { try { reviseDocument(chronicle.id(), actionId, resolvedAt, text); perception="Your marks remain on the physical page."; } catch (IllegalArgumentException | IllegalStateException ignored) { outcome="FAILED"; perception="You handle the page for a while, then set it aside unchanged."; } }
-        else if (intent == Intent.CONFRONT_WILDLIFE) { double spec=SuccessModel.specificity(text,HUNT_SIGNALS); double fam=capability.familiarity(chronicle.id(),"AIM"); int tactic=(int)Math.round(spec*30 + Math.min(0.20,fam*3.0)*100); // The TEXT, so the hunt closes with what the hunter named (#37): "hunt the deer" in a wood that
+        else if (intent == Intent.CONFRONT_WILDLIFE) { double spec=SuccessModel.specificity(text,HUNT_SIGNALS); double fam=capability.familiarity(chronicle.id(),"AIM"); int tactic=(int)Math.round(spec*30 + Math.min(0.20,fam*3.0)*100)
+            // ...AND WHAT KEEPS YOU UNSEEN (#37/#93). The camouflage cloak and the hide screen — whose own
+            // keywords include "stalking screen" — were read by the ambush odds and by nothing else, so the
+            // gear made expressly for closing with an animal did nothing for closing with an animal. It is
+            // the same number the ambush reads, named once in WildlifeEncounterService.unseenBonus.
+            + wildlife.unseenBonus(chronicle.id()); // The TEXT, so the hunt closes with what the hunter named (#37): "hunt the deer" in a wood that
             // also held a boar closed with the boar, because the quarry was picked carnivores-first and the
             // words were never read. The most consequential act in the game, answered about the wrong animal.
             WildlifeEncounterService.EncounterResult result=wildlife.confront(chronicle.id(),chronicle.location(),actionId,resolvedAt,tactic,text); outcome=result.outcome(); perception=result.narration(); wildlife.recordEmissionDrift(chronicle.location(),"PREDATION",40,resolvedAt); }
@@ -2174,6 +2180,54 @@ public class ChronicleActionService {
      * {@code tool_profile} — the shortest key, which in this catalogue is the stone flake and the field stone:
      * both are a morning's work, and that is the useful half of the answer.
      */
+    /**
+     * How unseen you are (#37/#93).
+     *
+     * <p>The ambush odds read a camouflage cloak, a set hide screen and a scent-mask bundle — twelve off for
+     * the outline, eight for the scent — and {@code chronicle.trail_hidden_at} keeps the hours a covered trail
+     * stays covered. None of it could be asked, so gear made expressly for not being seen was invisible in
+     * both senses: a Chronicle who had spent a hide and an evening on a cloak had no way to learn it was doing
+     * anything at all.
+     *
+     * <p><b>In the model's own numbers, and no others.</b> There is no stalking-DISTANCE model in this world —
+     * nothing anywhere converts concealment into paces — so the reading says what the gear is worth against
+     * being noticed and says plainly that it cannot give a distance. A true answer to the near question beats
+     * an invented answer to the exact one, which is the rule the waterskin's fill level set.
+     */
+    private String[] judgeUnseen(ActiveChronicle chronicle, Instant at) {
+        int unseen = wildlife.unseenBonus(chronicle.id());
+        java.util.List<String> wearing = new java.util.ArrayList<>();
+        if (items.hasAtLeast(chronicle.id(), "camouflage_cloak", 1)) wearing.add("the camouflage cloak breaks your outline");
+        else if (items.hasAtLeast(chronicle.id(), "hide_screen", 1)) wearing.add("the hide screen breaks your outline");
+        if (items.hasAtLeast(chronicle.id(), "scent_mask_bundle", 1)) wearing.add("the scent mask covers what your nose-led quarry would follow");
+
+        Integer hoursLeft = jdbc.query(
+            // The window is the hunting service\x27s own figure, asked for rather than repeated: a reading that
+            // keeps its own copy of a number is a second source of truth, and this one would drift the first
+            // time the trail rule changed. My first cut said twelve hours where the rule says four.
+            "SELECT GREATEST(0, ? - FLOOR(EXTRACT(EPOCH FROM (?::timestamptz - c.trail_hidden_at)) / 3600))::int " +
+            "FROM chronicle c WHERE c.id=? AND c.trail_hidden_at IS NOT NULL",
+            rs -> rs.next() ? rs.getInt(1) : null,
+            com.devosphere.draugr.ecology.WildlifeEncounterService.trailStaysHiddenHours(),
+            java.sql.Timestamp.from(at), chronicle.id());
+
+        StringBuilder b = new StringBuilder();
+        if (wearing.isEmpty())
+            b.append("You are carrying nothing that hides you: no cloak to break your outline, no screen, no "
+                   + "scent mask. What sees you, sees you.");
+        else b.append("What hides you: ").append(joinAnd(wearing))
+              .append(wearing.size() == 1 ? ". It takes " : ". Together they take ")
+              .append(unseen).append(" off the odds of anything closing on you unseen.");
+        if (hoursLeft != null && hoursLeft > 0)
+            b.append(" Your trail is covered for about ").append(hoursLeft)
+             .append(hoursLeft == 1 ? " hour more." : " hours more.");
+        // THE LIMIT, SAID OUT LOUD. Nothing in this world turns concealment into paces, and inventing a figure
+        // here would be the catalogue token in prose: a number with nothing behind it.
+        b.append(" How near you could come to a particular animal is not a thing you can reckon in paces —")
+         .append(" it is cover, wind and patience, and you will know when it lifts its head.");
+        return new String[]{"SUCCEEDED", b.toString()};
+    }
+
     private String[] judgeTools(ActiveChronicle chronicle) {
         java.util.List<java.util.Map<String,Object>> classes = jdbc.queryForList(
             "SELECT t.tool_class, " +
@@ -3740,6 +3794,15 @@ public class ChronicleActionService {
                ||value.contains("do i lack")||value.contains("should i make")||value.contains("are missing")
                ||value.contains("would i need")))
             return Intent.JUDGE_TOOLS;
+        // HOW UNSEEN YOU ARE (#37/#93). The ambush odds read a camouflage cloak, a set hide screen and a
+        // scent-mask bundle, and a hidden trail keeps its own hours in chronicle.trail_hidden_at — and a keeper
+        // could not ask any of it. `how close can I get`, `am I hidden` and `will they see me` all reached
+        // nothing, so gear made expressly for not being seen was invisible in both senses.
+        if (value.contains("how close can i get")||value.contains("am i hidden")||value.contains("will they see me")
+            ||value.contains("will it see me")||value.contains("can they see me")||value.contains("am i out of sight")
+            ||value.contains("how well am i hidden")||value.contains("am i well hidden")
+            ||value.contains("can i get close")||value.contains("how near can i get"))
+            return Intent.JUDGE_UNSEEN;
         // What you are carrying and what state it is in (#37, act fifteen). condition_state, use_count and
         // quality_grade have been on every item since the table existed, and the LOAD is computed on every
         // action — and "how heavy is my pack" was answered "you have nothing by that name in hand to weigh".
@@ -5731,7 +5794,7 @@ public class ChronicleActionService {
             || (word(v, "fix") && !v.contains("memory") && !v.contains("mind"));
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, JUDGE_CLOTHING, JUDGE_PLACE, JUDGE_WORK_IN_HAND, JUDGE_LEARNING, JUDGE_FLORA, JUDGE_RAISING, JUDGE_CAMP_GROUND, JUDGE_TOOLS, PARE_HOOVES, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, JUDGE_CLOTHING, JUDGE_PLACE, JUDGE_WORK_IN_HAND, JUDGE_LEARNING, JUDGE_FLORA, JUDGE_RAISING, JUDGE_CAMP_GROUND, JUDGE_TOOLS, JUDGE_UNSEEN, PARE_HOOVES, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;}
         /** The cardinal for a grid offset, for when the WORLD names the direction rather than the player (#37). */
         static Direction of(int dx,int dy){ for(Direction d:values()) if(d.dx==dx&&d.dy==dy) return d; return null; } }    /**     * The structured perception frame — the seam every future Simulation Agent reads

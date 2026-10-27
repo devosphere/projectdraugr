@@ -2930,4 +2930,27 @@ class IntentClassificationRegressionTest {
         assertEquals("CRAFT_KNIFE", classify("make a knife"));
         assertEquals("CRAFT_HATCHET", classify("make a hatchet"));
     }
+
+    /**
+     * Asking how unseen you are (#37/#93, V449).
+     *
+     * <p>The ambush odds have read a camouflage cloak, a hide screen and a scent-mask bundle since #93, and a
+     * brushed-out trail keeps four hours in {@code chronicle.trail_hidden_at}. None of it could be asked, so
+     * gear made expressly for not being seen was invisible in both senses.
+     */
+    @Test
+    void askingHowUnseenYouAre() throws Exception {
+        assertEquals("JUDGE_UNSEEN", classify("am I hidden"));
+        assertEquals("JUDGE_UNSEEN", classify("how close can I get"));
+        assertEquals("JUDGE_UNSEEN", classify("will they see me"));
+        assertEquals("JUDGE_UNSEEN", classify("can I get close"));
+
+        // AND THE ACTS OF HIDING KEEP THEIRS. Asking whether you are hidden is not hiding, and the three acts
+        // that actually hide a Chronicle — going to ground, covering a trail, scouting for danger — are
+        // untouched.
+        assertEquals("SCOUT", classify("look for danger"));
+        assertEquals("HIDE_TRAIL", classify("cover my trail"));
+        assertEquals("DISENGAGE", classify("back away slowly"));
+        assertEquals("TRACK", classify("follow the tracks"));
+    }
 }
