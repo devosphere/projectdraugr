@@ -111,6 +111,16 @@ class WhichWayTheGroundLiesIntegrationTest {
         return summary.id();
     }
 
+    /**
+     * Set how often this ground has been walked, making the row if there is none. A bare UPDATE passed locally
+     * and changed nothing in CI, where the Chronicle awoke on ground with no arrival recorded yet — and the
+     * reading said "You have not stood here before today" to a test that thought it had walked it nine times.
+     */
+    private void visited(UUID chronicle, UUID chunk, int times) {
+        jdbc.update("INSERT INTO chronicle_chunk_visit (chronicle_id,chunk_id,visit_count,last_visited_at) VALUES (?,?,?,now()) " +
+                    "ON CONFLICT (chronicle_id,chunk_id) DO UPDATE SET visit_count=EXCLUDED.visit_count", chronicle, chunk, times);
+    }
+
     /** Stand the Chronicle on the first chunk satisfying a predicate over its neighbours, remembering where it was. */
     private Map<String, Object> standOn(UUID chronicle, String having) {
         Map<String, Object> ground = jdbc.query(
@@ -326,7 +336,7 @@ class WhichWayTheGroundLiesIntegrationTest {
         assertEquals("DESIGNATE", named.intent(), () -> "naming must reach the naming: " + named.perception());
 
         // ---- NOT YET FINDABLE: named, not memorised, no marker, not walked often. Both halves must say so.
-        jdbc.update("UPDATE chronicle_chunk_visit SET visit_count=1 WHERE chronicle_id=? AND chunk_id=?", me, here);
+        visited(me, here, 1);
         jdbc.update("UPDATE chronicle_named_location SET memorized=FALSE WHERE chronicle_id=? AND chunk_id=?", me, here);
         ChronicleActionService.ActionResult faint = actions.resolve("could I find my way back here");
         assertEquals("JUDGE_PLACE", faint.intent(), () -> "the question must reach the reading: " + faint.perception());
@@ -334,7 +344,7 @@ class WhichWayTheGroundLiesIntegrationTest {
             () -> "a name with nothing holding it must read as faded: " + faint.perception());
 
         // ---- WALKED OFTEN ENOUGH TO BE ROUTINE, which is the world's own count and not a flag.
-        jdbc.update("UPDATE chronicle_chunk_visit SET visit_count=9 WHERE chronicle_id=? AND chunk_id=?", me, here);
+        visited(me, here, 9);
         ChronicleActionService.ActionResult known = actions.resolve("could I find my way back here");
         assertEquals("JUDGE_PLACE", known.intent());
         assertTrue(known.perception().contains("could make your way back"),

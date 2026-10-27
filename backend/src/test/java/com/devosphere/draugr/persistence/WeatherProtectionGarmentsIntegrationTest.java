@@ -115,12 +115,16 @@ class WeatherProtectionGarmentsIntegrationTest {
         String warmest = jdbc.queryForObject(
             "SELECT item_key FROM item_definition WHERE insulation_value >= 20 ORDER BY insulation_value DESC LIMIT 1", String.class);
         assertNotNull(warmest, "the catalogue must hold a warm garment for this to assert anything");
-        for (int i = 0; i < 3; i++) wearOutright(chronicle, warmest);
-        int worn = jdbc.queryForObject(
-            "SELECT COALESCE(SUM(d.insulation_value + COALESCE(i.lining_bonus,0)),0) FROM equipment_attachment e " +
-            "JOIN item_instance i ON i.object_id=e.item_id JOIN item_definition d ON d.item_key=i.item_key " +
-            "WHERE e.chronicle_id=?", Integer.class, chronicle);
-        assertTrue(worn >= 80, () -> "the fixture must pass the cap for the cap to be assertable, got " + worn);
+        // One to a place on the body: three wears into TORSO/OUTER left ONE garment on, and CI read 72 against the
+        // 80 cap. So each goes to its own outer place, as many as it takes to pass the cap.
+        int worn = wornWarmth(chronicle);
+        for (String place : OUTER_PLACES) {
+            if (worn >= 80) break;
+            wearOutright(chronicle, warmest, place);
+            worn = wornWarmth(chronicle);
+        }
+        final int wornNow = worn;
+        assertTrue(wornNow >= 80, () -> "the fixture must pass the cap for the cap to be assertable, got " + wornNow);
 
         jdbc.update("UPDATE chronicle_physiology SET wetness_level=0 WHERE chronicle_id=?", chronicle);
         ChronicleActionService.ActionResult dry = actions.resolve("am I dressed for this weather");
@@ -154,30 +158,48 @@ class WeatherProtectionGarmentsIntegrationTest {
     }
 
     /**
-     * Put a garment on outright, by the catalogue's own position for it where there is one.
+     * Put a garment on outright, in A FREE PLACE ON THE BODY.
      *
-     * <p>ONE GARMENT TO A PLACE ON THE BODY, and the Chronicle arrives already dressed. The first cut of this
-     * inserted straight into TORSO/OUTER and passed locally — where every @SpringBootTest skips for want of
-     * Docker — then failed in CI on equipment_attachment's own unique key, because the keeper was already
-     * wearing their arrival shirt there. The suite shares one world and one Chronicle: a fixture has to make
-     * room for what it puts on, and put back what it took off.
+     * <p>Two CI rounds went on this fixture, and both failures were the same mistake seen from different
+     * sides. It first inserted straight into TORSO/OUTER three times over: {@code equipment_attachment} is
+     * unique on (chronicle, position, layer), so the second insert failed on the key — and locally nothing
+     * showed it, because every @SpringBootTest skips here for want of Docker. The repair displaced whatever
+     * was in the slot first, which made all three garments land in the SAME place: only the last one stayed
+     * on, the keeper's arrival shirt had been taken off to make room, and the insulation total came to 72
+     * where the test needs 80 to assert anything about the cap.
+     *
+     * <p>So: find a place that is free and hang it there. The suite shares one Chronicle, who arrives dressed,
+     * and a fixture that wants to ADD insulation must add rather than replace.
      */
-    private void wearOutright(UUID chronicle, String itemKey) {
-        if (displacedFromTorso == null) displacedFromTorso = jdbc.query(
-            "SELECT item_id FROM equipment_attachment WHERE chronicle_id=? AND body_position='TORSO' AND layer='OUTER'",
-            rs -> rs.next() ? rs.getObject(1, UUID.class) : null, chronicle);
-        jdbc.update("DELETE FROM equipment_attachment WHERE chronicle_id=? AND body_position='TORSO' AND layer='OUTER'", chronicle);
+    /** The outer places on the body a fixture may hang a garment, in the order it fills them. */
+    private static final java.util.List<String> OUTER_PLACES = java.util.List.of(
+        "TORSO", "BACK", "SHOULDER_LEFT", "SHOULDER_RIGHT", "LEGS", "ARM_LEFT", "ARM_RIGHT", "NECK");
+
+    /** The insulation the keeper is wearing, counted the way the warmth model counts it. */
+    private int wornWarmth(UUID chronicle) {
+        Integer sum = jdbc.queryForObject(
+            "SELECT COALESCE(SUM(d.insulation_value + COALESCE(i.lining_bonus,0)),0) FROM equipment_attachment e " +
+            "JOIN item_instance i ON i.object_id=e.item_id JOIN item_definition d ON d.item_key=i.item_key " +
+            "WHERE e.chronicle_id=?", Integer.class, chronicle);
+        return sum == null ? 0 : sum;
+    }
+
+    private void wearOutright(UUID chronicle, String itemKey, String place) {
+        Integer taken = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM equipment_attachment WHERE chronicle_id=? AND body_position=? AND layer='OUTER'",
+            Integer.class, chronicle, place);
+        if (taken != null && taken > 0) return;   // somebody is already wearing something there
+
         UUID id = UUID.randomUUID();
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,lifecycle_state,current_owner_id) " +
                     "VALUES (?,'ITEM',(SELECT display_name FROM item_definition WHERE item_key=?),'ACTIVE',?)", id, itemKey, chronicle);
         jdbc.update("INSERT INTO item_instance (object_id,item_key,condition_state) VALUES (?,?,'SOUND')", id, itemKey);
         jdbc.update("INSERT INTO equipment_attachment (item_id,chronicle_id,body_position,layer,attached_at) " +
-                    "VALUES (?,?,'TORSO','OUTER',?)", id, chronicle, Timestamp.from(Instant.now()));
+                    "VALUES (?,?,?,'OUTER',?)", id, chronicle, place, Timestamp.from(Instant.now()));
         woreForTheTest.add(id);
     }
 
-    /** What was on the torso before this test dressed over it, so the next test finds the keeper as it left them. */
-    private UUID displacedFromTorso;
+    /** What this test hung on the keeper, so the next test finds them dressed as they were. */
     private final java.util.List<UUID> woreForTheTest = new java.util.ArrayList<>();
 
     @AfterEach
@@ -185,12 +207,7 @@ class WeatherProtectionGarmentsIntegrationTest {
         for (UUID id : woreForTheTest)
             jdbc.update("DELETE FROM equipment_attachment WHERE item_id=?", id);
         woreForTheTest.clear();
-        if (displacedFromTorso != null) {
-            jdbc.update("INSERT INTO equipment_attachment (item_id,chronicle_id,body_position,layer,attached_at) " +
-                        "SELECT ?, w.current_owner_id, 'TORSO', 'OUTER', ? FROM world_object w WHERE w.id=? " +
-                        "  AND w.current_owner_id IS NOT NULL ON CONFLICT DO NOTHING",
-                        displacedFromTorso, Timestamp.from(Instant.now()), displacedFromTorso);
-            displacedFromTorso = null;
-        }
+        // Nothing is displaced any more: a garment goes to a FREE place or not at all, so there is nothing
+        // to put back. Only what this test hung on the keeper comes off.
     }
 }
