@@ -211,8 +211,14 @@ class TheBeastIsNotAPersonIntegrationTest {
         assertFalse(PersonWords.namesAPerson("carry the manure"), "\"manure\" is not a man");
         assertFalse(PersonWords.namesAPerson("gather the mushrooms"));
 
-        // And a person the WORLD named, which no vocabulary could know in advance.
-        String someone = jdbc.query("SELECT given_name FROM native_individual WHERE given_name IS NOT NULL LIMIT 1",
+        // And a person the WORLD named, which no vocabulary could know in advance. Not a name the world also gives
+        // an animal or a thing ("Wren"): those are refused by design, and an unordered LIMIT 1 can hand us one.
+        String someone = jdbc.query(
+            "SELECT given_name FROM native_individual WHERE given_name IS NOT NULL " +
+            "  AND lower(given_name) NOT IN (SELECT lower(species_key) FROM wildlife_species " +
+            "                                UNION SELECT regexp_replace(lower(species_key), '^.*_', '') FROM wildlife_species " +
+            "                                UNION SELECT replace(lower(item_key), '_', ' ') FROM item_definition) " +
+            "ORDER BY given_name LIMIT 1",
             rs -> rs.next() ? rs.getString(1) : null);
         if (someone != null) {
             assertTrue(conduct.namesSomebodyLiving("tie up " + someone), "a given name from this world names somebody");

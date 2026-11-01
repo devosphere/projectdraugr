@@ -405,4 +405,45 @@ class WhichWayTheGroundLiesIntegrationTest {
         assertFalse(again.perception().contains("no name"),
             () -> "and must not still be saying there is none: " + again.perception());
     }
+
+    /**
+     * The camp reading and the water agree (#37/#99, V447).
+     *
+     * <p>Five records decide whether ground is worth stopping on, every one of them already read by some act,
+     * and the question reached nothing: the only way to learn it was to spend the night. The reading is only
+     * worth having if it says what those acts would do — so this stands the Chronicle on ground the world says
+     * has water, and holds BOTH to it: the reading must name the water, and the drawing of it must not be
+     * refused for want of any.
+     *
+     * <p>Ground chosen by its biome rather than asserted about a fixed chunk, because the world is generated.
+     */
+    @Test
+    void theCampReadingAndTheWaterAgree() {
+        UUID me = awaken();
+        UUID wet = jdbc.query(
+            "SELECT id FROM world_chunk WHERE biome IN ('WETLAND','RIVER_BANK') ORDER BY grid_y, grid_x LIMIT 1",
+            rs -> rs.next() ? rs.getObject(1, UUID.class) : null);
+        Assumptions.assumeTrue(wet != null, "this world generated no wet ground to test against");
+        whoMoved = me;
+        stoodAt = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, me);
+        jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", wet, me);
+
+        ChronicleActionService.ActionResult camp = actions.resolve("is this a good place to camp");
+        assertEquals("JUDGE_CAMP_GROUND", camp.intent(),
+            () -> "the question must reach the reading: " + camp.perception());
+        assertTrue(camp.perception().contains("water within reach"),
+            () -> "on wet ground the reading must name the water: " + camp.perception());
+
+        // ...AND THE DRAWING OF IT AGREES. Whatever else stops a keeper filling a skin here — no vessel, say —
+        // it must not be the absence of water the reading has just reported.
+        ChronicleActionService.ActionResult drawn = actions.resolve("fill the waterskin");
+        assertFalse(drawn.perception().contains("no water here"),
+            () -> "the reading said there was water; the act must not say otherwise: " + drawn.perception());
+        assertFalse(drawn.perception().contains("nothing to drink here"),
+            () -> "nor in other words: " + drawn.perception());
+
+        // A reading alters nothing it touches, which is what its card says and what the migration asserts.
+        assertTrue(auditor.inspect().consistent(),
+            () -> "a reading must leave the world as it was: " + auditor.inspect().violations());
+    }
 }

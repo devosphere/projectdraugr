@@ -455,8 +455,7 @@ public class WildlifeEncounterService {
         // Concealment gear (#93): a camouflage cloak or a set hide screen breaks the outline; a scent-mask bundle
         // hides the smell that a nose-led predator follows. Each lowers the odds of being caught in an ambush,
         // stacking with actively going to ground — carried/worn, so they help even when not deliberately hiding.
-        if (items.hasAtLeast(chronicle,"camouflage_cloak",1) || items.hasAtLeast(chronicle,"hide_screen",1)) chance -= 12;
-        if (items.hasAtLeast(chronicle,"scent_mask_bundle",1)) chance -= 8;
+        chance -= unseenBonus(chronicle);
         // A whistle blown on the move defeats an ambush from the opposite direction to everything else here (#75).
         // A cloak and a scent mask work by hiding you; a whistle works by announcing you, and an ambush needs
         // surprise. Nothing stalks what already knows it is coming — it is the same reason people walking in bear
@@ -845,6 +844,9 @@ public class WildlifeEncounterService {
 
     /** How long brushing out a trail keeps a carcass quiet on the walk home — long enough to get it there. */
     private static final int TRAIL_STAYS_HIDDEN_HOURS = 4;
+
+    /** The same figure, for the reading that tells a keeper how long their trail stays covered (#37). */
+    public static int trailStaysHiddenHours() { return TRAIL_STAYS_HIDDEN_HOURS; }
 
     /** Whether this Chronicle covered their trail recently enough for it still to be covered (#37, V393). */
     @Transactional(readOnly = true)
@@ -2199,4 +2201,22 @@ public class WildlifeEncounterService {
     private record Carcass(UUID id,String species,int meat,boolean hide){}
     public record EncounterResult(String outcome,String narration){}
     public record HarvestResult(String outcome,String narration){}
+    /**
+     * How much of the Chronicle's own gear keeps them unseen, as the one number three things read (#37/#93).
+     *
+     * <p>A camouflage cloak or a set hide screen breaks the outline; a scent-mask bundle hides the smell a
+     * nose-led animal follows. Both were read here, in the ambush odds, and <b>nowhere else</b> — so the
+     * catalogue's own "stalking screen" did nothing whatever for a stalk, and the cloak a Chronicle had spent a
+     * hide and an evening on helped only when something was hunting THEM.
+     *
+     * <p>Now the hunt's tactic reads it too, and so does the reading that answers "am I hidden", which is what
+     * makes the three agree: one number, named here, with the catalogue keys in one place.
+     */
+    public int unseenBonus(UUID chronicle) {
+        int unseen = 0;
+        if (items.hasAtLeast(chronicle, "camouflage_cloak", 1) || items.hasAtLeast(chronicle, "hide_screen", 1)) unseen += 12;
+        if (items.hasAtLeast(chronicle, "scent_mask_bundle", 1)) unseen += 8;
+        return unseen;
+    }
+
 }

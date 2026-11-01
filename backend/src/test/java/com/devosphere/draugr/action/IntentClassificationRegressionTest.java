@@ -2881,4 +2881,76 @@ class IntentClassificationRegressionTest {
         assertEquals("JUDGE_WORK_IN_HAND", classify("what am I working on"));
         assertEquals("JUDGE_FLORA", classify("what grows here"));
     }
+
+    /**
+     * Asking whether this ground is worth stopping on (#37/#99, V447).
+     *
+     * <p>Water, fuel, a roof, the bed and whose country it is — five records, every one of them already read by
+     * some act, and the question reached nothing. The only way to learn whether ground was worth camping on was
+     * to spend the night on it and find out.
+     */
+    @Test
+    void askingWhetherThisGroundIsWorthStoppingOn() throws Exception {
+        assertEquals("JUDGE_CAMP_GROUND", classify("is this a good place to camp"));
+        assertEquals("JUDGE_CAMP_GROUND", classify("is this a good camp"));
+        assertEquals("JUDGE_CAMP_GROUND", classify("is this a good place to sleep"));
+        assertEquals("JUDGE_CAMP_GROUND", classify("should I camp here"));
+        assertEquals("JUDGE_CAMP_GROUND", classify("is this ground good enough to camp on"));
+
+        // AND THE ACTS OF STOPPING KEEP THEIRS. Asking where to lie down is not lying down, and the sleeping,
+        // the resting and the bed-making all still answer their own sentences.
+        assertEquals("SLEEP", classify("sleep until morning"));
+        assertEquals("REST", classify("rest a while"));
+        assertEquals("MAKE_BED", classify("make a bed"));
+        assertEquals("JUDGE_PLACE", classify("what do I know about this place"));
+        assertEquals("JUDGE_FLORA", classify("what grows here"));
+    }
+
+    /**
+     * Asking what tools you still want (#37/#99, V448).
+     *
+     * <p>Three tool classes gate two hundred works and tool_profile says which items satisfy each. The gear
+     * reading answers what a keeper HAS; nothing answered what they LACK, and `what tools do I need` reached
+     * nothing — so the way to find out was one refusal at a time, each costing the walk to the work.
+     */
+    @Test
+    void askingWhatToolsYouStillWant() throws Exception {
+        assertEquals("JUDGE_TOOLS", classify("what tools do I need"));
+        assertEquals("JUDGE_TOOLS", classify("what tools am I missing"));
+        assertEquals("JUDGE_TOOLS", classify("what tool do I need"));
+        assertEquals("JUDGE_TOOLS", classify("what tools should I make"));
+
+        // AND THE GEAR READING KEEPS WHAT IT HAS ALWAYS ANSWERED, which is the boundary this rule is gated for:
+        // what you HAVE is the gear reading's, what you LACK is this one's.
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("what tools do I have"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("check my tools"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("what am I carrying"));
+
+        // ...and making a tool is still making it.
+        assertEquals("CRAFT_KNIFE", classify("make a knife"));
+        assertEquals("CRAFT_HATCHET", classify("make a hatchet"));
+    }
+
+    /**
+     * Asking how unseen you are (#37/#93, V449).
+     *
+     * <p>The ambush odds have read a camouflage cloak, a hide screen and a scent-mask bundle since #93, and a
+     * brushed-out trail keeps four hours in {@code chronicle.trail_hidden_at}. None of it could be asked, so
+     * gear made expressly for not being seen was invisible in both senses.
+     */
+    @Test
+    void askingHowUnseenYouAre() throws Exception {
+        assertEquals("JUDGE_UNSEEN", classify("am I hidden"));
+        assertEquals("JUDGE_UNSEEN", classify("how close can I get"));
+        assertEquals("JUDGE_UNSEEN", classify("will they see me"));
+        assertEquals("JUDGE_UNSEEN", classify("can I get close"));
+
+        // AND THE ACTS OF HIDING KEEP THEIRS. Asking whether you are hidden is not hiding, and the three acts
+        // that actually hide a Chronicle — going to ground, covering a trail, scouting for danger — are
+        // untouched.
+        assertEquals("SCOUT", classify("look for danger"));
+        assertEquals("HIDE_TRAIL", classify("cover my trail"));
+        assertEquals("DISENGAGE", classify("back away slowly"));
+        assertEquals("TRACK", classify("follow the tracks"));
+    }
 }
