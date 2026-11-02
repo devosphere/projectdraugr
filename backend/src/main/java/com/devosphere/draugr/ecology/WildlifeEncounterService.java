@@ -84,8 +84,22 @@ public class WildlifeEncounterService {
      * "hunt something", "kill the animal", "take whatever is here" mean exactly what the old behaviour did, and
      * must keep it.
      */
-    private String speciesNamedIn(String actionText, UUID chunk) {
-        if (actionText == null || actionText.isBlank()) return null;
+    /**
+     * Every species of this world the sentence could be naming — the one said in full, else all those that
+     * answer to its head noun (#37, #99).
+     *
+     * <p>Pulled out of {@link #speciesNamedIn} so that the CLASSIFIER can ask the same question the act asks.
+     * The hunt's gate named eleven animals as literals — deer, boar, wolf, hare, rabbit, fox, elk, aurochs,
+     * bear, goat, bird — against a registry of a hundred and ninety, while this method has read the whole
+     * registry since V408. So the service was ready and the gate was what never let the sentence through:
+     * `hunt the hedgehog`, `hunt the pheasant`, `stalk the lynx` and `spear the beaver` all reached nothing.
+     * One matcher, two readers, is the only way those two cannot drift apart again.
+     *
+     * <p>Whole words only, with the plural. A prefix would make "water buffalo" answer to "water" and a
+     * substring would find "ox" inside "oxbow"; this project has been bitten by the substring four times.
+     */
+    private java.util.List<String> registryNamesIn(String actionText) {
+        if (actionText == null || actionText.isBlank()) return java.util.List.of();
         String v = " " + actionText.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim() + " ";
         String wholeName = null;
         java.util.List<String> byHeadNoun = new java.util.ArrayList<>();
@@ -105,7 +119,29 @@ public class WildlifeEncounterService {
         // A NAME SAID IN FULL ALWAYS BEATS A HEAD NOUN, and that order is the whole of this. Preferring the
         // longest key outright made "hunt the boar" mean THORNHIDE BOAR — a monster — over the wild boar, because
         // both answer to "boar" and the monster's key is longer. A hunter who says "boar" means the pig.
-        if (wholeName != null) return wholeName;
+        return wholeName != null ? java.util.List.of(wholeName) : byHeadNoun;
+    }
+
+    /**
+     * Whether the sentence names an ordinary animal of this world — something a person could actually go after.
+     *
+     * <p>Read by the classifier's hunting gate, so that what the catalogue holds and what a hunting sentence can
+     * reach are the same list. MONSTRUM is excluded deliberately, and not for squeamishness: the monster keys
+     * are where the dangerous head nouns live — {@code cinder_jackal_pack}, {@code locust_swarm},
+     * {@code mire_leech_cluster}, {@code storm_moth_cloud}, {@code giant_hornet_queen} — and letting them into
+     * a gate whose verbs include "throw the" would make <i>"throw the pack down"</i> a hunt.
+     */
+    @Transactional(readOnly = true)
+    public boolean namesWildQuarry(String actionText) {
+        java.util.List<String> named = registryNamesIn(actionText);
+        if (named.isEmpty()) return false;
+        return Boolean.TRUE.equals(jdbc.query(
+            "SELECT EXISTS(SELECT 1 FROM wildlife_species WHERE species_key = ANY(?) AND kingdom_class <> 'MONSTRUM')",
+            rs -> rs.next() ? rs.getBoolean(1) : Boolean.FALSE, (Object) named.toArray(new String[0])));
+    }
+
+    private String speciesNamedIn(String actionText, UUID chunk) {
+        java.util.List<String> byHeadNoun = registryNamesIn(actionText);
         if (byHeadNoun.isEmpty()) return null;
         if (byHeadNoun.size() == 1) return byHeadNoun.get(0);
 
