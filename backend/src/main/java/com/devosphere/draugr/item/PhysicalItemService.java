@@ -2701,11 +2701,18 @@ public class PhysicalItemService {
         // reach settles it when only one of them can be worked; otherwise the Chronicle is asked, by name, and
         // nothing is spent.
         if (resolved.ambiguous()) {
-            java.util.List<String> workable = resolved.tied().stream().filter(k -> inputsInReach(chronicle, location, k)).toList();
-            if (workable.size() == 1) key = workable.get(0);
+            // The guard below runs on the TIE as well, and first. "wall the path" fit both daub a wattle panel and
+            // lay a mortared course once each of them answered to "wall", and the Chronicle was asked which of two
+            // walls they meant — while either one alone would have been refused as a sentence about a path. A
+            // tie is only a question worth asking between pieces of work the words actually asked for.
+            java.util.List<String> meant = resolved.tied().stream().filter(k -> !sentenceMeantSomethingElse(actionText, k)).toList();
+            java.util.List<String> workable = meant.stream().filter(k -> inputsInReach(chronicle, location, k)).toList();
+            if (meant.isEmpty()) key = resolved.tied().get(0);   // refused by the guard below, as one match would be
+            else if (meant.size() == 1) key = meant.get(0);
+            else if (workable.size() == 1) key = workable.get(0);
             else {
-                matcher.recordAmbiguity(actionText, resolved.tied());
-                return new String[]{"FAILED", whichOfThese(workable.isEmpty() ? resolved.tied() : workable, workable.isEmpty())};
+                matcher.recordAmbiguity(actionText, meant);
+                return new String[]{"FAILED", whichOfThese(workable.isEmpty() ? meant : workable, workable.isEmpty())};
             }
         }
         // The words must have asked for WORK, not merely named a thing the world can make (#37).
