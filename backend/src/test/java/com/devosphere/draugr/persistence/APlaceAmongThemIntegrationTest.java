@@ -147,10 +147,15 @@ class APlaceAmongThemIntegrationTest {
         String eatenHere = "SELECT COUNT(*) FROM world_object WHERE destroyed_cause='EATEN_BY_COMMUNITY' "
                          + "AND destroyed_location_id = (SELECT home_chunk_id FROM native_community WHERE id=?)";
         int eaten = jdbc.queryForObject(eatenHere, Integer.class, community);
+        // Counted BEFORE the day, by the rule the store itself uses: the living at home, not anyone away as a
+        // companion. Counted after, an elder who ate and then died of age in the same day's life course was gone
+        // from the count but not from the larder — 9 eaten against 8 — and how old the isle is depends on order.
+        int eatersOnTheIsle = jdbc.queryForObject("SELECT COUNT(*) FROM native_individual n JOIN world_object w ON w.id=n.object_id " +
+            "WHERE n.community_id=? AND n.condition <> 'DEAD' AND w.lifecycle_state='ACTIVE' " +
+            "AND NOT EXISTS (SELECT 1 FROM native_companionship cp WHERE cp.individual_id=n.object_id AND cp.ended_at IS NULL)",
+            Integer.class, community);
         jdbc.update("UPDATE native_community SET last_simulated_at=? WHERE id=?", Timestamp.from(Instant.parse("2031-06-10T00:00:00Z")), community);
         natives.advanceTo(Instant.parse("2031-06-11T00:00:00Z"));
-        int eatersOnTheIsle = jdbc.queryForObject("SELECT COUNT(*) FROM native_individual n JOIN world_object w ON w.id=n.object_id " +
-            "WHERE n.community_id=? AND n.condition <> 'DEAD' AND w.lifecycle_state='ACTIVE'", Integer.class, community);
         int ateToday = jdbc.queryForObject(eatenHere, Integer.class, community) - eaten;
         assertEquals((eatersOnTheIsle + 1) * ration, ateToday, "the isle feeds its member too");
 

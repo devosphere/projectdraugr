@@ -24,6 +24,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -177,5 +178,66 @@ class AShelterHoldsWhatFitsIntegrationTest {
             "a calving shed loses none of them");
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
+
+    /**
+     * A pen rests what is in it (#37/V450).
+     *
+     * <p>Everything about keeping stock read ONE thing — whether a pen stood on the keeper's ground — so the
+     * trade-off a stock-keeper makes twice a day was not the player's to make: a keeper who raised a byre had
+     * their beasts in it always, and one on open grassland had them out always. Measured live,
+     * {@code let the animals out} reached nothing at all.
+     *
+     * <p>This asserts the CONSEQUENCE rather than the prose, which is the only thing that makes the state real:
+     * with a byre standing and a tired beast in it, the overnight rest takes the tiredness off — and with the
+     * same beast turned out to grass, the same pass leaves it exactly as tired as it was. The byre it is not in
+     * does not rest it.
+     */
+    @Test
+    void aPenRestsWhatIsInIt() {
+        if (worldGenesis.current() == null) { worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault()); ecology.seed(); }
+        var active = chronicles.active() != null ? chronicles.active() : chronicles.awaken();
+        assertNotNull(active, "a living Chronicle is needed");
+        UUID chronicle = active.id();
+        UUID chunk = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+        Instant now = Instant.now();
+
+        // This test owns its herd and its byre, and nothing else on the ground is asked about.
+        jdbc.update("UPDATE wildlife_bond SET at_pasture_since=NULL WHERE chronicle_id=?", chronicle);
+        UUID bond = tame(chronicle, chunk, "mountain_goat", now);
+        raise(chunk, "ANIMAL_PEN", now);
+        jdbc.update("UPDATE wildlife_bond SET draft_fatigue=60 WHERE id=?", bond);
+
+        // ---- IN: the pen takes the tiredness off.
+        items.restPennedDraftBeasts(now);
+        int afterPenned = fatigue(bond);
+        assertTrue(afterPenned < 60,
+            () -> "a tired beast in a pen must be rested by it, and was left at " + afterPenned);
+
+        // ---- OUT: the same pass, the same pen, and nothing happens to it.
+        jdbc.update("UPDATE wildlife_bond SET draft_fatigue=60 WHERE id=?", bond);
+        String[] turnedOut = items.turnOutStock(chronicle, chunk, now);
+        assertEquals("SUCCEEDED", turnedOut[0], () -> "the stock must go out: " + turnedOut[1]);
+        assertNotNull(jdbc.queryForObject("SELECT at_pasture_since FROM wildlife_bond WHERE id=?", Timestamp.class, bond),
+            "turning them out must be written down, or nothing else can read it");
+        items.restPennedDraftBeasts(now);
+        assertEquals(60, fatigue(bond),
+            "a beast out at grass stands out all night: the pen it is not in must not rest it");
+
+        // ---- AND BACK IN AGAIN, which is the other half of the choice.
+        String[] broughtIn = items.bringInStock(chronicle, chunk, now);
+        assertEquals("SUCCEEDED", broughtIn[0], () -> "and they must come back in: " + broughtIn[1]);
+        assertNull(jdbc.queryForObject("SELECT at_pasture_since FROM wildlife_bond WHERE id=?", Timestamp.class, bond),
+            "bringing them in must clear the state it set");
+        items.restPennedDraftBeasts(now);
+        assertTrue(fatigue(bond) < 60, "and the pen must rest them again once they are in it");
+
+        assertTrue(auditor.inspect().consistent(),
+            () -> "turning stock out and in alters nothing the Auditor minds: " + auditor.inspect().violations());
+    }
+
+    private int fatigue(UUID bond) {
+        Integer n = jdbc.queryForObject("SELECT draft_fatigue FROM wildlife_bond WHERE id=?", Integer.class, bond);
+        return n == null ? -1 : n;
     }
 }
