@@ -67,5 +67,43 @@ class CategoryIsAHintNotAGateTest {
         ProcessMatcher.Result r = ProcessMatcher.resolve("weave a quiver", "PROCESS", List.of(QUIVER_LIKE, inCategory));
         assertEquals("boil_quiver_glue", r.processKey(),
             "when the guessed category has an answer it keeps it, and the fallback never runs");
+        assertEquals("boil_quiver_glue", ProcessMatcher.resolveForPlay("weave a quiver", "PROCESS",
+            List.of(QUIVER_LIKE, inCategory)).processKey(), "an equally precise phrase elsewhere does not unseat it");
+    }
+
+    /** The PROCESS recipe answers to the bare noun; the CRAFT recipes declare the whole sentence. */
+    private static final ProcessMatcher.Candidate GENERIC_STRING = new ProcessMatcher.Candidate(
+        "twist_bowstring", "PROCESS", List.of("bowstring", "twist"), List.of("string", "bowstring"), "bowstring");
+    private static final ProcessMatcher.Candidate BAST_STRING = new ProcessMatcher.Candidate(
+        "make_bowstring_bast", "CRAFT", List.of("twist a bast bowstring", "bast bowstring"), List.of("bowstring"), "bowstring_bast");
+
+    @Test
+    @DisplayName("a category that answers with less of the sentence yields to the phrase said whole")
+    void theSharperPhraseWins() {
+        // "twist" classifies PROCESS, and the PROCESS recipe answers to "bowstring" — so before this, the bast and
+        // the hemp bowstring both reached the sinew recipe, and a Chronicle holding plant fibre was sent for sinew.
+        assertEquals("twist_bowstring",
+            ProcessMatcher.resolve("twist a bast bowstring", "PROCESS", List.of(GENERIC_STRING, BAST_STRING)).processKey(),
+            "the category alone must be what picks the generic recipe, or this test is not about it");
+        assertEquals("make_bowstring_bast",
+            ProcessMatcher.resolveForPlay("twist a bast bowstring", "PROCESS", List.of(GENERIC_STRING, BAST_STRING)).processKey(),
+            "the recipe that declares the sentence word for word must answer it");
+
+        // The bare noun still reaches the generic recipe: nothing elsewhere says it more precisely.
+        assertEquals("twist_bowstring",
+            ProcessMatcher.resolveForPlay("twist a bowstring", "PROCESS", List.of(GENERIC_STRING, BAST_STRING)).processKey());
+    }
+
+    @Test
+    @DisplayName("a longer keyword about a DIFFERENT word does not unseat the category")
+    void longerIsNotSharper() {
+        // The out-of-category phrase is longer but does not contain the word the category matched on, so it is
+        // not the same request said more precisely — it is a different request, and the hint keeps it.
+        ProcessMatcher.Candidate kiln = new ProcessMatcher.Candidate(
+            "fire_pottery", "PROCESS", List.of("fire"), List.of("pot"), "fired_pot");
+        ProcessMatcher.Candidate shaping = new ProcessMatcher.Candidate(
+            "shape_pot", "CRAFT", List.of("shape the clay pot"), List.of("pot"), "green_pot");
+        assertEquals("fire_pottery",
+            ProcessMatcher.resolveForPlay("fire and shape the clay pot", "PROCESS", List.of(kiln, shaping)).processKey());
     }
 }

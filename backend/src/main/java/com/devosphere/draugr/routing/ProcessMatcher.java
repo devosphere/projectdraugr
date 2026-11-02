@@ -241,7 +241,16 @@ public class ProcessMatcher {
     /** As {@link #matchAndRecord}, keeping the whole result so the play path can see a tie (#38). */
     public Result resolveAndRecord(String actionText, java.util.UUID chronicle) {
         String category = classifier.classify(actionText);
-        List<Candidate> candidates = candidates(chronicle);
+        Result r = resolveForPlay(actionText, category, candidates(chronicle));
+        if (!r.matched()) misses.record(actionText, category, r);
+        return r;
+    }
+
+    /**
+     * The play path's rule, pure: the classified category first, then the rest of the catalogue where the category
+     * answered nothing — or answered with a word the rest of the catalogue says more precisely.
+     */
+    public static Result resolveForPlay(String actionText, String category, List<Candidate> candidates) {
         Result r = resolve(actionText, category, candidates);
 
         // The category is a HINT, not a gate (#37). It is guessed from the verb, and the verb a process is
@@ -262,10 +271,44 @@ public class ProcessMatcher {
         if (!r.matched() && category != null) {
             Result anywhere = resolve(actionText, null, candidates);
             if (anywhere.matched()) r = anywhere;
+        } else if (r.matched() && category != null) {
+            // The hint going first was still a gate in one shape (#37): when its category DID answer, it answered
+            // with whatever word it had, however much less of the sentence that word was. "twist a bast bowstring"
+            // is a keyword of make_bowstring_bast word for word, but "twist" classifies PROCESS, and the PROCESS
+            // recipe twist_bowstring answers to the bare "bowstring" — so the bast and the hemp bowstring both
+            // reached the sinew recipe, and the Chronicle holding plant fibre was told to find sinew.
+            //
+            // So the rest of the catalogue is asked as well, and it wins only where its phrase is the SAME phrase
+            // said more precisely: strictly longer, containing the category's own winning word whole, and settled
+            // without a tie. "twist a bast bowstring" contains "bowstring"; a merely longer keyword about something
+            // else ("fire the pot" against a bare "clay") does not, so every existing answer the category gave on
+            // a different word stands exactly as it did.
+            Result anywhere = resolve(actionText, null, candidates);
+            if (anywhere.matched() && !anywhere.ambiguous() && !anywhere.processKey().equals(r.processKey())) {
+                String v = ActivityClassifier.normalise(actionText);
+                String inCategory = matchedKeyword(v, find(candidates, r.processKey()));
+                String sharper = matchedKeyword(v, find(candidates, anywhere.processKey()));
+                if (inCategory != null && sharper != null && sharper.length() > inCategory.length()
+                    && ActivityClassifier.containsTerm(ActivityClassifier.normalise(sharper), inCategory))
+                    r = anywhere;
+            }
         }
-
-        if (!r.matched()) misses.record(actionText, category, r);
         return r;
+    }
+
+    private static Candidate find(List<Candidate> candidates, String processKey) {
+        for (Candidate c : candidates) if (c.processKey().equals(processKey)) return c;
+        return null;
+    }
+
+    /** The longest of a candidate's keywords the text contains whole — the word it was matched on. */
+    private static String matchedKeyword(String normalised, Candidate c) {
+        if (c == null) return null;
+        String longest = null;
+        for (String kw : c.keywords())
+            if (ActivityClassifier.containsTerm(normalised, kw) && (longest == null || kw.length() > longest.length()))
+                longest = kw;
+        return longest;
     }
 
     /**
