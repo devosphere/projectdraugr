@@ -214,10 +214,32 @@ public class ProcessMatcher {
      *
      * <p>Used by {@code ArchitectRouter}, which is read-only by contract: assessing
      * whether a gap exists is not the same as a player running into one.
+     *
+     * <p>THE SAME RULE AS PLAY, AND IT HAD DRIFTED (#37). This asked {@link #resolve}, while the play path
+     * asks {@link #resolveForPlay} — so the three readers of this method measured a STRICTER rule than the one
+     * that actually runs, and every one of them is written on the understanding that it agrees:
+     *
+     * <ul>
+     *   <li>{@code PhysicalItemService.actionMatchesProcess} says in its own javadoc that it is "the same
+     *       authority runProcess uses, so a yes here means the very next fallback to PROCESS_MATERIAL will
+     *       resolve". It is the negative gate on NINE classifier rules — {@code !actionMatchesProcess(…)} — so
+     *       a "no" it gave wrongly let a Java intent keep a phrase the catalogue advertises and play would
+     *       have routed to the recipe that advertises it.</li>
+     *   <li>{@code PhysicalItemService.actionIsFireProcess} lays the smoke footprint (#219) by asking which
+     *       process this is. Naming a different process than the one that runs is a plume on the wrong act.</li>
+     *   <li>{@code ArchitectRouter} assesses whether a gap exists. A gap play does not have is not a gap.</li>
+     * </ul>
+     *
+     * <p>A reader that measures a different rule than the act is the defect this project keeps finding: the
+     * gate and the act drift apart silently, because each looks right from inside. ONE MATCHER, MANY READERS
+     * is the only arrangement in which they cannot. The direction is safe to reason about as well as to
+     * measure: {@code resolveForPlay} only ever turns a miss into an answer, or an answer into the same phrase
+     * read more precisely, and all nine classifier gates are negative — so this can only hand a sentence TO
+     * the catalogue, never take one away from it.
      */
     @Transactional(readOnly = true)
     public String match(String actionText) {
-        return resolve(actionText, classifier.classify(actionText), candidates()).processKey();
+        return resolveForPlay(actionText, classifier.classify(actionText), candidates()).processKey();
     }
 
     /** The activity category this text classifies to (PROCESS/ACQUIRE/CRAFT/…), or null if the vocabulary
