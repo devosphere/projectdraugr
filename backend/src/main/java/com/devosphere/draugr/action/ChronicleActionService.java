@@ -2998,7 +2998,18 @@ public class ChronicleActionService {
         // smother, stamp out and douse are nothing else's words — so "it" is safe to allow.
         if(value.contains("extinguish")||value.contains("put out the fire")||value.contains("put the fire out")||value.contains("douse")||value.contains("smother the fire")||value.contains("stamp out the fire")||value.contains("quench the fire")||((value.contains("put out")||value.contains("kill"))&&value.contains("fire"))
            ||value.contains("smother it")||value.contains("smother the")||value.contains("stamp it out")||value.contains("kick it out")
-           ||value.contains("put it out")||value.contains("quench it")) return Intent.EXTINGUISH_FIRE;
+           ||value.contains("put it out")||value.contains("quench it")
+           // BLOWING IT OUT is how most people put a small flame out, and it reached nothing (#37): this rule
+           // knew extinguish, put out, douse, smother, stamp and quench, and not the plainest one of all.
+           //
+           // "blow" is the one killing word here that is NOT unambiguous — `blow on the fire` is the opposite
+           // act, breathing a banked fire back up, and LIGHT_FIRE owns it below. So blowing only counts as
+           // killing when the sentence also says OUT, and the bare "it" form is taken as the whole phrase
+           // rather than as blow-plus-out-plus-it, which would have claimed any sentence about blowing dust
+           // off something. "snuff" is nothing else's word and needs no such care.
+           ||value.contains("blow it out")||value.contains("snuff it")
+           ||((value.contains("blow")&&word(value,"out"))||value.contains("snuff"))
+             &&(value.contains("fire")||value.contains("flame")||value.contains("ember")||value.contains("coal"))) return Intent.EXTINGUISH_FIRE;
         // And "bank it for the night" and "damp it down", which are how banking is actually said.
         if((value.contains("bank")||value.contains("cover the coals")||value.contains("cover the embers")||value.contains("preserve the ember")||value.contains("rake the coals"))&&(value.contains("fire")||value.contains("coal")||value.contains("ember"))
            ||value.contains("bank it")||value.contains("bank them")||value.contains("damp it down")||value.contains("damp down the")
@@ -3024,9 +3035,21 @@ public class ChronicleActionService {
         if(value.contains("bow drill")||value.contains("hand drill")||value.contains("fire plough")||value.contains("fire plow")||value.contains("fire saw")||value.contains("fire piston")||value.contains("pyrite")||value.contains("tinder nest")
            ||((value.contains("strike")||value.contains("spark")||value.contains("scrape"))&&(value.contains("flint")||value.contains("steel")||value.contains("stone")))
            ||((value.contains("focus")||value.contains("lens")||value.contains("magnify"))&&(value.contains("sun")||value.contains("tinder")))
-           ||(value.contains("ember")&&(value.contains("carry")||value.contains("transfer")||value.contains("bring")||value.contains("nurse")
-              // Breathing a banked fire back up is how a fire is kept overnight, and it reached nothing (#37).
-              ||value.contains("blow")||value.contains("fan")||value.contains("breathe")||value.contains("coax")))) return Intent.LIGHT_FIRE;
+           ||(value.contains("ember")&&(value.contains("carry")||value.contains("transfer")||value.contains("bring")||value.contains("nurse")))
+           // Breathing a banked fire back up is how a fire is kept overnight, and it reached nothing (#37).
+           //
+           // THE VERBS KNEW ONE NOUN. Both halves above hung off the word "ember", so `fan the embers` and
+           // `blow on the embers` were answered while `fan the fire`, `blow on the fire`, `coax the fire` and
+           // `fan the flame` reached nothing at all — the same act, said the way most people say it. The
+           // breathing verbs belong to the fire however it is named; the CARRYING verbs stay on "ember" above,
+           // because an ember is the thing you pick up and carry and a fire is not.
+           //
+           // Guarded against the OPPOSITE act, which is the one thing these verbs could wrongly claim: blowing
+           // a flame OUT kills it. EXTINGUISH_FIRE stands further up the chain but knows nothing of "blow", so
+           // without this guard `blow out the fire` would have been answered by lighting one.
+           ||((value.contains("blow")||value.contains("fan")||value.contains("breathe")||value.contains("coax"))
+              &&(value.contains("ember")||value.contains("coal")||value.contains("flame")||word(value,"fire"))
+              &&!word(value,"out")&&!value.contains("snuff")&&!value.contains("smother"))) return Intent.LIGHT_FIRE;
         // How the fire IS (#37). fire_state.fuel_minutes is the burning time remaining TO THE MINUTE — light()
         // sets it, feed() adds to it, bank() raises it and its ceiling, the tick counts it down every turn, the
         // body reads it when it decides how fast you lose heat, and the Auditor holds that a fire cannot be
@@ -3440,7 +3463,14 @@ public class ChronicleActionService {
         if(drivingStock(value)) return Intent.MOVE;
         // Two named locals for the welfare gate below, because that gate is already four clauses deep and the
         // last five precedence faults in this file were all one-line conditions.
-        boolean husbandryOnlyAilment = value.contains("lame")||value.contains("limping")||value.contains("limps");
+        // word() because "lame" sits inside FLAME, LAMELLA and LAMELLAR, and this rule only needs the ailment.
+        // Measured: `fan the flame`, `blow on the flame`, `the flame is low` and `how is the flame` were every
+        // one of them answered "You keep no tamed animals, and there is nothing of yours to look over" — a
+        // Chronicle tending their fire was handed a livestock report. So were `lamellar armour` and `lace the
+        // lamellae`, which is how this was found: they are assemble_lamellar_armor's and cut_lamellae's OWN
+        // advertised keywords, and the recipes were unreachable by their own names. The line directly below
+        // already reached for word() because "fit" sits inside PROFIT and OUTFIT; this one had not.
+        boolean husbandryOnlyAilment = word(value,"lame")||word(value,"limping")||word(value,"limps");
         // "is the ox fit" asks after the animal's condition and reached nothing — the welfare words knew "how
         // is", "what state" and "are they well" and not the plainest one a keeper uses. Held OFF any sentence
         // that names draught gear, because "does the harness fit" is a question about the strap and the haulage
