@@ -65,8 +65,22 @@ class IntentClassificationRegressionTest {
                     return com.devosphere.draugr.narration.Words.word(v, "ox")
                         || com.devosphere.draugr.narration.Words.word(v, "oxen");
                 }
-                /** Nothing is kept in a test with no world, so taming never yields its feeding branch here. */
-                @Override public boolean keepsSuchABeast(String t) { return false; }
+                /**
+                 * ONE OX IS KEPT (#37/#99). This stub returned false flat, on the grounds that a test with no
+                 * world keeps nothing - which was true until a keeper could kill their own beast, and now makes
+                 * every slaughter sentence unroutable here while it works in play.
+                 *
+                 * <p>An ox and nothing else, so both directions are asserted: the sentences a keeper says about
+                 * their own animal reach the act, and {@code kill the wolf} - which the hunt's gate names - does
+                 * not. The real method asks the same question of {@code wildlife_bond}.
+                 */
+                @Override public boolean keepsSuchABeast(String t) {
+                    String v = t == null ? "" : t.toLowerCase(java.util.Locale.ROOT);
+                    return com.devosphere.draugr.narration.Words.word(v, "ox")
+                        || com.devosphere.draugr.narration.Words.word(v, "oxen");
+                }
+                /** And so there is a flock for the sentences that name no species, like `cull the herd`. */
+                @Override public boolean keepsAnyStock() { return true; }
                 /**
                  * What the Chronicle is carrying, as a fake pack rather than a database (#37). The real method
                  * asks the recursive containment walk for every item in reach and matches its key and head noun;
@@ -2998,11 +3012,74 @@ class IntentClassificationRegressionTest {
         // AND THE VERBS THESE SIT AMONG KEEP THEIRS. "let" and "put" and "get" belong to half the game, and the
         // rule is gated on the stock words for exactly that reason: a rope is not a herd.
         assertEquals("DROP", classify("put the basket down"));
-        // `feed the goats` is TAME here and FEED_ANIMAL in play: the rule yields the feeding branch once a beast
-        // of that kind is kept, and the stub keeps none. The data decides it, which is #106's own settlement.
+        // The rule yields the feeding branch once a beast of that kind is kept: the data decides it, which
+        // is #106's own settlement. The stub keeps an OX now (V453), and "the stock" names no species, so
+        // this one reaches FEED_ANIMAL through namesAKeptAnimal rather than through the keeper's own flock.
         assertEquals("FEED_ANIMAL", classify("feed the stock"));
         assertEquals("CHECK_STOCK", classify("how are the animals"));
         assertEquals("TEND_ANIMAL", classify("tend the sick goat"));
+    }
+
+    /**
+     * KILLING A BEAST YOU KEEP (#37/#99, V453) - the one thing a keeper of this world could never do.
+     *
+     * <p>Measured live on a keeper standing beside three oxen of their own, before this existed: NINE of
+     * thirteen ordinary sentences reached nothing at all.
+     *
+     * <pre>
+     *   kill the ox           -&gt; UNKNOWN   "You spend the effort and come back with only the effort."
+     *   slaughter the ox      -&gt; UNKNOWN   "It does not come to anything."
+     *   cull the herd         -&gt; UNKNOWN   "You try, and the effort goes into the air."
+     *   kill one of my oxen   -&gt; UNKNOWN
+     *   take the ox for meat  -&gt; UNKNOWN
+     *   put the ox down       -&gt; DROP      "You are not carrying anything by that name."
+     *   kill the goat         -&gt; HUNT      "the animal breaks away through the cover"
+     * </pre>
+     *
+     * <p>That last one is the worst of them: on a species the hunt's gate happens to name, a keeper's own tamed
+     * goat was hunted, and fled from them across their own pen.
+     */
+    @Test
+    void killingABeastYouKeep() throws Exception {
+        assertEquals("SLAUGHTER_STOCK", classify("kill the ox"));
+        assertEquals("SLAUGHTER_STOCK", classify("slaughter the ox"));
+        assertEquals("SLAUGHTER_STOCK", classify("kill one of my oxen"));
+        assertEquals("SLAUGHTER_STOCK", classify("take the ox for meat"));
+        // "put down" is DROP's, and stays DROP's for everything that is not a beast of the keeper's own.
+        assertEquals("SLAUGHTER_STOCK", classify("put the ox down"));
+        assertEquals("DROP", classify("put the basket down"));
+        // AND THE FAMILY WORDS, which name no species. A keeper culling says this and nothing more.
+        assertEquals("SLAUGHTER_STOCK", classify("cull the herd"));
+        assertEquals("SLAUGHTER_STOCK", classify("cull one of the flock"));
+        // AND THE PLURAL, which the key+"s" rule could never hear: 15 of the 215 species in the registry do not
+        // take an s, and the keeper who says "oxen" is by definition the keeper with more than one to cull.
+        assertEquals("SLAUGHTER_STOCK", classify("cull one of the oxen"));
+        assertEquals("SLAUGHTER_STOCK", classify("slaughter the oxen"));
+    }
+
+    /**
+     * AND WHAT THE ACT MUST NOT TAKE, which is the half that makes a new rule safe rather than merely new.
+     *
+     * <p>The verbs are shared with the hunt and always will be; what tells the two apart is whether the animal
+     * is YOURS, which is the data's answer and not the sentence's. The butchering verbs are deliberately left
+     * alone: {@code kill the ox} leaves a carcass and {@code butcher it} then works it, which is the real order
+     * of the work, and claiming both for one act would collapse two steps and break butchering a wild kill.
+     */
+    @Test
+    void whatTheSlaughterMustNotTake() throws Exception {
+        // Not yours: still a hunt. The eleven literals in the hunt's own gate cover this one.
+        assertEquals("CONFRONT_WILDLIFE", classify("kill the wolf"));
+        // Butchering stays with the carcass.
+        assertNotEquals("SLAUGHTER_STOCK", classify("butcher the deer"));
+        assertNotEquals("SLAUGHTER_STOCK", classify("skin the carcass"));
+        // THE SUBSTRING, which this project has been bitten by four times: "the stock" is inside "the stockade".
+        assertEquals("BUILD_FENCE", classify("put up a stockade"));
+        // And the readings and the other stock acts keep every word of theirs.
+        assertEquals("TURN_OUT_STOCK", classify("turn the stock out"));
+        assertEquals("BRING_IN_STOCK", classify("get the stock in"));
+        assertEquals("CHECK_STOCK", classify("how are the animals"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("take stock of my gear"));
+        assertEquals("FEED_ANIMAL", classify("feed the stock"));
     }
 
     /**

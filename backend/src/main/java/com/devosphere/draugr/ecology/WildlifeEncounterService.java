@@ -313,7 +313,6 @@ public class WildlifeEncounterService {
         if("SHELTERING".equals(candidate.behavior())) resistance -= 12;
         int roll = Math.floorMod(action.hashCode(), 100);
         if (capability + roll >= resistance + 40) {
-            UUID carcass=UUID.randomUUID(); int meat=meatFor(candidate.species());
             // The one that comes at you is the one that leads (#121). A social group that is hunting, standing its
             // ground or holding a territory is doing it behind somebody, and killing that animal is not the same as
             // killing one of the others: the group scatters, and a scattered group hunts nothing and raids nobody
@@ -337,10 +336,7 @@ public class WildlifeEncounterService {
                     Timestamp.from(at), candidate.populationId());
             else
                 jdbc.update("UPDATE wildlife_population SET population_count=population_count-1,behavior_state='ALERT' WHERE id=?",candidate.populationId());
-            jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CARCASS',?,?)",carcass,display(candidate.species())+" carcass",chunk);
-            Timestamp ts=Timestamp.from(at);
-            jdbc.update("INSERT INTO wildlife_carcass (object_id,source_population_id,species_key,remaining_meat_units,hide_available,killed_by_action_id,died_at) VALUES (?,?,?,?,true,?,?)",carcass,candidate.populationId(),candidate.species(),meat,action,ts);
-            jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'WILDLIFE_KILLED',jsonb_build_object('species',?,'sourcePopulationId',?::text))",carcass,ts,candidate.species(),candidate.populationId().toString());
+            aCarcassOnTheGround(chunk,candidate.populationId(),candidate.species(),action,at,"WILDLIFE_KILLED");
             return new EncounterResult("SUCCEEDED", ledFromTheFront
                 ? "The struggle ends in the wet earth. The still form remains where it fell, and the others go — not far, and not together. "
                   + "Whatever held them in one shape a moment ago is lying at your feet."
@@ -2308,6 +2304,131 @@ public class WildlifeEncounterService {
      * red deer, reindeer, crocodilian) still gives 4, a MEDIUM one (boar) 3. The change is at the ends — the
      * HUGE animals now give what an animal that size gives, and a vole is no longer worth as much as a moose.
      */
+    /**
+     * Kill a beast you have kept (#37/#99) - the one thing a keeper of this world could never do.
+     *
+     * <p>Measured live before this existed, on a keeper standing beside three oxen of their own: {@code kill
+     * the ox}, {@code slaughter the ox}, {@code cull the herd}, {@code kill one of my oxen}, {@code take the ox
+     * for meat} and {@code butcher the ox} all reached NOTHING, and {@code put the ox down} was read as putting
+     * an object on the ground. On the goats it was worse than nothing: {@code kill the goat} was read as a HUNT
+     * and answered <i>"the animal breaks away through the cover"</i> - the keeper's own tamed goat fleeing from
+     * them across their own pen.
+     *
+     * <p>Ten husbandry passes run over a kept animal every tick. It can be fed, watered, groomed, tended,
+     * treated, worked, bred, turned out to grass and shut in again. What a keeper could not do was take the one
+     * product husbandry exists for. Everything {@code tamed_yield} holds is MILK, an EGG or WOOL - taken off a
+     * living animal, with the animal left standing. No row gives meat, hide, bone, sinew or fat, because those
+     * come only from a death, and nothing in this world killed a kept beast. So every tamable species in the
+     * registry was a dead end for the thing most of them are kept for.
+     *
+     * <p>What it leaves is exactly what a kill leaves, through {@link #aCarcassOnTheGround}, so every word a
+     * player already knows for the next step works on it unchanged. The butchering verbs are deliberately NOT
+     * claimed by this act: {@code kill the ox} leaves a carcass and {@code butcher it} works it, which is the
+     * real order of the work and keeps HARVEST_CARCASS exactly as it was.
+     *
+     * <p>IT REPORTS THE COST AND DOES NOT ARGUE. A keeper who kills their only milking animal is told that the
+     * milk stops, and a keeper who kills a trained draft beast is told the training is gone - and then it is
+     * done, because whether it was worth it is theirs to judge and not this engine's.
+     */
+    @Transactional
+    public EncounterResult slaughterStock(UUID chronicle, UUID chunk, String actionText, UUID action, Instant at) {
+        java.util.List<java.util.Map<String,Object>> kept = jdbc.queryForList(
+            "SELECT wb.id AS bond_id, wb.population_id, wp.species_key, wp.population_count, " +
+            "       wb.draft_conditioning " +
+            "FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id = wb.population_id " +
+            "WHERE wb.chronicle_id = ? AND wb.bond_stage = 'TAMED' AND wb.released_at IS NULL " +
+            "  AND wp.population_count > 0 " +
+            "ORDER BY wp.population_count DESC", chronicle);
+        if (kept.isEmpty())
+            return new EncounterResult("FAILED",
+                "You keep no stock. There is nothing on this ground that is yours to kill.");
+
+        // WHICH ONE. The keeper's own flock is the authority on what they can have meant, which is a short list
+        // and the same question keepsSuchABeast asks on the classifier's side. Whole words with the plural, so
+        // a name cannot be found inside another word. Unnamed, it comes off the largest group, which is what a
+        // keeper culling to a number would do.
+        java.util.Map<String,Object> beast = null;
+        for (java.util.Map<String,Object> candidate : kept)
+            if (PhysicalItemService.saidAsASpeciesName(actionText, (String) candidate.get("species_key"))) {
+                beast = candidate; break;
+            }
+        if (beast == null) beast = kept.get(0);
+
+        String species = (String) beast.get("species_key");
+        UUID population = (UUID) beast.get("population_id");
+        UUID bond = (UUID) beast.get("bond_id");
+        int head = ((Number) beast.get("population_count")).intValue();
+        int trained = beast.get("draft_conditioning") == null ? 0
+            : ((Number) beast.get("draft_conditioning")).intValue();
+
+        // YOU CANNOT BLEED AN OX WITH YOUR HANDS. The hunt has a contest and a weapon behind it; a slaughter has
+        // neither, and what it needs instead is an edge. hasCuttingTool is the same reader the butchering and
+        // the garment work already use, so the one knife a Chronicle owns answers for all three.
+        if (!items.hasCuttingTool(chronicle))
+            return new EncounterResult("FAILED",
+                "You have nothing on you that will cut. A beast this size is not killed with bare hands, and "
+              + "trying would be a long cruelty with no meat at the end of it. Find an edge first.");
+
+        jdbc.update("UPDATE wildlife_population SET population_count = population_count - 1 WHERE id = ?", population);
+        aCarcassOnTheGround(chunk, population, species, action, at, "STOCK_SLAUGHTERED");
+
+        int left = head - 1;
+        // THE KEEPING ENDS WITH THE LAST ONE, and it ends the way V439 established: released_at records when,
+        // and the stage is left alone, because they WERE tamed and that happened. Every other reader of
+        // wildlife_bond filters released_at IS NULL, so this one statement stops all of them at once rather
+        // than leaving a keeper feeding, watering and breeding an animal they have eaten.
+        if (left == 0) jdbc.update("UPDATE wildlife_bond SET released_at = ? WHERE id = ?", Timestamp.from(at), bond);
+
+        // NAMED WITHOUT AN ARTICLE AND WITHOUT A PLURAL, deliberately. "one of your ox" is what the obvious
+        // phrasing produced, and "an ox"/"a goat" needs to know which article a species name takes. Leading
+        // with "The <name>" is correct English for every one of the 215 keys in the registry.
+        StringBuilder b = new StringBuilder();
+        b.append(left == 0 ? "The last " + display(species) + " you kept goes down quickly"
+                           : "You cut one out of the rest. The " + display(species) + " goes down quickly");
+        b.append(", which is the whole of the kindness available. ");
+        b.append(left == 0 ? "That was the last one."
+               : left == 1 ? "One is left."
+               : left + " are left.");
+        if (left == 0) {
+            String yields = jdbc.query(
+                "SELECT string_agg(DISTINCT lower(yield_kind), ' and ') FROM tamed_yield WHERE species_key = ?",
+                rs -> rs.next() ? rs.getString(1) : null, species);
+            if (yields != null) b.append(" No more ").append(yields).append(" comes off it now.");
+            if (trained > 0) b.append(" What you had worked into it is gone with it; the next one begins from nothing.");
+        }
+        b.append(" The carcass is on the ground where it happened, and it is meat from this moment on: "
+               + "nothing about it keeps itself.");
+        return new EncounterResult("SUCCEEDED", b.toString());
+    }
+
+    /**
+     * Lay a carcass on this ground (#37/#99). One place makes every carcass there is.
+     *
+     * <p>Pulled out of the hunt's kill so that a SLAUGHTER leaves exactly what a kill leaves, down to the
+     * object type and the transition. Everything downstream is already built and already reached from
+     * somewhere else — {@code HARVEST_CARCASS} butchers it, V343 gives it sinew, bone and fat as well as meat,
+     * {@code carcass_scent} decides what the blood draws, and the preservation tiers decide how long the meat
+     * keeps. A second copy of these three writes would be a second answer that drifts; this is the same
+     * arrangement {@code registryNamesIn} and {@code namesAKeptAnimal} already use, and for the same reason.
+     *
+     * <p>{@code how} is the only thing the two acts differ by, and it is the record of WHY the animal died:
+     * a kill is WILDLIFE_KILLED, a slaughter is STOCK_SLAUGHTERED. Nothing reads them apart yet; the honest
+     * record is there for whatever does.
+     */
+    private UUID aCarcassOnTheGround(UUID chunk, UUID population, String species, UUID action, Instant at, String how) {
+        UUID carcass = UUID.randomUUID();
+        Timestamp ts = Timestamp.from(at);
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CARCASS',?,?)",
+            carcass, display(species) + " carcass", chunk);
+        jdbc.update("INSERT INTO wildlife_carcass (object_id,source_population_id,species_key,remaining_meat_units," +
+            "hide_available,killed_by_action_id,died_at) VALUES (?,?,?,?,true,?,?)",
+            carcass, population, species, meatFor(species), action, ts);
+        jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) " +
+            "VALUES (?,?,?,jsonb_build_object('species',?,'sourcePopulationId',?::text))",
+            carcass, ts, how, species, population.toString());
+        return carcass;
+    }
+
     private int meatFor(String species) {
         String tier = jdbc.query("SELECT size_tier FROM wildlife_species WHERE species_key=?",
             rs -> rs.next() ? rs.getString(1) : null, species);
