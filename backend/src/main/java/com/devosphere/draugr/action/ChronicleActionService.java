@@ -4899,8 +4899,12 @@ public class ChronicleActionService {
         // EQUIP before any of them could be asked for, so `make a sling` and `knot an arm sling` reached a
         // dressing act instead of their own recipes. Two words wide and three meanings deep: a sling you cast
         // a stone with, an arm sling you bind a wound with, a carrying sling you put a pack on.
+        // ...and it must be asked PRECISELY. Standing aside for actionMatchesProcess was too broad: that
+        // matcher says yes to any sentence naming something a recipe can produce, so `I sling the burden frame
+        // on my back` stopped being an equip and answered about dry branches for a frame just finished. CI
+        // caught it; the local suite could not, because that test is DB-backed and those skip here.
         if(value.contains("sling") && !value.contains("sling stone") && !value.contains("sling pouch")
-           && !items.anAttackWithAWeaponInHand(value) && !items.actionMatchesProcess(value)) return Intent.EQUIP;
+           && !items.anAttackWithAWeaponInHand(value) && !items.asksForOneToBeMade(value,"sling")) return Intent.EQUIP;
         if(!action.contains(":")&&(value.contains("map")||value.contains("chart")||value.contains("cartograph"))&&(value.contains("sketch")||value.contains("draw")||value.contains("make")||value.contains("chart")||value.contains("create")||value.contains("update")||value.contains("plot")||value.contains("survey")||value.contains("map out")
            // ...and the words a person actually uses for putting a place ON the map (#37). Measured: `add this
            // place to my map` and `note this place on the map` reached nothing at all, while `mark this place on

@@ -4667,6 +4667,32 @@ public class PhysicalItemService {
         return false;
     }
 
+    /**
+     * Whether the sentence asks for a thing called {@code word} to be MADE, rather than used or worn (#37).
+     *
+     * <p>CI caught the reason this exists, and it is the second time the same guard has been the wrong one.
+     * The sling rule in the classifier stood aside for {@link #actionMatchesProcess}, and that matcher says
+     * yes to any sentence merely naming something a recipe can produce — so
+     * {@code I sling the burden frame on my back} stopped being an equip and fell through to the burden-frame
+     * recipe, answering <i>"You have not got enough dry branch within reach"</i> about a frame the Chronicle
+     * had just finished lashing. The local suite could never have caught it: that test is a DB-backed
+     * integration test and those skip here.
+     *
+     * <p>So the question is asked precisely instead: a making verb standing in front of the word, or the
+     * whole sentence being a recipe's own name. {@code make a sling}, {@code knot an arm sling} and
+     * {@code twist a carrying sling} are makings; {@code leather sling} and {@code shot sling} are recipes'
+     * names; {@code sling the burden frame on my back} and {@code put on the sling} are neither.
+     */
+    @Transactional(readOnly = true)
+    public boolean asksForOneToBeMade(String actionText, String word) {
+        if (actionText == null) return false;
+        if (isARecipesOwnName(actionText)) return true;
+        String[] said = actionText.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim().split(" ");
+        for (int i = 0; i < said.length; i++)
+            if (said[i].equals(word)) return makingVerbStandsBefore(actionText, i);
+        return false;
+    }
+
     /** Every weapon-and-nothing-else this Chronicle is carrying. Overridden in the suite's DB-free harness. */
     protected java.util.List<String[]> weaponsCarriedForNaming() {
         return jdbc.query(

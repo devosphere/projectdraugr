@@ -2177,6 +2177,13 @@ class IntentClassificationRegressionTest {
         assertEquals("FISH", classify("cast the net"));
         assertEquals("BUILD_FENCE", classify("throw up a fence"));
         assertNotEquals("CONFRONT_WILDLIFE", classify("spin the fire bow"), "the fire drill is not a weapon");
+        // THE ONE CI CAUGHT AND THIS SUITE COULD NOT. "sling" also means equip, and the rule that says so
+        // stood aside for actionMatchesProcess — which says yes to any sentence naming something a recipe can
+        // produce. So this sentence stopped being an equip and answered about dry branches for a burden frame
+        // the Chronicle had just lashed. It lived in a DB-backed integration test, and those skip locally;
+        // asserted here, where it costs nothing, because the defect is in the ROUTING and needs no database.
+        assertEquals("EQUIP", classify("i sling the burden frame on my back"));
+        assertEquals("EQUIP", classify("sling the pack on my back"));
         // A thing being MADE is not a thing being used, even when its name carries one of these words. The
         // guard is the catalogue's own making verbs; with no database here it stands aside, so this case is
         // carried live and by the process stub rather than asserted as a category match.
