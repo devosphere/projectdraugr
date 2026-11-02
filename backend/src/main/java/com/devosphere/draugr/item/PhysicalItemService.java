@@ -4645,6 +4645,50 @@ public class PhysicalItemService {
             actionText.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim());
     }
 
+    /**
+     * A SENTENCE THAT IS A RECIPE'S OWN NAME, AND THAT THE CATALOGUE CAN ANSWER, BELONGS TO THE CATALOGUE (#37).
+     *
+     * <p>Asked at the top of {@code ChronicleActionService.classify}, where it stands the Java intent chain
+     * aside. The chain matches on raw substrings and has no word boundaries, so a hundred and twenty-six
+     * branches written for other sentences were quietly claiming phrases the catalogue advertises. Every one of
+     * these is a keyword of the recipe named beside it, measured through a running stack:
+     *
+     * <pre>
+     * slake the quicklime           -&gt; DRINK               slake_lime_mortar
+     * drop spindle                  -&gt; DROP                make_drop_spindle
+     * recover the iron              -&gt; PICK_UP             reforge_iron_scrap
+     * fix a meal                    -&gt; REPAIR_ITEM         cook_greens
+     * ox yoke                       -&gt; JUDGE_HAULAGE       make_draft_yoke
+     * hone stone / honing kit       -&gt; REPAIR_ITEM         dress_whetstone / assemble_sharpening_kit
+     * make a tracking marker bundle -&gt; TRACK               make_tracking_marker_bundle
+     * water dipper                  -&gt; COLLECT_WATER       carve_water_ladle
+     * covered basket                -&gt; CLOSE_CONTAINER     weave_lidded_basket
+     * take the flesh off            -&gt; UNEQUIP             (off, inside a hide-scraping phrase)
+     * </pre>
+     *
+     * <p><b>AND THE CATALOGUE HAS TO BE ABLE TO KEEP THE PROMISE.</b> This is the half that makes the rule
+     * safe, and it is why the question is asked here as one thing rather than in two places. Eight of the
+     * sixty-six phrases a Java intent claims resolve to NOTHING even with the whole catalogue in play —
+     * {@code dress rubble}, {@code fix the dye}, {@code hang it to dry}, {@code take the flesh off}, and the
+     * bare verbs {@code fix}, {@code dress}, {@code carve}, {@code reinforce}. Standing the Java intent aside
+     * for those would trade a wrong answer for no answer, which is worse: they are a missing subject term, data
+     * work, not a routing defect. So the handoff happens only where a process actually answers.
+     *
+     * <p>That second half also settles the bare verbs with no list of exceptions and no word count. 273 of the
+     * catalogue's 2,337 keywords are a single word; a bare verb names no material, so no process's subject gate
+     * passes and the handoff never fires. {@code fix} stays a repair and {@code dress} stays getting dressed.
+     *
+     * <p>{@link #actionMatchesProcess} is the authority asked, which is the same authority {@code runProcess}
+     * will use a moment later — so a yes here is a promise the next step keeps. An assembly's own name is
+     * covered too without a second rule: {@code classify} returning UNKNOWN falls through to
+     * {@code AssemblyService.advance} BEFORE {@code runProcess}, so {@code build a lime kiln} and
+     * {@code reed screen} reach the same ADVANCE_ASSEMBLY they always did, by the other road.
+     */
+    @Transactional(readOnly = true)
+    public boolean aRecipesOwnNameTheCatalogueCanAnswer(String actionText) {
+        return isARecipesOwnName(actionText) && actionMatchesProcess(actionText);
+    }
+
     /** Every phrase the catalogue advertises, already normalised. Overridden in the suite's DB-free harness. */
     protected java.util.List<String> everyRecipeName() {
         return jdbc.queryForList(
