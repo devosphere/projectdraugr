@@ -7,8 +7,10 @@ import com.devosphere.draugr.simulation.SimulationTickService;
 import com.devosphere.draugr.world.genesis.WorldEcologyGenesisService;
 import com.devosphere.draugr.world.genesis.WorldGenesisService;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -67,27 +69,25 @@ class VenomousWildlifeIntegrationTest {
     @Autowired PersistentStateAuditor auditor;
     @Autowired JdbcTemplate jdbc;
 
-    /**
-     * AN ADDER IS A SUMMER ANIMAL (#161, V312). Snakes brumate from November to February, and wildlife_abroad
-     * leaves a dormant species out of every wild-facing query there is — so from the first of November this test
-     * seated an adder the world then declined to produce, the ambient cast supplied a gray wolf or an elk
-     * instead, and two assertions about venom failed on a sentence about something with no fangs at all.
-     *
-     * <p>The subject here is the bite, not the calendar. June, pinned and put back, so the bite is what is
-     * measured — and the dormancy itself is asserted on purpose in {@code AmbientTamingIntegrationTest}.
-     */
-    private java.sql.Timestamp clockBefore;
+    private Timestamp clockWas;
 
-    @org.junit.jupiter.api.BeforeEach
-    void inTheSeasonOfSnakes() {
-        clockBefore = jdbc.queryForObject("SELECT simulated_at FROM simulation_clock WHERE id=1", java.sql.Timestamp.class);
-        jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1",
-            java.sql.Timestamp.from(java.time.Instant.parse("2031-06-10T08:00:00Z")));
+    /**
+     * June noon, held for the test and put back after. {@code wildlife_abroad} reads the shared world clock's MONTH,
+     * and an adder is a reptile that sleeps from November to February: on a winter clock (the suite's clock follows
+     * the real date, so this began failing on 1 November) the ground holds no adder at all, and the fallback hands
+     * this test an elk, a wolf or an ox instead.
+     */
+    @BeforeEach
+    void pinTheClock() {
+        clockWas = jdbc.queryForObject("SELECT simulated_at FROM simulation_clock WHERE id=1", Timestamp.class);
+        jdbc.update("UPDATE simulation_clock SET simulated_at = TIMESTAMPTZ '2031-06-10T12:00:00Z' WHERE id=1");
+        jdbc.update("UPDATE chronicle_physiology SET last_metabolic_update = (SELECT simulated_at FROM simulation_clock WHERE id=1), " +
+            "hours_without_food=0, hours_without_water=0, sleep_debt_hours=0");
     }
 
-    @org.junit.jupiter.api.AfterEach
-    void restoreClock() {
-        if (clockBefore != null) jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", clockBefore);
+    @AfterEach
+    void putTheClockBack() {
+        if (clockWas != null) jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", clockWas);
     }
 
     private int illness(UUID chronicle) {

@@ -2953,4 +2953,35 @@ class IntentClassificationRegressionTest {
         assertEquals("DISENGAGE", classify("back away slowly"));
         assertEquals("TRACK", classify("follow the tracks"));
     }
+
+    /**
+     * Turning stock out, and bringing them in (#37/V450).
+     *
+     * <p>Everything about keeping stock read ONE thing — whether a pen stood on the keeper's ground — so the
+     * trade-off a stock-keeper makes twice a day was not the player's to make. `let the animals out` reached
+     * nothing at all, which is how the gap was found.
+     */
+    @Test
+    void turningStockOutAndBringingThemIn() throws Exception {
+        assertEquals("TURN_OUT_STOCK", classify("let the animals out"));
+        assertEquals("TURN_OUT_STOCK", classify("turn the stock out"));
+        // ...but a drive that names where they are going is a DRIVE, and has been since #106: the keeper walks
+        // them there. These two rules take the sentence with no destination in it, which is the state change.
+        assertEquals("MOVE", classify("drive the herd out to grass"));
+        assertEquals("MOVE", classify("put the animals out to graze"));
+
+        assertEquals("BRING_IN_STOCK", classify("bring the animals in"));
+        assertEquals("BRING_IN_STOCK", classify("get the stock in"));
+        assertEquals("BRING_IN_STOCK", classify("shut the beasts in"));
+        assertEquals("BRING_IN_STOCK", classify("bring them in for the night"));
+
+        // AND THE VERBS THESE SIT AMONG KEEP THEIRS. "let" and "put" and "get" belong to half the game, and the
+        // rule is gated on the stock words for exactly that reason: a rope is not a herd.
+        assertEquals("DROP", classify("put the basket down"));
+        // `feed the goats` is TAME here and FEED_ANIMAL in play: the rule yields the feeding branch once a beast
+        // of that kind is kept, and the stub keeps none. The data decides it, which is #106's own settlement.
+        assertEquals("FEED_ANIMAL", classify("feed the stock"));
+        assertEquals("CHECK_STOCK", classify("how are the animals"));
+        assertEquals("TEND_ANIMAL", classify("tend the sick goat"));
+    }
 }

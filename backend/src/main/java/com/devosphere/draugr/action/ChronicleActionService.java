@@ -31,6 +31,15 @@ import java.util.regex.Pattern;
 @Service
 public class ChronicleActionService {
     private static final Pattern DURATION = Pattern.compile("\\b(?:for\\s+)?(\\d{1,3})\\s*(minute|min|minutes|mins|hour|hours|hr|hrs)\\b", Pattern.CASE_INSENSITIVE);
+    /**
+     * Setting a thing down with its name between the verb and the particle (#37): "put the basket down", "set
+     * the pot down", "lay the bundle down". The drop rule held the verb and particle adjacent, so the commonest
+     * English word order for it reached nothing at all.
+     */
+    private static final java.util.regex.Pattern SETS_A_THING_DOWN = java.util.regex.Pattern.compile(
+        "\\b(?:put|set|lay)\\b(?:(?!\\b(?:on|in|into|under|over|through)\\b).){1,30}?\\bdown\\b",
+        java.util.regex.Pattern.CASE_INSENSITIVE);
+
     private static final Pattern DOCUMENT_EDIT = Pattern.compile("(?is)^\\s*(append|replace|write)\\s+(?:to\\s+)?(?:document|journal|map)\\s+([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\s*:\\s*(.+)$");
     // Captures the name a chronicle gives a place: "...as the Sleeping Area",
     // "name this Wolf Kingdom", "call this place the Drinking Area".
@@ -667,6 +676,8 @@ public class ChronicleActionService {
         else if (intent == Intent.JUDGE_CAMP_GROUND) { String[] r = judgeCampGround(chronicle, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_TOOLS) { String[] r = judgeTools(chronicle); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_UNSEEN) { String[] r = judgeUnseen(chronicle, resolvedAt); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.TURN_OUT_STOCK) { String[] r = items.turnOutStock(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.BRING_IN_STOCK) { String[] r = items.bringInStock(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_WORK_IN_HAND) { String[] r = judgeWorkInHand(chronicle, text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_LEARNING) { String[] r = judgeLearning(chronicle); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_FLORA) { String[] r = judgeFlora(chronicle.location()); outcome = r[0]; perception = r[1]; }
@@ -2113,6 +2124,29 @@ public class ChronicleActionService {
         return new String[]{"SUCCEEDED", b.toString()};
     }
 
+    /**
+     * Driving the stock out of the pen onto the ground they stand on (#37/V450) — not to anywhere.
+     *
+     * <p>A predicate rather than an inline rule because two places need it: this rule, and the welfare reading
+     * above, which claims any sentence naming a beast and would otherwise answer "shut the beasts in" with a
+     * report on their health. The welfare rule already holds a list of the ACTS that keep their own verbs —
+     * tending, grooming, feeding, milking, shearing, building — and penning is now one of them.
+     */
+    private static boolean turningStockOut(String value) {
+        return (value.contains("let")||value.contains("turn")||value.contains("drive")||value.contains("put"))
+            &&(value.contains("animals out")||value.contains("stock out")||value.contains("herd out")
+               ||value.contains("beasts out")||value.contains("them out"));
+    }
+
+    /** Gathering them off the grass and shutting them in, which is the other half of the same choice. */
+    private static boolean shuttingStockIn(String value) {
+        return (value.contains("bring")||value.contains("gather")||value.contains("get")||value.contains("shut")
+                ||value.contains("drive")||value.contains("pen"))
+            &&(value.contains("animals in")||value.contains("stock in")||value.contains("herd in")
+               ||value.contains("beasts in")||value.contains("them in for the night")
+               ||value.contains("animals up for the night")||value.contains("them off the grass"));
+    }
+
     private boolean asksWhatRemainsOfTheWork(String value) {
         return value.contains("what am i working on")||value.contains("what was i working on")
             ||value.contains("what is unfinished")||value.contains("whats unfinished")
@@ -3313,6 +3347,10 @@ public class ChronicleActionService {
            // The acts keep their own verbs. Asking after a beast is not tending, grooming, feeding or milking one.
            &&!value.contains("tend")&&!value.contains("treat")&&!value.contains("groom")&&!value.contains("curry")
            &&!value.contains("feed the")&&!word(value,"milk")&&!value.contains("shear")
+           // ...and TURNING THEM OUT or SHUTTING THEM IN, which became acts in V450. Without this,
+           // "shut the beasts in" was answered with a report on their health — a question the keeper did not
+           // ask, in place of the act they did.
+           &&!turningStockOut(value)&&!shuttingStockIn(value)
            // ...and BUILDING something is the assembly matcher's, never a question about the stock. A sick
            // animal shelter is a thing a keeper raises, and "sick" plus "animal" is all this rule needed to
            // steal all three of its own keywords — which noJavaIntentShadowsAnAssemblysOwnKeywords caught.
@@ -3803,6 +3841,19 @@ public class ChronicleActionService {
             ||value.contains("how well am i hidden")||value.contains("am i well hidden")
             ||value.contains("can i get close")||value.contains("how near can i get"))
             return Intent.JUDGE_UNSEEN;
+        // TURNING STOCK OUT, AND SHUTTING THEM IN (#37/V450). Everything about keeping stock read ONE thing —
+        // whether a pen stood on the keeper's ground — so the trade-off a stock-keeper makes twice a day was
+        // not the player's to make: a keeper who raised a byre had their beasts in it always, and one on open
+        // grassland had them out always. `let the animals out` reached nothing at all.
+        //
+        // PLACED BELOW THE DRIVE, which already owns a destination. "take the stock to water", "turn the sheep
+        // out to pasture" and "put the animals out to graze" are a DRIVE — the keeper walking them somewhere —
+        // and takingTheStockToWaterOrGrass has held them to MOVE since #106. Hoisting these two rules above it
+        // took `drive the herd out to grass` off the drive, which is a worse answer than the gap was: the herd
+        // never went anywhere. What is left for these rules is the sentence with no destination in it, which is
+        // exactly the state change: out on this ground, or in behind the wall on it.
+        if (turningStockOut(value)) return Intent.TURN_OUT_STOCK;
+        if (shuttingStockIn(value)) return Intent.BRING_IN_STOCK;
         // What you are carrying and what state it is in (#37, act fifteen). condition_state, use_count and
         // quality_grade have been on every item since the table existed, and the LOAD is computed on every
         // action — and "how heavy is my pack" was answered "you have nothing by that name in hand to weigh".
@@ -4635,7 +4686,12 @@ public class ChronicleActionService {
              )) return Intent.DESIGNATE;
         // DROP / place (#67): set an object down on the ground here. STORE (into a container) and the trap/
         // marker verbs are already claimed above, so a bare place/lay/set-down here is a plain drop.
-        if(value.contains("drop")||value.contains("leave behind")||value.contains("set down")||value.contains("put down")||value.contains("discard")||value.contains("lay down")||value.contains("lay it down")||value.contains("lay them down")||((value.contains("place")||value.contains("set")||value.contains("put")||value.contains("lay")||value.contains("leave"))&&(value.contains("on the ground")||value.contains("down here")||value.contains(" aside")))) return Intent.DROP;
+        // SAID WITH THE THING IN THE MIDDLE (#37). This rule wants the verb and the particle together —
+        // "put down", "set down", "lay down" — and nobody holding a basket says it that way: `put the basket
+        // down` reached NOTHING at all, while `put down the basket` worked. Found by asserting it as a
+        // boundary for something else, which is how most of these turn up.
+        if(SETS_A_THING_DOWN.matcher(value).find()) return Intent.DROP;
+                if(value.contains("drop")||value.contains("leave behind")||value.contains("set down")||value.contains("put down")||value.contains("discard")||value.contains("lay down")||value.contains("lay it down")||value.contains("lay them down")||((value.contains("place")||value.contains("set")||value.contains("put")||value.contains("lay")||value.contains("leave"))&&(value.contains("on the ground")||value.contains("down here")||value.contains(" aside")))) return Intent.DROP;
         if(value.contains("unequip")||value.contains("take off")||value.contains("remove my")||value.contains("remove the")||value.contains("doff")) return Intent.UNEQUIP;
         // Treating a hurt where the sentence names the PART rather than the hurt (#37, act fourteen). The
         // treatment rule knew bind, bandage, dress, clean, tend, treat, see to and wash — against wound, injury,
@@ -5794,7 +5850,7 @@ public class ChronicleActionService {
             || (word(v, "fix") && !v.contains("memory") && !v.contains("mind"));
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, JUDGE_CLOTHING, JUDGE_PLACE, JUDGE_WORK_IN_HAND, JUDGE_LEARNING, JUDGE_FLORA, JUDGE_RAISING, JUDGE_CAMP_GROUND, JUDGE_TOOLS, JUDGE_UNSEEN, PARE_HOOVES, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, JUDGE_CLOTHING, JUDGE_PLACE, JUDGE_WORK_IN_HAND, JUDGE_LEARNING, JUDGE_FLORA, JUDGE_RAISING, JUDGE_CAMP_GROUND, JUDGE_TOOLS, JUDGE_UNSEEN, TURN_OUT_STOCK, BRING_IN_STOCK, PARE_HOOVES, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;}
         /** The cardinal for a grid offset, for when the WORLD names the direction rather than the player (#37). */
         static Direction of(int dx,int dy){ for(Direction d:values()) if(d.dx==dx&&d.dy==dy) return d; return null; } }    /**     * The structured perception frame — the seam every future Simulation Agent reads

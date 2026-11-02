@@ -6,8 +6,10 @@ import com.devosphere.draugr.ecology.WildlifeEncounterService;
 import com.devosphere.draugr.world.genesis.WorldEcologyGenesisService;
 import com.devosphere.draugr.world.genesis.WorldGenesisService;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -17,6 +19,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -66,6 +69,27 @@ class AmbientTamingIntegrationTest {
     @Autowired WildlifeEncounterService wildlife;
     @Autowired PersistentStateAuditor auditor;
     @Autowired JdbcTemplate jdbc;
+
+    private Timestamp clockWas;
+
+    /**
+     * June noon, held for the test and put back after. {@code wildlife_abroad} reads the shared world clock's MONTH,
+     * and an adder is a reptile that sleeps from November to February: on a winter clock (the suite's clock follows
+     * the real date, so this began failing on 1 November) the ground holds no adder at all, and the fallback hands
+     * this test an elk, a wolf or an ox instead.
+     */
+    @BeforeEach
+    void pinTheClock() {
+        clockWas = jdbc.queryForObject("SELECT simulated_at FROM simulation_clock WHERE id=1", Timestamp.class);
+        jdbc.update("UPDATE simulation_clock SET simulated_at = TIMESTAMPTZ '2031-06-10T12:00:00Z' WHERE id=1");
+        jdbc.update("UPDATE chronicle_physiology SET last_metabolic_update = (SELECT simulated_at FROM simulation_clock WHERE id=1), " +
+            "hours_without_food=0, hours_without_water=0, sleep_debt_hours=0");
+    }
+
+    @AfterEach
+    void putTheClockBack() {
+        if (clockWas != null) jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", clockWas);
+    }
 
     /** A stretch of forest with nothing seeded on it — which is most of the map. */
     private UUID plainGround() {

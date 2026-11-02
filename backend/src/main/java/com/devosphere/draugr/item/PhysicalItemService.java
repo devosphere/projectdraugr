@@ -893,12 +893,19 @@ public class PhysicalItemService {
             // never read the stage, so they rested and watched over animals that were never tamed — and, once
             // the death path began releasing a dead keeper's stock, would have gone on resting a corpse's ox in
             // a byre nobody owned while the other eight correctly stopped.
-            "WHERE wb.draft_fatigue > 0 AND wb.bond_stage = 'TAMED' AND wb.released_at IS NULL AND EXISTS (" +
+            // A PEN RESTS WHAT IS IN IT (#37/V450). An animal turned out to grass stands out all night; the
+            // byre it is not in does not take the weather off it.
+            "WHERE wb.draft_fatigue > 0 AND wb.bond_stage = 'TAMED' AND wb.released_at IS NULL " +
+            "  AND wb.at_pasture_since IS NULL AND EXISTS (" +
             "  SELECT 1 FROM world_object cw JOIN construction_project cp ON " + stillSound("cp") + " " +
             "    AND EXISTS(SELECT 1 FROM construction_kind ck WHERE ck.project_kind=cp.project_kind AND ck.shelters_stock) " +
             "  JOIN world_object pw ON pw.id=cp.object_id AND pw.lifecycle_state='ACTIVE' AND pw.current_location_id=cw.current_location_id " +
             "  WHERE cw.id=wb.chronicle_id)", PEN_REST_RECOVERY);
     }
+
+    /** What being out ON the grass is worth, over and above the relief a beast got for its keeper merely
+     *  standing on grassland. Smaller than that base relief: turning them out is a help, not a transformation. */
+    private static final int AT_PASTURE_EXTRA_RELIEF = 6;
 
     private static final int DRAFT_THIRST_PER_TURN = 4;   // a beast dries out faster than it grows hungry
     private static final int DRAFT_WATER_RELIEF    = 40;  // reaching water settles it quickly
@@ -1411,7 +1418,10 @@ public class PhysicalItemService {
         "        (SELECT COUNT(*) FROM tamed_young ty2 JOIN wildlife_bond wb3 ON wb3.id = ty2.bond_id " +
         "          WHERE wb3.chronicle_id = cw.id) " +
         "   FROM wildlife_bond wb2 JOIN wildlife_population wp2 ON wp2.id = wb2.population_id " +
-        "  WHERE wb2.chronicle_id = cw.id AND wb2.bond_stage = 'TAMED')";
+        // AND NOT THE ONES OUT AT GRASS (#37/V450). Crowding is a question about a pen, and an animal
+        // turned out is not in it: a keeper with a small fold and the herd on the hill is not crowding
+        // anything. The room side needs no such clause — the pens hold what they hold either way.
+        "  WHERE wb2.chronicle_id = cw.id AND wb2.bond_stage = 'TAMED' AND wb2.at_pasture_since IS NULL)";
 
     /** SQL for how many beasts the sound stock structures on that same ground hold between them (#108, V434). */
     private static final String ROOM_ON_THIS_GROUND =
@@ -1446,6 +1456,7 @@ public class PhysicalItemService {
             "  coat_condition = GREATEST(0, wb.coat_condition - ?) " +
             "FROM world_object cw " +
             "WHERE cw.id = wb.chronicle_id AND wb.bond_stage = 'TAMED' " +
+            "  AND wb.at_pasture_since IS NULL " +
             "  AND " + ROOM_ON_THIS_GROUND + " > 0 " +
             "  AND " + HEAD_ON_THIS_GROUND + " > " + ROOM_ON_THIS_GROUND,
             CROWDING_SICKENS, CROWDING_WEARS_COAT);
@@ -1789,13 +1800,19 @@ public class PhysicalItemService {
             "UPDATE wildlife_bond wb SET draft_hunger = CASE " +
             "  WHEN EXISTS (SELECT 1 FROM world_object cw JOIN world_chunk ch ON ch.id=cw.current_location_id " +
             "               WHERE cw.id=wb.chronicle_id AND ch.biome='GRASSLAND') " +
-            "  THEN LEAST(100, GREATEST(0, draft_hunger - ? + " + cold + ")) ELSE LEAST(100, draft_hunger + ? + " + cold + ") END " +
+            // ...AND BETTER WHEN THEY ARE ACTUALLY OUT ON IT (#37/V450). Grazing relief was given to every
+            // beast whose keeper stood on grassland, penned or not. Turning them out is now worth something:
+            // the extra is ADDED to what they already had, so no herd in any existing world is worse fed for
+            // this landing — which is the only safe way to change a rule a player has been living under.
+            "  THEN LEAST(100, GREATEST(0, draft_hunger - ? " +
+            "       - CASE WHEN wb.at_pasture_since IS NOT NULL THEN ? ELSE 0 END + " + cold + ")) " +
+            "  ELSE LEAST(100, draft_hunger + ? + " + cold + ") END " +
             // EVERY kept animal, not only the ones that pull (#122). Hunger rose only for a species in
             // draft_species, while feedDraftBeasts below relieves every TAMED bond with no such filter — so a
             // keeper could feed a hen that was constitutionally incapable of being hungry, and a milk goat went
             // through her whole life at nought. The relief was already universal; this is the other half of it.
             "WHERE wb.bond_stage='TAMED'",
-            DRAFT_GRAZE_RELIEF, DRAFT_HUNGER_PER_TURN);
+            DRAFT_GRAZE_RELIEF, AT_PASTURE_EXTRA_RELIEF, DRAFT_HUNGER_PER_TURN);
     }
 
     /** At or below this, a grown beast is burning feed to keep its own heat. */
@@ -4014,8 +4031,15 @@ public class PhysicalItemService {
         jdbc.update(
             "UPDATE crop_stand cs SET grazed=true WHERE cs.harvested=false AND cs.grazed=false " +
             "AND ? >= cs.sown_at + make_interval(days => cs.maturity_days) " +
-            "AND EXISTS (SELECT 1 FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id " +
-            "  WHERE es.chunk_id=cs.chunk_id AND wp.ecological_role='HERBIVORE' AND wp.population_count>0) " +
+            // A KEEPER'S OWN STOCK EAT THEIR OWN BARLEY (#37/V450). This read WILD herbivores only, so a
+            // keeper could turn a dozen goats out beside a ripe stand and watch them ignore it — the one
+            // grazing animal in the world that could not graze. Now either will do it: the fence is what
+            // keeps a stand whole, whoever is on the other side of it.
+            "AND (EXISTS (SELECT 1 FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id " +
+            "       WHERE es.chunk_id=cs.chunk_id AND wp.ecological_role='HERBIVORE' AND wp.population_count>0) " +
+            "     OR EXISTS (SELECT 1 FROM wildlife_bond wb JOIN world_object cw ON cw.id=wb.chronicle_id " +
+            "       WHERE cw.current_location_id=cs.chunk_id AND wb.bond_stage='TAMED' " +
+            "         AND wb.released_at IS NULL AND wb.at_pasture_since IS NOT NULL)) " +
             "AND NOT EXISTS (SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
             "  WHERE w.current_location_id=cs.chunk_id AND cp.project_kind IN ('WATTLE_FENCE','BRUSH_FENCE') " +
             "  AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND w.lifecycle_state='ACTIVE')",
@@ -4545,6 +4569,103 @@ public class PhysicalItemService {
     }
 
     /**
+     * How many BEASTS, not how many bonds (#37/V450). A bond is a group — four goats under one row — so
+     * counting rows told a keeper with a herd of four that they had driven out "the one beast". The welfare
+     * report has always counted head; so do these.
+     */
+    private int headAtPasture(UUID chronicle, boolean out) {
+        Integer n = jdbc.queryForObject(
+            "SELECT COALESCE(SUM(wp.population_count),0) FROM wildlife_bond wb " +
+            "JOIN wildlife_population wp ON wp.id = wb.population_id " +
+            "WHERE wb.chronicle_id=? AND wb.bond_stage='TAMED' AND wb.released_at IS NULL " +
+            "  AND wb.at_pasture_since IS " + (out ? "NOT NULL" : "NULL"), Integer.class, chronicle);
+        return n == null ? 0 : n;
+    }
+
+    /**
+     * Turn the stock out to grass (#37/V450).
+     *
+     * <p>Everything about keeping stock read one thing — whether a pen stood on the keeper's ground — so the
+     * trade-off every stock-keeper in history makes twice a day was not the player's to make: a keeper who
+     * raised a byre had their beasts in it always, and one on open grassland had them out always.
+     * {@code let the animals out} reached nothing at all.
+     *
+     * <p>Out at grass they feed better, and the pen neither rests them nor keeps a wolf off them. The refusals
+     * say which it is: nothing kept, or nothing that is in.
+     */
+    @Transactional
+    public String[] turnOutStock(UUID chronicle, UUID location, Instant at) {
+        Integer kept = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM wildlife_bond WHERE chronicle_id=? AND bond_stage='TAMED' AND released_at IS NULL",
+            Integer.class, chronicle);
+        if (kept == null || kept == 0)
+            return new String[]{"FAILED", "You have no stock to turn out — nothing of yours to drive anywhere."};
+        int out = jdbc.update(
+            "UPDATE wildlife_bond SET at_pasture_since=? WHERE chronicle_id=? AND bond_stage='TAMED' " +
+            "  AND released_at IS NULL AND at_pasture_since IS NULL", Timestamp.from(at), chronicle);
+        if (out == 0) return new String[]{"FAILED", "They are already out at grass, every one of them."};
+        int head = headAtPasture(chronicle, true);
+
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
+        boolean grass = "GRASSLAND".equals(biome);
+        boolean ripeStandHere = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM crop_stand cs WHERE cs.chunk_id=? AND cs.harvested=false)",
+            Boolean.class, location));
+        boolean fenced = Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "JOIN construction_kind ck ON ck.project_kind=cp.project_kind AND ck.is_barrier " +
+            "WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' AND cp.state='COMPLETED' " +
+            "  AND cp.integrity_percent > 0)", Boolean.class, location));
+        StringBuilder b = new StringBuilder("You open the way and drive them out — ")
+            .append(head == 1 ? "the one beast" : "all " + head + " of them")
+            .append(grass ? " — onto the grass, where they put their heads straight down and begin."
+                          : " — though there is little enough here for them to eat; this is not pasture.");
+        b.append(" Out at grass nothing shuts behind them: no pen rests them, and nothing stands between them "
+               + "and whatever hunts at night.");
+        if (ripeStandHere && !fenced)
+            b.append(" And your own crop is standing on this ground with no fence round it, which they will "
+                   + "find before you do.");
+        return new String[]{"SUCCEEDED", b.toString()};
+    }
+
+    /**
+     * Gather the stock off the grass and shut them in (#37/V450) — harder than turning them out, as anyone who
+     * has done it at dusk knows.
+     *
+     * <p>Says plainly when there is nothing to shut them into: they come off the grass either way, because a
+     * keeper can gather a herd without owning a byre, but what that is worth is told honestly.
+     */
+    @Transactional
+    public String[] bringInStock(UUID chronicle, UUID location, Instant at) {
+        Integer outside = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM wildlife_bond WHERE chronicle_id=? AND bond_stage='TAMED' " +
+            "  AND released_at IS NULL AND at_pasture_since IS NOT NULL", Integer.class, chronicle);
+        if (outside == null || outside == 0) {
+            Integer kept = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM wildlife_bond WHERE chronicle_id=? AND bond_stage='TAMED' AND released_at IS NULL",
+                Integer.class, chronicle);
+            return new String[]{"FAILED", kept == null || kept == 0
+                ? "You have no stock to bring in — nothing of yours is out there."
+                : "They are already in; none of yours is out at grass."};
+        }
+        int head = headAtPasture(chronicle, true);
+        jdbc.update("UPDATE wildlife_bond SET at_pasture_since=NULL WHERE chronicle_id=? AND bond_stage='TAMED' " +
+                    "  AND released_at IS NULL AND at_pasture_since IS NOT NULL", chronicle);
+        int[] room = theRoomTheStockHave(chronicle);
+        StringBuilder b = new StringBuilder("You walk them in off the grass — ")
+            .append(head == 1 ? "the one beast" : "all " + head + " of them").append('.');
+        if (room[1] == 0)
+            b.append(" There is nothing here to shut them into: they stand where you put them, and the night is "
+                   + "the same night it would have been out at grass.");
+        else if (room[0] > room[1])
+            b.append(" The pens here hold ").append(room[1]).append(" between them and you have ").append(room[0])
+             .append(" head to put in them, so they stand closer than is good for them.");
+        else b.append(" The pens here have room for them, and behind a wall they will rest better and sleep safer "
+                    + "— and eat what you bring them, not what grows.");
+        return new String[]{"SUCCEEDED", b.toString()};
+    }
+
+    /**
      * How the stock are (#106). The plainest question a keeper asks, and nothing could answer it.
      *
      * <p><b>What the world already knew.</b> {@code wildlife_bond} carries hunger, thirst, fatigue and sickness on
@@ -4648,6 +4769,16 @@ public class PhysicalItemService {
         // PACKED IN (#108, V434). The crowding the tick charges for, said out loud with both numbers in it, so
         // the keeper can see which way to mend it. Asking the same two questions the tick asks, so the report
         // cannot tell them the stock have room while the world is making them ill for want of it.
+        // WHERE THEY ARE, which the keeper has just decided and the tick now acts on (#37/V450). The report
+        // must change with the state or the state is invisible again: out at grass they feed themselves and
+        // take their chances, in the pen they are rested and safe and eat what is brought.
+        Integer outAtGrass = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM wildlife_bond WHERE chronicle_id=? AND bond_stage='TAMED' " +
+            "  AND released_at IS NULL AND at_pasture_since IS NOT NULL", Integer.class, chronicle);
+        if (outAtGrass != null && outAtGrass > 0)
+            b.append(headAtPasture(chronicle, true) == 1 ? "The one beast is " : "They are ")
+             .append("out at grass now, and feeding themselves — nothing shut behind them, and nothing "
+                   + "between them and the dark. ");
         int[] theRoom = theRoomTheStockHave(chronicle);
         if (theRoom[1] > 0 && theRoom[0] > theRoom[1])
             b.append("They are packed in tighter than what you have raised for them holds — ").append(theRoom[0])
