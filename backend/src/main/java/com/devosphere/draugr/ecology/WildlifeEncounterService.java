@@ -1000,7 +1000,11 @@ public class WildlifeEncounterService {
             "              WHERE pes.chunk_id = cw.current_location_id AND pp.ecological_role='CARNIVORE' " +
             "                AND pp.population_count > 0 AND wildlife_abroad(pp.species_key) AND pp.behavior_state IN ('HUNTING','PACK_HUNT','ALERT','AGGRESSIVE')) " +
             // nothing standing that would keep them off
-            "  AND NOT EXISTS (SELECT 1 FROM construction_project cp JOIN world_object pw ON pw.id=cp.object_id " +
+            // A WALL KEEPS A WOLF OFF WHAT IS BEHIND IT (#37/V450). This asked only whether something stood
+            // on the ground, so a herd turned out to grass was as safe as one shut in the byre — the pen
+            // protected animals that were not in it. An animal at pasture takes its chances; that is the
+            // other half of the bargain the keeper makes when they turn it out to feed.
+            "  AND (wb.at_pasture_since IS NOT NULL OR NOT EXISTS (SELECT 1 FROM construction_project cp JOIN world_object pw ON pw.id=cp.object_id " +
             "                  WHERE pw.current_location_id = cw.current_location_id AND cp.state='COMPLETED' " +
             // A THING COMING APART DOES NOT KEEP A WOLF OUT (#108). This asked only that the barrier still
             // stood at all, so a pen rotted to one percent gave the herd TOTAL immunity from a night raid —
@@ -1014,7 +1018,7 @@ public class WildlifeEncounterService {
             // an animal indoors is out of reach too. This asked for is_shelter, which is neither question (V281):
             // every ordinary fence a keeper builds is is_shelter=false and so protected nothing, while a bark door
             // lying on open ground is is_shelter=true and did.
-            "                    AND EXISTS(SELECT 1 FROM construction_kind ck WHERE ck.project_kind=cp.project_kind AND (ck.is_barrier OR ck.encloses))) " +
+            "                    AND EXISTS(SELECT 1 FROM construction_kind ck WHERE ck.project_kind=cp.project_kind AND (ck.is_barrier OR ck.encloses)))) " +
             "ORDER BY wb.last_raid_at NULLS FIRST LIMIT 1 FOR UPDATE OF wb",
             rs -> rs.next() ? java.util.Map.of("bond", rs.getObject(1, UUID.class), "pop", rs.getObject(2, UUID.class),
                     "species", rs.getString(3)) : null,
