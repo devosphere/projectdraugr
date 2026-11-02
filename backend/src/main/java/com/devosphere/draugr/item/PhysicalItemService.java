@@ -4370,6 +4370,13 @@ public class PhysicalItemService {
         if (name.endsWith("wolf")) return name.substring(0, name.length() - 4) + "wolves";
         if (name.endsWith("calf")) return name.substring(0, name.length() - 4) + "calves";
         if (name.endsWith("louse")) return name.substring(0, name.length() - 5) + "lice";
+        // The f that turns to v, which the species registry never needed and the ITEM catalogue does: eight of
+        // its knives and fourteen of its leaves end this way, so "drop the knives" and "eat the nettle leaves"
+        // were asking for things the one plural rule in this project could not say. Deliberately narrow — a
+        // roof is not rooves and a cliff is not clives, and neither ends in these.
+        if (name.endsWith("fe")) return name.substring(0, name.length() - 2) + "ves";    // knife, life
+        if (name.endsWith("eaf") || name.endsWith("oaf"))                                 // leaf, sheaf, loaf
+            return name.substring(0, name.length() - 1) + "ves";
         // Unchanged in the plural, which is its own trap: "two sheeps" is how a matcher gives itself away.
         if (name.endsWith("sheep") || name.endsWith("deer") || name.endsWith("trout")
             || name.endsWith("fish") || name.endsWith("swine")) return name;
@@ -4377,6 +4384,98 @@ public class PhysicalItemService {
         if (name.endsWith("x") || name.endsWith("s") || name.endsWith("z")
             || name.endsWith("sh") || name.endsWith("ch")) return name + "es";
         return name + "s";
+    }
+
+    /**
+     * How well a sentence names one particular belonging (#37).
+     *
+     * <p>Four places asked this question and all four asked it backwards: {@code lower.contains(displayName)},
+     * which is true only when the player utters the catalogue's full spelling. Measured on a booted world, with
+     * the thing in question in the pack or on the body the whole time:
+     *
+     * <pre>
+     *   drop the hide         -> "You are not carrying anything by that name."   (an Animal hide was carried)
+     *   drop the knife        -> "You are not carrying anything by that name."   (three knives were carried)
+     *   improve my knife      -> "You have nothing by that name to improve."
+     *   take off my trousers  -> "You are not wearing anything by that name."    (Everyday trousers, worn)
+     *   put on my shirt       -> SUCCEEDED, and settled a stone knife into the hand
+     * </pre>
+     *
+     * <p>So the same reading has two faces: it refuses what you are holding, and - where the caller fell back
+     * to the first row rather than failing - it accepts what you do not own and gives you something else.
+     *
+     * <p>Three readings, strongest first, the same ladder {@link #foodTheSentenceAsksFor} already climbs for the
+     * larder: <b>3</b> the display name in full, <b>2</b> the item key said as words (which is how
+     * {@code stone_knife} is reachable as <i>stone knife</i>), <b>1</b> the head noun alone, because the word a
+     * person says for their own gear is the family word - <i>the knife</i>, <i>my boots</i>. Every reading is
+     * held to WHOLE WORDS on both sides, space-padded the way the process matcher does it, so "the hide" finds
+     * an Animal hide and "hidden" does not.
+     *
+     * @param spoken what the player said, lowercase
+     * @param displayName the item's name as the player would see it
+     * @param itemKey its catalogue key, or null
+     * @return 3, 2, 1, or 0 when the sentence does not name this thing at all
+     */
+    public static int howWellNamed(String spoken, String displayName, String itemKey) {
+        if (spoken == null || displayName == null) return 0;
+        String said = " " + spoken.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim() + " ";
+        // A refined thing carries its revision in its name ("Stone knife Revision II"); nobody says that aloud.
+        String name = displayName.replaceAll("(?i)\\s+Revision\\s+[IVXLC0-9]+$", "").trim()
+            .toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim();
+        if (saidWhole(said, name)) return 3;
+        if (itemKey != null && saidWhole(said, itemKey.replace('_', ' '))) return 2;
+        // The head noun of a name already flattened to words, which is why the underscore matters: a
+        // display_name of "stone_knife" - and three of the Chronicle's own belongings are spelt that way -
+        // yielded no head noun at all while the class was split on spaces and hyphens only, so `wield the
+        // knife` found nothing while three knives hung off the pack.
+        int cut = name.lastIndexOf(' ');
+        String head = cut < 0 ? name : name.substring(cut + 1);
+        return !head.isEmpty() && saidWhole(said, head) && notQualifiedAway(said, head, name) ? 1 : 0;
+    }
+
+    /**
+     * A head noun is the family word only when the player did not qualify it away (#37).
+     *
+     * <p>{@code equip the bone knife} matched a stone knife on the bare word <i>knife</i> and answered
+     * SUCCEEDED, which is the first fix's own defect looking back at me: a family word reaches the wrong member
+     * of the family. The player said <b>bone</b> knife; a stone one is not what they asked for.
+     *
+     * <p>So the word in front of the head noun must either be a word of this thing's own name, or one of the
+     * function words a request is built out of. Any other word is a qualifier that belongs to something else,
+     * and a qualifier the item cannot answer to refuses the match rather than guessing. "sharp knife" is
+     * refused too, and that is the right way round: a refusal can be read, a wrong knife cannot.
+     */
+    private static boolean notQualifiedAway(String paddedSpoken, String head, String name) {
+        int at = paddedSpoken.indexOf(" " + head + " ");
+        if (at < 0) at = paddedSpoken.indexOf(" " + pluralOf(head) + " ");
+        if (at <= 0) return true;
+        String before = paddedSpoken.substring(0, at).trim();
+        int lastSpace = before.lastIndexOf(' ');
+        String prior = lastSpace < 0 ? before : before.substring(lastSpace + 1);
+        if (prior.isEmpty() || (" " + name + " ").contains(" " + prior + " ")) return true;
+        return REQUEST_WORDS.contains(prior);
+    }
+
+    /** The words a request is made of, as opposed to the words a thing is named with. */
+    private static final java.util.Set<String> REQUEST_WORDS = java.util.Set.of(
+        "the", "a", "an", "my", "mine", "our", "your", "their", "his", "her", "its", "this", "that", "these",
+        "those", "some", "any", "one", "another", "other", "each", "both", "of", "on", "off", "up", "down",
+        "out", "in", "with", "and", "to", "for", "please", "now", "again", "just",
+        "take", "takes", "taking", "put", "puts", "putting", "wear", "wears", "wearing", "equip", "equips",
+        "wield", "wields", "wielding", "hold", "holds", "holding", "carry", "carries", "drop", "drops",
+        "remove", "removes", "doff", "don", "grab", "pick", "use", "improve", "refine", "rework", "better",
+        "settle", "sling", "stow", "leave", "set", "lay", "get", "give", "me", "i", "want", "would", "like");
+
+    /**
+     * Said as a whole word, in either number - {@code take off my shoes} must find a Left everyday shoe.
+     *
+     * <p>The plural comes from {@link #pluralOf}, the same reader the hunt and the stockyard use for an ox and
+     * a goose. A second rule for English plurals would be a second rule to get wrong.
+     */
+    private static boolean saidWhole(String paddedSpoken, String phrase) {
+        String p = phrase.replaceAll("[^a-z0-9]+", " ").trim();
+        if (p.isEmpty()) return false;
+        return paddedSpoken.contains(" " + p + " ") || paddedSpoken.contains(" " + pluralOf(p) + " ");
     }
 
     /**

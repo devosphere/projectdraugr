@@ -4880,18 +4880,14 @@ public class ChronicleActionService {
         boolean theEquipVerbs = value.contains("equip")||value.contains("wear")||value.contains("put on")
             ||value.contains("wield")||value.contains("hold my")||value.contains("hold the")
             ||value.contains("carry on my back");
-        // "DRESS" IS THREE THINGS, exactly as the bed was: getting dressed, dressing a WOUND, and dressing a
-        // CARCASS. My first cut took all three and the routing test caught it at once — `dress the boar` became
-        // EQUIP, when dressing a boar is butchering it. The clothing sense is the one with NO OBJECT: a person
-        // says "get dressed", never "dress the boar" when they mean their own clothes. So the bare verb is
-        // claimed and "dress the …" / "dress a …" are left to the wound and the carcass, which own them.
-        boolean gettingDressed = (word(value,"dress")||word(value,"dressed"))
-            &&!value.contains("dress the")&&!value.contains("dress a");
-        // The other ways of saying "put on what I have" (#37). "put on everything I have" worked; these did not.
-        boolean coveringUp = value.contains("layer up")||value.contains("wrap up warm")
-            ||value.contains("wrap myself")||value.contains("cover my head")
-            ||value.contains("cover my hands")||value.contains("hood up");
-        if(theEquipVerbs||((gettingDressed||coveringUp)&&!items.actionMatchesProcess(value))) return Intent.EQUIP;
+        // Both dressing readings now live beside the act that carries them out — see
+        // dressingWithoutNamingAThing. The process guard belongs to the BARE verb only: "dress" is also what a
+        // tanner does to a hide, so `dress hides` must stay a process. The six covering-up phrases are a closed
+        // list nobody says to mean making a thing, and the guard was quietly eating two of them — measured,
+        // `wrap myself` and `hood up` answered "those words fit more than one piece of work" and named bark
+        // wraps and fur hoods to a player who only wanted to cover up with what they had.
+        if(theEquipVerbs||coveringUpWithWhatIsOnHand(value)
+           ||(gettingDressedGenerally(value)&&!items.actionMatchesProcess(value))) return Intent.EQUIP;
         // "sling" also means equip (sling it over a shoulder) — but not when 'sling' is part of a thing being made,
         // i.e. a sling stone or a sling pouch ("shape a sling stone", "sew a sling stone pouch"). Those route to their
         // craft recipes; every other use of 'sling' is the equip verb.
@@ -5866,13 +5862,131 @@ public class ChronicleActionService {
     // another. CompassAgreesWithDirectionTest holds the enum below to the same convention.
     private String compass(int dx, int dy) { String c = com.devosphere.draugr.world.Compass.of(dx, dy); return c == null ? "at the centre" : c; }
     private String rotateCompass(String dir, boolean clockwise) { return com.devosphere.draugr.world.Compass.rotate(dir, clockwise); }
+    /**
+     * The belongings a sentence names, read the one way (#37).
+     *
+     * <p>Equip, unequip, drop and refine each had their own copy of {@code lower.contains(displayName)}, so all
+     * four refused what the player was holding — see
+     * {@link com.devosphere.draugr.item.PhysicalItemService#howWellNamed} for the measurements and the three
+     * readings. One reader now, because four readings of "which of my things did I just name" are four readings
+     * that can disagree about the same pack.
+     *
+     * <p>Only the BEST reading survives: "drop the stone knife" names the stone knife and not every knife, and
+     * among equal readings the longest name wins, the way the larder matcher settles it. Rows sharing the chosen
+     * name all come back, because one item can be worn in more than one place.
+     */
+    private static java.util.List<java.util.Map<String,Object>> rowsNamedIn(java.util.List<java.util.Map<String,Object>> rows, String text) {
+        int best = 0; String bestName = null;
+        for (java.util.Map<String,Object> r : rows) {
+            String nm = (String) r.get("display_name");
+            int s = com.devosphere.draugr.item.PhysicalItemService.howWellNamed(text, nm, (String) r.get("item_key"));
+            if (s > best || (s == best && s > 0 && nm != null && bestName != null && nm.length() > bestName.length())) { best = s; bestName = nm; }
+        }
+        if (best == 0) return java.util.List.of();
+        final String chosen = bestName;
+        return rows.stream().filter(r -> chosen.equals(r.get("display_name"))).collect(java.util.stream.Collectors.toList());
+    }
+
+    /**
+     * "Put on what I have" — the dressing phrases that name no particular thing (#37).
+     *
+     * <p>One matcher, two readers: the classifier uses it to route these to EQUIP, and {@code equipByName} uses
+     * it to decide whether a sentence that named nothing in reach was a request for a thing the player has not
+     * got, or a request to simply be dressed. Kept apart, the gate and the act drifted — and the act's fallback
+     * answered "wear the cloak" by settling a stone knife into the hand.
+     */
+    private static boolean dressingWithoutNamingAThing(String value) {
+        return gettingDressedGenerally(value) || coveringUpWithWhatIsOnHand(value);
+    }
+
+    /**
+     * "DRESS" IS THREE THINGS, exactly as the bed was: getting dressed, dressing a WOUND, and dressing a
+     * CARCASS. My first cut took all three and the routing test caught it at once — {@code dress the boar}
+     * became EQUIP, when dressing a boar is butchering it. The clothing sense is the one with NO OBJECT: a
+     * person says "get dressed", never "dress the boar" when they mean their own clothes. So the bare verb is
+     * claimed and "dress the …" / "dress a …" are left to the wound and the carcass, which own them.
+     */
+    private static boolean gettingDressedGenerally(String value) {
+        return (word(value,"dress")||word(value,"dressed"))
+            &&!value.contains("dress the")&&!value.contains("dress a");
+    }
+
+    /** The other ways of saying "put on what I have" (#37) — a closed list, and none of them makes anything. */
+    private static boolean coveringUpWithWhatIsOnHand(String value) {
+        return value.contains("layer up")||value.contains("wrap up warm")
+            ||value.contains("wrap myself")||value.contains("cover my head")
+            ||value.contains("cover my hands")||value.contains("hood up");
+    }
+
+    /**
+     * "Everything I have" — a request for the whole kit rather than one named thing (#37).
+     *
+     * <p>Separate from {@link #dressingWithoutNamingAThing} on purpose: the classifier must NOT read the word
+     * "everything" as a reason to route to EQUIP (burn everything, eat everything, carry everything), so this
+     * reading belongs only to the act, after an equip verb has already been heard.
+     */
+    private static boolean asksForTheWholeKit(String value) {
+        return value.contains("everything")||value.contains("what i have")
+            ||value.contains("my clothes")||value.contains("all my")||value.contains("all of it");
+    }
+
+    /**
+     * Does the sentence name THIS place on the body (#37)?
+     *
+     * <p>Read off {@code item_equipment_compatibility.body_position} itself rather than listed: the position is
+     * already English under its underscores, so HAND_LEFT answers to <i>hand</i> and LOWER_LEG_RIGHT to
+     * <i>leg</i>. The plural comes from the one plural reader, so <i>cover my hands</i> finds a HAND_LEFT.
+     */
+    private static boolean bodyPartNamedIn(String lower, String position) {
+        if (position == null) return false;
+        String said = " " + lower.replaceAll("[^a-z0-9]+", " ").trim() + " ";
+        for (String part : position.toLowerCase(Locale.ROOT).split("_")) {
+            if (part.equals("left") || part.equals("right") || part.equals("lower")) continue;
+            if (said.contains(" " + part + " ")
+                || said.contains(" " + com.devosphere.draugr.item.PhysicalItemService.pluralOf(part) + " ")) return true;
+        }
+        return false;
+    }
+
     private String[] equipByName(ActiveChronicle chronicle, String text, Instant at) {
-        java.util.List<java.util.Map<String,Object>> candidates = jdbc.queryForList("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT w.id,w.display_name,c.body_position,c.layer FROM reachable r JOIN world_object w ON w.id=r.id JOIN item_instance i ON i.object_id=w.id JOIN item_equipment_compatibility c ON c.item_key=i.item_key LEFT JOIN equipment_attachment e ON e.item_id=w.id WHERE e.item_id IS NULL ORDER BY w.display_name", chronicle.id());
+        java.util.List<java.util.Map<String,Object>> candidates = jdbc.queryForList("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT w.id,w.display_name,i.item_key,c.body_position,c.layer FROM reachable r JOIN world_object w ON w.id=r.id JOIN item_instance i ON i.object_id=w.id JOIN item_equipment_compatibility c ON c.item_key=i.item_key LEFT JOIN equipment_attachment e ON e.item_id=w.id WHERE e.item_id IS NULL ORDER BY w.display_name", chronicle.id());
         if (candidates.isEmpty()) return new String[]{"FAILED","You have nothing unequipped that can be worn or wielded."};
         String lower = text.toLowerCase(Locale.ROOT);
         // Candidate rows for the item the text actually names (one row per compatible slot).
-        var named = candidates.stream().filter(c->lower.contains(((String)c.get("display_name")).toLowerCase(Locale.ROOT))).collect(java.util.stream.Collectors.toList());
+        var named = rowsNamedIn(candidates, lower);
+        // A NAMED THING YOU HAVE NOT GOT IS NOT A SUCCESS. The old fallback took the first candidate whenever the
+        // name missed, so `wear the cloak`, `wear the hide boots`, `put on my shirt` and `wear the fur hat` all
+        // answered SUCCEEDED and settled the same stone knife into the hand — four different requests, one wrong
+        // answer, in the same even voice as a true one. Unequip, drop and refine all say so plainly; this is the
+        // sibling that did not, and one act should not have two rules.
+        if (named.isEmpty() && !dressingWithoutNamingAThing(lower) && !asksForTheWholeKit(lower)) {
+            // ALREADY ON IS NOT THE SAME AS HAVEN'T GOT. The candidate list is only what is NOT yet worn, so
+            // `put on my shirt` while wearing it fell through to "you have nothing by that name" — a true
+            // refusal that says something false about the pack.
+            var already = rowsNamedIn(jdbc.queryForList("SELECT w.id,w.display_name,i.item_key FROM equipment_attachment e JOIN world_object w ON w.id=e.item_id JOIN item_instance i ON i.object_id=w.id WHERE e.chronicle_id=? AND w.lifecycle_state='ACTIVE'", chronicle.id()), lower);
+            if (!already.isEmpty()) return new String[]{"FAILED","You are already wearing the "+already.get(0).get("display_name")+"."};
+            return new String[]{"FAILED","You have nothing by that name to put on or take up."};
+        }
         var pool = named.isEmpty() ? candidates : named;
+        // Being dressed is not the same as being armed. Asked to simply cover up, the old reading took whatever
+        // sorted first, so `cover my head` and `wrap up warm` put a knife in the hand; a garment comes first now.
+        if (named.isEmpty()) {
+            var worn = pool.stream().filter(c->!"CARRIED".equals(c.get("layer")) && !"ATTACHED".equals(c.get("layer"))).collect(java.util.stream.Collectors.toList());
+            if (!worn.isEmpty()) pool = worn;
+            // Nothing left to cover up WITH is not the same as nothing left to pick up. "Put on everything I
+            // have" may fairly take up a knife; "cover my head" never may, and with every garment already on,
+            // the old reading answered it by settling one into the hand.
+            else if (!asksForTheWholeKit(lower)) return new String[]{"FAILED","You have nothing more you can put on."};
+        }
+        // A PLACE ON THE BODY IS ALSO SOMETHING THE PLAYER NAMED. `cover my hands` put a shoe on, because the
+        // only part of the sentence being read was the thing, and these phrases name no thing at all. The
+        // vocabulary is the column's own values, so there is no second list of body parts to drift from it.
+        var atThePartNamed = pool.stream().filter(c->bodyPartNamedIn(lower, (String) c.get("body_position"))).collect(java.util.stream.Collectors.toList());
+        if (!atThePartNamed.isEmpty()) pool = atThePartNamed;
+        else if (named.isEmpty() && jdbc.queryForList("SELECT DISTINCT body_position FROM item_equipment_compatibility", String.class)
+                 .stream().anyMatch(p -> bodyPartNamedIn(lower, p)))
+            // They named a part and have nothing for it. A shoe is not an answer to "cover my hands".
+            return new String[]{"FAILED","You have nothing here to cover that with."};
         // Honour a hand the player names ("on my left hand"); otherwise take the first slot.
         String preferredPos = lower.contains("left") ? "HAND_LEFT" : (lower.contains("right") ? "HAND_RIGHT" : null);
         var match = pool.stream().filter(c->preferredPos!=null && preferredPos.equals(c.get("body_position"))).findFirst().orElse(pool.get(0));
@@ -5881,29 +5995,29 @@ public class ChronicleActionService {
         catch (Exception e) { return new String[]{"FAILED","The "+match.get("display_name")+" cannot be fitted there — something else is already in the way."}; }
     }
     private String[] unequipByName(ActiveChronicle chronicle, String text, Instant at) {
-        java.util.List<java.util.Map<String,Object>> equipped = jdbc.queryForList("SELECT w.id,w.display_name FROM equipment_attachment e JOIN world_object w ON w.id=e.item_id WHERE e.chronicle_id=? AND w.lifecycle_state='ACTIVE'", chronicle.id());
+        java.util.List<java.util.Map<String,Object>> equipped = jdbc.queryForList("SELECT w.id,w.display_name,i.item_key FROM equipment_attachment e JOIN world_object w ON w.id=e.item_id JOIN item_instance i ON i.object_id=w.id WHERE e.chronicle_id=? AND w.lifecycle_state='ACTIVE'", chronicle.id());
         if (equipped.isEmpty()) return new String[]{"FAILED","You have nothing equipped to remove."};
         String lower = text.toLowerCase(Locale.ROOT);
-        var match = equipped.stream().filter(r->lower.contains(((String)r.get("display_name")).toLowerCase(Locale.ROOT))).findFirst().orElse(null);
+        var match = rowsNamedIn(equipped, lower).stream().findFirst().orElse(null);
         if (match == null) return new String[]{"FAILED","You are not wearing or holding anything by that name."};
         boolean done = items.unequip((UUID)match.get("id"), at);
         return done ? new String[]{"SUCCEEDED","You remove the "+match.get("display_name")+" and hold it."} : new String[]{"FAILED","The "+match.get("display_name")+" cannot be removed right now."};
     }
     private String[] dropByName(ActiveChronicle chronicle, String text, Instant at) {
-        java.util.List<java.util.Map<String,Object>> carried = jdbc.queryForList("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT w.id,w.display_name FROM reachable r JOIN world_object w ON w.id=r.id JOIN item_instance i ON i.object_id=w.id ORDER BY w.display_name", chronicle.id());
+        java.util.List<java.util.Map<String,Object>> carried = jdbc.queryForList("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT w.id,w.display_name,i.item_key FROM reachable r JOIN world_object w ON w.id=r.id JOIN item_instance i ON i.object_id=w.id ORDER BY w.display_name", chronicle.id());
         if (carried.isEmpty()) return new String[]{"FAILED","You are not carrying anything to leave behind."};
         String lower = text.toLowerCase(Locale.ROOT);
-        var match = carried.stream().filter(r->lower.contains(((String)r.get("display_name")).toLowerCase(Locale.ROOT))).findFirst().orElse(null);
+        var match = rowsNamedIn(carried, lower).stream().findFirst().orElse(null);
         if (match == null) return new String[]{"FAILED","You are not carrying anything by that name."};
         items.drop((UUID)match.get("id"), chronicle.location(), at);
         return new String[]{"SUCCEEDED","You set the "+match.get("display_name")+" down and leave it where it lies."};
     }
     /** Improve an existing carried item in place — the organic "Revision II, III" evolution, not a new object. Its identity is kept; only the workmanship and name advance. */
     private String[] refineByName(ActiveChronicle chronicle, String text, Instant at) {
-        java.util.List<java.util.Map<String,Object>> carried = jdbc.queryForList("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT w.id,w.display_name FROM reachable r JOIN world_object w ON w.id=r.id JOIN item_instance i ON i.object_id=w.id ORDER BY length(w.display_name) DESC", chronicle.id());
+        java.util.List<java.util.Map<String,Object>> carried = jdbc.queryForList("WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' UNION ALL SELECT ic.item_id FROM item_containment ic JOIN reachable r ON r.id=ic.container_id JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') SELECT w.id,w.display_name,i.item_key FROM reachable r JOIN world_object w ON w.id=r.id JOIN item_instance i ON i.object_id=w.id ORDER BY length(w.display_name) DESC", chronicle.id());
         if (carried.isEmpty()) return new String[]{"FAILED","You have nothing on you to work on and improve."};
         String lower = text.toLowerCase(Locale.ROOT);
-        var match = carried.stream().filter(c->lower.contains(baseName((String)c.get("display_name")).toLowerCase(Locale.ROOT))).findFirst().orElse(null);
+        var match = rowsNamedIn(carried, lower).stream().findFirst().orElse(null);
         if (match == null) return new String[]{"FAILED","You have nothing by that name to improve."};
         UUID id = (UUID) match.get("id"); String base = baseName((String) match.get("display_name"));
         Integer priorRefines = jdbc.queryForObject("SELECT COUNT(*) FROM object_transition WHERE object_id=? AND transition_type='REFINED'", Integer.class, id);
