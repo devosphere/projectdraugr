@@ -100,7 +100,27 @@ class IntentClassificationRegressionTest {
                     return false;
                 }
             };
-        ChronicleActionService svc = new ChronicleActionService(null, null, null, null, items, null, null, null, null, null, null, null, new com.devosphere.draugr.narration.ActionInputClassifier(), null, null, null, new com.devosphere.draugr.narration.NarrationEngine(), (com.devosphere.draugr.ai.RuntimeAuthoringService) null, (ExaminationService) null, (com.devosphere.draugr.people.ContactService) null, (com.devosphere.draugr.people.TradeService) null, (com.devosphere.draugr.people.ConductService) null, (com.devosphere.draugr.people.AgreementService) null, (com.devosphere.draugr.people.CompanionService) null, (com.devosphere.draugr.people.AudienceService) null, (com.devosphere.draugr.people.MembershipService) null, (com.devosphere.draugr.people.ClaimService) null);
+        // THE SPECIES REGISTRY, faked the same way and for the same reason as the item catalogue above (#99).
+        // The hunting gate used to carry eleven animal literals — deer, boar, wolf, hare, rabbit, fox, elk,
+        // aurochs, bear, goat, bird — against a catalogue of about a hundred and ninety species. It asks the
+        // registry now, so a collaborator that knew nothing would leave every hunting sentence here
+        // unclassifiable while it works perfectly in play.
+        //
+        // These names are enough to assert BOTH directions, which is the only reason to fake it rather than
+        // stub it true: a handful of ordinary animals the gate must now admit, and nothing else — so a
+        // MONSTRUM head noun like "pack", "cluster" or "swarm" still fails, which is what keeps "throw the
+        // pack down" from being read as a hunt.
+        com.devosphere.draugr.ecology.WildlifeEncounterService wildlife =
+            new com.devosphere.draugr.ecology.WildlifeEncounterService(null, null, null, null) {
+                @Override public boolean namesWildQuarry(String t) {
+                    String v = t == null ? "" : " " + t.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim() + " ";
+                    for (String beast : new String[]{"badger lizard", "lizard", "hedgehog", "pheasant", "partridge",
+                                                     "squirrel", "lynx", "beaver", "otter", "duck", "trout"})
+                        if (v.contains(" " + beast + " ") || v.contains(" " + beast + "s ")) return true;
+                    return false;
+                }
+            };
+        ChronicleActionService svc = new ChronicleActionService(null, null, null, null, items, null, null, null, wildlife, null, null, null, new com.devosphere.draugr.narration.ActionInputClassifier(), null, null, null, new com.devosphere.draugr.narration.NarrationEngine(), (com.devosphere.draugr.ai.RuntimeAuthoringService) null, (ExaminationService) null, (com.devosphere.draugr.people.ContactService) null, (com.devosphere.draugr.people.TradeService) null, (com.devosphere.draugr.people.ConductService) null, (com.devosphere.draugr.people.AgreementService) null, (com.devosphere.draugr.people.CompanionService) null, (com.devosphere.draugr.people.AudienceService) null, (com.devosphere.draugr.people.MembershipService) null, (com.devosphere.draugr.people.ClaimService) null);
         return ((Enum<?>) m.invoke(svc, text)).name();
     }
 
@@ -2992,8 +3012,9 @@ class IntentClassificationRegressionTest {
         // AND THE VERBS THESE SIT AMONG KEEP THEIRS. "let" and "put" and "get" belong to half the game, and the
         // rule is gated on the stock words for exactly that reason: a rope is not a herd.
         assertEquals("DROP", classify("put the basket down"));
-        // `feed the goats` is TAME here and FEED_ANIMAL in play: the rule yields the feeding branch once a beast
-        // of that kind is kept, and the stub keeps none. The data decides it, which is #106's own settlement.
+        // The rule yields the feeding branch once a beast of that kind is kept: the data decides it, which
+        // is #106's own settlement. The stub keeps an OX now (V453), and "the stock" names no species, so
+        // this one reaches FEED_ANIMAL through namesAKeptAnimal rather than through the keeper's own flock.
         assertEquals("FEED_ANIMAL", classify("feed the stock"));
         assertEquals("CHECK_STOCK", classify("how are the animals"));
         assertEquals("TEND_ANIMAL", classify("tend the sick goat"));
@@ -3059,6 +3080,65 @@ class IntentClassificationRegressionTest {
         assertEquals("CHECK_STOCK", classify("how are the animals"));
         assertEquals("TAKE_STOCK_OF_GEAR", classify("take stock of my gear"));
         assertEquals("FEED_ANIMAL", classify("feed the stock"));
+    }
+
+    /**
+     * THE HUNT READS ITS OWN CATALOGUE (#99). The gate named eleven animals as literals against a registry of
+     * about a hundred and ninety, while {@code confront} has read the whole registry by name since V408 — so
+     * the service stood ready and the gate was what never let the sentence through. Measured on a booted world
+     * before the fix, every one of these answered with the generic witness line: <i>"Whatever you meant by
+     * that, your hands find no purchase on it."</i>
+     */
+    @Test
+    void anyAnimalTheWorldHoldsCanBeHunted() throws Exception {
+        assertEquals("CONFRONT_WILDLIFE", classify("hunt the hedgehog"));
+        assertEquals("CONFRONT_WILDLIFE", classify("hunt the pheasant"));
+        assertEquals("CONFRONT_WILDLIFE", classify("hunt the partridge"));
+        assertEquals("CONFRONT_WILDLIFE", classify("hunt the squirrel"));
+        assertEquals("CONFRONT_WILDLIFE", classify("hunt the badger lizard"));
+        // And the other verbs a hunter uses, which were in the gate all along and had nothing to pair with.
+        assertEquals("CONFRONT_WILDLIFE", classify("stalk the lynx"));
+        assertEquals("CONFRONT_WILDLIFE", classify("shoot the duck"));
+        assertEquals("CONFRONT_WILDLIFE", classify("spear the beaver"));
+        assertEquals("CONFRONT_WILDLIFE", classify("hunt the otter"));
+    }
+
+    /**
+     * The generic word for it, which failed too. {@code confrontWhateverIsHere} has existed all along to answer
+     * exactly this — carnivores first, because the dangerous thing is what notices you when you go looking for
+     * "something to hunt" — and no sentence could reach it.
+     */
+    @Test
+    void theGenericWordForAHuntReachesTheHunt() throws Exception {
+        assertEquals("CONFRONT_WILDLIFE", classify("hunt something"));
+        assertEquals("CONFRONT_WILDLIFE", classify("hunt anything"));
+        // A hunter who says this is going hunting, not rummaging through their own pack, which is what EAT did.
+        assertEquals("CONFRONT_WILDLIFE", classify("kill something to eat"));
+    }
+
+    /**
+     * AND THE BOUNDARIES, which is the half that makes widening a gate safe rather than merely wider.
+     *
+     * <p>Each of these shares a verb with the hunt, and several share a WORD with the catalogue: the monster keys
+     * are where the dangerous head nouns live, and {@code cinder_jackal_pack} would have made "throw the pack
+     * down" a hunt if MONSTRUM were not excluded. Measured live, all of these keep the intent they had.
+     */
+    @Test
+    void sentencesThatShareTheHuntsVerbsAreNotHunts() throws Exception {
+        assertNotEquals("CONFRONT_WILDLIFE", classify("throw the pack down"));
+        assertNotEquals("CONFRONT_WILDLIFE", classify("throw something on the fire"));
+        assertEquals("LIGHT_FIRE", classify("strike the flint"));
+        assertNotEquals("CONFRONT_WILDLIFE", classify("hunt for firewood"));
+        assertNotEquals("CONFRONT_WILDLIFE", classify("kill the weeds"));
+        assertNotEquals("CONFRONT_WILDLIFE", classify("attack the stump"));
+        assertEquals("HARVEST_CARCASS", classify("butcher the deer"));
+        // Making is not doing: the verbs that MAKE a bow still make one.
+        assertNotEquals("CONFRONT_WILDLIFE", classify("carve a bow"));
+        assertNotEquals("CONFRONT_WILDLIFE", classify("string the bow"));
+        // The eleven literals are kept, so none of them can regress while the registry answer grows.
+        assertEquals("CONFRONT_WILDLIFE", classify("hunt the deer"));
+        assertEquals("CONFRONT_WILDLIFE", classify("hunt the boar"));
+        assertEquals("CONFRONT_WILDLIFE", classify("hunt the rabbit"));
     }
 
     /**
