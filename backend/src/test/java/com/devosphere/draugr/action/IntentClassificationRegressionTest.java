@@ -2984,4 +2984,27 @@ class IntentClassificationRegressionTest {
         assertEquals("CHECK_STOCK", classify("how are the animals"));
         assertEquals("TEND_ANIMAL", classify("tend the sick goat"));
     }
+
+    /**
+     * Asking where there is to go (#37/#99, V451).
+     *
+     * <p>The last miss on the release-gate sweep. Three records hold the answer — the visit count, the grid and
+     * the places a keeper named — and every one is read by something else already. A keeper could ask the
+     * bearing TO a named place, and could not ask what there was.
+     */
+    @Test
+    void askingWhereThereIsToGo() throws Exception {
+        assertEquals("JUDGE_WHERE_TO_GO", classify("where should I go"));
+        assertEquals("JUDGE_WHERE_TO_GO", classify("where could I go"));
+        assertEquals("JUDGE_WHERE_TO_GO", classify("where have I not been"));
+        assertEquals("JUDGE_WHERE_TO_GO", classify("which way should I go"));
+
+        // AND THE GOING ITSELF IS UNTOUCHED, which is the boundary: asking where there is to go is not going,
+        // and the bearing reading keeps the question about a NAMED kind of ground.
+        assertEquals("WHICH_WAY", classify("which way is the marsh"));
+        assertEquals("MOVE", classify("go north"));
+        assertEquals("TRAVEL", classify("travel to Stonefield"));
+        assertEquals("JUDGE_PLACE", classify("what do I know about this place"));
+        assertEquals("SCOUT", classify("what is over that ridge"));
+    }
 }
