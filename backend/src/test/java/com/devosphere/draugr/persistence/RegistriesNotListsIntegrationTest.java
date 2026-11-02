@@ -121,4 +121,46 @@ class RegistriesNotListsIntegrationTest {
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
+
+    /**
+     * EVERY REPTILE AND AMPHIBIAN KEEPS THE SEASON, OR IS EXEMPT FOR A STATED REASON (#161, V312/V452).
+     *
+     * <p>V312 wrote the rule in prose — "snakes and lizards: November to February… every reptile catalogued here
+     * is catalogued on temperate ground" — and then applied it to a hand-written list of eight keys. The
+     * catalogue holds fourteen. Slow worm, wood gecko and crocodilian were abroad all winter against the
+     * migration's own sentence, which is how a December survey came to name "slow worm and wood gecko" among the
+     * reptiles about while every other reptile of that ground was properly underground.
+     *
+     * <p>V452's own DO block catches this at the moment it is applied, and that is not enough: a reptile added by
+     * some later migration would pass V452 (long since run) and reach a player abroad in January. This is the
+     * standing version of the same guard — the registry held to the rule, not to the list.
+     *
+     * <p>The mudpuppy is the one exemption, and for a reason rather than by name having been forgotten: it is a
+     * fully aquatic salamander that stays active under the ice and is at its most findable in winter. If a second
+     * exemption is ever wanted, it belongs here beside the first with its reason written down.
+     */
+    @Test
+    void everyReptileAndAmphibianKeepsTheSeason() {
+        List<String> abroadAllWinter = jdbc.queryForList(
+            "SELECT species_key FROM wildlife_species " +
+            "WHERE kingdom_class IN ('REPTILIA','AMPHIBIA') AND dormant_months IS NULL " +
+            "  AND species_key NOT IN ('mudpuppy') ORDER BY species_key", String.class);
+        assertTrue(abroadAllWinter.isEmpty(),
+            () -> "these reptiles and amphibians are abroad in January against V312's own rule, which is the "
+                + "defect V452 closed for three of them: " + abroadAllWinter);
+
+        // And the rule is still read rather than merely stored. A dormancy column with no wildlife_abroad behind
+        // it is decoration, and that is the shape this whole class exists to catch.
+        List<String> disagree = jdbc.queryForList(
+            "SELECT ws.species_key FROM wildlife_species ws " +
+            "WHERE wildlife_abroad(ws.species_key) <> NOT COALESCE(" +
+            "        EXTRACT(MONTH FROM (SELECT simulated_at FROM simulation_clock WHERE id=1) AT TIME ZONE 'UTC')::int " +
+            "        = ANY (ws.dormant_months), FALSE) " +
+            "ORDER BY ws.species_key", String.class);
+        assertTrue(disagree.isEmpty(),
+            () -> "wildlife_abroad and dormant_months disagree about these species, so one of the two is being "
+                + "ignored: " + disagree);
+
+        assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
 }

@@ -141,10 +141,15 @@ class AmbientTamingIntegrationTest {
         assertNotNull(summary);
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", chunk, summary.id());
 
-        // Pick a tameable forest creature that is NOT the one this ground would offer by default.
+        // Pick a tameable forest creature that is NOT the one this ground would offer by default — AND THAT THE
+        // WORLD WILL ACTUALLY PRODUCE TODAY. Without wildlife_abroad this asked for the common adder, which is
+        // the least willing name in the alphabet, and from November the adder is brumating: the world rightly
+        // declined to fetch one, and this test then read the substitute as proof that naming works. Ask for a
+        // thing that exists; do not assume the world keeps one of everything for you all year.
         String wanted = jdbc.queryForObject(
             "SELECT species_key FROM wildlife_species WHERE tamability > 0 AND kingdom_class <> 'MONSTRUM' " +
             "AND movement_class <> 'AQUATIC' AND biome_affinity ILIKE '%TEMPERATE_FOREST%' " +
+            "AND wildlife_abroad(species_key) " +
             "ORDER BY tamability, species_key LIMIT 1", String.class);
         assertNotNull(wanted);
 
@@ -154,5 +159,71 @@ class AmbientTamingIntegrationTest {
         assertEquals(wanted, jdbc.queryForObject(
             "SELECT wp.species_key FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id WHERE es.chunk_id=?",
             String.class, chunk), "the animal a Chronicle names is the animal they approach");
+    }
+
+    /**
+     * NAMING AN ANIMAL THAT IS ASLEEP FOR THE WINTER IS REFUSED, AND TOLD WHY (#37, #161).
+     *
+     * <p>The defect this replaces was not a gap but a <b>confident wrong answer</b>: the ambient cast is filtered
+     * by {@code wildlife_abroad}, a named animal missing from it fell through to "the most willing animal on this
+     * ground", and so on a November afternoon "approach the adder slowly" returned SUCCEEDED and bonded the
+     * Chronicle to an ox — in the same even voice, with nothing to suggest a swap had happened. A player has no
+     * way to notice that, and no way to learn that reptiles keep a season, because the world would not say it.
+     *
+     * <p>Asserted both ways round, on the same ground and the same sentence, with only the month between them:
+     * in the dormant month it is refused and the refusal names the season; in June the same words bond the
+     * animal itself. A refusal whose positive case is never measured is how a gap gets moved instead of closed.
+     */
+    @Test
+    void anAnimalWinteringOutOfSightIsRefusedBySeasonAndNotQuietlySwapped() {
+        java.sql.Timestamp was = jdbc.queryForObject("SELECT simulated_at FROM simulation_clock WHERE id=1", java.sql.Timestamp.class);
+        try {
+            UUID chunk = jdbc.queryForObject(
+                "SELECT c.id FROM world_chunk c WHERE c.biome='TEMPERATE_FOREST' " +
+                "AND NOT EXISTS (SELECT 1 FROM ecology_site es WHERE es.chunk_id=c.id) " +
+                "ORDER BY c.grid_y, c.grid_x LIMIT 1", UUID.class);
+            assertNotNull(chunk, "a forest chunk with nothing on it yet");
+            ChronicleService.ChronicleSummary summary = chronicles.awaken();
+            assertNotNull(summary);
+            jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", chunk, summary.id());
+
+            // A creature of this wood that keeps a season, and one of the months it spends out of sight.
+            java.util.Map<String,Object> sleeper = jdbc.queryForMap(
+                "SELECT species_key, dormant_months[1] AS asleep FROM wildlife_species " +
+                "WHERE dormant_months IS NOT NULL AND tamability > 0 AND kingdom_class <> 'MONSTRUM' " +
+                "AND movement_class <> 'AQUATIC' AND biome_affinity ILIKE '%TEMPERATE_FOREST%' " +
+                "AND NOT (6 = ANY (dormant_months)) ORDER BY species_key LIMIT 1");
+            String species = (String) sleeper.get("species_key");
+            int month = ((Number) sleeper.get("asleep")).intValue();
+            String said = "approach the " + species.replace('_', ' ') + " slowly";
+
+            jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1",
+                java.sql.Timestamp.from(Instant.parse(String.format("2031-%02d-15T10:00:00Z", month))));
+            WildlifeEncounterService.EncounterResult refused =
+                wildlife.tame(summary.id(), chunk, UUID.randomUUID(), Instant.now(), said);
+            assertEquals("FAILED", refused.outcome(),
+                () -> "an animal wintering out of sight must be refused, not swapped for another: " + refused.narration());
+            assertTrue(refused.narration().toLowerCase(java.util.Locale.ROOT).contains("time of year"),
+                () -> "the refusal must say it is the season, which is the one thing a player cannot work out: " + refused.narration());
+            assertEquals(0, (int) jdbc.queryForObject(
+                "SELECT COUNT(*) FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id WHERE es.chunk_id=?",
+                Integer.class, chunk), "and nothing else is conjured onto the ground in its place");
+            assertEquals(0, (int) jdbc.queryForObject(
+                "SELECT COUNT(*) FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id=wb.population_id " +
+                "JOIN ecology_site es ON es.id=wp.site_id WHERE wb.chronicle_id=? AND es.chunk_id=?",
+                Integer.class, summary.id(), chunk), "and no bond is formed with an animal that is not there");
+
+            // THE POSITIVE CASE OF THE REFUSAL: the same sentence, in a month the animal is abroad.
+            jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1",
+                java.sql.Timestamp.from(Instant.parse("2031-06-15T10:00:00Z")));
+            WildlifeEncounterService.EncounterResult met =
+                wildlife.tame(summary.id(), chunk, UUID.randomUUID(), Instant.now(), said);
+            assertEquals("SUCCEEDED", met.outcome(), met::narration);
+            assertEquals(species, jdbc.queryForObject(
+                "SELECT wp.species_key FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id WHERE es.chunk_id=?",
+                String.class, chunk), "in season, the animal they name is the animal they approach");
+        } finally {
+            if (was != null) jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", was);
+        }
     }
 }

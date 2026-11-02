@@ -67,6 +67,29 @@ class VenomousWildlifeIntegrationTest {
     @Autowired PersistentStateAuditor auditor;
     @Autowired JdbcTemplate jdbc;
 
+    /**
+     * AN ADDER IS A SUMMER ANIMAL (#161, V312). Snakes brumate from November to February, and wildlife_abroad
+     * leaves a dormant species out of every wild-facing query there is — so from the first of November this test
+     * seated an adder the world then declined to produce, the ambient cast supplied a gray wolf or an elk
+     * instead, and two assertions about venom failed on a sentence about something with no fangs at all.
+     *
+     * <p>The subject here is the bite, not the calendar. June, pinned and put back, so the bite is what is
+     * measured — and the dormancy itself is asserted on purpose in {@code AmbientTamingIntegrationTest}.
+     */
+    private java.sql.Timestamp clockBefore;
+
+    @org.junit.jupiter.api.BeforeEach
+    void inTheSeasonOfSnakes() {
+        clockBefore = jdbc.queryForObject("SELECT simulated_at FROM simulation_clock WHERE id=1", java.sql.Timestamp.class);
+        jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1",
+            java.sql.Timestamp.from(java.time.Instant.parse("2031-06-10T08:00:00Z")));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void restoreClock() {
+        if (clockBefore != null) jdbc.update("UPDATE simulation_clock SET simulated_at=? WHERE id=1", clockBefore);
+    }
+
     private int illness(UUID chronicle) {
         Integer n = jdbc.queryForObject("SELECT illness_severity FROM chronicle_physiology WHERE chronicle_id=?", Integer.class, chronicle);
         return n == null ? 0 : n;
