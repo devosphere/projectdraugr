@@ -116,6 +116,25 @@ class IntentClassificationRegressionTest {
                             || com.devosphere.draugr.narration.Words.word(v, carried + "s")) return true;
                     return false;
                 }
+                /**
+                 * THE CATALOGUE'S ADVERTISED PHRASES, faked the same way and for the same reason (#37).
+                 *
+                 * <p>Without this the real method reaches a null {@code jdbc}, catches the NPE and answers
+                 * false for everything — so the guard at the top of {@code classify} would be inert here and
+                 * these cases would assert nothing while the rule worked in play. That silence is the whole
+                 * hazard: a stub more forgiving OR more ignorant than the world makes a test meaningless.
+                 *
+                 * <p>Already normalised, because the real query normalises in SQL. Ten phrases taken off a live
+                 * catalogue, each one a keyword of the recipe it belongs to, and deliberately including the
+                 * four BARE VERBS — they really are catalogue keywords, and the only thing that keeps them on
+                 * their Java intents is the second half of the guard, which this list cannot fake away.
+                 */
+                @Override protected java.util.List<String> everyRecipeName() {
+                    return java.util.List.of(
+                        "slake the quicklime", "drop spindle", "ox yoke", "water dipper", "fix a meal",
+                        "make a tracking marker bundle", "covered basket", "recover the iron", "hone stone",
+                        "take the flesh off", "fix", "dress", "carve", "reinforce");
+                }
             };
         // THE SPECIES REGISTRY, faked the same way and for the same reason as the item catalogue above (#99).
         // The hunting gate used to carry eleven animal literals — deer, boar, wolf, hare, rabbit, fox, elk,
@@ -3297,6 +3316,57 @@ class IntentClassificationRegressionTest {
         assertEquals("TRAVEL", classify("travel to Stonefield"));
         assertEquals("JUDGE_PLACE", classify("what do I know about this place"));
         assertEquals("SCOUT", classify("what is over that ridge"));
+    }
+
+    /**
+     * A RECIPE'S OWN NAME, SAID WHOLE, IS A REQUEST FOR THAT RECIPE (#37/#99).
+     *
+     * <p>This chain is consulted before the two-axis matcher ever sees the sentence, and it matches on raw
+     * substrings with no word boundaries — so it had first claim on every phrase the catalogue advertises.
+     * Swept all 2,337 distinct {@code material_process} keywords through a running stack, 0 no-reply: 66 were
+     * taken by an intent here before the catalogue was asked. The intent beside each phrase below is the one
+     * that was measured taking it.
+     *
+     * <p>Both halves of the guard are asserted, because either alone is wrong: the phrase must be one the
+     * catalogue advertises AND one it can actually answer.
+     */
+    @Test
+    void aRecipesOwnNameSaidWholeReachesTheRecipe() throws Exception {
+        for (String[] c : new String[][]{
+                {"slake the quicklime", "DRINK"},
+                {"drop spindle", "DROP"},
+                {"ox yoke", "JUDGE_HAULAGE"},
+                {"water dipper", "COLLECT_WATER"},
+                {"fix a meal", "REPAIR_ITEM"},
+                {"make a tracking marker bundle", "TRACK"},
+                {"covered basket", "CLOSE_CONTAINER"},
+                {"recover the iron", "PICK_UP"},
+                {"hone stone", "REPAIR_ITEM"},
+                {"take the flesh off", "UNEQUIP"}})
+            assertEquals("UNKNOWN", classify(c[0], true),
+                () -> "\"" + c[0] + "\" is a recipe's own name and this chain took it as " + c[1]);
+
+        // THE HALF THAT MAKES IT SAFE. The same phrases with the catalogue unable to answer them: the Java
+        // intent keeps them, because standing aside there would trade a wrong answer for no answer at all.
+        // Eight of the sixty-six are exactly this case — a missing subject term, which is data work.
+        assertEquals("DRINK", classify("slake the quicklime", false));
+        assertEquals("DROP", classify("drop spindle", false));
+        assertEquals("JUDGE_HAULAGE", classify("ox yoke", false));
+
+        // THE BARE VERBS, and why neither a word count nor a list of exceptions is needed. All four are real
+        // catalogue keywords and all four are in the fake catalogue above, so the first half of the guard says
+        // yes to them. A bare verb names no material, so no process's subject gate passes, the second half is
+        // false in play, and they keep the intents a Chronicle saying one word actually means.
+        assertEquals("REPAIR_ITEM", classify("fix", false));
+        assertEquals("EQUIP", classify("dress", false));
+        assertEquals("MARK", classify("carve", false));
+        assertEquals("REPAIR_ITEM", classify("reinforce", false));
+
+        // AND A SENTENCE THE CATALOGUE CAN ANSWER BUT DOES NOT ADVERTISE WORD FOR WORD is untouched. This is
+        // the direction that would make the guard a free-for-all if the whole-sentence half were dropped: each
+        // of these contains a phrase from the fake catalogue and is not one.
+        assertEquals("DRINK", classify("drink the water", true));
+        assertEquals("DROP", classify("drop the spindle", true));
     }
 
     /**
