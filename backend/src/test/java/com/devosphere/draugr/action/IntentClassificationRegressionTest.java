@@ -50,6 +50,23 @@ class IntentClassificationRegressionTest {
                     String v = t == null ? "" : t.toLowerCase(java.util.Locale.ROOT);
                     return v.contains("fire clay") || v.contains("limestone");
                 }
+                /**
+                 * WHAT IS IN THE PACK, faked the same way, so the real reading runs (#37/#99). Only the
+                 * carried list is stubbed here — anAttackNaming itself is the production matcher, verb-strip
+                 * and all, which is the point: these cases hold the shipped reader to account rather than a
+                 * copy of its reasoning.
+                 *
+                 * <p>A HUNTER'S KIT, and deliberately NO AXE. The catalogue marks every axe as a working tool
+                 * as well as a weapon, so an axe is excluded from this list by the real query for the same
+                 * reason — `swing the axe at the tree` must stay felling.
+                 */
+                @Override protected java.util.List<String[]> weaponsCarriedForNaming() {
+                    return java.util.List.of(
+                        new String[]{"Hunting bow", "hunting_bow"}, new String[]{"Hunting arrow", "hunting_arrow"},
+                        new String[]{"Primitive spear", "primitive_spear"}, new String[]{"Javelin", "javelin"},
+                        new String[]{"Stone club", "stone_club"}, new String[]{"Sling", "sling"},
+                        new String[]{"Sling stone", "sling_stone"});
+                }
                 @Override public boolean namesAKeptAnimal(String t) {
                     String v = t == null ? "" : t.toLowerCase(java.util.Locale.ROOT);
                     // The fake catalogue now carries the HEAD NOUNS too (#106). Tending, grooming and feeding
@@ -2126,6 +2143,51 @@ class IntentClassificationRegressionTest {
         assertEquals("LINE_GARMENT", classify("stuff my boots with dry grass"));
         assertEquals("LINE_GARMENT", classify("stuff my clothes with moss"));
         assertEquals("DRY_BODY", classify("get under cover and dry off"), "and real drying still dries");
+    }
+
+    /**
+     * USING A WEAPON IS NOT MAKING ONE (#37/#99).
+     *
+     * <p>The hunt gate wants an attack verb AND a named animal. #827 taught the animal side the whole
+     * 215-species catalogue; nothing read the weapon side at all, so with a bow, arrows, a javelin, a sling and
+     * a spear all in the pack and an ox herd standing in the chunk, {@code throw the spear at the ox} killed it
+     * and {@code throw the spear} reached nothing — while {@code shoot the bow} was answered with an offer to
+     * assemble a bow and {@code sling a stone} answered SUCCEEDED and put the stone in the hand.
+     *
+     * <p>The kit these read against is the stubbed {@code weaponsCarriedForNaming} above; the reading itself is
+     * the shipped one. {@link com.devosphere.draugr.item.WeaponNamedAloudTest} holds that matcher to account
+     * directly, and these assert the ROUTING — which is the half that can be taken away by a rule above it.
+     */
+    @Test
+    void theWeaponInHandReachesTheFight() throws Exception {
+        assertEquals("CONFRONT_WILDLIFE", classify("shoot the bow"));
+        assertEquals("CONFRONT_WILDLIFE", classify("loose an arrow"));
+        assertEquals("CONFRONT_WILDLIFE", classify("throw the spear"));
+        assertEquals("CONFRONT_WILDLIFE", classify("hurl the javelin"));
+        assertEquals("CONFRONT_WILDLIFE", classify("swing the club"));
+        // The sling, whose word was claimed for EQUIP before anything could be cast with it.
+        assertEquals("CONFRONT_WILDLIFE", classify("sling a stone"));
+        // AND THE OTHER HALF, which is what makes a widened reading safe rather than merely wider. An axe is
+        // catalogued as a working tool as well as a weapon, so it is absent from the carried list by the real
+        // query's own rule — and felling keeps every phrase it had.
+        assertNotEquals("CONFRONT_WILDLIFE", classify("swing the axe at the tree"), "an axe needs the animal named");
+        assertEquals("FELL_TREE", classify("chop down the tree"));
+        assertEquals("LIGHT_FIRE", classify("strike the flint"));
+        assertEquals("FISH", classify("cast a line"));
+        assertEquals("FISH", classify("cast the net"));
+        assertEquals("BUILD_FENCE", classify("throw up a fence"));
+        assertNotEquals("CONFRONT_WILDLIFE", classify("spin the fire bow"), "the fire drill is not a weapon");
+        // THE ONE CI CAUGHT AND THIS SUITE COULD NOT. "sling" also means equip, and the rule that says so
+        // stood aside for actionMatchesProcess — which says yes to any sentence naming something a recipe can
+        // produce. So this sentence stopped being an equip and answered about dry branches for a burden frame
+        // the Chronicle had just lashed. It lived in a DB-backed integration test, and those skip locally;
+        // asserted here, where it costs nothing, because the defect is in the ROUTING and needs no database.
+        assertEquals("EQUIP", classify("i sling the burden frame on my back"));
+        assertEquals("EQUIP", classify("sling the pack on my back"));
+        // A thing being MADE is not a thing being used, even when its name carries one of these words. The
+        // guard is the catalogue's own making verbs; with no database here it stands aside, so this case is
+        // carried live and by the process stub rather than asserted as a category match.
+        assertNotEquals("CONFRONT_WILDLIFE", classify("sling the pack over my shoulder"));
     }
 
     /**

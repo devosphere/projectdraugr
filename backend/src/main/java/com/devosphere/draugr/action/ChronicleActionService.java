@@ -4891,7 +4891,20 @@ public class ChronicleActionService {
         // "sling" also means equip (sling it over a shoulder) — but not when 'sling' is part of a thing being made,
         // i.e. a sling stone or a sling pouch ("shape a sling stone", "sew a sling stone pouch"). Those route to their
         // craft recipes; every other use of 'sling' is the equip verb.
-        if(value.contains("sling") && !value.contains("sling stone") && !value.contains("sling pouch")) return Intent.EQUIP;
+        // ...and not when the sling is being USED. `sling a stone` answered EQUIP, SUCCEEDED, "You settle the
+        // Sling stone into place." — a request to cast a stone at something, answered by putting the stone in
+        // the hand and calling it done. Casting is what a sling is for; see anAttackWithAWeaponInHand.
+        // ...and not when one is being MADE. The catalogue holds five sling recipes — a leather one, a grass
+        // carrying sling, an arm sling, a stone pouch, the stone itself — and this rule claimed the word for
+        // EQUIP before any of them could be asked for, so `make a sling` and `knot an arm sling` reached a
+        // dressing act instead of their own recipes. Two words wide and three meanings deep: a sling you cast
+        // a stone with, an arm sling you bind a wound with, a carrying sling you put a pack on.
+        // ...and it must be asked PRECISELY. Standing aside for actionMatchesProcess was too broad: that
+        // matcher says yes to any sentence naming something a recipe can produce, so `I sling the burden frame
+        // on my back` stopped being an equip and answered about dry branches for a frame just finished. CI
+        // caught it; the local suite could not, because that test is DB-backed and those skip here.
+        if(value.contains("sling") && !value.contains("sling stone") && !value.contains("sling pouch")
+           && !items.anAttackWithAWeaponInHand(value) && !items.asksForOneToBeMade(value,"sling")) return Intent.EQUIP;
         if(!action.contains(":")&&(value.contains("map")||value.contains("chart")||value.contains("cartograph"))&&(value.contains("sketch")||value.contains("draw")||value.contains("make")||value.contains("chart")||value.contains("create")||value.contains("update")||value.contains("plot")||value.contains("survey")||value.contains("map out")
            // ...and the words a person actually uses for putting a place ON the map (#37). Measured: `add this
            // place to my map` and `note this place on the map` reached nothing at all, while `mark this place on
@@ -4900,6 +4913,15 @@ public class ChronicleActionService {
            ||value.contains("mark")||value.contains("note")||value.contains("add")||value.contains("put")
            )) return Intent.SKETCH_MAP;
         if(action.contains(":")&&(value.contains("write")||value.contains("draw")||value.contains("sketch")||value.contains("record")||value.contains("inscribe")||value.contains("mark ")||value.contains("note"))) return Intent.WRITE;
+        // USING A WEAPON IS NOT MAKING ONE. The hunt gate one method down needs an attack verb AND a named
+        // animal, and #827 taught the animal side the whole 215-species catalogue while the weapon side read
+        // nothing at all — so `shoot the bow` was answered with an offer to assemble a bow, `loose an arrow`
+        // with "you have not got enough fletched shaft", `hurl the javelin` with "this work needs heat", and
+        // `throw the spear` with nothing, every one of them with the weapon in hand. See
+        // anAttackWithAWeaponInHand for the measurement and for why the verb is stripped before the thing is
+        // read. LAST IN THIS CHAIN ON PURPOSE: every rule above keeps the sentences it already claims, and this
+        // one only takes what was falling through to the legacy chain and the material matcher behind it.
+        if(items.anAttackWithAWeaponInHand(value)) return Intent.CONFRONT_WILDLIFE;
         return classifyLegacy(action);
     }
     /** Whole-word containment, delegating to the one definition of it — see {@link com.devosphere.draugr.narration.Words}. */
