@@ -261,7 +261,20 @@ class ALifePerSpeciesFamilyIntegrationTest {
                 () -> f.name() + ": a beast kept in a " + f.spokenName() + " must rest in it (was " + tired + ", now " + rested + ")");
 
             // ---- DISREPAIR, set directly: the weathering pass has its own test and would cost days here.
-            jdbc.update("UPDATE construction_project SET integrity_percent=50 WHERE object_id=?", house);
+            //
+            // AND THE CLOCK IS PINNED WITH IT, because this test did not own what it measures. Setting the
+            // integrity alone left `last_structural_update` at whenever the house was raised, so the weathering
+            // pass that runs inside the mending action below took the owed wear off FIRST: it charges
+            // FLOOR(days since last_structural_update) x the weather rate. The assertion "a mending puts 25
+            // back" then measured the mending MINUS however many simulated days the shared world had moved on
+            // since this fixture was built, which is not a property of mending at all.
+            //
+            // It went red in CI on a change that only shifted action durations — enough to cross one day
+            // boundary — and read "equine: a mending puts 25 back on a horse stable ==> expected: <75> but was:
+            // <69>". Six points, which is exactly a whole-day multiple of the decay rate. Pinning the stamp to
+            // the simulated now leaves nothing owed, so the +25 below is the mending and only the mending.
+            jdbc.update("UPDATE construction_project SET integrity_percent=50, " +
+                "last_structural_update=(SELECT simulated_at FROM simulation_clock WHERE id=1) WHERE object_id=?", house);
 
             // ---- MENDING, with one of the things it was built from (#795).
             var mended = actions.resolve("repair the " + f.spokenName(), UUID.randomUUID());
