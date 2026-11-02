@@ -3298,4 +3298,59 @@ class IntentClassificationRegressionTest {
         assertEquals("JUDGE_PLACE", classify("what do I know about this place"));
         assertEquals("SCOUT", classify("what is over that ridge"));
     }
+
+    /**
+     * A WORD INSIDE ANOTHER WORD (#37). The stock-welfare rule took the ailment words by raw {@code contains},
+     * and "lame" sits inside FLAME, LAMELLA and LAMELLAR. So a Chronicle tending their fire — `fan the flame`,
+     * `blow on the flame`, `the flame is low`, `how is the flame` — was answered "You keep no tamed animals,
+     * and there is nothing of yours to look over."
+     *
+     * <p>It was found from the other end: `lamellar armour` and `lace the lamellae` are the OWN advertised
+     * keywords of assemble_lamellar_armor and cut_lamellae, and both recipes were unreachable by their own
+     * names because this rule claimed the phrase first. One substring, two families, and the line directly
+     * below the defect already used word() because "fit" sits inside PROFIT and OUTFIT.
+     */
+    @Test void theFlameWasNeverLame() throws Exception {
+        for (String phrase : new String[]{"fan the flame", "blow on the flame", "the flame is low",
+                                          "how is the flame", "lamellar armour", "lace the lamellae"})
+            assertNotEquals("CHECK_STOCK", classify(phrase), phrase);
+
+        // AND THE AILMENT ITSELF IS UNTOUCHED, which is the boundary: the rule exists because in this world
+        // nothing goes lame except a kept animal, and a keeper says "is he limping" without naming the species.
+        assertEquals("CHECK_STOCK", classify("is the goat lame"));
+        assertEquals("CHECK_STOCK", classify("is he limping"));
+        assertEquals("CHECK_STOCK", classify("is the ewe lame"));
+    }
+
+    /**
+     * THE VERBS KNEW ONE NOUN (#37). Breathing a banked fire back up hung off the word "ember" alone, so
+     * `fan the embers` was answered and `fan the fire`, `blow on the fire`, `coax the fire` and `fan the flame`
+     * reached nothing at all — the same act, said the way most people say it.
+     *
+     * <p>And blowing a flame OUT is the opposite act, which this rule could easily have swallowed. The killing
+     * sense was itself unreachable: EXTINGUISH_FIRE knew extinguish, put out, douse, smother, stamp and quench,
+     * and not the plainest one of all. Both directions are asserted here because each is the other's guard.
+     */
+    @Test void theFireIsFannedByWhateverItIsCalled() throws Exception {
+        for (String phrase : new String[]{"fan the fire", "blow on the fire", "fan the flame", "blow on the flame",
+                                          "coax the fire", "breathe on the coals", "fan the embers"})
+            assertEquals("LIGHT_FIRE", classify(phrase), phrase);
+
+        for (String phrase : new String[]{"blow out the fire", "blow the fire out", "blow out the flame",
+                                          "blow it out", "snuff the flame", "snuff it", "snuff out the embers"})
+            assertEquals("EXTINGUISH_FIRE", classify(phrase), phrase);
+
+        // Blowing is the one killing word that is not unambiguous, so it only counts as killing beside "out" —
+        // and these two must stay nobody's, or the guard is just a wider hole.
+        assertEquals("UNKNOWN", classify("blow the dust off the stone"));
+        assertEquals("UNKNOWN", classify("blow my nose"));
+
+        // The neighbouring fire acts keep their own verbs.
+        assertEquals("FEED_FIRE", classify("feed the fire"));
+        assertEquals("BANK_FIRE", classify("bank the fire"));
+        assertEquals("LIGHT_FIRE", classify("light the fire"));
+        assertEquals("CHECK_FIRE", classify("how is the fire"));
+        assertEquals("EXTINGUISH_FIRE", classify("douse the fire"));
+        assertEquals("EXTINGUISH_FIRE", classify("smother it"));
+    }
 }
