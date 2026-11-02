@@ -678,6 +678,7 @@ public class ChronicleActionService {
         else if (intent == Intent.JUDGE_UNSEEN) { String[] r = judgeUnseen(chronicle, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.TURN_OUT_STOCK) { String[] r = items.turnOutStock(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.BRING_IN_STOCK) { String[] r = items.bringInStock(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.JUDGE_WHERE_TO_GO) { String[] r = judgeWhereToGo(chronicle); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_WORK_IN_HAND) { String[] r = judgeWorkInHand(chronicle, text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_LEARNING) { String[] r = judgeLearning(chronicle); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_FLORA) { String[] r = judgeFlora(chronicle.location()); outcome = r[0]; perception = r[1]; }
@@ -2145,6 +2146,93 @@ public class ChronicleActionService {
             &&(value.contains("animals in")||value.contains("stock in")||value.contains("herd in")
                ||value.contains("beasts in")||value.contains("them in for the night")
                ||value.contains("animals up for the night")||value.contains("them off the grass"));
+    }
+
+    /**
+     * Where there is to go (#37/#99) — what is known each way, and what is not.
+     *
+     * <p>The last miss on the release-gate sweep of ordinary sentences. Three records hold the answer and every
+     * one of them is read by something else already: {@code chronicle_chunk_visit} knows which ground this
+     * Chronicle has stood on, {@code chronicle_named_location} knows what they named and where it lies, and
+     * {@code world_chunk}'s grid knows what kind of country each way is. A keeper could ask the bearing TO a
+     * named place and could ask what kind of ground lay somewhere — and could not ask the plainest question of
+     * all, which is what there is.
+     *
+     * <p><b>It reports and does not advise.</b> "You should go north" is a judgement this game has no business
+     * making. What is known each way, and which ways are unwalked, is the same information with the choice left
+     * where it belongs — and the unwalked directions are the half a player cannot get any other way, because
+     * nothing else in the game will say "you have not been that way at all".
+     */
+    private String[] judgeWhereToGo(ActiveChronicle chronicle) {
+        java.util.Map<String,Object> here = jdbc.queryForMap(
+            "SELECT world_id, grid_x, grid_y FROM world_chunk WHERE id=?", chronicle.location());
+        UUID world = (UUID) here.get("world_id");
+        int gx = ((Number) here.get("grid_x")).intValue(), gy = ((Number) here.get("grid_y")).intValue();
+
+        java.util.List<String> known = new java.util.ArrayList<>();
+        java.util.List<String> unwalked = new java.util.ArrayList<>();
+        int[][] steps = {{0,-1},{1,0},{0,1},{-1,0}};   // north, east, south, west
+        for (int[] step : steps) {
+            String bearing = com.devosphere.draugr.world.Compass.of(step[0], step[1]);
+            java.util.Map<String,Object> next = jdbc.query(
+                "SELECT c.biome, COALESCE((SELECT v.visit_count FROM chronicle_chunk_visit v " +
+                "    WHERE v.chronicle_id=? AND v.chunk_id=c.id), 0) AS visits " +
+                "FROM world_chunk c WHERE c.world_id=? AND c.grid_x=? AND c.grid_y=?",
+                rs -> rs.next() ? java.util.Map.of("biome", rs.getString(1), "visits", rs.getInt(2)) : null,
+                chronicle.id(), world, gx + step[0], gy + step[1]);
+            if (next == null) { unwalked.add(bearing + ", where the country ends"); continue; }
+            if (((Number) next.get("visits")).intValue() > 0)
+                known.add(groundSaidPlainly((String) next.get("biome")) + " to the " + bearing);
+            else unwalked.add(bearing);
+        }
+
+        // AND THE PLACES YOU NAMED, which is the other half of knowing where to go: a keeper who called a
+        // marsh Fenwatch is owed its bearing without having to remember the grid.
+        java.util.List<String> named = new java.util.ArrayList<>();
+        for (java.util.Map<String,Object> place : jdbc.queryForList(
+                "SELECT n.name, c.grid_x, c.grid_y FROM chronicle_named_location n " +
+                "JOIN world_chunk c ON c.id=n.chunk_id " +
+                "WHERE n.chronicle_id=? AND c.id <> ? ORDER BY n.designated_at DESC LIMIT 4",
+                chronicle.id(), chronicle.location())) {
+            int px = ((Number) place.get("grid_x")).intValue(), py = ((Number) place.get("grid_y")).intValue();
+            String bearing = com.devosphere.draugr.world.Compass.of(px - gx, py - gy);
+            int steps2 = Math.abs(px - gx) + Math.abs(py - gy);
+            // SAID IN WALKING, not in chunks. "Fenwatch lies 3 chunks to the southeast" is the engine
+            // talking: nobody in this world has ever used that word. The figure is the flat going the
+            // travel reckoning itself starts from, and it is offered as the estimate it is — the real
+            // walk is whatever the ground between turns out to be.
+            named.add(place.get("name") + " lies " + humanSpan(steps2 * FLAT_MINUTES_PER_DISTANCE)
+                + " of walking" + (bearing == null ? " away" : " to the " + bearing)
+                + ", as the ground allows");
+        }
+
+        StringBuilder b = new StringBuilder();
+        if (!known.isEmpty()) b.append("You know what lies next to you: ").append(joinAnd(known)).append('.');
+        if (!unwalked.isEmpty())
+            b.append(b.length() == 0 ? "You have walked none of the ground around you — nothing to the "
+                                      : " You have not been ")
+             .append(String.join(", nor ", unwalked)).append('.');
+        if (!named.isEmpty()) b.append(" Of the places you have named, ").append(joinAnd(named)).append('.');
+        b.append(" Which of them is worth the walking is yours to say.");
+        return new String[]{"SUCCEEDED", b.toString()};
+    }
+
+    /** A biome in the words the prose uses for it, for a reading that lists several at once. */
+    private static String groundSaidPlainly(String biome) {
+        return switch (biome == null ? "" : biome) {
+            case "GRASSLAND" -> "open grass";
+            case "FOREST", "TEMPERATE_FOREST" -> "woodland";
+            case "WETLAND" -> "marsh";
+            case "RIVER_BANK" -> "a river bank";
+            case "MOUNTAIN" -> "mountain";
+            case "HIGHLAND" -> "high ground";
+            case "COAST" -> "coast";
+            case "OCEAN" -> "open water";
+            case "CAVE_MOUTH" -> "a cave mouth";
+            case "CAVE_INTERIOR" -> "the rock";
+            case "DESERT" -> "dry waste";
+            default -> biome.toLowerCase(Locale.ROOT).replace('_', ' ');
+        };
     }
 
     private boolean asksWhatRemainsOfTheWork(String value) {
@@ -3854,6 +3942,20 @@ public class ChronicleActionService {
         // exactly the state change: out on this ground, or in behind the wall on it.
         if (turningStockOut(value)) return Intent.TURN_OUT_STOCK;
         if (shuttingStockIn(value)) return Intent.BRING_IN_STOCK;
+        // WHERE THERE IS TO GO (#37/#99). The last miss on the release-gate sweep: `where should I go` reached
+        // nothing at all. The world knows the answer in three records it already keeps — chronicle_chunk_visit
+        // (which ground you have stood on), chronicle_named_location (what you named and where it lies) and
+        // world_chunk's own grid (what kind of country each way is) — and every one of them is read by some
+        // other act: the travel, the bearing reading, the place reading.
+        //
+        // It REPORTS, and does not advise. "You should go north" is a judgement the game has no business
+        // making; "to the north you have not been, and the marsh you named Fenwatch lies two days east" is the
+        // same information with the choice left where it belongs.
+        if (value.contains("where should i go")||value.contains("where do i go")
+            ||value.contains("where to go")||value.contains("where could i go")
+            ||value.contains("where can i go")||value.contains("which way should i go")
+            ||value.contains("where have i not been")||value.contains("what is around here"))
+            return Intent.JUDGE_WHERE_TO_GO;
         // What you are carrying and what state it is in (#37, act fifteen). condition_state, use_count and
         // quality_grade have been on every item since the table existed, and the LOAD is computed on every
         // action — and "how heavy is my pack" was answered "you have nothing by that name in hand to weigh".
@@ -5850,7 +5952,7 @@ public class ChronicleActionService {
             || (word(v, "fix") && !v.contains("memory") && !v.contains("mind"));
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, JUDGE_CLOTHING, JUDGE_PLACE, JUDGE_WORK_IN_HAND, JUDGE_LEARNING, JUDGE_FLORA, JUDGE_RAISING, JUDGE_CAMP_GROUND, JUDGE_TOOLS, JUDGE_UNSEEN, TURN_OUT_STOCK, BRING_IN_STOCK, PARE_HOOVES, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, JUDGE_CLOTHING, JUDGE_PLACE, JUDGE_WORK_IN_HAND, JUDGE_LEARNING, JUDGE_FLORA, JUDGE_RAISING, JUDGE_CAMP_GROUND, JUDGE_TOOLS, JUDGE_UNSEEN, TURN_OUT_STOCK, BRING_IN_STOCK, JUDGE_WHERE_TO_GO, PARE_HOOVES, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;}
         /** The cardinal for a grid offset, for when the WORLD names the direction rather than the player (#37). */
         static Direction of(int dx,int dy){ for(Direction d:values()) if(d.dx==dx&&d.dy==dy) return d; return null; } }    /**     * The structured perception frame — the seam every future Simulation Agent reads
