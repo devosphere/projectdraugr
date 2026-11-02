@@ -2733,6 +2733,37 @@ public class ChronicleActionService {
     private Intent classify(String action) {
         String value=action.toLowerCase(Locale.ROOT);
         if(DOCUMENT_EDIT.matcher(action).matches()) return Intent.EDIT_DOCUMENT;
+        // THE CATALOGUE'S OWN NAME FOR A THING IS A REQUEST FOR IT (#37/#99).
+        //
+        // This chain is a hundred and twenty-six branches of raw `contains` with no word boundaries, and it is
+        // consulted BEFORE the two-axis matcher ever sees the sentence. So it had first claim on every phrase
+        // the catalogue advertises, and a sentence that was a recipe's own name word for word was answered by
+        // whichever branch happened to share a substring with it. Swept all 2,337 distinct material_process
+        // keywords through a running stack, 0 no-reply: 66 were taken by an intent here before the catalogue
+        // was asked. The shape of it:
+        //
+        //   slake the quicklime           -> DRINK              (slake_lime_mortar)
+        //   drop spindle                  -> DROP               (make_drop_spindle)
+        //   recover the iron              -> PICK_UP            (reforge_iron_scrap)
+        //   fix a meal                    -> REPAIR_ITEM        (cook_greens)
+        //   ox yoke                       -> JUDGE_HAULAGE      (make_draft_yoke)
+        //   make a tracking marker bundle -> TRACK              (make_tracking_marker_bundle)
+        //   water dipper                  -> COLLECT_WATER      (carve_water_ladle)
+        //   covered basket                -> CLOSE_CONTAINER    (weave_lidded_basket)
+        //
+        // The last two are the clearest reading of the whole seam: a dipper and a basket are OBJECTS, and the
+        // sentence naming one was taken as an act done with it.
+        //
+        // UNKNOWN rather than PROCESS_MATERIAL, because that is the fall-through the catalogue already owns,
+        // and it tries AssemblyService.advance BEFORE runProcess — so an assembly's own name (`build a lime
+        // kiln`, `reed screen`, `smoke hood`) reaches the same ADVANCE_ASSEMBLY it always did, by the other
+        // road, with nothing written here to special-case it.
+        //
+        // The guard asks whether the catalogue can actually ANSWER the phrase, not merely whether it
+        // advertises it, so this can never trade a wrong answer for no answer — see
+        // PhysicalItemService.aRecipesOwnNameTheCatalogueCanAnswer, which also explains why the bare verbs
+        // `fix`, `dress`, `carve` and `reinforce` keep their intents here with no list of exceptions.
+        if(items.aRecipesOwnNameTheCatalogueCanAnswer(action)) return Intent.UNKNOWN;
         if((value.contains("craft")||value.contains("make"))&&value.contains("spear")) return Intent.CRAFT_SPEAR;
         if((value.contains("craft")||value.contains("make"))&&value.contains("knife")) return Intent.CRAFT_KNIFE;
         if((value.contains("craft")||value.contains("make"))&&value.contains("hammer")) return Intent.CRAFT_HAMMER;
