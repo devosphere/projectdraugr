@@ -2086,6 +2086,16 @@ class IntentClassificationRegressionTest {
         assertEquals("EQUIP", classify("wrap up warm"));
         assertEquals("EQUIP", classify("cover my hands"));
         assertEquals("EQUIP", classify("put my hood up"));
+        // ...AND IT MUST OUTRANK THE PROCESS MATCHER, which was quietly eating two of the six. Measured live:
+        // `wrap myself` and `hood up` answered "those words fit more than one piece of work" and offered bark
+        // wraps and fur hoods to a player who only wanted to cover up with what they had. The six are a closed
+        // list and none of them makes anything, so the making guard belongs to the bare verb alone — "dress" is
+        // also what a tanner does to a hide.
+        assertEquals("EQUIP", classify("wrap myself", true));
+        assertEquals("EQUIP", classify("hood up", true));
+        assertEquals("EQUIP", classify("layer up", true));
+        assertEquals("EQUIP", classify("cover my head", true));
+        assertNotEquals("EQUIP", classify("dress hides", true), "the tanner keeps the bare verb");
 
         // Stating the condition, not asking after it.
         assertEquals("WARM_BODY", classify("i am cold"));
