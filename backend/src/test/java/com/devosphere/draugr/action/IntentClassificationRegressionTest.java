@@ -112,6 +112,19 @@ class IntentClassificationRegressionTest {
         // pack down" from being read as a hunt.
         com.devosphere.draugr.ecology.WildlifeEncounterService wildlife =
             new com.devosphere.draugr.ecology.WildlifeEncounterService(null, null, null, null) {
+                // The butchering gate asks a narrower question than the hunt does, so the fake answers it
+                // separately: same animals, minus the trout. A fish is not butchered - it is gutted and
+                // filleted, and fillet_fish owns those verbs - so AQUATIC is excluded in play by the
+                // registry's own movement_class. Keeping trout in one list and out of the other is what
+                // lets `butcher the trout` be asserted as NOT a butchering.
+                @Override public boolean namesButcherableQuarry(String t) {
+                    String v = t == null ? "" : " " + t.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim() + " ";
+                    for (String beast : new String[]{"badger lizard", "lizard", "hedgehog", "pheasant", "partridge",
+                                                     "squirrel", "lynx", "beaver", "otter", "duck", "ox"})
+                        if (v.contains(" " + beast + " ") || v.contains(" " + beast + "s ")
+                            || v.contains(" " + com.devosphere.draugr.item.PhysicalItemService.pluralOf(beast) + " ")) return true;
+                    return false;
+                }
                 @Override public boolean namesWildQuarry(String t) {
                     String v = t == null ? "" : " " + t.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim() + " ";
                     for (String beast : new String[]{"badger lizard", "lizard", "hedgehog", "pheasant", "partridge",
@@ -3139,6 +3152,56 @@ class IntentClassificationRegressionTest {
         assertEquals("CONFRONT_WILDLIFE", classify("hunt the deer"));
         assertEquals("CONFRONT_WILDLIFE", classify("hunt the boar"));
         assertEquals("CONFRONT_WILDLIFE", classify("hunt the rabbit"));
+    }
+
+    /**
+     * The knife reads the same catalogue the hunt does (#37/#99).
+     *
+     * <p>#827 made the hunting gate ask the registry instead of guessing from eleven literals. The butchering
+     * gate one method away kept guessing from ten - deer, boar, elk, aurochs, hare, rabbit, goat, wolf, bear,
+     * fox - so measured live: {@code butcher the ox} and {@code quarter the ox} reached NOTHING while
+     * {@code skin the ox} and {@code gut the ox} worked, because a second butchering rule in {@code classify}
+     * matches those two by phrase and asks for no species at all. Two rules for one act, disagreeing.
+     */
+    @Test
+    void anyBodyTheWorldHoldsCanBeButchered() throws Exception {
+        // The ten literals the gate knew are kept, so none of them can regress.
+        assertEquals("HARVEST_CARCASS", classify("butcher the deer"));
+        assertEquals("HARVEST_CARCASS", classify("skin the boar"));
+        // And the ones it had never heard of, over bodies it would have skinned without complaint.
+        assertEquals("HARVEST_CARCASS", classify("butcher the ox"));
+        assertEquals("HARVEST_CARCASS", classify("quarter the ox"));
+        assertEquals("HARVEST_CARCASS", classify("butcher the hedgehog"));
+        assertEquals("HARVEST_CARCASS", classify("butcher the lynx"));
+        assertEquals("HARVEST_CARCASS", classify("butcher the beaver"));
+        // Said in the plural, because a keeper with one ox does not say oxen (V453 gave pluralOf; the hunt's
+        // and the knife's shared matcher was still appending a bare s after it).
+        assertEquals("HARVEST_CARCASS", classify("butcher the oxen"));
+        // The phrase-matched rule in classify() still answers with no species named at all.
+        assertEquals("HARVEST_CARCASS", classify("skin the ox"));
+        assertEquals("HARVEST_CARCASS", classify("gut the ox"));
+        assertEquals("HARVEST_CARCASS", classify("butcher the carcass"));
+    }
+
+    /**
+     * What the widened knife must NOT take. The half that makes a new rule safe rather than merely new.
+     */
+    @Test
+    void whatTheKnifeMustNotTake() throws Exception {
+        // A FISH IS NOT BUTCHERED. fillet_fish, dry_fish and brine_fish are keyed on the word "fish" and own
+        // these verbs; AQUATIC is excluded in play by the registry's own movement_class, which draws the line
+        // itself - beaver, river otter and muskrat are AMPHIBIOUS and are very much skinned.
+        assertNotEquals("HARVEST_CARCASS", classify("butcher the trout"));
+        assertNotEquals("HARVEST_CARCASS", classify("fillet the fish"));
+        // MONSTRUM stays out, for the reason namesWildQuarry gives: its head nouns are pack/swarm/cluster.
+        assertNotEquals("HARVEST_CARCASS", classify("butcher the troll"));
+        // Verbs this gate shares with other work, each of which must keep its own phrase.
+        assertEquals("TREAT_WOUND", classify("dress the wound"));
+        assertEquals("HARVEST_CROP", classify("harvest the crop"));
+        assertEquals("RAID_HIVE", classify("harvest the hive"));
+        assertEquals("RAID_HIVE", classify("harvest the honey"));
+        // THE SUBSTRING, for the fifth time in this project: "ox" is inside "oxbow".
+        assertNotEquals("HARVEST_CARCASS", classify("cross at the oxbow"));
     }
 
     /**

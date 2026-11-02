@@ -5663,7 +5663,15 @@ public class ChronicleActionService {
         if (value.contains("cook what i have")||value.contains("cook what i am carrying")
             ||value.contains("cook something")||value.contains("make something to eat")
             ||value.contains("cook whatever i have")||value.contains("cook up what i have")) return Intent.COOK_MEAT; if ((value.contains("harvest") || value.contains("butcher") || value.contains("skin") || value.contains("gut") || value.contains("quarter") || value.contains("dress")
-) && (value.contains("carcass") || value.contains("remains") || value.contains("animal") || value.contains("the kill") || value.contains("the game") || word(value, "deer") || word(value, "boar") || word(value, "elk") || word(value, "aurochs") || word(value, "hare") || word(value, "rabbit") || word(value, "goat") || word(value, "wolf") || word(value, "bear") || word(value, "fox"))
+) && (value.contains("carcass") || value.contains("remains") || value.contains("animal") || value.contains("the kill") || value.contains("the game") || word(value, "deer") || word(value, "boar") || word(value, "elk") || word(value, "aurochs") || word(value, "hare") || word(value, "rabbit") || word(value, "goat") || word(value, "wolf") || word(value, "bear") || word(value, "fox")
+            /* AND EVERY OTHER BODY A KNIFE WOULD OPEN (#37/#99). The ten literals above are kept because a
+               literal cannot regress and five of them name no species at all; what they could not do is grow.
+               `butcher the ox` and `quarter the ox` reached NOTHING while `skin the ox` and `gut the ox`
+               worked, because the phrase-matching butchering rule in classify() needs no species and this one
+               needed a name it had never heard. `butcher the hedgehog`, `butcher the lynx` and `butcher the
+               beaver` reached nothing over bodies this rule would have skinned. The hunt stopped guessing in
+               #827; the knife kept at it one gate away. See namesButcherableQuarry for why a fish is not in. */
+            || wildlife.namesButcherableQuarry(value))
             // Act eleven: "take the hide" reached nothing standing over a deer this same rule would have skinned,
             // because every phrasing it knew named the animal. Naming the yield is naming the act; when nothing
             // here is dead, the harvest says so, which is a better answer than no answer.

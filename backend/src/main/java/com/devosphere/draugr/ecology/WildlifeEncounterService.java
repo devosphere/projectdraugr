@@ -105,7 +105,7 @@ public class WildlifeEncounterService {
         java.util.List<String> byHeadNoun = new java.util.ArrayList<>();
         for (String key : jdbc.queryForList("SELECT species_key FROM wildlife_species", String.class)) {
             String spoken = key.replace('_', ' ');
-            if (v.contains(" " + spoken + " ") || v.contains(" " + spoken + "s ")) {
+            if (saidInEitherNumber(v, spoken)) {
                 // Said in full. Longest wins, so "wild boar" beats a bare "boar" in the same sentence.
                 if (wholeName == null || key.length() > wholeName.length()) wholeName = key;
                 continue;
@@ -113,7 +113,7 @@ public class WildlifeEncounterService {
             int cut = spoken.lastIndexOf(' ');
             if (cut > 0) {
                 String head = spoken.substring(cut + 1);
-                if (v.contains(" " + head + " ") || v.contains(" " + head + "s ")) byHeadNoun.add(key);
+                if (saidInEitherNumber(v, head)) byHeadNoun.add(key);
             }
         }
         // A NAME SAID IN FULL ALWAYS BEATS A HEAD NOUN, and that order is the whole of this. Preferring the
@@ -140,6 +140,49 @@ public class WildlifeEncounterService {
             rs -> rs.next() ? rs.getBoolean(1) : Boolean.FALSE, (Object) named.toArray(new String[0])));
     }
 
+
+    /**
+     * Whether {@code name} is said in the already-padded, already-lowercased {@code padded}, in either number.
+     *
+     * <p>The plural comes from {@link com.devosphere.draugr.item.PhysicalItemService#pluralOf}, which V453 wrote
+     * for the keeper's side. This matcher was still appending a bare {@code s}, so it read 200 of the 215
+     * species and silently none of the other 15: {@code hunt the oxen}, {@code hunt the wolves}, {@code hunt
+     * the geese}, {@code hunt the mice} and {@code kill the wolves} all reached NOTHING while the singular of
+     * every one of them worked. A hunter who says <i>wolves</i> is describing the thing that makes a wolf
+     * worth fearing.
+     *
+     * <p>Whole words only, both numbers. A substring would find "ox" inside "oxbow".
+     */
+    private static boolean saidInEitherNumber(String padded, String name) {
+        return padded.contains(" " + name + " ")
+            || padded.contains(" " + com.devosphere.draugr.item.PhysicalItemService.pluralOf(name) + " ");
+    }
+
+    /**
+     * Whether the sentence names an animal whose body a person would open with a knife (#37/#99).
+     *
+     * <p>The butchering gate knew ten species by name - deer, boar, elk, aurochs, hare, rabbit, goat, wolf,
+     * bear, fox - which is the same shape of defect {@link #namesWildQuarry} was built to end for the hunt, one
+     * gate away and still unfixed. Measured: {@code butcher the ox} and {@code quarter the ox} reached NOTHING
+     * while {@code skin the ox} and {@code gut the ox} worked, because a second butchering rule matches those
+     * two by phrase and needs no species at all. {@code butcher the hedgehog}, {@code butcher the lynx} and
+     * {@code butcher the beaver} reached nothing either, over bodies this same rule would have skinned.
+     *
+     * <p>AQUATIC is excluded, and by the catalogue's own column rather than by a second list. A fish is not
+     * butchered - it is gutted and filleted, and {@code fillet_fish}, {@code dry_fish} and {@code brine_fish}
+     * are keyed on the word "fish" and own those verbs. The registry draws the line itself: beaver, river otter
+     * and muskrat are AMPHIBIOUS and are very much skinned, while the 21 AQUATIC rows are the fish. MONSTRUM is
+     * excluded for the reason given on {@link #namesWildQuarry}.
+     */
+    @Transactional(readOnly = true)
+    public boolean namesButcherableQuarry(String actionText) {
+        java.util.List<String> named = registryNamesIn(actionText);
+        if (named.isEmpty()) return false;
+        return Boolean.TRUE.equals(jdbc.query(
+            "SELECT EXISTS(SELECT 1 FROM wildlife_species WHERE species_key = ANY(?) " +
+            "AND kingdom_class <> 'MONSTRUM' AND movement_class <> 'AQUATIC')",
+            rs -> rs.next() ? rs.getBoolean(1) : Boolean.FALSE, (Object) named.toArray(new String[0])));
+    }
     private String speciesNamedIn(String actionText, UUID chunk) {
         java.util.List<String> byHeadNoun = registryNamesIn(actionText);
         if (byHeadNoun.isEmpty()) return null;
@@ -351,7 +394,22 @@ public class WildlifeEncounterService {
         // between the chronicle's effort and the animal's resistance sets the gravity,
         // so a bare-handed charge at a bear is punished the way it would be in life.
         int deficit = Math.max(0, resistance - (capability + roll));
-        int severity=("CARNIVORE".equals(candidate.role())?22:"OMNIVORE".equals(candidate.role())?12:4) + deficit;
+        // WHAT HITS YOU IS DECIDED BY HOW MUCH ANIMAL THERE IS (#37/#99). This read the diet and nothing else,
+        // so the floor - what the animal brings when the contest was nearly even and the deficit adds nothing -
+        // had a TINY hedgehog (base_resistance 15) wounding a person for 12 and a HUGE aurochs (90) for 4.
+        // base_resistance is catalogued for every one of the 215 species, it is already authoritative for the
+        // CONTEST fifty lines above, and the wound ignored it. Measured live: "The ox moves with sudden force",
+        // said of a HUGE animal, in the mildest of the three wound lines there are.
+        //
+        // Diet stays, as intent rather than as mass: a carnivore means to hurt you, a herbivore is hurting you
+        // on its way past. Calibrated to keep the old carnivore band where it was sensible - a gray wolf (55)
+        // reads 13 + 10 = 23 against the old 22 - so what changes is the two ends the bands had backwards.
+        int mass = candidate.baseResistance() != null ? candidate.baseResistance() / 4
+            // Uncatalogued species keep the old reading, so nothing outside the registry regresses.
+            : "CARNIVORE".equals(candidate.role()) ? 22 : "OMNIVORE".equals(candidate.role()) ? 12 : 4;
+        int intent = candidate.baseResistance() == null ? 0
+            : "CARNIVORE".equals(candidate.role()) ? 10 : "OMNIVORE".equals(candidate.role()) ? 5 : 2;
+        int severity = mass + intent + deficit;
         if("RESTING".equals(candidate.behavior()) || "SHELTERING".equals(candidate.behavior())) severity=Math.max(2,severity-5);
         // An ambush hunter strikes from cover with no warning; the first blow lands
         // on a body that had no chance to set itself against it.
@@ -409,6 +467,15 @@ public class WildlifeEncounterService {
             ? "The " + display(candidate.species()) + " closes with its whole weight, and for a moment there is only force and tearing before it wheels away into the trees."
             : severity >= 35
             ? "The " + display(candidate.species()) + " drives into you hard, raking deep before it breaks off through the cover."
+            // AND THE WORDS READ THE ANIMAL, not only the number. This one sentence was said of a HUGE ox and
+            // of a bank vole alike, because the three bands are keyed on severity and severity knew nothing
+            // about size. A small animal that gets a part of you and a large one that simply leans through you
+            // are not the same event, whatever the wound measures. Thresholds from the registry's own spread:
+            // TINY averages 7 (2-20) and HUGE averages 101 (80-150), so 20 and 80 are the two edges.
+            : candidate.baseResistance() != null && candidate.baseResistance() <= 20
+            ? "The " + display(candidate.species()) + " twists where you hold it and gets a part of you before it is gone. Little enough to look at, and it bleeds anyway."
+            : candidate.baseResistance() != null && candidate.baseResistance() >= 80
+            ? "The " + display(candidate.species()) + " walks through where you were standing. Nothing about it is quick; all of it is weight, and the ground arrives before you can set yourself against it."
             : "The " + display(candidate.species()) + " moves with sudden force. The encounter leaves its mark before the forest takes it back.";
         return new EncounterResult("PARTIAL", mark);
     }
