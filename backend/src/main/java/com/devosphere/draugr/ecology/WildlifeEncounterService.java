@@ -61,10 +61,16 @@ public class WildlifeEncounterService {
         String named = speciesNamedIn(actionText, chunk);
         if (named != null) {
             Encounter asked = namedQuarryHere(chunk, named, at);
-            if (asked == null)
-                return new EncounterResult("FAILED", "You work this ground over for " + named.replace('_', ' ')
+            if (asked == null) {
+                // AND IT SAYS WHICH KIND OF "NONE" THIS IS. Told only that the ground holds none, a hunter in
+                // November walks the same wood again tomorrow for the same nothing. The season is the answer.
+                String asleep = winteringOutOfSight(named);
+                return new EncounterResult("FAILED", asleep != null ? asleep
+                    : "You work this ground over for " + named.replace('_', ' ')
                     + " and find none of it here — not a track, not a smell, nothing moving. Whatever else is "
                     + "about, that is not.");
+            }
+
             return closeWith(chronicle, chunk, action, at, tacticBonus, asked);
         }
         return confrontWhateverIsHere(chronicle, chunk, action, at, tacticBonus);
@@ -115,6 +121,28 @@ public class WildlifeEncounterService {
             "ORDER BY length(species_key) LIMIT 1",
             rs -> rs.next() ? rs.getString(1) : null, (Object) byHeadNoun.toArray(new String[0]));
         return ordinary != null ? ordinary : byHeadNoun.stream().min(java.util.Comparator.comparingInt(String::length)).orElse(null);
+    }
+
+    /**
+     * The one sentence that says a named animal is out of season, or null when it is abroad (#161, V312).
+     *
+     * <p>Dormancy has been in the world since V312 and <b>nothing has ever said so out loud</b>. The rule is read
+     * by every wild-facing query — perception, tracking, confronting, taming, traps, raids — and all any of them
+     * could do with it was leave the animal out. So from November a keeper who went looking for an adder was told
+     * the ground held none, in the same words it would use in June, and the one thing they needed to know — that
+     * it is the <i>season</i>, not the ground — was the one thing the world would not say.
+     *
+     * <p>That is the fifth face of this project's standing defect in a place nobody looked: the world knew and
+     * would not say. A player cannot get this anywhere else; no amount of walking or waiting out a day teaches
+     * it, because the answer does not change until the month does.
+     *
+     * <p>Said for all of them, not just the snakes: a bear dens, a bat roosts, a dormouse buries, an adder
+     * brumates under a stone, and "wintering out of sight" is true of every one.
+     */
+    private String winteringOutOfSight(String species) {
+        if (Boolean.TRUE.equals(jdbc.queryForObject("SELECT wildlife_abroad(?)", Boolean.class, species))) return null;
+        return "No " + display(species) + " is about at this time of year. They are wintering out of sight — denned, "
+             + "buried or gone to ground — and no working of this ground will turn one up before the season turns.";
     }
 
     /** The named species as a herd on this ground: the one standing here, or the registry's if it belongs here. */
@@ -1483,25 +1511,26 @@ public class WildlifeEncounterService {
             Boolean.TRUE.equals(kind.get("ambush_hunter")));
     }
 
-    private Tamable approachAmbient(UUID chunk, String actionText, Instant at) {
+    /**
+     * Every creature this particular ground would let a person near, in this ground's own order (#37).
+     *
+     * <p>Pulled out of {@link #approachAmbient} so that the animal a Chronicle <i>names</i> can be looked for in
+     * exactly the same cast the unnamed approach draws from. One list, two readers: a named animal that is not in
+     * it is refused by name, and that cannot drift out of step with what the unnamed approach would have offered.
+     */
+    private java.util.List<java.util.Map<String,Object>> ambientTamableHere(UUID chunk) {
         String biome = jdbc.query("SELECT biome FROM world_chunk WHERE id=?", rs -> rs.next() ? rs.getString(1) : null, chunk);
-        if (biome == null) return null;
-        java.util.List<java.util.Map<String,Object>> here = jdbc.queryForList(
+        if (biome == null) return java.util.List.of();
+        return jdbc.queryForList(
             "SELECT species_key, tamability, activity_cycle, ecological_role FROM wildlife_species " +
             "WHERE tamability > 0 AND kingdom_class <> 'MONSTRUM' AND movement_class <> 'AQUATIC' " +
             "  AND NOT EXISTS (SELECT 1 FROM cognition_profile cp WHERE cp.species_key=wildlife_species.species_key AND cp.domestication_prohibited) " +
             "  AND biome_affinity ILIKE ? AND wildlife_abroad(species_key) ORDER BY md5(species_key || ?::text)",
             "%" + biome + "%", chunk.toString());
-        if (here.isEmpty()) return null;
+    }
 
-        // Failing a name, take the most willing of the handful this particular ground carries — not the most
-        // willing in the whole biome, or every stretch of forest would offer the same animal.
-        java.util.List<java.util.Map<String,Object>> nearby = here.subList(0, Math.min(5, here.size()));
-        java.util.Map<String,Object> pick = here.stream()
-            .filter(s -> com.devosphere.draugr.narration.Words.names(actionText, (String) s.get("species_key")))
-            .findFirst()
-            .orElseGet(() -> nearby.stream().max(java.util.Comparator.comparingInt(s -> ((Number) s.get("tamability")).intValue())).orElse(here.get(0)));
-
+    /** The creature, made real on this ground, so that returning to it day after day means something. */
+    private Tamable materialiseTamable(UUID chunk, java.util.Map<String,Object> pick, Instant at) {
         String species = (String) pick.get("species_key");
         UUID siteId = UUID.randomUUID(), populationId = UUID.randomUUID();
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'ECOLOGY_SITE',?,?)",
@@ -1513,6 +1542,74 @@ public class WildlifeEncounterService {
             "VALUES (?,?,?,?,?,?,?,'FORAGING',?)",
             populationId, siteId, species, pick.get("ecological_role"), pick.get("activity_cycle"), 2, 4, Timestamp.from(at));
         return new Tamable(populationId, species, ((Number) pick.get("tamability")).intValue(), "FORAGING");
+    }
+
+    private Tamable approachAmbient(UUID chunk, String actionText, Instant at) {
+        java.util.List<java.util.Map<String,Object>> here = ambientTamableHere(chunk);
+        if (here.isEmpty()) return null;
+
+        // Failing a name, take the most willing of the handful this particular ground carries — not the most
+        // willing in the whole biome, or every stretch of forest would offer the same animal.
+        java.util.List<java.util.Map<String,Object>> nearby = here.subList(0, Math.min(5, here.size()));
+        java.util.Map<String,Object> pick = here.stream()
+            .filter(s -> com.devosphere.draugr.narration.Words.names(actionText, (String) s.get("species_key")))
+            .findFirst()
+            .orElseGet(() -> nearby.stream().max(java.util.Comparator.comparingInt(s -> ((Number) s.get("tamability")).intValue())).orElse(here.get(0)));
+        return materialiseTamable(chunk, pick, at);
+    }
+
+    /**
+     * The animal this sentence named, standing here or materialised here — or null, and only null (#37).
+     *
+     * <p>The counterpart of {@link #namedQuarryHere} for the gentler act. It will not substitute: that is the
+     * whole point of it.
+     */
+    private Tamable namedTamableHere(UUID chunk, String species, Instant at) {
+        Tamable standing = jdbc.query(
+            "SELECT wp.id,wp.species_key,ws.tamability,wp.behavior_state FROM wildlife_population wp " +
+            "JOIN ecology_site es ON es.id=wp.site_id JOIN wildlife_species ws ON ws.species_key=wp.species_key " +
+            "WHERE es.chunk_id=? AND wp.species_key=? AND wp.population_count>0 AND ws.tamability>0 " +
+            "  AND wildlife_abroad(wp.species_key) " +
+            "  AND NOT EXISTS (SELECT 1 FROM cognition_profile cp WHERE cp.species_key=wp.species_key AND cp.domestication_prohibited) " +
+            "LIMIT 1 FOR UPDATE OF wp",
+            rs -> rs.next() ? new Tamable(rs.getObject(1,UUID.class), rs.getString(2), rs.getInt(3), rs.getString(4)) : null,
+            chunk, species);
+        if (standing != null) return standing;
+        return ambientTamableHere(chunk).stream()
+            .filter(s -> species.equals(s.get("species_key"))).findFirst()
+            .map(pick -> materialiseTamable(chunk, pick, at)).orElse(null);
+    }
+
+    /**
+     * Why the animal they named will not be approached, in the plainest true reason there is (#37).
+     *
+     * <p>The permanent facts first — what the creature is, and whether this ground carries it at all — then the
+     * one that will have changed by spring. A season said where the ground is the real answer is noise.
+     */
+    private String whyNotApproachable(String species, UUID chunk) {
+        java.util.Map<String,Object> r = jdbc.queryForMap(
+            "SELECT ws.tamability, " +
+            "       EXISTS(SELECT 1 FROM cognition_profile cp WHERE cp.species_key=ws.species_key AND cp.domestication_prohibited) AS forbidden, " +
+            "       (ws.movement_class = 'AQUATIC') AS aquatic, ws.kingdom_class, " +
+            "       (ws.biome_affinity ILIKE '%' || (SELECT biome FROM world_chunk WHERE id=?) || '%') AS belongs " +
+            "FROM wildlife_species ws WHERE ws.species_key=?", chunk, species);
+        String name = display(species);
+        if (Boolean.TRUE.equals(r.get("forbidden")))
+            return "The " + name + " are not animals to be approached and kept. Whatever they are to you, they "
+                 + "are not that, and nothing you do patiently enough will make them it.";
+        Integer tamability = r.get("tamability") == null ? 0 : ((Number) r.get("tamability")).intValue();
+        if (tamability <= 0 || "MONSTRUM".equals(r.get("kingdom_class")))
+            return "Nothing you do will bring a " + name + " to your hand. You can hunt one or keep well away "
+                 + "from it; there is no third thing to be had with it.";
+        if (Boolean.TRUE.equals(r.get("aquatic")))
+            return "A " + name + " lives in the water. There is no standing still on a bank that will make one "
+                 + "come to you.";
+        if (!Boolean.TRUE.equals(r.get("belongs")))
+            return "This ground carries no " + name + ". Whatever else is about, that is not, and standing still "
+                 + "here will not change it.";
+        String asleep = winteringOutOfSight(species);
+        if (asleep != null) return asleep;
+        return "You look a long while for a " + name + " and find none of it here.";
     }
 
     /**
@@ -1527,7 +1624,24 @@ public class WildlifeEncounterService {
     @Transactional
     public EncounterResult tame(UUID chronicle, UUID chunk, UUID action, Instant at, String actionText) {
         String v = actionText.toLowerCase(java.util.Locale.ROOT);
-        Tamable t = jdbc.query(
+
+        // THE ANIMAL NAMED IS THE ANIMAL APPROACHED, AND ONE THAT CANNOT BE IS REFUSED BY NAME (#37).
+        //
+        // The ambient cast is filtered by what this ground carries, what the creature is, and — since V312 —
+        // whether it is abroad this month. A name that matched nothing in that list simply fell through to
+        // `orElseGet`, which handed back THE MOST WILLING ANIMAL ON THE GROUND. So in November, when every
+        // snake, frog, lizard, turtle, bear, bat and dormouse in the catalogue is wintering, "approach the
+        // adder slowly" answered SUCCEEDED and bonded the Chronicle to an ox — in the same even voice, with no
+        // hint that anything had been substituted. It is the worse half of the right-work-wrong-subject defect:
+        // not a refusal to improve on, but a confident wrong answer, and the player has no way to notice.
+        //
+        // Confronting has read the name since V408 and refuses by name when it cannot find it. This is the same
+        // rule for the gentler act, through the same matcher, and the refusal says WHICH kind of no it is.
+        String named = speciesNamedIn(actionText, chunk);
+        Tamable t = named == null ? null : namedTamableHere(chunk, named, at);
+        if (named != null && t == null) return new EncounterResult("FAILED", whyNotApproachable(named, chunk));
+
+        if (t == null) t = jdbc.query(
             "SELECT wp.id,wp.species_key,ws.tamability,wp.behavior_state FROM wildlife_population wp " +
             "JOIN ecology_site es ON es.id=wp.site_id JOIN wildlife_species ws ON ws.species_key=wp.species_key " +
             "WHERE es.chunk_id=? AND wp.population_count>0 AND ws.tamability>0 AND wildlife_abroad(wp.species_key) " +
