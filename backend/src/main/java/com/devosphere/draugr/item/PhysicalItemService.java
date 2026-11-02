@@ -4479,6 +4479,204 @@ public class PhysicalItemService {
     }
 
     /**
+     * The words a person uses to set a weapon going (#37/#99). A closed list, because every one of them is a
+     * word some other work also owns: a line is cast, water is drawn, a kiln is fired, flint is struck, a log
+     * is thrown on the fire, a pack is slung over a shoulder, an axe is swung at a tree. What makes them safe
+     * is never the verb — it is the second half of {@link #anAttackWithAWeaponInHand}, which asks whether the
+     * rest of the sentence names a weapon this Chronicle is actually carrying. A kiln is not a weapon.
+     */
+    private static final java.util.Set<String> ATTACK_VERBS = java.util.Set.of(
+        "shoot", "shoots", "shot", "loose", "looses", "nock", "nocks", "draw", "draws", "aim", "aims",
+        "throw", "throws", "hurl", "hurls", "cast", "casts", "fling", "flings", "pelt", "pelts", "lob", "lobs",
+        "sling", "slings", "swing", "swings", "stab", "stabs", "thrust", "thrusts", "jab", "jabs",
+        "strike", "strikes", "club", "clubs", "bash", "bashes", "smash", "smashes", "launch");
+        // NOT "fire". Measured: it made `spin the fire bow` a hunt — strip the verb and "spin the bow" names
+        // the Hunting bow in the pack, so a fire drill became an attack. The catalogue leads 22 recipe keywords
+        // with "fire" (a kiln firing, a fire-hardened point), nobody in this era fires a bow, and no sentence
+        // this rule exists for needs it.
+
+    /**
+     * Whether the sentence sets a weapon the Chronicle is carrying against something (#37/#99).
+     *
+     * <p>THE HUNT READS THE QUARRY AND NOTHING READS THE WEAPON. {@code WildlifeEncounterService} carries a
+     * fully wired fight — archery only with an arrow nocked, a sling that turns a lobbed stone into a cast, an
+     * atlatl that adds its leverage only when there is a dart, the whole stone→copper→bronze→iron→steel edge
+     * ladder — and every bit of it was reachable only by naming the animal. Measured live, with a bow, arrows,
+     * a javelin, a sling, a spear, an axe and a club all carried and an ox herd standing in the chunk:
+     *
+     * <pre>
+     * throw the spear at the ox  -&gt; CONFRONT_WILDLIFE  SUCCEEDED  "The struggle ends in the wet earth."
+     * throw the spear            -&gt; UNKNOWN
+     * shoot the bow              -&gt; offered to ASSEMBLE a bow
+     * loose an arrow             -&gt; "You have not got enough fletched shaft"
+     * hurl the javelin           -&gt; "This work needs heat, and none is within reach"
+     * sling a stone              -&gt; EQUIP SUCCEEDED, "You settle the Sling stone into place."
+     * </pre>
+     *
+     * <p>The same spear, in the same hand, one named animal apart. A hunter says what they are doing it with.
+     *
+     * <p>THE VERB IS STRIPPED BEFORE THE THING IS READ, because several of these words are both. {@code sling
+     * the pack over my shoulder} names a sling and means a shoulder; {@code sling a stone} names a stone and
+     * means the weapon. Removing the leading verb first tells them apart with no second list of exceptions —
+     * and it is why {@code club it} is left alone: strip the verb and nothing is named, which is the honest
+     * reading of a sentence that names neither a weapon nor a target.
+     *
+     * <p>A WEAPON THAT IS ALSO A WORKING TOOL NEEDS THE ANIMAL NAMED. The catalogue draws this line itself:
+     * nine of its thirty-six weapons have a {@code tool_profile} row — every axe, the hammers and mauls, the
+     * hand axe, the field stone — and the other twenty-seven are weapons and nothing else. So {@code swing the
+     * axe at the tree} stays felling and {@code swing the club} is a fight, decided by data rather than by a
+     * list of exceptions written here and left behind by the next migration.
+     */
+    @Transactional(readOnly = true)
+    public boolean anAttackWithAWeaponInHand(String actionText) {
+        int verbAt = attackVerbAt(actionText);
+        if (verbAt < 0) return false;
+        if (makingVerbStandsBefore(actionText, verbAt)) return false;
+        if (isARecipesOwnName(actionText)) return false;
+        return anAttackNaming(actionText, weaponsCarriedForNaming());
+    }
+
+    /** The verb each recipe is asked for by, kept for an hour — see {@link #makingVerbStandsBefore}. */
+    private volatile java.util.Set<String> makingVerbs = java.util.Set.of();
+    private volatile Instant makingVerbsRead = Instant.EPOCH;
+
+    /**
+     * MAKING IS NOT DOING: whether a word that asks for a thing to be MADE stands in front of the attack verb.
+     *
+     * <p>Measured, after the first cut of this rule shipped nothing but the verbs: {@code shape a sling stone}
+     * answered with a dead animal, because "sling" is a word this rule attacks with and also part of the name
+     * of the thing being made. Strip the verb and "shape a stone" names the sling stone in the pack.
+     *
+     * <p>The first guard tried was {@link #actionMatchesProcess}, and MEASUREMENT KILLED IT: that matcher
+     * answers yes for {@code loose an arrow} and {@code hurl the javelin} — it agrees on the subject word and
+     * calls them work — which is the very defect this rule exists to end. A guard that cannot tell an arrow
+     * being loosed from an arrow being fletched hands the defect straight back.
+     *
+     * <p>So the vocabulary is the one the recipes ask for themselves, and the catalogue states it in its own
+     * keywords: A WORD FOLLOWED BY AN ARTICLE IN A RECIPE'S KEYWORD IS THAT RECIPE'S VERB. "make a sling",
+     * "shape a sling stone", "knot an arm sling", "twist a carrying sling" — 215 verbs, and the same shape
+     * leaves the noun-led keywords ("arm sling", "leather sling", "bow stave") out, which is what makes it
+     * usable. None of shoot, loose, nock, hurl, sling or draw is among them; shape, twist, knot, sew and spin
+     * all are. A recipe added by a later migration is covered without anything here being edited.
+     *
+     * <p>BEFORE, not merely present: {@code cast the spear} and {@code sling a stone} open with a word that is
+     * both, and nothing stands in front of it. {@code forge a point then throw it} opens by naming the work.
+     */
+    private boolean makingVerbStandsBefore(String actionText, int verbAt) {
+        if (verbAt == 0) return false;
+        if (java.time.Duration.between(makingVerbsRead, Instant.now()).compareTo(java.time.Duration.ofHours(1)) >= 0
+            || makingVerbs.isEmpty()) {
+            try {
+                makingVerbs = java.util.Set.copyOf(jdbc.queryForList(
+                    "SELECT DISTINCT split_part(trim(k),' ',1) FROM (" +
+                    "  SELECT trim(unnest(string_to_array(keywords,','))) k FROM material_process" +
+                    ") said WHERE split_part(trim(k),' ',2) IN ('a','an','the','some','two','one','into','out','down','up')",
+                    String.class));
+                makingVerbsRead = Instant.now();
+            } catch (RuntimeException couldNotRead) {
+                return false; // A classifier that cannot read the catalogue holds nothing against the words.
+            }
+        }
+        String[] said = actionText.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim().split(" ");
+        for (int i = 0; i < verbAt && i < said.length; i++) if (makingVerbs.contains(said[i])) return true;
+        return false;
+    }
+
+    /**
+     * Where the first attack verb stands in the sentence, or -1. Cheap, so the DB is spared every other action.
+     *
+     * <p>A WORD AFTER "MY" IS A THING, NOT A DOING. Measured live, and it answered with a dead animal:
+     * {@code my spear and my bow and my sling} -&gt; CONFRONT_WILDLIFE, SUCCEEDED, a kill — because "sling" is
+     * the one word in that sentence this rule knows as a verb, and striking it out leaves a spear and a bow
+     * behind. I had written in the suite that the camp stocktake claims such a sentence first; it does not
+     * ({@code what am i carrying} is claimed, a bare list is not), so the reassurance was false and the limit
+     * was reachable in play. A determiner in front settles it: there is no sentence in which "my sling" is
+     * someone slinging something.
+     */
+    private static int attackVerbAt(String actionText) {
+        if (actionText == null) return -1;
+        String[] said = actionText.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim().split(" ");
+        for (int i = 0; i < said.length; i++)
+            if (ATTACK_VERBS.contains(said[i]) && !(i > 0 && DETERMINERS.contains(said[i - 1]))) return i;
+        return -1;
+    }
+
+    /** Every phrase the catalogue advertises, normalised, kept for an hour — see {@link #isARecipesOwnName}. */
+    private volatile java.util.Set<String> recipeNames = java.util.Set.of();
+    private volatile Instant recipeNamesRead = Instant.EPOCH;
+
+    /**
+     * A SENTENCE THAT IS A RECIPE'S OWN NAME IS A REQUEST FOR THAT RECIPE.
+     *
+     * <p>Found by holding the rule against the whole catalogue before pushing rather than after a 50-minute
+     * CI round: sixty catalogue phrases contain one of these verbs, and six of them this rule would have
+     * taken. They are the ones where the verb stands in NOUN position inside the recipe's own name, so no
+     * making verb precedes it to be caught by {@link #makingVerbStandsBefore}:
+     *
+     * <pre>
+     * sling stone / sling stone pouch / shot sling / stone club / stone sling / stone-headed club
+     * </pre>
+     *
+     * <p>Strip "sling" from "sling stone" and what is left names the Sling stone in the pack — so asking for
+     * one to be made would have thrown it at something instead. The same reading also settles the one case a
+     * verb list could never reach: {@code cast a bronze spear} opens with a word that is both a casting and a
+     * throwing, and a bronze spear in the pack is no reason to refuse to found another.
+     *
+     * <p>Whole sentence, not substring. {@code cast the spear} is not a recipe's name and stays a throw.
+     */
+    boolean isARecipesOwnName(String actionText) {
+        if (java.time.Duration.between(recipeNamesRead, Instant.now()).compareTo(java.time.Duration.ofHours(1)) >= 0
+            || recipeNames.isEmpty()) {
+            try {
+                recipeNames = java.util.Set.copyOf(everyRecipeName());
+                recipeNamesRead = Instant.now();
+            } catch (RuntimeException couldNotRead) {
+                return false; // A classifier that cannot read the catalogue holds nothing against the words.
+            }
+        }
+        return recipeNames.contains(
+            actionText.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim());
+    }
+
+    /** Every phrase the catalogue advertises, already normalised. Overridden in the suite's DB-free harness. */
+    protected java.util.List<String> everyRecipeName() {
+        return jdbc.queryForList(
+            "SELECT DISTINCT regexp_replace(lower(trim(k)), '[^a-z0-9]+', ' ', 'g') FROM (" +
+            "  SELECT trim(unnest(string_to_array(keywords,','))) k FROM material_process" +
+            "  UNION ALL SELECT trim(unnest(string_to_array(keywords,','))) FROM assembly_definition" +
+            ") said", String.class);
+    }
+
+    /** The words that make the next one a thing. Kept apart from REQUEST_WORDS, which holds verbs of its own. */
+    private static final java.util.Set<String> DETERMINERS = java.util.Set.of(
+        "the", "a", "an", "my", "mine", "our", "your", "their", "his", "her", "its", "this", "that", "these",
+        "those", "some", "any", "another", "other", "each", "both", "no", "every");
+
+    /**
+     * The reading itself, over a list of {display_name, item_key} pairs — pure, so the suite can hold it to
+     * account on the real matcher rather than on a copy of its reasoning.
+     */
+    static boolean anAttackNaming(String actionText, java.util.List<String[]> weaponsCarried) {
+        if (actionText == null || weaponsCarried.isEmpty()) return false;
+        String[] said = actionText.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim().split(" ");
+        int verbAt = attackVerbAt(actionText);
+        if (verbAt < 0) return false;
+        StringBuilder rest = new StringBuilder();
+        for (int i = 0; i < said.length; i++) if (i != verbAt) rest.append(said[i]).append(' ');
+        for (String[] w : weaponsCarried) if (howWellNamed(rest.toString(), w[0], w[1]) >= 1) return true;
+        return false;
+    }
+
+    /** Every weapon-and-nothing-else this Chronicle is carrying. Overridden in the suite's DB-free harness. */
+    protected java.util.List<String[]> weaponsCarriedForNaming() {
+        return jdbc.query(
+            "SELECT w.display_name, i.item_key FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
+            "JOIN weapon_profile p ON p.item_key=i.item_key LEFT JOIN tool_profile t ON t.item_key=i.item_key " +
+            "WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND t.item_key IS NULL",
+            (rs, n) -> new String[]{rs.getString(1), rs.getString(2)}, activeChronicle());
+    }
+
+    /**
      * Every species this keeper still has standing (#37/#99).
      *
      * <p>Pulled out so the two questions the classifier asks of a keeper's flock - <i>do you keep THIS?</i> and
