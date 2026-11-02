@@ -678,6 +678,7 @@ public class ChronicleActionService {
         else if (intent == Intent.JUDGE_UNSEEN) { String[] r = judgeUnseen(chronicle, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.TURN_OUT_STOCK) { String[] r = items.turnOutStock(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.BRING_IN_STOCK) { String[] r = items.bringInStock(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
+        else if (intent == Intent.SLAUGHTER_STOCK) { WildlifeEncounterService.EncounterResult r = wildlife.slaughterStock(chronicle.id(), chronicle.location(), text, actionId, resolvedAt); outcome = r.outcome(); perception = r.narration(); }
         else if (intent == Intent.JUDGE_WHERE_TO_GO) { String[] r = judgeWhereToGo(chronicle); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_WORK_IN_HAND) { String[] r = judgeWorkInHand(chronicle, text, resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.JUDGE_LEARNING) { String[] r = judgeLearning(chronicle); outcome = r[0]; perception = r[1]; }
@@ -2133,6 +2134,48 @@ public class ChronicleActionService {
      * report on their health. The welfare rule already holds a list of the ACTS that keep their own verbs —
      * tending, grooming, feeding, milking, shearing, building — and penning is now one of them.
      */
+    /**
+     * Killing a beast you keep (#37/#99), which until now no sentence could ask for.
+     *
+     * <p>Measured live on a keeper with three oxen of their own: {@code kill the ox}, {@code slaughter the ox},
+     * {@code cull the herd}, {@code kill one of my oxen}, {@code take the ox for meat} and {@code butcher the
+     * ox} reached NOTHING - nine of thirteen ordinary sentences answered with the generic witness line - and
+     * {@code put the ox down} was read as setting an object on the ground. On a kept goat, which the hunt's
+     * gate happens to name, {@code kill the goat} was read as a HUNT and the keeper's own tamed goat
+     * <i>"breaks away through the cover"</i> from them.
+     *
+     * <p>THE DATA DECIDES, not the words, which is the same arrangement #106 used to stop taming from claiming
+     * a keeper's {@code feed the goat}: the verbs here are shared with the hunt and always will be, and what
+     * tells a slaughter from a hunt is whether the animal is YOURS.
+     *
+     * <p>THE BUTCHERING VERBS ARE NOT TAKEN. {@code butcher}, {@code skin}, {@code gut} and {@code dress} stay
+     * with HARVEST_CARCASS, because {@code kill the ox} leaves a carcass and {@code butcher it} then works it -
+     * that is the real order of the work, and claiming both words for one act would collapse two steps into
+     * one and break butchering a wild kill in the process.
+     *
+     * <p>THE FAMILY WORDS NEED THE FLOCK TO EXIST. {@code cull the herd} names no species, so it is gated on
+     * the keeper having stock at all; without that, a hunter with nothing of their own saying {@code kill one
+     * of the animals} would be taken off the hunt and answered with a refusal about stock they never had. That
+     * is the generic-word defect running backwards, and it is the half that is easy to miss.
+     *
+     * <p>WHOLE WORDS, because this project has been bitten by the substring four times. A plain
+     * {@code contains("the stock")} is also inside <i>"put up a stock<b>ade</b>"</i>, which the suite already
+     * asserts is a fence - found by reading the existing assertions before trusting the matcher, not after.
+     */
+    private boolean slaughteringStock(String value) {
+        boolean theAct = word(value, "kill") || word(value, "kills") || value.contains("slaughter")
+            || value.contains("cull") || value.contains("for meat") || value.contains("for the meat")
+            || (value.contains("put") && value.contains("down"));
+        if (!theAct) return false;
+        // Named: the keeper's own flock answers for what they can have meant.
+        if (items.keepsSuchABeast(value)) return true;
+        // Or the keeper's own words for the whole of it, which name no species.
+        boolean ownWords = word(value, "herd") || word(value, "flock") || value.contains("livestock")
+            || value.contains("my animals") || value.contains("my beasts") || word(value, "stock")
+            || value.contains("one of my");
+        return ownWords && items.keepsAnyStock();
+    }
+
     private static boolean turningStockOut(String value) {
         return (value.contains("let")||value.contains("turn")||value.contains("drive")||value.contains("put"))
             &&(value.contains("animals out")||value.contains("stock out")||value.contains("herd out")
@@ -3940,6 +3983,7 @@ public class ChronicleActionService {
         // took `drive the herd out to grass` off the drive, which is a worse answer than the gap was: the herd
         // never went anywhere. What is left for these rules is the sentence with no destination in it, which is
         // exactly the state change: out on this ground, or in behind the wall on it.
+        if (slaughteringStock(value)) return Intent.SLAUGHTER_STOCK;
         if (turningStockOut(value)) return Intent.TURN_OUT_STOCK;
         if (shuttingStockIn(value)) return Intent.BRING_IN_STOCK;
         // WHERE THERE IS TO GO (#37/#99). The last miss on the release-gate sweep: `where should I go` reached
@@ -5952,7 +5996,7 @@ public class ChronicleActionService {
             || (word(v, "fix") && !v.contains("memory") && !v.contains("mind"));
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, JUDGE_CLOTHING, JUDGE_PLACE, JUDGE_WORK_IN_HAND, JUDGE_LEARNING, JUDGE_FLORA, JUDGE_RAISING, JUDGE_CAMP_GROUND, JUDGE_TOOLS, JUDGE_UNSEEN, TURN_OUT_STOCK, BRING_IN_STOCK, JUDGE_WHERE_TO_GO, PARE_HOOVES, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, JUDGE_CLOTHING, JUDGE_PLACE, JUDGE_WORK_IN_HAND, JUDGE_LEARNING, JUDGE_FLORA, JUDGE_RAISING, JUDGE_CAMP_GROUND, JUDGE_TOOLS, JUDGE_UNSEEN, TURN_OUT_STOCK, BRING_IN_STOCK, SLAUGHTER_STOCK, JUDGE_WHERE_TO_GO, PARE_HOOVES, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;}
         /** The cardinal for a grid offset, for when the WORLD names the direction rather than the player (#37). */
         static Direction of(int dx,int dy){ for(Direction d:values()) if(d.dx==dx&&d.dy==dy) return d; return null; } }    /**     * The structured perception frame — the seam every future Simulation Agent reads

@@ -4231,26 +4231,23 @@ public class PhysicalItemService {
     @Transactional(readOnly = true)
     public boolean namesAKeptAnimal(String actionText) {
         if (actionText == null || actionText.isBlank()) return false;
-        String v = " " + actionText.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim() + " ";
+        // Said in full, or by the word a keeper actually uses for it (#106). The catalogue was asked, correctly,
+        // and asked only for the WHOLE compound key: the species are mountain_goat and bighorn_sheep, so "groom
+        // the goat" and "shear the sheep" named nothing the table would own to. Nobody says "mountain goat"
+        // twice a day about an animal they milk. The head noun is the last word of the key — goat, sheep,
+        // goose, duck, buffalo, fowl, turkey, pigeon, ox, deer — and it is the name the animal goes by.
+        //
+        // Only the head noun, and only as a whole word: a prefix would make "water buffalo" answer to "water"
+        // and a substring would find "ox" inside "oxbow" and "box". This project has been bitten by the
+        // substring four times over; HeadNounsNameOnlyAnimalsIntegrationTest holds the line.
+        //
+        // AND IN EITHER NUMBER (#37/#99/V453). This read the key and the key with an s, which is silently none
+        // of the 15 species in the registry whose plural is irregular: measured live, `feed the oxen` and `how
+        // are the oxen` reached NOTHING while `feed the ox` worked. saidAsASpeciesName is the one reader of a
+        // species name there is now, so the keeper's acts and the keeper's readings hear the same words.
         for (String key : jdbc.queryForList(
-                "SELECT species_key FROM draft_species UNION SELECT species_key FROM tamed_yield", String.class)) {
-            String spoken = key.replace('_', ' ');
-            if (v.contains(" " + spoken + " ") || v.contains(" " + spoken + "s ")) return true;
-            // ...and by the word a keeper actually uses for it (#106). The catalogue was asked, correctly, and
-            // asked only for the WHOLE compound key: the species are mountain_goat and bighorn_sheep, so "groom
-            // the goat" and "shear the sheep" named nothing the table would own to. Nobody says "mountain goat"
-            // twice a day about an animal they milk. The head noun is the last word of the key — goat, sheep,
-            // goose, duck, buffalo, fowl, turkey, pigeon, ox, deer — and it is the name the animal goes by.
-            //
-            // Only the head noun, and only as a whole word: a prefix would make "water buffalo" answer to
-            // "water" and a substring would find "ox" inside "oxbow" and "box". This project has been bitten by
-            // the substring four times over; HeadNounsNameOnlyAnimalsIntegrationTest holds the line.
-            int cut = spoken.lastIndexOf(' ');
-            if (cut > 0) {
-                String head = spoken.substring(cut + 1);
-                if (v.contains(" " + head + " ") || v.contains(" " + head + "s ")) return true;
-            }
-        }
+                "SELECT species_key FROM draft_species UNION SELECT species_key FROM tamed_yield", String.class))
+            if (saidAsASpeciesName(actionText, key)) return true;
         return false;
     }
 
@@ -4325,23 +4322,103 @@ public class PhysicalItemService {
      * <p>No Chronicle id: one lives at a time, which {@code one_living_chronicle} enforces, and the taming rule is
      * reached from {@link #namesAKeptAnimal}'s side of the classifier where there is none to pass.
      */
+    /**
+     * Whether this sentence names this species (#37/#99) - said in full, by its head noun, singular or plural.
+     *
+     * <p>SAY THE PLURAL AND BE UNDERSTOOD. Every matcher of species names in this project tried the key and the
+     * key with an {@code s} on the end, which is 200 of the 215 species in the registry and silently none of
+     * the other 15: {@code oxen}, {@code geese}, {@code mice}, {@code dormice}, {@code wolves}, and
+     * {@code sheep}, {@code deer} and {@code trout}, which do not change at all. Measured live, {@code cull one
+     * of the oxen} reached nothing while {@code cull the herd} worked - and the keeper who says <i>oxen</i> is
+     * the keeper who has more than one, which is exactly who asks to cull.
+     *
+     * <p>Shared rather than copied, because a hand-rolled plural beside a registry is the same second answer
+     * this project keeps finding: {@code keepsSuchABeast} reads it for the classifier, and the slaughter reads
+     * it for the flock. The two cannot drift apart.
+     *
+     * <p>Whole words with the spaces kept, so a name cannot be found inside another word - the substring has
+     * cost this project four separate defects. {@code fox} is why the {@code ox} rule tests for a word
+     * boundary rather than a suffix: a red fox is not a red "foxen".
+     */
+    public static boolean saidAsASpeciesName(String actionText, String speciesKey) {
+        if (actionText == null || actionText.isBlank() || speciesKey == null) return false;
+        String v = " " + actionText.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim() + " ";
+        String spoken = speciesKey.replace('_', ' ');
+        if (saidHere(v, spoken)) return true;
+        int cut = spoken.lastIndexOf(' ');
+        return cut > 0 && saidHere(v, spoken.substring(cut + 1));
+    }
+
+    private static boolean saidHere(String padded, String name) {
+        return padded.contains(" " + name + " ") || padded.contains(" " + pluralOf(name) + " ");
+    }
+
+    /**
+     * The plural of an animal's name, for the handful of English words that do not simply take an {@code s}.
+     *
+     * <p>Only the forms the species registry actually needs. A general pluraliser would be a bigger thing than
+     * this slice has any business adding, and every form here is checked against a real species key.
+     */
+    static String pluralOf(String name) {
+        if (name.equals("ox") || name.endsWith(" ox")) return name + "en";              // ox, musk ox
+        if (name.endsWith("mouse")) return name.substring(0, name.length() - 5) + "mice"; // field mouse, dormouse
+        if (name.endsWith("goose")) return name.substring(0, name.length() - 5) + "geese";
+        if (name.endsWith("wolf")) return name.substring(0, name.length() - 4) + "wolves";
+        if (name.endsWith("calf")) return name.substring(0, name.length() - 4) + "calves";
+        if (name.endsWith("louse")) return name.substring(0, name.length() - 5) + "lice";
+        // Unchanged in the plural, which is its own trap: "two sheeps" is how a matcher gives itself away.
+        if (name.endsWith("sheep") || name.endsWith("deer") || name.endsWith("trout")
+            || name.endsWith("fish") || name.endsWith("swine")) return name;
+        // And the ordinary rule for words an s cannot simply follow: fox -> foxes, thrush -> thrushes.
+        if (name.endsWith("x") || name.endsWith("s") || name.endsWith("z")
+            || name.endsWith("sh") || name.endsWith("ch")) return name + "es";
+        return name + "s";
+    }
+
+    /**
+     * Every species this keeper still has standing (#37/#99).
+     *
+     * <p>Pulled out so the two questions the classifier asks of a keeper's flock - <i>do you keep THIS?</i> and
+     * <i>do you keep ANYTHING?</i> - cannot answer from different data. Both are needed to route a slaughter:
+     * the first for {@code kill the ox}, the second for {@code cull the herd}, which names no species at all.
+     *
+     * <p>TWO FILTERS WERE MISSING FROM THE ONLY READER THERE WAS. {@code released_at IS NULL} is how V439
+     * records that a keeping has ended, and every other reader of {@code wildlife_bond} - turning stock out,
+     * bringing them in, counting the head at pasture - filters on it. This one did not, so a keeper whose
+     * keeping had ended still "kept" the animal as far as the classifier was concerned. And
+     * {@code population_count > 0} is the other half of the same honesty: a bond whose animals have all been
+     * taken by raids, or eaten by their keeper, is a bond to an empty herd. Neither mattered before a keeper
+     * could end a keeping on purpose; both matter now.
+     */
+    @Transactional(readOnly = true)
+    public java.util.List<String> keptSpecies() {
+        return jdbc.queryForList(
+            "SELECT DISTINCT wp.species_key FROM wildlife_bond wb " +
+            "JOIN wildlife_population wp ON wp.id = wb.population_id " +
+            "JOIN chronicle c ON c.id = wb.chronicle_id AND c.life_state = 'LIVING' " +
+            "WHERE wb.bond_stage = 'TAMED' AND wb.released_at IS NULL AND wp.population_count > 0",
+            String.class);
+    }
+
+    /**
+     * Whether this keeper keeps anything at all (#37/#99).
+     *
+     * <p>Read by the slaughter rule for the sentences that name no species: {@code cull the herd},
+     * {@code kill one of my animals}, {@code slaughter one of the flock}. Those are the keeper's words for
+     * their own stock and they have to reach the act - the generic word for a thing has to reach it, or the
+     * act only exists for whoever already knows the catalogue. But they are only the keeper's words if there
+     * IS a flock: without this, {@code kill one of the animals} said by a hunter with nothing of their own
+     * would be taken off the hunt and answered with a refusal about stock they never had.
+     */
+    @Transactional(readOnly = true)
+    public boolean keepsAnyStock() {
+        return !keptSpecies().isEmpty();
+    }
+
     @Transactional(readOnly = true)
     public boolean keepsSuchABeast(String actionText) {
         if (actionText == null || actionText.isBlank()) return false;
-        String v = " " + actionText.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim() + " ";
-        for (String key : jdbc.queryForList(
-                "SELECT DISTINCT wp.species_key FROM wildlife_bond wb " +
-                "JOIN wildlife_population wp ON wp.id = wb.population_id " +
-                "JOIN chronicle c ON c.id = wb.chronicle_id AND c.life_state = 'LIVING' " +
-                "WHERE wb.bond_stage = 'TAMED'", String.class)) {
-            String spoken = key.replace('_', ' ');
-            if (v.contains(" " + spoken + " ") || v.contains(" " + spoken + "s ")) return true;
-            int cut = spoken.lastIndexOf(' ');
-            if (cut > 0) {
-                String head = spoken.substring(cut + 1);
-                if (v.contains(" " + head + " ") || v.contains(" " + head + "s ")) return true;
-            }
-        }
+        for (String key : keptSpecies()) if (saidAsASpeciesName(actionText, key)) return true;
         return false;
     }
 
