@@ -4358,8 +4358,12 @@ public class PhysicalItemService {
      *
      * <p>Only the forms the species registry actually needs. A general pluraliser would be a bigger thing than
      * this slice has any business adding, and every form here is checked against a real species key.
+     *
+     * <p>Public because {@code WildlifeEncounterService.registryNamesIn} - the hunt's and the butchering
+     * gate's name matcher - needs the same plural and was still appending a bare {@code s} after V453 gave
+     * the keeper's side this one. Two tables of English irregulars would be two tables to disagree.
      */
-    static String pluralOf(String name) {
+    public static String pluralOf(String name) {
         if (name.equals("ox") || name.endsWith(" ox")) return name + "en";              // ox, musk ox
         if (name.endsWith("mouse")) return name.substring(0, name.length() - 5) + "mice"; // field mouse, dormouse
         if (name.endsWith("goose")) return name.substring(0, name.length() - 5) + "geese";
