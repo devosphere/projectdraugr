@@ -2176,19 +2176,80 @@ public class ChronicleActionService {
         return ownWords && items.keepsAnyStock();
     }
 
-    private static boolean turningStockOut(String value) {
-        return (value.contains("let")||value.contains("turn")||value.contains("drive")||value.contains("put"))
-            &&(value.contains("animals out")||value.contains("stock out")||value.contains("herd out")
-               ||value.contains("beasts out")||value.contains("them out"));
+
+    /**
+     * A container named as a WORD, in either number — never found inside another word (#37/#99).
+     *
+     * <p>Written because {@code urn} is inside <i>t-urn</i>, and the container list beside it read half its
+     * nouns as substrings. The plural is tried as {@code s} and {@code es} so going whole-word loses nothing:
+     * {@code baskets}, {@code pots} and {@code boxes} are all still heard.
+     *
+     * <p>This is the sixth defect this project has taken from a bare {@code contains} on a short noun — after
+     * {@code ox} inside {@code oxbow} and {@code fox}, {@code lame} inside {@code flame}, {@code hat} inside
+     * {@code thatch}, {@code cap} inside {@code death cap}, and {@code fit} inside {@code profit}.
+     */
+    private static boolean containerSaid(String value, String noun) {
+        return word(value, noun) || word(value, noun + "s") || word(value, noun + "es");
+    }
+
+    /**
+     * THE KEEPER SAYS WHAT THEY KEEP (#37/#99). Both halves of this choice wanted a COLLECTIVE noun in a fixed
+     * order — {@code animals out}, {@code stock out}, {@code herd out}, {@code them out} — so a keeper naming
+     * the animals they actually have reached the act in neither direction, and word order alone could defeat it.
+     * The slaughter rule directly above has asked {@link PhysicalItemService#keepsSuchABeast} since V453; these
+     * two, added in the same migration, never did. Measured live with geese, goats and oxen kept:
+     *
+     * <pre>
+     * turn the animals out            TURN_OUT_STOCK    "You open the way and drive them out — all 12 of them"
+     * turn the goats out              UNKNOWN
+     * let the goats out               UNKNOWN
+     * turn out the goats              EMPTY_CONTAINER   the urn inside "turn", fixed with containerSaid
+     * turn out the stock              EMPTY_CONTAINER   "stock" is a word this rule wants, but not in that order
+     * bring the animals in            BRING_IN_STOCK    correct
+     * bring the geese in              UNKNOWN
+     * shut the geese in               CHECK_STOCK       a health report in place of the act
+     * </pre>
+     *
+     * <p>Each miss landed on a different wrong act, which is what a rule with no reader of its own does. Asked
+     * now the way the slaughter asks it: the direction word, and then either the keeper's own collective words
+     * or a beast they actually keep. {@code word(value,"out")} keeps "about" and "outside" from counting as a
+     * direction.
+     *
+     * <p>THE TWO MOVEMENTS SHARE ONE READER AND THE SLAUGHTER DELIBERATELY DOES NOT. Folding all three onto
+     * {@link #namesTheKeepersOwn} was the first shape of this and it is wrong: that reader counts a bare
+     * {@code them}, which is safe for <i>turn them out</i> — nothing else in the game is turned out — and
+     * dangerous for <i>kill them</i>, where "them" beside a fight is wildlife and belongs to
+     * {@code CONFRONT_WILDLIFE}. So {@link #slaughteringStock} keeps the stricter list on purpose. Two readers
+     * here, not one, and the reason is written down rather than left for the next cycle to rediscover.
+     */
+    private boolean turningStockOut(String value) {
+        boolean theAct = value.contains("let") || value.contains("turn") || value.contains("drive")
+            || value.contains("put") || value.contains("graze") || value.contains("pasture");
+        return theAct && word(value, "out") && namesTheKeepersOwn(value);
     }
 
     /** Gathering them off the grass and shutting them in, which is the other half of the same choice. */
-    private static boolean shuttingStockIn(String value) {
-        return (value.contains("bring")||value.contains("gather")||value.contains("get")||value.contains("shut")
-                ||value.contains("drive")||value.contains("pen"))
-            &&(value.contains("animals in")||value.contains("stock in")||value.contains("herd in")
-               ||value.contains("beasts in")||value.contains("them in for the night")
-               ||value.contains("animals up for the night")||value.contains("them off the grass"));
+    private boolean shuttingStockIn(String value) {
+        boolean theAct = value.contains("bring") || value.contains("gather") || value.contains("get")
+            || value.contains("shut") || value.contains("drive") || value.contains("pen");
+        if (!theAct) return false;
+        boolean inward = word(value, "in") || value.contains("off the grass") || value.contains("up for the night");
+        return inward && namesTheKeepersOwn(value);
+    }
+
+    /**
+     * The keeper's own animals, named or spoken of as a whole — the one reader the two husbandry-MOVEMENT rules
+     * share. A bare {@code them} counts here because turning out and bringing in are both addressed to a flock
+     * already in mind and nothing else in the game is turned out; that is exactly why the slaughter rule does
+     * not use this and keeps its own stricter list.
+     */
+    private boolean namesTheKeepersOwn(String value) {
+        if (items.keepsSuchABeast(value)) return true;
+        boolean ownWords = word(value, "herd") || word(value, "flock") || value.contains("livestock")
+            || value.contains("my animals") || value.contains("the animals") || value.contains("my beasts")
+            || value.contains("the beasts") || word(value, "stock") || word(value, "them")
+            || value.contains("one of my");
+        return ownWords && items.keepsAnyStock();
     }
 
     /**
@@ -2867,13 +2928,32 @@ public class ChronicleActionService {
         // needs a store verb, an in/into/inside, and a container noun together.
         // A WATERSKIN IS A CONTAINER (#37). This list held every dry container in the game and not one thing you
         // carry liquid in, so "empty the waterskin" and "put the water in the gourd" reached nothing while the
-        // same sentences about a basket worked. The liquid vessels are the ones the water chain turns on.
-        //
         // "waterskin" and "water skin" are named in full rather than a bare "skin", which belongs to the hide and
         // the fish — the substring lesson this file has learned several times over.
-        boolean containerNoun = value.contains("basket")||value.contains("container")||value.contains("pouch")||value.contains("bag")||value.contains("sack")||value.contains("pot")||value.contains("crate")||value.contains("chest")||value.contains("quiver")||value.contains("box")||value.contains("pannier")||value.contains("backpack")||value.contains("storage")
-            ||value.contains("waterskin")||value.contains("water skin")||value.contains("gourd")||value.contains("flask")
-            ||value.contains("jug")||value.contains("urn")||word(value,"jar")||word(value,"jars")||word(value,"vessel")||word(value,"vessels");
+        //
+        // AND NOW IT IS LEARNED HERE TOO, because "urn" is inside "t-URN" (#37/#99). The list read half of these
+        // as substrings and only `jar` and `vessel` as words, so every one of the five rules that consults it —
+        // STORE, EMPTY_CONTAINER, PICK_UP, OPEN_CONTAINER, CLOSE_CONTAINER — saw a container in any sentence
+        // carrying the word "turn". Measured live, and the worst case is the plainest: "turn out" is ITSELF one
+        // of the emptying verbs, so it satisfied both halves of the EMPTY_CONTAINER condition by itself and
+        // every `turn out …` sentence became a request to empty a container, whatever followed it:
+        //
+        //   turn out the goats  ->  "There is no container within reach to empty."
+        //   turn out the stock  ->  the same
+        //
+        // A keeper putting their animals out to graze was offered an empty urn. Whole words in either number
+        // now, which is what `jar`/`jars` and `vessel`/`vessels` beside them were already doing — and it loses
+        // nothing but gains the words it should never have had: a chestNUT is not a chest, RANSACK is not a
+        // sack, POTTERY is not a pot, BAGGAGE is not a bag, and QUIVERing is not a quiver.
+        boolean containerNoun = containerSaid(value, "basket") || containerSaid(value, "container")
+            || containerSaid(value, "pouch") || containerSaid(value, "bag") || containerSaid(value, "sack")
+            || containerSaid(value, "pot") || containerSaid(value, "crate") || containerSaid(value, "chest")
+            || containerSaid(value, "quiver") || containerSaid(value, "box") || containerSaid(value, "pannier")
+            || containerSaid(value, "backpack") || containerSaid(value, "storage")
+            || containerSaid(value, "waterskin") || containerSaid(value, "water skin")
+            || containerSaid(value, "gourd") || containerSaid(value, "flask")
+            || containerSaid(value, "jug") || containerSaid(value, "urn")
+            || containerSaid(value, "jar") || containerSaid(value, "vessel");
         // STORE (#67 store/pack): put/stow/cache/stockpile something into a container, or the container-less
         // storage verbs that imply the settlement's store ("put it away", "cache the meat", "stockpile the wood").
         if((value.contains(" in ")||value.contains(" into ")||value.contains(" inside "))&&(value.contains("put")||value.contains("place")||value.contains("store")||value.contains("stow")||value.contains("stash")||value.contains("load")||value.contains("pack")||value.contains("drop"))&&containerNoun) return Intent.STORE;
