@@ -3473,4 +3473,53 @@ class IntentClassificationRegressionTest {
         assertEquals("EXTINGUISH_FIRE", classify("douse the fire"));
         assertEquals("EXTINGUISH_FIRE", classify("smother it"));
     }
+
+    /**
+     * THE GARMENT IS CALLED WHAT IT IS (#37/#99, V457).
+     *
+     * <p>Nine processes make an item called a tunic, leggings, trousers or a sling, and advertised only the
+     * other word for it — jerkin, chaps, breeches, strap, carrier. The item's own name could pass neither of
+     * the matcher's gates, so this rule, which names "tunic", "legging" and "trouser" outright and had no gate
+     * at all, answered with one generic garment.
+     *
+     * <p><b>And it was worse than a generic answer, which is why the data had to come first.</b> Measured
+     * through the shipped matcher over a dump of the catalogue, before V457 these phrases resolved to a
+     * stranger: {@code make a leather tunic} and {@code make leather leggings} both reached
+     * {@code make_waterskin}, {@code make a bark tunic} reached {@code make_bark_container}, and
+     * {@code fur leggings} reached {@code line_with_fur}. Gating this rule alone would have traded a generic
+     * garment for a water bottle.
+     *
+     * <p>Asserted in both directions, because the bare words must NOT move: no recipe claims a plain "tunic",
+     * "leggings" or "trousers", so those still reach this rule — the honest answer to a sentence naming no
+     * material, exactly as {@code make a belt} and {@code make a girdle} do above.
+     */
+    @Test
+    void theGarmentNamedByItsOwnWordGoesToItsOwnRecipe() throws Exception {
+        for (String said : new String[]{
+                "make a leather tunic", "make a hide tunic", "make a bark tunic", "make a reed tunic",
+                "make fur leggings", "make leather leggings", "make hide trousers",
+                "make a fibre carry sling", "make a leather bottle sling",
+                // The catalogue's own words, which have always reached their recipes and must keep doing so.
+                "make a leather jerkin", "make a hide jerkin", "make fur chaps", "make leather chaps",
+                "make hide breeches", "make a fibre carry strap", "make a leather bottle carrier"})
+            assertNotEquals("CRAFT_GARMENT", classify(said, true),
+                () -> "\"" + said + "\" names a garment the catalogue has a recipe for");
+
+        // THE BARE WORDS STAY. Nothing claims a plain tunic, leggings or trousers, so the matcher answers
+        // nothing and this rule is the honest destination.
+        assertEquals("CRAFT_GARMENT", classify("make a tunic", false));
+        assertEquals("CRAFT_GARMENT", classify("make leggings", false));
+        assertEquals("CRAFT_GARMENT", classify("make trousers", false));
+        assertEquals("CRAFT_GARMENT", classify("sew a coat", false));
+        assertEquals("CRAFT_GARMENT", classify("make a cloak", false));
+
+        // AND THE SNOWSHOE CARVE-OUT THIS RULE HAS CARRIED SINCE #708 is untouched by the new gate: a snowshoe
+        // is not a shoe, and asking for one must stay with its own two processes.
+        assertNotEquals("CRAFT_GARMENT", classify("make snowshoes", false));
+        assertNotEquals("CRAFT_GARMENT", classify("make a pair of snowshoes", true));
+
+        // Neighbours.
+        assertNotEquals("CRAFT_GARMENT", classify("wear the tunic"));
+        assertNotEquals("CRAFT_GARMENT", classify("take off the leggings"));
+    }
 }
