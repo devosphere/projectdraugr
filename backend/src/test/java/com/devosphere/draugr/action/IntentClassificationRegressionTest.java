@@ -3602,8 +3602,61 @@ class IntentClassificationRegressionTest {
         assertNotEquals("TURN_OUT_STOCK", classify("turn the wolves out"));
         assertNotEquals("BRING_IN_STOCK", classify("bring the wolves in"));
 
-        // And a direction word inside another word is not a direction.
+        // And a direction word inside another word is not a direction: "about" carries "out".
         assertNotEquals("TURN_OUT_STOCK", classify("turn the ox about"));
-        assertNotEquals("BRING_IN_STOCK", classify("bring the ox inside the pen"));
+
+        // THE INWARD HALF OF THAT PAIR WAS A BADLY CHOSEN EXAMPLE AND IS CORRECTED HERE. It asserted that
+        // `bring the ox inside the pen` was NOT a bringing-in, to show that "inside" does not count as the word
+        // "in" — but that sentence plainly IS bringing the ox in, and it only passed because at the time
+        // neither "inside" nor "pen" counted as a direction. Once penning carried its own direction the
+        // assertion failed, and it was right to: the sentence, not the rule, was wrong.
+        //
+        // There is no honest counter-example to write in its place. Any sentence carrying a stock verb, the
+        // keeper's own beast and the word "inside" really is a bringing-in, so the "out"/"about" case above is
+        // where that boundary is tested.
+        assertEquals("BRING_IN_STOCK", classify("bring the ox inside the pen"));
+    }
+
+    /**
+     * TO PEN THEM IS NOT TO BUILD A PEN (#37/#99).
+     *
+     * <p>{@code "pen the"} sat in BUILD_PEN's verb list beside build, raise and erect, so the plainest thing a
+     * keeper says about a pen they already have was read as raising another one:
+     *
+     * <pre>
+     * pen the goats in  ->  BUILD_PEN, "A pen wants a ring of stout posts — eight sound branches…"
+     * </pre>
+     *
+     * <p>Nobody says "pen the goats" meaning "construct a pen"; they say "build a pen". And it was unsafe on
+     * its own terms: {@code "pen the"} is a substring of <i>o-pen the</i> and <i>shar-pen the</i>, so
+     * {@code open the pen} — the gate, not a construction — carried both halves of the rule.
+     *
+     * <p>Every BUILD_PEN phrase the suite holds carries a real build verb, so none of them needed it. Asserted
+     * both ways here, because a rule that stopped building pens would be a different bug wearing this fix's
+     * clothes.
+     */
+    @Test
+    void penningTheFlockIsNotRaisingAPen() throws Exception {
+        // Penning your own animals is moving them, and "pen" carries its own direction.
+        assertEquals("BRING_IN_STOCK", classify("pen the oxen in"));
+        assertEquals("BRING_IN_STOCK", classify("pen the oxen"));
+        assertEquals("BRING_IN_STOCK", classify("pen the herd"));
+
+        // Building one is still building one — every phrase the suite already held.
+        assertEquals("BUILD_PEN", classify("build a pen"));
+        assertEquals("BUILD_PEN", classify("build a pig pen"));
+        assertEquals("BUILD_PEN", classify("build a paddock"));
+        assertEquals("BUILD_PEN", classify("build an exercise paddock"));
+        assertEquals("BUILD_PEN", classify("build a calving pen"));
+        assertEquals("BUILD_PEN", classify("make a goat pen"));
+        assertEquals("BUILD_PEN", classify("put up a corral"));
+
+        // A pen that names its own job still steps aside for the structure that does it (#108/V428).
+        assertEquals("UNKNOWN", classify("build a quarantine pen"));
+        assertEquals("UNKNOWN", classify("build a boar pen"));
+
+        // And the gate is not a construction. "pen the" is inside "o-pen the".
+        assertNotEquals("BUILD_PEN", classify("open the pen"));
+        assertNotEquals("BUILD_PEN", classify("sharpen the stake"));
     }
 }

@@ -2233,7 +2233,11 @@ public class ChronicleActionService {
         boolean theAct = value.contains("bring") || value.contains("gather") || value.contains("get")
             || value.contains("shut") || value.contains("drive") || value.contains("pen");
         if (!theAct) return false;
-        boolean inward = word(value, "in") || value.contains("off the grass") || value.contains("up for the night");
+        // TO PEN IS ITSELF TO PUT IN, so the verb carries its own direction and `pen the goats` needs no "in".
+        // It cannot take a construction with it: `make a goat pen` and `build a pen` both reach BUILD_PEN a few
+        // hundred lines above this, because that rule asks for a real build verb and is checked first.
+        boolean inward = word(value, "in") || value.contains("off the grass") || value.contains("up for the night")
+            || word(value, "pen") || word(value, "penned");
         return inward && namesTheKeepersOwn(value);
     }
 
@@ -3933,8 +3937,23 @@ public class ChronicleActionService {
         // Narrow on purpose. A bare "isolation" is NOT in this list: no assembly holds "isolation pen" as a
         // keyword, so deferring on it would turn a working generic pen into UNKNOWN — a worse answer than the
         // approximate one. Every word here was checked to have a structure that actually matches.
+        // AND "pen the" IS NOT A BUILD VERB (#37/#99). It sat in the list below beside build, raise and erect,
+        // so the plainest thing a keeper says about a pen they already have was read as raising another one:
+        //
+        //   pen the goats in  ->  BUILD_PEN, "A pen wants a ring of stout posts — eight sound branches…"
+        //
+        // To pen an animal is to put it IN the pen. Nobody says "pen the goats" meaning "construct a pen"; they
+        // say "build a pen". Every BUILD_PEN phrase the suite holds carries a real build verb — build a pen, a
+        // pig pen, a paddock, an exercise paddock, a calving pen, make a goat pen — and not one of them needs
+        // this, so it goes and the sentence falls through to BRING_IN_STOCK, which since #840 can hear a keeper
+        // name their own animals.
+        //
+        // It was also unsafe on its own terms: "pen the" is a substring of "o-pen the" and "shar-pen the", so
+        // `open the pen` — the gate, not a construction — carried both halves of this rule and answered with a
+        // ring of posts. The whole-word `pen` test saved every sentence except the ones that genuinely name a
+        // pen, which is exactly where it did the damage.
         boolean namesAPenningJobOfItsOwn = value.contains("quarantine")||word(value,"boar")||word(value,"bull");
-        if((word(value,"pen")||word(value,"pens")||word(value,"paddock")||word(value,"corral")||value.contains("animal enclosure")||value.contains("livestock enclosure"))&&!namesAPenningJobOfItsOwn&&(value.contains("build")||value.contains("raise")||value.contains("set up")||value.contains("put up")||value.contains("make")||value.contains("construct")||value.contains("erect")||value.contains("pen the"))) return Intent.BUILD_PEN;
+        if((word(value,"pen")||word(value,"pens")||word(value,"paddock")||word(value,"corral")||value.contains("animal enclosure")||value.contains("livestock enclosure"))&&!namesAPenningJobOfItsOwn&&(value.contains("build")||value.contains("raise")||value.contains("set up")||value.contains("put up")||value.contains("make")||value.contains("construct")||value.contains("erect"))) return Intent.BUILD_PEN;
         if(!value.contains("rail fence")&&(word(value,"fence")||word(value,"fences")||value.contains("palisade")||value.contains("stockade"))&&(value.contains("build")||value.contains("raise")||value.contains("set up")||value.contains("put up")||value.contains("weave")||value.contains("erect")||value.contains("make")||value.contains("construct")||value.contains("throw up")||value.contains("fence off")||value.contains("fence the")||value.contains("fence around")||value.contains("around the camp")||value.contains("around the perimeter"))) return Intent.BUILD_FENCE;
         // A raised lookout (#127) — a lashed pole stand a Chronicle climbs to see past the near treeline, extending
         // the boundary scout a chunk further. The lookout noun plus a build verb; placed before MAINTAIN_CAMP and
