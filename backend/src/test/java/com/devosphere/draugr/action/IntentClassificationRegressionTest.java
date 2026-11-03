@@ -3659,4 +3659,45 @@ class IntentClassificationRegressionTest {
         assertNotEquals("BUILD_PEN", classify("open the pen"));
         assertNotEquals("BUILD_PEN", classify("sharpen the stake"));
     }
+
+    /**
+     * WHAT A KEEPER KEEPS (#37/#99).
+     *
+     * <p>The welfare rule answers "how are they", and its answer already names every kind and what each wants —
+     * but it is reached only by a sentence that NAMES a beast or an ailment, so the plainest inventory question
+     * a keeper has reached nothing:
+     *
+     * <pre>
+     * what do I keep            ->  UNKNOWN
+     * how many geese do I keep  ->  MEASURE, "You look over what you carry, but nothing by that name is here"
+     * </pre>
+     *
+     * <p>The second is the worse of the two — a question about the flock answered by counting carried items.
+     *
+     * <p>Asserted against the storeroom too, because "keep" is the one word here that could wrongly claim it:
+     * {@code what do I keep in the basket} is a question about storage.
+     */
+    @Test
+    void aKeeperCanAskWhatTheyKeep() throws Exception {
+        assertEquals("CHECK_STOCK", classify("what do i keep", false));
+        assertEquals("CHECK_STOCK", classify("what am i keeping", false));
+        assertEquals("CHECK_STOCK", classify("what animals do i keep", false));
+        assertEquals("CHECK_STOCK", classify("what stock do i have", false));
+        assertEquals("CHECK_STOCK", classify("what livestock do i have", false));
+        assertEquals("CHECK_STOCK", classify("what beasts do i have", false));
+        assertEquals("CHECK_STOCK", classify("how many oxen do i keep", false));
+        assertEquals("CHECK_STOCK", classify("how many animals do i have", false));
+
+        // The welfare question it joins, which must keep working.
+        assertEquals("CHECK_STOCK", classify("how is the stock", false));
+        assertEquals("CHECK_STOCK", classify("how are the oxen", false));
+
+        // NOT THE STOREROOM. "keep" in a container sentence is storage, not husbandry.
+        assertNotEquals("CHECK_STOCK", classify("what do i keep in the basket", false));
+        assertNotEquals("CHECK_STOCK", classify("what do i keep inside the pouch", false));
+
+        // And "how many" of a thing that is not a beast is not a flock question.
+        assertNotEquals("CHECK_STOCK", classify("how many arrows do i have", false));
+        assertNotEquals("CHECK_STOCK", classify("how many berries do i have", false));
+    }
 }
