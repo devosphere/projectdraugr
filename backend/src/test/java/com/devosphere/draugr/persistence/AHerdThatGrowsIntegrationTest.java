@@ -504,6 +504,11 @@ class AHerdThatGrowsIntegrationTest {
         // regression went red in CI.
         jdbc.update("DELETE FROM tamed_young");
         jdbc.update("DELETE FROM tamed_gestation");
+        // tamed_production FIRST, and it is the only one of the three that needs saying: tamed_gestation and
+        // tamed_young cascade from wildlife_bond, tamed_production is ON DELETE NO ACTION. CI caught it as a
+        // foreign-key violation on the bond delete below, left behind by an earlier test in this class that had
+        // taken a yield.
+        jdbc.update("DELETE FROM tamed_production WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
         jdbc.update("DELETE FROM wildlife_bond WHERE chronicle_id=?", chronicle);
         byre(chunk, t0);
 
