@@ -3522,4 +3522,88 @@ class IntentClassificationRegressionTest {
         assertNotEquals("CRAFT_GARMENT", classify("wear the tunic"));
         assertNotEquals("CRAFT_GARMENT", classify("take off the leggings"));
     }
+
+    /**
+     * THE URN INSIDE "T-URN" (#37/#99).
+     *
+     * <p>The container-noun list read half its nouns as substrings and only {@code jar} and {@code vessel} as
+     * words, so all five rules that consult it — STORE, EMPTY_CONTAINER, PICK_UP, OPEN_CONTAINER,
+     * CLOSE_CONTAINER — saw a container in any sentence carrying "turn". The worst case is the plainest:
+     * {@code turn out} is ITSELF one of the emptying verbs, so it satisfied both halves of the condition by
+     * itself, and every {@code turn out …} sentence became a request to empty a container:
+     *
+     * <pre>
+     * turn out the goats  ->  "There is no container within reach to empty."
+     * turn out the stock  ->  the same
+     * </pre>
+     *
+     * <p>A keeper putting their animals out to graze was offered an empty urn. Whole words in either number
+     * now, so nothing that worked is lost and the words it should never have had are gone.
+     */
+    @Test
+    void aContainerIsAWordAndNotASubstring() throws Exception {
+        // Still heard, singular and plural — going whole-word must lose nothing.
+        assertEquals("EMPTY_CONTAINER", classify("empty the urn"));
+        assertEquals("EMPTY_CONTAINER", classify("empty the basket"));
+        assertEquals("EMPTY_CONTAINER", classify("empty the baskets"));
+        assertEquals("EMPTY_CONTAINER", classify("empty the pot"));
+        assertEquals("EMPTY_CONTAINER", classify("empty the pots"));
+        assertEquals("EMPTY_CONTAINER", classify("tip out the box"));
+        assertEquals("OPEN_CONTAINER", classify("open the pouch"));
+        assertEquals("CLOSE_CONTAINER", classify("close the chest"));
+        assertEquals("STORE", classify("put the stones in the basket"));
+
+        // AND NOT INSIDE ANOTHER WORD. None of these names a container.
+        assertNotEquals("EMPTY_CONTAINER", classify("turn around"));
+        assertNotEquals("EMPTY_CONTAINER", classify("turn the log over"));
+        assertNotEquals("EMPTY_CONTAINER", classify("return to camp"));
+        assertNotEquals("EMPTY_CONTAINER", classify("eat the chestnut"));
+        assertNotEquals("EMPTY_CONTAINER", classify("empty the chestnuts"));
+    }
+
+    /**
+     * THE KEEPER SAYS WHAT THEY KEEP (#37/#99).
+     *
+     * <p>Turning the flock out and shutting it in both wanted a COLLECTIVE noun in a fixed order — {@code
+     * animals out}, {@code stock out}, {@code them out} — so a keeper naming the animals they actually have
+     * reached the act in neither direction, and each miss landed on a different wrong act. Measured live with
+     * geese, goats and oxen kept:
+     *
+     * <pre>
+     * turn the goats out                 UNKNOWN
+     * let the goats out                  UNKNOWN
+     * turn out the goats                 EMPTY_CONTAINER   the urn, above
+     * turn out the stock                 EMPTY_CONTAINER   "stock" is a word it wants, not in that order
+     * bring the geese in                 UNKNOWN
+     * shut the geese in                  CHECK_STOCK       a health report in place of the act
+     * gather the goats in for the night  UNKNOWN
+     * </pre>
+     *
+     * <p>The stub keeps an ox and nothing else, which is what lets both directions be asserted here.
+     */
+    @Test
+    void theKeeperCanMoveTheirOwnAnimalsByName() throws Exception {
+        // Named, in either order, and in the plural.
+        assertEquals("TURN_OUT_STOCK", classify("turn the oxen out"));
+        assertEquals("TURN_OUT_STOCK", classify("turn out the oxen"));
+        assertEquals("TURN_OUT_STOCK", classify("let the ox out"));
+        assertEquals("BRING_IN_STOCK", classify("bring the oxen in"));
+        assertEquals("BRING_IN_STOCK", classify("shut the oxen in"));
+        assertEquals("BRING_IN_STOCK", classify("gather the oxen in for the night"));
+
+        // The collective words that always worked must keep working, in either order.
+        assertEquals("TURN_OUT_STOCK", classify("turn the animals out"));
+        assertEquals("TURN_OUT_STOCK", classify("turn out the stock"));
+        assertEquals("TURN_OUT_STOCK", classify("drive the herd out"));
+        assertEquals("BRING_IN_STOCK", classify("bring the animals in"));
+        assertEquals("BRING_IN_STOCK", classify("get the flock in"));
+
+        // A beast the keeper does NOT keep is not their flock to move. The stub keeps only an ox.
+        assertNotEquals("TURN_OUT_STOCK", classify("turn the wolves out"));
+        assertNotEquals("BRING_IN_STOCK", classify("bring the wolves in"));
+
+        // And a direction word inside another word is not a direction.
+        assertNotEquals("TURN_OUT_STOCK", classify("turn the ox about"));
+        assertNotEquals("BRING_IN_STOCK", classify("bring the ox inside the pen"));
+    }
 }
