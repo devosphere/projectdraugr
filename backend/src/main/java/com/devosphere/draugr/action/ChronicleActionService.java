@@ -2980,7 +2980,28 @@ public class ChronicleActionService {
         if(value.contains("lean-to") || value.contains("lean to")) return classifyLeanTo(value);
         // Garment work before the generic craft rules, so "sew a hide coat" is not
         // swallowed by the furniture or tool branches.
+        // AND IT DEFERS TO THE CATALOGUE, which it never did (#37, V457). This rule names "legging", "trouser"
+        // and "tunic" outright and had no gate at all, while NINE processes make an item called exactly one of
+        // those and advertised only the other word for it:
+        //
+        //   make_leather_tunic     "Sew a leather jerkin"      makes "Leather tunic"
+        //   make_fur_leggings      "Sew fur chaps"             makes "Fur leggings"
+        //   make_hide_trousers     "Lace hide breeches"        makes "Hide trousers"
+        //
+        // jerkin/tunic, chaps/leggings, breeches/trousers, strap/sling. The game's word reached the recipe and
+        // the player's word reached this one generic garment — the same defect the belt rule above carried, and
+        // for the same reason: a noun-driven rule with no gate has first claim on phrases the catalogue owns.
+        //
+        // THE ORDER MATTERED AND MEASUREMENT SETTLED IT. Before V457 those phrases did not merely miss their
+        // recipe, they resolved to a STRANGER — `make a leather tunic` and `make leather leggings` both reached
+        // make_waterskin, `make a bark tunic` reached make_bark_container, `fur leggings` reached line_with_fur.
+        // So gating this rule on its own would have traded a generic garment for a water bottle. The keywords
+        // and subjects had to be in the catalogue first, and they are.
+        //
+        // `make a tunic`, `make leggings` and `make trousers` name no material, no recipe claims them, and they
+        // still reach the generic garment here — which is the honest answer to a sentence that names no stuff.
         if((value.contains("sew")||value.contains("stitch")||value.contains("craft")||value.contains("make")||value.contains("weave"))&&(value.contains("coat")||value.contains("cloak")||value.contains("legging")||value.contains("trouser")||value.contains("tunic")||value.contains("boot")||value.contains("shoe")||value.contains("garment")||value.contains("clothing")||(value.contains("hide")&&value.contains("wear")))
+           &&!items.actionMatchesProcess(value)
            // A snowshoe is not a shoe (#37). Adding "shoe" in #708 so that "sew a pair of shoes" would reach the
            // maker also handed it "snowshoes", which CONTAINS it -- so asking for snowshoes made a pair of hide
            // boots, silently and successfully, which is the worst way for an answer to be wrong. They are their
