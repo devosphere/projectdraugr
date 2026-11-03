@@ -3319,6 +3319,56 @@ class IntentClassificationRegressionTest {
     }
 
     /**
+     * THE PLAYER'S WORD FOR A BELT (#37/#99, V456).
+     *
+     * <p>Eight processes produce an item whose own {@code display_name} ends in "belt" — bark, cordage, cordage
+     * tool, fibre, leather, leather pouch, leather utility, rawhide — and not one of them answered to that
+     * word, because seven advertise GIRDLE phrases and the eighth advertises STRAP ones. Every material-named
+     * belt sentence therefore fell to the single generic {@code CRAFT_BELT} rule here. Measured live:
+     *
+     * <pre>
+     * make a leather belt    CRAFT_BELT        "You lay out the FIBRE to make a belt…"
+     * make a leather girdle  PROCESS_MATERIAL  "Fit a leather girdle…"            correct, same garment
+     * make a cordage belt    CRAFT_BELT        fibre                              wrong
+     * belt bag               PROCESS_MATERIAL  sew_leather_pouch                  correct
+     * make a belt bag        CRAFT_BELT        fibre                              wrong
+     * </pre>
+     *
+     * <p>That last pair is the sharpest reading: <b>adding the making verb is what broke it.</b> The cause was
+     * an {@code ||} arm with no gate of its own — the girdle half deferred to the catalogue and the belt half
+     * did not, and the comment explaining that only ever asked whether claiming "girdle" would steal a
+     * recipe's phrases, never whether the ungated "belt" arm already did.
+     *
+     * <p>Asserted in both directions, because the bare word must NOT move: no recipe claims a plain "belt" or
+     * "girdle", so those still reach this rule, which is the right answer to a sentence naming no material.
+     */
+    @Test
+    void theMaterialNamedBeltsGoToTheirOwnRecipeAndTheBareWordDoesNot() throws Exception {
+        // processMatches=true stands for "the catalogue answers this", which after V456 it does for every
+        // material-named belt phrase and for "make a belt bag" (sew_leather_pouch's own "belt bag").
+        for (String said : new String[]{
+                "make a fibre belt", "make a bark belt", "make a cordage belt", "make a rawhide belt",
+                "make a leather belt", "make a leather tool belt", "make a leather pouch belt",
+                "make a cordage tool belt", "make a belt bag",
+                // The girdle side, which has deferred since #37 and must keep doing so.
+                "make a leather girdle", "make a cordage girdle"})
+            assertNotEquals("CRAFT_BELT", classify(said, true),
+                () -> "\"" + said + "\" names a material the catalogue has a belt recipe for");
+
+        // THE BARE WORD STAYS. Nothing in the catalogue claims a plain "belt" or "girdle", so the matcher
+        // answers nothing and this rule is the honest destination.
+        assertEquals("CRAFT_BELT", classify("make a belt", false));
+        assertEquals("CRAFT_BELT", classify("make a girdle", false));
+        assertEquals("CRAFT_BELT", classify("craft a belt", false));
+        assertEquals("CRAFT_BELT", classify("weave a girdle", false));
+
+        // And the neighbours this rule has always had to leave alone.
+        assertNotEquals("CRAFT_BELT", classify("belt out a song"));
+        assertNotEquals("CRAFT_BELT", classify("put on my belt"));
+        assertNotEquals("CRAFT_BELT", classify("take off the belt"));
+    }
+
+    /**
      * A RECIPE'S OWN NAME, SAID WHOLE, IS A REQUEST FOR THAT RECIPE (#37/#99).
      *
      * <p>This chain is consulted before the two-axis matcher ever sees the sentence, and it matches on raw

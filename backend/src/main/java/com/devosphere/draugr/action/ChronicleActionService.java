@@ -2839,12 +2839,29 @@ public class ChronicleActionService {
         // `make_cordage_belt` declares "cordage girdle", "make a cordage girdle", "tie a cordage girdle" — and
         // the rule knew only "belt", so `make a girdle` reached nothing at all while `make a belt` worked. The
         // game's word and the player's word were both right and only one of them was heard.
-        // The girdle half defers to the catalogue, which "belt" deliberately does not. `make_cordage_belt`
+        // The girdle half deferred to the catalogue and "belt" deliberately did not. `make_cordage_belt`
         // declares "cordage girdle", "make a cordage girdle" and "tie a cordage girdle" — so claiming the word
         // outright would have taken a recipe's own three phrases, which is the fault this very rule is meant to
         // avoid. "make a girdle", which no recipe claims, still reaches the belt.
+        // AND NEITHER HALF CLAIMS THE WORD OUTRIGHT NOW (#37, V456). The asymmetry above was deliberate and
+        // the reasoning only ran one way: it asked whether claiming "girdle" would steal a recipe's phrases,
+        // and never whether the ungated "belt" arm already did. It did, twice over.
+        //
+        // EIGHT processes produce an item whose own display_name ends in "belt" — bark, cordage, cordage tool,
+        // fibre, leather, leather pouch, leather utility, rawhide — and not one of them answered to that word,
+        // because seven advertise GIRDLE phrases and the eighth advertises STRAP ones. So every material-named
+        // belt sentence landed here and was answered with one generic fibre belt:
+        //
+        //   make a leather belt   -> "You lay out the FIBRE to make a belt…"   a leather belt made of fibre
+        //   make a leather girdle -> "Fit a leather girdle…"                   correct, same garment
+        //   make a belt bag       -> a belt, while `belt bag` alone reaches sew_leather_pouch
+        //
+        // That last pair is the sharpest reading of it: ADDING THE MAKING VERB IS WHAT BROKE IT. V456 gives the
+        // eight recipes the player's word as well as the catalogue's, and this arm now defers exactly as the
+        // girdle arm does, so a sentence the catalogue can answer goes to the catalogue. `make a belt` and
+        // `make a girdle` name no material, no recipe claims either, and both still reach the belt here.
         if((value.contains("make")||value.contains("craft")||value.contains("assemble")||value.contains("fashion")||value.contains("weave")||value.contains("build"))
-           &&(value.contains("belt")||(value.contains("girdle")&&!items.actionMatchesProcess(value)))&&!value.contains("belt out")) return Intent.CRAFT_BELT;
+           &&((value.contains("belt")||value.contains("girdle"))&&!items.actionMatchesProcess(value))&&!value.contains("belt out")) return Intent.CRAFT_BELT;
         // Physical logistics (#29/#40/#41). Storing something IN a container is checked before DROP and before
         // the gather verbs, so "put the stones in the basket" is containment, not dropping or gathering. It
         // needs a store verb, an in/into/inside, and a container noun together.
