@@ -5159,14 +5159,23 @@ public class PhysicalItemService {
             return new String[]{"FAILED", "You keep no tamed animals, and there is nothing of yours to look over."};
 
         // If they named a kind, answer about that kind — by its catalogue name or by the word it goes by (#106).
+        //
+        // ASKED THROUGH THE ONE READER (#37/#99). This rolled its own: substring for the full name, a bare `s`
+        // for the plural, and `word()` only on the head noun. Three defects measured against the 23 species a
+        // Chronicle can actually keep:
+        //
+        //   look over the flock by the oxbow  -> narrowed to the OXEN       b-OX, inside another word
+        //   check the stock near the fox run  -> narrowed to the OXEN       f-OX, the same
+        //   how are the geese                 -> matched NOTHING            greylag_goose, and "gooses" is not a word
+        //   how are the oxen                  -> found ox but not MUSK ox    its head arm tried "ox" and "oxs"
+        //
+        // The first two are the worst of them: a keeper of several kinds, asking about the flock beside an
+        // oxbow, was answered about one of them. saidAsASpeciesName has done all of this correctly since V453 —
+        // whole words, head noun, and pluralOf for the fifteen irregulars — and the keeper's ACTS already read
+        // it while the keeper's READINGS did not. One matcher, many readers, or the two drift apart.
         java.util.List<java.util.Map<String,Object>> asked = new java.util.ArrayList<>();
-        for (java.util.Map<String,Object> k : kinds) {
-            String spoken = ((String) k.get("species_key")).replace('_', ' ');
-            String head = spoken.contains(" ") ? spoken.substring(spoken.lastIndexOf(' ') + 1) : spoken;
-            if (v.contains(spoken) || v.contains(spoken + "s")
-                || com.devosphere.draugr.narration.Words.word(v, head)
-                || com.devosphere.draugr.narration.Words.word(v, head + "s")) asked.add(k);
-        }
+        for (java.util.Map<String,Object> k : kinds)
+            if (saidAsASpeciesName(actionText, (String) k.get("species_key"))) asked.add(k);
         if (asked.isEmpty()) asked = kinds;
 
         boolean wetGround = Boolean.TRUE.equals(jdbc.queryForObject(
@@ -5284,7 +5293,6 @@ public class PhysicalItemService {
      */
     @Transactional(readOnly = true)
     public String[] breedingProspects(UUID chronicle, UUID location, String actionText) {
-        String v = actionText == null ? "" : actionText.toLowerCase(java.util.Locale.ROOT);
         java.util.List<java.util.Map<String,Object>> kinds = jdbc.queryForList(
             "SELECT wp.species_key, COUNT(*) AS kept, " +
             "       MAX(wb.draft_hunger) AS hunger, MAX(wb.draft_thirst) AS thirst, " +
@@ -5301,11 +5309,21 @@ public class PhysicalItemService {
             return new String[]{"FAILED", "You keep no tamed animals, and nothing of yours is going to be in calf."};
 
         // If they named a kind, answer about that kind. Otherwise answer about all of them.
+        //
+        // AND THE SAME ONE READER AS THE WELFARE REPORT ABOVE (#37/#99). This was the barer of the two: a
+        // substring and a bare `s`, with NO head-noun arm at all. So every one of these asked about the whole
+        // flock when it had named a kind, and the two reports disagreed about what a keeper had just said:
+        //
+        //   are the goats in kid    welfare narrowed to the goats,  breeding answered about everything
+        //   is the sheep in lamb    welfare narrowed to the sheep,  breeding answered about everything
+        //   are the deer in calf    welfare narrowed to the deer,   breeding answered about everything
+        //   are the geese laying    NEITHER heard it
+        //   are the oxen in calf    both found ox, neither found MUSK ox
+        //
+        // and it inherited the substring hazard too: `near the fox run` narrowed to the oxen.
         java.util.List<java.util.Map<String,Object>> asked = new java.util.ArrayList<>();
-        for (java.util.Map<String,Object> k : kinds) {
-            String spoken = ((String) k.get("species_key")).replace('_', ' ');
-            if (v.contains(spoken) || v.contains(spoken + "s")) asked.add(k);
-        }
+        for (java.util.Map<String,Object> k : kinds)
+            if (saidAsASpeciesName(actionText, (String) k.get("species_key"))) asked.add(k);
         if (asked.isEmpty()) asked = kinds;
 
         StringBuilder b = new StringBuilder();

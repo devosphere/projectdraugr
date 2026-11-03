@@ -80,4 +80,52 @@ class SpeciesNamesHeardTest {
         assertFalse(PhysicalItemService.saidAsASpeciesName("", "ox"));
         assertFalse(PhysicalItemService.saidAsASpeciesName(null, "ox"));
     }
+
+    /**
+     * THE KEEPER'S TWO REPORTS NOW ASK THIS, AND THEY DID NOT (#37/#99).
+     *
+     * <p>{@code stockWelfare} and {@code breedingProspects} each rolled their own name matching — a substring
+     * for the full name, a bare {@code s} for the plural, and in the breeding report no head-noun arm at all.
+     * These are the sentences those two reports actually receive, held against the one reader, over the 23
+     * species a Chronicle can keep. What the old inline rules did with them:
+     *
+     * <pre>
+     * look over the flock by the oxbow   narrowed to the OXEN         b-OX, found inside another word
+     * check the stock near the fox run   narrowed to the OXEN         f-OX, the same
+     * how are the geese                  matched NOTHING              "gooses" is not a word
+     * how are the oxen                   found ox but not MUSK ox     the head arm tried "ox" and "oxs"
+     * are the goats in kid               welfare narrowed, breeding answered about the whole flock
+     * is the sheep in lamb               welfare narrowed, breeding answered about the whole flock
+     * </pre>
+     *
+     * <p>So a keeper of several kinds, asking after the flock beside an oxbow, was answered about one of them —
+     * and the two reports disagreed about what had just been said.
+     */
+    @Test
+    void theSentencesTheKeepersReportsReceiveAreHeardTheSameWay() {
+        // The irregular plural of a bird a Chronicle can actually keep.
+        assertTrue(PhysicalItemService.saidAsASpeciesName("how are the geese", "greylag_goose"));
+        assertTrue(PhysicalItemService.saidAsASpeciesName("are the geese laying", "greylag_goose"));
+
+        // Said in the plural, and heard for BOTH kinds of ox a keeper might have.
+        assertTrue(PhysicalItemService.saidAsASpeciesName("are the oxen in calf", "ox"));
+        assertTrue(PhysicalItemService.saidAsASpeciesName("are the oxen in calf", "musk_ox"));
+
+        // By the head noun, which is how the breeding report is actually addressed.
+        assertTrue(PhysicalItemService.saidAsASpeciesName("are the goats in kid", "mountain_goat"));
+        assertTrue(PhysicalItemService.saidAsASpeciesName("is the sheep in lamb", "bighorn_sheep"));
+        assertTrue(PhysicalItemService.saidAsASpeciesName("are the deer in calf", "red_deer"));
+        assertTrue(PhysicalItemService.saidAsASpeciesName("are the ducks laying", "mallard_duck"));
+        assertTrue(PhysicalItemService.saidAsASpeciesName("are the horses in foal", "horse"));
+
+        // AND THE TWO THAT MATTERED MOST: a name inside another word is not that name. Both of these narrowed
+        // a whole flock down to the oxen.
+        assertFalse(PhysicalItemService.saidAsASpeciesName("look over the flock by the oxbow", "ox"));
+        assertFalse(PhysicalItemService.saidAsASpeciesName("check the stock near the fox run", "ox"));
+        assertFalse(PhysicalItemService.saidAsASpeciesName("look over the flock by the oxbow", "musk_ox"));
+
+        // A kind the keeper did not name is not answered about.
+        assertFalse(PhysicalItemService.saidAsASpeciesName("are the goats in kid", "horse"));
+        assertFalse(PhysicalItemService.saidAsASpeciesName("how are the geese", "mallard_duck"));
+    }
 }
