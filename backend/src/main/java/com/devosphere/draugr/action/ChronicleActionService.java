@@ -3675,6 +3675,28 @@ public class ChronicleActionService {
            // building words would have caught it. Asked of the matcher, so that every assembly added after this
            // one is protected too — which a hand-kept list could never promise.
            &&!namesAnAssembly(value)) return Intent.CHECK_STOCK;
+        // WHAT A KEEPER KEEPS (#37/#99). The welfare rule above answers "how are they", and its answer already
+        // names every kind and what each one wants — but it is reached only by a sentence that NAMES a beast or
+        // an ailment, so the plainest inventory question a keeper has reached nothing at all:
+        //
+        //   what do I keep            -> UNKNOWN
+        //   how many geese do I keep  -> MEASURE, "You look over what you carry, but nothing by that name is here"
+        //
+        // The second is the worse of the two: a question about the flock answered by counting carried items.
+        // JUDGE_RAISING is not the home for it either — that is "what can be BUILT here", raise as in raise a
+        // roof. So these phrasings join the stock report, which is what they were always asking for.
+        //
+        // GUARDED AGAINST THE STOREROOM, which is the one thing "keep" could wrongly claim: "what do I keep in
+        // the basket" is a question about storage and belongs to the container rules. A kept-stock word carries
+        // the other phrasings on its own, and `keepsAnyStock` keeps all of them off a Chronicle who keeps
+        // nothing, so a lone traveller asking what they keep is not answered about livestock they have not got.
+        boolean asksWhatIsKept =
+            ((value.contains("what do i keep") || value.contains("what am i keeping"))
+                && !value.contains(" in ") && !value.contains(" inside "))
+            || value.contains("what animals do i") || value.contains("what stock do i")
+            || value.contains("what livestock do i") || value.contains("what beasts do i")
+            || (value.contains("how many") && namesABeast(value));
+        if (asksWhatIsKept && !namesAnAssembly(value) && items.keepsAnyStock()) return Intent.CHECK_STOCK;
         // The dressing verbs belong here too (#106): tendSickAnimal works a poultice, an infusion or a dried herb
         // bundle into an ailing beast, which is exactly what "bandage the goat" and "put a poultice on the ewe"
         // ask for, and both reached nothing. Gated on the beast as everything in this block is, so "bind the
