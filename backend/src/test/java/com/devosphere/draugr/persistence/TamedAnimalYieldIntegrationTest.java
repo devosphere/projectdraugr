@@ -22,6 +22,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -396,5 +397,87 @@ class TamedAnimalYieldIntegrationTest {
         assertEquals(java.util.List.of(), jdbc.queryForList(
             "SELECT species_key FROM tamed_yield WHERE yield_kind IN ('EGG','MILK') AND interval_hours > 72 ORDER BY 1", String.class),
             "milk and eggs come daily, not seasonally");
+    }
+
+    /**
+     * A SICK FLOCK IS NOT AN ABSENT ONE (#37/#99).
+     *
+     * <p>Every other reason a yield can fail says which: out of season, a matted coat, a dam off her feed, too
+     * soon since the last taking. Sickness alone had no message, because it is a condition in the WHERE clause
+     * that selects the animal rather than a field read afterwards — so the row vanished and the keeper was told
+     * they owned nothing at all:
+     *
+     * <pre>
+     * collect the eggs from the geese  ->  "You have no tamed fowl here to gather eggs from."
+     * shear the goats                  ->  "There is no tamed fleece-bearer here to shear."
+     * </pre>
+     *
+     * <p>with a tamed goose and a tamed goat standing there, merely ill. That is the opposite of what the
+     * mechanic is for: V299's own note says a sick animal gives nothing so that "the herd stops paying until it
+     * is looked after", and a keeper told they have no fowl has no reason to go and look after the fowl.
+     *
+     * <p>Three states, because the middle one is the whole of the fix's value and the outer two must not move:
+     * nothing kept says so, a sick flock says it is sick, and a well one gives.
+     */
+    @Test
+    void aSickFlockIsNotAnAbsentOne() {
+        if (worldGenesis.current() == null) {
+            worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
+            ecology.seed();
+        }
+        ChronicleService.ChronicleSummary summary = chronicles.awaken();
+        assertNotNull(summary);
+        UUID chronicle = summary.id();
+        UUID chunk = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+        UUID worldId = jdbc.queryForObject("SELECT world_id FROM world_chunk WHERE id=?", UUID.class, chunk);
+        jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
+        Timestamp ts = Timestamp.from(Instant.now());
+
+        // Dry ground and a flock of this Chronicle's own, established here rather than inherited — the class
+        // shares its database and another test in it leaves the chunk wet.
+        jdbc.update("UPDATE world_chunk SET biome='GRASSLAND' WHERE id=?", chunk);
+        jdbc.update("DELETE FROM ecology_site WHERE chunk_id=? AND " + com.devosphere.draugr.ecology.FreshWater.sites(), chunk);
+        jdbc.update("DELETE FROM tamed_production WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
+        jdbc.update("DELETE FROM tamed_young WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
+        jdbc.update("DELETE FROM tamed_gestation WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
+        jdbc.update("DELETE FROM wildlife_bond WHERE chronicle_id=?", chronicle);
+
+        // The pail comes FIRST, before anything is tamed. Milking checks for something to milk into before it
+        // looks for an animal at all, so without this the refusal below would be about the vessel and would
+        // prove nothing about the flock — an assertion that passes for the wrong reason is worse than none.
+        items.createCarriedItem(chronicle, "wooden_bowl", "Wooden bowl", Instant.now(), "TEST_FIXTURE");
+
+        // NOTHING KEPT: the original refusal, which must not change. Asserted before anything is tamed, so it
+        // is the real "you have none" answer and not a sick animal mistaken for one.
+        var noFlock = actions.resolve("milk the goat");
+        assertEquals("FAILED", noFlock.outcome(), () -> "with nothing kept there is nothing to milk: " + noFlock.perception());
+        assertTrue(noFlock.perception().contains("nothing tamed here"),
+            () -> "and with nothing kept it says exactly that: " + noFlock.perception());
+
+        tame(chronicle, chunk, worldId, "mountain_goat", ts);
+
+        // WELL: the control. Everything after it differs only in her sickness.
+        jdbc.update("UPDATE wildlife_bond SET draft_hunger=0, draft_thirst=0, sickness=0 WHERE chronicle_id=?", chronicle);
+        var well = actions.resolve("milk the goat");
+        assertEquals("SUCCEEDED", well.outcome(), () -> "a goat in condition gives milk: " + well.perception());
+
+        // SICK: she is still hers, and the refusal has to say what is wrong with her rather than deny she
+        // exists. This is the assertion the defect would fail.
+        jdbc.update("DELETE FROM tamed_production WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
+        jdbc.update("UPDATE wildlife_bond SET sickness=? WHERE chronicle_id=?",
+            PhysicalItemService.TOO_SICK_TO_GIVE + 10, chronicle);
+        var ill = actions.resolve("milk the goat");
+        assertEquals("FAILED", ill.outcome(), () -> "a sick dam gives nothing: " + ill.perception());
+        assertTrue(ill.perception().contains("ailing"),
+            () -> "and the refusal names her illness: " + ill.perception());
+        assertFalse(ill.perception().contains("nothing tamed here"),
+            () -> "it must NOT tell a keeper who has a goat that they have no goat: " + ill.perception());
+
+        // TENDED: nothing was taken away permanently, which is the point of the mechanic.
+        jdbc.update("UPDATE wildlife_bond SET sickness=0 WHERE chronicle_id=?", chronicle);
+        var mended = actions.resolve("milk the goat");
+        assertEquals("SUCCEEDED", mended.outcome(), () -> "looked after, she gives again: " + mended.perception());
+
+        assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
 }

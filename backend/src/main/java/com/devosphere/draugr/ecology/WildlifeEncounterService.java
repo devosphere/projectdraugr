@@ -1360,11 +1360,42 @@ public class WildlifeEncounterService {
                     java.util.Map.entry("thirst", rs.getInt(11)),
                     java.util.Map.entry("needsWater", rs.getBoolean(12))) : null, wanted, chronicle);
 
-        if (ready == null) return new EncounterResult("FAILED", switch (wanted) {
-            case "MILK" -> "You have nothing tamed here that gives milk — a goat or a cow must be won over first, and won over properly.";
-            case "WOOL" -> "There is no tamed fleece-bearer here to shear.";
-            default     -> "You have no tamed fowl here to gather eggs from.";
-        });
+        if (ready == null) {
+            // A SICK FLOCK IS NOT AN ABSENT ONE (#37/#99). Every other reason a yield can fail has a message of
+            // its own below — out of season, a matted coat, a dam off her feed, too soon since the last taking —
+            // and sickness alone had none, because it is a condition in the WHERE clause above rather than a
+            // field read afterwards. So the row simply vanished and the keeper was told they owned nothing:
+            //
+            //   collect the eggs from the geese  ->  "You have no tamed fowl here to gather eggs from."
+            //   shear the goats                  ->  "There is no tamed fleece-bearer here to shear."
+            //
+            // with a tamed goose and a tamed goat standing there, merely ill. Measured by raising sickness on a
+            // kept flock and then healing it: the same two sentences answered "They are off the lay" and "You
+            // work the fleece off 4 of them in turn". The catalogue and the act were right the whole time and
+            // only the prose was wrong — and wrong in the way that matters, because V299's own note says the
+            // point of a sick animal giving nothing is that "the herd stops paying until it is looked after".
+            // A keeper told they have no fowl has no reason to go and look after the fowl.
+            boolean yoursButAiling = Boolean.TRUE.equals(jdbc.query(
+                "SELECT EXISTS(SELECT 1 FROM wildlife_bond wb " +
+                "JOIN wildlife_population wp ON wp.id = wb.population_id " +
+                "JOIN tamed_yield ty ON ty.species_key = wp.species_key AND ty.yield_kind = ? " +
+                "WHERE wb.chronicle_id = ? AND wb.bond_stage = 'TAMED' AND wp.population_count > 0 " +
+                "  AND wb.sickness >= " + com.devosphere.draugr.item.PhysicalItemService.TOO_SICK_TO_GIVE + ")",
+                rs -> rs.next() ? rs.getBoolean(1) : Boolean.FALSE, wanted, chronicle));
+            if (yoursButAiling) return new EncounterResult("FAILED", switch (wanted) {
+                case "MILK" -> "She is ailing, and what little she has is not fit to take. A sick dam gives nothing worth the pail "
+                    + "until she has been tended.";
+                case "WOOL" -> "The fleece is on a sick animal. Taking it now strips the one coat keeping the warmth in, and what came "
+                    + "off would be worth little. Tend it first.";
+                default     -> "The nests are empty because the birds are ailing, not because anyone took from them. They will come back "
+                    + "to lay once they have been looked after.";
+            });
+            return new EncounterResult("FAILED", switch (wanted) {
+                case "MILK" -> "You have nothing tamed here that gives milk — a goat or a cow must be won over first, and won over properly.";
+                case "WOOL" -> "There is no tamed fleece-bearer here to shear.";
+                default     -> "You have no tamed fowl here to gather eggs from.";
+            });
+        }
 
         // The animal is there and well, and it is simply not the time of year (#161, V323). Said as that, not as an
         // empty nest or a milked-out dam, which would tell the keeper to wait a day for something a season away.
