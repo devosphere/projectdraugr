@@ -476,4 +476,55 @@ class AHerdThatGrowsIntegrationTest {
         assertTrue(jdbc.queryForObject("SELECT COUNT(*) FROM breeding_profile WHERE litter_max > 1", Integer.class) >= 5,
             "a flock could never grow if nothing bore more than one");
     }
+
+    /**
+     * A HERD IN ONE POPULATION IS A HERD (#37/#99).
+     *
+     * <p>The pair rule counted BONDS, and taming creates one bond per POPULATION — so a keeper who tamed a herd
+     * of four goats had one bond, and the rule found one animal and refused. Breeding was reachable only by
+     * taming two SEPARATE populations of the same species, which is not how a keeper comes by a herd, and which
+     * is exactly the world the other tests in this class build.
+     *
+     * <p>Measured on a kept flock before the fix: bonds=1, head=4 per species, and {@code are the goats in kid}
+     * answered <i>"You keep one mountain goat, and one is not a pair"</i> with four goats standing there. The
+     * same four gave four lots of milk a moment later, because {@code tamed_yield} reads
+     * {@code population_count} — as do the pasture line and the crowding line. Four readers of one quantity and
+     * only the pair rule and the two reports counted bonds.
+     *
+     * <p>Asserted both ways: one animal in one population is still not a pair.
+     */
+    @Test
+    void aHerdInOnePopulationIsAHerd() {
+        world();
+        UUID chronicle = livingChronicle();
+        UUID chunk = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+        Instant t0 = Instant.parse("2026-01-01T00:00:00Z");
+        // This class shares one database, so the lifecycle tables are cleared first and every count below is
+        // scoped to this test's own species. Assuming a fixture you did not establish is how the last husbandry
+        // regression went red in CI.
+        jdbc.update("DELETE FROM tamed_young");
+        jdbc.update("DELETE FROM tamed_gestation");
+        // tamed_production FIRST, and it is the only one of the three that needs saying: tamed_gestation and
+        // tamed_young cascade from wildlife_bond, tamed_production is ON DELETE NO ACTION. CI caught it as a
+        // foreign-key violation on the bond delete below, left behind by an earlier test in this class that had
+        // taken a yield.
+        jdbc.update("DELETE FROM tamed_production WHERE bond_id IN (SELECT id FROM wildlife_bond WHERE chronicle_id=?)", chronicle);
+        jdbc.update("DELETE FROM wildlife_bond WHERE chronicle_id=?", chronicle);
+        byre(chunk, t0);
+
+        // ONE population, ONE bond, ONE animal in it: still not a pair, and that must stay true.
+        UUID only = tame(chronicle, chunk, "mountain_goat", t0);
+        items.advanceBreeding(t0);
+        assertEquals(0, count("tamed_gestation", "WHERE species_key='mountain_goat'"),
+            "one animal is not a pair, however it is counted");
+
+        // The same single bond, now a herd of four. This is the assertion the defect would fail: before the
+        // fix the pair rule counted the bond and found one.
+        jdbc.update("UPDATE wildlife_population SET population_count=4 WHERE id=(SELECT population_id FROM wildlife_bond WHERE id=?)", only);
+        items.advanceBreeding(t0);
+        assertEquals(1, count("tamed_gestation", "WHERE species_key='mountain_goat'"),
+            "four goats in one herd are a pair and more, and must get in calf");
+
+        assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
 }

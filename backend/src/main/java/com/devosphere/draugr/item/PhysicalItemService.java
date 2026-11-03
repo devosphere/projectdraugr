@@ -1050,9 +1050,22 @@ public class PhysicalItemService {
             // thirst, and the second thing that makes looking after stock matter rather than merely owning them.
             "  AND wb.draft_hunger < ? AND wb.draft_thirst < ? AND wb.draft_fatigue < ? AND wb.sickness < ? " +
             "  AND (wb.last_birth_at IS NULL OR wb.last_birth_at <= ?::timestamptz - make_interval(hours => bp.recovery_hours)) " +
-            // Two of a kind, counted among this keeper's own tamed stock.
-            "  AND (SELECT COUNT(*) FROM wildlife_bond o JOIN wildlife_population op ON op.id = o.population_id " +
-            "        WHERE o.chronicle_id = wb.chronicle_id AND o.bond_stage = 'TAMED' AND op.species_key = wp.species_key) >= 2 " +
+            // TWO OF A KIND, COUNTED IN ANIMALS (#37/#99). This counted BONDS, and taming creates one bond per
+            // POPULATION — so a keeper who tamed a herd of four goats had one bond, and the pair rule found one
+            // animal and refused. Breeding was reachable only by taming two SEPARATE populations of the same
+            // species, which is not how a keeper comes by a herd.
+            //
+            // Measured on a kept flock: bonds=1, head=4 per species, and `are the goats in kid` answered "You
+            // keep one mountain goat, and one is not a pair" with four goats standing there. The same four gave
+            // four lots of milk a moment later, because tamed_yield reads population_count — as do the pasture
+            // line (headAtPasture sums it) and the crowding line (HEAD_ON_THIS_GROUND). Four readers of the
+            // same quantity and only these three counted bonds.
+            //
+            // The rule's own words are about animals: "one is not a pair". So it counts animals.
+            "  AND (SELECT COALESCE(SUM(op.population_count), 0) FROM wildlife_bond o " +
+            "        JOIN wildlife_population op ON op.id = o.population_id " +
+            "        WHERE o.chronicle_id = wb.chronicle_id AND o.bond_stage = 'TAMED' " +
+            "          AND o.released_at IS NULL AND op.species_key = wp.species_key) >= 2 " +
             // Somewhere to be kept: a completed, intact stock shelter on the keeper's ground.
             "  AND EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
             "              JOIN construction_kind ck ON ck.project_kind = cp.project_kind AND ck.shelters_stock " +
@@ -5148,12 +5161,18 @@ public class PhysicalItemService {
             // MIN for the foot, not MAX: every other column here counts UP into trouble and hoof_condition counts
             // down out of it, so the animal that needs the keeper is the lowest one. The flag comes along so the
             // report can keep quiet about the feet of a bird (#106, V414).
-            "SELECT wp.species_key, COUNT(*) AS kept, MAX(wb.draft_hunger) AS hunger, MAX(wb.draft_thirst) AS thirst, " +
+            "SELECT wp.species_key, COALESCE(SUM(wp.population_count), 0) AS kept, MAX(wb.draft_hunger) AS hunger, MAX(wb.draft_thirst) AS thirst, " +
             "       MAX(wb.draft_fatigue) AS fatigue, MAX(wb.sickness) AS sickness, " +
             "       MIN(wb.hoof_condition) AS foot, bool_or(ws.feet_need_paring) AS has_feet " +
             "FROM wildlife_bond wb JOIN wildlife_population wp ON wp.id = wb.population_id " +
             "JOIN wildlife_species ws ON ws.species_key = wp.species_key " +
             "WHERE wb.chronicle_id = ? AND wb.bond_stage = 'TAMED' " +
+            // ASKING WHAT keptSpecies ASKS (#37/#99). Both reports left these two conditions out, so a keeper who
+            // had RELEASED their stock went on being given reports about it, and a population worked down to
+            // nothing was still named. keptSpecies — the shared reader for "does this keeper keep anything" —
+            // has had both all along, so the reports disagreed with the very thing that decides whether there
+            // is a flock to report on.
+            "  AND wb.released_at IS NULL AND wp.population_count > 0 " +
             "GROUP BY wp.species_key ORDER BY wp.species_key", chronicle);
         if (kinds.isEmpty())
             return new String[]{"FAILED", "You keep no tamed animals, and there is nothing of yours to look over."};
@@ -5220,7 +5239,11 @@ public class PhysicalItemService {
             if (fatigue >= NOT_IN_CONDITION) wants.add("worked past what they will stand");
             else if (fatigue >= WORTH_NAMING) wants.add("tired");
 
-            b.append(kept == 1 ? "The " + name + " is" : "The " + name + "s, " + kept + " of them, are");
+            // pluralOf, not a bare `s` (#37/#99). This line could only ever say the singular before, because
+            // `kept` counted BONDS and a keeper has one bond per population — so the plural branch had never
+            // run in play and "The greylag gooses, 4 of them" came out the moment it did. The same reader the
+            // keeper's acts and name-matching already use.
+            b.append(kept == 1 ? "The " + name + " is" : "The " + pluralOf(name) + ", " + kept + " of them, are");
             if (wants.isEmpty()) b.append(" in good order — fed, watered, rested and sound. ");
             else b.append(' ').append(joinAnd(wants)).append(". ");
         }
@@ -5294,7 +5317,7 @@ public class PhysicalItemService {
     @Transactional(readOnly = true)
     public String[] breedingProspects(UUID chronicle, UUID location, String actionText) {
         java.util.List<java.util.Map<String,Object>> kinds = jdbc.queryForList(
-            "SELECT wp.species_key, COUNT(*) AS kept, " +
+            "SELECT wp.species_key, COALESCE(SUM(wp.population_count), 0) AS kept, " +
             "       MAX(wb.draft_hunger) AS hunger, MAX(wb.draft_thirst) AS thirst, " +
             "       MAX(wb.draft_fatigue) AS fatigue, MAX(wb.sickness) AS sickness, " +
             "       BOOL_OR(bp.species_key IS NOT NULL) AS can_breed, " +
@@ -5304,6 +5327,8 @@ public class PhysicalItemService {
             "JOIN wildlife_species ws ON ws.species_key = wp.species_key " +
             "LEFT JOIN breeding_profile bp ON bp.species_key = wp.species_key " +
             "WHERE wb.chronicle_id = ? AND wb.bond_stage = 'TAMED' " +
+            // The same two conditions keptSpecies asks, as in the welfare report above.
+            "  AND wb.released_at IS NULL AND wp.population_count > 0 " +
             "GROUP BY wp.species_key ORDER BY wp.species_key", chronicle);
         if (kinds.isEmpty())
             return new String[]{"FAILED", "You keep no tamed animals, and nothing of yours is going to be in calf."};
@@ -5347,7 +5372,7 @@ public class PhysicalItemService {
                 "  AND sw.current_location_id = ? AND body_size_rank(ck.shelters_up_to_size) >= ?)",
                 Boolean.class, location, ((Number) k.get("body_rank")).intValue()));
             if (!housed) wanting.add("there is nothing standing here that would house stock their size");
-            b.append("You keep ").append(kept).append(" ").append(name).append(kept == 1 ? "" : "s").append(": ");
+            b.append("You keep ").append(kept).append(" ").append(kept == 1 ? name : pluralOf(name)).append(": ");
             if (wanting.isEmpty()) b.append("nothing stands in the way, and they will settle to it in their own time. ");
             else b.append(String.join(", and ", wanting)).append(". ");
         }
