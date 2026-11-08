@@ -268,4 +268,77 @@ class NamingAFoodYouDoNotHaveIntegrationTest {
             () -> "a bare \"eat\" names nothing, so there is nothing to refuse: " + prose);
         assertTrue(prose.contains("mushroom"), () -> "it takes what is to hand: " + prose);
     }
+
+    /**
+     * THE WORST THING FOUND ON THIS TICKET, and the reason this class exists at all, one food along (#37).
+     *
+     * <p>The guard above only fires for a word the FOOD catalogue knows, and it knows a food by its display
+     * name or by that name's LAST word. {@code Wild onion bulb} ends in "bulb" -- the PART, not the thing a
+     * hungry person names -- so {@code eat the onion} matched nothing and fell through to the fallback, which
+     * eats whatever is to hand.
+     *
+     * <p>Measured on a booted stack, with a wild onion bulb and a death cap in the pack: {@code eat the onion}
+     * <b>ate the death cap</b>, left the onion where it was, and put the Chronicle's illness at 12. The player
+     * named a food they were carrying and the world fed them a lethal mushroom instead.
+     */
+    @Test
+    void namingTheFoodYouCarryEatsThatFoodAndNotThePoisonBesideIt() {
+        UUID me = aLivingChronicle();
+        emptyThePack(me);
+        carry(me, "wild_onion_bulb");
+        carry(me, "death_cap");
+
+        String prose = said("eat the onion");
+        assertTrue(carried(me, "death_cap") == 1,
+            () -> "the death cap was never named and must still be in the pack: " + prose);
+        assertEquals(0, carried(me, "wild_onion_bulb"),
+            () -> "and the onion the player DID name is what was eaten: " + prose);
+    }
+
+    /**
+     * AND A THING THAT IS NOT FOOD IS NOT A REASON TO EAT SOMETHING ELSE (#37).
+     *
+     * <p>Nettle fibre is rope, not dinner, and the refusal says which of the two true things is the case --
+     * you have it and it is not food -- because that wants a different answer from the player than having
+     * none at all.
+     */
+    @Test
+    void namingSomethingThatIsNotFoodIsRefusedByName() {
+        UUID me = aLivingChronicle();
+        emptyThePack(me);
+        carry(me, "nettle_fiber");
+        carry(me, "death_cap");
+
+        String prose = said("eat the nettle");
+        assertTrue(prose.contains("not food"), () -> "it must say so plainly: " + prose);
+        assertTrue(prose.contains("nettle"), () -> "and name what the player named: " + prose);
+        assertEquals(1, carried(me, "death_cap"),
+            () -> "and nothing else may be eaten in its place: " + prose);
+    }
+
+    /**
+     * AND NAMING A THING THIS WORLD KNOWS BUT YOU HAVE NOT (#37). {@code eat the axe} is not a sentence worth
+     * answering with a mushroom, and the fallback is reached only by a sentence that names nothing.
+     */
+    @Test
+    void namingAThingYouHaveNotIsRefusedRatherThanSubstituted() {
+        UUID me = aLivingChronicle();
+        emptyThePack(me);
+        carry(me, "oyster_mushroom");
+
+        String prose = said("eat the stone hand axe");
+        assertTrue(prose.contains("would not have been a meal") || prose.contains("none here"),
+            () -> "a thing that is not a meal is refused as one: " + prose);
+        assertEquals(1, carried(me, "oyster_mushroom"),
+            () -> "and the mushroom the player never mentioned is untouched: " + prose);
+    }
+
+    /** How many of an item key the Chronicle is carrying, which is what settles what was actually eaten. */
+    private int carried(UUID me, String itemKey) {
+        Integer n = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM world_object w JOIN item_instance i ON i.object_id=w.id "
+            + "WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key=?",
+            Integer.class, me, itemKey);
+        return n == null ? 0 : n;
+    }
 }

@@ -216,7 +216,7 @@ public class PhysicalItemService {
         // the Chronicle was told there was no mushroom while carrying two. The fix for a family word has to be
         // made on BOTH sides, the reach and the asking, or it only moves the defect.
         String padded = " " + lowerText.replaceAll("[^a-z0-9]+", " ").trim() + " ";
-        return foods.stream()
+        String byHead = foods.stream()
             .filter(f -> {
                 String name = f[1].toLowerCase(java.util.Locale.ROOT);
                 int cut = Math.max(name.lastIndexOf(' '), name.lastIndexOf('-'));
@@ -224,6 +224,81 @@ public class PhysicalItemService {
                 return !head.isBlank() && padded.contains(" " + head + " ");
             })
             .map(f -> f[0]).findFirst().orElse(null);
+        if (byHead != null) return byHead;
+        // ...AND THEN THE PLANT ITSELF, because the head noun of a food is not always the KIND of it (#37).
+        // `Wild onion bulb` ends in "bulb" and `Plantain Leaf` in "leaf" -- the PART, not the thing a hungry
+        // person names. Of the 100 multi-word foods in this catalogue the last word is the kind for mushroom,
+        // fish, berry, meat and egg, and the part for leaf, root, bulb, tuber, kernel, clove, hip and greens.
+        // So `eat the onion`, with a wild onion bulb in the pack, found nothing at all.
+        //
+        // AND FINDING NOTHING WAS NOT A HARMLESS MISS. Measured on a booted stack: with a wild onion bulb AND a
+        // death cap in the pack, `eat the onion` ATE THE DEATH CAP, left the onion where it was, and put the
+        // Chronicle's illness at 12. The reach is half of this fix and the guard in eat() is the other.
+        //
+        // Any whole word of the name will do, except the words that say how a food was PREPARED rather than what
+        // it is -- otherwise `eat the dried fish` and `eat the smoked fish` would answer to each other. Asked of
+        // the foods actually in reach, which is a handful, so this is a short list and not the whole catalogue.
+        return foods.stream()
+            .filter(f -> namesIt(padded, f[1]))
+            .map(f -> f[0]).findFirst().orElse(null);
+    }
+
+    /** Whether the sentence says any whole word of this thing's name that is part of WHAT it is. */
+    private static boolean namesIt(String padded, String displayName) {
+        for (String w : displayName.toLowerCase(java.util.Locale.ROOT).split("[ -]")) {
+            if (w.length() >= 3 && !HOW_IT_WAS_PREPARED.contains(w) && padded.contains(" " + w + " ")) return true;
+        }
+        return false;
+    }
+    /** Words in a thing's name that say how it was treated, not what it is. */
+    private static final java.util.Set<String> HOW_IT_WAS_PREPARED = java.util.Set.of(
+        "dried", "salted", "smoked", "cooked", "raw", "fresh", "boiled", "roasted", "wild", "whole", "the");
+
+    /**
+     * The thing in reach that answers to a word the sentence says, by its display name, or null (#37).
+     *
+     * <p>Asked when a sentence names something that is not food, so that refusing can say which of the two true
+     * things is the case: you have no such thing at all, or you have it and it is not food. {@code eat the
+     * nettle} is the case in point -- nettle fibre is in the pack and is rope, not dinner.
+     */
+    @Transactional(readOnly = true)
+    public String aReachableThingTheSentenceNames(UUID chronicle, String lowerText) {
+        if (lowerText == null || lowerText.isBlank()) return null;
+        String padded = " " + lowerText.replaceAll("[^a-z0-9]+", " ").trim() + " ";
+        return jdbc.query(REACHABLE_CTE +
+            "SELECT DISTINCT d.display_name FROM reachable r JOIN item_instance i ON i.object_id=r.id "
+            + "JOIN item_definition d ON d.item_key=i.item_key ORDER BY d.display_name",
+            (rs, row) -> rs.getString(1), chronicle, chronicleLocation(chronicle))
+            .stream().filter(n -> namesIt(padded, n)).findFirst().orElse(null);
+    }
+
+    /**
+     * A thing this world has a name for at all, whether or not any exists near the Chronicle (#37).
+     *
+     * <p>The last question before a sentence is allowed to mean "eat whatever is to hand". A bare {@code eat}
+     * names nothing and should take what there is; {@code eat the axe} names something, and answering it by
+     * eating a mushroom is the defect this closes rather than a liberty worth keeping.
+     */
+    @Transactional(readOnly = true)
+    public String[] aCataloguedThingTheSentenceNames(String lowerText) {
+        if (lowerText == null || lowerText.isBlank()) return null;
+        String padded = " " + lowerText.replaceAll("[^a-z0-9]+", " ").trim() + " ";
+        // THE CATEGORY COMES BACK WITH THE NAME, because the refusal has to be true about it. My first cut
+        // returned the name alone and the caller said of every one of them that it "would not have been a meal
+        // in any case" -- which is false of a wild onion bulb, a FOOD whose head noun is "bulb" and which
+        // therefore reaches this question rather than the food one above it. A near-miss dressed as an answer,
+        // in a fix written to stop exactly that, and caught by reading the sentence it produced.
+        // AND THE WHOLE NAME OUTRANKS A WORD OF IT, which foodTheSentenceAsksFor learned first and wrote down:
+        // returning the catalogue's longest match names "a thing the Chronicle never mentioned, which is its own
+        // small lie". Measured here before this line existed: `eat the stone hand axe` answered "you go looking
+        // for MEDIUM CONSTRUCTION STONE", because that is the longest name holding a word the sentence says.
+        return jdbc.query("SELECT display_name, category FROM item_definition "
+            + " WHERE position(lower(display_name) in ?) > 0 ORDER BY length(display_name) DESC",
+            (rs, row) -> new String[]{rs.getString(1), rs.getString(2)}, lowerText)
+            .stream().findFirst().orElseGet(() ->
+                jdbc.query("SELECT display_name, category FROM item_definition ORDER BY length(display_name) DESC",
+                    (rs, row) -> new String[]{rs.getString(1), rs.getString(2)})
+                    .stream().filter(n -> namesIt(padded, n[0])).findFirst().orElse(null));
     }
 
     /** The item_key of any reachable edible (category FOOD) item, or null — the fallback when the player just says "eat". */

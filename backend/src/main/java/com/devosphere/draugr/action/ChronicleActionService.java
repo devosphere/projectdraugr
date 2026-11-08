@@ -6181,11 +6181,40 @@ public class ChronicleActionService {
         // A bare "eat" still takes whatever is to hand: that is right, and is why the fallback below exists. A
         // sentence that NAMES a food is answered about that food.
         if (named == null) {
-            String asked = items.foodTheSentenceAsksFor(text.toLowerCase(Locale.ROOT));
+            String lower = text.toLowerCase(Locale.ROOT);
+            String asked = items.foodTheSentenceAsksFor(lower);
             if (asked != null)
                 return new String[]{"FAILED", "You go looking for " + asked.toLowerCase(Locale.ROOT)
                     + " and there is none within reach — not in the pack, not put by here. Eating something else "
                     + "is a choice, and not one to be made for you."};
+            // AND A THING THAT IS NOT FOOD AT ALL IS NOT A REASON TO EAT SOMETHING ELSE (#37). The guard above
+            // only fires for a word the FOOD catalogue knows, so a sentence naming anything else fell past it to
+            // the fallback at the bottom and ate whatever was to hand. Measured, and it is the worst thing found
+            // on this ticket: with a wild onion bulb and a death cap in the pack, `eat the onion` ATE THE DEATH
+            // CAP and left the onion where it was. The onion went unrecognised because the bulb's head noun is
+            // "bulb"; that half is fixed in namedFoodInReach, and this half is why the miss was dangerous rather
+            // than merely wrong.
+            //
+            // TWO QUESTIONS, because they want different answers from the player: find some, or stop trying to
+            // eat your rope. A bare `eat` names nothing and still takes whatever is to hand, which is right and
+            // is why the fallback below exists at all.
+            String held = items.aReachableThingTheSentenceNames(chronicle, lower);
+            if (held != null)
+                return new String[]{"FAILED", "You have " + held.toLowerCase(Locale.ROOT) + " to hand, and it is "
+                    + "not food. Eating something else instead is a choice, and not one to be made for you."};
+            String[] known = items.aCataloguedThingTheSentenceNames(lower);
+            if (known != null) {
+                String name = known[0].toLowerCase(Locale.ROOT);
+                // A FOOD reaches this question only when its head noun is a PART of it -- "bulb", "leaf" -- so
+                // the food question above could not see it. It is still food, and saying otherwise would be the
+                // same near-miss this guard exists to prevent.
+                return new String[]{"FAILED", "FOOD".equals(known[1])
+                    ? "You go looking for " + name + " and there is none within reach — not in the pack, not "
+                      + "put by here. Eating something else is a choice, and not one to be made for you."
+                    : "You go looking for " + name + " and there is none here, and it would not have been a "
+                      + "meal in any case. Eating something else instead is a choice, and not one to be made "
+                      + "for you."};
+            }
         }
         FoodPreservationService.Consumption cooked = food.consume(chronicle, "cooked_game_meat", at);
         if (cooked.consumed()) { physiology.eatCookedMeal(chronicle, cooked.grade()); if (cooked.spoiled()) physiology.applyFoodborneIllness(chronicle, actionId, at); return new String[]{"SUCCEEDED", "The cooked meat is warm and dense, and the meal settles heavily but well."}; }
