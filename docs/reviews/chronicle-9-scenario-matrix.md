@@ -121,7 +121,14 @@ Also under this head: epic [#54](https://github.com/devosphere/projectdraugr/iss
 | | |
 |---|---|
 | **Category** | UI desynchronisation |
-| **Status** | **NOT ASSESSED.** No measurement was taken of per-agent token accounting or its display. This is the one complaint in #37 that this cycle has not touched at all, and it is the clearest remaining candidate for the next slice. |
+| **Status** | **ASSESSED AS ABSENT, not merely unmeasured.** Nothing records it anywhere, so there was never a number to display. This is the clearest remaining candidate for the next slice, and it is now specified rather than guessed at. |
+
+What the complaint needs, read off the code and the schema rather than estimated:
+
+1. **The response's own `usage` block is discarded.** `usage`, `input_tokens` and `output_tokens` do not appear anywhere in `backend/src/main/java/com/devosphere/draugr/ai/` — `AnthropicLanguageModel` is the single call site and it parses only the text out.
+2. **There is no table to put it in.** The schema holds no table matching `token`, `usage` or `cost`. The one AI-side record is `ai_procedure_receipt` (V359, V372), which keeps the Interpreter's verdict, reason code, confidence and cited context — and no counts.
+3. **Six agents would need tagging at the call site**, which is also exactly the breakdown #37 asks to see: `SimulationNarrator`, `ProcedureInterpreter`, `PersistentStateArchitect`, `QaCritic`, `AuditorSummarizer`, `RuntimeArchitect`.
+4. **It cannot be verified without the user.** Every measurement in this document was taken with `draugr.ai.enabled=false`; the master switch is the launcher password, so confirming a token count is real needs a run only the user can start. Building this blind would be the one thing this cycle has consistently refused to do — ship a number nobody has seen.
 
 ---
 
@@ -131,7 +138,7 @@ Also under this head: epic [#54](https://github.com/devosphere/projectdraugr/iss
 
 | Priority | Scenario | Category | Note |
 |---|---|---|---|
-| 1 | Per-agent AI token accounting is not visible (A10) | UI desync | untouched; the honest gap |
+| 1 | Per-agent AI token accounting is not recorded at all (A10) | UI desync | specified in A10 above; the response usage block is discarded and no table holds it |
 | 2 | Architect triggering unverified under a real AI run (A9) | persistence | needs the launcher password |
 | 3 | `look for fish` on a **water** chunk fishes, and has twice taken an animal (a crayfish, then a catfish) in answer to a look | action routing | **a documented decision whose reasoning holds only where there is no water** — see C below |
 | 4 | No per-limb body state: `how is my leg`, `how are my feet` | perception | a documented honest miss; the gear rule now stands aside rather than inventing one |
