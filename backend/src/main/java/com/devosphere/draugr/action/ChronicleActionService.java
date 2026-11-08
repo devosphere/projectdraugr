@@ -4220,6 +4220,11 @@ public class ChronicleActionService {
             ||value.contains("where can i go")||value.contains("which way should i go")
             ||value.contains("where have i not been")||value.contains("what is around here"))
             return Intent.JUDGE_WHERE_TO_GO;
+        // THE PLAINEST INVENTORY QUESTION THERE IS reached nothing (#37/#99). `what do i have`, `what have i
+        // got`, `what's in my bag`, `check my inventory` — all UNKNOWN, while `what is in my pack` worked word
+        // for word, and `look in my pack` fell through to OBSERVE and described the landscape. See
+        // asksWhatYouHave for why these are whole sentences rather than more `contains`.
+        if (asksWhatYouHave(value)) return Intent.TAKE_STOCK_OF_GEAR;
         // What you are carrying and what state it is in (#37, act fifteen). condition_state, use_count and
         // quality_grade have been on every item since the table existed, and the LOAD is computed on every
         // action — and "how heavy is my pack" was answered "you have nothing by that name in hand to weigh".
@@ -5176,6 +5181,31 @@ public class ChronicleActionService {
         return value.contains("where is my")||value.contains("where are my")||value.contains("where's my")
             || value.contains("where did i put")||value.contains("where did i leave")||value.contains("where did i set")
             || value.contains("where have i left")||value.contains("where did i last");
+    }
+
+    /**
+     * Whether the WHOLE sentence asks what the Chronicle has on them (#37/#99).
+     *
+     * <p>Whole sentences, not substrings, because the stems are the front of other questions: {@code what do i
+     * have} begins {@code what do i have to eat} (the food reading's, and claimed earlier) and {@code what do i
+     * have to do}, which is no question about a pack at all. And {@code in my pack} is the tail of {@code put the
+     * knife in my pack}, which is STORE's. So a container is only heard after a looking or asking verb that
+     * opens the sentence.
+     */
+    private static final java.util.Set<String> WHAT_YOU_HAVE = java.util.Set.of(
+        "what do i have", "what have i got", "what have i", "what do i have on me", "what do i have with me",
+        "what have i got with me", "what am i holding", "what do i own", "show me what i have",
+        "what do i have left", "what have i got left", "what is in my hand", "what is in my hands",
+        "what do i have in my hands", "inventory", "my inventory", "check inventory", "check my inventory",
+        "show my inventory", "list my things", "list what i have", "check my things", "check my belongings");
+    private static final Pattern IN_MY_CONTAINER = Pattern.compile(
+        "(what is|what do i have|what have i got|look|have a look|rummage|go|check what is) (in|inside|through) "
+        + "(my|the) (pack|bag|backpack|pouch|sack|satchel|basket|kit)|check my (pack|bag|backpack|satchel|kit)");
+
+    private static boolean asksWhatYouHave(String value) {
+        String said = value.toLowerCase(Locale.ROOT).replace("what's", "what is").replace("whats", "what is")
+            .replaceAll("[^a-z ]+", " ").replaceAll("\\s+", " ").trim();
+        return WHAT_YOU_HAVE.contains(said) || IN_MY_CONTAINER.matcher(said).matches();
     }
 
     /**

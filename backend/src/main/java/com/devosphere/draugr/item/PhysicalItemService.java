@@ -6609,7 +6609,14 @@ public class PhysicalItemService {
         LoadState load = loadState(chronicle);
         // A sentence that NAMES a thing is a question about that thing. Asked "how is my axe" and answered
         // with a list of your clothes is the approximate answer this project triages above a missing one.
-        String said0 = actionText == null ? "" : actionText.toLowerCase(java.util.Locale.ROOT);
+        //
+        // BUT NOT THE THING YOU ASK INSIDE (#37/#99). `what is in my pouch` named the pouch by its head noun and
+        // answered "The leather pouch is sound" — the condition of the container, asked for its contents. So a
+        // phrase opened by in/inside/through/into is cut off before the name is looked for: `how is the knife in
+        // my pack` still names the knife, and `what's in my sack` names nothing and is given the whole list,
+        // which includes what is in the sack, since the reading follows item_containment all the way down.
+        String said0 = actionText == null ? "" : actionText.toLowerCase(java.util.Locale.ROOT)
+            .replaceAll("\\b(in|inside|through|into)\\s+(my|the|your)\\b.*$", "");
         if (!said0.isEmpty()) {
             Held named = held.stream().filter(h -> com.devosphere.draugr.narration.Words.word(said0, h.name())
                     || said0.contains(h.name())).findFirst().orElse(null);
