@@ -42,7 +42,11 @@ jobs:
         # (incl. the #16 fresh-awakening regression) and the migration-driven boot
         # all execute here rather than skipping as they do on a Docker-less machine.
         # Skipping is exactly what a Docker-less runner does WITHOUT failing, so the log is read afterwards: a
-        # missing engine or any integration class that ran nothing fails this job instead of passing it.
+        # missing engine or any class that ran nothing fails this job instead of passing it. Every class runs
+        # something in a healthy run, and not every Testcontainers class is named *IntegrationTest
+        # (DeadEndOutputInvariantTest, ConcentrationSiteInvariantTest), so the check reads every class.
+        # The step runs under `bash -e`: a grep that matches nothing exits 1, so the count must not be a
+        # pipeline that dies on the healthy case — the first version failed a 1341-test green run that way.
         run: |
           set -o pipefail
           mvn --batch-mode test | tee "$RUNNER_TEMP/backend-tests.log"
@@ -50,9 +54,9 @@ jobs:
             echo "::error::Testcontainers found no Docker engine; the database tests were skipped, not passed."
             exit 1
           fi
-          ran_nothing=$(grep -E "Tests run: 0, .* in .*IntegrationTest" "$RUNNER_TEMP/backend-tests.log" | wc -l)
+          ran_nothing=$(grep -cE "Tests run: 0, .* in " "$RUNNER_TEMP/backend-tests.log" || true)
           if [ "$ran_nothing" -ne 0 ]; then
-            echo "::error::$ran_nothing integration test classes ran no tests."
+            echo "::error::$ran_nothing test classes ran no tests."
             exit 1
           fi
 
