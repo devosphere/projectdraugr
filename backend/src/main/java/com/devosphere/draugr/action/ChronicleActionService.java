@@ -4458,6 +4458,16 @@ public class ChronicleActionService {
              ||value.contains("have i got a light")||value.contains("what light")||value.contains("got to burn")
              ||value.contains("will my light")||value.contains("how long will the light"))
             && !value.contains("light the fire")&&!value.contains("light a fire");
+        // ASKED WHAT IS VISIBLE, TOLD HOW BRIGHT IT IS (#37). `what can i see` reached JUDGE_LIGHT and was
+        // answered "There is light enough here for close work" - a report on the illumination, to a question
+        // about the view. The rule above was written for "can i see TO WORK", which is why "can i work" sits
+        // beside it in the same list; the bare `can i see` was never meant to carry the whole question. OBSERVE
+        // already answers it, and `look around` proves so on the same ground: "A river runs past a bank of
+        // smoothed stone and packed earth."
+        //
+        // Whole sentence, because `can i see to work` and `is there enough light to work` are the light question
+        // still and were measured staying with it.
+        if (value.startsWith("what can i see")) return Intent.OBSERVE;
         if (askingAboutTheLight) return Intent.JUDGE_LIGHT;
         // What the team can pull (#37). The draft subsystem is finished and almost entirely invisible: gear is
         // sized to the body, four vehicles have four beds, rough ground tires a team half again as hard, and
@@ -4615,6 +4625,30 @@ public class ChronicleActionService {
             ||((value.contains("judge")||value.contains("taste"))
                &&(value.contains("water")||value.contains("the stream")||value.contains("the pool")||value.contains("the spring"))))
            &&!value.contains("boil")) return Intent.JUDGE_WATER;
+        // ...and asking WHAT the water is, or whether there is any at all, which judgeWater answers in its own
+        // first two lines and could not be reached by (#37). Measured on a river bank: `is there water here`,
+        // `is this a river or a lake`, `how is the water` and `what water is near` all reached nothing, while
+        // `what kind of water is this` reached EXAMINE and answered "Plain ground, unremarkable at a glance" -
+        // asked about the water, told about the ground. That is #845's defect in another place: asked what a
+        // thing IS, answered about whatever was underfoot.
+        //
+        // THE HANDLER ALREADY HOLDS BOTH HALVES OF THE ANSWER. waterNamed() opens every reply with what the
+        // water on this ground is called - "You crouch at the river and look at it properly" - and the no-water
+        // branch says so outright: "nothing running, nothing standing, and nothing built to hold any". The gate
+        // above required a word for SAFETY as well as a word for water, so the plainest phrasings of the
+        // question this intent is named for fell straight past it.
+        //
+        // WHOLE SENTENCES, because this water sits among six other finished readings and every one of them was
+        // measured before this was written: `how deep is the water` and `test the depth of the water` are
+        // MEASURE, `sniff the water` and `smell the water` are SMELL, `is the river crossable` is JUDGE_CROSSING,
+        // `collect water` and `boil the water` are their own acts, and `drink from the river` drinks. A stem
+        // would have taken several of them.
+        if (value.startsWith("is there water")||value.startsWith("is there any water")
+            ||value.startsWith("what kind of water")||value.startsWith("what sort of water")
+            ||value.startsWith("how is the water")||value.startsWith("what water is")
+            ||value.startsWith("is this a river")||value.startsWith("is this a lake")
+            ||value.startsWith("is this a stream")||value.startsWith("is this a pool"))
+            return Intent.JUDGE_WATER;
         // Stuff or line a garment already being worn (#37). Gated on a lining VERB plus a garment word, so
         // "gather dry grass" still gathers and "make a fur cloak" still makes one — the difference is that this
         // one is done TO something you have on.
@@ -5019,6 +5053,22 @@ public class ChronicleActionService {
            ||value.contains("what is on this ground")||value.contains("whats on this ground")
            ||value.contains("go hunting")||value.contains("going hunting")||value.contains("do some hunting")
            ||value.contains("find something to hunt")||value.contains("look for something to hunt")) return Intent.SEARCH;
+        // ASKING WHAT LIVES HERE IS THE SAME QUESTION `look for birds` ASKS (#37). That imperative has answered
+        // about its named kind since the nine-wordings work, through ExaminationService.lifeOfKind, and the
+        // reading covers all five kingdoms kindNamed knows - birds, insects, fish, reptiles and amphibians. The
+        // QUESTION form reached nothing at all. Sixteen of them, measured on a river bank:
+        //
+        //   are there fish here / what fish are here / what fish live here        -> nothing
+        //   are there birds here / what birds are here / what birds are around    -> nothing
+        //   are there insects here / what insects are here                        -> nothing
+        //   are there snakes here / are there frogs here                          -> nothing
+        //   what wildlife is around / are there animals nearby                    -> nothing
+        //
+        // while on that same ground `look for birds` answered "Looking for birds, you make out stork and grey
+        // heron" and `look for insects` "you make out dragonfly and damselfly". The block above covers ONE
+        // kingdom's phrasings and the general word for game, and that is the whole of the question shape this
+        // reading had.
+        if (asksWhatLivesHere(value)) return Intent.SEARCH;
         if(value.contains("search")||value.contains("look for")||value.contains("hunt for")||value.contains("check beneath")||value.contains("check under")||value.contains("look under")||value.contains("turn over")||value.contains("comb through")||value.contains("rummage")||value.contains("forage through")||value.contains("sift through the")) return Intent.SEARCH;
         // Reading a written document (#65 read/review_record). Word-boundary "read" so "bread" doesn't match;
         // "read the ground/tracks" already resolved to TRACK above.
@@ -5238,9 +5288,51 @@ public class ChronicleActionService {
         "what do i have left", "what have i got left", "what is in my hand", "what is in my hands",
         "what do i have in my hands", "inventory", "my inventory", "check inventory", "check my inventory",
         "show my inventory", "list my things", "list what i have", "check my things", "check my belongings");
+    /** The containers a Chronicle carries, named once so two matchers cannot drift apart over them. */
+    private static final String A_CONTAINER_OF_YOURS = "pack|bag|backpack|pouch|sack|satchel|basket|kit";
     private static final Pattern IN_MY_CONTAINER = Pattern.compile(
         "(what is|what do i have|what have i got|look|have a look|rummage|go|check what is) (in|inside|through) "
-        + "(my|the) (pack|bag|backpack|pouch|sack|satchel|basket|kit)|check my (pack|bag|backpack|satchel|kit)");
+        + "(my|the) (" + A_CONTAINER_OF_YOURS + ")|check my (pack|bag|backpack|satchel|kit)");
+    /** Inside something you are carrying, in any phrasing - the guard a question about the GROUND must not pass. */
+    private static final Pattern INSIDE_SOMETHING_OF_YOURS = Pattern.compile(
+        "(?<!\\w)(in|inside) (my|the) (" + A_CONTAINER_OF_YOURS + ")(?!\\w)");
+
+    /**
+     * Whether the sentence ASKS what lives on this ground, rather than telling the Chronicle to go and look (#37).
+     *
+     * <p>The kingdom is read by {@link ExaminationService#kindNamed}, which is the matcher the reading itself
+     * uses to decide what it is answering about. Asking that one means routing and reading can never disagree
+     * about which sentences name a kind, and neither can fall behind the other when either grows a word. A
+     * second list of kingdom words written here is how this project gets two matchers and one defect, which it
+     * has now done five times in a single cycle.
+     *
+     * <p>The kind must follow "what" or "which" directly, or the sentence must open "is there"/"are there".
+     * Every looser shape was measured first and belongs to somebody else: `what can i make from bird bone` is
+     * JUDGE_LEARNING, `what should i do with the fish` is JUDGE_WORK_IN_HAND, `which of these fish can i eat` is
+     * JUDGE_FOOD and `what birds can i scare off the crop` is SCARE_BIRDS. All four of those rules sit above this
+     * one, so placement alone would hold them; the adjacency rule and the making guard hold them a second time,
+     * because a rule that is only safe where it happens to stand is one edit away from not being safe.
+     *
+     * <p>A container of your own is excluded. `are there fish bones in my pack` and `is there a frog in my pack`
+     * ask what you are CARRYING, and answering them about the ground would be #845's defect over again - asked
+     * what is in a thing, answered about something else entirely.
+     */
+    private static boolean asksWhatLivesHere(String value) {
+        if (INSIDE_SOMETHING_OF_YOURS.matcher(value).find()||MAKING_SOMETHING.matcher(value).find()) return false;
+        if (!namesALivingKind(value)) return false;
+        if (value.startsWith("is there")||value.startsWith("are there")) return true;
+        Matcher asked = ASKS_WHICH_KIND.matcher(value);
+        return asked.find()&&namesALivingKind(asked.group(1));
+    }
+    private static final Pattern ASKS_WHICH_KIND = Pattern.compile("^(?:what|which) (\\w+)");
+    /**
+     * A kind of living thing, by the reading's own matcher plus the three words for living things in general,
+     * which name no kingdom and so are none of kindNamed's business.
+     */
+    private static boolean namesALivingKind(String said) {
+        return ExaminationService.kindNamed(said) != null
+            ||word(said,"wildlife")||word(said,"animals")||word(said,"creatures");
+    }
 
 
     /**
