@@ -50,6 +50,12 @@ public class ExaminationService {
         if (item == null) {
             String seen = resolveSeenThing(chronicle, location, lower);
             if (seen != null) return new String[]{"SUCCEEDED", seen};
+            // AND THE PLAIN WORD FOR A KIND OF PLANT, which named nothing at all (#37). Tried after the three
+            // readers above have had their exact-name chance, so every sentence they already answer is answered
+            // the same way, and before the nowhere guard below, because a thing that IS here beats a message
+            // saying something is not.
+            String[] byKind = plantOfTheKindSaid(location, lower);
+            if (byKind != null) return byKind;
             // AND A NAMED THING THAT IS NOWHERE IS SAID TO BE NOWHERE, rather than answered with a description
             // of the marsh. `examine my bronze sword` was answered "You take a slow look at the ground and what
             // stands on it..." — the same defect as `eat the fish` being answered with a mushroom: a subject
@@ -574,6 +580,75 @@ public class ExaminationService {
     }
 
     /** A reachable item the text names, or null — then the place is the subject. */
+    /**
+     * The last noun the sentence names, which is the word a player uses for the KIND of a thing (#37).
+     *
+     * <p>Only the FINAL noun is considered, and that is the whole guard against collisions. Scanning the
+     * sentence for any catalogue head noun would have made {@code examine the grass snake} answer about a grass
+     * and {@code examine the tree frog} about a shrub -- the only three collisions the catalogue holds, found by
+     * asking it before the rule was written rather than after. A player naming the kind puts it last.
+     */
+    static String headNounSaid(String lower) {
+        String[] words = (lower == null ? "" : lower).replaceAll("[^a-z ]", " ").replaceAll("\\s+", " ").trim().split(" ");
+        int i = words.length - 1;
+        while (i > 0 && TRAILING_FILLER.contains(words[i])) i--;
+        return i < 0 ? "" : words[i];
+    }
+    /** Words that can trail the thing named without being it. */
+    private static final java.util.Set<String> TRAILING_FILLER = java.util.Set.of(
+        "here", "over", "closely", "carefully", "properly", "again", "now", "too", "first", "please");
+
+    /** The singular of a said noun, for the two plural shapes a head noun takes. */
+    private static String singularSaid(String noun) {
+        if (noun.endsWith("ies") && noun.length() > 4) return noun.substring(0, noun.length() - 3) + "y";
+        if (noun.endsWith("es") && noun.length() > 3) return noun.substring(0, noun.length() - 2);
+        if (noun.endsWith("s") && noun.length() > 2) return noun.substring(0, noun.length() - 1);
+        return noun;
+    }
+
+    /**
+     * A plant named by its KIND rather than by its catalogue name (#37).
+     *
+     * <p>Every reader in this file asked the same question the same way round: is the catalogue's name inside
+     * the sentence? That answers {@code examine the oyster mushroom} and cannot answer {@code examine the
+     * mushroom}, because the player's word is the catalogue name's LAST word, not the whole of it. Measured on a
+     * temperate forest, 37 head nouns of plants growing on that exact ground: <b>20 of them were answered with a
+     * description of the ground</b>, and reported SUCCEEDED while doing it.
+     *
+     * <p>Among the twenty were {@code cap} and {@code agaric}. The reading above has a branch that says of a
+     * poisonous plant that it "kills, and no amount of cooking takes that out of it" -- and a Chronicle standing
+     * over a death cap could not reach that sentence with the word a person uses for the thing.
+     *
+     * <p>WHEN SEVERAL KINDS ANSWER IT ASKS, and names them. Five fungi grow in that one forest, so quietly
+     * returning the longest-named of them would have answered {@code examine the mushroom} about a chanterelle
+     * while a death cap stood in the same clearing. The ask lists what is there, which is both the honest answer
+     * and the useful one. It changes nothing while it asks, as #593's ambiguous processes do.
+     */
+    private String[] plantOfTheKindSaid(UUID location, String lower) {
+        String noun = headNounSaid(lower);
+        if (noun.length() < 3) return null;
+        List<Map<String, Object>> kinds = jdbc.queryForList(
+            "SELECT fd.flora_key, fd.is_poisonous FROM flora_definition fd "
+            + " WHERE fd.organism_type <> 'TREE' AND ("
+            + "   EXISTS (SELECT 1 FROM chunk_flora cf WHERE cf.chunk_id=? AND cf.flora_key=fd.flora_key AND cf.quantity > 0) "
+            + "   OR fd.biome_affinity ILIKE '%' || (SELECT biome FROM world_chunk WHERE id=?) || '%') "
+            + "   AND split_part(replace(fd.flora_key,'_',' '), ' ', -1) IN (?, ?) "
+            + " ORDER BY fd.flora_key",
+            location, location, noun, singularSaid(noun));
+        if (kinds.isEmpty()) return null;
+        if (kinds.size() == 1) {
+            String key = ((String) kinds.get(0).get("flora_key")).replace('_', ' ');
+            return new String[]{"SUCCEEDED", "You look the " + key + " over where it grows. "
+                + (Boolean.TRUE.equals(kinds.get(0).get("is_poisonous"))
+                   ? "It is poison — not a thing that disagrees with you, but a thing that kills, and no "
+                     + "amount of cooking takes that out of it."
+                   : "There is nothing wrong with it; it is the plain, sound growth of this ground.")};
+        }
+        List<String> named = kinds.stream().map(k -> ((String) k.get("flora_key")).replace('_', ' ')).toList();
+        return new String[]{"FAILED", "More than one of that kind grows within reach — " + joinAnd(named)
+            + ". Name the one you mean and it will be looked over properly."};
+    }
+
     private Map<String, Object> resolveItem(UUID chronicle, String lower) {
         List<Map<String, Object>> items = jdbc.queryForList(
             "WITH RECURSIVE reachable(id) AS (SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE' " +

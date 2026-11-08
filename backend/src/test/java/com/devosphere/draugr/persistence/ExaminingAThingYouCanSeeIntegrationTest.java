@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -235,5 +236,85 @@ class ExaminingAThingYouCanSeeIntegrationTest {
         String prose = said("examine the ground closely");
         assertTrue(readsAsAGroundSurvey(prose),
             () -> "\"examine the ground\" names no thing, so the survey is correct: " + prose);
+    }
+
+    /**
+     * THE PLAIN WORD FOR A KIND OF PLANT (#37). Every reader in ExaminationService asked whether the
+     * CATALOGUE's name was inside the sentence, which answers {@code examine the oyster mushroom} and cannot
+     * answer {@code examine the mushroom} -- the player's word is the catalogue name's LAST word, not the whole
+     * of it. Measured on a temperate forest, 37 head nouns of plants growing on that exact ground: twenty were
+     * answered with a description of the ground, and reported SUCCEEDED while doing it.
+     *
+     * <p>Derived from the catalogue rather than naming a species, because which plants grow where is the
+     * world's business and this assertion is not about any one of them.
+     */
+    @Test
+    void thePlainWordForAKindFindsThatKind() {
+        UUID me = aLivingChronicle();
+        // A multi-word plant on this ground whose LAST word no other plant here shares, so one kind answers.
+        List<String> pair = jdbc.query(
+            "WITH here AS ("
+            + " SELECT fd.flora_key, split_part(replace(fd.flora_key,'_',' '), ' ', -1) AS head"
+            + "   FROM flora_definition fd"
+            + "  WHERE fd.organism_type <> 'TREE' AND ("
+            + "    EXISTS (SELECT 1 FROM chunk_flora cf JOIN world_object w ON w.id=? "
+            + "             WHERE cf.chunk_id=w.current_location_id AND cf.flora_key=fd.flora_key AND cf.quantity > 0) "
+            + "    OR fd.biome_affinity ILIKE '%' || (SELECT ch.biome FROM world_object w2 "
+            + "         JOIN world_chunk ch ON ch.id=w2.current_location_id WHERE w2.id=?) || '%'))"
+            + " SELECT replace(h.flora_key,'_',' '), h.head FROM here h"
+            + "  WHERE position('_' in h.flora_key) > 0"
+            + "    AND (SELECT count(*) FROM here h2 WHERE h2.head = h.head) = 1"
+            + "  LIMIT 1",
+            rs -> rs.next() ? List.of(rs.getString(1), rs.getString(2)) : null, me, me);
+        Assumptions.assumeTrue(pair != null, "this ground grows no two-word plant with a head noun of its own");
+        String full = pair.get(0), kind = pair.get(1);
+
+        String prose = said("examine the " + kind);
+        assertFalse(readsAsAGroundSurvey(prose),
+            () -> "\"examine the " + kind + "\" names a kind that grows here, so it must not be answered with "
+                + "a description of the ground: " + prose);
+        assertTrue(prose.contains(full),
+            () -> "and it must name the plant it settled on, so the player knows which: " + prose);
+
+        // AND THE WHOLE NAME STILL WINS, which is what keeps this a widening and not a replacement.
+        String byName = said("examine the " + full);
+        assertTrue(byName.contains(full), () -> "the catalogue's own name must still answer: " + byName);
+    }
+
+    /**
+     * AND WHEN SEVERAL KINDS ANSWER IT ASKS, naming them, and changes nothing while it asks (#37/#593).
+     *
+     * <p>Five fungi grow in one measured forest. Quietly returning the longest-named of them would have
+     * answered {@code examine the mushroom} about a chanterelle while a DEATH CAP stood in the same clearing --
+     * a true sentence about the wrong plant, which is this project's worst shape. Listing what is there is both
+     * the honest answer and the useful one.
+     */
+    @Test
+    void whenSeveralKindsAnswerItAsksWhichAndChangesNothing() {
+        UUID me = aLivingChronicle();
+        String shared = jdbc.query(
+            "WITH here AS ("
+            + " SELECT fd.flora_key, split_part(replace(fd.flora_key,'_',' '), ' ', -1) AS head"
+            + "   FROM flora_definition fd"
+            + "  WHERE fd.organism_type <> 'TREE' AND ("
+            + "    EXISTS (SELECT 1 FROM chunk_flora cf JOIN world_object w ON w.id=? "
+            + "             WHERE cf.chunk_id=w.current_location_id AND cf.flora_key=fd.flora_key AND cf.quantity > 0) "
+            + "    OR fd.biome_affinity ILIKE '%' || (SELECT ch.biome FROM world_object w2 "
+            + "         JOIN world_chunk ch ON ch.id=w2.current_location_id WHERE w2.id=?) || '%'))"
+            + " SELECT head FROM here WHERE position('_' in flora_key) > 0"
+            + "  GROUP BY head HAVING count(*) > 1 LIMIT 1",
+            rs -> rs.next() ? rs.getString(1) : null, me, me);
+        Assumptions.assumeTrue(shared != null, "this ground grows no kind with two members");
+
+        int thingsBefore = jdbc.queryForObject("SELECT COUNT(*) FROM world_object", Integer.class);
+        String prose = said("examine the " + shared);
+        assertFalse(readsAsAGroundSurvey(prose),
+            () -> "an ambiguous kind must not fall through to the ground either: " + prose);
+        assertTrue(prose.contains("More than one of that kind"),
+            () -> "it must say that it cannot settle which: " + prose);
+        assertTrue(prose.contains(shared),
+            () -> "and name the members, so the player can choose — and so a poisonous one is seen: " + prose);
+        assertEquals(thingsBefore, (int) jdbc.queryForObject("SELECT COUNT(*) FROM world_object", Integer.class),
+            "nothing is made or taken while the world is still asking which plant was meant");
     }
 }
