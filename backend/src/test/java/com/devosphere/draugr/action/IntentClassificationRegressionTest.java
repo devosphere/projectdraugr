@@ -2101,6 +2101,22 @@ class IntentClassificationRegressionTest {
             assertEquals("UNKNOWN", classify(mine, false), mine + " is the body's business, not the herd's");
     }
 
+    @Test void whatDoIHaveIsAnInventoryQuestion() throws Exception {
+        // All of these reached nothing (#37/#99), and the two `look` forms reached OBSERVE and described the land.
+        for (String asked : new String[]{"what do i have", "What do I have?", "what have i got", "what's in my bag",
+                "whats in my pack", "what is in my pouch", "check my inventory", "inventory", "look in my pack",
+                "look through my bag", "what am i holding", "what do i have with me", "what's in my hands",
+                "what do i have in my pack", "go through my satchel", "check my bag"})
+            assertEquals("TAKE_STOCK_OF_GEAR", classify(asked), asked);
+        // ...and the one that always worked still does.
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("what is in my pack"));
+
+        // THE STEMS ARE THE FRONT OF OTHER QUESTIONS, which is why these are whole sentences.
+        assertEquals("JUDGE_FOOD", classify("what do i have to eat"), "the food reading's, as before");
+        assertEquals("UNKNOWN", classify("what do i have to do"), "no question about a pack at all");
+        assertNotEquals("TAKE_STOCK_OF_GEAR", classify("put the knife in my pack"), "putting a thing away is not asking");
+    }
+
     @Test void theClothingChain() throws Exception {
         // ASKING IS NOT DRESSING. The headline fix.
         assertEquals("TAKE_STOCK_OF_GEAR", classify("what am i wearing"));

@@ -3,6 +3,7 @@ package com.devosphere.draugr.persistence;
 import com.devosphere.draugr.action.ChronicleActionService;
 import com.devosphere.draugr.audit.PersistentStateAuditor;
 import com.devosphere.draugr.chronicle.ChronicleService;
+import com.devosphere.draugr.item.PhysicalItemService;
 import com.devosphere.draugr.world.genesis.WorldEcologyGenesisService;
 import com.devosphere.draugr.world.genesis.WorldGenesisService;
 import org.junit.jupiter.api.AfterAll;
@@ -26,6 +27,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -85,6 +87,7 @@ class YourOwnGearAndTheSkyIntegrationTest {
     @Autowired ChronicleActionService actions;
     @Autowired PersistentStateAuditor auditor;
     @Autowired JdbcTemplate jdbc;
+    @Autowired PhysicalItemService items;
 
     private Timestamp clockWas;
 
@@ -160,6 +163,11 @@ class YourOwnGearAndTheSkyIntegrationTest {
         asked.put("is anything broken", "TAKE_STOCK_OF_GEAR");
         asked.put("am I carrying too much", "TAKE_STOCK_OF_GEAR");
         asked.put("how heavy is my pack", "TAKE_STOCK_OF_GEAR");
+        // The plainest forms of all, which reached nothing (#37/#99) or OBSERVE and the landscape.
+        asked.put("what do I have", "TAKE_STOCK_OF_GEAR");
+        asked.put("what's in my bag", "TAKE_STOCK_OF_GEAR");
+        asked.put("look in my pack", "TAKE_STOCK_OF_GEAR");
+        asked.put("check my inventory", "TAKE_STOCK_OF_GEAR");
         eachReaches(asked);
 
         // A Chronicle awakens clothed, so the reading has something to name and says how the load sits.
@@ -181,6 +189,16 @@ class YourOwnGearAndTheSkyIntegrationTest {
             () -> "asked about the " + shirt + ", the answer must be about the " + shirt + ": " + named.perception());
         assertTrue(named.perception().length() < 200,
             () -> "and about that alone, not the whole pack: " + named.perception());
+
+        // BUT THE THING YOU ASK INSIDE IS NOT THE THING ASKED ABOUT (#37/#99). `what is in my pouch` answered
+        // "The leather pouch is sound". Asked what is in a thing really carried, the answer is the list.
+        String inside = items.gearStocktake(chronicle, "what is in my " + shirt);
+        assertFalse(inside.startsWith("The " + shirt),
+            () -> "asked what is IN the " + shirt + ", its condition is the wrong answer: " + inside);
+        assertTrue(inside.contains("to hand") || inside.contains("Worn and") || inside.contains("Past use"),
+            () -> "it is the whole list, which reaches into every container: " + inside);
+        // ...while a thing named before the container is still the subject.
+        assertTrue(items.gearStocktake(chronicle, "how is my " + shirt + " in my pack").startsWith("The " + shirt));
 
         assertTrue(auditor.inspect().consistent(),
             () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
