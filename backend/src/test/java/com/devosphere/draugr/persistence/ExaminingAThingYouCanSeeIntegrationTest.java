@@ -310,7 +310,7 @@ class ExaminingAThingYouCanSeeIntegrationTest {
         String prose = said("examine the " + shared);
         assertFalse(readsAsAGroundSurvey(prose),
             () -> "an ambiguous kind must not fall through to the ground either: " + prose);
-        assertTrue(prose.contains("More than one of that kind"),
+        assertTrue(prose.contains("more than one of that kind"),
             () -> "it must say that it cannot settle which: " + prose);
         assertTrue(prose.contains(shared),
             () -> "and name the members, so the player can choose — and so a poisonous one is seen: " + prose);
