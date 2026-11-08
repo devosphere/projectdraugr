@@ -4220,6 +4220,25 @@ public class ChronicleActionService {
             ||value.contains("where can i go")||value.contains("which way should i go")
             ||value.contains("where have i not been")||value.contains("what is around here"))
             return Intent.JUDGE_WHERE_TO_GO;
+        // ASKING WHETHER YOU NEED TO IS NOT DOING IT (#37/#99). This file already names the family further
+        // down — "the most expensive member of this project's asking-is-not-doing family by a wide margin" —
+        // but it had only the PAST tense: `did i sleep`, `i slept`, `am i rested`. The forward-looking half went
+        // straight to the act, and for sleep that is a night of simulated time spent on a question:
+        //
+        //   do i need to sleep / should i sleep / is it time to sleep / can i sleep here  -> SLEEP, and it slept
+        //   do i need to rest / should i rest                                             -> REST, an hour gone
+        //   should i eat                                                                  -> EAT
+        //   should i drink                                                                -> DRINK
+        //   do i need to warm up                                                          -> WARM_BODY
+        //
+        // AND THE CODEBASE ALREADY DISAGREED WITH ITSELF ABOUT IT, which is what settles it: `do i need to eat`
+        // and `do i need a drink` both answer with the body reading, while `should i eat` and `should i drink`
+        // act. The intent was decided; only the coverage was partial.
+        //
+        // Whole sentence with a short tail, because `should i eat the death cap` is a question about a MUSHROOM
+        // and belongs to the food reading. Placed above the comfort acts, the gear questions and
+        // classifyLegacy's bare `sleep`, so none of them can see these forms.
+        if (asksIfTheBodyNeeds(value)) return Intent.SENSE_BODY;
         // THE PLAINEST INVENTORY QUESTION THERE IS reached nothing (#37/#99). `what do i have`, `what have i
         // got`, `what's in my bag`, `check my inventory` — all UNKNOWN, while `what is in my pack` worked word
         // for word, and `look in my pack` fell through to OBSERVE and described the landscape. See
@@ -4293,6 +4312,22 @@ public class ChronicleActionService {
             ||value.contains("waterskin full")||value.contains("water skin full")||value.contains("skin full")
             ||value.contains("how much water do i")||value.contains("how much water have i")
             ||value.contains("take stock of my gear")||value.contains("what is in my pack")||value.contains("still good")&&value.contains("my ")||value.contains("still sound"))
+           // YOUR LEG IS NOT YOUR GEAR (#37/#99). This rule reads a bare `how is my`, so a question about the
+           // Chronicle's own body was answered with a list of their clothes:
+           //
+           //   how is my leg / arm / foot / hand  ->  "Sound and to hand: everyday shirt, everyday trousers…"
+           //
+           // `my leg hurts` already reached TREAT_WOUND, so the statement worked and the question did not — the
+           // same shape as #845's `what is in my pouch`, where a thing named but NOT the subject of the question
+           // was read as the subject.
+           //
+           // IT STANDS ASIDE RATHER THAN ROUTING TO THE BODY READING, and that is the existing decision rather
+           // than a new one. theFeetUnderTheBeast already asserts `how are my feet` reaches NOTHING, in its own
+           // words: "the body model keeps no foot state, so there is no honest answer to route it to and
+           // inventing one would be the opposite of this ticket's whole point." The model has no per-limb state,
+           // so answering a leg question out of whole-body condition would be inventing exactly that. The defect
+           // is this rule claiming it; the missing per-part reading is a separate gap, recorded there and here.
+           &&!asksAboutABodyPart(value)
            &&!value.contains("food")&&!value.contains("supplies")) return Intent.TAKE_STOCK_OF_GEAR;
         // Go round the camp and account for it (#37). Perception, not work. Placed before MAINTAIN_CAMP, which
         // claims the camp with a tidying verb — taking stock is not tidying, and must not be answered by sweeping.
@@ -4860,6 +4895,9 @@ public class ChronicleActionService {
            ||value.contains("check my injur")||value.contains("check my wound")||value.contains("check my body")||value.contains("check myself")
            ||value.contains("examine my body")||value.contains("inspect my body")||value.contains("examine myself")||value.contains("look at myself")
            ||value.contains("take stock of myself")||value.contains("assess myself")||value.contains("assess my condition")
+           // `assess my condition` was here and `what is my condition` was not, which is the plainer way to ask
+           // it (#37/#99). Measured UNKNOWN while `how do i feel` and `take stock of myself` both answered.
+           ||value.contains("what is my condition")||value.contains("what condition am i in")
            ||value.contains("am i hurt")||value.contains("am i injured")||value.contains("am i sick")||value.contains("am i ill")
            ||value.contains("what shape am i")
            // Act ten and act twelve: each of these is a person asking the body a question it can answer, and each
@@ -4937,7 +4975,9 @@ public class ChronicleActionService {
             return Intent.TREAT_WOUND;
         if(saysOfSelf(value,"cold|freezing|frozen|numb|chilled|chilly|perished"))
             return Intent.WARM_BODY;
-        if(saysOfSelf(value,"wet|soaked|drenched|damp|dripping|sodden|wet through"))
+        // `soaked through` was the missing sibling of `wet through` beside it (#37/#99): `i am soaked` and
+        // `i am wet through` both reached this and `i am soaked through` reached nothing.
+        if(saysOfSelf(value,"wet|soaked|drenched|damp|dripping|sodden|wet through|soaked through"))
             return Intent.DRY_BODY;
         if(saysOfSelf(value,"exhausted|dizzy|weak|faint|giddy|sick|ill|unwell|shaky|spent|aching|worn out|done in|light headed|lightheaded"))
             return Intent.SENSE_BODY;
@@ -5201,6 +5241,66 @@ public class ChronicleActionService {
     private static final Pattern IN_MY_CONTAINER = Pattern.compile(
         "(what is|what do i have|what have i got|look|have a look|rummage|go|check what is) (in|inside|through) "
         + "(my|the) (pack|bag|backpack|pouch|sack|satchel|basket|kit)|check my (pack|bag|backpack|satchel|kit)");
+
+
+    /**
+     * Whether the sentence asks whether the body NEEDS something, rather than asking for it to be done (#37/#99).
+     *
+     * <p>Whole sentence with a short tail. {@code should i eat} is a question about the Chronicle;
+     * {@code should i eat the death cap} is a question about a mushroom and belongs to the food reading, so the
+     * act word has to end the sentence or be followed only by a word like "here", "now" or "yet".
+     *
+     * <p>{@code do i need to eat} and {@code do i need a drink} already answered with the body reading before
+     * this existed — that is what settled the intent; these are the forms that slipped past it to the act.
+     */
+    private static final Pattern ASKS_IF_THE_BODY_NEEDS = Pattern.compile(
+        "^(do i need to|do i need a|do i have to|should i|ought i to|is it time to|is it time i|can i|may i|"
+      + "had i better|would i be better)\s+"
+      + "(sleep|rest|eat|drink|wash|bathe|lie down|sit down|warm up|cool off|cool down|dry off|get warm|get dry|"
+      + "have a rest|have a drink|have a wash|have something to eat|had a rest|had a drink|had a wash|had something to eat|take a nap|nap)"
+      + "(\s+(here|now|yet|again|tonight|soon|first|a while|for a while|already|at all))*$");
+
+    private static boolean asksIfTheBodyNeeds(String value) {
+        return ASKS_IF_THE_BODY_NEEDS.matcher(normalisedQuestion(value)).matches();
+    }
+
+    /**
+     * Whether the sentence asks after a part of the Chronicle's own body (#37/#99).
+     *
+     * <p>Whole words, because this project has paid for the substring six times: {@code arm} is inside
+     * <i>warm</i>, <i>harm</i> and <i>armour</i>, {@code ear} inside <i>bear</i>, <i>spear</i> and <i>year</i>,
+     * {@code hip} inside <i>ship</i>, {@code rib} inside <i>ribbon</i>, {@code back} inside <i>backpack</i>.
+     *
+     * <p>DELIBERATELY NOT HERE: {@code calf}, which is a young cow and belongs to the stock reading; and
+     * {@code bone}, {@code skin}, {@code gut}, {@code heart} and {@code nail}, every one of which is a material
+     * or a quarry part in this catalogue. A keeper asking after a calf means the animal, and nobody asks after
+     * their own lungs — so the ambiguous words are left to the readings that already own them.
+     */
+    private static final String[] OWN_BODY_PARTS = {
+        "leg", "legs", "arm", "arms", "hand", "hands", "foot", "feet", "head", "shoulder", "shoulders",
+        "knee", "knees", "ankle", "ankles", "wrist", "wrists", "finger", "fingers", "toe", "toes",
+        "chest", "belly", "stomach", "neck", "elbow", "elbows", "back", "hip", "hips", "eye", "eyes",
+        "face", "throat", "jaw", "heel", "heels", "shin", "shins", "rib", "ribs", "mouth", "nose",
+        "lip", "lips", "tooth", "teeth", "ear", "ears", "thumb", "thumbs", "palm", "palms"};
+
+    private static boolean asksAboutABodyPart(String value) {
+        String said = normalisedQuestion(value);
+        // Only a QUESTION about it. "bind my hand" is an act and TREAT_WOUND's; "cut the leg off" is butchery.
+        boolean asking = said.startsWith("how is my") || said.startsWith("how are my")
+            || said.startsWith("how is the") || said.startsWith("how does my")
+            || said.startsWith("what is wrong with my") || said.startsWith("is my") || said.startsWith("are my")
+            || said.startsWith("check my") || said.startsWith("look at my");
+        if (!asking) return false;
+        for (String part : OWN_BODY_PARTS) if (word(said, part)) return true;
+        return false;
+    }
+
+    /** Lower-cased, contractions opened out, punctuation dropped and spaces squeezed — for whole-sentence tests. */
+    private static String normalisedQuestion(String value) {
+        return value.toLowerCase(Locale.ROOT).replace("what's", "what is").replace("whats", "what is")
+            .replace("i'm", "i am").replace("im ", "i am ").replace("don't", "do not")
+            .replaceAll("[^a-z ]+", " ").replaceAll("\s+", " ").trim();
+    }
 
     private static boolean asksWhatYouHave(String value) {
         String said = value.toLowerCase(Locale.ROOT).replace("what's", "what is").replace("whats", "what is")

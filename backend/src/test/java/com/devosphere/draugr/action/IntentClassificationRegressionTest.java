@@ -3716,4 +3716,82 @@ class IntentClassificationRegressionTest {
         assertNotEquals("CHECK_STOCK", classify("how many arrows do i have", false));
         assertNotEquals("CHECK_STOCK", classify("how many berries do i have", false));
     }
+
+    /**
+     * ASKING WHETHER YOU NEED TO IS NOT DOING IT (#37/#99).
+     *
+     * <p>This file already names the family — <i>"the most expensive member of this project's
+     * asking-is-not-doing family by a wide margin"</i> — but it had only the PAST tense. The forward-looking
+     * half went straight to the act, and for sleep that is a night of simulated time spent on a question:
+     *
+     * <pre>
+     * do i need to sleep / should i sleep / is it time to sleep / can i sleep here  ->  SLEEP, and it slept
+     * do i need to rest / should i rest                                            ->  REST, an hour gone
+     * should i eat                                                                 ->  EAT
+     * should i drink                                                               ->  DRINK
+     * </pre>
+     *
+     * <p><b>And the codebase already disagreed with itself about it</b>, which is what settles it:
+     * {@code do i need to eat} and {@code do i need a drink} both answered with the body reading while
+     * {@code should i eat} and {@code should i drink} acted. The intent was decided; the coverage was partial.
+     */
+    @Test
+    void askingWhetherTheBodyNeedsSomethingIsNotDoingIt() throws Exception {
+        for (String asked : new String[]{
+                "do i need to sleep", "should i sleep", "is it time to sleep", "can i sleep here",
+                "do i need to rest", "should i rest", "should i eat", "should i drink",
+                "do i need to eat", "do i need a drink", "do i need to wash", "should i wash",
+                "do i need to warm up", "should i lie down", "is it time i had a rest", "may i sit down now"})
+            assertEquals("SENSE_BODY", classify(asked), asked);
+
+        // THE ACTS KEEP THEIR OWN VERBS. An instruction is not a question, and these must not move.
+        assertEquals("SLEEP", classify("go to sleep"));
+        assertEquals("SLEEP", classify("lie down and sleep"));
+        assertEquals("REST", classify("rest a while"));
+        assertEquals("REST", classify("sit down and rest"));
+        assertEquals("EAT", classify("eat something"));
+        assertEquals("DRINK", classify("drink some water"));
+        assertEquals("WASH", classify("wash my hands"));
+
+        // AND A QUESTION THAT NAMES SOMETHING ELSE belongs to whatever owns that thing, not to the body.
+        // `should i eat the death cap` is about a mushroom, which is why these are whole sentences.
+        assertNotEquals("SENSE_BODY", classify("should i eat the death cap"));
+        assertNotEquals("SENSE_BODY", classify("should i drink from the river"));
+    }
+
+    /**
+     * YOUR LEG IS NOT YOUR GEAR (#37/#99).
+     *
+     * <p>The gear question reads a bare {@code how is my}, so {@code how is my leg} was answered
+     * <i>"Sound and to hand: everyday shirt, everyday trousers…"</i> — a question about the Chronicle's own
+     * body answered with a list of their clothes. {@code my leg hurts} already reached TREAT_WOUND, so the
+     * statement worked and the question did not.
+     *
+     * <p><b>It stands aside rather than routing to the body reading, and that is the existing decision rather
+     * than a new one.</b> {@code theFeetUnderTheBeast} already asserts {@code how are my feet} reaches NOTHING,
+     * because the body model keeps no foot state and inventing an answer out of whole-body condition is exactly
+     * what that comment warns against. So these reach nothing too, consistently — the defect was the gear rule
+     * claiming them, and the missing per-part reading is a separate gap recorded in both places.
+     *
+     * <p>Whole words, because this project has paid for the substring six times: {@code arm} is inside
+     * <i>warm</i>, <i>harm</i> and <i>armour</i>.
+     */
+    @Test
+    void aQuestionAboutYourOwnBodyIsNotAQuestionAboutYourGear() throws Exception {
+        for (String asked : new String[]{"how is my leg", "how is my arm", "how is my foot", "how is my hand",
+                "how are my feet", "how are my hands", "how is my back", "how is my head",
+                "is my ankle swollen", "check my hands", "look at my shoulder"})
+            assertNotEquals("TAKE_STOCK_OF_GEAR", classify(asked), asked);
+
+        // THE GEAR QUESTIONS KEEP THEIRS. A pack is not a body part.
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("how is my knife"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("how heavy is my pack"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("what am i carrying"));
+
+        // AND THE AMBIGUOUS WORDS ARE LEFT TO THE READINGS THAT OWN THEM. A calf is a young cow, and bone,
+        // skin and gut are all materials in this catalogue, so none of them is in the body list.
+        assertNotEquals("SENSE_BODY", classify("how is my calf", true));
+        // An act on a body part is still an act.
+        assertNotEquals("SENSE_BODY", classify("bind my hand"));
+    }
 }
