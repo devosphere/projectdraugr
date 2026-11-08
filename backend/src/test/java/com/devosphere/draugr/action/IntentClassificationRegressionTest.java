@@ -3794,4 +3794,114 @@ class IntentClassificationRegressionTest {
         // An act on a body part is still an act.
         assertNotEquals("SENSE_BODY", classify("bind my hand"));
     }
+
+    /**
+     * ASKING WHAT LIVES HERE REACHES THE READING THAT ANSWERS IT (#37).
+     *
+     * <p>{@code look for birds} has answered about its named kind since the nine-wordings work, through
+     * ExaminationService.lifeOfKind, and that reading covers all five kingdoms kindNamed knows. The QUESTION
+     * form reached nothing: sixteen phrasings measured on a river bank, every one of them UNKNOWN, while the
+     * imperative beside them answered "Looking for birds, you make out stork and grey heron".
+     */
+    @Test void askingWhatLivesHere() throws Exception {
+        for (String p : new String[]{
+                "are there fish here", "are there any fish", "what fish are here",
+                "what fish are in this river", "what fish live here",
+                "are there birds here", "what birds are here", "what birds are around",
+                "are there insects here", "what insects are here",
+                "are there snakes here", "are there frogs here",
+                "what wildlife is around", "what wildlife is here",
+                "are there animals nearby", "are there any animals"})
+            assertEquals("SEARCH", classify(p), p);
+
+        // AND WITH A MATERIAL PROCESS ANSWERING TOO, because the question is decided by its shape and not by
+        // whether some recipe happens to mention a fish.
+        assertEquals("SEARCH", classify("are there fish here", true));
+        assertEquals("SEARCH", classify("what birds are here", true));
+
+        // THE IMPERATIVES THAT ALREADY WORKED, unmoved. These are the reason the gap was visible at all.
+        assertEquals("SEARCH", classify("look for birds"), "which always worked");
+        assertEquals("SEARCH", classify("look for insects"));
+        assertEquals("SEARCH", classify("what animals are here"));
+        assertEquals("SEARCH", classify("what lives here"));
+        assertEquals("SEARCH", classify("is there game"));
+
+        // `look for fish` IS LEFT WITH FISH ON PURPOSE, and this is the third time this cycle that an easy win
+        // turned out to be a documented decision. ChronicleNineWordingsIntegrationTest says in its own words
+        // that it "never reaches SEARCH: the classifier routes it to FISH, which answers about the water --
+        // 'there is no water here that holds anything worth taking' -- and that is the right answer to it."
+        //
+        // That reasoning is sound where there is no water, which is the ground that test stands on. On a RIVER
+        // BANK it does not hold: `look for fish` fishes, and in one measured run it CAUGHT A CRAYFISH -- an
+        // animal taken in answer to a question. That is recorded on the ticket for whoever owns the decision
+        // rather than reversed here, because the decision is explicit and the question forms above are the
+        // defect this slice is about.
+        assertEquals("FISH", classify("look for fish"),
+            "left with its owner's documented decision; see the ticket for what a water chunk does to it");
+        assertEquals("FISH", classify("catch a fish"), "and the act itself is untouched");
+        assertEquals("FISH", classify("fish the river"));
+        assertEquals("FISH", classify("go fishing"));
+
+        // NOT THE NEIGHBOURS. Every one of these was measured before the rule was written, and every one of
+        // them names a kind inside a sentence that is somebody else's question.
+        assertEquals("JUDGE_LEARNING", classify("what can i make from bird bone"));
+        assertEquals("JUDGE_LEARNING", classify("what can i make with fish skin"));
+        assertEquals("JUDGE_WORK_IN_HAND", classify("what should i do with the fish"));
+        assertEquals("JUDGE_FOOD", classify("which of these fish can i eat"));
+        assertEquals("SCARE_BIRDS", classify("what birds can i scare off the crop"));
+
+        // NOT WHAT YOU ARE CARRYING. Answering these about the ground would be #845's defect over again:
+        // asked what is IN a thing, answered about something else entirely.
+        assertNotEquals("SEARCH", classify("are there fish bones in my pack"));
+        assertNotEquals("SEARCH", classify("is there a frog in my pack"));
+    }
+
+    /**
+     * ASKING WHAT THE WATER IS, which judgeWater answers in its own first two lines (#37).
+     *
+     * <p>The gate wanted a word for SAFETY as well as a word for water, so the plainest phrasings of the
+     * question the intent is named for fell past it. {@code what kind of water is this} was worse than silent:
+     * it reached EXAMINE and answered "Plain ground, unremarkable at a glance".
+     */
+    @Test void askingWhatTheWaterIs() throws Exception {
+        for (String p : new String[]{
+                "is there water here", "is there any water here", "what kind of water is this",
+                "what sort of water is this", "how is the water", "what water is near",
+                "is this a river or a lake", "is this a lake", "is this a stream"})
+            assertEquals("JUDGE_WATER", classify(p), p);
+
+        assertEquals("JUDGE_WATER", classify("is this water safe"), "which always worked");
+        assertEquals("JUDGE_WATER", classify("judge the water"));
+
+        // THE SIX FINISHED READINGS THIS WATER SITS AMONG. A stem instead of a whole sentence would have taken
+        // several of them, and two of them -- sniff and test -- are recorded in the rule above as a widening
+        // that was tried once and broke standing assertions.
+        assertEquals("MEASURE", classify("how deep is the water"));
+        assertEquals("MEASURE", classify("test the depth of the water"));
+        assertEquals("SMELL", classify("sniff the water"));
+        assertEquals("SMELL", classify("smell the water"));
+        assertEquals("JUDGE_CROSSING", classify("is the river crossable"));
+        assertEquals("COLLECT_WATER", classify("collect water"));
+        assertEquals("BOIL_WATER", classify("boil the water"));
+        assertEquals("DRINK", classify("drink from the river"));
+    }
+
+    /**
+     * ASKED WHAT IS VISIBLE, TOLD HOW BRIGHT IT IS (#37).
+     *
+     * <p>{@code what can i see} reached JUDGE_LIGHT and was answered "There is light enough here for close
+     * work" -- a report on the illumination, to a question about the view. The light rule was written for
+     * "can i see TO WORK", which is why "can i work" sits beside it in the same list.
+     */
+    @Test void askedWhatIsVisible() throws Exception {
+        assertEquals("OBSERVE", classify("what can i see"));
+        assertEquals("OBSERVE", classify("what can i see here"));
+        assertEquals("OBSERVE", classify("look around"), "which always answered it");
+
+        // AND THE LIGHT QUESTION KEEPS ITS OWN WORDS.
+        assertEquals("JUDGE_LIGHT", classify("can i see to work"));
+        assertEquals("JUDGE_LIGHT", classify("is there enough light to work"));
+        assertEquals("JUDGE_LIGHT", classify("can i see in here"));
+        assertEquals("JUDGE_LIGHT", classify("it is too dark to see"));
+    }
 }

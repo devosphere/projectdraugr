@@ -123,7 +123,21 @@ class ChronicleNineWordingsIntegrationTest {
         // FISH, which answers about the water — "there is no water here that holds anything worth taking" — and
         // that is the right answer to it. The rule added here is about a search naming its subject, and asserting
         // it on a phrase that another intent owns was asserting the wrong thing about the wrong path.
-        for (String[] asked : new String[][] { {"look for birds", "birds"}, {"look for insects", "insects"} }) {
+        //
+        // STILL TRUE HERE, AND NOT TRUE EVERYWHERE (#37, perception slice). The reasoning above holds on THIS
+        // ground, which has no water: FISH refuses and the refusal is a fair answer. Measured on a RIVER_BANK
+        // it does not hold — `look for fish` fishes, and in one run it caught a crayfish, which is an animal
+        // taken in answer to a question. Left as it stands because the decision is explicit and belongs to
+        // whoever made it; recorded on the ticket, and here, so the next cycle does not have to find it again.
+        //
+        // AND THE QUESTION FORM NOW REACHES THE SAME READING AS THE IMPERATIVE. Sixteen phrasings of it reached
+        // nothing at all before this slice, fish among them — so `are there fish here` is asserted below, where
+        // `look for fish` cannot be. Both branches of lifeOfKind name the kind, the empty one included ("You
+        // look for fish, and this ground offers none that are abroad now"), so this holds whatever lives here.
+        for (String[] asked : new String[][] { {"look for birds", "birds"}, {"look for insects", "insects"},
+                                               {"are there birds here", "birds"}, {"what insects are here", "insects"},
+                                               {"are there fish here", "fish"}, {"are there snakes here", "snakes"},
+                                               {"are there frogs here", "frogs"}, {"what fish live here", "fish"} }) {
             var answer = actions.resolve(asked[0]);
             assertNotEquals("UNKNOWN", answer.intent(), answer::perception);
             assertTrue(answer.perception().toLowerCase(java.util.Locale.ROOT).contains(asked[1]),
