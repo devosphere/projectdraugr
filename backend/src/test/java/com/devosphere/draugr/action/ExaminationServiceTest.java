@@ -8,6 +8,7 @@ import org.springframework.jdbc.core.ResultSetExtractor;
 import java.util.Collections;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -49,5 +50,35 @@ class ExaminationServiceTest {
     @Test void practisedHandReadsDeeper() {
         String prose = withInsight(0.03).examine(CH, LOC, "analyze this ground", ExaminationService.Mode.ANALYZE)[1];
         assertTrue(prose.contains(DEEPER), "insight past the tier-2 threshold reveals the deeper layer: " + prose);
+    }
+
+    /**
+     * THE WORD A PLAYER USES FOR THE KIND OF A THING is the LAST noun of the sentence (#37).
+     *
+     * <p>Only the final noun is read, and that is the whole guard against collisions: the catalogue holds
+     * exactly three ({@code grass} inside {@code grass_snake}, {@code tree} inside {@code tree_frog} and
+     * {@code tree_newt}), found by asking it before the rule was written. Scanning the sentence for any head
+     * noun would have answered {@code examine the grass snake} about a grass.
+     */
+    @Test void theWordForAKindIsTheLastNounSaid() {
+        assertEquals("mushroom", ExaminationService.headNounSaid("examine the mushroom"));
+        assertEquals("cap", ExaminationService.headNounSaid("examine the death cap"));
+        assertEquals("onion", ExaminationService.headNounSaid("inspect the wild onion"));
+
+        // THE THREE COLLISIONS, each resolving to the word the sentence actually ends on.
+        assertEquals("snake", ExaminationService.headNounSaid("examine the grass snake"),
+            "not \"grass\" — a sentence about a snake must never be answered about a plant");
+        assertEquals("frog", ExaminationService.headNounSaid("examine the tree frog"));
+        assertEquals("newt", ExaminationService.headNounSaid("examine the tree newt"));
+
+        // A TRAILING WORD THAT IS NOT THE THING.
+        assertEquals("mushroom", ExaminationService.headNounSaid("examine the mushroom closely"));
+        assertEquals("mushroom", ExaminationService.headNounSaid("look the mushroom over"));
+        assertEquals("fungus", ExaminationService.headNounSaid("examine the fungus here"));
+
+        // AND PUNCTUATION AND CASE ARE NOT PART OF THE WORD.
+        assertEquals("mushroom", ExaminationService.headNounSaid("examine the mushroom."));
+        assertEquals("", ExaminationService.headNounSaid(""));
+        assertEquals("", ExaminationService.headNounSaid(null));
     }
 }
