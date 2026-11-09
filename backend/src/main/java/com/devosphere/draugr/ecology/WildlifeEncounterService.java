@@ -451,7 +451,10 @@ public class WildlifeEncounterService {
         // nothing — most of them could not even be put on, until V313 widened the attachment CHECKs.
         int blunted = body.protection();
         if (blunted > 0) severity = Math.max(1, severity - blunted);
-        physiology.applyInjury(chronicle,severity,action,at,"WILDLIFE_CONTACT");
+        // AND WHERE IT REACHED (#37), read from the catalogue's own size tier rather than invented — the same
+        // move base_resistance already made for how badly it hurts.
+        physiology.applyInjury(chronicle,severity,action,at,"WILDLIFE_CONTACT",
+            ChroniclePhysiologyService.whereAnAnimalReaches(sizeTierOf(candidate.species()), false));
         // A venomous ordinary animal — the common adder among wildlife (#V174) — does more than wound: its bite
         // carries venom that works inward after the snake is gone. This is the ordinary-wildlife counterpart of a
         // monster's VENOM_WOUND, so a real viper envenoms the way the giant hornet's sting does — a sick, spreading
@@ -654,7 +657,8 @@ public class WildlifeEncounterService {
 
         int resistance = threat.baseResistance() != null ? threat.baseResistance() : 50;
         int severity = Math.max(4, resistance / 4 + (threat.ambushHunter() ? 8 : 0));
-        physiology.applyInjury(chronicle, severity, action, at, "PASSIVE_WILDLIFE_ATTACK");
+        physiology.applyInjury(chronicle, severity, action, at, "PASSIVE_WILDLIFE_ATTACK",
+            ChroniclePhysiologyService.whereAnAnimalReaches(sizeTierOf(threat.species()), false));
         record(chronicle, threat.populationId(), chunk, "PASSIVE_ATTACK", at, action);
         jdbc.update("UPDATE wildlife_population SET behavior_state='ALERT' WHERE id=?", threat.populationId());
         String witness = threat.ambushHunter()
@@ -1479,7 +1483,10 @@ public class WildlifeEncounterService {
         String hurt = "";
         if (dangerous && !restrained) {
             int eased = restraint == null ? 0 : (Integer) restraint.get("eases");
-            physiology.applyInjury(chronicle, Math.max(1, HANDLING_INJURY - eased), null, at, "handling a " + display(handled));
+            // THE HAND, whatever the beast's size, because that is where your hands were. The prose this method
+            // writes says so itself: "you come away with something wrenched".
+            physiology.applyInjury(chronicle, Math.max(1, HANDLING_INJURY - eased), null, at, "handling a " + display(handled),
+                ChroniclePhysiologyService.whereAnAnimalReaches(null, true));
             if (restraint == null) {
                 hurt = " It shifts its weight against you without warning, and you come away with something wrenched.";
             } else {
@@ -2566,6 +2573,18 @@ public class WildlifeEncounterService {
             "              WHERE ck.holds_open_water AND " + stillSound("cp") + " " +
             "                AND pw.lifecycle_state='ACTIVE' AND pw.current_location_id=ch.id)))",
             Boolean.class, chronicle));
+    }
+
+    /**
+     * The catalogue's size tier for a species, so where a wound landed is READ rather than guessed (#37).
+     *
+     * <p>Null for an uncatalogued species, and a null site records no part at all — the world saying it does
+     * not know where, instead of choosing a limb to be definite about.
+     */
+    private String sizeTierOf(String speciesKey) {
+        if (speciesKey == null) return null;
+        return jdbc.query("SELECT size_tier FROM wildlife_species WHERE species_key=?",
+            rs -> rs.next() ? rs.getString(1) : null, speciesKey);
     }
 
     private String display(String species) { return species.replace('_',' '); }

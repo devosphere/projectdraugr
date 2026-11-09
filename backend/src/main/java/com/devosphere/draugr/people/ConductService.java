@@ -230,7 +230,10 @@ public class ConductService {
                 }
                 // They answer in kind, at once: this is the proportionate response of a community defending one of its
                 // own, and it is the Chronicle's body that pays.
-                physiology.applyInjury(chronicle, armed ? 25 : 15, actionId, at, "NATIVE_DEFENCE");
+                // AND WHERE (#37). Not chosen for variety — read from the prose this very branch writes:
+                // "stones and fish-spears come at you from every side, and you are hurt before you are clear".
+                // A thing coming at you from every side takes the body, not a limb.
+                physiology.applyInjury(chronicle, armed ? 25 : 15, actionId, at, "NATIVE_DEFENCE", "TORSO");
                 return new String[]{"PARTIAL", armed
                     ? name + " falls and does not get up. The isle erupts: stones and fish-spears come at you from every side, and you are hurt before you are clear of the reeds."
                     : name + " goes down under the blow and is dragged back by others. Stones follow you into the water, and one of them finds you."};
@@ -239,7 +242,9 @@ public class ConductService {
                 Map<String, Object> target = target(community, text);
                 if (target == null) return new String[]{"FAILED", "No one is within reach of you."};
                 offence(community, chronicle, at, "RESTRAINT_ATTEMPT", -60, "HOSTILE");
-                physiology.applyInjury(chronicle, 10, actionId, at, "NATIVE_DEFENCE");
+                // The arm, because this branch's own account is that you LAID HANDS on someone and they twisted
+                // free of them.
+                physiology.applyInjury(chronicle, 10, actionId, at, "NATIVE_DEFENCE", "ARM");
                 return new String[]{"FAILED", "You lay hands on " + target.get("given_name") + ", who twists free and shrieks. The rest are on you at once, and you are driven off the isle bruised and bleeding. A person is not a thing to be bound and led."};
             }
             case DAMAGE -> {
@@ -394,7 +399,9 @@ public class ConductService {
         int standing = ((Number) r.get("standing")).intValue();
         boolean dark = ContactService.isDark(at);
         if (standing <= DRIVEN_OFF && !dark) {
-            physiology.applyInjury(chronicle, 8, actionId, at, "NATIVE_DEFENCE");
+            // The back: the prose has the stones following until "you are back in the water", which is a body
+            // turned away and retreating.
+            physiology.applyInjury(chronicle, 8, actionId, at, "NATIVE_DEFENCE", "BACK");
             event(community, chronicle, at, "DROVE_OFF", Map.of());
             return "You are not a stride onto the raised ground before the stones start, hard and well aimed, and they do not stop until you are back in the water.";
         }

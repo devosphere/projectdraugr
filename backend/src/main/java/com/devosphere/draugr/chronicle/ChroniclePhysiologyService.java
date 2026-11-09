@@ -422,12 +422,101 @@ public class ChroniclePhysiologyService {
         refreshBody(chronicleId);
         return safe;
     }
+    /**
+     * WHERE AN INJURY LANDED (#37). The ticket's complaint was that "how is my leg" and "how are my feet"
+     * reached nothing, and the diagnosis was that nothing in this world recorded where a wound was: injury
+     * severity, pain and blood loss are single scalars over the whole body.
+     *
+     * <p><b>No new table and no new healing model.</b> Every injury already writes an immutable
+     * {@code chronicle_condition_event} carrying its severity, its time and a {@code source} in a jsonb
+     * payload — the history was already there and simply did not say where. So the part goes in that payload,
+     * and the SCALARS stay the one authority on whether the body is hurt and how much. A per-limb severity
+     * would have been a second truth about the same wound, and this project has paid for those.
+     *
+     * <p>The parts are the words a person uses about their own body. Left and right are deliberately absent:
+     * nothing in the simulation distinguishes a Chronicle's sides, and a payload that said LEFT_LEG would be
+     * claiming knowledge the world does not have.
+     */
+    public static final java.util.Set<String> BODY_PARTS = java.util.Set.of(
+        "HEAD", "FACE", "SHOULDER", "ARM", "HAND", "TORSO", "BACK", "HIP", "LEG", "KNEE", "FOOT", "ANKLE");
+
+    /**
+     * Which part an animal's attack reaches, read from the CATALOGUE's own size tier rather than invented.
+     *
+     * <p>This is the same move {@code base_resistance} made for how badly a wound hurts: the answer was already
+     * in the species row. A thing that lives at ankle height strikes the ankle; a thing that meets you at the
+     * waist takes the arm you put up; a thing that stands taller than you reaches your chest. A beast you had
+     * your hands on takes the hand, whatever its size, because that is where your hands were.
+     *
+     * <p>Deterministic on purpose. A random site would make the same bite land somewhere different each run,
+     * which is untestable and tells the player nothing they can reason about.
+     */
+    public static String whereAnAnimalReaches(String sizeTier, boolean hadHandsOnIt) {
+        if (hadHandsOnIt) return "HAND";
+        if (sizeTier == null) return null;
+        return switch (sizeTier.toUpperCase(java.util.Locale.ROOT)) {
+            case "TINY", "SMALL" -> "ANKLE";
+            case "MEDIUM" -> "ARM";
+            case "LARGE", "HUGE" -> "TORSO";
+            default -> null;
+        };
+    }
+
     @Transactional
     public void applyInjury(UUID chronicleId, int severity, UUID actionId, Instant occurredAt, String source) {
+        applyInjury(chronicleId, severity, actionId, occurredAt, source, null);
+    }
+
+    /**
+     * As above, recording WHERE it landed.
+     *
+     * <p>A null part records none rather than inventing one. An injury whose site the world genuinely does not
+     * know — and there are such — leaves the body hurt without a place, and the reading says exactly that
+     * instead of guessing a limb.
+     */
+    @Transactional
+    public void applyInjury(UUID chronicleId, int severity, UUID actionId, Instant occurredAt, String source, String bodyPart) {
         int bounded=clamp(severity);
+        String part = bodyPart == null ? null : bodyPart.toUpperCase(java.util.Locale.ROOT);
+        if (part != null && !BODY_PARTS.contains(part)) part = null;
         jdbc.update("UPDATE chronicle_physiology SET injury_severity=LEAST(100,injury_severity+?),pain_level=LEAST(100,pain_level+?),stress_level=LEAST(100,stress_level+?),blood_loss_ml=LEAST(7000,blood_loss_ml+?) WHERE chronicle_id=?",bounded,Math.max(1,bounded/2),Math.max(1,bounded/3),bounded*8,chronicleId);
-        jdbc.update("INSERT INTO chronicle_condition_event (chronicle_id,occurred_at,condition_kind,severity,source_action_id,payload) VALUES (?,?,?,?,?,jsonb_build_object('source',?))",chronicleId,Timestamp.from(occurredAt),"INJURY",bounded,actionId,source);
+        jdbc.update("INSERT INTO chronicle_condition_event (chronicle_id,occurred_at,condition_kind,severity,source_action_id,payload) VALUES (?,?,?,?,?,jsonb_build_object('source',?,'part',?))",chronicleId,Timestamp.from(occurredAt),"INJURY",bounded,actionId,source,part);
         refreshBody(chronicleId);
+    }
+
+    /**
+     * Where this body is hurt, worst first — the reading behind "how is my leg" and "where am I hurt" (#37).
+     *
+     * <p>Gated on the body still CARRYING an injury, because the events are permanent history and a cut that
+     * healed a month ago is not an answer to "how is my leg". While {@code injury_severity} is above zero the
+     * recent sites are what it is made of; once it is zero the body is whole and says so, however much history
+     * it has. That is why there is no per-part healing: the scalar already knows.
+     */
+    /**
+     * Whether this body is carrying an injury at all — asked of the SCALAR, which is the authority (#37).
+     *
+     * <p>The reading that needs this first asked the Body HUD's {@code health} label instead, and that label is
+     * DERIVED: it is refreshed from the scalars and can be a step behind them. One authority for one fact, or
+     * the two drift and the prose confidently says a body is whole while its injury severity says otherwise.
+     */
+    @Transactional(readOnly = true)
+    public boolean carriesAnInjury(UUID chronicleId) {
+        Integer severity = jdbc.queryForObject(
+            "SELECT injury_severity FROM chronicle_physiology WHERE chronicle_id=?", Integer.class, chronicleId);
+        return severity != null && severity > 0;
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.List<java.util.Map<String, Object>> whereItHurts(UUID chronicleId, Instant now) {
+        Integer carried = jdbc.queryForObject(
+            "SELECT injury_severity FROM chronicle_physiology WHERE chronicle_id=?", Integer.class, chronicleId);
+        if (carried == null || carried <= 0) return java.util.List.of();
+        return jdbc.queryForList(
+            "SELECT payload->>'part' AS part, severity, occurred_at, payload->>'source' AS source "
+            + "  FROM chronicle_condition_event "
+            + " WHERE chronicle_id=? AND condition_kind='INJURY' AND payload->>'part' IS NOT NULL "
+            + "   AND occurred_at > ?::timestamptz - interval '30 days' "
+            + " ORDER BY severity DESC, occurred_at DESC LIMIT 6", chronicleId, Timestamp.from(now));
     }
     /**
      * A strain of overexertion (#217) — a pulled muscle, a wrenched back from driving the body past what it had
