@@ -10,6 +10,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -80,5 +81,29 @@ class ExaminationServiceTest {
         assertEquals("mushroom", ExaminationService.headNounSaid("examine the mushroom."));
         assertEquals("", ExaminationService.headNounSaid(""));
         assertEquals("", ExaminationService.headNounSaid(null));
+    }
+
+    /**
+     * THE WORD IN FRONT OF THE KIND IS PART OF WHAT WAS NAMED (#37).
+     *
+     * <p>Without it the kind rule answered {@code examine the oak tree} about a BEECH -- the head noun is
+     * "tree", the only plants whose name ends in "tree" on that ground are the beech and the rowan, and neither
+     * is an oak. A true sentence about the wrong plant, shipped in #850 and found by reading the answer.
+     */
+    @Test void theWordInFrontOfTheKindIsPartOfWhatWasNamed() {
+        assertEquals("oak", ExaminationService.qualifierBefore("examine the oak tree", "tree"));
+        assertEquals("oyster", ExaminationService.qualifierBefore("examine the oyster mushroom", "mushroom"));
+        assertEquals("death", ExaminationService.qualifierBefore("look at the death cap", "cap"));
+
+        // A DETERMINER IS NOT A QUALIFIER, which is what keeps the family word a family word.
+        assertNull(ExaminationService.qualifierBefore("examine the mushroom", "mushroom"));
+        assertNull(ExaminationService.qualifierBefore("examine a mushroom", "mushroom"));
+        assertNull(ExaminationService.qualifierBefore("examine this mushroom", "mushroom"));
+        assertNull(ExaminationService.qualifierBefore("examine some mushroom", "mushroom"));
+
+        // NOR IS THE VERB, which is the word in front when the player says nothing else at all.
+        assertNull(ExaminationService.qualifierBefore("examine mushroom", "mushroom"));
+        assertNull(ExaminationService.qualifierBefore("inspect mushroom", "mushroom"));
+        assertNull(ExaminationService.qualifierBefore("identify mushroom", "mushroom"));
     }
 }

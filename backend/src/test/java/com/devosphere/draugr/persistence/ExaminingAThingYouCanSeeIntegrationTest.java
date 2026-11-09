@@ -317,4 +317,68 @@ class ExaminingAThingYouCanSeeIntegrationTest {
         assertEquals(thingsBefore, (int) jdbc.queryForObject("SELECT COUNT(*) FROM world_object", Integer.class),
             "nothing is made or taken while the world is still asking which plant was meant");
     }
+
+    /**
+     * A TREE GROWING HERE CAN BE LOOKED OVER, which it could not (#37).
+     *
+     * <p>Both plant readers excluded {@code organism_type = 'TREE'}, because the first was written for "a plant
+     * you could pick" and the gathering rule it borrows its reach from does not pick trees. So {@code examine
+     * the oak}, standing in a wood full of oaks, was answered with leaf litter -- the twenty-head-noun defect
+     * of #850, for the largest thing on the ground.
+     */
+    @Test
+    void aTreeGrowingHereCanBeLookedOver() {
+        UUID me = aLivingChronicle();
+        String tree = jdbc.query(
+            "SELECT replace(fd.flora_key,'_',' ') FROM flora_definition fd "
+            + " WHERE fd.organism_type = 'TREE' AND position('_' in fd.flora_key) = 0 AND ("
+            + "   EXISTS (SELECT 1 FROM chunk_flora cf JOIN world_object w ON w.id=? "
+            + "            WHERE cf.chunk_id=w.current_location_id AND cf.flora_key=fd.flora_key AND cf.quantity > 0) "
+            + "   OR fd.biome_affinity ILIKE '%' || (SELECT ch.biome FROM world_object w2 "
+            + "        JOIN world_chunk ch ON ch.id=w2.current_location_id WHERE w2.id=?) || '%') LIMIT 1",
+            rs -> rs.next() ? rs.getString(1) : null, me, me);
+        Assumptions.assumeTrue(tree != null, "this ground grows no one-word tree");
+
+        String prose = said("examine the " + tree);
+        assertFalse(readsAsAGroundSurvey(prose),
+            () -> "\"examine the " + tree + "\" must be about the tree, not the ground: " + prose);
+        assertTrue(prose.contains(tree), () -> "and must name it: " + prose);
+    }
+
+    /**
+     * AND THE WORD IN FRONT OF THE KIND IS PART OF WHAT WAS NAMED (#37).
+     *
+     * <p>#850's kind rule read the head noun alone, so {@code examine the <X> tree} answered about whichever
+     * plant on this ground happens to be named "... tree" -- measured, an oak was answered with a BEECH. A true
+     * sentence about the wrong plant, which is this project's worst shape, and mine.
+     *
+     * <p>Asserted as "it does not name the other one", derived from the catalogue, because which trees grow
+     * where is the world's business and this assertion is not about any particular pair.
+     */
+    @Test
+    void theWordInFrontOfTheKindIsNotIgnored() {
+        UUID me = aLivingChronicle();
+        // A one-word tree here, plus some OTHER plant here whose name ends in "tree" — the two the defect confused.
+        List<String> pair = jdbc.query(
+            "WITH here AS ("
+            + " SELECT fd.flora_key FROM flora_definition fd WHERE ("
+            + "   EXISTS (SELECT 1 FROM chunk_flora cf JOIN world_object w ON w.id=? "
+            + "            WHERE cf.chunk_id=w.current_location_id AND cf.flora_key=fd.flora_key AND cf.quantity > 0) "
+            + "   OR fd.biome_affinity ILIKE '%' || (SELECT ch.biome FROM world_object w2 "
+            + "        JOIN world_chunk ch ON ch.id=w2.current_location_id WHERE w2.id=?) || '%'))"
+            + " SELECT (SELECT flora_key FROM here WHERE position('_' in flora_key) = 0 LIMIT 1),"
+            + "        (SELECT replace(flora_key,'_',' ') FROM here "
+            + "          WHERE split_part(replace(flora_key,'_',' '), ' ', -1) = 'tree' LIMIT 1)",
+            rs -> rs.next() ? java.util.Arrays.asList(rs.getString(1), rs.getString(2)) : null, me, me);
+        Assumptions.assumeTrue(pair != null && pair.get(0) != null && pair.get(1) != null,
+            "this ground does not grow both a one-word plant and a \"... tree\"");
+        String named = pair.get(0), other = pair.get(1);
+
+        String prose = said("examine the " + named + " tree");
+        assertFalse(prose.contains(other),
+            () -> "\"examine the " + named + " tree\" must not be answered about the " + other + ": " + prose);
+        assertTrue(prose.contains(named) || !readsAsAGroundSurvey(prose),
+            () -> "and it must be about what was named: " + prose);
+    }
+
 }

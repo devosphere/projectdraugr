@@ -624,29 +624,70 @@ public class ExaminationService {
      * while a death cap stood in the same clearing. The ask lists what is there, which is both the honest answer
      * and the useful one. It changes nothing while it asks, as #593's ambiguous processes do.
      */
+    /** Every plant this ground grows, by the same two-part reach the gathering rule uses. */
+    private static final String GROWING_HERE =
+        "SELECT fd.flora_key, fd.is_poisonous FROM flora_definition fd "
+        + " WHERE ("
+        + "   EXISTS (SELECT 1 FROM chunk_flora cf WHERE cf.chunk_id=? AND cf.flora_key=fd.flora_key AND cf.quantity > 0) "
+        + "   OR fd.biome_affinity ILIKE '%' || (SELECT biome FROM world_chunk WHERE id=?) || '%') ";
+
+    /**
+     * The word standing in front of the kind, when the player named one -- {@code oak} in "the oak tree" (#37).
+     *
+     * <p>Without this, the kind rule answered {@code examine the oak tree} about a BEECH: the head noun is
+     * "tree", the only plants whose name ends in "tree" here are the beech and the rowan, and neither is an oak.
+     * A true sentence about the wrong plant, which is this project's worst shape, and I shipped it in #850.
+     *
+     * <p>Determiners are not qualifiers, so {@code examine the mushroom} still names no particular one and the
+     * family rule still answers it.
+     */
+    static String qualifierBefore(String lower, String noun) {
+        String[] w = (lower == null ? "" : lower).replaceAll("[^a-z ]", " ").replaceAll("\\s+", " ").trim().split(" ");
+        for (int i = 1; i < w.length; i++) {
+            if (w[i].equals(noun) && !DETERMINERS.contains(w[i - 1]) && w[i - 1].length() >= 3) return w[i - 1];
+        }
+        return null;
+    }
+    private static final java.util.Set<String> DETERMINERS = java.util.Set.of(
+        "the", "a", "an", "my", "this", "that", "these", "those", "some", "any", "one", "its", "their",
+        "examine", "inspect", "look", "study", "at", "over", "analyze", "analyse", "investigate", "identify");
+
     private String[] plantOfTheKindSaid(UUID location, String lower) {
         String noun = headNounSaid(lower);
         if (noun.length() < 3) return null;
-        List<Map<String, Object>> kinds = jdbc.queryForList(
-            "SELECT fd.flora_key, fd.is_poisonous FROM flora_definition fd "
-            + " WHERE fd.organism_type <> 'TREE' AND ("
-            + "   EXISTS (SELECT 1 FROM chunk_flora cf WHERE cf.chunk_id=? AND cf.flora_key=fd.flora_key AND cf.quantity > 0) "
-            + "   OR fd.biome_affinity ILIKE '%' || (SELECT biome FROM world_chunk WHERE id=?) || '%') "
+        // THE WHOLE NAME FIRST, SAID AS WHOLE WORDS. A one-word TREE is reached only here: the reader above
+        // excludes `organism_type = 'TREE'` because it was written for "a plant you could pick", so `examine the
+        // oak` -- with an oak growing all round -- was answered with leaf litter, exactly like the twenty head
+        // nouns #850 was about. Word boundaries, because this project has paid six times for a substring.
+        List<Map<String, Object>> whole = jdbc.queryForList(GROWING_HERE
+            + " AND ? ~ ('\\m' || replace(fd.flora_key,'_',' ') || '\\M') "
+            + " ORDER BY length(fd.flora_key) DESC LIMIT 1", location, location, lower);
+        if (!whole.isEmpty()) return theReading(whole.get(0));
+
+        // ...THEN THE KIND, with the qualifier honoured if the player gave one.
+        String qualifier = qualifierBefore(lower, noun);
+        List<Map<String, Object>> kinds = jdbc.queryForList(GROWING_HERE
             + "   AND split_part(replace(fd.flora_key,'_',' '), ' ', -1) IN (?, ?) "
+            + (qualifier == null ? "" : "   AND replace(fd.flora_key,'_',' ') ~ ('\\m' || ? || '\\M') ")
             + " ORDER BY fd.flora_key",
-            location, location, noun, singularSaid(noun));
+            qualifier == null
+                ? new Object[]{location, location, noun, singularSaid(noun)}
+                : new Object[]{location, location, noun, singularSaid(noun), qualifier});
         if (kinds.isEmpty()) return null;
-        if (kinds.size() == 1) {
-            String key = ((String) kinds.get(0).get("flora_key")).replace('_', ' ');
-            return new String[]{"SUCCEEDED", "You look the " + key + " over where it grows. "
-                + (Boolean.TRUE.equals(kinds.get(0).get("is_poisonous"))
-                   ? "It is poison — not a thing that disagrees with you, but a thing that kills, and no "
-                     + "amount of cooking takes that out of it."
-                   : "There is nothing wrong with it; it is the plain, sound growth of this ground.")};
-        }
+        if (kinds.size() == 1) return theReading(kinds.get(0));
         List<String> named = kinds.stream().map(k -> ((String) k.get("flora_key")).replace('_', ' ')).toList();
         return new String[]{"FAILED", "More than one of that kind grows within reach — " + joinAnd(named)
             + ". Name the one you mean and it will be looked over properly."};
+    }
+
+    /** The plant read over, said once so the whole-name and the kind answer in the same words. */
+    private static String[] theReading(Map<String, Object> plant) {
+        String key = ((String) plant.get("flora_key")).replace('_', ' ');
+        return new String[]{"SUCCEEDED", "You look the " + key + " over where it grows. "
+            + (Boolean.TRUE.equals(plant.get("is_poisonous"))
+               ? "It is poison — not a thing that disagrees with you, but a thing that kills, and no "
+                 + "amount of cooking takes that out of it."
+               : "There is nothing wrong with it; it is the plain, sound growth of this ground.")};
     }
 
     private Map<String, Object> resolveItem(UUID chronicle, String lower) {
