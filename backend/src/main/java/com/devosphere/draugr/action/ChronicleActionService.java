@@ -6222,6 +6222,19 @@ public class ChronicleActionService {
         if (raw.consumed()) { physiology.eat(chronicle, raw.grade()); if (raw.spoiled()) physiology.applyFoodborneIllness(chronicle, actionId, at); return new String[]{"SUCCEEDED", "The raw meat is cold and difficult to swallow, but it settles the immediate emptiness."}; }
         String any = named != null ? named : items.anyFoodInReach(chronicle);
         if (any != null) return eatItem(chronicle, any, actionId, at);
+        // AND IF THE ONLY THING LEFT TO EAT IS POISON, SAY SO (#37). The fallback above now steps over a food
+        // the catalogue knows will poison you, which it did not before: measured on a booted stack, a bare
+        // `eat` with nothing but death caps in the pack ATE ONE, and `death_cap` sorts near the front of the
+        // item keys, so it also won that race against ordinary food.
+        //
+        // Reporting "no food here" instead would be false, and would leave a starving player to find the
+        // difference out the hard way. Whether to eat it is still theirs to decide -- `eat the death cap` names
+        // it and still eats it, through namedFoodInReach, which is deliberately untouched.
+        String poison = items.aPoisonousFoodInReach(chronicle);
+        if (poison != null)
+            return new String[]{"FAILED", "The only thing within reach that could be called food is "
+                + poison.toLowerCase(Locale.ROOT) + ", and it is poison. It would not be a meal, it would be "
+                + "the end of you. If you mean to eat it, say so and it is your own doing."};
         return new String[]{"FAILED", "You search through everything you can reach and come up with nothing to eat — no cooked meat, no raw, no forage. There is simply no food here to hand."};
     }
     private String[] eatItem(UUID chronicle, String itemKey, UUID actionId, Instant at) {
