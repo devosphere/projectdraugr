@@ -44,4 +44,28 @@ class NamingAThingIsNotBuildingItTest {
         assertFalse(AssemblyService.asksForAnother("renew the thatch"));
         assertFalse(AssemblyService.asksForAnother("catch a newt"));
     }
+
+    /**
+     * V461: with NO rack standing, "put the meat on the drying rack" matched the bare name and began raising one.
+     * A process keyword that the sentence contains, longer than the name and containing it, is the speaker saying
+     * more than the station's name — the assembly stands aside for it.
+     */
+    @Test
+    void aSentenceThatSaysMoreThanTheNameIsAboutTheWork() {
+        java.util.List<String> processes = java.util.List.of(
+            "dry the meat,put the meat on the drying rack,lay the meat on the drying rack",
+            "smoke the fish,hang the fish on the smoke rack",
+            "weave a drying mat,drying rack mat");
+        assertTrue(AssemblyService.saysMoreThanTheName("put the meat on the drying rack", "drying rack", processes));
+        assertTrue(AssemblyService.saysMoreThanTheName("Lay the meat on the drying-rack.", "drying rack", processes));
+        assertTrue(AssemblyService.saysMoreThanTheName("hang the fish on the smoke rack", "smoke rack", processes));
+        assertTrue(AssemblyService.saysMoreThanTheName("weave a drying rack mat", "drying rack", processes));
+        // The name alone, and work on the thing itself, still belong to the assembly.
+        assertFalse(AssemblyService.saysMoreThanTheName("drying rack", "drying rack", processes));
+        assertFalse(AssemblyService.saysMoreThanTheName("work on the drying rack", "drying rack", processes));
+        // A process keyword that does not contain the matched name says nothing about THIS station.
+        assertFalse(AssemblyService.saysMoreThanTheName("dry the meat by the smoke rack", "smoke rack", processes));
+        // Whole terms: the meat put on a "drying racks" is not this keyword, and must not half-match it.
+        assertFalse(AssemblyService.saysMoreThanTheName("put the meat on the drying racks", "drying rack", processes));
+    }
 }

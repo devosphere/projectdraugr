@@ -256,6 +256,22 @@ public class AssemblyService {
                 && !underWayHere(chronicle, key, location) && standsHere(location, (String) def.get("construction_kind")))
             return null;
 
+        // AND A SENTENCE THAT SAYS MORE THAN THE NAME IS ABOUT THE WORK, NOT THE BUILDING (#37/#99, V461).
+        //
+        // The guard above settles a station that already stands. It cannot settle one that does not: "put the meat
+        // on the drying rack" with no rack here matched the bare name `drying rack` and began raising one — the
+        // Chronicle asked to dry meat and was set to lashing poles. "weave a drying rack mat" did the same, for a
+        // mat. The longest-keyword rule already answers this, it just was never asked ACROSS the two matchers:
+        // when a material process declares a keyword that the sentence contains, that is longer than the bare
+        // name the assembly matched and contains it, the speaker said more than the station's name, and what they
+        // said is the process's. So the assembly stands aside and the process runs — and, with no rack standing,
+        // refuses for want of one, which is the true answer. A build phrase never stands aside, so "build a dry
+        // ashlar wall" and "make a reed screen" (which a process also declares, at the same length) still build.
+        if (!isBuildPhrase(matchedKeyword) && !asksForAnother(text) && !underWayHere(chronicle, key, location)
+                && saysMoreThanTheName(text, matchedKeyword, jdbc.queryForList(
+                    "SELECT lower(keywords) FROM material_process WHERE review_state='VERIFIED'", String.class)))
+            return null;
+
         // A PART-BUILT STRUCTURE STANDS WHERE IT WAS BEGUN (#77).
         //
         // One of a kind may be under way per Chronicle (assembly_one_active_per_chronicle), and the instance was
@@ -784,6 +800,27 @@ public class AssemblyService {
         if (keyword == null) return false;
         String v = ActivityClassifier.normalise(keyword);
         for (String w : BUILD_VERBS) if (ActivityClassifier.containsTerm(v, w)) return true;
+        return false;
+    }
+
+    /**
+     * Does a process keyword in the text say more than the bare name the assembly matched (V461)? True when some
+     * keyword is in the text, is longer than the name, and contains the name as a whole term — "put the meat on
+     * the drying rack" over `drying rack`. Whole-term on both sides, never raw substring: this project has paid
+     * for `contains` six times.
+     */
+    static boolean saysMoreThanTheName(String text, String name, List<String> processKeywordCsvs) {
+        if (text == null || name == null) return false;
+        String v = ActivityClassifier.normalise(text);
+        String n = ActivityClassifier.normalise(name);
+        for (String csv : processKeywordCsvs) {
+            if (csv == null) continue;
+            for (String kw : csv.split(",")) {
+                String k = ActivityClassifier.normalise(kw.trim());
+                if (k.length() > n.length() && ActivityClassifier.containsTerm(k, n) && ActivityClassifier.containsTerm(v, k))
+                    return true;
+            }
+        }
         return false;
     }
 

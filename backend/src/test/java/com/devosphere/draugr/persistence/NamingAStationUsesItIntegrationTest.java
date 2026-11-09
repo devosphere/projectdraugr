@@ -118,4 +118,29 @@ class NamingAStationUsesItIntegrationTest {
 
         assertEquals(true, auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
+
+    /**
+     * V461: a sentence that says MORE than the station's name is about the work, rack or no rack. With none
+     * standing, "put the meat on the drying rack" began raising one. It holds whether or not some other test left
+     * a rack on this ground, which is why it can share the world: standing or not, the answer is the process.
+     */
+    @Test
+    void puttingMeatOnTheDryingRackNeverBeginsARack() {
+        if (worldGenesis.current() == null) {
+            worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
+            ecology.seed();
+        }
+        var summary = chronicles.awaken();
+        assertNotNull(summary, "awakening must produce a living Chronicle");
+        UUID chronicle = summary.id();
+        UUID chunk = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+        Instant now = ticks.current().simulatedAt();
+
+        for (String said : new String[]{"put the meat on the drying rack", "lay the fish on the drying rack",
+                                        "weave a drying rack mat"})
+            assertNull(assembly.advance(chronicle, chunk, said, now), said + " must reach the process, not the rack's build");
+        assertEquals(0, started(chronicle), "no rack may be begun by a sentence about drying on one");
+        assertNull(assembly.advance(chronicle, chunk, "hang the meat on the smoke rack", now),
+            "the smoke rack must stand aside for smoking, the same way");
+    }
 }
