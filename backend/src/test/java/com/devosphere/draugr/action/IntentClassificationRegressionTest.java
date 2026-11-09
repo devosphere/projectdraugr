@@ -3834,6 +3834,39 @@ class IntentClassificationRegressionTest {
     }
 
     /**
+     * REINFORCING IS ALSO A RECIPE (#37).
+     *
+     * <p>Found by arming every declared input of all 332 input-bearing processes -- material_process_input plus
+     * one member of each either/or group -- giving the Chronicle every tool in tool_profile, and saying each
+     * process's own first keyword. <b>327 of 332 ran.</b> So #37's first complaint, that the game "excessively
+     * hit a lot of crafting restrictions even if the procedure is rationally possible given the tools and
+     * materials", largely does not reproduce once the materials really are in reach.
+     *
+     * <p>Three could not run at all, each broken differently, and this is the Java one. {@code reinforce_timber}
+     * lashes planks face to face out of fiber cordage and declares {@code reinforce} and {@code beam} among its
+     * keywords; {@code mendsSomething} held a bare "reinforce" and took them both, answering "You have nothing
+     * by that name within reach to mend" to a Chronicle holding the cordage and the planks.
+     */
+    @Test void reinforcingIsAlsoARecipe() throws Exception {
+        assertNotEquals("REPAIR_ITEM", classify("reinforce the beam", true));
+        assertNotEquals("REPAIR_ITEM", classify("reinforce the planks", true));
+
+        // ONE ARM, NOT THE WHOLE RULE. This rule's own comment records what happened the last time a shared
+        // predicate was reused here without reading what it meant: `repair my stone knife` and `mend the woven
+        // basket` reached nothing at all. They are asserted with the matcher answering YES, because that is the
+        // case a careless guard would have taken.
+        assertEquals("REPAIR_ITEM", classify("repair my stone knife", true));
+        assertEquals("REPAIR_ITEM", classify("mend the woven basket", true));
+        assertEquals("REPAIR_ITEM", classify("patch my cloak", true));
+        assertEquals("REPAIR_ITEM", classify("sharpen the axe", true));
+        assertEquals("REPAIR_ITEM", classify("hone the blade", true));
+
+        // AND A BARE "reinforce" NAMES NO MATERIAL, so it keeps the mending answer. Measured: with the stub
+        // saying no process matches, which is what the live matcher says of a sentence carrying no subject.
+        assertEquals("REPAIR_ITEM", classify("reinforce"));
+    }
+
+    /**
      * ASKING WHAT LIVES HERE REACHES THE READING THAT ANSWERS IT (#37).
      *
      * <p>{@code look for birds} has answered about its named kind since the nine-wordings work, through

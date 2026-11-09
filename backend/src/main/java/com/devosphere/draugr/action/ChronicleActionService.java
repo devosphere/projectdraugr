@@ -3461,7 +3461,20 @@ public class ChronicleActionService {
         //
         // As words where they are short or live inside other words: "hone" sits in "honey" and "whet" in
         // "whether", and this project has shipped the substring defect four times over.
-        boolean mendsSomething = value.contains("repair")||value.contains("mend")||value.contains("patch")||value.contains("reinforce")||value.contains("sharpen")||value.contains("abrade")||value.contains("darn")
+        boolean mendsSomething = value.contains("repair")||value.contains("mend")||value.contains("patch")
+            // ...and REINFORCING, which is also a recipe (#37). reinforce_timber lashes planks face to face out
+            // of fiber cordage, and `lash the planks` and `bind the planks` already reached it -- but
+            // `reinforce` and `reinforce the beam` are two of its own declared keywords, and this bare arm took
+            // them both, answering "You have nothing by that name within reach to mend" to a Chronicle holding
+            // the cordage and the planks. Found by arming every declared input of all 332 input-bearing
+            // processes and saying each one's own first keyword: 327 ran, and this was one of only three that
+            // could not.
+            //
+            // ONE ARM, NOT THE WHOLE RULE. The comment a few lines below records what happened the last time a
+            // shared predicate was reused here without reading what it MEANT -- it sent `repair my stone knife`
+            // and `mend the woven basket` to nothing at all. Those must keep reaching REPAIR_ITEM whatever the
+            // catalogue also says, so only the one colliding word defers.
+            ||(value.contains("reinforce")&&!items.actionMatchesProcess(value))||value.contains("sharpen")||value.contains("abrade")||value.contains("darn")
             ||word(value,"hone")||word(value,"honing")||word(value,"whet")||word(value,"whets")||word(value,"whetting")
             ||word(value,"strop")||word(value,"strops")||word(value,"stropping")
             ||(word(value,"grind")&&(value.contains("axe")||value.contains("blade")||value.contains("knife")||value.contains("edge")||value.contains("adze")||value.contains("chisel")))
