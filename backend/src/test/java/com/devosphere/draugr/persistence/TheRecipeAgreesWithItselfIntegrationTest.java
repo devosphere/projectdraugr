@@ -109,8 +109,16 @@ class TheRecipeAgreesWithItselfIntegrationTest {
 
         // And the phrasing that always worked must keep working, because `plank` happens to sit in the keywords
         // as well — that difference is what made this look like a phrasing problem instead of a guard problem.
+        //
+        // `trim the plank`, NOT `shape the plank` — replayed through the live catalogue's classify() and
+        // resolveForPlay(), not assumed. `shape the plank` never worked and is a different defect: `shape` is a
+        // keyword of lap_joint_planks too and `plank` one of split_planks, so three recipes tie at equal length,
+        // and the matcher settles that tie by whose OUTPUT the sentence names — which keeps the two that MAKE
+        // planks (timber_plank, lapped_plank) and drops the one that WORKS a plank (wooden_component) before what
+        // is in reach is ever asked. Nor `taper the plank`: `taper` is no category term, so the sentence is
+        // matched across the whole catalogue and split_planks' bare `plank` takes it. Both recorded on #37.
         items.createCarriedItem(me, "timber_plank", "Timber plank", now, "TEST_FIXTURE");
-        String[] planed = items.runProcess(me, here, "shape the plank", now);
+        String[] planed = items.runProcess(me, here, "trim the plank", now);
         assertEquals("SUCCEEDED", planed[0], () -> "the phrasing that worked before must still work: " + planed[1]);
 
         // THE CATALOGUE DISAGREEING WITH ITSELF. `cut a mortise` is declared by cut_mortise word for word, and

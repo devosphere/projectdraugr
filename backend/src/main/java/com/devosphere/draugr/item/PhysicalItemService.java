@@ -2949,8 +2949,8 @@ public class PhysicalItemService {
         // `taper` is a keyword of shape_components and `billet` is a subject term of shape_components. Both
         // halves of that recipe claim the sentence. The guard refused it because it looked for "billet" among
         // the keywords, where it was never going to be — and so a Chronicle holding a billet, with a knife in
-        // hand, was told the world had no idea what they meant. `shape the billet` and `taper the plank` both
-        // worked, which is what made it look like a phrasing problem rather than this.
+        // hand, was told the world had no idea what they meant. `trim the plank` worked, because `plank` also
+        // sits in the keywords, which is what made it look like a phrasing problem rather than this.
         //
         // Asked of the subjects as well, and only on this arm. The arm below — a sentence whose verb this
         // process has never heard of — keeps asking the keywords alone, because there the whole point is that
