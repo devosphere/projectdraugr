@@ -162,6 +162,29 @@ public class ProcessMatcher {
         }
         if (best.isEmpty()) return new Result(null, gate, nearKey);
 
+        // Equal words, and one of them only names the MATERIAL (#37). A keyword that is also one of the recipe's own
+        // subject terms — split_planks answering to a bare "plank" — proves the sentence is about a plank and says
+        // nothing about what is being DONE to it; the subject gate has already asked that question. A recipe that
+        // matched on the work itself ("shape", "taper") at the same length is the stronger reading. Before this,
+        // "shape the plank" and "taper the plank" both went to SPLITTING planks out of a log, and the next step —
+        // whose output the text names — could only make it worse, because the recipe that makes planks is exactly
+        // the one whose output a sentence about a plank names. Only fires on an equal-length tie where at least one
+        // candidate matched on the work, so a sentence that names nothing but the material resolves as before.
+        //
+        // And only where the work-word is done TO the named material. "sew the cap" names a cap, which every cap
+        // recipe makes: sew_helm_cap matching on "sew" is no evidence against its siblings matching on "cap", so
+        // the family stays tied and the Chronicle is asked, as V318 means it to be.
+        if (best.size() > 1) {
+            boolean workOnTheMaterial = false;
+            for (Candidate c : best)
+                if (matchedOnTheWork(v, c, bestLen) && namedOutputWords(v, c.outputKey()) == 0) { workOnTheMaterial = true; break; }
+            if (workOnTheMaterial) {
+                List<Candidate> kept = new ArrayList<>();
+                for (Candidate c : best) if (matchedOnTheWork(v, c, bestLen)) kept.add(c);
+                best = kept;
+            }
+        }
+
         // Equal words: the text's own naming of what it makes decides, where it names anything — and then, where
         // that is equal too, how much of the WORK the text names.
         //
@@ -186,6 +209,16 @@ public class ProcessMatcher {
         }
         java.util.Collections.sort(tied);
         return new Result(tied.get(0), gate, nearKey, tied.size() > 1 ? List.copyOf(tied) : List.of());
+    }
+
+    /**
+     * Whether a candidate matched at this length on a word naming the WORK rather than only its material — a keyword
+     * of that length the text contains that is not also one of the recipe's own subject terms.
+     */
+    private static boolean matchedOnTheWork(String normalised, Candidate c, int len) {
+        for (String kw : c.keywords())
+            if (kw.length() == len && ActivityClassifier.containsTerm(normalised, kw) && !c.subjects().contains(kw)) return true;
+        return false;
     }
 
     /** How many of a process's OWN subject terms the text names — the evidence that separates nine poultices. */
