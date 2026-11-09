@@ -381,4 +381,114 @@ class ExaminingAThingYouCanSeeIntegrationTest {
             () -> "and it must be about what was named: " + prose);
     }
 
+    /** Every plant this ground grows, keyed and split into the category word on the end and the name in front. */
+    private static final String PLANTS_HERE_SPLIT =
+        "WITH here AS ("
+        + " SELECT fd.flora_key FROM flora_definition fd WHERE ("
+        + "   EXISTS (SELECT 1 FROM chunk_flora cf JOIN world_object w ON w.id=? "
+        + "            WHERE cf.chunk_id=w.current_location_id AND cf.flora_key=fd.flora_key AND cf.quantity > 0) "
+        + "   OR fd.biome_affinity ILIKE '%' || (SELECT ch.biome FROM world_object w2 "
+        + "        JOIN world_chunk ch ON ch.id=w2.current_location_id WHERE w2.id=?) || '%')), "
+        + "words AS (SELECT flora_key, "
+        + "                 split_part(replace(flora_key,'_',' '),' ',-1) AS tail, "
+        + "                 split_part(replace(flora_key,'_',' '),' ',-2) AS name FROM here) ";
+
+    /**
+     * A plant is found by its OWN name, not by the category word on the end of its key (#37).
+     *
+     * <p>Twenty-five of the catalogue's hundred and two plants are keyed with a category noun on the end —
+     * {@code plantain_herb}, {@code beech_tree}, {@code sphagnum_moss}, {@code hazel_shrub} — and the kind rule
+     * compared the LAST word of the key against the last noun of the sentence. So the word a person actually
+     * says was never the word compared:
+     *
+     * <pre>
+     *   examine the plantain herb  ->  read over properly
+     *   examine the plantain       ->  leaf litter, as though nothing of the kind grew there
+     * </pre>
+     *
+     * <p>Derived from the catalogue rather than naming a plant, and it asks for an UNAMBIGUOUS one — a name no
+     * other plant here answers to — because a word fitting two plants should ask, which the next test covers.
+     */
+    @Test
+    void aPlantIsFoundByTheNameInFrontOfItsCategoryWord() {
+        UUID me = aLivingChronicle();
+        List<String> plant = jdbc.query(PLANTS_HERE_SPLIT
+            + "SELECT w.name, replace(w.flora_key,'_',' ') FROM words w "
+            + " WHERE w.tail IN ('herb','shrub','moss','tree','bush','vine','fern','flower','lichen','sedge') "
+            + "   AND array_length(string_to_array(w.flora_key,'_'), 1) >= 2 "
+            + "   AND length(w.name) >= 4 "
+            // No other plant here answers to that word, by either reading, so the answer must not be an ask.
+            + "   AND NOT EXISTS (SELECT 1 FROM words x WHERE x.flora_key <> w.flora_key "
+            + "                     AND (x.tail = w.name OR x.name = w.name)) "
+            // And nothing here is called that on its own, which the whole-name rule would answer first.
+            + "   AND NOT EXISTS (SELECT 1 FROM words y WHERE replace(y.flora_key,'_',' ') = w.name) "
+            + " ORDER BY w.flora_key LIMIT 1",
+            rs -> rs.next() ? List.of(rs.getString(1), rs.getString(2)) : null, me, me);
+        Assumptions.assumeTrue(plant != null,
+            "this ground grows no plant keyed with a category word and an unambiguous name");
+        String name = plant.get(0), whole = plant.get(1);
+
+        String prose = said("examine the " + name);
+        assertFalse(readsAsAGroundSurvey(prose),
+            () -> "\"examine the " + name + "\" must reach the " + whole + ", not a survey of the ground: " + prose);
+        assertTrue(prose.contains(name),
+            () -> "and the answer must be about what was named: " + prose);
+    }
+
+    /**
+     * And the word in front of a category tail does not quietly beat — or lose to — a plant whose NAME ends in
+     * that same word (#37).
+     *
+     * <p>{@code examine the elder} was answered about GROUND ELDER while an elder shrub stood in the same wood:
+     * "ground elder" ends in "elder", so the last-word reading found it and stopped. A true sentence about the
+     * wrong plant is this project's worst shape, and the honest answer is the ask that already lives here.
+     */
+    @Test
+    void aWordThatFitsTwoPlantsIsAskedAboutRatherThanGuessed() {
+        UUID me = aLivingChronicle();
+        List<String> pair = jdbc.query(PLANTS_HERE_SPLIT
+            + "SELECT w.name, replace(w.flora_key,'_',' '), replace(x.flora_key,'_',' ') FROM words w JOIN words x "
+            + "    ON x.flora_key <> w.flora_key AND x.tail = w.name "
+            + " WHERE w.tail IN ('herb','shrub','moss','tree','bush','vine','fern','flower','lichen','sedge') "
+            + "   AND array_length(string_to_array(w.flora_key,'_'), 1) >= 2 "
+            + "   AND length(w.name) >= 4 "
+            + " ORDER BY w.flora_key LIMIT 1",
+            rs -> rs.next() ? List.of(rs.getString(1), rs.getString(2), rs.getString(3)) : null, me, me);
+        Assumptions.assumeTrue(pair != null, "this ground grows no such pair of plants");
+        String word = pair.get(0), byName = pair.get(1), byTail = pair.get(2);
+
+        String prose = said("examine the " + word);
+        assertTrue(prose.contains("more than one of that kind"),
+            () -> "\"examine the " + word + "\" fits both the " + byName + " and the " + byTail
+                + ", so it must ask rather than pick: " + prose);
+        assertTrue(prose.contains(byName) && prose.contains(byTail),
+            () -> "and the ask must name both of them: " + prose);
+    }
+
+    /**
+     * THE HAZARD THIS READER MUST NEVER REOPEN. {@code ground_ivy} is a plant whose name ends in a word that
+     * names a plant, so widening the kind rule to ANY word of the key would have made {@code examine the ground}
+     * a question about ivy. The category tails are a short, closed list for exactly this reason.
+     */
+    @Test
+    void examiningTheGroundIsStillAboutTheGround() {
+        UUID me = aLivingChronicle();
+        String underfoot = jdbc.query(PLANTS_HERE_SPLIT
+            + "SELECT replace(w.flora_key,'_',' ') FROM words w WHERE w.flora_key LIKE 'ground%' LIMIT 1",
+            rs -> rs.next() ? rs.getString(1) : null, me, me);
+        Assumptions.assumeTrue(underfoot != null, "this ground grows no plant whose name begins with \"ground\"");
+
+        String prose = said("examine the ground");
+        // Asserted as the SHAPE of the answer, not as "it never says ground elder". The ground survey names a
+        // sampled handful of what grows within reach, so whether any particular plant is mentioned is the
+        // world's business and varies — an assertion on that would be a flake wearing a finding's clothes. What
+        // must hold is that the sentence was answered as a look at the GROUND and not as a reading of a plant.
+        assertTrue(readsAsAGroundSurvey(prose),
+            () -> "\"examine the ground\" is a look at the ground and must stay one, not a reading of the "
+                + underfoot + ": " + prose);
+        assertFalse(prose.contains("over where it grows"),
+            () -> "and it must not be answered as a single plant read over — the " + underfoot
+                + " is why the category tails are a short closed list: " + prose);
+    }
+
 }

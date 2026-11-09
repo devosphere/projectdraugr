@@ -4013,4 +4013,66 @@ class IntentClassificationRegressionTest {
         assertEquals("DRY_BODY", classify("wring out my shirt", true));
         assertEquals("DRY_BODY", classify("i am soaked", true));
     }
+
+    /**
+     * The plainest check a keeper makes on what they keep (#37).
+     *
+     * <p>Measured against a real keeper beside nine tamed bighorn sheep, which is the only way this family can
+     * be measured at all — these rules consult {@code keepsAnyStock()}, so a sweep over a Chronicle with no
+     * animals proves nothing and produced three false findings in #855 before that was understood.
+     *
+     * <pre>
+     *   check on the stock   ->  "The bighorn sheep, 9 of them, are in good order"
+     *   look over the stock  ->  the same
+     *   see to the stock     ->  the same
+     *   check the stock      ->  NOTHING AT ALL
+     *   check the herd       ->  NOTHING AT ALL
+     *   check the flock      ->  NOTHING AT ALL
+     *   count the stock      ->  MEASURE, "nothing by that name is here to count"
+     * </pre>
+     *
+     * <p><b>The subject half was never the problem.</b> {@code herd}, {@code flock} and {@code stock} are all in
+     * KEPT_STOCK_WORDS, so {@code namesABeast} already said yes to every one of those sentences. It was the VERB
+     * list, which held {@code check on}, {@code check over} and {@code look over} but no plain {@code check the}
+     * — the same shape as #854's herbs and #856's pen gate, where one phrasing in a family reached the act and
+     * its neighbours did not.
+     *
+     * <p>{@code count the stock} is the worst of them because it was ANSWERED: a keeper with nine sheep was told
+     * nothing by that name was there to count, which is a true sentence about the wrong thing.
+     */
+    @Test
+    void thePlainestCheckAKeeperMakesReachesTheirStock() throws Exception {
+        assertEquals("CHECK_STOCK", classify("check the stock"));
+        assertEquals("CHECK_STOCK", classify("check the herd"));
+        assertEquals("CHECK_STOCK", classify("check the flock"));
+        assertEquals("CHECK_STOCK", classify("count the stock"));
+        assertEquals("CHECK_STOCK", classify("count the herd"));
+        assertEquals("CHECK_STOCK", classify("look to the herd"));
+        // The phrasings that already worked, held so the widening cannot be mistaken for the whole rule.
+        assertEquals("CHECK_STOCK", classify("check on the stock"));
+        assertEquals("CHECK_STOCK", classify("look over the stock"));
+        assertEquals("CHECK_STOCK", classify("see to the stock"));
+
+        // NOT THE CAMP STORES. "Take stock of the camp" is the stocktake and must stay it -- the two readings
+        // share the word "stock", which is the whole reason the herd reading is gated on keeping something.
+        assertNotEquals("CHECK_STOCK", classify("take stock of the camp"));
+
+        // AND NOT ANY OTHER "CHECK THE ...", because a bare `check the` in the verb list is only safe while the
+        // subject half still demands an animal. Each of these names something else a Chronicle checks.
+        assertNotEquals("CHECK_STOCK", classify("check the fire"));
+        assertNotEquals("CHECK_STOCK", classify("check the traps"));
+        assertNotEquals("CHECK_STOCK", classify("check the weather"));
+        assertNotEquals("CHECK_STOCK", classify("check the snare"));
+
+        // NOT THE DRIVE, which is an act of its own (#858) and says "the herd" just as loudly. `walk the` was in
+        // the first cut of this verb list and taking it would have shadowed the drive -- the same defect in a
+        // new place, three merges after it was fixed.
+        assertNotEquals("CHECK_STOCK", classify("drive the herd to grass"));
+        assertNotEquals("CHECK_STOCK", classify("walk the herd to water"));
+
+        // NOT A THING A KEEPER BUILDS, and not the stockade that merely CONTAINS the word "stock" -- the trap
+        // this file already records against a bare contains("the stock").
+        assertNotEquals("CHECK_STOCK", classify("build a sick animal shelter"));
+        assertNotEquals("CHECK_STOCK", classify("put up a stockade"));
+    }
 }
