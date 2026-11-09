@@ -92,14 +92,24 @@ class TakingTheStockToWaterIntegrationTest {
         return summary.id();
     }
 
-    /** Ground whose neighbour relieves thirst by the tick's OWN predicate, so act and model cannot disagree. */
+    /** The tick's own predicate for ground that relieves thirst (or hunger), over a chunk alias. */
+    private static String fits(String chunk, String what) {
+        return "water".equals(what)
+            ? "(" + chunk + ".biome IN ('WETLAND','RIVER_BANK') OR EXISTS (SELECT 1 FROM ecology_site es "
+              + " WHERE es.chunk_id=" + chunk + ".id AND " + com.devosphere.draugr.ecology.FreshWater.sites("es") + "))"
+            : chunk + ".biome = 'GRASSLAND'";
+    }
+
+    /**
+     * Ground whose neighbour relieves thirst by the tick's OWN predicate, so act and model cannot disagree — and
+     * which does NOT itself (#37): a keeper already standing on the water is not driven anywhere, so a fixture
+     * that could land on it would be measuring the other rule.
+     */
     private UUID standingBeside(String what) {
-        String neighbourFits = "water".equals(what)
-            ? "(n.biome IN ('WETLAND','RIVER_BANK') OR EXISTS (SELECT 1 FROM ecology_site es "
-              + " WHERE es.chunk_id=n.id AND " + com.devosphere.draugr.ecology.FreshWater.sites("es") + "))"
-            : "n.biome = 'GRASSLAND'";
+        String neighbourFits = fits("n", what);
         return jdbc.query(
             "SELECT c.id FROM world_chunk c WHERE c.biome <> 'CAVE_INTERIOR' AND c.biome <> 'OCEAN' "
+            + "  AND NOT " + fits("c", what) + " "
             + "  AND EXISTS (SELECT 1 FROM world_chunk n WHERE n.world_id=c.world_id "
             + "               AND abs(n.grid_x-c.grid_x)+abs(n.grid_y-c.grid_y)=1 AND " + neighbourFits + ") "
             + "ORDER BY c.grid_y, c.grid_x LIMIT 1",
@@ -178,7 +188,8 @@ class TakingTheStockToWaterIntegrationTest {
     void withNoWaterWithinAStepItRefusesAndSaysWhy() {
         UUID me = aLivingChronicle();
         UUID dry = jdbc.query(
-            "SELECT c.id FROM world_chunk c WHERE NOT EXISTS (SELECT 1 FROM world_chunk n "
+            "SELECT c.id FROM world_chunk c WHERE c.biome <> 'CAVE_INTERIOR' AND c.biome <> 'OCEAN' "
+            + "  AND NOT " + fits("c", "water") + " AND NOT EXISTS (SELECT 1 FROM world_chunk n "
             + "  WHERE n.world_id=c.world_id AND abs(n.grid_x-c.grid_x)+abs(n.grid_y-c.grid_y)=1 "
             + "    AND (n.biome IN ('WETLAND','RIVER_BANK') OR EXISTS (SELECT 1 FROM ecology_site es "
             + "          WHERE es.chunk_id=n.id AND " + com.devosphere.draugr.ecology.FreshWater.sites("es") + "))) "
@@ -194,5 +205,52 @@ class TakingTheStockToWaterIntegrationTest {
         // And it must NOT have moved them on a refusal.
         assertEquals(dry, jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, me),
             "a refused drive leaves the keeper where they stood");
+    }
+
+    /** Ground that itself relieves the herd, by the tick's own predicate. */
+    private UUID standingOn(String what) {
+        return jdbc.query(
+            "SELECT c.id FROM world_chunk c WHERE c.biome <> 'CAVE_INTERIOR' AND c.biome <> 'OCEAN' AND "
+            + fits("c", what) + " ORDER BY c.grid_y, c.grid_x LIMIT 1",
+            rs -> rs.next() ? (UUID) rs.getObject(1) : null);
+    }
+
+    /**
+     * #37, scenario matrix row 10: the bearing looked only at the four neighbours, so a keeper standing ON the
+     * water walked the herd away from it — or, with none beside them, was told there was none within a step.
+     */
+    @Test
+    void aKeeperStandingAtTheWaterIsNotWalkedAwayFromIt() {
+        UUID me = aLivingChronicle();
+        UUID wet = standingOn("water");
+        Assumptions.assumeTrue(wet != null, "this world has no ground that waters stock");
+        jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", wet, me);
+        keepOneBeast(me, 70, 10);
+
+        String prose = said("take the stock to water");
+        assertTrue(prose.contains("water on this ground already"), () -> "it must say they are at it: " + prose);
+        assertTrue(!prose.contains("no water within a step"), () -> "standing in it, it must not say there is none: " + prose);
+        assertEquals(wet, jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, me),
+            "the keeper must not be walked off the water to find water");
+    }
+
+    /** The grass face: `put the oxen out to graze` on pasture is turning them out on THIS ground. */
+    @Test
+    void aKeeperOnPastureTurnsThemOutWhereTheyStand() {
+        UUID me = aLivingChronicle();
+        UUID grass = standingOn("grass");
+        Assumptions.assumeTrue(grass != null, "this world has no grassland");
+        jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", grass, me);
+        keepOneBeast(me, 10, 70);
+
+        var r = actions.resolve("put the oxen out to graze", UUID.randomUUID());
+        assertNotNull(r);
+        assertEquals("TURN_OUT_STOCK", r.intent(), () -> "on pasture a drive to grass is the turn-out: " + r.perception());
+        String prose = r.perception() == null ? "" : r.perception().toLowerCase(Locale.ROOT);
+        assertTrue(prose.contains("onto the grass"), () -> "they go out onto this ground's grass: " + prose);
+        assertEquals(grass, jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, me),
+            "the keeper must not be walked off the pasture to find pasture");
+        assertNotNull(jdbc.queryForObject("SELECT at_pasture_since FROM wildlife_bond WHERE id=?",
+            java.sql.Timestamp.class, bondRaised), "the beast must really be out at grass");
     }
 }

@@ -147,7 +147,7 @@ What the complaint needs, read off the code and the schema rather than estimated
 | 7 | `hang it to dry` names no material | invalid physical procedure | measured |
 | 8 | `what is in the water` is ambiguous between the fish and the silt | perception | left unguessed on purpose |
 | 9 | EXAMINE answers about the **ground** rather than a named subject (e.g. a named mushroom) | narration | recorded in `ChronicleActionService`'s own comment; the water face of it is fixed by #848 |
-| 10 | `put the oxen out to graze` reaches MOVE | action routing | measured; probably correct, unconfirmed |
+| 10 | `put the oxen out to graze` reaches MOVE | action routing | **decided: MOVE is right, except on the ground it names.** The MOVE handler is a real drive (`towardStock` → the herd follows the keeper, the ticks read the keeper's chunk), so the routing stands. The defect was underneath it: `towardStock` checks only the four neighbours, so a keeper ON pasture walked the herd off it (or was told "no open grazing within a step" while standing in it), and the same for water. Fixed: on ground that already fits, a grass drive is TURN_OUT_STOCK here and a water drive takes no step — one shared `stockGround` predicate for both |
 
 ### B2 — what the open items turned out to be, once diagnosed
 
