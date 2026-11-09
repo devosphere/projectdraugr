@@ -3703,6 +3703,37 @@ public class ChronicleActionService {
             ||value.contains("thirsty")||keeperSaysOfTheirStock
             ||value.contains("water the")||value.contains("give the")&&value.contains("water")
             ||value.contains("check the")&&(value.contains(" over")||value.contains("for tick"))
+            // ...AND THE PLAINEST CHECK A KEEPER MAKES (#37). Measured against a real keeper standing beside
+            // nine tamed bighorn sheep, which is the only way this family can be measured at all — these rules
+            // consult keepsAnyStock(), so a sweep over a Chronicle with no animals proves nothing:
+            //
+            //   check on the stock   -> "The bighorn sheep, 9 of them, are in good order"
+            //   look over the stock  -> the same
+            //   see to the stock     -> the same
+            //   check the stock      -> NOTHING AT ALL
+            //   check the herd       -> NOTHING AT ALL
+            //   check the flock      -> NOTHING AT ALL
+            //   count the stock      -> MEASURE, "nothing by that name is here to count"
+            //
+            // The subject half was never the problem: `herd`, `flock` and `stock` are all in KEPT_STOCK_WORDS,
+            // so namesABeast already said yes to every one of those sentences. It was the VERB list, which had
+            // `check on`, `check over` and `look over` but no plain `check the` — the same shape as #854's herbs
+            // and #856's pen gate, where one phrasing in a family reached the act and its neighbours did not.
+            //
+            // `count the stock` is the worse of them, because it was ANSWERED: a keeper with nine sheep was
+            // told nothing by that name was there to count, which is a true sentence about the wrong thing.
+            //
+            // GATED ON ACTUALLY KEEPING SOMETHING, which is what settles the one genuinely ambiguous word here.
+            // "Stock" is camp stores as readily as livestock, so the herd claims the sentence only when there IS
+            // a herd. Verified by releasing the bond, exactly as #856's gate was checked: "check the stock",
+            // "check the herd" and "check the flock" reach nothing again and "count the stock" goes back to
+            // MEASURE, so this arm contributes nothing to a Chronicle who keeps no animals.
+            //
+            // AND THAT FALLBACK IS TO NOTHING, NOT TO THE CAMP STOCKTAKE — measured, because it would have been
+            // easy to write the comfortable version. The camp reading does not take "check the stock" either.
+            // Whether it should is a separate question about the STORES and this does not answer it; what this
+            // gate promises is only that the sentence is left exactly where it was for anyone without a herd.
+            ||checkingOnTheirStock(value)
             // ...and what a beast can be HELD with (#106). animal_restraint works by being CARRIED and no
             // sentence could reach it, so these are answered with what you have for it and what it does. There
             // is no restrained state in this world and an invented one would change nothing and claim it had.
@@ -5737,6 +5768,20 @@ public class ChronicleActionService {
      * of it. A species added to {@code draft_species} or {@code tamed_yield} becomes tendable, groomable and
      * feedable in the same breath, which is the whole point of asking the table.
      */
+    /**
+     * The plainest check a keeper makes on what they keep (#37).
+     *
+     * <p>Kept narrow on purpose: a verb of looking or counting, a word for the animals, and a keeper who
+     * actually has some. The beast word is still required by the rule this feeds, so this only ever widens the
+     * VERBS — and the `keepsAnyStock()` gate is what leaves "check the stock" to the camp stores for a
+     * Chronicle who keeps nothing.
+     */
+    private boolean checkingOnTheirStock(String value) {
+        return (value.contains("check the") || value.contains("count the") || value.contains("look to the"))
+            && namesABeast(value)
+            && items.keepsAnyStock();
+    }
+
     private boolean namesABeast(String value) {
         for (String w : KEPT_STOCK_WORDS) if (w.indexOf(' ') < 0 ? word(value, w) : value.contains(w)) return true;
         return items.namesAKeptAnimal(value);
