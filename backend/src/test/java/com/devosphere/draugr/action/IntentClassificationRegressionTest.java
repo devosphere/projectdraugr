@@ -3138,6 +3138,44 @@ class IntentClassificationRegressionTest {
         assertEquals("FEED_ANIMAL", classify("feed the stock"));
         assertEquals("CHECK_STOCK", classify("how are the animals"));
         assertEquals("TEND_ANIMAL", classify("tend the sick goat"));
+
+        // THE GATE STANDS FOR THE ANIMALS BEHIND IT (#37). Both rules above ask the sentence to name the
+        // KEEPER'S OWN -- a species they keep, or "them", "the herd", "the flock" -- and a keeper who says
+        // "open the pen" has named the structure instead. Measured with twelve goats standing in it, every
+        // one of these reached nothing.
+        //
+        // The act's own prose is what settles it: `let them out` answers "You OPEN THE WAY and drive them
+        // out", so opening is already what it does, and the sentence that says open could not reach it.
+        assertEquals("TURN_OUT_STOCK", classify("open the pen"));
+        assertEquals("TURN_OUT_STOCK", classify("open the gate"));
+        assertEquals("TURN_OUT_STOCK", classify("open the pen gate"));
+        assertEquals("TURN_OUT_STOCK", classify("open the fold"));
+        assertEquals("TURN_OUT_STOCK", classify("unlatch the pen"));
+        assertEquals("BRING_IN_STOCK", classify("close the pen"));
+        assertEquals("BRING_IN_STOCK", classify("shut the gate"));
+        assertEquals("BRING_IN_STOCK", classify("close the paddock"));
+        assertEquals("BRING_IN_STOCK", classify("bar the gate"));
+        // `latch the gate` and `bar the gate` hold none of the verbs the inward list knows -- bring, gather,
+        // get, shut, drive, pen -- so the enclosure question has to be asked BEFORE that list refuses them.
+        // Both reached nothing until it moved up, which is why they are asserted separately.
+        assertEquals("BRING_IN_STOCK", classify("latch the gate"));
+        // AND UNLATCH IS THE OPENING, not a latching, though it contains the word.
+        assertNotEquals("BRING_IN_STOCK", classify("unlatch the gate"));
+
+        // NOT A THING A KEEPER BUILDS. A pen is also a construction, and these reach BUILD_PEN and the
+        // assembly matcher a few hundred lines above either rule -- held a second time by the making guard,
+        // because a rule that is only safe where it happens to stand is one edit away from not being safe.
+        assertEquals("BUILD_PEN", classify("build a pen"));
+        assertEquals("BUILD_PEN", classify("make a goat pen"));
+        assertNotEquals("TURN_OUT_STOCK", classify("raise a gate"));
+        assertNotEquals("BRING_IN_STOCK", classify("put up a gate"));
+        assertNotEquals("TURN_OUT_STOCK", classify("hang the gate"));
+
+        // AND A DOOR IS NOT AN ENCLOSURE. Six assemblies own door phrases and a dwelling's door has nothing
+        // to do with the stock, so a bare "door" is deliberately absent from the enclosure words.
+        assertNotEquals("TURN_OUT_STOCK", classify("open the door"));
+        assertNotEquals("BRING_IN_STOCK", classify("close the door"));
+        assertEquals("OPEN_CONTAINER", classify("open the container"), "nor is a container");
     }
 
     /**
