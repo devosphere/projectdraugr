@@ -2225,20 +2225,68 @@ public class ChronicleActionService {
     private boolean turningStockOut(String value) {
         boolean theAct = value.contains("let") || value.contains("turn") || value.contains("drive")
             || value.contains("put") || value.contains("graze") || value.contains("pasture");
-        return theAct && word(value, "out") && namesTheKeepersOwn(value);
+        if (theAct && word(value, "out") && namesTheKeepersOwn(value)) return true;
+        // THE GATE STANDS FOR THE ANIMALS BEHIND IT (#37). Both of these rules ask the sentence to name the
+        // KEEPER'S OWN -- a species they keep, or "them", "the herd", "the flock" -- and a keeper who says
+        // "open the pen" has named the structure instead. Measured with twelve goats standing in it, every one
+        // of these reached nothing: `open the pen`, `open the gate`, `open the pen gate`, `close the pen`,
+        // `shut the pen`, `close the gate`, `shut the gate`, `latch the gate`.
+        //
+        // THE ACT'S OWN PROSE IS WHAT SETTLES IT. `let them out` answers "You OPEN THE WAY and drive them out
+        // -- all 12 of them", so opening is already what this act does; the sentence that says open is the one
+        // that could not reach it. The same shape as #854, where `dry the herbs` hung the herbs up in its own
+        // words while `hang the herbs to dry` went to the body.
+        return openingTheEnclosure(value);
+    }
+    /** Opening the keeper's own enclosure, which is turning them out said from the gate's side (#37). */
+    private boolean openingTheEnclosure(String value) {
+        return (value.contains("open") || value.contains("unlatch") || value.contains("unbar"))
+            && aKeepersEnclosure(value);
+    }
+    /** Shutting it, the same way round. */
+    private boolean closingTheEnclosure(String value) {
+        return (value.contains("close") || value.contains("shut") || value.contains("bar the")
+                // ...and the latch, which must not answer to UNLATCH -- that is the opening, and it is
+                // checked first in any case, so this is the second guard rather than the only one.
+                || (value.contains("latch") && !value.contains("unlatch")))
+            && aKeepersEnclosure(value);
+    }
+    /**
+     * The keeper's own enclosure, named rather than the animals in it (#37).
+     *
+     * <p>Gated on {@code keepsAnyStock()} exactly as the "them"/"the herd" words above are, so a Chronicle who
+     * keeps nothing does not start opening imaginary pens -- and on the making guard, because a pen is also a
+     * thing a keeper BUILDS. {@code build a pen} and {@code make a goat pen} reach BUILD_PEN a few hundred lines
+     * above either of these rules, and the guard holds them a second time rather than relying on that order.
+     *
+     * <p>A DOOR IS NOT HERE. Six assemblies own door and gate phrases -- door_hanging, reed_door, bark_door,
+     * simple_gate -- and they advertise "hang a door", "raise a gate", "put up a gate". None of those is an
+     * opening or a shutting, so none of them is claimed; but a bare "door" would start taking sentences about
+     * a dwelling, which has nothing to do with the stock.
+     */
+    private boolean aKeepersEnclosure(String value) {
+        return (word(value, "pen") || word(value, "pens") || word(value, "gate") || word(value, "gates")
+                || word(value, "fold") || word(value, "paddock") || word(value, "byre"))
+            && !MAKING_SOMETHING.matcher(value).find()
+            && items.keepsAnyStock();
     }
 
     /** Gathering them off the grass and shutting them in, which is the other half of the same choice. */
     private boolean shuttingStockIn(String value) {
         boolean theAct = value.contains("bring") || value.contains("gather") || value.contains("get")
             || value.contains("shut") || value.contains("drive") || value.contains("pen");
+        // SHUTTING THE GATE IS SHUTTING THEM IN, asked BEFORE the verb list above can refuse it, because
+        // that list holds the verbs that take an ANIMAL -- bring, gather, get, shut, drive, pen -- and
+        // `latch the gate` and `bar the gate` hold none of them. Both reached nothing until this moved up.
+        if (closingTheEnclosure(value)) return true;
         if (!theAct) return false;
         // TO PEN IS ITSELF TO PUT IN, so the verb carries its own direction and `pen the goats` needs no "in".
         // It cannot take a construction with it: `make a goat pen` and `build a pen` both reach BUILD_PEN a few
         // hundred lines above this, because that rule asks for a real build verb and is checked first.
         boolean inward = word(value, "in") || value.contains("off the grass") || value.contains("up for the night")
             || word(value, "pen") || word(value, "penned");
-        return inward && namesTheKeepersOwn(value);
+        if (inward && namesTheKeepersOwn(value)) return true;
+        return closingTheEnclosure(value);
     }
 
     /**
