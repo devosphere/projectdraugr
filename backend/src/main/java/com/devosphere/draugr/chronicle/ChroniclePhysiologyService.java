@@ -480,7 +480,7 @@ public class ChroniclePhysiologyService {
         String part = bodyPart == null ? null : bodyPart.toUpperCase(java.util.Locale.ROOT);
         if (part != null && !BODY_PARTS.contains(part)) part = null;
         jdbc.update("UPDATE chronicle_physiology SET injury_severity=LEAST(100,injury_severity+?),pain_level=LEAST(100,pain_level+?),stress_level=LEAST(100,stress_level+?),blood_loss_ml=LEAST(7000,blood_loss_ml+?) WHERE chronicle_id=?",bounded,Math.max(1,bounded/2),Math.max(1,bounded/3),bounded*8,chronicleId);
-        jdbc.update("INSERT INTO chronicle_condition_event (chronicle_id,occurred_at,condition_kind,severity,source_action_id,payload) VALUES (?,?,?,?,?,jsonb_build_object('source',?,'part',?))",chronicleId,Timestamp.from(occurredAt),"INJURY",bounded,actionId,source,part);
+        jdbc.update("INSERT INTO chronicle_condition_event (chronicle_id,occurred_at,condition_kind,severity,source_action_id,payload) VALUES (?,?,?,?,?,jsonb_build_object('source',?::text,'part',?::text))",chronicleId,Timestamp.from(occurredAt),"INJURY",bounded,actionId,source,part);
         refreshBody(chronicleId);
     }
 
