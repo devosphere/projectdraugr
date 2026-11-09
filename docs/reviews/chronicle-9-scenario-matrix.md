@@ -141,13 +141,43 @@ What the complaint needs, read off the code and the schema rather than estimated
 | 1 | Per-agent AI token accounting is not recorded at all (A10) | UI desync | specified in A10 above; the response usage block is discarded and no table holds it |
 | 2 | Architect triggering unverified under a real AI run (A9) | persistence | needs the launcher password |
 | 3 | `look for fish` on a **water** chunk fishes, and has twice taken an animal (a crayfish, then a catfish) in answer to a look | action routing | **a documented decision whose reasoning holds only where there is no water** — see C below |
-| 4 | No per-limb body state: `how is my leg`, `how are my feet` | perception | a documented honest miss; the gear rule now stands aside rather than inventing one |
+| 4 | No per-limb body state: `how is my leg`, `how are my feet` | perception | **diagnosed in B2** — nothing anywhere records where an injury landed, so this is a design decision rather than a defect |
 | 5 | Wound infection, broken bones and healing time are not modelled, so `is the cut infected` is an honest miss | perception | held as a deliberate miss by `TheQuestionsABodyCanAnswerIntegrationTest` |
 | 6 | `open the pen` reaches nothing | action routing | measured |
 | 7 | `hang it to dry` names no material | invalid physical procedure | measured |
 | 8 | `what is in the water` is ambiguous between the fish and the silt | perception | left unguessed on purpose |
 | 9 | EXAMINE answers about the **ground** rather than a named subject (e.g. a named mushroom) | narration | recorded in `ChronicleActionService`'s own comment; the water face of it is fixed by #848 |
 | 10 | `put the oxen out to graze` reaches MOVE | action routing | measured; probably correct, unconfirmed |
+
+### B2 — what the open items turned out to be, once diagnosed
+
+Three of section B's rows were investigated further. Two are now specified rather than merely listed, and one is **not a defect at all**:
+
+**Per-limb body state — fully diagnosed, and it is a design decision, not a bug.** Nothing in this world records *where* an injury landed. `chronicle_physiology` carries `injury_severity`, `pain_level`, `blood_loss_ml` and `stress_level` as single scalars; `chronicle_body` is a whole-body summary; and no column, class or query anywhere in the backend mentions a body part, limb or wound site. `applyInjury(chronicle, severity)` simply adds to the scalars. So a per-limb table would need **every injury source to invent a location** — which is exactly what `theFeetUnderTheBeast` calls "the opposite of this ticket's whole point". It is attainable (a bite, a fall, a knapping cut each imply a part) but that is new simulation design and wants a decision, not a defect fix.
+
+**`dry_meat` declares a keyword no sentence can reach.** Its keyword list includes `hang it to dry`, but the two-axis matcher needs a keyword **and** a subject term on the same process, and that phrase names no subject — "it" is a pronoun. Proved rather than assumed: with three raw game meat in the pack, `hang it to dry` still reached DRY_BODY, because `actionMatchesProcess` is false. Giving `dry_meat` a subject term that matches a pronoun would make every subject-less sentence reach meat, so it is left alone.
+
+**`examine the plantain` reaches the ground survey, and the fix is not a widening.** The head noun of `plantain_herb` is the *part*, not the kind. The food reader (#851) can match any non-preparation word of a name because it only searches the handful of foods **in reach**; this reader searches every plant the biome grows, where `ground_ivy` would hijack `examine the ground` — which has a test asserting the survey. That needs a stoplist, and a stoplist here would be guesswork.
+
+### B3 — measured NEGATIVES, recorded so they are not "fixed" later
+
+Three findings from the husbandry sweep looked like defects and are not. Each cost a fixture rebuild to establish, so they are written down:
+
+| Looked like | Actually |
+|---|---|
+| `how are the foxes` reaches nothing while `how are the goats` reaches CHECK_STOCK | **Correct.** `namesAKeptAnimal` asks `draft_species UNION tamed_yield` — the species a keeper can actually keep. A fox is neither, so a fox is not stock. The test fixture was the unrealistic part, not the code. |
+| `turn the goats out`, `pen the goats`, `bring the stock in` all reach nothing | **Correct, and the harness was at fault.** These are gated on keeping stock, and the Chronicle kept none. With a tamed herd bonded, every one of them routes: `turn the foxes out` → TURN_OUT_STOCK, `pen the foxes` → BRING_IN_STOCK, `put them in the pen` → BRING_IN_STOCK, `what do i keep` → CHECK_STOCK. |
+| `is the fox lame` reports "you keep no tamed animals" while `how are my animals` names the herd | **A fixture artefact.** The sweep harness recreates the Chronicle on a 409, which orphans the bond mid-run. Re-measured against a live bond, the two agree. |
+
+The lesson those three share is in the method section below: **a husbandry sentence's routing is not pure over text** — several of these rules consult `keepsAnyStock()` — so a sweep taken with a dead fixture reads as a wall of defects.
+
+Two genuine small gaps did come out of it, and they are the two ambiguous ones:
+
+| Priority | Scenario | Category | Note |
+|---|---|---|---|
+| 11 | `open the pen`, `close the pen`, `open the gate`, `close the gate` reach nothing | action routing | the acts exist — `let them out` is TURN_OUT_STOCK and `put them in the pen` is BRING_IN_STOCK — but naming the *structure* instead of the animals reaches neither |
+| 12 | `check the stock` reaches nothing while `check on the stock` reaches CHECK_STOCK | action routing | genuinely ambiguous between the camp stocktake and the herd report, which the welfare rule's own comment names as the reason it demands `check … over`. Wants the ask-when-ambiguous rule, not a guess |
+| 13 | `put the meat on the rack`, `put the hide on the rack` reach nothing | action routing | loading a built rack is not modelled; `dry the meat` is the process that exists |
 
 ---
 
