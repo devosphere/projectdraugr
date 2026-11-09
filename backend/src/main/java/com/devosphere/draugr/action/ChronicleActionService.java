@@ -4697,7 +4697,20 @@ public class ChronicleActionService {
            ||value.contains("dry clothes")||value.contains("dry things")
            // ...and the ways a person says it about the garment rather than about themselves (#37).
            // "dry my clothes" worked; "dry the cloak by the fire" and "hang my clothes to dry" did not.
-           ||value.contains("hang my clothes")||value.contains("hang the clothes")||value.contains("to dry")
+           ||value.contains("hang my clothes")||value.contains("hang the clothes")
+           // ...BUT NOT WHEN WHAT IS HUNG UP IS A MATERIAL (#37). This clause was a bare `to dry`, added
+           // for "hang my clothes to dry" -- which the two clauses in front of it already answer -- and it
+           // claimed every sentence containing those two words. Measured live:
+           //
+           //   dry the herbs          PROCESS_MATERIAL  "You tie the stems in small bunches and hang them heads-down"
+           //   hang the herbs to dry  DRY_BODY          "You try to dry off, but with no fire and no cover here"
+           //
+           // The succeeding process says HANG in its own prose, and the sentence that says hang reached the
+           // body act. Same for the hide, the meat and the fish, each of which `dry the X` already works on.
+           // Gated on the matcher the nine neighbouring rules defer to, so a sentence naming no material --
+           // `hang it to dry`, `leave it to dry` -- is still a person drying off, which is the right answer
+           // to it and is unchanged.
+           ||(value.contains("to dry")&&!items.actionMatchesProcess(value))
            ||((value.contains("dry")||value.contains("drying"))
               &&(value.contains("the cloak")||value.contains("my cloak")||value.contains("the tunic")
                  ||value.contains("my boots")||value.contains("my shoes")||value.contains("my clothes")))) return Intent.DRY_BODY;
