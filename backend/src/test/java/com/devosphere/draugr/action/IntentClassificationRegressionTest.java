@@ -3904,4 +3904,42 @@ class IntentClassificationRegressionTest {
         assertEquals("JUDGE_LIGHT", classify("can i see in here"));
         assertEquals("JUDGE_LIGHT", classify("it is too dark to see"));
     }
+
+    /**
+     * WHAT IS HUNG UP TO DRY IS NOT ALWAYS THE PLAYER (#37).
+     *
+     * <p>The DRY_BODY rule carried a bare {@code contains("to dry")}, added for "hang my clothes to dry" --
+     * which the two clauses in front of it already answer -- and it claimed every sentence holding those two
+     * words. Measured live, and this pair is the whole defect:
+     *
+     * <pre>
+     *   dry the herbs          PROCESS_MATERIAL  "You tie the stems in small bunches and hang them heads-down…"
+     *   hang the herbs to dry  DRY_BODY          "You try to dry off, but with no fire and no cover here…"
+     * </pre>
+     *
+     * <p>The succeeding process says HANG in its own prose, and the sentence that says hang reached the body
+     * act. Same for the hide, the meat and the fish, every one of which {@code dry the X} already worked on.
+     */
+    @Test void whatIsHungUpToDryIsNotAlwaysThePlayer() throws Exception {
+        // A MATERIAL THE CATALOGUE CAN DRY: the body act stands aside and the two-axis matcher answers.
+        assertNotEquals("DRY_BODY", classify("hang the hide to dry", true));
+        assertNotEquals("DRY_BODY", classify("hang the meat to dry", true));
+        assertNotEquals("DRY_BODY", classify("hang the fish up to dry", true));
+        assertNotEquals("DRY_BODY", classify("hang the herbs to dry", true));
+
+        // NAMING NO MATERIAL IS STILL A PERSON DRYING OFF, which is the right answer to it and why the clause
+        // is gated rather than deleted.
+        assertEquals("DRY_BODY", classify("hang it to dry"));
+        assertEquals("DRY_BODY", classify("leave it to dry"));
+
+        // AND THE GARMENT CLAUSES IN FRONT OF IT ARE UNTOUCHED -- asserted with the matcher answering YES,
+        // because that is the case where a careless guard would have taken them too.
+        assertEquals("DRY_BODY", classify("hang my clothes to dry", true));
+        assertEquals("DRY_BODY", classify("hang the clothes to dry", true));
+        assertEquals("DRY_BODY", classify("dry my clothes", true));
+        assertEquals("DRY_BODY", classify("dry the cloak by the fire", true));
+        assertEquals("DRY_BODY", classify("dry my boots", true));
+        assertEquals("DRY_BODY", classify("wring out my shirt", true));
+        assertEquals("DRY_BODY", classify("i am soaked", true));
+    }
 }
