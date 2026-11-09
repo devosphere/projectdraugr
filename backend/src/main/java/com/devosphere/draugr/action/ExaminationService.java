@@ -665,14 +665,43 @@ public class ExaminationService {
         if (!whole.isEmpty()) return theReading(whole.get(0));
 
         // ...THEN THE KIND, with the qualifier honoured if the player gave one.
+        //
+        // AND THE KIND IS NOT ALWAYS THE LAST WORD OF THE NAME (#37). Twenty-five of the catalogue's hundred and
+        // two plants are keyed with a category noun on the end — plantain_herb, beech_tree, sphagnum_moss,
+        // hazel_shrub — and for every one of them the word a person actually says is the word in FRONT of that
+        // tail. Measured in a forest with the plants standing in it:
+        //
+        //   examine the plantain herb   ->  read over properly
+        //   examine the plantain        ->  leaf litter, as though nothing of the kind grew there
+        //   examine the beech           ->  the same
+        //   examine the sphagnum        ->  the same
+        //
+        // So the name before a CATEGORY tail answers as the kind too. The tail list is deliberately short and
+        // holds only words that classify a plant rather than name one: it is what keeps this from becoming the
+        // any-word match this reader must never be. `ground_ivy` ends in "ivy", which names a plant, so
+        // `examine the ground` still cannot reach it — that hazard is exactly why the rule was last-word to
+        // begin with, and it is untouched.
+        //
+        // `grass`, `berry`, `nut` and `root` are left OUT of the tail list even though keys end in them, because
+        // the word in front of those is not a plant's name either: `meadow_grass` would have made
+        // `examine the meadow` a question about grass, and a meadow is a place.
+        //
+        // Both readings are asked in ONE query rather than one after the other, so a word that fits two plants
+        // is a tie and gets the ask that already exists here. `examine the elder` was answering about GROUND
+        // ELDER while an elder shrub stood in the same wood — a true sentence about the wrong plant, which is
+        // this project's worst shape. Now it names both and asks.
         String qualifier = qualifierBefore(lower, noun);
         List<Map<String, Object>> kinds = jdbc.queryForList(GROWING_HERE
-            + "   AND split_part(replace(fd.flora_key,'_',' '), ' ', -1) IN (?, ?) "
+            + "   AND ( split_part(replace(fd.flora_key,'_',' '), ' ', -1) IN (?, ?) "
+            + "      OR ( split_part(replace(fd.flora_key,'_',' '), ' ', -1) IN "
+            + "             ('herb','shrub','moss','tree','bush','vine','fern','flower','lichen','sedge') "
+            + "           AND array_length(string_to_array(fd.flora_key,'_'), 1) >= 2 "
+            + "           AND split_part(replace(fd.flora_key,'_',' '), ' ', -2) IN (?, ?) ) ) "
             + (qualifier == null ? "" : "   AND replace(fd.flora_key,'_',' ') ~ ('\\m' || ? || '\\M') ")
             + " ORDER BY fd.flora_key",
             qualifier == null
-                ? new Object[]{location, location, noun, singularSaid(noun)}
-                : new Object[]{location, location, noun, singularSaid(noun), qualifier});
+                ? new Object[]{location, location, noun, singularSaid(noun), noun, singularSaid(noun)}
+                : new Object[]{location, location, noun, singularSaid(noun), noun, singularSaid(noun), qualifier});
         if (kinds.isEmpty()) return null;
         if (kinds.size() == 1) return theReading(kinds.get(0));
         List<String> named = kinds.stream().map(k -> ((String) k.get("flora_key")).replace('_', ' ')).toList();
