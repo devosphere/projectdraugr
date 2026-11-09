@@ -301,11 +301,55 @@ public class PhysicalItemService {
                     .stream().filter(n -> namesIt(padded, n[0])).findFirst().orElse(null));
     }
 
-    /** The item_key of any reachable edible (category FOOD) item, or null — the fallback when the player just says "eat". */
+    /**
+     * Whether a food is the yield of a plant this catalogue calls poisonous (#37).
+     *
+     * <p>Asked of `flora_definition.is_poisonous` through `flora_drop`, because {@code item_definition} has no
+     * poison column at all -- which is the whole reason a death cap is simply a FOOD to anything reading the
+     * item catalogue alone. Two plants in this world are poisonous and both yield a FOOD: the death cap and the
+     * fly agaric.
+     */
+    private static final String THE_YIELD_OF_A_POISONOUS_PLANT =
+        "EXISTS (SELECT 1 FROM flora_drop fdp JOIN flora_definition fd ON fd.flora_key=fdp.flora_key "
+        + "WHERE fdp.item_key = i.item_key AND fd.is_poisonous)";
+
+    /**
+     * Whatever is to hand to eat, and NOT a thing the catalogue knows will poison you (#37).
+     *
+     * <p>This is the fallback a bare {@code eat} reaches, and it took the first row of `reachableFoods` ordered
+     * by item key. Measured on a booted stack: with nothing but death caps in the pack, {@code eat} ate one --
+     * and `death_cap` sorts near the front, so it also won that race against ordinary food.
+     *
+     * <p>A bare {@code eat} means "eat what I have", and a person who has foraged a death cap and a handful of
+     * mushrooms does not eat the death cap by accident. Naming it is still allowed and still eats it: that goes
+     * through {@link #namedFoodInReach} above, which is deliberately untouched, because refusing a sentence the
+     * player wrote on purpose would be a different kind of lie.
+     */
     @Transactional(readOnly = true)
     public String anyFoodInReach(UUID chronicle) {
-        java.util.List<String[]> foods = reachableFoods(chronicle);
-        return foods.isEmpty() ? null : foods.get(0)[0];
+        return jdbc.query(REACHABLE_CTE
+            + "SELECT i.item_key FROM reachable r JOIN item_instance i ON i.object_id=r.id "
+            + "JOIN item_definition d ON d.item_key=i.item_key "
+            + "WHERE d.category='FOOD' AND NOT " + THE_YIELD_OF_A_POISONOUS_PLANT + " "
+            + "ORDER BY i.item_key LIMIT 1",
+            rs -> rs.next() ? rs.getString(1) : null, chronicle, chronicleLocation(chronicle));
+    }
+
+    /**
+     * The poison that is the only thing left to eat, by its display name, or null (#37).
+     *
+     * <p>So that a bare {@code eat} with nothing else in reach can say what it found instead of either eating it
+     * or reporting "no food here" -- which would be false, and would leave a starving player to discover the
+     * difference the hard way. Whether to eat it then is theirs to decide, by naming it.
+     */
+    @Transactional(readOnly = true)
+    public String aPoisonousFoodInReach(UUID chronicle) {
+        return jdbc.query(REACHABLE_CTE
+            + "SELECT d.display_name FROM reachable r JOIN item_instance i ON i.object_id=r.id "
+            + "JOIN item_definition d ON d.item_key=i.item_key "
+            + "WHERE d.category='FOOD' AND " + THE_YIELD_OF_A_POISONOUS_PLANT + " "
+            + "ORDER BY d.display_name LIMIT 1",
+            rs -> rs.next() ? rs.getString(1) : null, chronicle, chronicleLocation(chronicle));
     }
 
     /**

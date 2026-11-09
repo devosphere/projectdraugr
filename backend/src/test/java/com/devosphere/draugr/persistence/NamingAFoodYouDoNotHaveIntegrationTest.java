@@ -333,6 +333,67 @@ class NamingAFoodYouDoNotHaveIntegrationTest {
             () -> "and the mushroom the player never mentioned is untouched: " + prose);
     }
 
+    /**
+     * A BARE {@code eat} DOES NOT REACH FOR THE POISON (#37).
+     *
+     * <p>The fallback took the first row of the reachable foods ordered by item key, and a death cap is simply
+     * a FOOD to anything reading the item catalogue alone -- {@code item_definition} has no poison column, so
+     * {@code is_poisonous} has to be asked of {@code flora_definition} through {@code flora_drop}. Measured on
+     * a booted stack: a bare {@code eat} carrying a death cap and an onion ate the DEATH CAP, because
+     * {@code death_cap} sorts in front of {@code wild_onion_bulb}.
+     *
+     * <p>A bare {@code eat} means "eat what I have", and a person who has foraged both does not eat the death
+     * cap by accident.
+     */
+    @Test
+    void aBareEatStepsOverThePoisonToReachRealFood() {
+        UUID me = aLivingChronicle();
+        emptyThePack(me);
+        carry(me, "death_cap");
+        carry(me, "wild_onion_bulb");
+
+        String prose = said("eat");
+        assertEquals(1, carried(me, "death_cap"), () -> "the death cap is not what a bare eat reaches for: " + prose);
+        assertEquals(0, carried(me, "wild_onion_bulb"), () -> "the food that is food is: " + prose);
+    }
+
+    /**
+     * AND IF THE POISON IS THE ONLY THING LEFT, IT SAYS SO (#37).
+     *
+     * <p>Reporting "no food here" would be false and would leave a starving player to find the difference out
+     * the hard way. Naming it is still their decision to make, which the test below holds.
+     */
+    @Test
+    void whenThePoisonIsTheOnlyFoodItIsNamedAndNotEaten() {
+        UUID me = aLivingChronicle();
+        emptyThePack(me);
+        carry(me, "death_cap");
+
+        String prose = said("eat");
+        assertTrue(prose.contains("it is poison"), () -> "it must say what it found: " + prose);
+        assertTrue(prose.toLowerCase(Locale.ROOT).contains("death cap"), () -> "and name it: " + prose);
+        assertFalse(prose.contains("no food here"), () -> "there IS something here, and saying otherwise is false: " + prose);
+        assertEquals(1, carried(me, "death_cap"), () -> "and it is not eaten: " + prose);
+    }
+
+    /**
+     * BUT NAMING IT STILL EATS IT, and that is the point of refusing only the unnamed case (#37).
+     *
+     * <p>A Chronicle who writes {@code eat the death cap} has made a choice. Refusing a sentence the player
+     * wrote on purpose would be a different kind of lie from the one this guard exists to stop, and starving is
+     * a real thing to weigh against it.
+     */
+    @Test
+    void namingThePoisonIsThePlayersOwnChoiceAndIsHonoured() {
+        UUID me = aLivingChronicle();
+        emptyThePack(me);
+        carry(me, "death_cap");
+
+        String prose = said("eat the death cap");
+        assertEquals(0, carried(me, "death_cap"),
+            () -> "a sentence the player wrote on purpose is not second-guessed: " + prose);
+    }
+
     /** How many of an item key the Chronicle is carrying, which is what settles what was actually eaten. */
     private int carried(UUID me, String itemKey) {
         Integer n = jdbc.queryForObject(
