@@ -2938,7 +2938,26 @@ public class PhysicalItemService {
         // that bare noun was being read as a declaration of the VERB, so every one of them answered a sentence
         // about something else with a recipe for itself. The verb counts only when the sentence ALSO names
         // something this process is about, which is what keeps "break the stone" and "skin the fish".
-        if (vocabularyKnowsTheVerb && namesWhatTheProcessIsAbout) return false;
+        //
+        // AND "WHAT THIS PROCESS IS ABOUT" IS WRITTEN IN TWO PLACES, NOT ONE (#37). The question above is asked
+        // of the keywords alone, and a recipe's keywords are only half of what it says about itself: the other
+        // half is its SUBJECT TERMS, which are derived in the migration from the recipe's own inputs and
+        // outputs and are the catalogue's plainest statement of the material it works on.
+        //
+        //   taper the billet   ->  nothing at all
+        //
+        // `taper` is a keyword of shape_components and `billet` is a subject term of shape_components. Both
+        // halves of that recipe claim the sentence. The guard refused it because it looked for "billet" among
+        // the keywords, where it was never going to be — and so a Chronicle holding a billet, with a knife in
+        // hand, was told the world had no idea what they meant. `shape the billet` and `taper the plank` both
+        // worked, which is what made it look like a phrasing problem rather than this.
+        //
+        // Asked of the subjects as well, and only on this arm. The arm below — a sentence whose verb this
+        // process has never heard of — keeps asking the keywords alone, because there the whole point is that
+        // the process has no claim on the sentence at all. So this can only ever turn a refusal into an answer,
+        // and only where the recipe's own two halves already agree the sentence is theirs.
+        if (vocabularyKnowsTheVerb
+            && (namesWhatTheProcessIsAbout || namesASubjectOfThisProcess(processKey, aboutWords))) return false;
 
         // A sentence that opens with an ordinary verb this process has never heard of, against a thing the
         // process happens to name. That is a sentence about the object, not a request to make one (#739).
@@ -2948,6 +2967,29 @@ public class PhysicalItemService {
         // that verb was. "skin the fire" is not a fish; "tar the path" is not a timber. A sentence carrying no
         // subject at all — "ret it" — is left alone, because there is nothing in it to contradict the process.
         return !aboutWords.isEmpty() && !namesWhatTheProcessIsAbout;
+    }
+
+    /**
+     * Whether the sentence names one of this process's own SUBJECT TERMS — the other half of what a recipe
+     * says about itself, and the half {@code sentenceMeantSomethingElse} could not see (#37).
+     *
+     * <p>Asked of the data, not a list, and plural-tolerant in the same way the matcher's own subject gate is,
+     * so the two cannot disagree about "billet" and "billets".
+     */
+    private boolean namesASubjectOfThisProcess(String processKey, java.util.List<String> aboutWords) {
+        if (aboutWords.isEmpty()) return false;
+        java.util.List<String> subjects = jdbc.queryForList(
+            "SELECT lower(subject_term) FROM process_subject WHERE process_key=?", String.class, processKey);
+        // Asked of the words the sentence is ABOUT rather than the whole sentence, so the verb the sentence
+        // opens with cannot answer for itself; and of those words joined as well, because 285 of the subject
+        // terms are phrases ("green hide", "clay bead") and a word-at-a-time reading could never meet one.
+        String joined = com.devosphere.draugr.routing.ActivityClassifier.normalise(String.join(" ", aboutWords));
+        for (String s : subjects) {
+            if (com.devosphere.draugr.routing.ActivityClassifier.containsSubject(joined, s)) return true;
+            for (String w : aboutWords)
+                if (com.devosphere.draugr.routing.ActivityClassifier.containsSubject(" " + w + " ", s)) return true;
+        }
+        return false;
     }
 
     /** Words that are in every sentence and tell you nothing about what it is about. */

@@ -27,6 +27,37 @@ This document is that output. It is organised around the **ten complaints #37 na
 
 Also under this head: epic [#54](https://github.com/devosphere/projectdraugr/issues/54) (closed) found three real supply-chain bugs — immortal food, laundered perishables, and ore hidden by an aggregate.
 
+#### A1 swept with the inputs ARMED, which is the only way this complaint can be tested
+
+Every slice above held a *keyword* to account. The complaint is about **restrictions**, and a restriction can only be measured with the materials actually in reach — so for each process the sweep puts every declared input in the pack (`material_process_input` plus one member of each either/or `material_process_input_group`), hands over every tool in `tool_profile`, lights a fire, stands the Chronicle on a RIVER_BANK and raises all fourteen stations. Then it says the process's own first keyword. A refusal with all of that present is the complaint itself.
+
+```
+485 input-bearing recipes, nothing skipped:   474 succeeded,  2 asked which,  9 refused,  0 no-reply
+```
+
+**The complaint largely does not reproduce.** When the materials really are in reach, the restriction logic lets the work happen. The two "asked which" are #593's ambiguity rule working as designed, and the nine refusals are all a *bare one-word* first keyword — `tan`, `knap`, `ret`, `shape`, `scarf` — a sentence that names no material, which is the subject gate working rather than failing.
+
+So A1 was a **reachability** problem, not a restriction one. A player who cannot find the phrase, or cannot attain the input, experiences that as a restriction; reachability is what every slice under this head has been closing.
+
+`0 no-reply` is the number that makes the rest trustworthy. Two earlier attempts at this sweep reported 0-of-25 and then 166-of-485 failures, and every one of those was a fault in the harness, not the world — see section D.
+
+#### A1's last shape: a recipe that disagrees with itself
+
+The 14 refusals in the first armed run were one defect wearing two masks, and both are now closed.
+
+| | |
+|---|---|
+| **Submitted action** | `taper the billet`, `cut a mortise`, `leach the bark`, `bind the fletching`, `half lap` |
+| **Visible context** | the timber in the pack, the chisel in hand, the bench standing |
+| **Expected procedure** | `shape_components`, `cut_mortise`, `prepare_tannin_mordant`, `fletch_arrows`, `lap_joint_planks` — each of which **declares the phrase as its own keyword** |
+| **Actual result (pre-fix)** | nothing at all. `taper` is a keyword of shape_components and `billet` one of its subject terms, so both halves of that recipe claimed the sentence — but the guard that asks "does this sentence name something this process is about?" looked only among the KEYWORDS, never the SUBJECT TERMS, which is where the catalogue records what a recipe works on. Separately, 114 multi-word keywords named no subject term of the recipe declaring them, so each was a phrase the catalogue advertises and its own gate must refuse: `leather boots`, `cuir bouilli`, `pressure flake`, `brain tan`, `saddle notch`, `box joint`, `leach tannin` all reached nothing |
+| **Expected state change** | the named output made, inputs consumed, mass conserved |
+| **Delivered** | #861 (V462 + the guard reading the subject half) |
+| **Fixture** | `EveryPhraseKeywordNamesItsOwnMaterialTest` (the standing guard, with the five phrases that name no material and need none), `TheRecipeAgreesWithItselfIntegrationTest` |
+| **Status** | **Closed with proof.** 111 of the 114 phrases now reach the catalogue; the 485-recipe sweep went 469 → **474 succeeded with zero new refusals and no new ties**. `wash the plank` and `wash the bowl` still reach nothing, so the guard was read more carefully rather than weakened. |
+
+This is the same defect V459 found once — `shape sling stones` declared while the subject term was the singular `sling stone`. The two halves of one recipe disagreeing about a word is the shape, and the standing guard now fails on the next one instead of letting it ship as a phrase the world quietly ignores.
+
 ### A2 — "Inspect, analyze, look, track, does not properly work"
 
 | | |
