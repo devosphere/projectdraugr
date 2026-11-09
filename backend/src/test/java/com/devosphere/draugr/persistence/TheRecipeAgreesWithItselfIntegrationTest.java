@@ -116,7 +116,9 @@ class TheRecipeAgreesWithItselfIntegrationTest {
         // and the matcher settles that tie by whose OUTPUT the sentence names — which keeps the two that MAKE
         // planks (timber_plank, lapped_plank) and drops the one that WORKS a plank (wooden_component) before what
         // is in reach is ever asked. Nor `taper the plank`: `taper` is no category term, so the sentence is
-        // matched across the whole catalogue and split_planks' bare `plank` takes it. Both recorded on #37.
+        // matched across the whole catalogue and split_planks' bare `plank` takes it. Both recorded on #37, and
+        // both since settled (V463 + ProcessMatcher.resolve's work-outranks-material step); this control stays
+        // `trim the plank` because it is the phrasing that worked BEFORE either change.
         items.createCarriedItem(me, "timber_plank", "Timber plank", now, "TEST_FIXTURE");
         String[] planed = items.runProcess(me, here, "trim the plank", now);
         assertEquals("SUCCEEDED", planed[0], () -> "the phrasing that worked before must still work: " + planed[1]);

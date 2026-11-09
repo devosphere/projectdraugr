@@ -43,13 +43,24 @@ CREATE OR REPLACE FUNCTION resolve_in(t text, only_cat text) RETURNS text LANGUA
     FROM material_process mp CROSS JOIN LATERAL unnest(string_to_array(mp.keywords, ',')) AS k(kw)
     WHERE mp.review_state='VERIFIED' AND (only_cat IS NULL OR mp.category_key=only_cat) GROUP BY mp.process_key),
   passed AS (SELECT cand.process_key, cand.best_kw FROM cand WHERE cand.best_kw IS NOT NULL
-    AND EXISTS (SELECT 1 FROM process_subject s WHERE s.process_key=cand.process_key AND whole((SELECT v FROM n), s.subject_term)))
-  SELECT process_key FROM passed
-   ORDER BY best_kw DESC,
+    AND EXISTS (SELECT 1 FROM process_subject s WHERE s.process_key=cand.process_key AND whole((SELECT v FROM n), s.subject_term))),
+  -- At the winning length, did this candidate match on the WORK (a keyword that is not one of its own subject
+  -- terms) or only on its material, and does the sentence name its output? See ProcessMatcher.resolve (#37):
+  -- "shape the plank" must not go to split_planks on the bare noun "plank".
+  top AS (SELECT p.process_key,
+                 EXISTS (SELECT 1 FROM material_process mp CROSS JOIN LATERAL unnest(string_to_array(mp.keywords, ',')) AS k(kw)
+                          WHERE mp.process_key = p.process_key AND length(k.kw) = p.best_kw AND whole((SELECT v FROM n), k.kw)
+                            AND NOT EXISTS (SELECT 1 FROM process_subject s WHERE s.process_key = p.process_key AND s.subject_term = k.kw))
+                   AS on_work,
+                 (SELECT count(*) FROM material_process mp CROSS JOIN LATERAL unnest(string_to_array(mp.output_item_key, '_')) AS o(w)
+                   WHERE mp.process_key = p.process_key AND length(o.w) > 2 AND whole((SELECT v FROM n), o.w)) AS named_out
+            FROM passed p WHERE p.best_kw = (SELECT max(best_kw) FROM passed))
+  SELECT process_key FROM top
+   ORDER BY CASE WHEN NOT on_work AND EXISTS (SELECT 1 FROM top t WHERE t.on_work AND t.named_out = 0) THEN 1 ELSE 0 END,
             -- then how many of the process's own subjects the sentence names (see ProcessMatcher.resolve):
             -- nine poultices share the bare "poultice" keyword and one herbal_poultice output, so the subject
             -- is the only evidence left when the herb is named away from the noun.
-            (SELECT count(*) FROM process_subject s2 WHERE s2.process_key = passed.process_key
+            (SELECT count(*) FROM process_subject s2 WHERE s2.process_key = top.process_key
               AND whole((SELECT v FROM n), s2.subject_term)) DESC,
             process_key ASC
    LIMIT 1; $$;
@@ -70,6 +81,8 @@ INSERT INTO probes VALUES
   ('cut a mortise into the beam','cut_mortise'),('cut a tenon on the end of the beam','cut_tenon'),
   ('notch the log for the corner','notch_log'),('scarf the two beams together','scarf_joint'),
   ('dovetail the corner joint','dovetail_corner'),('carve a batch of wooden pegs','carve_pegs'),
+  -- #37: a sentence about working a plank or stave is not a sentence about splitting or riving one
+  ('shape the plank','shape_components'),('taper the stave','shape_components'),('rake the hearth','gather_ash'),
   -- V57 building layers
   ('weave a wattle panel from hazel rods','weave_wattle_panel'),('daub the panel with clay','daub_panel'),
   ('rive roof shakes from the block','rive_shakes'),('lay the floorboards and peg them down','lay_floorboards'),

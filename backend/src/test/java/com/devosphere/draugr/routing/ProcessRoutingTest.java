@@ -207,6 +207,36 @@ class ProcessRoutingTest {
         assertEquals("ret_flax_cordage", ProcessMatcher.resolve("ret the flax into cordage", null, flax).processKey());
     }
 
+    /**
+     * #37: at equal length, a recipe that matched only on the bare name of its own MATERIAL yields to one that matched
+     * on the work done to that material. "shape the plank" went to split_planks on the noun "plank" — and the
+     * output-naming step could only make that worse, because the recipe that makes planks is exactly the one a
+     * sentence about a plank names the output of. But where the work-word's own product is what the text names
+     * ("sew the cap"), the family stays tied and the Chronicle is asked.
+     */
+    @Test
+    @DisplayName("the work done to a material outranks the bare name of the material, at equal length (#37)")
+    void theWorkOutranksTheBareMaterial() {
+        java.util.List<ProcessMatcher.Candidate> plank = java.util.List.of(
+            ProcessMatcher.Candidate.of("split_planks", "PROCESS", "split,plank,saw the log,hew,rive", "log,plank,timber,wood", "timber_plank"),
+            ProcessMatcher.Candidate.of("shape_components", "PROCESS", "shape,dress the plank,trim the plank,taper", "billet,plank,stave,timber,wood", "wooden_component"));
+        ProcessMatcher.Result shaped = ProcessMatcher.resolve("shape the plank", null, plank);
+        assertEquals("shape_components", shaped.processKey(), "the plank is what is shaped, not what is made");
+        org.junit.jupiter.api.Assertions.assertFalse(shaped.ambiguous());
+        assertEquals("shape_components", ProcessMatcher.resolve("taper the plank", null, plank).processKey());
+        assertEquals("split_planks", ProcessMatcher.resolve("rive a plank from the log", null, plank).processKey(),
+            "the recipe's own work-word still reaches it");
+        assertEquals("split_planks", ProcessMatcher.resolve("a plank", null, plank).processKey(),
+            "a sentence naming nothing but the material resolves as it did");
+
+        java.util.List<ProcessMatcher.Candidate> caps = java.util.List.of(
+            ProcessMatcher.Candidate.of("make_fur_cap", "CRAFT", "fur cap,cap", "cap,fur", "fur_cap"),
+            ProcessMatcher.Candidate.of("sew_helm_cap", "CRAFT", "helm cap,sew", "cap,leather", "helm_cap"));
+        ProcessMatcher.Result cap = ProcessMatcher.resolve("sew the cap", null, caps);
+        assertEquals(java.util.List.of("make_fur_cap", "sew_helm_cap"), cap.tied(),
+            "the cap is what both make, so the sewing is no evidence against the fur — ask");
+    }
+
     /** Nothing at all should come back for text that names no work and no material. */
     @Test
     @DisplayName("empty and irrelevant text resolves to nothing")
