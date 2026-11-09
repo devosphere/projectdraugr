@@ -524,6 +524,16 @@ public class ChronicleActionService {
             }
 
         }
+        else if (intent == Intent.MOVE && drivingStock(text.toLowerCase(Locale.ROOT))
+                 && Direction.from(text) == null
+                 && stockGroundUnderfoot(chronicle.location(), stockWantsWater(text.toLowerCase(Locale.ROOT)))) {
+            // ALREADY STANDING WHERE THE DRIVE WOULD TAKE THEM (#37, matrix row 10). `put the oxen out to graze`
+            // on pasture walked the herd off it, because the bearing looks only at the neighbours. For grass what
+            // is left of the sentence is the state change — out, on this ground — so it is TURN_OUT_STOCK; for
+            // water there is nothing to change. No step is taken, so no draught beast is worked and no arrival met.
+            if (stockWantsWater(text.toLowerCase(Locale.ROOT))) perception = waterUnderfoot(chronicle.id());
+            else { intent = Intent.TURN_OUT_STOCK; String[] r = items.turnOutStock(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
+        }
         else if (intent == Intent.MOVE) {
             // A haul tired the team in silence, which made draft gear that does not fit the animal
             // indistinguishable from gear that does (#106). This is the commoner of the two hauling boundaries:
@@ -5777,15 +5787,7 @@ public class ChronicleActionService {
      * @param forWater true for water, false for grazing
      */
     private Toward towardStock(UUID location, boolean forWater) {
-        String fit = forWater
-            ? "(next.biome IN ('WETLAND','RIVER_BANK') "
-              + " OR EXISTS (SELECT 1 FROM ecology_site es WHERE es.chunk_id=next.id AND "
-              + com.devosphere.draugr.ecology.FreshWater.sites("es") + ") "
-              + " OR EXISTS (SELECT 1 FROM construction_project cp JOIN world_object tw ON tw.id=cp.object_id "
-              + "            WHERE cp.project_kind IN ('WATERING_STATION','RAINWATER_CATCHMENT') "
-              + "              AND cp.state='COMPLETED' AND cp.integrity_percent>0 "
-              + "              AND tw.lifecycle_state='ACTIVE' AND tw.current_location_id=next.id))"
-            : "next.biome = 'GRASSLAND'";
+        String fit = stockGround("next", forWater);
         java.util.List<java.util.Map<String,Object>> fits = jdbc.queryForList(
             "SELECT next.grid_x - here.grid_x AS dx, next.grid_y - here.grid_y AS dy "
             + "FROM world_chunk here JOIN world_chunk next ON next.world_id=here.world_id "
@@ -5799,6 +5801,52 @@ public class ChronicleActionService {
                   + "thing to be scouted first.");
         java.util.Map<String,Object> n = fits.get(0);
         return new Toward(Direction.of(((Number) n.get("dx")).intValue(), ((Number) n.get("dy")).intValue()), null);
+    }
+
+    /**
+     * The ground that relieves a kept herd, as ONE predicate over a chunk alias (#106, #37).
+     *
+     * <p>Shared by the drive's bearing ({@link #towardStock}) and the check that the keeper already stands on it
+     * ({@link #stockGroundUnderfoot}). Two copies would drift, and a drift here sends a keeper off ground that
+     * waters or feeds their stock in search of ground that does.
+     */
+    private static String stockGround(String chunk, boolean forWater) {
+        return forWater
+            ? "(" + chunk + ".biome IN ('WETLAND','RIVER_BANK') "
+              + " OR EXISTS (SELECT 1 FROM ecology_site es WHERE es.chunk_id=" + chunk + ".id AND "
+              + com.devosphere.draugr.ecology.FreshWater.sites("es") + ") "
+              + " OR EXISTS (SELECT 1 FROM construction_project cp JOIN world_object tw ON tw.id=cp.object_id "
+              + "            WHERE cp.project_kind IN ('WATERING_STATION','RAINWATER_CATCHMENT') "
+              + "              AND cp.state='COMPLETED' AND cp.integrity_percent>0 "
+              + "              AND tw.lifecycle_state='ACTIVE' AND tw.current_location_id=" + chunk + ".id))"
+            : chunk + ".biome = 'GRASSLAND'";
+    }
+
+    /** Whether the ground the keeper stands on already waters (or feeds) their stock, by the drive's own predicate. */
+    private boolean stockGroundUnderfoot(UUID location, boolean forWater) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM world_chunk here WHERE here.id=? AND " + stockGround("here", forWater) + ")",
+            Boolean.class, location));
+    }
+
+    /**
+     * A drive to water whose destination is the ground already underfoot (#37, scenario matrix row 10).
+     *
+     * <p>{@code towardStock} looks only at the four neighbours, so a keeper standing ON the water who said
+     * {@code take the stock to water} walked the herd away from it to the next piece of it — and with none beside
+     * them was told "there is no water within a step" while standing in it. The grass face of the same defect is
+     * {@code put the oxen out to graze} on pasture, which becomes TURN_OUT_STOCK on this ground (see the MOVE
+     * dispatch). For water there is no state to change: the thirst tick reads this chunk, so they drink here.
+     */
+    private String waterUnderfoot(UUID chronicle) {
+        Integer kept = jdbc.queryForObject(
+            "SELECT count(*) FROM wildlife_bond WHERE chronicle_id=? AND bond_stage='TAMED' AND released_at IS NULL",
+            Integer.class, chronicle);
+        if (kept == null || kept == 0)
+            return "There is water on this ground already, and you keep no tamed animals to bring to it.";
+        return "There is water on this ground already, so there is nowhere to take them: "
+            + (kept == 1 ? "the one beast you keep is" : "the " + kept + " beasts you keep are")
+            + " standing at it now.";
     }
 
     /**
