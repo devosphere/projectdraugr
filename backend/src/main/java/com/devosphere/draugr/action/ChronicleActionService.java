@@ -1010,7 +1010,7 @@ public class ChronicleActionService {
         else if (intent == Intent.INVESTIGATE) { String[] r = examination.examine(chronicle.id(), chronicle.location(), text, ExaminationService.Mode.INVESTIGATE); outcome = r[0]; perception = r[1]; }
         // The non-visual senses (#65): grounded in the actual weather, water, fire, life, and ground here.
         else if (intent == Intent.SEARCH) { String[] r = examination.sense(chronicle.id(), chronicle.location(), text, ExaminationService.Sense.SEARCH); outcome = r[0]; perception = r[1]; }
-        else if (intent == Intent.SENSE_BODY) { perception = bodyReading(beforeBody); }
+        else if (intent == Intent.SENSE_BODY) { perception = theBodySaid(chronicle.id(), text, beforeBody, resolvedAt); }
         else if (intent == Intent.BREEDING_PROSPECTS) { String[] r = items.breedingProspects(chronicle.id(), chronicle.location(), text); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.CHECK_STOCK) { String[] r = items.stockWelfare(chronicle.id(), chronicle.location(), text); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.LISTEN) { String[] r = examination.sense(chronicle.id(), chronicle.location(), text, ExaminationService.Sense.LISTEN); outcome = r[0]; perception = r[1]; }
@@ -4341,6 +4341,25 @@ public class ChronicleActionService {
         // and belongs to the food reading. Placed above the comfort acts, the gear questions and
         // classifyLegacy's bare `sleep`, so none of them can see these forms.
         if (asksIfTheBodyNeeds(value)) return Intent.SENSE_BODY;
+        // A QUESTION ABOUT A PART OF YOUR OWN BODY IS NOW ANSWERED (#37/#99).
+        //
+        // `asksAboutABodyPart` has existed since the gear rule was caught answering "how is my leg" with a list
+        // of clothes — and it was used in exactly ONE place, as a negative guard, so the words were recognised,
+        // the question was kept away from the wrong reading, and then nothing answered it. Its own comment says
+        // why, and says it plainly: "IT STANDS ASIDE RATHER THAN ROUTING TO THE BODY READING… the body model
+        // keeps no foot state, so there is no honest answer to route it to and inventing one would be the
+        // opposite of this ticket's whole point."
+        //
+        // That reason is now gone. Every injury records WHERE it landed, read from the catalogue's own size
+        // tier for an animal or from the prose the branch itself writes for a thrown stone, so the body reading
+        // has something true to say about a leg. The decision it records was right while it held; it does not
+        // hold any more.
+        //
+        // GATED AGAINST A BEAST'S LEG, because `asksAboutABodyPart` accepts a bare "how is the" prefix — so
+        // "how is the goat's leg" matches it word for word. The keeper's reading sits a few hundred lines above
+        // and claims that sentence first, but a rule that is only safe where it happens to stand is one edit
+        // away from not being safe, so the guard is written here as well.
+        if (asksAboutABodyPart(value) && !namesABeast(value)) return Intent.SENSE_BODY;
         // THE PLAINEST INVENTORY QUESTION THERE IS reached nothing (#37/#99). `what do i have`, `what have i
         // got`, `what's in my bag`, `check my inventory` — all UNKNOWN, while `what is in my pack` worked word
         // for word, and `look in my pack` fell through to OBSERVE and described the landscape. See
@@ -4423,12 +4442,16 @@ public class ChronicleActionService {
            // same shape as #845's `what is in my pouch`, where a thing named but NOT the subject of the question
            // was read as the subject.
            //
-           // IT STANDS ASIDE RATHER THAN ROUTING TO THE BODY READING, and that is the existing decision rather
-           // than a new one. theFeetUnderTheBeast already asserts `how are my feet` reaches NOTHING, in its own
-           // words: "the body model keeps no foot state, so there is no honest answer to route it to and
-           // inventing one would be the opposite of this ticket's whole point." The model has no per-limb state,
-           // so answering a leg question out of whole-body condition would be inventing exactly that. The defect
-           // is this rule claiming it; the missing per-part reading is a separate gap, recorded there and here.
+           // IT STANDS ASIDE, and that is still right — but it is no longer the end of the sentence's journey.
+           //
+           // This note used to read: "there is no honest answer to route it to and inventing one would be the
+           // opposite of this ticket's whole point", and that was true for as long as nothing recorded WHERE a
+           // wound was. The body reading now has one: every injury records its part in the condition history,
+           // read from the catalogue's own size tier for an animal or from the prose the branch itself writes
+           // for a thrown stone, so `how is my leg` is answered by the body a few hundred lines above this.
+           //
+           // The guard stays exactly as it was. Standing aside is what stops a question about a leg being
+           // answered with a list of clothes, and that is this rule's business whatever the body can now say.
            &&!asksAboutABodyPart(value)
            &&!value.contains("food")&&!value.contains("supplies")) return Intent.TAKE_STOCK_OF_GEAR;
         // Go round the camp and account for it (#37). Perception, not work. Placed before MAINTAIN_CAMP, which
@@ -6830,6 +6853,125 @@ public class ChronicleActionService {
      * would force them on you, because a body does not announce that it is hydrated. When nothing presses it says
      * so, which is itself an answer and not a failure.
      */
+    /**
+     * Which part of the body the sentence asked after, in the world's own vocabulary (#37).
+     *
+     * <p>The player's words are not the recorded parts: a Chronicle says heel, toe, shin or wrist, and what the
+     * history holds is FOOT, LEG or HAND. This is the one place the two vocabularies meet, so a question and a
+     * wound cannot drift apart — the defect this project keeps finding is two readers of one question.
+     *
+     * <p>Whole words throughout, for the reason {@code OWN_BODY_PARTS} already records: "arm" is inside warm,
+     * harm and armour, "hip" inside ship, "rib" inside ribbon, "ear" inside bear and spear.
+     */
+    private static String bodyPartAsked(String text) {
+        String said = normalisedQuestion(text);
+        for (String[] pair : new String[][]{
+                {"ankle", "ANKLE"}, {"ankles", "ANKLE"},
+                {"foot", "FOOT"}, {"feet", "FOOT"}, {"heel", "FOOT"}, {"heels", "FOOT"},
+                {"toe", "FOOT"}, {"toes", "FOOT"},
+                {"knee", "KNEE"}, {"knees", "KNEE"},
+                {"shin", "LEG"}, {"shins", "LEG"}, {"leg", "LEG"}, {"legs", "LEG"},
+                {"hip", "HIP"}, {"hips", "HIP"},
+                {"hand", "HAND"}, {"hands", "HAND"}, {"wrist", "HAND"}, {"wrists", "HAND"},
+                {"finger", "HAND"}, {"fingers", "HAND"}, {"thumb", "HAND"}, {"thumbs", "HAND"},
+                {"palm", "HAND"}, {"palms", "HAND"},
+                {"elbow", "ARM"}, {"elbows", "ARM"}, {"arm", "ARM"}, {"arms", "ARM"},
+                {"shoulder", "SHOULDER"}, {"shoulders", "SHOULDER"},
+                {"back", "BACK"},
+                {"chest", "TORSO"}, {"belly", "TORSO"}, {"stomach", "TORSO"}, {"rib", "TORSO"}, {"ribs", "TORSO"},
+                {"face", "FACE"}, {"eye", "FACE"}, {"eyes", "FACE"}, {"jaw", "FACE"}, {"mouth", "FACE"},
+                {"nose", "FACE"}, {"lip", "FACE"}, {"lips", "FACE"}, {"tooth", "FACE"}, {"teeth", "FACE"},
+                {"ear", "FACE"}, {"ears", "FACE"},
+                {"head", "HEAD"}, {"neck", "HEAD"}, {"throat", "HEAD"}})
+            if (word(said, pair[0])) return pair[1];
+        return null;
+    }
+
+    /** The world's word for a part, said the way a person says it. */
+    private static String spokenPart(String part) {
+        return switch (part) {
+            case "TORSO" -> "chest";
+            case "BACK" -> "back";
+            case "FACE" -> "face";
+            default -> part.toLowerCase(Locale.ROOT);
+        };
+    }
+
+    /**
+     * ANSWERED IN THE NUMBER IT WAS ASKED IN (#37). A Chronicle asks after their feet, not their foot, and the
+     * first cut of this reading answered "Your foot is sound" to "how are my feet" — a true statement in the
+     * wrong number, which in a world written this carefully reads as a seam.
+     *
+     * <p>The paired parts are the ones a person has two of and names in the plural. The recorded part stays
+     * singular, because the history knows a FOOT and not which foot — see {@code BODY_PARTS} on why sides are
+     * deliberately absent.
+     */
+    private static final java.util.Map<String, String> SAID_OF_BOTH = java.util.Map.of(
+        "FOOT", "feet", "LEG", "legs", "HAND", "hands", "ARM", "arms",
+        "KNEE", "knees", "ANKLE", "ankles", "SHOULDER", "shoulders", "HIP", "hips");
+
+    private static final java.util.Set<String> PLURAL_WORDS = java.util.Set.of(
+        "feet", "legs", "hands", "arms", "knees", "ankles", "shoulders", "hips", "ribs", "eyes", "ears",
+        "toes", "wrists", "fingers", "thumbs", "palms", "elbows", "heels", "shins", "lips", "teeth");
+
+    private static boolean askedOfBoth(String text) {
+        String said = normalisedQuestion(text);
+        for (String w : PLURAL_WORDS) if (word(said, w)) return true;
+        return false;
+    }
+
+    /** "your leg is" / "your feet are", so the answer agrees with the question. */
+    private static String thePartAsSaid(String part, boolean both) {
+        return both && SAID_OF_BOTH.containsKey(part)
+            ? "Your " + SAID_OF_BOTH.get(part) + " are"
+            : "Your " + spokenPart(part) + " is";
+    }
+
+    /**
+     * The body reading, and WHERE THE HURT SITS when the history knows (#37).
+     *
+     * <p>Three answers, and the third is the one worth defending: a body that carries an injury with no part
+     * recorded says so, instead of naming a limb to sound certain. That happens for an injury older than the
+     * record, or from a source the catalogue cannot place — and "you cannot say where it sits" is true, where a
+     * guessed leg would not be.
+     */
+    private String theBodySaid(UUID me, String text, ChroniclePhysiologyService.BodyHudSnapshot b, Instant at) {
+        String asked = bodyPartAsked(text);
+        List<java.util.Map<String, Object>> hurts = physiology.whereItHurts(me, at);
+        // ASKED OF THE SCALAR, NOT THE LABEL DERIVED FROM IT. The first cut read the Body HUD's health
+        // label, which is refreshed from the scalars and can be a step behind them — so a body whose
+        // injury severity was plainly above zero was told nothing was wrong with it. One authority for
+        // one fact; this project's recurring defect is two readers of the same question.
+        boolean carryingAHurt = physiology.carriesAnInjury(me);
+        if (asked == null) {
+            String where = "";
+            if (!hurts.isEmpty()) {
+                List<String> parts = hurts.stream().map(h -> "your " + spokenPart((String) h.get("part"))).distinct().toList();
+                where = " The hurt sits in " + joinAnd(parts) + ".";
+            }
+            return bodyReading(b) + where;
+        }
+        java.util.Map<String, Object> here = hurts.stream()
+            .filter(h -> asked.equals(h.get("part"))).findFirst().orElse(null);
+        boolean both = askedOfBoth(text);
+        String subject = thePartAsSaid(asked, both);
+        if (here != null) {
+            int severity = ((Number) here.get("severity")).intValue();
+            String how = severity >= 40 ? "It is a bad one and nowhere near closed"
+                       : severity >= 20 ? "It is open still and tender to the touch"
+                       : "It is a small hurt and already closing";
+            return "The hurt sits in your " + spokenPart(asked) + ". " + how + ".";
+        }
+        if (!hurts.isEmpty()) {
+            List<String> parts = hurts.stream().map(h -> "your " + spokenPart((String) h.get("part"))).distinct().toList();
+            return subject + " sound. The hurt sits in " + joinAnd(parts) + ".";
+        }
+        if (carryingAHurt)
+            return subject + " no worse than the rest of you. There is a hurt in you that has not closed, and "
+                 + "you could not say where it sits.";
+        return subject + " sound. Nothing is wrong with it.";
+    }
+
     private String bodyReading(ChroniclePhysiologyService.BodyHudSnapshot b) {
         if (b == null) return "You take stock of yourself, and find nothing you can put a name to.";
         List<String> said = new java.util.ArrayList<>();

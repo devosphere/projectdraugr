@@ -2071,12 +2071,21 @@ class IntentClassificationRegressionTest {
         // NOT THE PLAYER'S OWN FEET. What matters here is that this rule does not CLAIM them — a keeper asking
         // after their own feet must not be handed a blade and an animal.
         //
-        // `how are my feet` reaches nothing, and reached nothing before this slice: the body model keeps no
-        // foot state, so there is no honest answer to route it to and inventing one would be the opposite of
-        // this ticket's whole point. Asserted as UNKNOWN rather than quietly left out, so the gap is recorded
-        // where the next cycle will see it instead of being rediscovered.
-        assertEquals("UNKNOWN", classify("how are my feet", false),
-            "the player's own feet have no state in the body model — a real gap, and not this rule's to fill");
+        // THIS ASSERTION USED TO READ `UNKNOWN`, AND THE GAP IT RECORDED IS NOW CLOSED. Its words were: "the
+        // body model keeps no foot state, so there is no honest answer to route it to and inventing one would
+        // be the opposite of this ticket's whole point." That was true, and it was the right thing to assert
+        // for as long as it held — recording the gap where the next cycle would see it is exactly how it came
+        // to be fixed.
+        //
+        // Every injury now records WHERE it landed, read from the catalogue's own size tier for an animal or
+        // from the prose the branch itself writes for a thrown stone, so the body reading has something true to
+        // say about a foot: it names the part the hurt sits in, says the part is sound when it is, and says it
+        // cannot tell where when no place was recorded. So the question goes to the body — and what this test
+        // still guards is that it does NOT go to the hooves.
+        assertEquals("SENSE_BODY", classify("how are my feet", false),
+            "the player's own feet are the body's business, and the body can now say how they are");
+        assertNotEquals("PARE_HOOVES", classify("how are my feet", false),
+            "and they are still not an animal's feet — a blade and a goat is the answer this test exists to forbid");
         assertEquals("WARM_BODY", classify("warm my feet by the fire"), "but warming them works, and must keep working");
 
         // AND "TRIM" STILL BELONGS TO THE WOOD. The coppice rule's own comment says it is gated on the wood "so
@@ -2094,11 +2103,25 @@ class IntentClassificationRegressionTest {
 
         // ...AND NOT THE PLAYER'S OWN LEG, which is the one thing that widening could wrongly claim. Answering
         // "my leg is lame" with a stock report would be face 6 exactly — a confidently wrong answer in the same
-        // even voice as every true one. All four reach nothing, which is a real gap in the body reading and is
-        // recorded on #37 rather than papered over here: a missing answer costs a turn, a wrong one costs the
-        // player their model of what the game heard.
+        // even voice as every true one. None of these may reach the herd.
         for (String mine : new String[]{"my leg is lame", "am i lame", "is my leg lame", "i am limping"})
-            assertEquals("UNKNOWN", classify(mine, false), mine + " is the body's business, not the herd's");
+            assertNotEquals("CHECK_STOCK", classify(mine, false), mine + " is the body's business, not the herd's");
+
+        // THE QUESTION HALF IS NOW ANSWERED. This loop used to assert all four reached UNKNOWN, with the note
+        // that it was "a real gap in the body reading, recorded on #37 rather than papered over here". The part
+        // of that gap which was a QUESTION about a part is closed: injuries record where they landed, so the
+        // body can say how a leg is.
+        assertEquals("SENSE_BODY", classify("is my leg lame", false),
+            "a question about the Chronicle's own leg is the body's to answer, and it now can");
+
+        // AND THE STATEMENT HALF IS STILL OPEN, narrower than it was and said plainly rather than left to be
+        // rediscovered: "my leg is lame", "am i lame" and "i am limping" state a condition instead of asking
+        // after one, and nothing routes them yet. `my leg hurts` already reaches TREAT_WOUND, so the statement
+        // forms belong with the TREATING of a hurt rather than the reading of it — which is a different rule
+        // from this slice's, and guessing at it here would be the over-reach this very comment warns about.
+        for (String stated : new String[]{"my leg is lame", "am i lame", "i am limping"})
+            assertEquals("UNKNOWN", classify(stated, false),
+                stated + " states a condition rather than asking after one — still unrouted, recorded on #37");
     }
 
     @Test void whatDoIHaveIsAnInventoryQuestion() throws Exception {
@@ -4074,5 +4097,46 @@ class IntentClassificationRegressionTest {
         // this file already records against a bare contains("the stock").
         assertNotEquals("CHECK_STOCK", classify("build a sick animal shelter"));
         assertNotEquals("CHECK_STOCK", classify("put up a stockade"));
+    }
+
+    /**
+     * A question about a part of the Chronicle's own body reaches the BODY (#37/#99).
+     *
+     * <p>{@code asksAboutABodyPart} has existed since the gear rule was caught answering "how is my leg" with a
+     * list of clothes, and it was used in exactly ONE place — as a negative guard. So the words were
+     * recognised, the question was kept away from the wrong reading, and then <b>nothing answered it</b>. Its
+     * own comment gave the reason: there was no honest answer to route it to, because nothing recorded WHERE a
+     * wound was.
+     *
+     * <p>Injuries now record their part, so there is one.
+     */
+    @Test
+    void aQuestionAboutYourOwnBodyReachesTheBody() throws Exception {
+        assertEquals("SENSE_BODY", classify("how is my leg"));
+        assertEquals("SENSE_BODY", classify("how are my feet"));
+        assertEquals("SENSE_BODY", classify("how is my arm"));
+        assertEquals("SENSE_BODY", classify("is my ankle swollen"));
+        assertEquals("SENSE_BODY", classify("what is wrong with my shoulder"));
+        assertEquals("SENSE_BODY", classify("check my hands"));
+        assertEquals("SENSE_BODY", classify("look at my back"));
+
+        // NOT A BEAST'S LEG, which is the hazard routing this predicate creates. `asksAboutABodyPart` accepts a
+        // bare "how is the" prefix, so "how is the ox's leg" matches it word for word — and while it was only
+        // ever a negative guard that cost nothing. The keeper's reading claims those sentences first, and the
+        // new arm is gated on namesABeast as well, because a rule that is only safe where it happens to stand
+        // is one edit away from not being safe.
+        assertEquals("CHECK_STOCK", classify("how is the ox's leg"));
+        assertEquals("CHECK_STOCK", classify("is the ox lame"));
+
+        // NOT THE GEAR, which is the reading that used to answer these with a list of clothes. The question is
+        // about a leg; a waterskin is still a waterskin.
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("how is my waterskin"));
+        assertEquals("TAKE_STOCK_OF_GEAR", classify("take stock of my gear"));
+
+        // AND NOT THE ACTS, which own the statement and the verb. Asking after a hand is not binding one, and
+        // warming your feet is not a question about them.
+        assertEquals("WARM_BODY", classify("warm my feet by the fire"));
+        assertNotEquals("SENSE_BODY", classify("bind my hand"));
+        assertEquals("PARE_HOOVES", classify("pare the hooves"));
     }
 }
