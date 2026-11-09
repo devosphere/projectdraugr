@@ -2114,14 +2114,20 @@ class IntentClassificationRegressionTest {
         assertEquals("SENSE_BODY", classify("is my leg lame", false),
             "a question about the Chronicle's own leg is the body's to answer, and it now can");
 
-        // AND THE STATEMENT HALF IS STILL OPEN, narrower than it was and said plainly rather than left to be
-        // rediscovered: "my leg is lame", "am i lame" and "i am limping" state a condition instead of asking
-        // after one, and nothing routes them yet. `my leg hurts` already reaches TREAT_WOUND, so the statement
-        // forms belong with the TREATING of a hurt rather than the reading of it — which is a different rule
-        // from this slice's, and guessing at it here would be the over-reach this very comment warns about.
-        for (String stated : new String[]{"my leg is lame", "am i lame", "i am limping"})
-            assertEquals("UNKNOWN", classify(stated, false),
-                stated + " states a condition rather than asking after one — still unrouted, recorded on #37");
+        // AND THE STATEMENT HALF IS NOW ROUTED. This loop used to assert UNKNOWN for "my leg is lame" and
+        // "i am limping", recorded on #37 as belonging with the TREATING of a hurt. They go where `my leg hurts`
+        // always went, and TREAT_WOUND answers honestly when there is no wound behind the statement.
+        assertEquals("TREAT_WOUND", classify("my leg hurts", false), "the sibling that always worked");
+        for (String stated : new String[]{"my leg is lame", "i am limping", "i am lame", "my ankle is sprained",
+                "my ankle is twisted", "my knee is swollen", "my back is strained", "my wrist is sprained"})
+            assertEquals("TREAT_WOUND", classify(stated, false), stated + " states a hurt; it is treated like one");
+        // "am i lame" is a QUESTION, and the body reading answers it as it answers "am i hurt".
+        for (String asked : new String[]{"am i lame", "am i limping"})
+            assertEquals("SENSE_BODY", classify(asked, false), asked + " asks after the body");
+        // The end-anchor holds: a sentence that goes on is not a statement of a hurt, and a beast's limp is
+        // still the keeper's question.
+        assertNotEquals("TREAT_WOUND", classify("i am limping back to camp", false));
+        assertEquals("CHECK_STOCK", classify("is the goat lame"));
     }
 
     @Test void whatDoIHaveIsAnInventoryQuestion() throws Exception {
