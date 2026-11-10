@@ -57,14 +57,22 @@ public class VisualContextController {
      * @param candidates the eligibility chain, most specific first, always ending in {@code key}
      * @param fingerprint the visual context's fingerprint, for caching
      */
+    /**
+     * @param biome the authoritative terrain this stands on, carried so a caller never has to infer the ground
+     *              from the picture (#878). A backdrop key names a SCENE — "ancient observatory", "mountain
+     *              crag" — and a scene is a locality, not a terrain. The screen used the scene's own label as
+     *              the terrain heading, so an open grassland tile was headed "Forest" while the ground under
+     *              the Chronicle's feet said "open grass runs to every horizon". Null when nothing is alive to
+     *              stand anywhere.
+     */
     public record Backdrop(int version, String key, String reason, java.util.List<String> candidates,
-                           String fingerprint) { }
+                           String fingerprint, String biome) { }
 
     @GetMapping("/v1/backdrop")
     public Backdrop backdrop() {
         VisualContextService.VisualContext here = context.active(ticks.current().simulatedAt());
         BackdropResolver.Choice choice = BackdropResolver.resolve(here);
         return new Backdrop(VisualContextService.VERSION, choice.key(), choice.reason(), choice.candidates(),
-            here == null ? null : here.fingerprint());
+            here == null ? null : here.fingerprint(), here == null ? null : here.biome());
     }
 }
