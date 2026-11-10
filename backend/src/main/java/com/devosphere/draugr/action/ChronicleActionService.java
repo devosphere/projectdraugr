@@ -5071,6 +5071,9 @@ public class ChronicleActionService {
            // it (#37/#99). Measured UNKNOWN while `how do i feel` and `take stock of myself` both answered.
            ||value.contains("what is my condition")||value.contains("what condition am i in")
            ||value.contains("am i hurt")||value.contains("am i injured")||value.contains("am i sick")||value.contains("am i ill")
+           // A LAME LEG ASKED AFTER (#37). `is my leg lame` reached this through the body-part question, while
+           // `am i lame` and `am i limping`, the same question without naming the leg, reached nothing.
+           ||value.contains("am i lame")||value.contains("am i limping")
            ||value.contains("what shape am i")
            // Act ten and act twelve: each of these is a person asking the body a question it can answer, and each
            // reached nothing. The body knows every one of its own pressures.
@@ -5144,6 +5147,14 @@ public class ChronicleActionService {
         // only a statement, and acted on when there is something to act on. Where no act exists at all
         // (exhausted, dizzy, weak), the body reading is the honest answer and is all this claims.
         if(saysOfSelf(value,"bleeding|bleed|bleeds|hurt|injured|cut|wounded|in pain|sore|gashed|bruised|grazed|hurts"))
+            return Intent.TREAT_WOUND;
+        // ...AND A LAME LEG STATED (#37). `my leg hurts` reached the dressing, while `my leg is lame`, `i am
+        // limping` and `my ankle is sprained` reached nothing; #864 recorded this as the statement half still
+        // open. A leg that will not carry you is a hurt, and treating a hurt is what this already answers,
+        // honestly ("nothing open and nothing bleeding") when no wound stands behind the statement. The
+        // husbandry rule's aboutTheirOwnBody guard keeps these off the herd, and the end-anchor in saysOfSelf
+        // keeps `i am limping back to camp` from being read as a dressing.
+        if(saysOfSelf(value,"lame|limping|sprained|twisted|wrenched|strained|swollen"))
             return Intent.TREAT_WOUND;
         if(saysOfSelf(value,"cold|freezing|frozen|numb|chilled|chilly|perished"))
             return Intent.WARM_BODY;
