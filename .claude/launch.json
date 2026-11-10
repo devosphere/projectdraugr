@@ -4,9 +4,25 @@
     {
       "name": "draugr-frontend",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "cwd": "frontend",
       "port": 5173
+    },
+    {
+      "name": "world-bible",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "--yes",
+        "serve",
+        "world-bible",
+        "-l",
+        "4173",
+        "--no-clipboard"
+      ],
+      "port": 4173
     }
   ]
 }
