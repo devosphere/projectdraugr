@@ -46,7 +46,8 @@ class ChronicleNarrationExporterTest {
             if (i == count / 2) narration = "MIDDLE_SENTINEL_M2. " + narration;
             if (i == count - 1) narration = narration + " CLOSING_SENTINEL_Z3.";
             entries.add(new ChronicleService.JourneyEntry(
-                    arrival.plusSeconds(i * 1800L), "OBSERVE", "SUCCEEDED", narration));
+                    arrival.plusSeconds(i * 1800L), "OBSERVE", "SUCCEEDED", narration,
+                    "look around", arrival.plusSeconds(i * 1800L)));
         }
         ChronicleService.ChronicleSummary summary = new ChronicleService.ChronicleSummary(
                 UUID.randomUUID(), 7, "LIVING", arrival, null, null, UUID.randomUUID());
@@ -78,6 +79,58 @@ class ChronicleNarrationExporterTest {
             assertTrue(text.contains("Chronicle 7"), "the chronicle heading must be present");
         } catch (Exception e) {
             throw new AssertionError("the exported PDF must be parseable and text-extractable", e);
+        } finally {
+            reader.close();
+        }
+    }
+
+    /**
+     * The export carries what was ASKED, not only what the world answered (#873).
+     *
+     * <p>The player need was reconstructing the decisions before a death, and the ledger has always held
+     * {@code action_text} — the readers simply never asked for it, so the archive and the PDF showed one half
+     * of every exchange. A death is the case that proves it: the last command and the cause of death are
+     * usually different things, and without the command the record cannot be read back afterwards.
+     *
+     * <p>Asserted on a genuinely parsed PDF rather than on the bytes written, because a compressed content
+     * stream will not answer a grep either way — the text has to be inflated before the claim means anything.
+     */
+    @Test
+    void theExportShowsTheCommandAboveTheAnswer() throws java.io.IOException {
+        Instant arrival = Instant.parse("2026-08-02T00:00:00Z");
+        Instant oneSubmission = arrival.plusSeconds(600);
+        List<ChronicleService.JourneyEntry> entries = List.of(
+                new ChronicleService.JourneyEntry(arrival.plusSeconds(60), "OBSERVE", "SUCCEEDED",
+                        "Tall trees close overhead. " + paragraph(1), "look around", arrival.plusSeconds(60)),
+                // Two steps of ONE multi-step submission: same submittedAt, their own words each.
+                new ChronicleService.JourneyEntry(oneSubmission, "GATHER_FIBER", "SUCCEEDED",
+                        "You separate usable plant fiber. " + paragraph(2), "gather plant fiber", oneSubmission),
+                new ChronicleService.JourneyEntry(oneSubmission.plusSeconds(1), "CRAFT_TINDER", "SUCCEEDED",
+                        "You tease the fiber into a nest. " + paragraph(3), "prepare a tinder nest", oneSubmission),
+                // A row from before the readers carried the command: it must still export, narration alone.
+                new ChronicleService.JourneyEntry(arrival.plusSeconds(1800), "REST", "SUCCEEDED",
+                        "WITHOUT_A_COMMAND_SENTINEL. " + paragraph(4), null, null));
+        ChronicleService.ChronicleSummary summary = new ChronicleService.ChronicleSummary(
+                UUID.randomUUID(), 13, "DEAD", arrival, arrival.plusSeconds(3600), "Systemic Illness", UUID.randomUUID());
+
+        byte[] pdf = exporter.toPdf(new ChronicleService.ChronicleJourney(summary, entries, null, 0, 0));
+        PdfReader reader = readable(pdf);
+        try {
+            StringBuilder text = new StringBuilder();
+            PdfTextExtractor extractor = new PdfTextExtractor(reader);
+            for (int page = 1; page <= reader.getNumberOfPages(); page++) text.append(extractor.getTextFromPage(page));
+            String read = text.toString();
+
+            for (String said : List.of("look around", "gather plant fiber", "prepare a tinder nest"))
+                assertTrue(read.contains(said), () -> "the export must carry the command '" + said + "': " + read);
+
+            // The command comes BEFORE the answer it provoked — the pairing is the whole point.
+            assertTrue(read.indexOf("look around") < read.indexOf("Tall trees close overhead"),
+                    "the command must be exported above the narration it caused");
+
+            // A row with no command still exports its narration rather than being dropped.
+            assertTrue(read.contains("WITHOUT_A_COMMAND_SENTINEL"),
+                    "an entry whose command was never recorded must still appear");
         } finally {
             reader.close();
         }
