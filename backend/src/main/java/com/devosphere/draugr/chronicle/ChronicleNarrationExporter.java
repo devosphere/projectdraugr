@@ -84,11 +84,33 @@ public class ChronicleNarrationExporter {
                 doc.add(none);
             } else {
                 Instant arrival = s.arrivedAt();
+                // THE COMMAND, THEN THE ANSWER (#873). The export used to carry only what the world said, so a
+                // reader could not tell what had been asked — and after a death that is exactly the question,
+                // because the last command and the cause of death are usually different things.
+                //
+                // Set to the right, mirroring the screen, so the two voices stay apart at a glance: the player
+                // on one side, the world on the other. A row with no command text — written before the ledger
+                // carried it to this reader — simply shows the narration, as it always did.
+                Font spoken = FontFactory.getFont(FontFactory.HELVETICA_OBLIQUE, 9.5f, Font.ITALIC, MUTED);
+                Instant lastSubmission = null;
                 for (ChronicleService.JourneyEntry e : journey.entries()) {
                     Paragraph mk = new Paragraph(markerFor(arrival, e.at()), marker);
                     mk.setSpacingBefore(11f);
                     mk.setSpacingAfter(1.5f);
                     doc.add(mk);
+                    if (e.actionText() != null && !e.actionText().isBlank()) {
+                        // A multi-step procedure is several rows sharing one submission. Each step keeps its own
+                        // line — that is the order the Chronicle actually did them in — and the continuation
+                        // steps are marked so a reader can see they came from one piece of writing.
+                        boolean continues = e.submittedAt() != null && e.submittedAt().equals(lastSubmission);
+                        Paragraph said = new Paragraph((continues ? "… " : "") + e.actionText().trim(), spoken);
+                        said.setAlignment(Element.ALIGN_RIGHT);
+                        said.setIndentationLeft(64f);
+                        said.setSpacingAfter(3f);
+                        said.setLeading(13f);
+                        doc.add(said);
+                        lastSubmission = e.submittedAt();
+                    }
                     Paragraph n = new Paragraph(e.narration() == null ? "" : e.narration(), body);
                     n.setLeading(15.5f);
                     doc.add(n);

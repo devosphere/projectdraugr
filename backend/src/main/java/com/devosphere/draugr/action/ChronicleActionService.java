@@ -1185,9 +1185,18 @@ public class ChronicleActionService {
         // COALESCE the overlay over the base narration so scroll-back shows the enriched prose the
         // player saw live (AI sentence / death coda) when one was stored, and the deterministic prose
         // otherwise. The base row is the join anchor and the fallback.
+        // AND THE WORDS THAT CAUSED IT (#873). Live play already knows what the player typed — it typed it —
+        // but scroll-back and a reload do not, so without `action_text` the timeline loses every command the
+        // moment the page is refreshed. `submitted_at` rides along because it is the only thing that marks the
+        // steps of one multi-step submission as belonging together.
+        String columns = "SELECT ca.id, ca.resolved_at, COALESCE(can.narration, ca.narration), ca.action_text, ca.submitted_at "
+                + "FROM chronicle_action ca LEFT JOIN chronicle_action_narration can ON can.action_id = ca.id ";
+        org.springframework.jdbc.core.RowMapper<NarrationEntry> asEntry = (rs, row) -> new NarrationEntry(
+                rs.getObject(1, UUID.class), rs.getTimestamp(2).toInstant(), rs.getString(3), rs.getString(4),
+                rs.getTimestamp(5) == null ? null : rs.getTimestamp(5).toInstant());
         List<NarrationEntry> entries = before == null
-                ? jdbc.query("SELECT ca.id, ca.resolved_at, COALESCE(can.narration, ca.narration) FROM chronicle_action ca LEFT JOIN chronicle_action_narration can ON can.action_id = ca.id WHERE ca.chronicle_id = ? AND ca.narration IS NOT NULL ORDER BY ca.resolved_at DESC, ca.id DESC LIMIT ?", (rs, row) -> new NarrationEntry(rs.getObject(1, UUID.class), rs.getTimestamp(2).toInstant(), rs.getString(3)), chronicle, limit + 1)
-                : jdbc.query("SELECT ca.id, ca.resolved_at, COALESCE(can.narration, ca.narration) FROM chronicle_action ca LEFT JOIN chronicle_action_narration can ON can.action_id = ca.id WHERE ca.chronicle_id = ? AND ca.narration IS NOT NULL AND (ca.resolved_at, ca.id) < (?, ?) ORDER BY ca.resolved_at DESC, ca.id DESC LIMIT ?", (rs, row) -> new NarrationEntry(rs.getObject(1, UUID.class), rs.getTimestamp(2).toInstant(), rs.getString(3)), chronicle, java.sql.Timestamp.from(before), beforeId, limit + 1);
+                ? jdbc.query(columns + "WHERE ca.chronicle_id = ? AND ca.narration IS NOT NULL ORDER BY ca.resolved_at DESC, ca.id DESC LIMIT ?", asEntry, chronicle, limit + 1)
+                : jdbc.query(columns + "WHERE ca.chronicle_id = ? AND ca.narration IS NOT NULL AND (ca.resolved_at, ca.id) < (?, ?) ORDER BY ca.resolved_at DESC, ca.id DESC LIMIT ?", asEntry, chronicle, java.sql.Timestamp.from(before), beforeId, limit + 1);
         boolean hasMore = entries.size() > limit;
         if (hasMore) entries = entries.subList(0, limit);
         return new NarrationPage(List.copyOf(entries), hasMore);
@@ -7967,6 +7976,12 @@ public class ChronicleActionService {
     public record WeatherView(String kind, int intensity) { }
     /** A single qualitative transition between the previous frame and this one — e.g. hunger "Hungry" → "Starving". */
     public record StateChange(String aspect, String from, String to) { }
-    public record NarrationEntry(UUID id, Instant occurredAt, String narration) { }
+    /**
+     * One line of the living timeline: what the world answered, and what was asked to provoke it (#873).
+     *
+     * <p>{@code actionText} is the player's own words. {@code submittedAt} is shared by every step of one
+     * multi-step submission, so a reader can present six resolved steps as the one procedure they were.
+     */
+    public record NarrationEntry(UUID id, Instant occurredAt, String narration, String actionText, Instant submittedAt) { }
     public record NarrationPage(List<NarrationEntry> entries, boolean hasMore) { }
 }
