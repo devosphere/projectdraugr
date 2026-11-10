@@ -36,8 +36,13 @@ public final class ActionPlan {
      */
     private static final Pattern PUNCTUATION_SEPARATOR = Pattern.compile(
         "\\R+|\\s*;\\s*|(?<=[\\p{Alnum}\\)\\]\"'])\\.(?:\\s+|$)");
+    /**
+     * The leading comma is CAPTURED, because it is what settles the ambiguity the word-count rule exists for
+     * (#869). "what next for the hide" is a question; "urinate, then dry off" is two instructions. Nobody writes
+     * a comma in front of a sequencing word unless they mean "and after that".
+     */
     private static final Pattern WORD_SEPARATOR = Pattern.compile(
-        "\\s*,?\\s+(?i:and\\s+then|then|after\\s+that|afterwards?|next|finally|lastly"
+        "(?:\\s*(,)\\s*|\\s+)(?i:and\\s+then|then|after\\s+that|afterwards?|next|finally|lastly"
       + "|once\\s+that\\s+is\\s+done|once\\s+that's\\s+done|when\\s+that\\s+is\\s+done)\\s*,?\\s+");
 
     /** A list marker opening a step: "1.", "2)", "-", "*", "•". */
@@ -86,9 +91,30 @@ public final class ActionPlan {
      * routing test for the same sentence had passed — the unit test calls the classifier, and the splitter runs
      * before it).
      *
-     * <p>So a word separator is only honoured when at least three words stand before it, which is the shortest
-     * thing that can be an instruction with an object. Line breaks, semicolons and sentence ends are untouched:
-     * those are unambiguous, and a person who writes a full stop has ended a step whatever the words were.
+     * <p>So a BARE word separator is only honoured when at least three words stand before it, which is the
+     * shortest thing that can be an instruction with an object. Line breaks, semicolons and sentence ends are
+     * untouched: those are unambiguous, and a person who writes a full stop has ended a step whatever the words
+     * were.
+     *
+     * <p><b>A COMMA IN FRONT OF THE SEQUENCING WORD IS UNAMBIGUOUS TOO, and the word count must not override it
+     * (#869).</b> The rule was written to protect "what next for the hide", where "next" belongs to the
+     * question. It also caught real instructions that happen to be short:
+     *
+     * <pre>
+     *   urinate, then dry off, then sleep for 2 hours   ->  the relief was never a step
+     *   dry off, then rest 30 minutes                   ->  the rest was never a step
+     * </pre>
+     *
+     * <p>And it did not merely decline to split them. The old loop skipped the short piece WITHOUT advancing
+     * past the separator, so the next piece began before it: "urinate" and its "then" were absorbed into
+     * "urinate, then dry off", which the resolver matched as the drying alone. A Chronicle with an urgent
+     * bladder wrote the step, was told about drying and sleeping, and went from Urgent to Critical — the step
+     * did not fail, it ceased to exist. <b>A step that is silently dropped is worse than one that is refused</b>,
+     * because nothing in the report says it is gone.
+     *
+     * <p>Nobody writes a comma before "next" in a question, so the comma settles it: with one, the split stands
+     * however short the instruction is. Without one, the three-word rule is unchanged and "what next for the
+     * hide" still arrives whole.
      */
     private static List<String> pieces(String trimmed) {
         List<String> out = new ArrayList<>();
@@ -97,7 +123,8 @@ public final class ActionPlan {
             int from = 0;
             while (m.find()) {
                 String piece = part.substring(from, m.start());
-                if (wordsIn(piece) < 3) continue;   // the word belongs to what is being said
+                boolean punctuated = m.group(1) != null;   // a comma stood before the sequencing word
+                if (!punctuated && wordsIn(piece) < 3) continue;   // the word belongs to what is being said
                 out.add(piece);
                 from = m.end();
             }

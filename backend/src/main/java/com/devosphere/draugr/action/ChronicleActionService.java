@@ -203,12 +203,7 @@ public class ChronicleActionService {
             // Stopped. Say so, and say what was left — never let the report imply the rest happened.
             outcome = done > 0 ? "PARTIAL" : "FAILED";
             int remaining = steps.size() - (i + 1);
-            told.append(" You get no further than that. ");
-            told.append(done == 0
-                ? "The rest of what you set out to do is still ahead of you"
-                : "What you did before this stands, but the " + remaining + " step" + (remaining == 1 ? "" : "s")
-                  + " after it went undone");
-            told.append(", and until this part comes right there is no going on to them.");
+            told.append(" You get no further than that. ").append(stoppedReport(done, remaining));
             // The failed step is kept with the rest: it is the part that has to come right first.
             undone = steps.subList(i, steps.size());
             stoppedBecause = "FAILED_STEP";
@@ -227,6 +222,37 @@ public class ChronicleActionService {
         // The plan reports as the last step that actually ran: its identity, its clock, and the body as it stands.
         return new ActionResult(last.actionId(), last.intent(), outcome, last.durationMinutes(), last.resolvedAt(),
                 told.toString(), last.body(), last.frame(), last.died());
+    }
+
+    /**
+     * What a stopped plan says about the steps around the one that failed (#872).
+     *
+     * <p>Pure, and separate from the loop, so the rule is written in exactly one place and can be read without
+     * a database — the arithmetic is what went wrong, and arithmetic is the easiest thing to test and the
+     * easiest thing to get wrong inline.
+     *
+     * <p><b>A failed LAST step has nothing after it.</b> The report used to count the remainder and say so in
+     * the plainest possible self-contradiction: "the 0 steps after it went undone, and until this part comes
+     * right there is no going on to them" — naming a quantity it had just counted as none, then promising to
+     * withhold something that does not exist. Reported twice from live play: on
+     * {@code check the fire; bank the fire for the night} over a cold pit, and on a bow-drill ignition at the
+     * end of a longer procedure.
+     *
+     * <p>The failed step is set aside whatever its position, so telling the player it can be taken up again is
+     * true as well as kinder: a bare "carry on" retries exactly that part.
+     *
+     * @param done      steps that ran before the failure
+     * @param remaining steps written after the one that failed
+     */
+    static String stoppedReport(int done, int remaining) {
+        if (done == 0)
+            return "The rest of what you set out to do is still ahead of you, and until this part comes right "
+                 + "there is no going on to them.";
+        if (remaining == 0)
+            return "What you did before this stands. This last part is the one that did not come right, and it "
+                 + "waits for you to take it up again.";
+        return "What you did before this stands, but the " + remaining + " step" + (remaining == 1 ? "" : "s")
+             + " after it went undone, and until this part comes right there is no going on to them.";
     }
 
     private static UUID stepKey(UUID idempotencyKey, String tag, int i) {
