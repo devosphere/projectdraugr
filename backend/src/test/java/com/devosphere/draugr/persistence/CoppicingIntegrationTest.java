@@ -122,6 +122,58 @@ class CoppicingIntegrationTest {
         assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
 
+    private int carried(UUID chronicle, String itemKey) {
+        Integer n = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM item_instance i JOIN world_object w ON w.id=i.object_id " +
+                "WHERE i.item_key=? AND w.current_owner_id=? AND w.lifecycle_state='ACTIVE'", Integer.class, itemKey, chronicle);
+        return n == null ? 0 : n;
+    }
+
+    /**
+     * #906: at a wetland camp with a standing willow, {@code coppice willow} handed back a Hazel Rod — the handler
+     * never received the words and cut whatever tree the chunk listed first. The named willow is the one cut now, it
+     * yields willow withies, and a tree that is not standing here is refused by name rather than swapped for another.
+     */
+    @Test
+    void coppicingTheNamedWillowYieldsWillowNotHazel() {
+        if (worldGenesis.current() == null) {
+            worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
+            ecology.seed();
+        }
+        ChronicleService.ChronicleSummary summary = chronicles.awaken();
+        assertNotNull(summary, "awakening must produce a living Chronicle");
+        UUID chronicle = summary.id();
+        UUID chunk = jdbc.queryForObject("SELECT id FROM world_chunk WHERE biome='TEMPERATE_FOREST' ORDER BY grid_y DESC, grid_x DESC LIMIT 1", UUID.class);
+        jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", chunk, chronicle);
+        jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
+        Instant now = ticks.current().simulatedAt();
+        items.createCarriedItem(chronicle, "stone_axe", "Stone axe", now, "TEST_SEED");
+
+        // A mixed wood: an ash the chunk lists before the willow, which is exactly what used to be cut.
+        jdbc.update("DELETE FROM chunk_flora WHERE chunk_id=? AND flora_key IN (SELECT flora_key FROM flora_definition WHERE organism_type='TREE')", chunk);
+        jdbc.update("INSERT INTO chunk_flora (chunk_id, flora_key, quantity, capacity) VALUES (?, 'ash', 8, 16), (?, 'willow', 6, 16)", chunk, chunk);
+
+        int hazelBefore = carried(chronicle, "hazel_rod");
+        int willowBefore = carried(chronicle, "willow_branch");
+        String[] cut = items.coppice(chronicle, chunk, "coppice willow", now);
+        assertEquals("SUCCEEDED", cut[0], () -> "coppicing the standing willow must succeed: " + cut[1]);
+        assertTrue(carried(chronicle, "willow_branch") >= willowBefore + 2, () -> "the willow must yield willow withies: " + cut[1]);
+        assertEquals(hazelBefore, carried(chronicle, "hazel_rod"), "a willow must not yield a Hazel Rod");
+        assertTrue(cut[1].toLowerCase().contains("willow"), () -> "the narration must name the stand that was cut: " + cut[1]);
+        Timestamp ashCut = jdbc.queryForObject("SELECT last_coppiced_at FROM chunk_flora WHERE chunk_id=? AND flora_key='ash'", Timestamp.class, chunk);
+        assertEquals(null, ashCut, "the ash nobody named must be left uncut");
+
+        // A tree that is not standing here is refused by name, and nothing is cut in its place.
+        int willowAfter = carried(chronicle, "willow_branch");
+        String[] absent = items.coppice(chronicle, chunk, "coppice the birch", now);
+        assertFalse("SUCCEEDED".equals(absent[0]), () -> "a birch that is not here must not be coppiced: " + absent[1]);
+        assertTrue(absent[1].toLowerCase().contains("birch"), () -> "the refusal must name the tree asked for: " + absent[1]);
+        assertEquals(willowAfter, carried(chronicle, "willow_branch"), "a refused cutting yields nothing");
+        assertEquals(hazelBefore, carried(chronicle, "hazel_rod"), "a refused cutting yields nothing");
+
+        assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
+
     @Test
     void aConiferStandCannotBeCoppiced() {
         if (worldGenesis.current() == null) {

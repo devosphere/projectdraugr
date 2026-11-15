@@ -715,7 +715,7 @@ public class ChronicleActionService {
         else if (intent == Intent.PLANT_TREE) { String[] r=items.plantTree(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.FORAGE_GROUND) { String[] r=items.forageGround(chronicle.id(),chronicle.location(),text,resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.FELL_TREE) { String[] r=items.fellTree(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
-        else if (intent == Intent.COPPICE) { String[] r=items.coppice(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
+        else if (intent == Intent.COPPICE) { String[] r=items.coppice(chronicle.id(),chronicle.location(),text,resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.TILL_GROUND) { String[] r=items.tillGround(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.SOW) { String[] r=items.sowCrop(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.HARVEST_CROP) { String[] r=items.harvestCrop(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
