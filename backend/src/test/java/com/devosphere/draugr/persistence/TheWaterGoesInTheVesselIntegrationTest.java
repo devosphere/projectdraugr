@@ -117,7 +117,7 @@ class TheWaterGoesInTheVesselIntegrationTest {
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", wetland, chronicle);
         jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
         // Whatever this shared world left in the pack; this test measures its own water only.
-        jdbc.update("UPDATE world_object w SET lifecycle_state='DESTROYED', current_owner_id=NULL " +
+        jdbc.update("UPDATE world_object w SET lifecycle_state='DESTROYED', destroyed_cause='TEST_TEARDOWN', current_owner_id=NULL " +
                     "FROM item_instance i WHERE i.object_id=w.id AND w.current_owner_id=? " +
                     "  AND i.item_key IN ('raw_water','filtered_water','clean_water')", chronicle);
 
@@ -139,7 +139,7 @@ class TheWaterGoesInTheVesselIntegrationTest {
         assertEquals("SUCCEEDED", drunk.outcome(), drunk::perception);
 
         // AN EQUIPPED LADLE IS A VESSEL (#915). Nothing else that holds water, and it is in the hand.
-        jdbc.update("UPDATE world_object w SET lifecycle_state='DESTROYED', current_owner_id=NULL " +
+        jdbc.update("UPDATE world_object w SET lifecycle_state='DESTROYED', destroyed_cause='TEST_TEARDOWN', current_owner_id=NULL " +
                     "FROM item_instance i WHERE i.object_id=w.id AND w.current_owner_id=? " +
                     "  AND i.item_key IN ('raw_water','filtered_water','clean_water','folded_bark_cup')", chronicle);
         UUID ladle = vessel(chronicle, "water_ladle", "Water ladle", now);

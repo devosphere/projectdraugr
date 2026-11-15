@@ -2148,6 +2148,15 @@ public class PhysicalItemService {
         Object[] args = new Object[WATER_VESSELS.length + 1];
         args[0] = chronicle;
         System.arraycopy(WATER_VESSELS, 0, args, 1, WATER_VESSELS.length);
+        // A VESSEL MADE BY ANY PATH CAN HOLD WATER. Only createCraftedItem writes a container_properties row;
+        // a vessel that arrived through createCarriedItem (a starting kit, a find, a fixture) had none, so the
+        // query below never saw it and an EMPTY cup was reported "already brimful" (CI on #928: five suites).
+        // Give each such vessel the capacity its catalogue declares before measuring the free space in it.
+        jdbc.update("INSERT INTO container_properties (object_id,max_mass_grams,max_volume_ml) " +
+            "SELECT w.id, c.max_mass_grams, c.max_volume_ml FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
+            "JOIN container_capacity_default c ON c.item_key=i.item_key " +
+            "WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key IN (" + vesselKeys + ") " +
+            "ON CONFLICT (object_id) DO NOTHING", args);
         // Free volume = the vessel's own capacity less what is already inside it. Smallest free space first.
         List<java.util.Map<String,Object>> vessels = jdbc.queryForList(
             "SELECT w.id, w.display_name, cp.max_volume_ml - COALESCE((" +
