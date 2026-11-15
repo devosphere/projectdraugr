@@ -182,19 +182,30 @@ class BankedFireIntegrationTest {
                 "and past the ember threshold, which is why fuel alone could never say whether a fire bites: " + fuelAt(chunk));
 
             int intact = integrityOfTheRack(chunk);
-            fire.advanceTo(banked.plus(Duration.ofHours(3)));
+            // A SPAN THE BANKED FIRE CAN LIVE THROUGH, taken from its own fuel rather than picked. Three
+            // fixed hours is 180 minutes, and banking left it something over 120 — so the coals went OUT
+            // partway and the hearth was cold when the reading was taken: "The stone fire pit is cold and
+            // empty" (CI, #890). Both claims below were then measuring a dead fire, one of them passing for
+            // that reason. Half the remaining fuel keeps it alight and banked for the whole window, which is
+            // the state whose hazard is in question.
+            Duration underAsh = Duration.ofMinutes(Math.max(30, fuelAt(chunk) / 2));
+            Instant raked = banked.plus(underAsh);
+            fire.advanceTo(raked);
+            assertTrue(fuelAt(chunk) > 0,
+                () -> "this measures a banked fire, so it must still be burning at the end of the span: fuel "
+                      + fuelAt(chunk) + " after " + underAsh.toMinutes() + " minutes");
             assertEquals(intact, integrityOfTheRack(chunk),
                 "coals raked tight under ash throw nothing: a banked hearth must not char what stands beside it");
 
             // The reading agrees with the act that produced it — the contradiction the player actually saw.
-            String read = fire.fireReading(chronicle, chunk, banked.plus(Duration.ofHours(3)), 0);
+            String read = fire.fireReading(chronicle, chunk, raked, 0);
             assertTrue(read.contains("banked"), () -> "the reading must say the fire is banked: " + read);
             assertFalse(read.contains("throwing embers"),
                 () -> "a banked fire must never be reported as throwing embers: " + read);
 
             // PUTTING A BRANCH ON OPENS THE FLAME AGAIN. A fire you have just fed is not banked, whatever it
             // was a minute ago, and the hazard must come back with the flame.
-            fire.feed(chronicle, chunk, banked.plus(Duration.ofHours(3)));
+            fire.feed(chronicle, chunk, raked);
             assertFalse(bankedAt(chunk), "feeding a banked fire opens the flame again");
         } finally {
             jdbc.update("UPDATE world_weather SET weather_kind=? WHERE world_id=?", skyWas, world);
