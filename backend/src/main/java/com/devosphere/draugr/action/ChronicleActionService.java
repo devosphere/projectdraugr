@@ -970,7 +970,7 @@ public class ChronicleActionService {
             prob *= wetFireOdds(chronicle.location(), mp.requiresDry(), beforeWeather);
             boolean caught = SuccessModel.roll(Math.min(0.95, prob), actionId);
             FireService.LightResult r = fire.light(chronicle.id(), chronicle.location(), resolvedAt, caught, method);
-            if(r==FireService.LightResult.LIT){perception="An ember catches in the tinder. You feed it into the fuel and a flame steadies within the ring of stone.";} else {outcome="FAILED"; perception=switch(r){ case NO_PIT -> "You crouch over the bare ground, but there is no ring of stone here to hold a fire."; case NO_KIT -> "You press your palms together and search for something to work, but your hands raise no heat from bare wood alone."; case NO_TINDER -> "You spin the spindle until a wisp of smoke curls up, but the ember finds nothing fine enough to catch, and dies against the board."; case NO_FUEL -> "A small ember glows in the tinder and then fades, with nothing dry set ready to build it into a fire."; case NO_CATCH -> "You work the spindle and coax a thread of smoke, but the ember never quite takes, and the tinder blackens to nothing in your hands."; default -> "The attempt leaves the air unchanged."; };} }
+            if(r==FireService.LightResult.LIT){perception="An ember catches in the tinder. You feed it into the fuel and a flame steadies within the ring of stone.";} else {outcome="FAILED"; perception=switch(r){ case NO_PIT -> "You crouch over the bare ground, but there is no ring of stone here to hold a fire."; case NO_KIT -> missingKitRead(mp); case NO_TINDER -> "You spin the spindle until a wisp of smoke curls up, but the ember finds nothing fine enough to catch, and dies against the board."; case NO_FUEL -> "A small ember glows in the tinder and then fades, with nothing dry set ready to build it into a fire."; case NO_CATCH -> "You work the spindle and coax a thread of smoke, but the ember never quite takes, and the tinder blackens to nothing in your hands."; default -> "The attempt leaves the air unchanged."; };} }
         else if (intent == Intent.FEED_FIRE) { if(fire.feed(chronicle.id(),chronicle.location(),resolvedAt)) perception="You settle another dry branch into the coals and watch the fire deepen."; else {outcome="FAILED"; perception="You handle the branch near the cold stones, then take it back.";} }
         else if (intent == Intent.EXTINGUISH_FIRE) { if(fire.extinguish(chronicle.location(),resolvedAt)) perception="You smother the fire with earth and beat down the last of it until only cooling, dead ash remains."; else {outcome="FAILED"; perception="You move to put out a fire, but none is burning here.";} }
         else if (intent == Intent.BANK_FIRE) { if(fire.bank(chronicle.id(),chronicle.location(),resolvedAt)) perception=items.hasAtLeast(chronicle.id(),"fire_poker",1)?"You work the poker through the fire, rake the coals into a tight heap and cover them with ash. Banked like this the embers will hold low and long, and can be woken again later.":"You rake the coals into a tight heap and cover them with ash, so the embers will hold low and long and can be woken again later."; else {outcome="FAILED"; perception="There is no fire here to bank down.";} }
@@ -1007,7 +1007,17 @@ public class ChronicleActionService {
         else if (intent == Intent.CRAFT_PICKAXE) { if (items.hasAtLeast(chronicle.id(),"field_stone",1) && items.hasAtLeast(chronicle.id(),"plant_fiber",1) && items.hasAtLeast(chronicle.id(),"dry_branch",1)) { items.craftPrimitiveTool("primitive_pickaxe","Primitive pickaxe",true,resolvedAt); perception="You lash a shaped stone crosswise to the branch and swing it through the air to test it. The weight pulls true at the end of the arc — a tool made for breaking hard ground."; } else { outcome="FAILED"; perception="The pieces refuse to hold in a form that can work the ground. The head lolls sideways on every swing, and no amount of binding sets it straight."; } }
         else if (intent == Intent.CRAFT_HATCHET) { if (items.hasAtLeast(chronicle.id(),"field_stone",1) && items.hasAtLeast(chronicle.id(),"plant_fiber",1) && items.hasAtLeast(chronicle.id(),"dry_branch",1)) { items.craftPrimitiveTool("stone_hatchet","Stone hatchet",true,resolvedAt); perception="You knap a stone down to a broad, biting edge and lash it into the split of a branch, wedging and binding until it is one thing. It is heavy in the head and rough in the haft, but the edge bites — a hatchet, enough to bring a tree down."; } else { outcome="FAILED"; perception="Without a stone edge, a branch, and cordage to bind them, the head never seats. It rocks in the split and tears free the moment you put any force behind it."; } }
         else if (intent == Intent.CRAFT_FIRE_KIT) { if (items.craftFireKit(resolvedAt)) perception="You carve a flat notched board and a straight spindle from dry wood — the makings of a friction fire."; else { outcome="FAILED"; perception="Without a blade and sound dry wood, your hands shape nothing that would raise an ember."; } }
-        else if (intent == Intent.CRAFT_TINDER) { if (items.craftTinder(resolvedAt)) perception="You tease plant fiber apart into a loose, dry nest, fine enough to hold a spark."; else { outcome="FAILED"; perception="You pull at what you have, but nothing here is dry and fine enough to catch an ember."; } }
+        else if (intent == Intent.CRAFT_TINDER) {
+            // NAME WHAT WAS ACTUALLY TEASED APART (#898). craftTinder takes eight different stocks — cattail
+            // fluff, birch polypore, fatwood, shavings, plant fibre, leaf litter, dry twigs, shed fur — and
+            // returned a boolean, so every one of them was reported as plant fibre. A player learns this world
+            // from its sentences, and that one taught a material the act had not touched.
+            String from = items.tinderFrom(resolvedAt);
+            if (from != null) {
+                String what = items.plainNamesOf(java.util.List.of(from)).get(0);
+                perception = "You tease " + what + " apart into a loose, dry nest, fine enough to hold a spark.";
+            } else { outcome="FAILED"; perception="You pull at what you have, but nothing here is dry and fine enough to catch an ember."; }
+        }
         else if (intent == Intent.CRAFT_DESK) { if (items.craftFurniture(chronicle.id(),chronicle.location(),"wooden_desk","Wooden desk",5,0,false,0,0,resolvedAt)) perception="You lash cut branches into a broad, steady work surface and set it in place. The desk stands where you built it."; else { outcome="FAILED"; perception="Without a blade, sound branches, and fiber to bind them, no surface holds together."; } }
         else if (intent == Intent.CRAFT_CHAIR) { if (items.craftFurniture(chronicle.id(),chronicle.location(),"wooden_chair","Wooden chair",3,0,false,0,0,resolvedAt)) perception="You bind branches into a low seat and set it down. The chair holds your weight."; else { outcome="FAILED"; perception="The pieces will not hold as a seat without a blade, branches, and binding fiber."; } }
         else if (intent == Intent.CRAFT_SHELF) { if (items.craftFurniture(chronicle.id(),chronicle.location(),"stone_shelf","Stone slab shelf",0,3,true,30000,40000,resolvedAt)) perception="You stack and level flat slabs into a standing shelf of stone — a place to keep what you make and what you know."; else { outcome="FAILED"; perception="Without enough flat stone slabs, nothing here will stand as a shelf."; } }
@@ -1055,6 +1065,16 @@ public class ChronicleActionService {
                     + com.devosphere.draugr.construction.ConstructionService.FIRE_PIT_STONES
                     + ". You leave them where they lie.";
             }
+        }
+        else if (intent == Intent.TAKE_UP_AGAIN) {
+            // Reached only when there is nothing to take up: resolvePlan resumes a real remainder before the
+            // sentence ever gets here (#876). It marks nothing and costs a moment's attention.
+            //
+            // SUCCEEDED, and deliberately. Looking and finding nothing is a completed act of looking, and the
+            // prose carries the whole truth of it. FAILED would stop the procedure this step belongs to and
+            // then SET THE "carry on" ITSELF ASIDE — so the next resume would take up a resume, for ever.
+            perception = "You look for the work you set aside, and there is none waiting to be taken up. "
+                       + "What you are doing now is what you wrote.";
         }
         else if (intent == Intent.BUILD_ALARM) { String[] r = construction.buildCampAlarm(chronicle.id(), chronicle.location(), resolvedAt); outcome = r[0]; perception = r[1]; }
         else if (intent == Intent.STRIP_BARK) { int n = items.stripBark(chronicle.id(), chronicle.location(), resolvedAt); outcome = n > 0 ? "SUCCEEDED" : "FAILED"; perception = n > 0 ? "You work a broad strip of bark free from a tree and keep it." : "You look for a tree with workable bark, but find none within reach."; }
@@ -1245,7 +1265,7 @@ public class ChronicleActionService {
             if (!refined.equals(perception)) {
                 perception = refined;
                 aiContributed = true;
-                frame = new PerceptionFrame(frame.intent(), frame.outcome(), frame.location(), frame.timeOfDay(), frame.weather(), frame.attention(), frame.nearbyObjects(), frame.physiology(), frame.sinceLastFrame(), perception);
+                frame = new PerceptionFrame(frame.intent(), frame.outcome(), frame.location(), frame.timeOfDay(), frame.weather(), frame.attention(), frame.nearbyObjects(), frame.physiology(), frame.sinceLastFrame(), perception, frame.hearth());
             }
         }
         // Persist the DISPLAYED narration as an overlay so history, the journey archive, and the PDF
@@ -1411,10 +1431,36 @@ public class ChronicleActionService {
     /** A fire burning dangerously (#219 fire containment): a roaring, unbanked hearth in dry weather with thatch or a
      *  loose fuel stock close by — the grounded warning that, left untended, it could catch, read before it ever does.
      *  Mirrors the gate the fire tick scorches on (FireService.scorchNearbyFlammables). Read-only; names no action. */
+    /**
+     * What a named ignition method is still short of (#871).
+     *
+     * <p>A Chronicle who had built the pit, cut the hearth board, carved the spindle, strung the bow and
+     * prepared the tinder, and was missing only the BEARING BLOCK, was told their hands could "raise no heat
+     * from bare wood alone" — a sentence describing someone with no kit whatever. They had four of the five
+     * parts. The refusal could not tell an incomplete kit from an empty pack because it never looked:
+     * {@code MethodProfile.missing} already held the answer, listed from fire_method_requirement, and the
+     * switch threw it away and printed a literal.
+     *
+     * <p>An empty-handed attempt still reads as it always did; there is no kit to be short of.
+     */
+    private String missingKitRead(FireService.MethodProfile method) {
+        java.util.List<String> short0 = items.plainNamesOf(method.missing());
+        if (short0.isEmpty())
+            return "You press your palms together and search for something to work, but your hands raise no heat from bare wood alone.";
+        StringBuilder named = new StringBuilder();
+        for (int i = 0; i < short0.size(); i++)
+            named.append(i == 0 ? "" : i == short0.size() - 1 ? " and " : ", ").append("a ").append(short0.get(i));
+        return "You set out what you have for the " + method.displayName().toLowerCase(java.util.Locale.ROOT)
+            + " and come up short: it wants " + named + ", and you have " + (short0.size() == 1 ? "none" : "none of them") + ". Without that the method cannot be worked at all.";
+    }
+
     private String groundFireHazard(UUID loc, Instant at) {
         boolean roaring = Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM fire_state fs JOIN construction_project cp ON cp.object_id=fs.construction_id JOIN world_object w ON w.id=cp.object_id " +
-            "WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' AND fs.active=true AND fs.fuel_minutes>=120)", Boolean.class, loc));
+            // `banked` is what makes "unbanked" above true rather than merely intended (#890). This javadoc said
+            // unbanked before the column existed, so the third reader of the hazard gate warned about the one
+            // hearth that is safe: coals raked tight under ash hold a long burn and throw nothing.
+            "WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' AND fs.active=true AND fs.banked=false AND fs.fuel_minutes>=120)", Boolean.class, loc));
         if (!roaring) return "";
         String weather = jdbc.query("SELECT ww.weather_kind FROM world_weather ww JOIN world_chunk wc ON wc.world_id=ww.world_id WHERE wc.id=?",
             rs -> rs.next() ? rs.getString(1) : null, loc);
@@ -2968,6 +3014,15 @@ public class ChronicleActionService {
     }
     private Intent classify(String action) {
         String value=action.toLowerCase(Locale.ROOT);
+        // A BARE "CARRY ON" IS NEVER A MAKING (#876). resolvePlan takes it up when something is set aside, and
+        // until now anything else fell straight through this chain to the catalogue — so written as a STEP of a
+        // procedure, where the plan it belongs to has just replaced whatever was set aside, it reached the
+        // material matcher and was answered by a recipe. Live: `urinate; gather plant fiber; prepare a tinder
+        // nest; carry on` wound the player's FIRE SPINDLE into a fibre-wound spindle, and the ignition they
+        // were building toward then failed for want of the spindle it had consumed.
+        //
+        // First in the chain, because the phrase is a whole submission and nothing else can be meant by it.
+        if(ActionPlan.isResumeRequest(action)) return Intent.TAKE_UP_AGAIN;
         if(DOCUMENT_EDIT.matcher(action).matches()) return Intent.EDIT_DOCUMENT;
         // THE CATALOGUE'S OWN NAME FOR A THING IS A REQUEST FOR IT (#37/#99).
         //
@@ -3010,7 +3065,23 @@ public class ChronicleActionService {
         if((value.contains("craft")||value.contains("make")||value.contains("carve")||value.contains("prepare"))&&((value.contains("fire")&&(value.contains("kit")||value.contains("drill")||value.contains("board")))||(value.contains("hearth")&&!value.contains("clay hearth")&&!value.contains("clay-lined"))||value.contains("spindle"))) return Intent.CRAFT_FIRE_KIT;
         // Charred tinder is its own thing (V49) — made by smothering fiber rather than
         // teasing it loose — so it goes to the ignition-kit path, not the tinder nest.
-        if((value.contains("make")||value.contains("prepare")||value.contains("gather")||value.contains("form")||value.contains("bundle"))&&value.contains("tinder")&&!value.contains("char")) return Intent.CRAFT_TINDER;
+        //
+        // THE VERB HAS TO GOVERN THE TINDER (#902). This asked whether a making word appeared ANYWHERE in the
+        // sentence and whether "tinder" appeared anywhere, which are two unrelated questions. Live:
+        //
+        //   "Light the fire with the bow drill, pressing steadily downward on the spindle in the hearth board
+        //    until a glowing ember FORMS, easing the ember into the dry TINDER nest..."
+        //
+        // "forms" belongs to the ember and "tinder" to the nest the ember is going into, and the sentence as a
+        // whole is an ignition — it opens with "Light the fire with the bow drill", which LIGHT_FIRE claims
+        // further down and which even names "tinder nest" as an ignition signal. The player was answered with
+        // the refusal for MAKING tinder while holding the nest they had already made.
+        //
+        // So the question is asked properly: the making verb must stand just before the word, with nothing
+        // between the two but the words that decorate a noun. "make tinder", "prepare a dry tinder nest" and
+        // "form a tinder bundle" are makings; an ember forming nine words earlier is not.
+        if(makingGoverns(value, "tinder", "make","making","craft","crafting","fashion","prepare","preparing","gather","gathering","form","forming","bundle","tease","teasing","build","work","twist")
+           &&!value.contains("char")) return Intent.CRAFT_TINDER;
         // A "drying rack" is a staged structure (V58), not a shelf — let it fall through
         // to the assembly engine rather than being caught by "rack" here.
         // Workstations (V69) before the generic desk/table rule, which also matches "bench"/"table": a
@@ -3322,6 +3393,27 @@ public class ChronicleActionService {
            &&(value.contains("on")||value.contains("put")||value.contains("add")||value.contains("throw"))
            &&!value.contains("gather")&&!value.contains("collect")&&!value.contains("find")
            &&!value.contains("need")&&!value.contains("enough")&&!value.contains("how much")) return Intent.FEED_FIRE;
+        // ...and the ones that COUNT the wood (#895). The rules above know "more" and "another" and nothing
+        // else, so `add one dry branch to the fire` — said four times in one live Chronicle, at a lit pit, with
+        // dry branches in the pack — reached neither of them. It fell out of the fire rules entirely and was
+        // answered somewhere else, and the Chronicle ended up carrying four "Burning branch" items that
+        // survived the fire going cold and two days of travel, while the narration said each branch had settled
+        // across the coals.
+        //
+        // A number is not a different act from "another". The shape is a putting verb, a word for fuel, and
+        // the fire it goes on; the guards are the same ones the rule above needs, plus the OPPOSITE act —
+        // taking something back OFF the fire is not feeding it.
+        if((value.contains("put")||value.contains("add")||value.contains("throw")||value.contains("toss")
+            ||value.contains("lay")||value.contains("set")||value.contains("place")||value.contains("settle")
+            ||value.contains("feed"))
+           &&(word(value,"branch")||word(value,"branches")||word(value,"wood")||word(value,"stick")||word(value,"sticks")
+              ||word(value,"log")||word(value,"logs")||word(value,"fuel")||word(value,"kindling")||word(value,"firewood"))
+           &&(word(value,"fire")||word(value,"coals")||word(value,"embers")||word(value,"flames")||value.contains("hearth")
+              ||value.contains("fire pit")||value.contains("firepit"))
+           &&!value.contains("gather")&&!value.contains("collect")&&!value.contains("find")&&!value.contains("pick up")
+           &&!value.contains("need")&&!value.contains("enough")&&!value.contains("how much")
+           &&!value.contains("off the fire")&&!value.contains("out of the fire")&&!value.contains("away from the fire")
+           &&!value.contains("build a fire")&&!value.contains("build the fire pit")) return Intent.FEED_FIRE;
         // Naming a real ignition technique IS asking for fire (V49). A player who
         // writes "strike flint against pyrite" or "spin the bow drill" should not
         // have to also say the word "fire" to be understood.
@@ -5504,6 +5596,44 @@ public class ChronicleActionService {
     /** Whole-word containment, delegating to the one definition of it — see {@link com.devosphere.draugr.narration.Words}. */
     private static boolean word(String haystack, String w) { return com.devosphere.draugr.narration.Words.word(haystack, w); }
 
+    /** The words that may stand between a verb and the noun it governs without breaking the grip. */
+    private static final java.util.Set<String> DECORATES_A_NOUN = java.util.Set.of(
+        "a", "an", "the", "some", "my", "more", "another", "one", "two", "three", "up", "out", "into", "of",
+        "dry", "fine", "loose", "new", "fresh", "good", "proper", "small", "little", "bit", "handful", "wad", "bundle");
+
+    /**
+     * Whether one of these verbs GOVERNS this word, rather than merely sharing a sentence with it.
+     *
+     * <p>Every collision this classifier has ever produced came from asking two questions at once: is a making
+     * word anywhere in the sentence, and is the noun anywhere in the sentence. A long, well-written command
+     * answers yes to both by accident. #902 is the clearest case there is — an ignition described in full
+     * ("...until a glowing ember FORMS, easing the ember into the dry TINDER nest...") was taken as a request
+     * to MAKE tinder, and refused for want of the very nest the sentence was holding.
+     *
+     * <p>So: the verb must stand before the word with nothing between them but the words that decorate a noun.
+     * That accepts "make tinder", "prepare a dry tinder nest", "form a tinder bundle" and "gather more
+     * tinder", and rejects a verb that belongs to some other noun nine words away.
+     *
+     * <p>Pure and static: no database, no state, testable as arithmetic.
+     *
+     * @param value the normalised action text
+     * @param noun  the word the verb must govern
+     * @param verbs the verbs that count as governing it
+     */
+    static boolean makingGoverns(String value, String noun, String... verbs) {
+        if (value == null) return false;
+        String[] said = value.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim().split(" ");
+        java.util.Set<String> governing = java.util.Set.of(verbs);
+        for (int at = 0; at < said.length; at++) {
+            if (!said[at].equals(noun)) continue;
+            for (int back = at - 1; back >= 0 && at - back <= 4; back--) {
+                if (governing.contains(said[back])) return true;
+                if (!DECORATES_A_NOUN.contains(said[back])) break;
+            }
+        }
+        return false;
+    }
+
     /**
      * Whether the sentence asks WHERE a thing of yours is, rather than what you have (#37).
      *
@@ -6938,7 +7068,7 @@ public class ChronicleActionService {
             || (word(v, "fix") && !v.contains("memory") && !v.contains("mind"));
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, JUDGE_CLOTHING, JUDGE_PLACE, JUDGE_WORK_IN_HAND, JUDGE_LEARNING, JUDGE_FLORA, JUDGE_RAISING, JUDGE_CAMP_GROUND, JUDGE_TOOLS, JUDGE_UNSEEN, TURN_OUT_STOCK, BRING_IN_STOCK, SLAUGHTER_STOCK, JUDGE_WHERE_TO_GO, PARE_HOOVES, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, JUDGE_CLOTHING, JUDGE_PLACE, JUDGE_WORK_IN_HAND, JUDGE_LEARNING, JUDGE_FLORA, JUDGE_RAISING, JUDGE_CAMP_GROUND, JUDGE_TOOLS, JUDGE_UNSEEN, TURN_OUT_STOCK, BRING_IN_STOCK, SLAUGHTER_STOCK, JUDGE_WHERE_TO_GO, PARE_HOOVES, TAKE_UP_AGAIN, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;}
         /** The cardinal for a grid offset, for when the WORLD names the direction rather than the player (#37). */
         static Direction of(int dx,int dy){ for(Direction d:values()) if(d.dx==dx&&d.dy==dy) return d; return null; } }    /**     * The structured perception frame — the seam every future Simulation Agent reads
@@ -7259,6 +7389,34 @@ public class ChronicleActionService {
         }
         return sb.toString();
     }
+    /**
+     * What the hearth on this ground is doing, in one plain phrase, or null when there is no hearth (#903).
+     *
+     * <p>Given to the narrator as a FACT, not as an inference from a count of objects. The frame used to carry
+     * "construction:1" and no more, so a stone ring built in the snow and never lit was described as giving
+     * off warmth from burning wood — the narrator had nothing to contradict, so it filled the silence.
+     *
+     * <p>Not gated by attention: a Chronicle standing at their own hearth knows whether it is alight.
+     */
+    private String hearthHere(UUID loc) {
+        return jdbc.query(
+            "SELECT lower(w.display_name), fs.active, fs.fuel_minutes, fs.banked " +
+            "FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "LEFT JOIN fire_state fs ON fs.construction_id=cp.object_id " +
+            "WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' AND cp.state='COMPLETED' " +
+            "  AND cp.project_kind IN (SELECT project_kind FROM construction_kind WHERE holds_fire) " +
+            "ORDER BY fs.active DESC NULLS LAST, fs.fuel_minutes DESC NULLS LAST LIMIT 1",
+            rs -> {
+                if (!rs.next()) return null;
+                String what = rs.getString(1);
+                boolean alight = rs.getBoolean(2) && !rs.wasNull();
+                if (!alight) return what + ", UNLIT AND COLD — no flame, no embers, no smoke, no warmth from it";
+                if (rs.getBoolean(4)) return what + ", banked: coals under ash, holding low, no open flame";
+                int fuel = rs.getInt(3);
+                return what + ", alight with about " + Math.max(1, fuel / 60) + " hour(s) of fuel in it";
+            }, loc);
+    }
+
     private PerceptionFrame buildFrame(ActiveChronicle chronicle, Intent intent, String outcome, String perception, Instant at, ChroniclePhysiologyService.BodyHudSnapshot before, ChroniclePhysiologyService.BodyHudSnapshot after, String beforeWeather, String attention) {
         UUID loc = chronicle.location();
         java.util.Map<String,Object> here = jdbc.queryForMap("SELECT world_id, grid_x, grid_y, biome FROM world_chunk WHERE id=?", loc);
@@ -7285,7 +7443,7 @@ public class ChronicleActionService {
             (rs, row) -> rs.getString(1).toLowerCase(Locale.ROOT) + ":" + rs.getInt(2), loc, chronicle.id());
         List<StateChange> sinceLast = physiologyDelta(before, after);
         if (beforeWeather != null && weather != null && !beforeWeather.equals(weather.kind())) sinceLast.add(new StateChange("weather", beforeWeather, weather.kind()));
-        return new PerceptionFrame(intent.name(), outcome, location, timeOfDayLabel(at), weather, attention, List.copyOf(nearby), after, List.copyOf(sinceLast), perception);
+        return new PerceptionFrame(intent.name(), outcome, location, timeOfDayLabel(at), weather, attention, List.copyOf(nearby), after, List.copyOf(sinceLast), perception, hearthHere(loc));
     }
     /**
      * How much of the world the chronicle was actually attending to, read from the
@@ -8173,7 +8331,16 @@ public class ChronicleActionService {
         };
         return (c == null ? " " : " The " + c + " takes the last of you. ") + "Your chronicle's journey ends here.";
     }
-    public record PerceptionFrame(String intent, String outcome, LocationView location, String timeOfDay, WeatherView weather, String attention, List<String> nearbyObjects, ChroniclePhysiologyService.BodyHudSnapshot physiology, List<StateChange> sinceLastFrame, String narration) { }
+    /**
+     * @param hearth what the hearth on this ground is doing, or null when there is none (#903).
+     *               <p>The AI narrator was given the biome, the sky, a count of object types and the body, and
+     *               nothing at all about fire — so on a snowy pre-dawn tile where a Chronicle had just RINGED
+     *               FOUR STONES and never once struck a light, it wrote that ash and snow were melting between
+     *               the stones and warmth was rising from gathered wood. Nothing in the frame contradicted it,
+     *               because nothing in the frame mentioned the fire either way. The distinction matters: it is
+     *               what a hypothermic Chronicle reads when deciding whether it is safe to lie down.
+     */
+    public record PerceptionFrame(String intent, String outcome, LocationView location, String timeOfDay, WeatherView weather, String attention, List<String> nearbyObjects, ChroniclePhysiologyService.BodyHudSnapshot physiology, List<StateChange> sinceLastFrame, String narration, String hearth) { }
     public record LocationView(UUID chunkId, String name, String biome, int gridX, int gridY) { }
     public record WeatherView(String kind, int intensity) { }
     /** A single qualitative transition between the previous frame and this one — e.g. hunger "Hungry" → "Starving". */

@@ -119,14 +119,16 @@ public class FireService {
                 items.consumeOne(chronicle, key, now);
         if(!emberCaught) return LightResult.NO_CATCH; // The attempt spent the tinder without taking hold.
         if(!items.consumeOne(chronicle,"dry_branch",now)) return LightResult.NO_FUEL;
-        jdbc.update("INSERT INTO fire_state (construction_id,active,fuel_minutes,last_updated_at) VALUES (?,true,45,?) ON CONFLICT (construction_id) DO UPDATE SET active=true,fuel_minutes=fire_state.fuel_minutes+45,last_updated_at=EXCLUDED.last_updated_at",pit,Timestamp.from(now));
+        // A fire just lit is an open flame, so it is not banked whatever this hearth was before (#890).
+        jdbc.update("INSERT INTO fire_state (construction_id,active,fuel_minutes,last_updated_at,banked) VALUES (?,true,45,?,false) ON CONFLICT (construction_id) DO UPDATE SET active=true,fuel_minutes=fire_state.fuel_minutes+45,last_updated_at=EXCLUDED.last_updated_at,banked=false",pit,Timestamp.from(now));
         return LightResult.LIT;
     }
     @Transactional
     public boolean feed(UUID chronicle, UUID location, Instant now) {
         UUID pit=jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id JOIN fire_state fs ON fs.construction_id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind IN (SELECT project_kind FROM construction_kind WHERE holds_fire) AND cp.state='COMPLETED' AND w.lifecycle_state='ACTIVE' AND fs.active=true LIMIT 1 FOR UPDATE",rs->rs.next()?rs.getObject(1,UUID.class):null,location);
         if(pit==null || !items.consumeOne(chronicle,"dry_branch",now)) return false;
-        jdbc.update("UPDATE fire_state SET fuel_minutes=fuel_minutes+45,last_updated_at=? WHERE construction_id=?",Timestamp.from(now),pit);
+        // A fire you have just put a branch on is not banked any more, whatever it was a minute ago (#890).
+        jdbc.update("UPDATE fire_state SET fuel_minutes=fuel_minutes+45,last_updated_at=?,banked=false WHERE construction_id=?",Timestamp.from(now),pit);
         return true;
     }
     /** The active fire burning here, or null (#71). */
@@ -138,7 +140,7 @@ public class FireService {
     public boolean extinguish(UUID location, Instant now) {
         UUID pit=activeFirePit(location);
         if(pit==null) return false;
-        jdbc.update("UPDATE fire_state SET active=false, fuel_minutes=0, last_updated_at=? WHERE construction_id=?",Timestamp.from(now),pit);
+        jdbc.update("UPDATE fire_state SET active=false, fuel_minutes=0, banked=false, last_updated_at=? WHERE construction_id=?",Timestamp.from(now),pit);
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'FIRE_EXTINGUISHED','{}'::jsonb)",pit,Timestamp.from(now));
         return true;
     }
@@ -154,7 +156,11 @@ public class FireService {
         UUID pit=activeFirePit(location);
         if(pit==null) return false;
         boolean poker = chronicle != null && items.hasAtLeast(chronicle,"fire_poker",1);
-        jdbc.update("UPDATE fire_state SET fuel_minutes=LEAST(fuel_minutes+?,?), last_updated_at=? WHERE construction_id=?",
+        // BANKED, and recorded as such (#890). Raking the coals tight and covering them RAISES fuel_minutes —
+        // that is what banking is for — and the ember hazard read that same number as ferocity, so doing the
+        // careful thing on a low fire was answered by a warning that the hearth would char the hut by the hour.
+        // Covered coals throw less than an open flame, not more; the flag is what says so.
+        jdbc.update("UPDATE fire_state SET fuel_minutes=LEAST(fuel_minutes+?,?), banked=true, last_updated_at=? WHERE construction_id=?",
             poker?130:90, poker?320:240, Timestamp.from(now),pit);
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'FIRE_BANKED','{}'::jsonb)",pit,Timestamp.from(now));
         return true;
@@ -263,13 +269,13 @@ public class FireService {
     @Transactional(readOnly = true)
     public String fireReading(UUID chronicle, UUID location, Instant now, int darkHoursLeft) {
         java.util.Map<String,Object> fire = jdbc.query(
-            "SELECT fs.active, fs.fuel_minutes, w.display_name FROM fire_state fs " +
+            "SELECT fs.active, fs.fuel_minutes, w.display_name, fs.banked FROM fire_state fs " +
             "JOIN construction_project cp ON cp.object_id = fs.construction_id " +
             "JOIN world_object w ON w.id = cp.object_id " +
             "WHERE w.current_location_id = ? AND w.lifecycle_state = 'ACTIVE' AND cp.state = 'COMPLETED' " +
             "ORDER BY fs.active DESC, fs.fuel_minutes DESC LIMIT 1",
             rs -> rs.next() ? java.util.Map.of("active", rs.getBoolean(1), "fuel", rs.getInt(2),
-                                               "what", rs.getString(3)) : null, location);
+                                               "what", rs.getString(3), "banked", rs.getBoolean(4)) : null, location);
 
         // Fuel to hand. dry_branch is what feed() consumes, so that is what is counted — the reading must not
         // promise burning time from wood the fire will not take.
@@ -309,16 +315,20 @@ public class FireService {
                        : fuel >= 60 ? "about an hour" + (fuel >= 90 ? " and a half" : "")
                        : fuel >= 20 ? "perhaps " + (fuel / 10 * 10) + " minutes"
                        : "minutes only";
+        // BANKED IS ITS OWN CONDITION, not a fiercer version of alight (#890). Covered coals hold a long
+        // burn with no flame, so reporting them by fuel alone said "burning well" of a hearth deliberately
+        // damped down for the night.
+        boolean banked = Boolean.TRUE.equals(fire.get("banked"));
         StringBuilder b = new StringBuilder();
-        b.append("The ").append(what).append(" is alight — ")
-         .append(fuel >= 180 ? "burning well" : fuel >= 60 ? "steady" : "low, and sinking")
+        b.append("The ").append(what).append(banked ? " is banked — coals raked tight under ash, holding low" : " is alight — ")
+         .append(banked ? "" : fuel >= 180 ? "burning well" : fuel >= 60 ? "steady" : "low, and sinking")
          .append(", with ").append(howLong).append(" of fuel in it. ");
         // WHAT A ROARING FIRE WILL DO TO WHAT STANDS BESIDE IT (#219, and unaskable until now). All three
         // conditions scorchNearbyFlammables applies are readable, and it is the same query: flammability is a
         // property of the KIND (V274 made it so, after three hardcoded names left a reed hut fireproof), the
         // hazard begins at 120 fuel-minutes, and wet weather puts the embers out before they catch. A keeper
         // whose lean-to is quietly losing 4% an hour to their own hearth was told nothing at all.
-        if (fuel >= ROARING_ENOUGH_TO_THROW_EMBERS) {
+        if (!banked && fuel >= ROARING_ENOUGH_TO_THROW_EMBERS) {
             String dryEnough = jdbc.query(
                 "SELECT ww.weather_kind FROM world_weather ww JOIN world_chunk wc ON wc.world_id=ww.world_id WHERE wc.id=?",
                 rs -> rs.next() ? rs.getString(1) : null, location);
@@ -355,13 +365,14 @@ public class FireService {
         // it. Collecting first (rather than updating inside the open cursor) keeps the per-fire hazard queries clear
         // of the cursor's own connection.
         java.util.List<Object[]> fires = jdbc.query(
-            "SELECT construction_id,last_updated_at,fuel_minutes FROM fire_state WHERE active=true FOR UPDATE",
-            (rs, i) -> new Object[]{rs.getObject(1, UUID.class), rs.getTimestamp(2).toInstant(), rs.getInt(3)});
+            "SELECT construction_id,last_updated_at,fuel_minutes,banked FROM fire_state WHERE active=true FOR UPDATE",
+            (rs, i) -> new Object[]{rs.getObject(1, UUID.class), rs.getTimestamp(2).toInstant(), rs.getInt(3), rs.getBoolean(4)});
         for (Object[] f : fires) {
-            UUID id = (UUID) f[0]; Instant last = (Instant) f[1]; int fuelBefore = (int) f[2];
+            UUID id = (UUID) f[0]; Instant last = (Instant) f[1]; int fuelBefore = (int) f[2]; boolean banked = (boolean) f[3];
             int remaining = Math.max(0, fuelBefore - (int) Duration.between(last, now).toMinutes());
-            jdbc.update("UPDATE fire_state SET fuel_minutes=?,active=?,last_updated_at=? WHERE construction_id=?", remaining, remaining > 0, Timestamp.from(now), id);
-            scorchNearbyFlammables(id, last, now, fuelBefore);
+            // A fire that burns out is no longer banked; there is nothing left to be covering.
+            jdbc.update("UPDATE fire_state SET fuel_minutes=?,active=?,banked=?,last_updated_at=? WHERE construction_id=?", remaining, remaining > 0, banked && remaining > 0, Timestamp.from(now), id);
+            scorchNearbyFlammables(id, last, now, fuelBefore, banked);
         }
     }
 
@@ -375,10 +386,14 @@ public class FireService {
      * fuel actually on hand — a fire cannot roar longer than it can burn — so a hearth tended and banked in good
      * order never bites; only a big fire left alone does.
      */
-    private void scorchNearbyFlammables(UUID pit, Instant last, Instant now, int fuelBefore) {
+    private void scorchNearbyFlammables(UUID pit, Instant last, Instant now, int fuelBefore, boolean banked) {
         // Only a well-fed, roaring fire throws enough heat and embers to catch nearby thatch. The threshold is
         // shared with fireReading, which must warn at exactly the fuel this begins to bite at.
-        if (fuelBefore < ROARING_ENOUGH_TO_THROW_EMBERS) return;
+        //
+        // BANKED COALS ARE NOT A ROARING FIRE (#890). Banking raises fuel_minutes past this threshold on
+        // purpose, so reading fuel alone turned the one act that makes a hearth SAFE overnight into the
+        // trigger for burning the camp down.
+        if (banked || fuelBefore < ROARING_ENOUGH_TO_THROW_EMBERS) return;
         long hours = Math.min(Duration.between(last, now).toHours(), fuelBefore / 60L);
         if (hours <= 0) return;
         UUID chunk = jdbc.query("SELECT current_location_id FROM world_object WHERE id=?", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, pit);
