@@ -2000,6 +2000,23 @@ public class WildlifeEncounterService {
      */
     static final java.util.List<String> WHOLE_WATER_TRAPS = java.util.List.of("crayfish_trap", "basket_fish_trap", "fish_trap");
 
+    /** wildlife_species.size_tier, smallest first. An unknown tier ranks above all of them — nothing admits it. */
+    private static final java.util.List<String> SIZE_TIERS = java.util.List.of("TINY", "SMALL", "MEDIUM", "LARGE", "HUGE");
+
+    static int sizeRank(String tier) {
+        int i = tier == null ? -1 : SIZE_TIERS.indexOf(tier);
+        return i < 0 ? SIZE_TIERS.size() : i;
+    }
+
+    /**
+     * Whether a funnel trap cut for a quarry of {@code quarryTier} lets in an animal of {@code tier} (#908): its
+     * own size and one above, never more. A crayfish (TINY) trap takes minnows, dace and perch; not a carp.
+     */
+    static boolean throatAdmits(String quarryTier, String tier) {
+        int q = sizeRank(quarryTier), t = sizeRank(tier);
+        return q < SIZE_TIERS.size() && t <= q + 1;
+    }
+
     private String key2name(String key) {
         String name = jdbc.query("SELECT display_name FROM item_definition WHERE item_key=?", rs -> rs.next() ? rs.getString(1) : null, key);
         return name != null ? name : key.replace('_', ' ');
@@ -2249,14 +2266,43 @@ public class WildlifeEncounterService {
             aquatic ? "SELECT species_key FROM wildlife_species WHERE movement_class='AQUATIC' AND biome_affinity ILIKE ? ORDER BY species_key"
                     : "SELECT species_key FROM wildlife_species WHERE size_tier IN ('TINY','SMALL','MEDIUM') AND movement_class IN ('TERRESTRIAL','AERIAL') AND biome_affinity ILIKE ? AND wildlife_abroad(species_key) ORDER BY species_key",
             String.class, "%"+biome+"%");
-        if (prey.isEmpty()) return new EncounterResult("PARTIAL","The trap is untouched. Nothing that uses this ground has come near it.");
+        // A MADE TRAP FISHES FOR WHAT IT WAS MADE FOR (#908). A crayfish trap — "a small funnel trap for crayfish
+        // and small fish" (V218) — drew from every water species of the biome, so at a wetland it came up with a
+        // carp, a pike or a sturgeon as often as a crayfish. Two things a funnel trap really does: its throat is
+        // cut for its quarry, so nothing much bigger than that can get in; and what it is baited and shaped for
+        // is what mostly walks into it. Both read from the catalogue — the quarry is whatever species the trap's
+        // own name names, the throat is that species' size tier and one above it — so a trap named for no species
+        // (fish trap, basket fish trap, a funnel woven on the spot) fishes the whole water exactly as before.
+        String wholeTrap = (String) trap.get("whole");
+        java.util.List<String> quarry = java.util.List.of();
+        if (aquatic && wholeTrap != null && !prey.isEmpty()) {
+            String trapName = key2name(wholeTrap);
+            java.util.Map<String,String> tierOf = new java.util.HashMap<>();
+            jdbc.query("SELECT species_key, size_tier FROM wildlife_species WHERE movement_class='AQUATIC'",
+                rs -> { tierOf.put(rs.getString(1), rs.getString(2)); });
+            java.util.List<String> named = new java.util.ArrayList<>();
+            for (String key : tierOf.keySet()) if (PhysicalItemService.saidAsASpeciesName(trapName, key)) named.add(key);
+            if (!named.isEmpty()) {
+                String widest = named.stream().map(tierOf::get).max(java.util.Comparator.comparingInt(WildlifeEncounterService::sizeRank)).orElse(null);
+                java.util.List<String> admitted = new java.util.ArrayList<>();
+                for (String p : prey) if (throatAdmits(widest, tierOf.get(p))) admitted.add(p);
+                prey = admitted;
+                quarry = named.stream().filter(prey::contains).sorted().toList();
+                if (prey.isEmpty()) return new EncounterResult("PARTIAL", "The " + trapName.toLowerCase(java.util.Locale.ROOT)
+                    + " is untouched. Nothing in this water is small enough to go into it.");
+            }
+        }
         // The longer it has stood, the likelier it has caught — up to a point.
         int chance = (int) Math.min(70, 15 + hoursOut * 6);
         if (Math.floorMod(action.hashCode(), 100) >= chance) {
             jdbc.update("UPDATE placed_trap SET checked_at=? WHERE object_id=?", Timestamp.from(at), trapId);
             return new EncounterResult("PARTIAL","The trap is exactly as you set it. Nothing has come to it yet.");
         }
-        String caught = prey.get(Math.floorMod(action.hashCode() >>> 4, prey.size()));
+        // Half of what a made trap takes is its quarry, when its quarry lives here; the rest is whatever else the
+        // throat lets in — a crayfish trap does take the odd minnow or dace, and that is honest bycatch.
+        String caught = !quarry.isEmpty() && Math.floorMod(action.hashCode() >>> 12, 2) == 0
+            ? quarry.get(Math.floorMod(action.hashCode() >>> 14, quarry.size()))
+            : prey.get(Math.floorMod(action.hashCode() >>> 4, prey.size()));
         takeSpeciesDrops(chronicle, caught, at);
         if (aquatic) { UUID fish = items.createCarriedItem(chronicle,"raw_fish","Raw fish",at,"TAKEN_FROM_TRAP"); food.registerRaw(fish,at); }
         else { UUID meat = items.createCarriedItem(chronicle,"raw_game_meat","Raw game meat",at,"TAKEN_FROM_TRAP"); food.registerRaw(meat,at); }
@@ -2264,7 +2310,6 @@ public class WildlifeEncounterService {
         jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED',destroyed_at=?,destroyed_location_id=current_location_id,destroyed_cause='TRAP_SPRUNG',current_location_id=NULL WHERE id=?", Timestamp.from(at), trapId);
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'TRAP_SPRUNG',jsonb_build_object('species',?))", trapId, Timestamp.from(at), caught);
         // A made funnel trap is emptied, not spent (#923): the catch comes out and the trap comes back with it.
-        String wholeTrap = (String) trap.get("whole");
         if (wholeTrap != null) {
             String name = key2name(wholeTrap);
             items.createCarriedItem(chronicle, wholeTrap, name, at, "RECOVERED_FROM_TRAP");
