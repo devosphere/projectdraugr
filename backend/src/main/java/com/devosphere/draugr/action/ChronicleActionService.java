@@ -830,7 +830,12 @@ public class ChronicleActionService {
             // standing water drunk from it sits far easier in the gut than from a skin: the safest way to drink
             // untreated water short of boiling. Best of the untreated-water eases; ripple-safe when none is carried.
             boolean silver = items.hasAtLeast(chronicle.id(), "silver_cup", 1);
-            String carried = items.bestWaterCarried(chronicle.id());
+            // A NAMED SOURCE IS THE DRINK (#931). The pack used to win whatever was said, so `drink from the
+            // spring` drank a skin filled somewhere else and told the player so — the spring, its walled head,
+            // the draw below a sand bed, none of it touched while anything was carried. Naming the water is a
+            // different sentence from `drink water`, which still takes the safest measure you carry.
+            boolean namedSource = namesAWaterSource(text.toLowerCase(Locale.ROOT));
+            String carried = namedSource ? null : items.bestWaterCarried(chronicle.id());
             if (carried != null) {
                 items.consumeOne(chronicle.id(), carried, resolvedAt); physiology.drink(chronicle.id());
                 if ("clean_water".equals(carried)) perception = "You drink your fill of the boiled water — clean, flat, and safe.";
@@ -855,7 +860,10 @@ public class ChronicleActionService {
                         // A well or a catchment on dry ground IS the water, so it cannot be beside it (#77). This
                         // read "through the well beside the water here", which invents a second source.
                         : "You draw water from the " + through.name() + " and drink; it comes up clearer than any standing pool would, though it has not been boiled.") : silver ? "You dip the silver cup into " + drunkFrom + " and drink; the bright metal keeps it from turning the gut as it otherwise would." : ladle ? "You dip the ladle into " + drunkFrom + " and draw from above the silt; it is still not clean, but the gut will fare better than from a careless gulp." : "You drink from " + drunkFrom + ". It eases the dryness, but it is not clean, and the gut will know it."; }
-            } else { outcome = "FAILED"; perception = noWaterToDrink(chronicle.location(), beforeWeather); }
+            } else { outcome = "FAILED"; perception = noWaterToDrink(chronicle.location(), beforeWeather)
+                // Named water that is not here is refused, never quietly swapped for the pack (#931) — but the
+                // player is told the pack is still an answer, since that is the next thing they will want.
+                + (namedSource && items.bestWaterCarried(chronicle.id()) != null ? " The water you carry is still with you, if you mean to drink that." : ""); }
         }
         else if (intent == Intent.COLLECT_WATER) {
             // THE SKY IS A SOURCE (#37). Standing in a downpour with a vessel on your arm and being told "there
@@ -8165,6 +8173,36 @@ public class ChronicleActionService {
         if ("SNOW".equals(weather))
             return "Snow lies about, but there is no running water here, and snow in the mouth numbs more than it quenches.";
         return "You look about, but there is no water here fit to drink — no stream, no spring, only dry ground that gives nothing back.";
+    }
+
+    /** The words a drink can be drawn FROM that are water on the ground, not a vessel (#931). */
+    private static final Pattern WATER_SOURCE_WORD = Pattern.compile(
+        "\\b(?:spring|stream|river|brook|creek|beck|rill|well|catchment|cistern|pool|pond|lake|mere|marsh|bog|"
+        + "source|waterhole|water hole|seep|filter bed|sand bed|settling basin|spring head|sea|ocean)s?\\b");
+    /** Where a drink is said to come from: the object of each preposition, up to the next one. */
+    private static final Pattern DRINK_PREPOSITION = Pattern.compile("\\b(?:from|at|out of|in|of)\\s+");
+    /** The plain "of water" that says WHAT is drunk, not where from — `take a drink of water from the stream`. */
+    private static final Pattern JUST_WATER = Pattern.compile("^(?:some |the |a little |a mouthful of |fresh )?water(?: here)?$");
+
+    /**
+     * Whether a drink phrase names water on the ground to drink from (#931), as against `drink water`, which names
+     * no source and so takes what is carried. The FIRST place the drink is said to come from decides, so `drink from
+     * the cup I filled at the stream` is the cup and `drink at the spring` is the spring; a bare "of water" says what
+     * is drunk and is passed over. "Well" only counts as a place (`at the well`), never as `drink well`, because only
+     * the object of a preposition is read. Pure over text, so it is tested without a database.
+     */
+    static boolean namesAWaterSource(String lower) {
+        if (lower == null) return false;
+        Matcher m = DRINK_PREPOSITION.matcher(lower);
+        List<int[]> spans = new java.util.ArrayList<>();
+        while (m.find()) spans.add(new int[]{m.start(), m.end()});
+        for (int i = 0; i < spans.size(); i++) {
+            int end = i + 1 < spans.size() ? spans.get(i + 1)[0] : lower.length();
+            String object = lower.substring(spans.get(i)[1], end).replaceAll("[^a-z' -]", " ").trim().replaceAll("\\s+", " ");
+            if (object.isEmpty() || JUST_WATER.matcher(object).matches()) continue;
+            return WATER_SOURCE_WORD.matcher(object).find();
+        }
+        return false;
     }
 
     private String waterNamed(UUID location) {

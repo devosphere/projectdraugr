@@ -846,6 +846,10 @@ class IntentClassificationRegressionTest {
         // The bare request, where there may be no stream to name (#30: the failure now says why there is none).
         assertEquals("DRINK", classify("drink water"));
         assertEquals("DRINK", classify("take a drink of water"));
+        // #931: every source the drink branch now honours by name must reach the drink branch at all.
+        for (String named : new String[]{"drink from the spring", "drink from the river", "drink at the well",
+                "drink from the catchment", "drink from the walled spring head", "drink from the pool"})
+            assertEquals("DRINK", classify(named), named);
     }
 
     /** Workstations (V69) claim their words before the generic desk/table rule; a plain table is still a desk. */
