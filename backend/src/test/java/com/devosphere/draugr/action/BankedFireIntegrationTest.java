@@ -168,9 +168,18 @@ class BankedFireIntegrationTest {
                         "(SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
                         " WHERE w.current_location_id=? AND cp.project_kind='FUEL_RACK')", chunk);
             Instant banked = now.plus(Duration.ofHours(2));
+            // The two hours above burned the fire down to whatever the feedings left past 120 — fifteen minutes
+            // on a 135-minute fire — and bare-handed banking adds 90, which is 105: UNDER the threshold, so the
+            // "banked coals throw nothing" check below would have passed for the wrong reason (CI: 105 < 120).
+            // A poker rakes the coals tighter (+130), which carries a banked fire past the threshold whatever
+            // the feedings left, so what is measured is the flag and not a fire too small to bite.
+            items.createCarriedItem(chronicle, "fire_poker", "Fire poker", banked, "TEST_SEED");
+            int fuelBeforeBanking = fuelAt(chunk);
             assertTrue(fire.bank(chronicle, chunk, banked), "there is a fire here to bank");
             assertTrue(bankedAt(chunk), "banking must be recorded, not merely add minutes");
-            assertTrue(fuelAt(chunk) >= 120, "banking raises the burn — that is what it is for, and why fuel alone could never say this");
+            assertTrue(fuelAt(chunk) > fuelBeforeBanking, "banking raises the burn — that is what it is for");
+            assertTrue(fuelAt(chunk) >= 120,
+                "and past the ember threshold, which is why fuel alone could never say whether a fire bites: " + fuelAt(chunk));
 
             int intact = integrityOfTheRack(chunk);
             fire.advanceTo(banked.plus(Duration.ofHours(3)));
