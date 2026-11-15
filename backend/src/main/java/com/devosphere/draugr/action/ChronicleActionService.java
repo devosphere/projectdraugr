@@ -1166,6 +1166,16 @@ public class ChronicleActionService {
         physiology.applyLabor(chronicle.id(), items, failed ? (labor.energy() + 1) / 2 : labor.energy(), failed ? labor.hygiene() / 2 : labor.hygiene());
         if (energyEntering != null && energyEntering < 20) {
             physiology.applyStrain(chronicle.id(), 6, actionId, resolvedAt);
+            // AND THE PLAYER IS TOLD (#920). Ten of these landed in one Chronicle — three stone-gatherings, a
+            // debris hut, a fire pit, a feeding, two clay digs, a firing and a cordage — each one a real
+            // injury of 3, carrying them to 30/100, and NOT ONE of them was mentioned in the narration of the
+            // action that caused it. The player found out by reading the backend's own history afterwards.
+            //
+            // Appended to the step's OWN prose, so in a procedure it is plain which step cost what. No body
+            // part, because no body part is recorded for a strain and inventing one is the defect #921 is
+            // about. The task still succeeded; this is what it cost.
+            perception = perception + " The work pulls something as you finish it — not a cut, a strain, deep "
+                       + "in the muscle, and it will want rest before it eases.";
         }
         // Bucket B — the narration contract: wrap the deterministic core in a clause of setting, so the
         // world is present in the prose and not just the act. Success and failure alike are grounded;
@@ -7057,13 +7067,25 @@ public class ChronicleActionService {
         // injury severity was plainly above zero was told nothing was wrong with it. One authority for
         // one fact; this project's recurring defect is two readers of the same question.
         boolean carryingAHurt = physiology.carriesAnInjury(me);
+        ChroniclePhysiologyService.Ailments ails = physiology.ailments(me);
+        // ASKED ABOUT THE WOUNDS THEMSELVES (#921). `check my wounds` named no part, so it fell to the
+        // whole-body reading and came back word for word identical to `check myself` — both answering a
+        // Chronicle with ten unplaceable strains and a fever with the same generic line. A player asking
+        // after their wounds wants every place that hurts, in one answer, and the truth when there is no
+        // place to name.
+        if (asked == null && asksAboutTheWounds(text)) return theWoundsSaid(hurts, ails);
         if (asked == null) {
             String where = "";
             if (!hurts.isEmpty()) {
                 List<String> parts = hurts.stream().map(h -> "your " + spokenPart((String) h.get("part"))).distinct().toList();
                 where = " The hurt sits in " + joinAnd(parts) + ".";
+            } else if (ails.injury() > 0) {
+                // UNPLACEABLE, AND SAID SO. Ten overexertion strains carry no body part — the condition
+                // history records none — so a reading that only ever says "the hurt sits in..." says nothing
+                // at all here, and a guessed limb would be worse than silence.
+                where = " It is spread through you rather than sitting anywhere: strain, not a wound you could dress.";
             }
-            return bodyReading(b) + where;
+            return bodyReading(b, ails) + where;
         }
         java.util.Map<String, Object> here = hurts.stream()
             .filter(h -> asked.equals(h.get("part"))).findFirst().orElse(null);
@@ -7086,14 +7108,93 @@ public class ChronicleActionService {
         return subject + " sound. Nothing is wrong with it.";
     }
 
-    private String bodyReading(ChroniclePhysiologyService.BodyHudSnapshot b) {
+    /**
+     * What the body tells you, read from WHAT IS WRONG rather than from the word the HUD puts on it
+     * (#886, #914, #921).
+     *
+     * <p>This opened with a switch on {@code health()}, which is one word derived from three numbers — so an
+     * illness-only Chronicle (illness 64, injury 0, nothing bleeding) was described as carrying "a hurt in you
+     * that has not closed", and the bandaging action, which reads the scalars, then correctly answered that
+     * nothing was open. Two readers of one question, disagreeing in the same breath.
+     *
+     * <p>Worse at the top of the range: "something in you is badly wrong and will not wait" told a Chronicle
+     * at illness 93 with ten unplaceable strains nothing they could act on at all. A player deciding what to
+     * treat needs to know WHICH of the things that can kill them is doing it.
+     *
+     * <p>Sensation, never the HUD's vocabulary — {@link com.devosphere.draugr.narration.NarrationPolicy}
+     * rejects "your injury is high", and rightly.
+     */
+    /** Whether the question is about wounds rather than about the whole body (#921). */
+    private static boolean asksAboutTheWounds(String text) {
+        String said = normalisedQuestion(text);
+        return word(said, "wound") || word(said, "wounds") || word(said, "injury") || word(said, "injuries")
+            || word(said, "cut") || word(said, "cuts") || word(said, "gash") || word(said, "gashes")
+            || word(said, "bleeding") || (word(said, "hurt") && !word(said, "hurts"));
+    }
+
+    /**
+     * Every place that hurts, in one answer, and the truth when there is no place to name (#921).
+     *
+     * <p>The three cases are the whole of it: wounds the history can place, a body carrying damage it cannot
+     * place — ten overexertion strains, none with a recorded part — and a body with nothing open at all, which
+     * must say so plainly rather than leave the player hunting limb by limb. Bleeding is stated either way,
+     * because "nothing is bleeding" is an answer a player acts on.
+     */
+    private String theWoundsSaid(List<java.util.Map<String, Object>> hurts, ChroniclePhysiologyService.Ailments a) {
+        StringBuilder b = new StringBuilder("You go over yourself for what is open. ");
+        if (!hurts.isEmpty()) {
+            List<String> each = hurts.stream().map(h -> {
+                int severity = ((Number) h.get("severity")).intValue();
+                String how = severity >= 40 ? "a bad one, nowhere near closed"
+                           : severity >= 20 ? "open still and tender"
+                           : "small, and already closing";
+                return "your " + spokenPart((String) h.get("part")) + " (" + how + ")";
+            }).distinct().toList();
+            b.append(each.size() == 1 ? "There is one: " : "There are " + each.size() + ": ")
+             .append(joinAnd(each)).append(". ");
+        } else if (a.injury() > 0) {
+            b.append("Nothing is open. What you carry is strain — the whole of you worked past what it had, ")
+             .append("spread through you with no one place to dress. Rest is what it wants, not a binding. ");
+        } else {
+            b.append("Nothing is open and nothing is torn. ");
+        }
+        b.append(a.bloodLoss() > 400 ? "You are still losing blood."
+               : a.bloodLoss() > 0 ? "There has been blood, but it has stopped."
+               : "Nothing is bleeding.");
+        // A SICKNESS IS NOT A WOUND, and a player who asked after wounds while burning with fever should be
+        // told where to look instead of being left to conclude they are well (#914).
+        if (a.illness() > 35)
+            b.append(" What ails you is not a wound: a sickness is working in you, and no binding touches it.");
+        return b.toString();
+    }
+
+    private String bodyReading(ChroniclePhysiologyService.BodyHudSnapshot b, ChroniclePhysiologyService.Ailments a) {
         if (b == null) return "You take stock of yourself, and find nothing you can put a name to.";
         List<String> said = new java.util.ArrayList<>();
-        switch (b.health()) {
-            case "Critical" -> said.add("something in you is badly wrong and will not wait");
-            case "Injured" -> said.add("there is a hurt in you that has not closed");
-            default -> { }
-        }
+        if (a == null) a = new ChroniclePhysiologyService.Ailments(0, 0, 0, 0);
+        // BLEEDING FIRST: it is the fastest of the three and the one with an answer in hand.
+        if (a.bloodLoss() > 1500) said.add("you have bled more than a body can spare and it has not stopped");
+        else if (a.bloodLoss() > 400) said.add("you are losing blood, and it is still coming");
+        // THE HURT, by how bad it is rather than by a threshold label.
+        if (a.injury() > 80) said.add("your body is broken past what it can carry, and every movement costs");
+        else if (a.injury() > 35) said.add("there is a hurt in you that has not closed");
+        else if (a.injury() > 0) said.add("your body aches with work it was driven too far through");
+        // AND THE SICKNESS, which is a different thing and was never once said.
+        if (a.illness() > 80) said.add("a sickness has hold of you and is winning — you are hot, wrung out, and it is getting worse");
+        else if (a.illness() > 35) said.add("a sickness is working in you: your skin is hot and your strength is going out of you");
+        else if (a.illness() > 10) said.add("something is not right in you, not enough to name yet");
+        // WHICH WAY IT IS GOING. "How sick am I" and "am I getting better" are two questions, and a player
+        // who has just washed, dried off and dressed the wound needs the second one answered or they cannot
+        // tell whether any of it worked. Repeated from what the physiology tick measured, never worked out
+        // again here — the tick is the only code that sees the smoke, the refuse and the sodden clothes.
+        if (a.illness() > 10)
+            said.add(a.illnessTrend() > 0 ? "and it is getting worse, not better — something in how you are living is feeding it"
+                   : a.illnessTrend() < 0 ? "and it is easing, slowly, now that you are keeping yourself"
+                   : "and it is holding where it is");
+        // The derived label only speaks where the scalars cannot explain it — so "badly wrong" never again
+        // stands in for an answer the world was holding all along.
+        if ("Critical".equals(b.health()) && said.isEmpty())
+            said.add("something in you is badly wrong and will not wait");
         switch (b.temperature()) {
             case "Hypothermic" -> said.add("the cold has got past shivering and into the middle of you");
             case "Cold" -> said.add("the chill has worked in under your skin");
