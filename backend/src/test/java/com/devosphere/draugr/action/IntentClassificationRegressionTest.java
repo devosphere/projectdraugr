@@ -4171,6 +4171,8 @@ class IntentClassificationRegressionTest {
         assertEquals("CRAFT_TINDER", classify("make tinder"));
         assertEquals("CRAFT_TINDER", classify("prepare a tinder nest"));
         assertEquals("CRAFT_TINDER", classify("form a tinder bundle"));
+        // "craft" governs too: the tool-belt bench tests craft a tinder bundle, and lost it when the rule was made strict.
+        assertEquals("CRAFT_TINDER", classify("craft a tinder bundle"));
         assertEquals("CRAFT_TINDER", classify("gather more tinder"));
         assertEquals("CRAFT_TINDER", classify("make a loose dry tinder nest"));
     }

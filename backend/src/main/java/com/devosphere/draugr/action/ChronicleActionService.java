@@ -3019,7 +3019,7 @@ public class ChronicleActionService {
         // So the question is asked properly: the making verb must stand just before the word, with nothing
         // between the two but the words that decorate a noun. "make tinder", "prepare a dry tinder nest" and
         // "form a tinder bundle" are makings; an ember forming nine words earlier is not.
-        if(makingGoverns(value, "tinder", "make","making","prepare","preparing","gather","gathering","form","forming","bundle","tease","teasing","build","work","twist")
+        if(makingGoverns(value, "tinder", "make","making","craft","crafting","fashion","prepare","preparing","gather","gathering","form","forming","bundle","tease","teasing","build","work","twist")
            &&!value.contains("char")) return Intent.CRAFT_TINDER;
         // A "drying rack" is a staged structure (V58), not a shelf — let it fall through
         // to the assembly engine rather than being caught by "rack" here.

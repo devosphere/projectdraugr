@@ -124,20 +124,24 @@ class BankedFireIntegrationTest {
         assertTrue(short0.perception().contains("bearing block"),
             () -> "a refusal must name what the method is short of, not describe empty hands: " + short0.perception());
 
-        // Now the fire itself, lit through FireService so the test owns the ember rather than rolling for it.
-        items.createCarriedItem(chronicle, "fire_socket", "Bearing block", now, "TEST_SEED");
-        items.createCarriedItem(chronicle, "tinder_nest", "Tinder nest", now, "TEST_SEED");
-        for (int i = 0; i < 6; i++) items.createCarriedItem(chronicle, "dry_branch", "Dry branch", now, "TEST_SEED");
-        assertEquals(FireService.LightResult.LIT, fire.light(chronicle, chunk, now, true, "bow_drill"));
-        assertFalse(bankedAt(chunk), "a fire just lit is an open flame, not banked");
-
         // Something that burns, standing beside it — the hazard needs a victim to be observable at all.
+        // Raised BEFORE the fire is lit: building it is a resolved action, which moves the clock and may spend
+        // dry branches, so raised afterwards it could burn a 45-minute fire down or leave the feedings below
+        // nothing to put on (CI: "two feedings ... past the ember threshold" failed). The test owns its fuel.
         for (int i = 0; i < 3; i++) items.createCarriedItem(chronicle, "hazel_rod", "Hazel rod", now, "TEST_SEED");
         for (int i = 0; i < 2; i++) items.createCarriedItem(chronicle, "bark_sheet", "Bark sheet", now, "TEST_SEED");
         items.createCarriedItem(chronicle, "fiber_cordage", "Fiber cordage", now, "TEST_SEED");
         items.createCarriedItem(chronicle, "stone_knife", "Stone knife", now, "TEST_SEED");
         ChronicleActionService.ActionResult rack = actions.resolve("I build a fuel rack.");
         assertEquals("SUCCEEDED", rack.outcome(), rack::perception);
+        now = ticks.current().simulatedAt();
+
+        // Now the fire itself, lit through FireService so the test owns the ember rather than rolling for it.
+        items.createCarriedItem(chronicle, "fire_socket", "Bearing block", now, "TEST_SEED");
+        items.createCarriedItem(chronicle, "tinder_nest", "Tinder nest", now, "TEST_SEED");
+        for (int i = 0; i < 6; i++) items.createCarriedItem(chronicle, "dry_branch", "Dry branch", now, "TEST_SEED");
+        assertEquals(FireService.LightResult.LIT, fire.light(chronicle, chunk, now, true, "bow_drill"));
+        assertFalse(bankedAt(chunk), "a fire just lit is an open flame, not banked");
 
         // The sky decides whether embers catch at all, and it is the world's, not this chunk's — put it back
         // afterwards so no other test in this shared world inherits it.
@@ -148,8 +152,10 @@ class BankedFireIntegrationTest {
 
             // AN UNBANKED FIRE ABOVE THE THRESHOLD STILL BITES. The fix must not disarm the hazard, only stop
             // it reading duration as ferocity.
-            fire.feed(chronicle, chunk, now);
-            fire.feed(chronicle, chunk, now);
+            items.createCarriedItem(chronicle, "dry_branch", "Dry branch", now, "TEST_SEED");
+            items.createCarriedItem(chronicle, "dry_branch", "Dry branch", now, "TEST_SEED");
+            assertTrue(fire.feed(chronicle, chunk, now), "a lit fire and a branch in hand: the first feeding must take");
+            assertTrue(fire.feed(chronicle, chunk, now), "a lit fire and a branch in hand: the second feeding must take");
             assertTrue(fuelAt(chunk) >= 120, "two feedings on a fresh fire must carry it past the ember threshold");
             int before = integrityOfTheRack(chunk);
             fire.advanceTo(now.plus(Duration.ofHours(2)));
