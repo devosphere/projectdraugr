@@ -2767,15 +2767,59 @@ public class PhysicalItemService {
      */
     @Transactional
     public String[] coppice(UUID chronicle, UUID location, Instant occurredAt) {
+        return coppice(chronicle, location, null, occurredAt);
+    }
+
+    /**
+     * What a cutting of a coppiced stand yields (#906). Willow throws up withies, and the catalogue already holds
+     * them as {@code willow_branch} — the very material the wattle, the lookout pole and the shed wall accept beside
+     * hazel. Every other broadleaf stays on the rod it always gave.
+     */
+    static boolean namesTheTree(String actionText, String treeKey) {
+        // The WHOLE name, never its last word: saidAsASpeciesName's head-noun fallback would hear the
+        // chestnut_tree in "coppice the tree". The catalogue's _tree suffix is dropped (a walnut, not a walnut tree).
+        String v = " " + actionText.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim() + " ";
+        String name = treeName(treeKey);
+        String plural = name.endsWith("sh") || name.endsWith("ch") ? name + "es" : pluralOf(name); // ashes, birches
+        return v.contains(" " + name + " ") || v.contains(" " + plural + " ");
+    }
+
+    static String treeName(String treeKey) {
+        return treeKey.replaceFirst("_tree$", "").replace('_', ' ');
+    }
+
+    private static String coppiceYieldOf(String treeKey) {
+        return "willow".equals(treeKey) ? "willow_branch" : "hazel_rod";
+    }
+
+    /**
+     * Coppice the stand the player NAMED when they named one (#906). {@code coppice willow} used to cut whatever
+     * tree the chunk listed first and hand back a Hazel Rod regardless — the handler never received the words.
+     * Now a named tree is the one cut; a named tree that is not standing here is refused by name rather than
+     * quietly swapped for another; and with no name, a broadleaf is preferred over a conifer the chunk happens to
+     * list first, since only the broadleaf will coppice at all.
+     */
+    @Transactional
+    public String[] coppice(UUID chronicle, UUID location, String actionText, Instant occurredAt) {
         if (!hasCuttingTool(chronicle) && !hasAtLeast(chronicle,"stone_axe",1) && !hasAtLeast(chronicle,"stone_hatchet",1)
             && !hasAtLeast(chronicle,"copper_axe",1) && !hasAtLeast(chronicle,"bronze_axe",1) && !hasAtLeast(chronicle,"iron_axe",1) && !hasAtLeast(chronicle,"steel_axe",1))
             return new String[]{"FAILED", "You take hold of the rods, but without a blade to cut them there is no coppicing this stand."};
 
+        String named = null;
+        if (actionText != null && !actionText.isBlank())
+            for (String key : jdbc.queryForList("SELECT flora_key FROM flora_definition WHERE organism_type='TREE' ORDER BY length(flora_key) DESC", String.class))
+                if (namesTheTree(actionText, key)) { named = key; break; }
+
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
-        String treeKey = jdbc.query(
+        List<String> standing = jdbc.queryForList(
             "SELECT cf.flora_key FROM chunk_flora cf JOIN flora_definition fd ON fd.flora_key=cf.flora_key " +
-            "WHERE cf.chunk_id=? AND fd.organism_type='TREE' AND cf.quantity>0 LIMIT 1",
-            rs -> rs.next() ? rs.getString(1) : null, location);
+            "WHERE cf.chunk_id=? AND fd.organism_type='TREE' AND cf.quantity>0 " +
+            "ORDER BY (cf.flora_key IN ('pine','spruce')), cf.flora_key", String.class, location);
+        String treeKey = named == null ? (standing.isEmpty() ? null : standing.get(0))
+                       : standing.contains(named) ? named : null;
+        if (named != null && treeKey == null && !standing.isEmpty())
+            return new String[]{"FAILED", "There is no " + treeName(named) + " standing here to coppice — the wood here is "
+                + String.join(" and ", standing.stream().map(PhysicalItemService::treeName).toList()) + "."};
         if (treeKey == null) {
             treeKey = switch (biome != null ? biome : "") {
                 case "FOREST", "TEMPERATE_FOREST" -> "oak";
@@ -2784,6 +2828,8 @@ public class PhysicalItemService {
                 case "WETLAND", "RIVER_BANK" -> "willow";
                 default -> null;
             };
+            if (named != null && !named.equals(treeKey))
+                return new String[]{"FAILED", "There is no " + treeName(named) + " standing here to coppice."};
             if (treeKey == null) return new String[]{"FAILED", "There is no wood here to coppice."};
             Integer standQty = jdbc.query("SELECT quantity FROM chunk_flora WHERE chunk_id=? AND flora_key=?",
                 rs -> rs.next() ? rs.getInt(1) : null, location, treeKey);
@@ -2806,13 +2852,23 @@ public class PhysicalItemService {
             return new String[]{"FAILED", "The stools you cut before have not yet thrown up new rods worth taking — coppice needs a rest between cuttings."};
 
         int rods = 2 + (int) (Math.random() * 3); // 2..4 rods a cutting
-        int room = capacityHeadroomUnits(chronicle, "hazel_rod");
+        String yieldKey = coppiceYieldOf(treeKey);
+        String yieldName = jdbc.query("SELECT display_name FROM item_definition WHERE item_key=?",
+            rs -> rs.next() ? rs.getString(1) : null, yieldKey);
+        if (yieldName == null) yieldName = "willow_branch".equals(yieldKey) ? "Willow Branch" : "Hazel Rod";
+        int room = capacityHeadroomUnits(chronicle, yieldKey);
         int take = Math.min(rods, room);
         if (take <= 0) return new String[]{"FAILED", "You have cut all the rods you can carry."};
-        for (int i = 0; i < take; i++) createCarriedItem(chronicle, "hazel_rod", "Hazel Rod", occurredAt, "COPPICED");
+        for (int i = 0; i < take; i++) createCarriedItem(chronicle, yieldKey, yieldName, occurredAt, "COPPICED");
         // The stools are cut but the tree lives on — the stand is NOT reduced. Only the coppice clock is set.
         jdbc.update("UPDATE chunk_flora SET last_coppiced_at=? WHERE chunk_id=? AND flora_key=?", Timestamp.from(occurredAt), location, treeKey);
-        return new String[]{"SUCCEEDED", "You work along the stand cutting the low rods and poles from the living stools and bundling them, and leave the stools standing to throw up fresh growth again — a crop of rods taken without losing the wood."};
+        String tree = treeName(treeKey);
+        String crop = "willow_branch".equals(yieldKey) ? "pliant willow withies" : "straight rods";
+        String one = yieldName.toLowerCase(java.util.Locale.ROOT);
+        String counted = take == 1 ? one : one + (one.endsWith("ch") || one.endsWith("sh") ? "es" : "s");
+        return new String[]{"SUCCEEDED", "You work along the " + tree + " stand cutting the low rods and poles from the living stools and bundling them — "
+            + take + " " + counted
+            + " — and leave the stools standing to throw up fresh growth again: a crop of " + crop + " taken without losing the wood."};
     }
 
     /**
