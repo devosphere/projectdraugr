@@ -92,6 +92,69 @@ class TheWaterGoesInTheVesselIntegrationTest {
         return n == null ? 0 : n;
     }
 
+    /** Vessels belonging to other suites, lifted out of the pack for the length of this test and then returned. */
+    private final java.util.List<UUID> setAside = new java.util.ArrayList<>();
+
+    /** The thirteen keys this world counts as something that holds water (PhysicalItemService.WATER_VESSELS). */
+    private static final String VESSEL_KEYS =
+        "'waterskin','wooden_bucket','clay_pot','clay_jar','fired_bowl','fired_cup','clay_water_filter'," +
+        "'wooden_bowl','wooden_trough','soapstone_bowl','folded_bark_cup','water_ladle','field_stone_bowl'";
+
+    /**
+     * Clear every measure of water this Chronicle can reach, recording how it went.
+     *
+     * <p>Two things the raw UPDATE this replaces got wrong. It left {@code destroyed_cause} NULL, which the
+     * Auditor refuses in its own right — "destroyed object(s) do not record how they were destroyed" — and it
+     * matched only water the Chronicle DIRECTLY owns, which, now that the water really goes into the vessel,
+     * is no longer where the water is. The containment rows go first: a containment row pointing at a
+     * destroyed object is a violation of its own.
+     */
+    private void clearWater(UUID chronicle) {
+        String mine =
+            "SELECT w.id FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
+            "WHERE i.item_key IN ('raw_water','filtered_water','clean_water') AND w.lifecycle_state='ACTIVE' " +
+            "  AND (w.current_owner_id=? OR w.current_owner_id IN " +
+            "       (SELECT v.id FROM world_object v WHERE v.current_owner_id=?))";
+        jdbc.update("DELETE FROM item_containment WHERE item_id IN (" + mine + ")", chronicle, chronicle);
+        jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED', destroyed_at=now(), " +
+                    "destroyed_cause='TEST_TEARDOWN', current_owner_id=NULL, current_location_id=NULL " +
+                    "WHERE id IN (" + mine + ")", chronicle, chronicle);
+    }
+
+    /**
+     * Leave this Chronicle holding no water vessel at all, by setting every one it carries down in another
+     * chunk — not by destroying it, because a vessel destroyed with water still inside leaves a containment
+     * row pointing at a dead object.
+     *
+     * <p>THE SUITE SHARES ONE CHRONICLE across some 925 tests, and several of them leave a waterskin or a
+     * soapstone bowl in its pack for good. This test asks a question about ALL of them at once — "every
+     * vessel you have is brimful, so the rain has nowhere to go" — and a stranger's bowl, which can really be
+     * filled now that an empty vessel is no longer reported brimful, would take the water this test is
+     * following and the refusal would never come. A test that measures a global must own the global.
+     */
+    private void noVesselsButMine(UUID chronicle, UUID elsewhere) {
+        for (UUID id : jdbc.queryForList(
+                "SELECT w.id FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
+                "WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key IN (" + VESSEL_KEYS + ")",
+                UUID.class, chronicle)) {
+            jdbc.update("DELETE FROM equipment_attachment WHERE item_id=?", id);
+            jdbc.update("UPDATE world_object SET current_owner_id=NULL, current_location_id=? WHERE id=?", elsewhere, id);
+            setAside.add(id);
+        }
+    }
+
+    /**
+     * Hand back every vessel this test set aside, so the suites that run after it find the pack as they left
+     * it. Taking a stranger's bowl out of the pack to measure a global is fair; keeping it is how one test
+     * starts failing another.
+     */
+    private void handBackWhatIsNotMine(UUID chronicle) {
+        for (UUID id : setAside)
+            jdbc.update("UPDATE world_object SET current_owner_id=?, current_location_id=NULL " +
+                        "WHERE id=? AND lifecycle_state='ACTIVE'", chronicle, id);
+        setAside.clear();
+    }
+
     /** Measures carried in the bare hands, which is what this whole issue is about not happening. */
     private int loose(UUID chronicle) {
         Integer n = jdbc.queryForObject(
@@ -116,10 +179,11 @@ class TheWaterGoesInTheVesselIntegrationTest {
             "SELECT id FROM world_chunk WHERE biome='WETLAND' ORDER BY grid_y, grid_x LIMIT 1", UUID.class);
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", wetland, chronicle);
         jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
-        // Whatever this shared world left in the pack; this test measures its own water only.
-        jdbc.update("UPDATE world_object w SET lifecycle_state='DESTROYED', destroyed_cause='TEST_TEARDOWN', current_owner_id=NULL " +
-                    "FROM item_instance i WHERE i.object_id=w.id AND w.current_owner_id=? " +
-                    "  AND i.item_key IN ('raw_water','filtered_water','clean_water')", chronicle);
+        UUID elsewhere = jdbc.queryForObject(
+            "SELECT id FROM world_chunk WHERE id <> ? ORDER BY grid_y DESC, grid_x DESC LIMIT 1", UUID.class, wetland);
+        // Whatever this shared world left in the pack: this test measures its own water, in its own vessels.
+        clearWater(chronicle);
+        noVesselsButMine(chronicle, elsewhere);
 
         // A FOLDED BARK CUP AND NOTHING ELSE — the vessel #918 was reported against.
         vessel(chronicle, "folded_bark_cup", "Folded bark cup", now);
@@ -139,9 +203,8 @@ class TheWaterGoesInTheVesselIntegrationTest {
         assertEquals("SUCCEEDED", drunk.outcome(), drunk::perception);
 
         // AN EQUIPPED LADLE IS A VESSEL (#915). Nothing else that holds water, and it is in the hand.
-        jdbc.update("UPDATE world_object w SET lifecycle_state='DESTROYED', destroyed_cause='TEST_TEARDOWN', current_owner_id=NULL " +
-                    "FROM item_instance i WHERE i.object_id=w.id AND w.current_owner_id=? " +
-                    "  AND i.item_key IN ('raw_water','filtered_water','clean_water','folded_bark_cup')", chronicle);
+        clearWater(chronicle);
+        noVesselsButMine(chronicle, elsewhere);
         UUID ladle = vessel(chronicle, "water_ladle", "Water ladle", now);
         items.equip(ladle, "HAND_LEFT", "CARRIED");
         ChronicleActionService.ActionResult scooped = actions.resolve("collect water");
@@ -156,6 +219,7 @@ class TheWaterGoesInTheVesselIntegrationTest {
         assertEquals("FAILED", brimful.outcome(), brimful::perception);
         assertTrue(brimful.perception().contains("brimful"), brimful::perception);
 
+        handBackWhatIsNotMine(chronicle);
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
 }
