@@ -97,8 +97,17 @@ class OneSkyAndCatchingWhatItGivesIntegrationTest {
         // another test's water. A consumed item cannot be deleted — spending it writes an object_transition whose
         // foreign key refuses the delete — so what still carries a reference is archived instead.
         for (UUID id : given) {
+            // Rain caught now goes INTO the vessel (#918): fillWaterVessels gives the skin a container_properties
+            // row, and the water's containment and PLACED_IN_CONTAINER transition both reference it. The skin
+            // itself has no transition, so it took the DELETE path below and the capacity row's foreign key
+            // (NO ACTION) refused it — but only when the shared sky was raining. Archive what it holds, and it;
+            // and drop the containment rows, which the Auditor counts as a violation once either end is inactive.
+            jdbc.update("UPDATE world_object w SET lifecycle_state='ARCHIVED' FROM item_containment ic " +
+                        "WHERE ic.item_id=w.id AND ic.container_id=? AND w.lifecycle_state='ACTIVE'", id);
+            jdbc.update("DELETE FROM item_containment WHERE container_id=?", id);
             boolean hasHistory = Boolean.TRUE.equals(jdbc.queryForObject(
-                "SELECT EXISTS(SELECT 1 FROM object_transition WHERE object_id=?)", Boolean.class, id));
+                "SELECT EXISTS(SELECT 1 FROM object_transition WHERE object_id=?) " +
+                "    OR EXISTS(SELECT 1 FROM container_properties WHERE object_id=?)", Boolean.class, id, id));
             String state = jdbc.query("SELECT lifecycle_state FROM world_object WHERE id=?",
                 rs -> rs.next() ? rs.getString(1) : null, id);
             if (state == null) continue;
