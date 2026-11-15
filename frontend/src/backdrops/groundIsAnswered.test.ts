@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import manifest from './backdrop-manifest.json';
-import { pickBackdrop, recordsFor, type RuntimeRecord } from './resolveBackdrop';
+import { namesTheGround, pickBackdrop, recordsFor, type RuntimeRecord } from './resolveBackdrop';
 
 /**
  * #229 — every ground the world actually generates is answered, and no place is shown as a forest unless it is one.
@@ -82,6 +82,50 @@ describe('every ground the world generates is answered', () => {
       }
     }
     expect(lies, `these grounds would be shown as something they are not: ${lies.join(', ')}`).toEqual([]);
+  });
+
+  /**
+   * AND THE OTHER BUILD — the one without the art (#932).
+   *
+   * <p>The tests above are written with `everyImagePresent`, which is the player's build. A CLEAN CHECKOUT holds
+   * four of the hundred and fifty backdrops: the rest are generated locally and deliberately not committed. So
+   * every candidate misses, every chain walks down to the registry root, and the forest plate is what the whole
+   * world is shown with. There is nothing wrong with that — it is the last resort doing its job, and there is no
+   * other image to show.
+   *
+   * <p>What is wrong is NAMING it. The root's label is "Forest", and the header printed it as the locality
+   * beneath the ground, so a clean build read "Cave Interior / FOREST", "Grassland / FOREST", "Wetland / FOREST"
+   * — the exact symptom #878 was filed about, invisible to anyone whose assets are present. Measured live before
+   * the fix: `CAVE INTERIOR | Morning | FOREST`. After it: `CAVE INTERIOR | Morning`, same stand-in picture.
+   */
+  it('in a build with only the committed art, no ground is NAMED after the stand-in it is shown with', () => {
+    const COMMITTED = new Set([
+      'playthrough-clay-deposit-v1.png', 'playthrough-forest-v1.png',
+      'playthrough-quarry-v1.png', 'playthrough-stream-v1.png',
+    ]);
+    const named: string[] = [];
+    let standingIn = 0;
+    for (const biome of GENERATED_BIOMES) {
+      const shown = pickBackdrop(endingCandidatesFor(biome), RECORDS, f => COMMITTED.has(f));
+      expect(shown, `${biome} could not even be shown the stand-in`).toBeTruthy();
+      // A ground whose own art happens to be committed is named, and rightly — the river bank keeps `stream`.
+      // The claim here is only about the grounds shown the ROOT.
+      if (shown!.record.backdropKey !== root.backdropKey) continue;
+      standingIn++;
+      if (namesTheGround(shown!)) named.push(`${biome} -> ${shown!.record.label}`);
+    }
+    expect(standingIn, 'this build must actually fall to the stand-in, or the test proves nothing')
+      .toBeGreaterThan(0);
+    expect(named, `these grounds would be labelled after a picture that is only standing in for them: `
+      + `${named.join(', ')}`).toEqual([]);
+  });
+
+  /** The converse, so the fix cannot be "never name anything": a real scene still names the place it is. */
+  it('a ground answered by its own scene still names that place', () => {
+    const shown = pickBackdrop(['biome.wetland'], RECORDS, everyImagePresent);
+    expect(shown, 'the wetland has a scene of its own').toBeTruthy();
+    expect(shown!.record.backdropKey, 'and it is not the root').not.toBe(root.backdropKey);
+    expect(namesTheGround(shown!), 'so its label is a place and may be shown as one').toBe(true);
   });
 
   /** And the ground is answered with a scene, not merely with a record — the chain must be walkable to an image. */

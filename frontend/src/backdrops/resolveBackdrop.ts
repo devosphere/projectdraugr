@@ -35,6 +35,20 @@ export interface Pick {
 
 const MAX_FALLBACK_STEPS = 32;
 
+/**
+ * Whether a pick NAMES THE GROUND IT IS STANDING ON, or merely stands in for it (#932).
+ *
+ * <p>The registry root — the record nothing falls back FROM — is the last image left when everything else has
+ * missed. It is reached two ways: as the outright last resort, and by walking some other record's fallback
+ * chain down to it, which is why the question is about the RECORD and not about the candidate that led there.
+ * Its label is "Forest", and shown as a locality beneath the heading it said "Forest" under the ground of
+ * whatever place could not be pictured — in a build without the generated art, which is every clean checkout,
+ * that is every tile in the world. The heading already names the ground; a stand-in needs no name of its own.
+ */
+export function namesTheGround(pick: Pick): boolean {
+  return pick.record.fallbackKey !== null;
+}
+
 const slug = (biome: string) => biome.toLowerCase().replace(/_/g, '-');
 
 function rootOf(records: RuntimeRecord[]): RuntimeRecord | undefined {
