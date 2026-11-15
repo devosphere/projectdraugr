@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { latestOnly, sceneToFadeFrom } from './backdrops/latestScene';
 import { loadScene } from './backdrops/backdropLoader';
+import { playerWords } from './playerWords';
 
 const previewBody = [
   ['Health', 'Healthy'], ['Condition', 'Unsteady'], ['Hunger', 'Satisfied'], ['Thirst', 'Hydrated'],
@@ -17,10 +18,11 @@ type Panel = 'none' | 'chronicle' | 'equipment' | 'load' | 'storage' | 'crafting
 type ReaderDocument = 'field-journal' | 'folded-letter';
 type LiteratureDoc = { id: string; kind: string; title: string; revisionId: string | null; revisionNumber: number };
 type LiteratureRevision = { id: string; kind: string; title: string; revisionId: string; revisionNumber: number; content: string; createdAt: string };
-// `action` is the player's own words for this entry, and `submittedAt` is shared by every step of one
-// multi-step submission — the only thing that marks six resolved steps as the one procedure they were (#873).
-type NarrationEntry = { id: string; text: string; occurredAt?: string; action?: string; submittedAt?: string };
-type NarrationPage = { entries: { id: string; occurredAt: string; narration: string; actionText?: string; submittedAt?: string }[]; hasMore: boolean };
+// `action` is this entry's own step words, `submission` the whole sentence it was cut from (#892), and
+// `submittedAt` is shared by every step of one multi-step submission — the only thing that marks six
+// resolved steps as the one procedure they were (#873).
+type NarrationEntry = { id: string; text: string; occurredAt?: string; action?: string; submittedAt?: string; submission?: string | null };
+type NarrationPage = { entries: { id: string; occurredAt: string; narration: string; actionText?: string; submittedAt?: string; submissionText?: string | null }[]; hasMore: boolean };
 type DiscoveryContext = { discoveries: string[]; constructions: { id: string; displayName: string; projectKind: string; state: string; progressPercent: number }[] };
 
 const olderNarrationPages = [[
@@ -217,7 +219,7 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
       // A newly awakened Chronicle has no action history yet. Keep the
       // arrival perception visible instead of replacing it with an empty list.
       if (page.entries.length > 0) {
-        setNarrations(page.entries.reverse().map(entry => ({ id: entry.id, occurredAt: entry.occurredAt, text: entry.narration, action: entry.actionText, submittedAt: entry.submittedAt })));
+        setNarrations(page.entries.reverse().map(entry => ({ id: entry.id, occurredAt: entry.occurredAt, text: entry.narration, action: entry.actionText, submittedAt: entry.submittedAt, submission: entry.submissionText })));
       }
       setHasOlderNarrations(page.hasMore);
     }).catch(() => undefined);
@@ -334,7 +336,7 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
       const response = await fetch(`${apiUrl}/api/actions/history?${params}`);
       const page = response.ok ? await response.json() as NarrationPage : null;
       if (!page) return;
-      setNarrations(entries => [...page.entries.reverse().map(entry => ({ id: entry.id, occurredAt: entry.occurredAt, text: entry.narration, action: entry.actionText, submittedAt: entry.submittedAt })), ...entries]);
+      setNarrations(entries => [...page.entries.reverse().map(entry => ({ id: entry.id, occurredAt: entry.occurredAt, text: entry.narration, action: entry.actionText, submittedAt: entry.submittedAt, submission: entry.submissionText })), ...entries]);
       setHasOlderNarrations(page.hasMore);
       requestAnimationFrame(() => { if (timeline) timeline.scrollTop = timeline.scrollHeight - previousHeight; });
     } finally { setLoadingOlderNarrations(false); }
@@ -423,13 +425,15 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
         <div className="narration-timeline" ref={narrationTimeline} onScroll={event => { if (event.currentTarget.scrollTop < 12) loadOlderNarrations(); }}>
           {hasOlderNarrations && <p className="narration-loading">{loadingOlderNarrations ? 'Earlier memories surface…' : 'Scroll upward for earlier moments.'}</p>}
           {narrations.map((entry, index) => {
-            // A multi-step procedure resolves to several entries sharing one submission. Each keeps its own
-            // line, because that is the order the Chronicle did them in; the continuation steps are marked so
-            // the player can see they came from one piece of writing rather than four separate commands.
+            // A multi-step procedure resolves to several entries sharing one submission. The SENTENCE stands
+            // at the head of the group and each step keeps its own line beneath it, because that is the order
+            // the Chronicle did them in; the continuation steps say so in a word, so the player can see they
+            // came from one piece of writing rather than four separate commands (#873, #892).
             const continues = Boolean(entry.submittedAt) && entry.submittedAt === narrations[index - 1]?.submittedAt;
+            const said = playerWords(entry, continues);
             return (
               <Fragment key={entry.id}>
-                {entry.action && <p className={continues ? 'player-action continues' : 'player-action'}>{entry.action}</p>}
+                {said && <p className={continues ? 'player-action continues' : 'player-action'}>{said}</p>}
                 <p>{entry.text}</p>
               </Fragment>
             );

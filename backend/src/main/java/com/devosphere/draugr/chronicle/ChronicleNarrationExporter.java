@@ -103,7 +103,7 @@ public class ChronicleNarrationExporter {
                         // line — that is the order the Chronicle actually did them in — and the continuation
                         // steps are marked so a reader can see they came from one piece of writing.
                         boolean continues = e.submittedAt() != null && e.submittedAt().equals(lastSubmission);
-                        Paragraph said = new Paragraph((continues ? "… " : "") + e.actionText().trim(), spoken);
+                        Paragraph said = new Paragraph(wordsFor(e.submissionText(), e.actionText(), continues), spoken);
                         said.setAlignment(Element.ALIGN_RIGHT);
                         said.setIndentationLeft(64f);
                         said.setSpacingAfter(3f);
@@ -167,6 +167,39 @@ public class ChronicleNarrationExporter {
                     .append(journey.placesNamed() == 1 ? " place named" : " places named");
         }
         return b.toString();
+    }
+
+    /**
+     * The word that marks a step as carrying on from the line above it (#892).
+     *
+     * <p>It was an ellipsis, and an ellipsis in front of a sentence is how every reader on earth writes
+     * TRUNCATION. The player read "… prepare a tinder nest" as the archive having cut their words short,
+     * which is the one thing it must never appear to do to someone reading back their own life. A word
+     * cannot be mistaken for a missing piece of text.
+     */
+    static final String CARRIES_ON = "then ";
+
+    /**
+     * The player's own line for one row of the ledger.
+     *
+     * <p><b>The ledger keeps one row per resolved STEP; the player wrote one SENTENCE.</b> Both are true and
+     * the reader needs both, so the sentence stands at the head of its group — that is what was composed and
+     * submitted — and the steps beneath it are shown in the order they actually ran, each marked as carrying
+     * on. Before this, the head of the group showed only its first step, so a procedure that read as one
+     * sentence on the live screen came back after a relaunch as its pieces and nothing on screen was the
+     * thing the player had typed.
+     *
+     * <p>Pure and static so the rule is written once and can be read without building a PDF. A row from
+     * before V464 has no submission to show, and there its step text stands, exactly as it always did.
+     *
+     * @param submissionText the whole submission this step was cut from, or null for a pre-V464 row
+     * @param actionText     this step's own words
+     * @param continues      true when the row above came from the same submission
+     */
+    static String wordsFor(String submissionText, String actionText, boolean continues) {
+        String step = actionText == null ? "" : actionText.trim();
+        if (continues) return CARRIES_ON + step;
+        return submissionText == null || submissionText.isBlank() ? step : submissionText.trim();
     }
 
     private String markerFor(Instant arrival, Instant at) {

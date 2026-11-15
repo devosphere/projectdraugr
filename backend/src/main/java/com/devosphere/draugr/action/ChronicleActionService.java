@@ -158,29 +158,33 @@ public class ChronicleActionService {
         boolean replay = alreadyRecorded(stepKey(idempotencyKey, "step", 0));
         // Writing a new procedure is moving on from whatever was set aside before it.
         if (!replay) endOpenRemainder("REPLACED");
-        return workThrough(steps, idempotencyKey, "step", replay, "");
+        return workThrough(steps, idempotencyKey, "step", replay, "", text);
     }
+
+    /** A set-aside remainder: its row, its undone steps, and the submission they were cut out of (#892). */
+    private record Remainder(UUID id, List<String> steps, String submission) { }
 
     /** The steps of a set-aside plan, worked again from where they stopped; null when nothing was set aside. */
     private ActionResult takeUpWhatWasSetAside(UUID idempotencyKey) {
         UUID chronicle = jdbc.query("SELECT id FROM chronicle WHERE life_state='LIVING'", rs -> rs.next() ? rs.getObject(1, UUID.class) : null);
         if (chronicle == null) return null;
-        org.springframework.jdbc.core.RowMapper<java.util.Map.Entry<UUID, List<String>>> row = (rs, n) ->
-            java.util.Map.entry(rs.getObject(1, UUID.class), List.of((String[]) rs.getArray(2).getArray()));
+        org.springframework.jdbc.core.RowMapper<Remainder> row = (rs, n) ->
+            new Remainder(rs.getObject(1, UUID.class), List.of((String[]) rs.getArray(2).getArray()), rs.getString(3));
         // The same resume submitted twice is one resume: find the plan it already took up, and replay it.
-        java.util.Map.Entry<UUID, List<String>> plan = idempotencyKey == null ? null : jdbc.query(
-            "SELECT id, steps FROM chronicle_plan_remainder WHERE resume_key = ?", row, idempotencyKey).stream().findFirst().orElse(null);
+        Remainder plan = idempotencyKey == null ? null : jdbc.query(
+            "SELECT id, steps, submission_text FROM chronicle_plan_remainder WHERE resume_key = ?", row, idempotencyKey).stream().findFirst().orElse(null);
         boolean replay = plan != null;
         if (plan == null) plan = jdbc.query(
-            "SELECT id, steps FROM chronicle_plan_remainder WHERE chronicle_id = ? AND state = 'OPEN'", row, chronicle).stream().findFirst().orElse(null);
+            "SELECT id, steps, submission_text FROM chronicle_plan_remainder WHERE chronicle_id = ? AND state = 'OPEN'", row, chronicle).stream().findFirst().orElse(null);
         if (plan == null) return null;
         if (!replay) jdbc.update("UPDATE chronicle_plan_remainder SET state='RESUMED', resume_key=?, resumed_at=? WHERE id=?",
-                idempotencyKey, java.sql.Timestamp.from(ticks.current().simulatedAt()), plan.getKey());
-        return workThrough(plan.getValue(), idempotencyKey, "resume", replay, "You take up what you set aside.");
+                idempotencyKey, java.sql.Timestamp.from(ticks.current().simulatedAt()), plan.id());
+        return workThrough(plan.steps(), idempotencyKey, "resume", replay, "You take up what you set aside.", plan.submission());
     }
 
     /** Work the steps in order, stopping where one fails; keep what was not done unless this is a replay. */
-    private ActionResult workThrough(List<String> steps, UUID idempotencyKey, String tag, boolean replay, String opening) {
+    private ActionResult workThrough(List<String> steps, UUID idempotencyKey, String tag, boolean replay, String opening,
+                                     String submission) {
         List<String> attempted = steps.size() > ActionPlan.MAX_STEPS ? steps.subList(0, ActionPlan.MAX_STEPS) : steps;
         StringBuilder told = new StringBuilder(opening);
         ActionResult last = null;
@@ -189,7 +193,7 @@ public class ChronicleActionService {
         List<String> undone = List.of();
         String stoppedBecause = null;
         for (int i = 0; i < attempted.size(); i++) {
-            ActionResult step = resolve(attempted.get(i), stepKey(idempotencyKey, tag, i));
+            ActionResult step = resolve(attempted.get(i), stepKey(idempotencyKey, tag, i), submission);
             last = step;
             if (told.length() > 0) told.append(" ");
             told.append(step.perception());
@@ -217,7 +221,7 @@ public class ChronicleActionService {
         }
         if (!replay) {
             if (last.died()) endOpenRemainder("ENDED");
-            else if (!undone.isEmpty()) setAside(undone, stoppedBecause, last, idempotencyKey, tag);
+            else if (!undone.isEmpty()) setAside(undone, stoppedBecause, last, idempotencyKey, tag, submission);
         }
         // The plan reports as the last step that actually ran: its identity, its clock, and the body as it stands.
         return new ActionResult(last.actionId(), last.intent(), outcome, last.durationMinutes(), last.resolvedAt(),
@@ -270,27 +274,41 @@ public class ChronicleActionService {
                     "AND chronicle_id IN (SELECT id FROM chronicle WHERE life_state = 'LIVING')", state);
     }
 
-    private void setAside(List<String> undone, String stoppedBecause, ActionResult last, UUID idempotencyKey, String tag) {
+    private void setAside(List<String> undone, String stoppedBecause, ActionResult last, UUID idempotencyKey, String tag,
+                          String submission) {
         UUID chronicle = jdbc.query("SELECT id FROM chronicle WHERE life_state='LIVING'", rs -> rs.next() ? rs.getObject(1, UUID.class) : null);
         if (chronicle == null) return;
         UUID id = idempotencyKey == null ? UUID.randomUUID()
             : UUID.nameUUIDFromBytes((idempotencyKey + ":" + tag + ":remainder").getBytes(java.nio.charset.StandardCharsets.UTF_8));
         jdbc.update(con -> {
             java.sql.PreparedStatement ps = con.prepareStatement(
-                "INSERT INTO chronicle_plan_remainder (id, chronicle_id, steps, stopped_because, set_aside_at, source_action_id) " +
-                "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING");
+                "INSERT INTO chronicle_plan_remainder (id, chronicle_id, steps, stopped_because, set_aside_at, source_action_id, submission_text) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING");
             ps.setObject(1, id);
             ps.setObject(2, chronicle);
             ps.setArray(3, con.createArrayOf("text", undone.toArray()));
             ps.setString(4, stoppedBecause);
             ps.setTimestamp(5, java.sql.Timestamp.from(last.resolvedAt()));
             ps.setObject(6, last.actionId());
+            // The undone steps were cut from this sentence; a "carry on" must record the same words (#892).
+            ps.setString(7, submission == null ? null : submission.trim());
             return ps;
         });
     }
 
     @Transactional
     public ActionResult resolve(String text, UUID idempotencyKey) {
+        // An action submitted on its own IS its own submission; a step of a procedure is not (#892).
+        return resolve(text, idempotencyKey, text);
+    }
+
+    /**
+     * @param submission the whole text the player wrote, which for a step of a procedure is the sentence it was
+     *                   cut out of. The ledger records one row per STEP, so without this a procedure came back
+     *                   after a relaunch as its pieces and the timeline disagreed with itself about the
+     *                   player's own words. #873 recorded that as its known gap; this closes it.
+     */
+    public ActionResult resolve(String text, UUID idempotencyKey, String submission) {
         if (text == null || text.trim().isEmpty() || text.length() > 2500) throw new IllegalArgumentException("An action must contain 1 to 2500 characters.");
         if (idempotencyKey != null) {
             // A duplicate submission returns the original outcome without resolving
@@ -1145,7 +1163,7 @@ public class ChronicleActionService {
         // token is spent, so a DB failure — or a retry of one — costs nothing.
         narration.validate(perception);
         String deterministicNarration = perception; // the durable source of truth, before coda/AI
-        jdbc.update("INSERT INTO chronicle_action (id, chronicle_id, resolved_at, action_text, intent_type, outcome, duration_minutes, narration, idempotency_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", actionId, chronicle.id(), resolvedTs, text.trim(), intent.name(), outcome, minutes, perception, idempotencyKey);
+        jdbc.update("INSERT INTO chronicle_action (id, chronicle_id, resolved_at, action_text, intent_type, outcome, duration_minutes, narration, idempotency_key, submission_text) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", actionId, chronicle.id(), resolvedTs, text.trim(), intent.name(), outcome, minutes, perception, idempotencyKey, submission == null ? null : submission.trim());
         jdbc.update("INSERT INTO chronicle_action_effect (action_id, effect_domain, effect_type, payload) VALUES (?, 'TIME', 'TIME_ADVANCED', jsonb_build_object('minutes', ?))", actionId, minutes);
         if (gatherEffectType != null) jdbc.update("INSERT INTO chronicle_action_effect (action_id, effect_domain, effect_type, payload) VALUES (?, 'ITEM', ?, jsonb_build_object(?, ?))", actionId, gatherEffectType, gatherPayloadKey, gatherCount);
         jdbc.update("INSERT INTO chronicle_event (chronicle_id, occurred_at, event_type, payload) VALUES (?, ?, 'CHRONICLE_ACTION_RESOLVED', jsonb_build_object('actionId', ?::text, 'intent', ?, 'outcome', ?))", chronicle.id(), resolvedTs, actionId.toString(), intent.name(), outcome);
@@ -1219,11 +1237,14 @@ public class ChronicleActionService {
         // but scroll-back and a reload do not, so without `action_text` the timeline loses every command the
         // moment the page is refreshed. `submitted_at` rides along because it is the only thing that marks the
         // steps of one multi-step submission as belonging together.
-        String columns = "SELECT ca.id, ca.resolved_at, COALESCE(can.narration, ca.narration), ca.action_text, ca.submitted_at "
+        // `submission_text` is the sentence the player wrote; `action_text` is the step it was cut into (#892).
+        // A reader shows the submission once per group and the steps beneath it, so the timeline reads the same
+        // before and after a relaunch. Null for rows written before V464, and there the step text stands.
+        String columns = "SELECT ca.id, ca.resolved_at, COALESCE(can.narration, ca.narration), ca.action_text, ca.submitted_at, ca.submission_text "
                 + "FROM chronicle_action ca LEFT JOIN chronicle_action_narration can ON can.action_id = ca.id ";
         org.springframework.jdbc.core.RowMapper<NarrationEntry> asEntry = (rs, row) -> new NarrationEntry(
                 rs.getObject(1, UUID.class), rs.getTimestamp(2).toInstant(), rs.getString(3), rs.getString(4),
-                rs.getTimestamp(5) == null ? null : rs.getTimestamp(5).toInstant());
+                rs.getTimestamp(5) == null ? null : rs.getTimestamp(5).toInstant(), rs.getString(6));
         List<NarrationEntry> entries = before == null
                 ? jdbc.query(columns + "WHERE ca.chronicle_id = ? AND ca.narration IS NOT NULL ORDER BY ca.resolved_at DESC, ca.id DESC LIMIT ?", asEntry, chronicle, limit + 1)
                 : jdbc.query(columns + "WHERE ca.chronicle_id = ? AND ca.narration IS NOT NULL AND (ca.resolved_at, ca.id) < (?, ?) ORDER BY ca.resolved_at DESC, ca.id DESC LIMIT ?", asEntry, chronicle, java.sql.Timestamp.from(before), beforeId, limit + 1);
@@ -8036,6 +8057,7 @@ public class ChronicleActionService {
      * <p>{@code actionText} is the player's own words. {@code submittedAt} is shared by every step of one
      * multi-step submission, so a reader can present six resolved steps as the one procedure they were.
      */
-    public record NarrationEntry(UUID id, Instant occurredAt, String narration, String actionText, Instant submittedAt) { }
+    public record NarrationEntry(UUID id, Instant occurredAt, String narration, String actionText, Instant submittedAt,
+                                 String submissionText) { }
     public record NarrationPage(List<NarrationEntry> entries, boolean hasMore) { }
 }

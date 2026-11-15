@@ -47,7 +47,7 @@ class ChronicleNarrationExporterTest {
             if (i == count - 1) narration = narration + " CLOSING_SENTINEL_Z3.";
             entries.add(new ChronicleService.JourneyEntry(
                     arrival.plusSeconds(i * 1800L), "OBSERVE", "SUCCEEDED", narration,
-                    "look around", arrival.plusSeconds(i * 1800L)));
+                    "look around", arrival.plusSeconds(i * 1800L), "look around"));
         }
         ChronicleService.ChronicleSummary summary = new ChronicleService.ChronicleSummary(
                 UUID.randomUUID(), 7, "LIVING", arrival, null, null, UUID.randomUUID());
@@ -95,21 +95,45 @@ class ChronicleNarrationExporterTest {
      * <p>Asserted on a genuinely parsed PDF rather than on the bytes written, because a compressed content
      * stream will not answer a grep either way — the text has to be inflated before the claim means anything.
      */
+    /** One sentence, cut into two steps by the plan — the thing the player actually typed (#892). */
+    private static final String WHOLE_SUBMISSION = "gather plant fiber, then prepare a tinder nest";
+
+    /**
+     * The rule for the player's line, read without building a PDF (#892).
+     *
+     * <p>Three cases and they are the whole of it: the head of a group shows the SENTENCE, a step beneath it
+     * shows its own words marked as carrying on, and a row from before the submission was recorded falls back
+     * to its step text rather than showing nothing.
+     */
+    @Test
+    void theHeadOfAGroupReadsAsTheSentenceAndTheStepsBeneathItCarryOn() {
+        assertEquals(WHOLE_SUBMISSION,
+                ChronicleNarrationExporter.wordsFor(WHOLE_SUBMISSION, "gather plant fiber", false));
+        assertEquals(ChronicleNarrationExporter.CARRIES_ON + "prepare a tinder nest",
+                ChronicleNarrationExporter.wordsFor(WHOLE_SUBMISSION, "prepare a tinder nest", true));
+        // Pre-V464: no submission was ever stored, so the step text stands. It must not read as empty.
+        assertEquals("look around", ChronicleNarrationExporter.wordsFor(null, "look around", false));
+        assertEquals("look around", ChronicleNarrationExporter.wordsFor("   ", "look around", false));
+    }
+
     @Test
     void theExportShowsTheCommandAboveTheAnswer() throws java.io.IOException {
         Instant arrival = Instant.parse("2026-08-02T00:00:00Z");
         Instant oneSubmission = arrival.plusSeconds(600);
         List<ChronicleService.JourneyEntry> entries = List.of(
                 new ChronicleService.JourneyEntry(arrival.plusSeconds(60), "OBSERVE", "SUCCEEDED",
-                        "Tall trees close overhead. " + paragraph(1), "look around", arrival.plusSeconds(60)),
+                        "Tall trees close overhead. " + paragraph(1), "look around", arrival.plusSeconds(60),
+                        "look around"),
                 // Two steps of ONE multi-step submission: same submittedAt, their own words each.
                 new ChronicleService.JourneyEntry(oneSubmission, "GATHER_FIBER", "SUCCEEDED",
-                        "You separate usable plant fiber. " + paragraph(2), "gather plant fiber", oneSubmission),
+                        "You separate usable plant fiber. " + paragraph(2), "gather plant fiber", oneSubmission,
+                        WHOLE_SUBMISSION),
                 new ChronicleService.JourneyEntry(oneSubmission.plusSeconds(1), "CRAFT_TINDER", "SUCCEEDED",
-                        "You tease the fiber into a nest. " + paragraph(3), "prepare a tinder nest", oneSubmission),
+                        "You tease the fiber into a nest. " + paragraph(3), "prepare a tinder nest", oneSubmission,
+                        WHOLE_SUBMISSION),
                 // A row from before the readers carried the command: it must still export, narration alone.
                 new ChronicleService.JourneyEntry(arrival.plusSeconds(1800), "REST", "SUCCEEDED",
-                        "WITHOUT_A_COMMAND_SENTINEL. " + paragraph(4), null, null));
+                        "WITHOUT_A_COMMAND_SENTINEL. " + paragraph(4), null, null, null));
         ChronicleService.ChronicleSummary summary = new ChronicleService.ChronicleSummary(
                 UUID.randomUUID(), 13, "DEAD", arrival, arrival.plusSeconds(3600), "Systemic Illness", UUID.randomUUID());
 
@@ -121,8 +145,21 @@ class ChronicleNarrationExporterTest {
             for (int page = 1; page <= reader.getNumberOfPages(); page++) text.append(extractor.getTextFromPage(page));
             String read = text.toString();
 
-            for (String said : List.of("look around", "gather plant fiber", "prepare a tinder nest"))
+            for (String said : List.of("look around", "prepare a tinder nest"))
                 assertTrue(read.contains(said), () -> "the export must carry the command '" + said + "': " + read);
+
+            // #892: THE SENTENCE THE PLAYER COMPOSED STANDS AT THE HEAD OF ITS GROUP. The ledger holds one row
+            // per step, and the export used to show the first step's words alone — so a procedure written as
+            // one sentence was nowhere in the record of the life that wrote it.
+            assertTrue(read.contains(WHOLE_SUBMISSION),
+                    () -> "the export must carry the whole submission '" + WHOLE_SUBMISSION + "': " + read);
+
+            // And a continuation says so in a WORD. An ellipsis in front of a sentence reads as truncation,
+            // which is the one thing an archive of someone's own life must never seem to do.
+            assertTrue(read.contains(ChronicleNarrationExporter.CARRIES_ON + "prepare a tinder nest"),
+                    () -> "a continuation step must be marked as carrying on, not cut short: " + read);
+            assertTrue(read.indexOf(WHOLE_SUBMISSION) < read.indexOf("prepare a tinder nest"),
+                    "the submission must stand above the steps it was cut into");
 
             // The command comes BEFORE the answer it provoked — the pairing is the whole point.
             assertTrue(read.indexOf("look around") < read.indexOf("Tall trees close overhead"),
