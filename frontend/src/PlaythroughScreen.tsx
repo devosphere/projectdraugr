@@ -111,8 +111,10 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
   // grassland tile was headed "Forest" while look-around said "open grass runs to every horizon". The opening
   // value claims no terrain at all rather than guessing one — "Uncharted forest" was a guess, and it was the
   // guess the player saw on grassland.
-  const [location, setLocation] = useState<{ art: string | null; label: string; terrain: string | null }>(
-    { art: null, label: 'Uncharted ground', terrain: null });
+  // `named` is whether the scene's label is a PLACE (#932). The registry root is a stand-in image, so its
+  // label — "Forest" — is not a locality and is not shown as one.
+  const [location, setLocation] = useState<{ art: string | null; label: string; terrain: string | null; named: boolean }>(
+    { art: null, label: 'Uncharted ground', terrain: null, named: false });
   // #239: the scene a new one fades in over. The new art has already decoded before setLocation (#237), so the
   // fade never starts on a blank frame; the old scene stays as the ground underneath until it is fully covered.
   // Someone who has asked for reduced motion gets the change at once, with no fade at all.
@@ -192,7 +194,7 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
       // The GROUND is taken whether or not a scene could be shown. A backdrop that fails to load must never
       // leave the heading describing the last place the Chronicle stood — that is how "Forest" survived a walk
       // onto open grassland and back.
-      if (scene) setLocation({ art: scene.art, label: scene.label, terrain });
+      if (scene) setLocation({ art: scene.art, label: scene.label, terrain, named: scene.namesTheGround });
       else setLocation(previous => ({ ...previous, terrain }));
     }).catch(() => undefined);
   }
@@ -393,7 +395,7 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
     <div className="playthrough-vignette" />
     {/* #239: what a sighted player reads off the picture, said for a screen reader. Built only from the general
         place label, the time and the weather — never a site the Chronicle has not been told about. */}
-    <p className="sr-only" aria-live="polite">{`Your surroundings: ${location.terrain ?? location.label}${location.terrain && location.label !== location.terrain ? `, ${location.label}` : ''}, ${environment.time.toLowerCase()}, ${environment.weather.toLowerCase()}.`}</p>
+    <p className="sr-only" aria-live="polite">{`Your surroundings: ${location.terrain ?? location.label}${location.named && location.terrain && location.label !== location.terrain ? `, ${location.label}` : ''}, ${environment.time.toLowerCase()}, ${environment.weather.toLowerCase()}.`}</p>
     {showOverlay && (
       <div className="resolving-overlay" role="status" aria-live="polite" aria-label="The world is resolving your action">
         <div className="resolving-hourglass" aria-hidden="true">⏳</div>
@@ -401,7 +403,7 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
     )}
     <header className="world-header">
       <div><p className="eyebrow">{location.terrain ?? location.label}</p><strong>{environment.time}</strong>
-        {location.terrain && location.label && location.label !== location.terrain
+        {location.named && location.terrain && location.label && location.label !== location.terrain
           && <p className="locality">{location.label}</p>}</div>
       <div className="world-signs" aria-label="Environmental conditions"><span title="Daylight">{environment.time}</span><span title="Weather">{environment.weather}</span><span title="Environment">{environment.season}</span></div>
       <div className="header-controls"><button className="quiet-body" aria-label="Open body awareness" aria-expanded={bodyOpen} onClick={() => { setBodyOpen(!bodyOpen); setMenuOpen(false); setPanel('none'); }}>🧍</button><button className="quiet-menu" aria-label="Open menus" aria-expanded={menuOpen} onClick={() => { setMenuOpen(!menuOpen); setBodyOpen(false); setPanel('none'); }}>☰</button></div>

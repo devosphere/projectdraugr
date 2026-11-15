@@ -13,7 +13,7 @@
  *     or corrupt file degrades to a valid neutral scene rather than a blank one.
  */
 import { decodeArt } from './latestScene';
-import { pickBackdrop, type RuntimeRecord } from './resolveBackdrop';
+import { namesTheGround, pickBackdrop, type RuntimeRecord } from './resolveBackdrop';
 
 // The registry is loaded on first use, as its own chunk. Imported statically it rode in the main bundle — the whole
 // manifest, review history and all, downloaded before the title screen — for a screen that needs it only once a
@@ -67,6 +67,15 @@ export interface Scene {
   backdropKey: string;
   label: string;
   art: string;
+  /**
+   * Whether this scene NAMES THE GROUND IT IS STANDING ON (#932).
+   *
+   * <p>False for the registry's root, which is what every candidate falling through ends at: a stand-in
+   * image, not a place. Its label is "Forest", and shown as a locality it put "Forest" under the heading of
+   * a cave interior — and under every heading at all in a build without the generated art, which is the
+   * symptom #878 was filed about. The ground is already named above it; a stand-in needs no name.
+   */
+  namesTheGround: boolean;
 }
 
 /**
@@ -81,7 +90,8 @@ export async function loadScene(candidates: string[]): Promise<Scene | null> {
     try {
       const art = await urlFor(pick.record);
       await decodeArt(art);
-      return { backdropKey: pick.record.backdropKey, label: pick.record.label, art };
+      return { backdropKey: pick.record.backdropKey, label: pick.record.label, art,
+               namesTheGround: namesTheGround(pick) };
     } catch {
       rejected.add(pick.record.filename);
       urlCache.delete(`${pick.record.filename}#${pick.record.contentHash}`);

@@ -72,6 +72,7 @@ public class SimulationNarrator {
                 .map(String::trim)
                 .filter(extra -> !extra.isBlank())
                 .filter(extra -> !claimsWhatIsNotThere(extra, frame, backendNarration))
+                .filter(extra -> !claimsAFireThatIsNotLit(extra, frame, backendNarration))
                 .map(extra -> backendNarration + " " + extra)
                 .orElse(backendNarration);
     }
@@ -96,6 +97,33 @@ public class SimulationNarrator {
         return false;
     }
 
+    /** Fire words: what no sentence may claim of a ground whose hearth is cold (#903). */
+    private static final Set<String> FIRE_WORDS = Set.of(
+        "flame", "flames", "ember", "embers", "coals", "blaze", "smoke", "smoulder", "smouldering",
+        "smolder", "smoldering", "crackle", "crackles", "crackling", "burning", "ablaze", "firelight");
+
+    /**
+     * Whether the sentence puts a fire on ground whose hearth is cold (#903).
+     *
+     * <p>{@link #claimsWhatIsNotThere} holds the narrator to the OBJECTS the receipt names, and a fire pit is
+     * an object that really is there — so a stone ring built in the snow and never lit passed that guard
+     * while the sentence said "warmth was rising from gathered wood". A thing's STATE is a claim about the
+     * world as much as its existence is, and this is the state a hypothermic Chronicle is reading the prose
+     * for when they decide whether it is safe to lie down.
+     *
+     * <p>Only when the frame actually knows the hearth is unlit, and only when the deterministic prose has
+     * not itself mentioned fire — a line about a fire going out may be elaborated on; a cold ring may not be
+     * given flames.
+     */
+    boolean claimsAFireThatIsNotLit(String extra, PerceptionFrame frame, String backendNarration) {
+        if (frame == null || frame.hearth() == null || !frame.hearth().contains("UNLIT")) return false;
+        String receipt = backendNarration == null ? "" : backendNarration.toLowerCase(Locale.ROOT);
+        String said = extra.toLowerCase(Locale.ROOT);
+        for (String word : FIRE_WORDS)
+            if (said.contains(word) && !receipt.contains(word)) return true;
+        return false;
+    }
+
     private String buildUser(PerceptionFrame frame, String backendNarration) {
         String biome = frame.location() == null ? "unknown" : frame.location().biome();
         String weather = frame.weather() == null ? "clear"
@@ -117,9 +145,13 @@ public class SimulationNarrator {
             - Location: %s at %s
             - Weather: %s
             - Nearby: %s
-            - State changes this moment: %s""".formatted(
+            - State changes this moment: %s
+            - Hearth on this ground: %s""".formatted(
                 backendNarration, frame.intent(), frame.outcome(), biome, frame.timeOfDay(),
-                weather, nearby, changes);
+                weather, nearby, changes,
+                // THE FIRE IS A FACT, NOT AN INFERENCE (#903). Given plainly so the narrator never has to
+                // guess from a count of objects whether the stones it can see are warm.
+                frame.hearth() == null ? "none built here" : frame.hearth());
     }
 
     private String describeChange(StateChange c) {
