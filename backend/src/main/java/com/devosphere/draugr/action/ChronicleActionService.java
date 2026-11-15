@@ -634,15 +634,15 @@ public class ChronicleActionService {
             // on open grassland, on a beach, on a mountainside, inside a cave. Narration must witness the world,
             // and a wood that is not there is the plainest way of failing that. The span IS known — the player may
             // have asked for two hours — and saying it is the difference between a pause and an afternoon.
-            perception = "You remain still for " + humanSpan(minutes) + ", and the place goes on around you without you.";
+            perception = "You remain still for " + exactSpan(minutes) + ", and the place goes on around you without you.";
             perception += bittenWhileStill(chronicle, resolvedAt, minutes);
         }
         else if (intent == Intent.SLEEP) {
             boolean safe = physiology.sleep(chronicle.id(), minutes); items.restDraftBeasts(chronicle.id());
             perception = safe
-                ? "You lie down under cover and let sleep take you for " + humanSpan(minutes)
+                ? "You lie down under cover and let sleep take you for " + exactSpan(minutes)
                   + ". You wake to a changed sky, the deep tiredness lifted from your limbs."
-                : "You settle onto the bare ground and drift through " + humanSpan(minutes)
+                : "You settle onto the bare ground and drift through " + exactSpan(minutes)
                   + " of broken, shallow sleep, waking stiff and only half-rested as the light shifts.";
             perception += bittenWhileStill(chronicle, resolvedAt, minutes);
             // Stock left loose overnight are what predators come for (#108). A sleep spans the dark hours, so this
@@ -1767,6 +1767,23 @@ public class ChronicleActionService {
      * afternoon on your back read identically. Rounded the way speech rounds, because "fifty-three minutes" is a
      * clock talking, not a body.
      */
+    /**
+     * How long a rest or a sleep actually lasted, said in full (#880).
+     *
+     * <p>{@link #humanSpan} rounds the way speech rounds, which is right for an estimate such as a walk still to
+     * make. A rest or a sleep is not an estimate: its span is exactly what the clock advanced, and the player
+     * asked for it. Rounded, {@code sleep for 90 minutes} read back as "2 hours" and 45 minutes as "an hour", so
+     * the record of elapsed time disagreed with the time that elapsed, and that is the time a player plans the
+     * fire's remaining fuel against. Whole hours still read as hours; only minutes that are really there are added.
+     */
+    static String exactSpan(int minutes) {
+        if (minutes <= 1) return "a minute";
+        if (minutes < 60) return minutes + " minutes";
+        int h = minutes / 60, m = minutes % 60;
+        String hours = h == 1 ? "an hour" : h + " hours";
+        if (m == 0) return hours;
+        return hours + " and " + (m == 1 ? "a minute" : m + " minutes");
+    }
     private String humanSpan(int minutes) {
         if (minutes < 10) return "a few minutes";
         if (minutes < 45) return minutes + " minutes";
