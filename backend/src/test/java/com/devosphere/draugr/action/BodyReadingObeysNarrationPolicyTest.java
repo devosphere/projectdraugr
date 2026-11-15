@@ -1,5 +1,6 @@
 package com.devosphere.draugr.action;
 
+import com.devosphere.draugr.chronicle.ChroniclePhysiologyService.Ailments;
 import com.devosphere.draugr.chronicle.ChroniclePhysiologyService.BodyHudSnapshot;
 import com.devosphere.draugr.narration.NarrationPolicy;
 import org.junit.jupiter.api.Test;
@@ -24,7 +25,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class BodyReadingObeysNarrationPolicyTest {
 
     /** Every label {@code ChroniclePhysiologyService} can put in each field of the snapshot. */
-    private static final List<String> HEALTH = List.of("Healthy", "Injured", "Critical");
+    private static final List<String> HEALTH = List.of("Healthy", "Injured", "Sick", "Ailing", "Critical");
+
+    /** Every shape the three scalars behind the health label can take, including the ones that produce no line. */
+    private static final List<Ailments> AILMENTS = List.of(
+        new Ailments(0, 0, 0, 0), new Ailments(12, 0, 0, 0), new Ailments(50, 0, 0, 0), new Ailments(95, 0, 0, 0),
+        new Ailments(0, 20, 0, 0), new Ailments(0, 64, 0, 0), new Ailments(0, 99, 0, 0),
+        new Ailments(0, 0, 500, 0), new Ailments(0, 0, 2900, 0), new Ailments(60, 99, 2900, 0), new Ailments(30, 40, 100, 0),
+        // ...and every direction the sickness can be going, which the reading now says out loud (#909).
+        new Ailments(0, 64, 0, 3), new Ailments(0, 64, 0, -4), new Ailments(0, 64, 0, 0));
     private static final List<String> CONDITION = List.of("Normal", "In pain", "Distressed", "Sleep deprived");
     private static final List<String> HUNGER = List.of("Satisfied", "Hungry", "Very Hungry", "Starving", "Critical Starvation");
     private static final List<String> THIRST = List.of("Hydrated", "Thirsty", "Dehydrated", "Critical Dehydration");
@@ -35,8 +44,10 @@ class BodyReadingObeysNarrationPolicyTest {
     private static final List<String> BOWEL = List.of("Empty", "Normal", "Need Relief", "Urgent", "Critical");
     private static final List<String> HYGIENE = List.of("Clean", "Normal", "Dirty", "Filthy", "Hazardous");
 
-    private static String read(BodyHudSnapshot snapshot) throws Exception {
-        Method m = ChronicleActionService.class.getDeclaredMethod("bodyReading", BodyHudSnapshot.class);
+    private static String read(BodyHudSnapshot snapshot) throws Exception { return read(snapshot, new Ailments(0, 0, 0, 0)); }
+
+    private static String read(BodyHudSnapshot snapshot, Ailments ails) throws Exception {
+        Method m = ChronicleActionService.class.getDeclaredMethod("bodyReading", BodyHudSnapshot.class, Ailments.class);
         m.setAccessible(true);
         // bodyReading is pure over the snapshot — it touches no collaborator, so none is needed here.
         ChronicleActionService svc = new ChronicleActionService(null, null, null, null, null, null, null, null, null, null, null, null,
@@ -47,7 +58,7 @@ class BodyReadingObeysNarrationPolicyTest {
             (com.devosphere.draugr.people.AgreementService) null, (com.devosphere.draugr.people.CompanionService) null,
             (com.devosphere.draugr.people.AudienceService) null, (com.devosphere.draugr.people.MembershipService) null,
             (com.devosphere.draugr.people.ClaimService) null);
-        return (String) m.invoke(svc, snapshot);
+        return (String) m.invoke(svc, snapshot, ails);
     }
 
     private static BodyHudSnapshot contented() {
@@ -80,9 +91,18 @@ class BodyReadingObeysNarrationPolicyTest {
                     () -> "the reading for " + f.name() + "=" + v + " uses the HUD's words: " + said);
             }
 
+        // EVERY SHAPE OF WHAT IS ACTUALLY WRONG (#886, #914, #921). The reading no longer opens on the health
+        // LABEL — it reads injury, illness and blood loss, which is why an illness-only Chronicle stopped being
+        // told about an unclosed hurt. Those lines are narration like any other and must pass the policy too.
+        for (Ailments ails : AILMENTS) {
+            String said = read(contented(), ails);
+            assertDoesNotThrow(() -> new NarrationPolicy().validate(said),
+                () -> "the reading for " + ails + " uses the HUD's words: " + said);
+        }
+
         // And the worst of everything at once, which is the longest sentence the reading will ever build.
         String allAtOnce = read(new BodyHudSnapshot("Critical", "In pain", "Critical Starvation", "Critical Dehydration",
-            "Collapsing", "Hyperthermic", "Soaked", "Critical", "Critical", "Hazardous"));
+            "Collapsing", "Hyperthermic", "Soaked", "Critical", "Critical", "Hazardous"), new Ailments(95, 99, 2900, 0));
         assertDoesNotThrow(() -> policy.validate(allAtOnce), () -> "the worst case uses the HUD's words: " + allAtOnce);
     }
 
@@ -103,7 +123,6 @@ class BodyReadingObeysNarrationPolicyTest {
         BodyHudSnapshot c = contented();
         record Case(String field, String value, BodyHudSnapshot snapshot) { }
         List<Case> distress = List.of(
-            new Case("health", "Injured", new BodyHudSnapshot("Injured", c.condition(), c.hunger(), c.thirst(), c.energy(), c.temperature(), c.wetness(), c.bladder(), c.bowel(), c.hygiene())),
             new Case("thirst", "Thirsty", new BodyHudSnapshot(c.health(), c.condition(), c.hunger(), "Thirsty", c.energy(), c.temperature(), c.wetness(), c.bladder(), c.bowel(), c.hygiene())),
             new Case("hunger", "Hungry", new BodyHudSnapshot(c.health(), c.condition(), "Hungry", c.thirst(), c.energy(), c.temperature(), c.wetness(), c.bladder(), c.bowel(), c.hygiene())),
             new Case("energy", "Exhausted", new BodyHudSnapshot(c.health(), c.condition(), c.hunger(), c.thirst(), "Exhausted", c.temperature(), c.wetness(), c.bladder(), c.bowel(), c.hygiene())),
@@ -115,5 +134,63 @@ class BodyReadingObeysNarrationPolicyTest {
             assertTrue(!said.contains("Nothing presses"),
                 () -> d.field() + "=" + d.value() + " must not read as a body with nothing wrong: " + said);
         }
+    }
+
+    /**
+     * A SICKNESS IS NOT A WOUND (#886, #914).
+     *
+     * <p>Chronicle 41: illness 64, injury 0, nothing bleeding. "Am I sick?" answered "There is a hurt in you
+     * that has not closed", and "bandage my wound" answered, correctly, that nothing was open — the reading
+     * had asked the one-word HEALTH LABEL, which cannot tell the two apart, while the bandaging read the
+     * scalars. Both halves are asserted here, because fixing one and not the other only moves the defect.
+     */
+    @Test
+    void anIllnessIsReadAsSicknessAndAWoundAsAWound() throws Exception {
+        String sick = read(contented(), new Ailments(0, 64, 0, 0));
+        assertTrue(sick.contains("sickness"), () -> "illness must be read as sickness: " + sick);
+        assertTrue(!sick.contains("hurt") && !sick.contains("closed"),
+            () -> "a body with no injury must never be told of an unclosed hurt: " + sick);
+
+        String hurt = read(contented(), new Ailments(50, 0, 0, 0));
+        assertTrue(hurt.contains("hurt"), () -> "an injury must be read as a hurt: " + hurt);
+        assertTrue(!hurt.contains("sickness"), () -> "a body with no illness must not be told it is sick: " + hurt);
+
+        // BOTH AT ONCE SAYS BOTH. Chronicle 49 — illness 93, injury 30 from ten unplaceable strains — was
+        // told only "something in you is badly wrong", which names nothing a player can act on.
+        String both = read(new BodyHudSnapshot("Critical", "Normal", "Satisfied", "Hydrated", "Energetic",
+            "Comfortable", "Dry", "Comfortable", "Normal", "Clean"), new Ailments(30, 93, 0, 0));
+        assertTrue(both.contains("sickness"), () -> "a critical illness must be named: " + both);
+        assertTrue(both.contains("ache") || both.contains("hurt"), () -> "the strain must be named too: " + both);
+        assertTrue(!both.contains("badly wrong"),
+            () -> "the generic line must give way whenever the scalars can explain the state: " + both);
+
+        // ...and it is still there for a Critical the scalars cannot explain — blood loss short of the
+        // injury thresholds, say — so the fix never silences the reading.
+        String unexplained = read(new BodyHudSnapshot("Critical", "Normal", "Satisfied", "Hydrated", "Energetic",
+            "Comfortable", "Dry", "Comfortable", "Normal", "Clean"), new Ailments(0, 0, 0, 0));
+        assertTrue(unexplained.contains("badly wrong"), () -> "an unexplained Critical must still be said: " + unexplained);
+    }
+
+    /**
+     * "HOW SICK AM I" AND "AM I GETTING BETTER" ARE TWO QUESTIONS (#909).
+     *
+     * <p>A player who has just washed, dried off, got warm and dressed the wound needs the second one
+     * answered, or they cannot tell whether any of it worked — and before illness could fall at all there
+     * was no second answer to give.
+     */
+    @Test
+    void theReadingSaysWhichWayTheSicknessIsGoing() throws Exception {
+        String worse = read(contented(), new Ailments(0, 64, 0, 3));
+        assertTrue(worse.contains("getting worse"), () -> "a rising sickness must say so: " + worse);
+
+        String easing = read(contented(), new Ailments(0, 64, 0, -4));
+        assertTrue(easing.contains("easing"), () -> "a mending sickness must say so: " + easing);
+
+        String holding = read(contented(), new Ailments(0, 64, 0, 0));
+        assertTrue(holding.contains("holding"), () -> "a sickness going nowhere must say so: " + holding);
+
+        // And a body with no sickness is told nothing about a direction it has not got.
+        String well = read(contented(), new Ailments(0, 0, 0, -4));
+        assertTrue(!well.contains("easing") && !well.contains("holding"), () -> "no sickness, no trend: " + well);
     }
 }
