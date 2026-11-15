@@ -2037,7 +2037,14 @@ public class PhysicalItemService {
     // yet not collect any into it — a vessel you can set on the flame must be able to hold what goes in it. The
     // folded bark cup is a drinking vessel by construction, and matters early: it holds water before there is any
     // pottery to hold it in. bark_scoop is deliberately left out — a scoop lifts water, it does not carry it.
-    private static final String[] WATER_VESSELS = {"waterskin","wooden_bucket","clay_pot","clay_jar","fired_bowl","fired_cup","clay_water_filter","wooden_bowl","wooden_trough","soapstone_bowl","folded_bark_cup"};
+    //
+    // water_ladle joins them (#915): it was catalogued as a TOOL with no container row, so a Chronicle who
+    // carved one, equipped it and stood at the marsh was told "nothing you carry will hold it" — while
+    // `drink water` in the same place described dipping that same ladle and drinking from it. The world knew
+    // the ladle held water when it suited one action and not the other. V468 gives it the capacity.
+    //
+    // field_stone_bowl joins them for #917: a bowl for Chronicles who arrive nowhere near soapstone.
+    private static final String[] WATER_VESSELS = {"waterskin","wooden_bucket","clay_pot","clay_jar","fired_bowl","fired_cup","clay_water_filter","wooden_bowl","wooden_trough","soapstone_bowl","folded_bark_cup","water_ladle","field_stone_bowl"};
     /** Whether the Chronicle carries anything that can hold water to fill or boil in (#71). */
     @Transactional(readOnly = true)
     public boolean hasWaterVessel(UUID chronicle) { for (String v : WATER_VESSELS) if (hasAtLeast(chronicle, v, 1)) return true; return false; }
@@ -2094,6 +2101,80 @@ public class PhysicalItemService {
         int made = 0;
         for (int i = 0; i < count; i++) { if (capacityHeadroomUnits(chronicle, key) < 1) break; createCarriedItem(chronicle, key, name, at, "COLLECTED"); made++; }
         return made;
+    }
+
+    /**
+     * The catalogue's name for the best water vessel this Chronicle carries, for prose that must name it (#907).
+     *
+     * <p>Fireproof first, because the sentence that needed this is the one about setting a vessel on the fire.
+     * Falls back to "vessel" rather than to nothing, so a line is never left with a hole in it.
+     */
+    @Transactional(readOnly = true)
+    public String plainNameOfBestVessel(UUID chronicle) {
+        for (String key : FIREPROOF_VESSELS) if (hasAtLeast(chronicle, key, 1)) return namedInTheCatalogue(key);
+        for (String key : WATER_VESSELS) if (hasAtLeast(chronicle, key, 1)) return namedInTheCatalogue(key);
+        return "vessel";
+    }
+
+    /** The catalogue's own word for an item key, lower-cased; the key itself if the catalogue has no row. */
+    private String namedInTheCatalogue(String itemKey) {
+        String name = jdbc.query("SELECT display_name FROM item_definition WHERE item_key=?",
+            rs -> rs.next() ? rs.getString(1) : null, itemKey);
+        return name == null ? itemKey.replace('_', ' ') : name.toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /** What a filling actually did: how many measures went in, and what they went into (#918). */
+    public record Filled(int measures, String vessel) { }
+
+    /**
+     * Fill the Chronicle's water vessels, PUTTING THE WATER IN THEM (#918).
+     *
+     * <p>{@link #makeWater} creates water in the Chronicle's hands and nothing else. So the narration said
+     * "you fill your vessel" while Storage showed 0.0 L in the bark cup AND the bark fold container, and Load
+     * listed Raw water carried loose — three panels disagreeing about one act. A vessel the world checks for
+     * before it will let you collect, and then never puts anything into, is a vessel in name only.
+     *
+     * <p>Fills the SMALLEST vessel that can take a measure first, so a cup is used before a bucket is opened
+     * and the big vessel is kept for the big fill. Equipped vessels count: a ladle in the hand is in reach
+     * (#915), and the ledger owns an equipped item exactly as it owns a carried one.
+     *
+     * @return how many measures went in, and the name of the vessel the first one went into
+     */
+    @Transactional
+    public Filled fillWaterVessels(UUID chronicle, String key, String name, int wanted, Instant at) {
+        Integer measure = jdbc.queryForObject("SELECT unit_volume_ml FROM item_definition WHERE item_key=?", Integer.class, key);
+        if (measure == null || measure <= 0) return new Filled(0, null);
+        String vesselKeys = String.join(",", java.util.Collections.nCopies(WATER_VESSELS.length, "?"));
+        Object[] args = new Object[WATER_VESSELS.length + 1];
+        args[0] = chronicle;
+        System.arraycopy(WATER_VESSELS, 0, args, 1, WATER_VESSELS.length);
+        // Free volume = the vessel's own capacity less what is already inside it. Smallest free space first.
+        List<java.util.Map<String,Object>> vessels = jdbc.queryForList(
+            "SELECT w.id, w.display_name, cp.max_volume_ml - COALESCE((" +
+            "   SELECT SUM(d.unit_volume_ml) FROM item_containment ic JOIN item_instance ii ON ii.object_id=ic.item_id " +
+            "   JOIN item_definition d ON d.item_key=ii.item_key JOIN world_object inner_o ON inner_o.id=ic.item_id " +
+            "   WHERE ic.container_id=w.id AND inner_o.lifecycle_state='ACTIVE'), 0) AS free " +
+            "FROM world_object w JOIN item_instance i ON i.object_id=w.id " +
+            "JOIN container_properties cp ON cp.object_id=w.id " +
+            "WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key IN (" + vesselKeys + ") " +
+            "ORDER BY free ASC", args);
+
+        int made = 0;
+        String first = null;
+        for (java.util.Map<String,Object> vessel : vessels) {
+            int free = ((Number) vessel.get("free")).intValue();
+            UUID id = (UUID) vessel.get("id");
+            while (made < wanted && free >= measure) {
+                if (capacityHeadroomUnits(chronicle, key) < 1) return new Filled(made, first);
+                UUID water = createCarriedItem(chronicle, key, name, at, "COLLECTED");
+                placeInContainer(water, id);
+                free -= measure;
+                made++;
+                if (first == null) first = ((String) vessel.get("display_name")).toLowerCase(java.util.Locale.ROOT);
+            }
+            if (made >= wanted) break;
+        }
+        return new Filled(made, first);
     }
     /** Convert up to {@code max} carried units of one water kind into another (raw→filtered, raw→boiled). */
     @Transactional
@@ -3317,10 +3398,28 @@ public class PhysicalItemService {
         java.util.Map<String,String> chosen = new java.util.LinkedHashMap<>();
         for (String g : groups) {
             String pick = null;
-            for (java.util.Map<String,Object> o : jdbc.queryForList(
-                    "SELECT item_key, quantity FROM material_process_input_group WHERE process_key=? AND group_name=?", key, g))
+            java.util.List<java.util.Map<String,Object>> options = jdbc.queryForList(
+                "SELECT item_key, quantity FROM material_process_input_group WHERE process_key=? AND group_name=? ORDER BY item_key", key, g);
+            for (java.util.Map<String,Object> o : options)
                 if (hasAtLeastHere(chronicle, location, (String) o.get("item_key"), ((Number) o.get("quantity")).intValue())) { pick = (String) o.get("item_key"); break; }
-            if (pick == null) return new String[]{"FAILED", "Nothing within reach is suitable to work from. What this step wants, you do not have here to give it."};
+            if (pick == null) {
+                // SAY WHICH GROUP WENT SHORT, AND WHAT WOULD ANSWER IT (#894). This said "Nothing within reach
+                // is suitable to work from" — true of a recipe that wants greens AND clean water when the
+                // greens are in hand and the water is not, and useless to the player, who had five bundles of
+                // watercress and re-foraged more before working out it was the water. A fixed input has named
+                // itself since #37; the either/or groups never did, so exactly the ingredients with a CHOICE
+                // behind them were the ones the game would not name.
+                java.util.List<String> wanted = new java.util.ArrayList<>();
+                for (java.util.Map<String,Object> o : options) {
+                    int q = ((Number) o.get("quantity")).intValue();
+                    String named = namedInTheCatalogue((String) o.get("item_key"));
+                    wanted.add(q > 1 ? q + " " + named : named);
+                }
+                String either = wanted.size() == 1 ? wanted.get(0)
+                    : String.join(", ", wanted.subList(0, wanted.size() - 1)) + " or " + wanted.get(wanted.size() - 1);
+                return new String[]{"FAILED", "This work wants " + either + ", and you have none of it within reach. "
+                    + "The rest of what it takes you have."};
+            }
             chosen.put(g, pick);
         }
 
