@@ -873,7 +873,11 @@ public class ChronicleActionService {
             if (!clay && !bark) { outcome = "FAILED"; perception = "You have no water filter to pour through — a bark-and-charcoal filter, or a fired clay one, must be made first."; }
             else { int n = items.convertWater(chronicle.id(), "raw_water", "filtered_water", "Filtered water", 3, resolvedAt); outcome = n > 0 ? "SUCCEEDED" : "FAILED"; perception = n > 0 ? (clay ? "You pour the raw water slowly through the clay filter; it comes out the other side notably clearer." : "You pour the raw water slowly through the bark-and-charcoal cone; it drips out the bottom clearer and less foul than it went in.") : "You have no raw water to pour through the filter."; }
         }
-        else if (intent == Intent.WASH) { if(waterInReach(chronicle.location())){boolean soap=items.hasAtLeast(chronicle.id(),"soap",1)&&items.consumeOne(chronicle.id(),"soap",resolvedAt);physiology.wash(chronicle.id(),soap);perception=soap?"You work the soap into a lather and scrub down; the water carries off far more than it would alone, and you come up clean.":"Cold water runs over your hands and skin, carrying away some of the dirt.";}else{outcome="FAILED";perception="You look for water to wash in, but there is none here — the ground is dry, and nothing runs or stands within reach.";} }
+        else if (intent == Intent.WASH) { if(waterInReach(chronicle.location())){boolean soap=items.hasAtLeast(chronicle.id(),"soap",1)&&items.consumeOne(chronicle.id(),"soap",resolvedAt);physiology.wash(chronicle.id(),soap);perception=soap?"You work the soap into a lather and scrub down; the water carries off far more than it would alone, and you come up clean.":"Cold water runs over your hands and skin, carrying away some of the dirt.";}
+            // #911: the sea is no water to drink, but a body can wash in it. Soap will not lather in salt water, so it
+            // is kept rather than spent. The wetting is the same as any wash, so the cold of a night sea still tells.
+            else if(seaInReach(chronicle.location())){boolean soapHeld=items.hasAtLeast(chronicle.id(),"soap",1);physiology.wash(chronicle.id(),false);perception="You wade into the edge of the sea and scrub down in it. The salt water is bitterly cold and stings in every scratch, but the dirt comes away, and you come out wet through and stiff with salt."+(soapHeld?" Your soap will not raise a lather in sea water, so you keep it for fresh.":"");}
+            else{outcome="FAILED";perception="You look for water to wash in, but there is none here — the ground is dry, and nothing runs or stands within reach.";} }
         else if (intent == Intent.WARM_BODY) { if(fireInReach(chronicle.location())){physiology.warmByFire(chronicle.id());perception="You crouch close to the fire and hold out your hands, letting its heat soak in until the chill loosens its grip.";}else{outcome="FAILED";perception="You cast about for warmth, but there is no fire burning within reach — only the cold air and colder ground.";} }
         else if (intent == Intent.DRY_BODY) { if(fireInReach(chronicle.location())||shelterInReach(chronicle.location())){physiology.dryOff(chronicle.id());perception="Out of the wet, you work the damp from your skin and clothes until you are drier than you were.";}else{outcome="FAILED";perception="You try to dry off, but with no fire and no cover here the damp only clings the harder.";} }
         else if (intent == Intent.COOL_BODY) { if(shelterInReach(chronicle.location())||waterInReach(chronicle.location())){physiology.coolOff(chronicle.id());perception="You get out of the sun and let the heat bleed off you until your head clears a little.";}else{outcome="FAILED";perception="You look for shade or water to cool in, but there is none here — the heat has nowhere to go.";} }
@@ -7246,6 +7250,13 @@ public class ChronicleActionService {
             "SELECT COUNT(*) FROM ecology_site WHERE chunk_id=? AND (" + com.devosphere.draugr.ecology.FreshWater.sites() + ")",
             Integer.class, location);
         return sites != null && sites > 0;
+    }
+    /** Sea water the Chronicle can reach (#911): a shore or open water. It is salt, so it never counts in
+     *  {@link #waterInReach} (which drinking also reads), but a body can wash in it. A separate question so drinking
+     *  keeps its freshwater rule while washing stops reporting "dry ground" to someone standing in the sea. */
+    private boolean seaInReach(UUID location) {
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
+        return "OCEAN".equals(biome) || "COAST".equals(biome);
     }
 
     /** A completed rainwater catchment OR well standing here, to fill a vessel from (#77). A well is the same
