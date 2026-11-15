@@ -87,7 +87,16 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
   const prototypeMode = !apiUrl;
   const [action, setAction] = useState('');
   const [body, setBody] = useState(previewBody);
-  const [narrations, setNarrations] = useState<NarrationEntry[]>([{ id: 'arrival-3', text: 'Cold air fills your lungs. Rainwater darkens the leaves around you. A narrow stream moves somewhere to your right, beneath the hush of unfamiliar trees.' }]);
+  // THE OPENING LINE CLAIMS NOTHING IT CANNOT KNOW (#885). It used to promise rainwater on the leaves and a
+  // narrow stream to the right — prototype prose, written before there was a world to ask. Chronicle 16 opened
+  // on a Temperate Forest tile at night in SNOW at -3°C, with no water source on the ground: the terrain
+  // survey named none, `judge the water here` confirmed none, and `which way to water` found none on any
+  // adjacent tile either. The first sentence of a life was false in three ways at once.
+  //
+  // Sensory and unfalsifiable now. The ground, the hour and the sky are the header's to report, from
+  // /api/visual-context and /api/chronicles/active/environment, and they are authoritative; this line is only
+  // the moment of arriving. The first real action's narration comes from the simulation like every other.
+  const [narrations, setNarrations] = useState<NarrationEntry[]>([{ id: 'arrival-3', text: 'Your lungs fill with air that is not the air you remember. The ground takes your weight, and holds. Whatever this place is, you have never stood in it before.' }]);
   const [olderNarrationPage, setOlderNarrationPage] = useState(0);
   const [hasOlderNarrations, setHasOlderNarrations] = useState(prototypeMode);
   const [loadingOlderNarrations, setLoadingOlderNarrations] = useState(false);
