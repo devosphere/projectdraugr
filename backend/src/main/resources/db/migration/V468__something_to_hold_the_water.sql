@@ -53,6 +53,12 @@ SELECT i.object_id, 520, 500, FALSE
 -- CAPACITY is fixed at 700 ml rather than bounded by the stone, because field stones are all one size in the
 -- catalogue today; the size-bounded capacity #917 asks for waits on #916, which is what gives a field stone a
 -- size at all.
+--
+-- THREE FIELD STONES, AND MASS IS WHY. A field stone is 750 g and the bowl is 1800 g, so a one-stone recipe
+-- would have the Auditor's conservation rule right: it creates matter from nothing. (It caught this on the
+-- first CI round and failed 447 tests doing it, which is what that gate is for.) Three is also the truthful
+-- number: pecking out a stone bowl wears out the hammerstones as surely as it hollows the blank, and this
+-- catalogue has exactly one word for a loose stone. One becomes the bowl; two are spent pounding it.
 INSERT INTO item_definition (item_key, display_name, category, unit_mass_grams, unit_volume_ml, stackable, equippable, insulation_value) VALUES
 ('field_stone_bowl', 'Field stone bowl', 'CONTAINER', 1800, 900, FALSE, TRUE, 0)
 ON CONFLICT (item_key) DO NOTHING;
@@ -71,12 +77,12 @@ ON CONFLICT (item_key, source_kind) DO NOTHING;
 INSERT INTO material_process (process_key, display_name, output_item_key, output_min, output_max, tool_class, requires_fire, requires_water, duration_minutes, domain_key, category_key, keywords, narration, review_state, reviewed_at) VALUES
 ('peck_field_stone_bowl', 'Peck out a field stone bowl', 'field_stone_bowl', 1, 1, 'STRIKING', FALSE, FALSE, 120, 'items', 'CRAFT',
  'field stone bowl,stone bowl,peck a bowl,peck out a bowl,peck a stone bowl,peck out a stone bowl,pound out a bowl,make a field stone bowl,make a stone bowl',
- 'You set the stone between your feet and peck at its face with a harder one, hour after hour, until a hollow deepens into a bowl that will hold water.',
+ 'You pick out the heaviest stone for the blank and set it between your feet, pecking at its face with the others, hour after hour. The hammerstones blunt and go to gravel; the hollow deepens into a bowl that will hold water.',
  'VERIFIED', now())
 ON CONFLICT (process_key) DO NOTHING;
 
 INSERT INTO material_process_input (process_key, item_key, quantity) VALUES
-('peck_field_stone_bowl', 'field_stone', 1)
+('peck_field_stone_bowl', 'field_stone', 3)
 ON CONFLICT (process_key, item_key) DO NOTHING;
 
 INSERT INTO process_subject (process_key, subject_term) VALUES
@@ -93,4 +99,8 @@ BEGIN
     THEN RAISE EXCEPTION 'V468: the field stone bowl has no recipe'; END IF;
     IF NOT EXISTS (SELECT 1 FROM container_capacity_default WHERE item_key='field_stone_bowl')
     THEN RAISE EXCEPTION 'V468: the field stone bowl holds nothing'; END IF;
+    -- The conservation rule the Auditor applies, asserted here so a bad number never reaches a CI round.
+    IF EXISTS (SELECT 1 FROM process_mass_balance WHERE process_key='peck_field_stone_bowl'
+                 AND min_input_grams > 0 AND max_output_grams > min_input_grams * 1.05)
+    THEN RAISE EXCEPTION 'V468: pecking a bowl would create matter from nothing'; END IF;
 END $$;
