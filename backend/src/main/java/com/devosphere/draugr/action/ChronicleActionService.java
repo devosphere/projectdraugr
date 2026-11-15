@@ -158,29 +158,33 @@ public class ChronicleActionService {
         boolean replay = alreadyRecorded(stepKey(idempotencyKey, "step", 0));
         // Writing a new procedure is moving on from whatever was set aside before it.
         if (!replay) endOpenRemainder("REPLACED");
-        return workThrough(steps, idempotencyKey, "step", replay, "");
+        return workThrough(steps, idempotencyKey, "step", replay, "", text);
     }
+
+    /** A set-aside remainder: its row, its undone steps, and the submission they were cut out of (#892). */
+    private record Remainder(UUID id, List<String> steps, String submission) { }
 
     /** The steps of a set-aside plan, worked again from where they stopped; null when nothing was set aside. */
     private ActionResult takeUpWhatWasSetAside(UUID idempotencyKey) {
         UUID chronicle = jdbc.query("SELECT id FROM chronicle WHERE life_state='LIVING'", rs -> rs.next() ? rs.getObject(1, UUID.class) : null);
         if (chronicle == null) return null;
-        org.springframework.jdbc.core.RowMapper<java.util.Map.Entry<UUID, List<String>>> row = (rs, n) ->
-            java.util.Map.entry(rs.getObject(1, UUID.class), List.of((String[]) rs.getArray(2).getArray()));
+        org.springframework.jdbc.core.RowMapper<Remainder> row = (rs, n) ->
+            new Remainder(rs.getObject(1, UUID.class), List.of((String[]) rs.getArray(2).getArray()), rs.getString(3));
         // The same resume submitted twice is one resume: find the plan it already took up, and replay it.
-        java.util.Map.Entry<UUID, List<String>> plan = idempotencyKey == null ? null : jdbc.query(
-            "SELECT id, steps FROM chronicle_plan_remainder WHERE resume_key = ?", row, idempotencyKey).stream().findFirst().orElse(null);
+        Remainder plan = idempotencyKey == null ? null : jdbc.query(
+            "SELECT id, steps, submission_text FROM chronicle_plan_remainder WHERE resume_key = ?", row, idempotencyKey).stream().findFirst().orElse(null);
         boolean replay = plan != null;
         if (plan == null) plan = jdbc.query(
-            "SELECT id, steps FROM chronicle_plan_remainder WHERE chronicle_id = ? AND state = 'OPEN'", row, chronicle).stream().findFirst().orElse(null);
+            "SELECT id, steps, submission_text FROM chronicle_plan_remainder WHERE chronicle_id = ? AND state = 'OPEN'", row, chronicle).stream().findFirst().orElse(null);
         if (plan == null) return null;
         if (!replay) jdbc.update("UPDATE chronicle_plan_remainder SET state='RESUMED', resume_key=?, resumed_at=? WHERE id=?",
-                idempotencyKey, java.sql.Timestamp.from(ticks.current().simulatedAt()), plan.getKey());
-        return workThrough(plan.getValue(), idempotencyKey, "resume", replay, "You take up what you set aside.");
+                idempotencyKey, java.sql.Timestamp.from(ticks.current().simulatedAt()), plan.id());
+        return workThrough(plan.steps(), idempotencyKey, "resume", replay, "You take up what you set aside.", plan.submission());
     }
 
     /** Work the steps in order, stopping where one fails; keep what was not done unless this is a replay. */
-    private ActionResult workThrough(List<String> steps, UUID idempotencyKey, String tag, boolean replay, String opening) {
+    private ActionResult workThrough(List<String> steps, UUID idempotencyKey, String tag, boolean replay, String opening,
+                                     String submission) {
         List<String> attempted = steps.size() > ActionPlan.MAX_STEPS ? steps.subList(0, ActionPlan.MAX_STEPS) : steps;
         StringBuilder told = new StringBuilder(opening);
         ActionResult last = null;
@@ -189,7 +193,7 @@ public class ChronicleActionService {
         List<String> undone = List.of();
         String stoppedBecause = null;
         for (int i = 0; i < attempted.size(); i++) {
-            ActionResult step = resolve(attempted.get(i), stepKey(idempotencyKey, tag, i));
+            ActionResult step = resolve(attempted.get(i), stepKey(idempotencyKey, tag, i), submission);
             last = step;
             if (told.length() > 0) told.append(" ");
             told.append(step.perception());
@@ -217,7 +221,7 @@ public class ChronicleActionService {
         }
         if (!replay) {
             if (last.died()) endOpenRemainder("ENDED");
-            else if (!undone.isEmpty()) setAside(undone, stoppedBecause, last, idempotencyKey, tag);
+            else if (!undone.isEmpty()) setAside(undone, stoppedBecause, last, idempotencyKey, tag, submission);
         }
         // The plan reports as the last step that actually ran: its identity, its clock, and the body as it stands.
         return new ActionResult(last.actionId(), last.intent(), outcome, last.durationMinutes(), last.resolvedAt(),
@@ -270,27 +274,41 @@ public class ChronicleActionService {
                     "AND chronicle_id IN (SELECT id FROM chronicle WHERE life_state = 'LIVING')", state);
     }
 
-    private void setAside(List<String> undone, String stoppedBecause, ActionResult last, UUID idempotencyKey, String tag) {
+    private void setAside(List<String> undone, String stoppedBecause, ActionResult last, UUID idempotencyKey, String tag,
+                          String submission) {
         UUID chronicle = jdbc.query("SELECT id FROM chronicle WHERE life_state='LIVING'", rs -> rs.next() ? rs.getObject(1, UUID.class) : null);
         if (chronicle == null) return;
         UUID id = idempotencyKey == null ? UUID.randomUUID()
             : UUID.nameUUIDFromBytes((idempotencyKey + ":" + tag + ":remainder").getBytes(java.nio.charset.StandardCharsets.UTF_8));
         jdbc.update(con -> {
             java.sql.PreparedStatement ps = con.prepareStatement(
-                "INSERT INTO chronicle_plan_remainder (id, chronicle_id, steps, stopped_because, set_aside_at, source_action_id) " +
-                "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING");
+                "INSERT INTO chronicle_plan_remainder (id, chronicle_id, steps, stopped_because, set_aside_at, source_action_id, submission_text) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING");
             ps.setObject(1, id);
             ps.setObject(2, chronicle);
             ps.setArray(3, con.createArrayOf("text", undone.toArray()));
             ps.setString(4, stoppedBecause);
             ps.setTimestamp(5, java.sql.Timestamp.from(last.resolvedAt()));
             ps.setObject(6, last.actionId());
+            // The undone steps were cut from this sentence; a "carry on" must record the same words (#892).
+            ps.setString(7, submission == null ? null : submission.trim());
             return ps;
         });
     }
 
     @Transactional
     public ActionResult resolve(String text, UUID idempotencyKey) {
+        // An action submitted on its own IS its own submission; a step of a procedure is not (#892).
+        return resolve(text, idempotencyKey, text);
+    }
+
+    /**
+     * @param submission the whole text the player wrote, which for a step of a procedure is the sentence it was
+     *                   cut out of. The ledger records one row per STEP, so without this a procedure came back
+     *                   after a relaunch as its pieces and the timeline disagreed with itself about the
+     *                   player's own words. #873 recorded that as its known gap; this closes it.
+     */
+    public ActionResult resolve(String text, UUID idempotencyKey, String submission) {
         if (text == null || text.trim().isEmpty() || text.length() > 2500) throw new IllegalArgumentException("An action must contain 1 to 2500 characters.");
         if (idempotencyKey != null) {
             // A duplicate submission returns the original outcome without resolving
@@ -886,24 +904,11 @@ public class ChronicleActionService {
             if (!clay && !bark) { outcome = "FAILED"; perception = "You have no water filter to pour through — a bark-and-charcoal filter, or a fired clay one, must be made first."; }
             else { int n = items.convertWater(chronicle.id(), "raw_water", "filtered_water", "Filtered water", 3, resolvedAt); outcome = n > 0 ? "SUCCEEDED" : "FAILED"; perception = n > 0 ? (clay ? "You pour the raw water slowly through the clay filter; it comes out the other side notably clearer." : "You pour the raw water slowly through the bark-and-charcoal cone; it drips out the bottom clearer and less foul than it went in.") : "You have no raw water to pour through the filter."; }
         }
-        else if (intent == Intent.WASH) {
-            // SALT WATER WASHES (#911). This asked waterInReach, which is the DRINKING gate and rightly
-            // excludes the sea — so a Chronicle standing on open ocean was told "the ground is dry, and
-            // nothing runs or stands within reach", and `look around` in the very next breath described open
-            // water and named the herring in it. Washing and drinking are two questions; brine answers one of
-            // them. saltWaterToWorkWith is the gate the shore crafts already use.
-            boolean fresh = waterInReach(chronicle.location());
-            boolean brine = !fresh && items.saltWaterToWorkWith(chronicle.location());
-            if (fresh || brine) {
-                boolean soap = items.hasAtLeast(chronicle.id(),"soap",1) && items.consumeOne(chronicle.id(),"soap",resolvedAt);
-                physiology.wash(chronicle.id(), soap);
-                perception = soap
-                    ? "You work the soap into a lather and scrub down; the water carries off far more than it would alone, and you come up clean."
-                    : brine
-                        ? "You wade in and scrub yourself down in the sea. The salt stings and dries tight on the skin afterwards, but the filth goes with the water."
-                        : "Cold water runs over your hands and skin, carrying away some of the dirt.";
-            } else { outcome="FAILED"; perception="You look for water to wash in, but there is none here — the ground is dry, and nothing runs or stands within reach."; }
-        }
+        else if (intent == Intent.WASH) { if(waterInReach(chronicle.location())){boolean soap=items.hasAtLeast(chronicle.id(),"soap",1)&&items.consumeOne(chronicle.id(),"soap",resolvedAt);physiology.wash(chronicle.id(),soap);perception=soap?"You work the soap into a lather and scrub down; the water carries off far more than it would alone, and you come up clean.":"Cold water runs over your hands and skin, carrying away some of the dirt.";}
+            // #911: the sea is no water to drink, but a body can wash in it. Soap will not lather in salt water, so it
+            // is kept rather than spent. The wetting is the same as any wash, so the cold of a night sea still tells.
+            else if(seaInReach(chronicle.location())){boolean soapHeld=items.hasAtLeast(chronicle.id(),"soap",1);physiology.wash(chronicle.id(),false);perception="You wade into the edge of the sea and scrub down in it. The salt water is bitterly cold and stings in every scratch, but the dirt comes away, and you come out wet through and stiff with salt."+(soapHeld?" Your soap will not raise a lather in sea water, so you keep it for fresh.":"");}
+            else{outcome="FAILED";perception="You look for water to wash in, but there is none here — the ground is dry, and nothing runs or stands within reach.";} }
         else if (intent == Intent.WARM_BODY) { if(fireInReach(chronicle.location())){physiology.warmByFire(chronicle.id());perception="You crouch close to the fire and hold out your hands, letting its heat soak in until the chill loosens its grip.";}else{outcome="FAILED";perception="You cast about for warmth, but there is no fire burning within reach — only the cold air and colder ground.";} }
         else if (intent == Intent.DRY_BODY) { if(fireInReach(chronicle.location())||shelterInReach(chronicle.location())){physiology.dryOff(chronicle.id());perception="Out of the wet, you work the damp from your skin and clothes until you are drier than you were.";}else{outcome="FAILED";perception="You try to dry off, but with no fire and no cover here the damp only clings the harder.";} }
         else if (intent == Intent.COOL_BODY) { if(shelterInReach(chronicle.location())||waterInReach(chronicle.location())){physiology.coolOff(chronicle.id());perception="You get out of the sun and let the heat bleed off you until your head clears a little.";}else{outcome="FAILED";perception="You look for shade or water to cool in, but there is none here — the heat has nowhere to go.";} }
@@ -1171,7 +1176,7 @@ public class ChronicleActionService {
         // token is spent, so a DB failure — or a retry of one — costs nothing.
         narration.validate(perception);
         String deterministicNarration = perception; // the durable source of truth, before coda/AI
-        jdbc.update("INSERT INTO chronicle_action (id, chronicle_id, resolved_at, action_text, intent_type, outcome, duration_minutes, narration, idempotency_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", actionId, chronicle.id(), resolvedTs, text.trim(), intent.name(), outcome, minutes, perception, idempotencyKey);
+        jdbc.update("INSERT INTO chronicle_action (id, chronicle_id, resolved_at, action_text, intent_type, outcome, duration_minutes, narration, idempotency_key, submission_text) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", actionId, chronicle.id(), resolvedTs, text.trim(), intent.name(), outcome, minutes, perception, idempotencyKey, submission == null ? null : submission.trim());
         jdbc.update("INSERT INTO chronicle_action_effect (action_id, effect_domain, effect_type, payload) VALUES (?, 'TIME', 'TIME_ADVANCED', jsonb_build_object('minutes', ?))", actionId, minutes);
         if (gatherEffectType != null) jdbc.update("INSERT INTO chronicle_action_effect (action_id, effect_domain, effect_type, payload) VALUES (?, 'ITEM', ?, jsonb_build_object(?, ?))", actionId, gatherEffectType, gatherPayloadKey, gatherCount);
         jdbc.update("INSERT INTO chronicle_event (chronicle_id, occurred_at, event_type, payload) VALUES (?, ?, 'CHRONICLE_ACTION_RESOLVED', jsonb_build_object('actionId', ?::text, 'intent', ?, 'outcome', ?))", chronicle.id(), resolvedTs, actionId.toString(), intent.name(), outcome);
@@ -1245,11 +1250,14 @@ public class ChronicleActionService {
         // but scroll-back and a reload do not, so without `action_text` the timeline loses every command the
         // moment the page is refreshed. `submitted_at` rides along because it is the only thing that marks the
         // steps of one multi-step submission as belonging together.
-        String columns = "SELECT ca.id, ca.resolved_at, COALESCE(can.narration, ca.narration), ca.action_text, ca.submitted_at "
+        // `submission_text` is the sentence the player wrote; `action_text` is the step it was cut into (#892).
+        // A reader shows the submission once per group and the steps beneath it, so the timeline reads the same
+        // before and after a relaunch. Null for rows written before V464, and there the step text stands.
+        String columns = "SELECT ca.id, ca.resolved_at, COALESCE(can.narration, ca.narration), ca.action_text, ca.submitted_at, ca.submission_text "
                 + "FROM chronicle_action ca LEFT JOIN chronicle_action_narration can ON can.action_id = ca.id ";
         org.springframework.jdbc.core.RowMapper<NarrationEntry> asEntry = (rs, row) -> new NarrationEntry(
                 rs.getObject(1, UUID.class), rs.getTimestamp(2).toInstant(), rs.getString(3), rs.getString(4),
-                rs.getTimestamp(5) == null ? null : rs.getTimestamp(5).toInstant());
+                rs.getTimestamp(5) == null ? null : rs.getTimestamp(5).toInstant(), rs.getString(6));
         List<NarrationEntry> entries = before == null
                 ? jdbc.query(columns + "WHERE ca.chronicle_id = ? AND ca.narration IS NOT NULL ORDER BY ca.resolved_at DESC, ca.id DESC LIMIT ?", asEntry, chronicle, limit + 1)
                 : jdbc.query(columns + "WHERE ca.chronicle_id = ? AND ca.narration IS NOT NULL AND (ca.resolved_at, ca.id) < (?, ?) ORDER BY ca.resolved_at DESC, ca.id DESC LIMIT ?", asEntry, chronicle, java.sql.Timestamp.from(before), beforeId, limit + 1);
@@ -7277,6 +7285,13 @@ public class ChronicleActionService {
             Integer.class, location);
         return sites != null && sites > 0;
     }
+    /** Sea water the Chronicle can reach (#911): a shore or open water. It is salt, so it never counts in
+     *  {@link #waterInReach} (which drinking also reads), but a body can wash in it. A separate question so drinking
+     *  keeps its freshwater rule while washing stops reporting "dry ground" to someone standing in the sea. */
+    private boolean seaInReach(UUID location) {
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
+        return "OCEAN".equals(biome) || "COAST".equals(biome);
+    }
 
     /** A completed rainwater catchment OR well standing here, to fill a vessel from (#77). A well is the same
      *  thought as the catchment pointed downward: ground with no stream has its own water once one is sunk. Both
@@ -8055,6 +8070,7 @@ public class ChronicleActionService {
      * <p>{@code actionText} is the player's own words. {@code submittedAt} is shared by every step of one
      * multi-step submission, so a reader can present six resolved steps as the one procedure they were.
      */
-    public record NarrationEntry(UUID id, Instant occurredAt, String narration, String actionText, Instant submittedAt) { }
+    public record NarrationEntry(UUID id, Instant occurredAt, String narration, String actionText, Instant submittedAt,
+                                 String submissionText) { }
     public record NarrationPage(List<NarrationEntry> entries, boolean hasMore) { }
 }

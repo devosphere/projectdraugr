@@ -224,4 +224,71 @@ class MultiStepProcedureIntegrationTest {
         actions.resolvePlan("carry on", key);
         assertEquals(afterFirst, actionsRecorded(chronicle), "the same resume submitted twice is one resume");
     }
+
+    /**
+     * #892 — THE LEDGER KEEPS THE SENTENCE, NOT ONLY THE PIECES IT WAS CUT INTO.
+     *
+     * <p>A procedure resolves to one row per step, each holding that step's own words, and nothing held the
+     * sentence the player composed. So the live screen showed what was typed (it had just typed it) and a
+     * relaunch showed the pieces — the timeline disagreed with itself about the player's own words, and the
+     * readers marked the pieces with a leading ellipsis, which reads as the archive having cut them short.
+     *
+     * <p>Proves the submission is recorded on EVERY step of the plan while each step keeps its own text, and
+     * that a remainder set aside for a later "carry on" carries it too — otherwise one submission would come
+     * back in two different shapes depending only on where it happened to stop.
+     */
+    @Test
+    void everyStepRemembersTheSentenceItWasCutFrom() {
+        UUID chronicle = awaken();
+        jdbc.update("UPDATE chronicle_plan_remainder SET state='REPLACED' WHERE chronicle_id=? AND state='OPEN'", chronicle);
+
+        // Distinct from every other procedure in this class, so the assertions below own exactly what they
+        // measure in a suite that shares one world.
+        String written = "take a short rest. Then listen for a while. Then look around at the ground here.";
+        ChronicleActionService.ActionResult plan = actions.resolvePlan(written, null);
+        assertEquals("SUCCEEDED", plan.outcome(), plan::perception);
+
+        assertEquals(3, (int) jdbc.queryForObject(
+                "SELECT COUNT(*) FROM chronicle_action WHERE chronicle_id=? AND submission_text=?",
+                Integer.class, chronicle, written),
+            "every step of one submission must record the sentence it was cut from");
+        assertEquals(3, (int) jdbc.queryForObject(
+                "SELECT COUNT(DISTINCT action_text) FROM chronicle_action WHERE chronicle_id=? AND submission_text=?",
+                Integer.class, chronicle, written),
+            "and each step must still keep its own words — the sentence is carried beside them, not instead of them");
+        assertEquals(1, (int) jdbc.queryForObject(
+                "SELECT COUNT(DISTINCT submitted_at) FROM chronicle_action WHERE chronicle_id=? AND submission_text=?",
+                Integer.class, chronicle, written),
+            "one submission is one group, and submitted_at is the only thing that says so");
+
+        // An action submitted on its own IS its own submission, so a reader never has a row with no words.
+        ChronicleActionService.ActionResult alone = actions.resolve("look around at the ground here", null);
+        assertEquals("look around at the ground here", jdbc.queryForObject(
+                "SELECT submission_text FROM chronicle_action WHERE id=?", String.class, alone.actionId()),
+            "a single action's submission is itself");
+
+        // AND THE SET-ASIDE HALF REMEMBERS IT TOO. Without this, a procedure that stopped part-way read back
+        // as a sentence up to the break and as pieces after it.
+        UUID chunk = jdbc.queryForObject("SELECT current_location_id FROM world_object WHERE id=?", UUID.class, chronicle);
+        jdbc.update("DELETE FROM crop_stand WHERE chunk_id=?", chunk);
+        jdbc.update("UPDATE chronicle_plan_remainder SET state='REPLACED' WHERE chronicle_id=? AND state='OPEN'", chronicle);
+        String stops = "listen for a while. Then reap the ripe grain. Then take a short rest.";
+        assertEquals("PARTIAL", actions.resolvePlan(stops, null).outcome());
+        assertEquals(stops, jdbc.queryForObject(
+                "SELECT submission_text FROM chronicle_plan_remainder WHERE chronicle_id=? AND state='OPEN'",
+                String.class, chronicle),
+            "the undone steps must remember the sentence they were cut from");
+
+        int saidBeforeTheResume = (int) jdbc.queryForObject(
+            "SELECT COUNT(*) FROM chronicle_action WHERE chronicle_id=? AND submission_text=?",
+            Integer.class, chronicle, stops);
+        actions.resolvePlan("carry on", null);
+        assertEquals(saidBeforeTheResume + 1, (int) jdbc.queryForObject(
+                "SELECT COUNT(*) FROM chronicle_action WHERE chronicle_id=? AND submission_text=?",
+                Integer.class, chronicle, stops),
+            "the step a resume attempts must record the same words as the part that already ran, "
+                + "not the bare 'carry on' that asked for it");
+
+        assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
 }

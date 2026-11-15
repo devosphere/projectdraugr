@@ -82,11 +82,11 @@ public class ChronicleService {
         // reader can therefore show six steps as one submission without the backend guessing where a plan began.
         List<JourneyEntry> entries = jdbc.query(
             "SELECT ca.resolved_at, ca.intent_type, ca.outcome, COALESCE(can.narration, ca.narration), " +
-            "       ca.action_text, ca.submitted_at " +
+            "       ca.action_text, ca.submitted_at, ca.submission_text " +
             "FROM chronicle_action ca LEFT JOIN chronicle_action_narration can ON can.action_id = ca.id " +
             "WHERE ca.chronicle_id=? AND ca.narration IS NOT NULL ORDER BY ca.resolved_at, ca.id",
             (rs, row) -> new JourneyEntry(rs.getTimestamp(1).toInstant(), rs.getString(2), rs.getString(3), rs.getString(4),
-                rs.getString(5), rs.getTimestamp(6) == null ? null : rs.getTimestamp(6).toInstant()),
+                rs.getString(5), rs.getTimestamp(6) == null ? null : rs.getTimestamp(6).toInstant(), rs.getString(7)),
             chronicleId);
 
         String finalBody = jdbc.query("SELECT body_snapshot::text FROM chronicle_death_snapshot WHERE chronicle_id=?",
@@ -173,16 +173,17 @@ public class ChronicleService {
     private ChronicleSummary summary(UUID id, int sequence, String state, Instant arrived, Instant died, String cause, UUID location) { return new ChronicleSummary(id, sequence, state, arrived, died, cause, location); }
     private record WorldSeed(UUID id, long seed) { }
     public record ChronicleSummary(UUID id, int sequenceNumber, String lifeState, Instant arrivedAt, Instant diedAt, String deathCause, UUID locationId) { }
-    /** One resolved action, as the archive replays it. */
     /**
      * One resolved action in a life's record: what was asked, and what the world answered (#873).
      *
-     * <p>{@code actionText} is the player's own words for this step. {@code submittedAt} is shared by every
-     * step of one multi-step submission and is what lets a reader group them; it is nullable only for the
-     * defensive case of a row written before the column existed.
+     * <p>{@code actionText} is this step's own words and {@code submissionText} the whole sentence it was cut
+     * from (#892) — the ledger holds a row per STEP, and both are true of the same row. {@code submittedAt} is
+     * shared by every step of one submission and is what lets a reader group them; it is nullable only for the
+     * defensive case of a row written before the column existed, as {@code submissionText} is for any row
+     * written before V464.
      */
     public record JourneyEntry(Instant at, String intent, String outcome, String narration,
-                               String actionText, Instant submittedAt) { }
+                               String actionText, Instant submittedAt, String submissionText) { }
     /** A whole life, readable after its end. {@code finalBody} is null while the chronicle still lives. */
     public record ChronicleJourney(ChronicleSummary summary, List<JourneyEntry> entries, String finalBody, int discoveries, int placesNamed) { }
     public record ChronicleLocation(UUID chronicleId, UUID locationId, String biome, String presentationKey) { }

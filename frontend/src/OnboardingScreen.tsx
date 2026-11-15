@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react';
 import forestArt from './assets/onboarding-forest-v1.png';
+import { playerWords } from './playerWords';
 
 type Panel = 'none' | 'archive' | 'settings' | 'crossing' | 'exit';
 
 type ChronicleSummary = { id: string; sequenceNumber: number; lifeState: string; arrivedAt: string; diedAt: string | null; deathCause: string | null };
-type JourneyEntry = { at: string; intent: string; outcome: string; narration: string };
+// `actionText` is this step's own words and `submissionText` the sentence it was cut from; `submittedAt` is
+// shared by every step of one submission. The archive used to hold the world's answers alone, so a reader
+// could not tell what the Chronicle had ATTEMPTED before it died — and after a death that is the question
+// (#888).
+type JourneyEntry = { at: string; intent: string; outcome: string; narration: string; actionText?: string | null; submittedAt?: string | null; submissionText?: string | null };
 type ChronicleJourney = { summary: ChronicleSummary; entries: JourneyEntry[]; finalBody: string | null; discoveries: number; placesNamed: number };
 
 /** How long a life lasted, in the world's own reckoning. */
@@ -108,10 +113,18 @@ export function OnboardingScreen({ hasLivingChronicle, onAwaken, entryError, api
             {journey.entries.length === 0
               ? <p>This chronicle resolved no actions before the end. The world holds nothing of them but their arrival.</p>
               : <ol className="archive-entries">
-                  {journey.entries.map((e, i) => <li key={i}>
-                    <span className="archive-entry-time">{new Date(e.at).toISOString().slice(0, 16).replace('T', ' ')}</span>
-                    <span className="archive-entry-text">{e.narration}</span>
-                  </li>)}
+                  {journey.entries.map((e, i) => {
+                    // The same pairing the live timeline and the PDF show, and by the same rule: the sentence
+                    // at the head of its group, its steps beneath it marked as carrying on.
+                    const previous = journey.entries[i - 1];
+                    const continues = Boolean(e.submittedAt) && e.submittedAt === previous?.submittedAt;
+                    const said = playerWords({ action: e.actionText, submission: e.submissionText }, continues);
+                    return <li key={i}>
+                      <span className="archive-entry-time">{new Date(e.at).toISOString().slice(0, 16).replace('T', ' ')}</span>
+                      {said && <span className={continues ? 'archive-entry-said continues' : 'archive-entry-said'}>{said}</span>}
+                      <span className="archive-entry-text">{e.narration}</span>
+                    </li>;
+                  })}
                 </ol>}
           </div>
 
