@@ -189,6 +189,11 @@ public class ChroniclePhysiologyService {
             // WHICH WAY IT IS GOING, written down by the one piece of code that knows (#909). The reading
             // repeats this rather than working it out a second time against a partial view of the world.
             int illnessTrend = illnessPressure - mending;
+            // A tick in which no time passed measured nothing, so it must not overwrite what the last real one
+            // measured. Every resolved action ticks the body to the world clock first — including `check
+            // myself`, the act that READS this — and a zero-hour tick computes zero pressure and zero mending,
+            // so it reported a sickness being fed by filth as "holding where it is" (CI, #909). The update
+            // below keeps the stored trend unless hours > 0.
             illness = clamp(illness + illnessPressure - mending);
             // Every physiological death vector terminates here. Trauma (injury_severity
             // at its ceiling) is the path a grievous mauling or an accumulation of
@@ -206,7 +211,7 @@ public class ChroniclePhysiologyService {
                 jdbc.update("INSERT INTO chronicle_event (chronicle_id, occurred_at, event_type, payload) VALUES (?, ?, 'CHRONICLE_DIED', jsonb_build_object('cause', ?))", id, ts, cause);
                 jdbc.update("INSERT INTO world_event (occurred_at, event_type, aggregate_id, payload) VALUES (?, 'CHRONICLE_DIED', ?, jsonb_build_object('cause', ?))", ts, id, cause);
             } else {
-                jdbc.update("UPDATE chronicle_physiology SET last_metabolic_update = ?, hours_without_food = ?, hours_without_water = ?, energy_level = ?, core_temperature_c=?, wetness_level = ?, bladder_level = ?, bowel_level = ?, hygiene_level = ?, sleep_debt_hours=?, pain_level=?, stress_level=?, injury_severity=?, illness_severity=?, blood_loss_ml=?, illness_trend=? WHERE chronicle_id = ?", ts, BigDecimal.valueOf(food), BigDecimal.valueOf(water), energy, BigDecimal.valueOf(core), wetness, bladder, bowel, hygiene, BigDecimal.valueOf(sleepDebt), pain, stress, injury, illness, bloodLoss, illnessTrend, id);
+                jdbc.update("UPDATE chronicle_physiology SET last_metabolic_update = ?, hours_without_food = ?, hours_without_water = ?, energy_level = ?, core_temperature_c=?, wetness_level = ?, bladder_level = ?, bowel_level = ?, hygiene_level = ?, sleep_debt_hours=?, pain_level=?, stress_level=?, injury_severity=?, illness_severity=?, blood_loss_ml=?, illness_trend=CASE WHEN ? THEN ? ELSE illness_trend END WHERE chronicle_id = ?", ts, BigDecimal.valueOf(food), BigDecimal.valueOf(water), energy, BigDecimal.valueOf(core), wetness, bladder, bowel, hygiene, BigDecimal.valueOf(sleepDebt), pain, stress, injury, illness, bloodLoss, hours > 0, illnessTrend, id);
                 BodyHudSnapshot body = snapshot(health(injury, illness, bloodLoss), condition(rs.getString(12), pain, stress, sleepDebt), food, water, energy, core, wetness, bladder, bowel, hygiene);
                 jdbc.update("UPDATE chronicle_body SET hunger = ?, thirst = ?, energy = ?, temperature = ?, wetness = ?, bladder = ?, bowel = ?, hygiene = ? WHERE chronicle_id = ?", body.hunger(), body.thirst(), body.energy(), body.temperature(), body.wetness(), body.bladder(), body.bowel(), body.hygiene(), id);
             }
