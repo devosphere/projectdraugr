@@ -870,7 +870,7 @@ public class ChronicleActionService {
                 else {
                     // Less than a stream gives, because this is what falls into the mouth of a vessel while you
                     // hold it, not a vessel pushed under water. A storm drives more of it in.
-                    int n = items.makeWater(chronicle.id(), "raw_water", "Raw water", "STORM".equals(sky) ? 2 : 1, resolvedAt);
+                    int n = items.fillWaterVessels(chronicle.id(), "raw_water", "Raw water", "STORM".equals(sky) ? 2 : 1, resolvedAt).measures();
                     outcome = n > 0 ? "SUCCEEDED" : "FAILED";
                     perception = n == 0 ? "Your vessels are already brimful; the rain has nowhere to go but past you."
                         : "STORM".equals(sky)
@@ -888,11 +888,18 @@ public class ChronicleActionService {
                 // A sand filter bed (#77) is drawn off beneath the sand, so what fills the vessel is already filtered.
                 DrawTreatment bed = drawTreatment(chronicle.location());
                 boolean filtered = bed != null && bed.filtered();
-                int n = filtered ? items.makeWater(chronicle.id(), "filtered_water", "Filtered water", 3, resolvedAt) : items.makeWater(chronicle.id(), "raw_water", "Raw water", 3, resolvedAt);
+                // THE WATER GOES IN THE VESSEL (#918). It used to be created in the Chronicle's hands while
+                // the prose said "you fill your vessel", so Storage showed 0.0 L in every container and Load
+                // listed the water carried loose beside them — three panels disagreeing about one act.
+                PhysicalItemService.Filled filled = filtered
+                    ? items.fillWaterVessels(chronicle.id(), "filtered_water", "Filtered water", 3, resolvedAt)
+                    : items.fillWaterVessels(chronicle.id(), "raw_water", "Raw water", 3, resolvedAt);
+                int n = filled.measures();
                 outcome = n > 0 ? "SUCCEEDED" : "FAILED";
+                String into = filled.vessel() == null ? "your vessel" : "your " + filled.vessel();
                 perception = n == 0 ? "Your vessels are already brimful; there is no room for more water."
-                    : filtered ? "You fill your vessel at the draw below the " + bed.name() + "; the water comes through the sand clear — filtered, though not yet boiled."
-                    : "You fill your vessel with water from the source here — raw, and carrying whatever the source carries.";
+                    : filtered ? "You fill " + into + " at the draw below the " + bed.name() + "; the water comes through the sand clear — filtered, though not yet boiled."
+                    : "You fill " + into + " with water from the source here — raw, and carrying whatever the source carries.";
             }
         }
         else if (intent == Intent.BOIL_WATER) {
@@ -902,11 +909,17 @@ public class ChronicleActionService {
             else if (!fireproof && !stoneBoil) { outcome = "FAILED"; perception = "You have nothing that can take a boil — a fireproof clay or soapstone vessel to set on the flame, or a set of hot stones to drop into a vessel of water."; }
             else {
                 int n = items.convertWater(chronicle.id(), "raw_water", "clean_water", "Boiled water", 3, resolvedAt);
-                if (n == 0 && waterInReach(chronicle.location()) && items.hasWaterVessel(chronicle.id())) n = items.makeWater(chronicle.id(), "clean_water", "Boiled water", 3, resolvedAt);
+                if (n == 0 && waterInReach(chronicle.location()) && items.hasWaterVessel(chronicle.id()))
+                    n = items.fillWaterVessels(chronicle.id(), "clean_water", "Boiled water", 3, resolvedAt).measures();
                 outcome = n > 0 ? "SUCCEEDED" : "FAILED";
+                // NAME THE VESSEL THAT IS ACTUALLY ON THE FLAME (#907). The AI's added sentence described the
+                // sides of a METAL container going too hot to touch, to a Chronicle whose only water vessel
+                // was a fired clay cup — the narrator was never told what the water was in, so it furnished
+                // one. The deterministic line names it, and the narrator elaborates on what it is given.
+                String pot = items.plainNameOfBestVessel(chronicle.id());
                 perception = n == 0 ? "You have no water to boil and no source and vessel to draw and boil it from."
-                    : fireproof ? "You bring the water to a hard, rolling boil over the fire until it is clean and safe to drink."
-                    : "You heat the stones in the fire and drop them hissing into the vessel, one after another, until the water rolls to a clean boil.";
+                    : fireproof ? "You set the " + pot + " on the fire and bring the water to a hard, rolling boil, until it is clean and safe to drink."
+                    : "You heat the stones in the fire and drop them hissing into the " + pot + ", one after another, until the water rolls to a clean boil.";
             }
         }
         else if (intent == Intent.FILTER_WATER) {
