@@ -1075,7 +1075,7 @@ public class PhysicalItemService {
     private static String heatOnStock() {
         return "(CASE WHEN EXISTS (" +
             "  SELECT 1 FROM world_object cw2 JOIN world_chunk ch2 ON ch2.id=cw2.current_location_id " +
-            "  JOIN world_weather ww ON ww.world_id=ch2.world_id " +
+            "  CROSS JOIN LATERAL local_sky(ch2.id) ww " +
             "  WHERE cw2.id=wb.chronicle_id AND ww.ambient_temperature_c >= " + HOT_ENOUGH_TO_TELL_C +
             // Relief from the heat, and which relief depends on the animal rather than on what is cheapest to build.
             "    AND NOT EXISTS (SELECT 1 FROM construction_project cp2 JOIN world_object sw2 ON sw2.id=cp2.object_id " +
@@ -1845,7 +1845,7 @@ public class PhysicalItemService {
             "JOIN wildlife_bond wb ON wb.id = ty.bond_id AND wb.bond_stage = 'TAMED' AND wb.released_at IS NULL " +
             "JOIN world_object cw ON cw.id = wb.chronicle_id " +
             "JOIN world_chunk ch ON ch.id = cw.current_location_id " +
-            "JOIN world_weather ww ON ww.world_id = ch.world_id " +
+            "CROSS JOIN LATERAL local_sky(ch.id) ww " +
             "WHERE ww.ambient_temperature_c <= ? " +
             "  AND NOT EXISTS (SELECT 1 FROM construction_project cp JOIN world_object sw ON sw.id = cp.object_id " +
             "                  JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
@@ -1972,7 +1972,7 @@ public class PhysicalItemService {
     private static String coldOnStock() {
         String weatherHere =
             "SELECT 1 FROM world_object cw3 JOIN world_chunk ch3 ON ch3.id=cw3.current_location_id " +
-            "JOIN world_weather ww3 ON ww3.world_id=ch3.world_id WHERE cw3.id=wb.chronicle_id ";
+            "CROSS JOIN LATERAL local_sky(ch3.id) ww3 WHERE cw3.id=wb.chronicle_id ";
         String shelterHere =
             "SELECT 1 FROM construction_project cp3 JOIN world_object sw3 ON sw3.id=cp3.object_id " +
             "JOIN construction_kind ck3 ON ck3.project_kind=cp3.project_kind " +
@@ -6486,7 +6486,7 @@ public class PhysicalItemService {
     public boolean guttering(UUID chronicle) {
         return Boolean.TRUE.equals(jdbc.queryForObject(
             "SELECT EXISTS(SELECT 1 FROM world_object body JOIN world_chunk c ON c.id=body.current_location_id " +
-            "JOIN world_weather ww ON ww.world_id=c.world_id " +
+            "CROSS JOIN LATERAL local_sky(c.id) ww " +
             "WHERE body.id=? AND c.biome NOT IN ('CAVE_MOUTH','CAVE_INTERIOR') " +
             "  AND (ww.weather_kind IN ('STORM','RAIN','SNOW') OR ww.wind_speed_kph >= 30))",
             Boolean.class, chronicle));

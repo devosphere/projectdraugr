@@ -1355,7 +1355,7 @@ public class ChronicleActionService {
         // system is driving is a property of the system and not of where you stand under it. Reading the kind
         // raw here was the one place the world contradicted itself about the weather — this is the sentence a
         // player gets from `look around`, which is how most of them ask what the sky is doing.
-        Integer intensity = jdbc.query("SELECT intensity FROM world_weather WHERE world_id=?", rs -> rs.next() ? rs.getInt(1) : null, world);
+        Integer intensity = jdbc.query("SELECT (local_sky(?)).intensity", rs -> rs.next() ? rs.getInt(1) : null, loc);
         String weather = intensity == null ? null : weatherPhrase(localClimate(loc).kind(), intensity);
         if (weather != null && !weather.isEmpty()) s.append(weather).append(" ");
         // A people's isle within sight (#112): what can be seen of it from here, and nothing that could not.
@@ -1483,7 +1483,7 @@ public class ChronicleActionService {
             // hearth that is safe: coals raked tight under ash hold a long burn and throw nothing.
             "WHERE w.current_location_id=? AND w.lifecycle_state='ACTIVE' AND fs.active=true AND fs.banked=false AND fs.fuel_minutes>=120)", Boolean.class, loc));
         if (!roaring) return "";
-        String weather = jdbc.query("SELECT ww.weather_kind FROM world_weather ww JOIN world_chunk wc ON wc.world_id=ww.world_id WHERE wc.id=?",
+        String weather = jdbc.query("SELECT local_weather_kind(?)",
             rs -> rs.next() ? rs.getString(1) : null, loc);
         if (!("CLEAR".equals(weather) || "OVERCAST".equals(weather))) return "";
         String structure = jdbc.query(
@@ -7453,7 +7453,7 @@ public class ChronicleActionService {
         LocationView location = new LocationView(loc, named, (String) here.get("biome"), (int) here.get("grid_x"), (int) here.get("grid_y"));
         // The HUD's sky is the sky here, for the same reason the prose's is (#28/#37): the client showed the
         // front while the narration described the local fall, so the panel and the paragraph disagreed.
-        Integer frontIntensity = jdbc.query("SELECT intensity FROM world_weather WHERE world_id=?", rs -> rs.next() ? rs.getInt(1) : null, world);
+        Integer frontIntensity = jdbc.query("SELECT (local_sky(?)).intensity", rs -> rs.next() ? rs.getInt(1) : null, loc);
         WeatherView weather = frontIntensity == null ? null : new WeatherView(localClimate(loc).kind(), frontIntensity);
         // ATTENTION scales what the frame reveals. A chronicle heads-down on a task
         // (LOW) witnesses only what the act touches, not the carcass in the treeline
@@ -7680,7 +7680,7 @@ public class ChronicleActionService {
         // nothing in it that threatens rain" while it was snowing outside: one false claim about an unseen sky
         // swapped for another. From a cave MOUTH a person can see out, so the useful answer is both at once.
         String outsideKind = jdbc.query(
-            "SELECT ww.weather_kind FROM world_weather ww JOIN world_chunk c ON c.world_id=ww.world_id WHERE c.id=?",
+            "SELECT local_weather_kind(?)",
             rs -> rs.next() ? rs.getString(1) : null, location);
         if (insideTheRock) said.add("You are in under the rock, where there is no sky to read");
         else if (underTheRock) said.add("You read it from the mouth of the cave, with the rock over you");

@@ -22,7 +22,7 @@ public class WildlifeSimulationService {
     public void advanceTo(Instant now) {
         seedExistingSites(now);
         int hour = now.atZone(ZoneOffset.UTC).getHour();
-        jdbc.query("SELECT wp.id,wp.population_count,wp.carrying_capacity,wp.ecological_role,wp.activity_cycle,wp.last_simulated_at,ww.weather_kind,COALESCE((SELECT cd.disturbance_level FROM chunk_disturbance cd WHERE cd.chunk_id=es.chunk_id),0) FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id JOIN world_weather ww ON ww.world_id=es.world_id FOR UPDATE", rs -> {
+        jdbc.query("SELECT wp.id,wp.population_count,wp.carrying_capacity,wp.ecological_role,wp.activity_cycle,wp.last_simulated_at,ww.weather_kind,COALESCE((SELECT cd.disturbance_level FROM chunk_disturbance cd WHERE cd.chunk_id=es.chunk_id),0) FROM wildlife_population wp JOIN ecology_site es ON es.id=wp.site_id CROSS JOIN LATERAL local_sky(es.chunk_id) ww FOR UPDATE", rs -> {
             while (rs.next()) {
                 UUID id = rs.getObject(1, UUID.class); int population = rs.getInt(2); int capacity = rs.getInt(3); String role = rs.getString(4); String cycle = rs.getString(5); Instant last = rs.getTimestamp(6).toInstant(); String weather = rs.getString(7); int disturbance = rs.getInt(8);
                 long intervalHours = reproductionIntervalHours(role);

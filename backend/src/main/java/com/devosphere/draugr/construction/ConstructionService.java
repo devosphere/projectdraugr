@@ -36,7 +36,7 @@ public class ConstructionService {
     @Transactional public boolean repairLeanTo(UUID chronicle, UUID location, Instant at) { UUID id=jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='LEAN_TO' AND cp.state='COMPLETED' AND cp.integrity_percent<100 LIMIT 1 FOR UPDATE",rs->rs.next()?rs.getObject(1,UUID.class):null,location); if(id==null||!items.hasAtLeast(chronicle,"dry_branch",1)||!items.hasAtLeast(chronicle,"plant_fiber",1))return false; if(!items.consumeOne(chronicle,"dry_branch",at)||!items.consumeOne(chronicle,"plant_fiber",at))throw new IllegalStateException("Reachable repair materials changed during the action."); Timestamp ts=Timestamp.from(at); jdbc.update("UPDATE construction_project SET integrity_percent=LEAST(100,integrity_percent+25),last_structural_update=? WHERE object_id=?",ts,id); jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CONSTRUCTION_REPAIRED','{}'::jsonb)",id,ts); return true; }
     @Transactional public void advanceTo(Instant now) {
         Timestamp occurredAt = Timestamp.from(now);
-        jdbc.update("UPDATE construction_project cp SET integrity_percent=GREATEST(0,cp.integrity_percent-FLOOR(EXTRACT(EPOCH FROM (? - cp.last_structural_update))/86400)::int*4),last_structural_update=? FROM world_object w JOIN world_chunk c ON c.id=w.current_location_id JOIN world_weather ww ON ww.world_id=c.world_id WHERE cp.object_id=w.id AND cp.project_kind='LEAN_TO' AND cp.state='COMPLETED' AND ww.weather_kind='STORM' AND EXTRACT(EPOCH FROM (? - cp.last_structural_update))>=86400",occurredAt,occurredAt,occurredAt);
+        jdbc.update("UPDATE construction_project cp SET integrity_percent=GREATEST(0,cp.integrity_percent-FLOOR(EXTRACT(EPOCH FROM (? - cp.last_structural_update))/86400)::int*4),last_structural_update=? FROM world_object w JOIN world_chunk c ON c.id=w.current_location_id CROSS JOIN LATERAL local_sky(c.id) ww WHERE cp.object_id=w.id AND cp.project_kind='LEAN_TO' AND cp.state='COMPLETED' AND ww.weather_kind='STORM' AND EXTRACT(EPOCH FROM (? - cp.last_structural_update))>=86400",occurredAt,occurredAt,occurredAt);
         List<UUID> collapsed = jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE cp.project_kind='LEAN_TO' AND cp.state='COMPLETED' AND cp.integrity_percent=0 AND w.lifecycle_state='ACTIVE' FOR UPDATE", (rs, row) -> rs.getObject(1, UUID.class));
         for (UUID objectId : collapsed) {
             jdbc.update("UPDATE construction_project SET state='DESTROYED' WHERE object_id=?", objectId);
@@ -52,7 +52,7 @@ public class ConstructionService {
         jdbc.update("UPDATE construction_project cp SET " +
             "integrity_percent = GREATEST(0, cp.integrity_percent - FLOOR(EXTRACT(EPOCH FROM (?::timestamptz - cp.last_structural_update))/86400)::int * " +
             "(CASE ww.weather_kind WHEN 'STORM' THEN 3 WHEN 'RAIN' THEN 2 WHEN 'SNOW' THEN 2 ELSE 1 END)), last_structural_update = ? " +
-            "FROM world_object w JOIN world_chunk c ON c.id=w.current_location_id JOIN world_weather ww ON ww.world_id=c.world_id " +
+            "FROM world_object w JOIN world_chunk c ON c.id=w.current_location_id CROSS JOIN LATERAL local_sky(c.id) ww " +
             "WHERE cp.object_id=w.id AND cp.state='COMPLETED' " +
             "AND EXISTS (SELECT 1 FROM construction_kind ck WHERE ck.project_kind=cp.project_kind AND ck.decays AND NOT ck.is_shelter AND NOT ck.is_workstation) " +
             "AND EXTRACT(EPOCH FROM (?::timestamptz - cp.last_structural_update)) >= 86400", occurredAt, occurredAt, occurredAt);
@@ -69,7 +69,7 @@ public class ConstructionService {
         jdbc.update("UPDATE construction_project cp SET " +
             "integrity_percent = GREATEST(0, cp.integrity_percent - FLOOR(EXTRACT(EPOCH FROM (?::timestamptz - cp.last_structural_update))/86400)::int * " +
             "(CASE ww.weather_kind WHEN 'STORM' THEN 2 WHEN 'RAIN' THEN 1 WHEN 'SNOW' THEN 1 ELSE 0 END)), last_structural_update = ? " +
-            "FROM world_object w JOIN world_chunk c ON c.id=w.current_location_id JOIN world_weather ww ON ww.world_id=c.world_id " +
+            "FROM world_object w JOIN world_chunk c ON c.id=w.current_location_id CROSS JOIN LATERAL local_sky(c.id) ww " +
             "WHERE cp.object_id=w.id AND cp.state='COMPLETED' AND cp.project_kind <> 'LEAN_TO' " +
             "AND EXISTS (SELECT 1 FROM construction_kind ck WHERE ck.project_kind=cp.project_kind AND ck.decays AND ck.is_shelter) " +
             "AND EXTRACT(EPOCH FROM (?::timestamptz - cp.last_structural_update)) >= 86400", occurredAt, occurredAt, occurredAt);

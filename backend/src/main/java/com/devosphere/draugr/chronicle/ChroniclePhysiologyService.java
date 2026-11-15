@@ -65,9 +65,11 @@ public class ChroniclePhysiologyService {
                 // 13: the ground the body is actually standing on, so the weather it endures can be the
                 // weather that falls THERE rather than the world's single sky. See the note on the extractor.
                 ",wc.id" +
-                " FROM chronicle c JOIN world_weather ww ON ww.world_id=c.world_id" +
-                " JOIN world_object standing ON standing.id=c.id" +
-                " LEFT JOIN world_chunk wc ON wc.id=standing.current_location_id WHERE c.id=?", result -> {
+                " FROM chronicle c JOIN world_object standing ON standing.id=c.id" +
+                " LEFT JOIN world_chunk wc ON wc.id=standing.current_location_id" +
+                // THE SKY WHERE THE BODY STANDS, not the world's only front (#912). A body three chunks
+                // outside the storm is not being rained on, and this is the query that decides whether it is.
+                " CROSS JOIN LATERAL local_sky(wc.id) ww WHERE c.id=?", result -> {
                     if (!result.next()) return new Environment("CLEAR",0,18,0,0,false,false,false,false,false,false,false);
                     // The body endures the weather where it STANDS (#37). Everything else in the simulation had
                     // already learned this: the Body HUD, the prose, the backdrops and the senses all run the

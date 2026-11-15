@@ -29,8 +29,8 @@ public class ChronicleService {
         // mountain is colder and windier and turns the lowlands' rain to snow. See BiomeClimate.
         // The reading itself is LocalWeatherService's; only a Chronicle standing nowhere falls back to the
         // world's sky unmodulated.
-        return jdbc.query("SELECT sc.simulated_at,COALESCE(ww.weather_kind,'CLEAR'),COALESCE(ww.ambient_temperature_c,18.0),COALESCE(ww.wind_speed_kph,6),wc.id " +
-            "FROM chronicle c JOIN simulation_clock sc ON sc.id=1 JOIN world_object w ON w.id=c.id LEFT JOIN world_chunk wc ON wc.id=w.current_location_id LEFT JOIN world_weather ww ON ww.world_id=c.world_id WHERE c.life_state='LIVING'",
+        return jdbc.query("SELECT sc.simulated_at,(local_sky(wc.id)).weather_kind,(local_sky(wc.id)).ambient_temperature_c,(local_sky(wc.id)).wind_speed_kph,wc.id " +
+            "FROM chronicle c JOIN simulation_clock sc ON sc.id=1 JOIN world_object w ON w.id=c.id LEFT JOIN world_chunk wc ON wc.id=w.current_location_id WHERE c.life_state='LIVING'",
             rs -> {
                 if (!rs.next()) return null;
                 UUID ground = rs.getObject(5, UUID.class);
