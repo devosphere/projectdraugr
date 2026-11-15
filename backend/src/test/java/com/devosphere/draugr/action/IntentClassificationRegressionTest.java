@@ -4145,4 +4145,84 @@ class IntentClassificationRegressionTest {
         assertNotEquals("SENSE_BODY", classify("bind my hand"));
         assertEquals("PARE_HOOVES", classify("pare the hooves"));
     }
+
+    /**
+     * #902 — A VERB THAT BELONGS TO SOMETHING ELSE IS NOT A REQUEST.
+     *
+     * <p>The tinder rule asked two unrelated questions — is a making word anywhere in the sentence, is
+     * "tinder" anywhere in the sentence — and a long, carefully written ignition answers yes to both by
+     * accident. The sentence below is the one from the live report, word for word. It opens by naming the act
+     * ("Light the fire with the bow drill"), and it was answered with the refusal for MAKING tinder, to a
+     * player who was holding the nest they had already made.
+     */
+    @Test
+    void anEmberThatFormsIsNotARequestToFormTinder() throws Exception {
+        assertEquals("LIGHT_FIRE", classify(
+            "Light the fire with the bow drill, pressing steadily downward on the spindle in the hearth board "
+          + "until a glowing ember forms, easing the ember into the dry tinder nest and shielding the kindling "
+          + "from rain."));
+        // The shorter form that DID reach ignition, kept so the fix cannot move the defect the other way.
+        assertEquals("LIGHT_FIRE", classify(
+            "Light the fire with my bow drill, pressing the spindle steadily downward until a glowing ember "
+          + "catches in the dry tinder."));
+
+        // AND MAKING TINDER IS STILL MAKING TINDER. The positive case of any refusal — a guard that fixes a
+        // collision by making the right sentence unreachable has only moved the defect.
+        assertEquals("CRAFT_TINDER", classify("make tinder"));
+        assertEquals("CRAFT_TINDER", classify("prepare a tinder nest"));
+        assertEquals("CRAFT_TINDER", classify("form a tinder bundle"));
+        assertEquals("CRAFT_TINDER", classify("gather more tinder"));
+        assertEquals("CRAFT_TINDER", classify("make a loose dry tinder nest"));
+    }
+
+    /**
+     * #895 — A NUMBER IS NOT A DIFFERENT ACT FROM "ANOTHER".
+     *
+     * <p>Feeding the fire knew "more wood", "another branch", "more branches" and "more sticks". Said four
+     * times at a lit pit in one live Chronicle, {@code add one dry branch to the fire} reached none of them,
+     * fell out of the fire rules entirely, and left the player carrying four "Burning branch" items that
+     * outlived the fire and two days of travel while the narration said each branch had settled on the coals.
+     */
+    @Test
+    void countingTheBranchIsStillFeedingTheFire() throws Exception {
+        assertEquals("FEED_FIRE", classify("add one dry branch to the fire"));
+        assertEquals("FEED_FIRE", classify("put a log on the fire"));
+        assertEquals("FEED_FIRE", classify("lay two sticks across the coals"));
+        assertEquals("FEED_FIRE", classify("throw some kindling on the embers"));
+        assertEquals("FEED_FIRE", classify("settle a branch into the hearth"));
+
+        // The ones it already knew, kept.
+        assertEquals("FEED_FIRE", classify("put more wood on the fire"));
+        assertEquals("FEED_FIRE", classify("another branch on the fire"));
+
+        // NOT THE OPPOSITE ACTS. Gathering fuel is not burning it, and taking a stick back off the fire is
+        // not feeding it — both are sentences this rule's words could otherwise claim.
+        assertNotEquals("FEED_FIRE", classify("gather branches for the fire"));
+        assertNotEquals("FEED_FIRE", classify("take the stick off the fire"));
+        assertNotEquals("FEED_FIRE", classify("how much wood does the fire need"));
+    }
+
+    /**
+     * #876 — "CARRY ON" IS NEVER A MAKING.
+     *
+     * <p>Written as a step of a procedure, the phrase fell through this whole chain to the material matcher,
+     * which answered it with a recipe: live, {@code urinate; gather plant fiber; prepare a tinder nest; carry
+     * on} wound the player's FIRE SPINDLE into a fibre-wound spindle, and the ignition they had spent the
+     * morning assembling then failed for want of the spindle their own procedure had eaten.
+     *
+     * <p>{@code processMatches} is true here, which is the state that produced the defect: the catalogue CAN
+     * answer the phrase, and the point is that it is never asked.
+     */
+    @Test
+    void aBareCarryOnReachesNoRecipe() throws Exception {
+        for (String said : new String[]{"carry on", "continue", "resume", "carry on with the rest",
+                                        "i'll carry on now", "resume where i left off"})
+            assertEquals("TAKE_UP_AGAIN", classify(said, true), said);
+
+        // A SUBSTRING IS NOT THE PHRASE. These are the sentences the guard must not claim, and they are why
+        // ActionPlan.isResumeRequest matches a whole submission rather than looking for "carry on" inside one.
+        assertNotEquals("TAKE_UP_AGAIN", classify("carry the basket on my back"));
+        assertNotEquals("TAKE_UP_AGAIN", classify("continue building the wall"));
+        assertNotEquals("TAKE_UP_AGAIN", classify("resume the lean-to"));
+    }
 }

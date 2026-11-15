@@ -29,7 +29,7 @@ class SimulationNarratorTest {
     }
 
     private static PerceptionFrame frame(String backend) {
-        return new PerceptionFrame("OBSERVE", "SUCCEEDED", null, "morning", null, "HIGH", null, null, List.of(), backend);
+        return new PerceptionFrame("OBSERVE", "SUCCEEDED", null, "morning", null, "HIGH", null, null, List.of(), backend, null);
     }
 
     @Test
@@ -105,5 +105,68 @@ class SimulationNarratorTest {
 
         assertTrue(narrator.refine(frame("You cut the cord with the bone knife."), "You cut the cord with the bone knife.")
             .endsWith("The bone knife is slick in your hand."));
+    }
+
+    /** The same frame, with a hearth on the ground in whatever state is given. */
+    private static PerceptionFrame frameWithHearth(String backend, String hearth) {
+        return new PerceptionFrame("SLEEP", "SUCCEEDED", null, "before dawn", null, "LOW", null, null,
+            List.of(), backend, hearth);
+    }
+
+    /**
+     * #903 — A THING'S STATE IS A CLAIM ABOUT THE WORLD, AS MUCH AS ITS EXISTENCE IS.
+     *
+     * <p>Live: a Chronicle in snow before dawn built a ring of four field stones and had never once struck a
+     * light in that life. The narrator wrote that ash and snow were melting between the stones and warmth was
+     * rising from gathered wood. {@code claimsWhatIsNotThere} passed it, correctly on its own terms — the fire
+     * pit really is on that ground; it is the FIRE that is not. The distinction is what a hypothermic
+     * Chronicle reads the prose for when deciding whether it is safe to lie down.
+     */
+    @Test
+    void aColdHearthIsNeverGivenAFire() {
+        String cold = "stone fire pit, UNLIT AND COLD — no flame, no embers, no smoke, no warmth from it";
+        LanguageModel invents = (model, system, user) ->
+            Optional.of("Ash and snow melt between the stones, and warmth rises from the burning wood.");
+        SimulationNarrator narrator = new SimulationNarrator(invents, props(true, "test-key"), java.util.Set::of);
+
+        String deterministic = "You settle stone into a low, deliberate ring. The fire pit remains where you made it.";
+        assertEquals(deterministic, narrator.refine(frameWithHearth(deterministic, cold), deterministic),
+            "a sentence that puts a fire in a cold hearth is refused, and the deterministic prose stands alone");
+
+        // ATMOSPHERE THAT CLAIMS NO FIRE IS STILL WELCOME — the guard is about the fire, not about the weather.
+        LanguageModel atmosphere = (model, system, user) ->
+            Optional.of("Snow sifts into the ring and does not melt.");
+        SimulationNarrator kind = new SimulationNarrator(atmosphere, props(true, "test-key"), java.util.Set::of);
+        assertTrue(kind.refine(frameWithHearth(deterministic, cold), deterministic)
+            .endsWith("Snow sifts into the ring and does not melt."));
+
+        // AND A LIT HEARTH MAY BE DESCRIBED AS ONE. A guard that silenced the narrator at a real fire would
+        // have moved the defect rather than fixed it.
+        SimulationNarrator atTheFire = new SimulationNarrator(invents, props(true, "test-key"), java.util.Set::of);
+        String lit = "stone fire pit, alight with about 2 hour(s) of fuel in it";
+        assertTrue(atTheFire.refine(frameWithHearth(deterministic, lit), deterministic)
+            .endsWith("warmth rises from the burning wood."));
+
+        // ...as may a cold hearth whose own deterministic line is about fire: "the fire has gone out" may be
+        // elaborated on, because the receipt itself raised the subject.
+        String wentOut = "The last of the embers blackens and the fire goes out.";
+        LanguageModel echoes = (model, system, user) -> Optional.of("The embers tick as they cool.");
+        SimulationNarrator afterwards = new SimulationNarrator(echoes, props(true, "test-key"), java.util.Set::of);
+        assertTrue(afterwards.refine(frameWithHearth(wentOut, cold), wentOut).endsWith("The embers tick as they cool."));
+    }
+
+    /** The hearth's condition is given to the narrator as a fact, not left to be inferred from a count (#903). */
+    @Test
+    void theNarratorIsToldWhatTheHearthIsDoing() {
+        AtomicReference<String> asked = new AtomicReference<>();
+        LanguageModel capture = (model, system, user) -> { asked.set(user); return Optional.empty(); };
+        SimulationNarrator narrator = new SimulationNarrator(capture, props(true, "test-key"), java.util.Set::of);
+
+        narrator.refine(frameWithHearth("You lie down.", "stone fire pit, UNLIT AND COLD — no flame, no embers, no smoke, no warmth from it"), "You lie down.");
+        assertNotNull(asked.get());
+        assertTrue(asked.get().contains("Hearth on this ground: stone fire pit, UNLIT AND COLD"), asked.get());
+
+        narrator.refine(frame("You lie down."), "You lie down.");
+        assertTrue(asked.get().contains("Hearth on this ground: none built here"), asked.get());
     }
 }

@@ -6381,19 +6381,52 @@ public class PhysicalItemService {
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CRAFTED',jsonb_build_object('recipe',?,'placedAt',?::text))", id, Timestamp.from(at), itemKey, location.toString());
         return true;
     }
-    /** Tease a fine, dry nest that can catch an ember — from plant fibre, or from cattail down or tinder
-     *  fungus, both of which take a spark as well or better (#75 real-world tinders). */
+    /**
+     * The catalogue's own words for these item keys, lower-cased, in the order asked.
+     *
+     * <p>Code that holds a key and tells the player about it has to name it somehow, and every place that
+     * needed one wrote its own query or, worse, a literal. A refusal that names the wrong thing is worse than
+     * one that names nothing: #871 is a bow-drill refusal saying the hands could raise no heat "from bare wood
+     * alone" to a Chronicle who had the board, the spindle and the bow and was missing only the bearing block.
+     *
+     * <p>A key the catalogue does not hold is read as itself with its underscores opened out, so a name is
+     * never empty.
+     */
+    @Transactional(readOnly = true)
+    public java.util.List<String> plainNamesOf(java.util.List<String> itemKeys) {
+        if (itemKeys == null || itemKeys.isEmpty()) return java.util.List.of();
+        java.util.Map<String,String> named = new java.util.HashMap<>();
+        String places = String.join(",", java.util.Collections.nCopies(itemKeys.size(), "?"));
+        for (java.util.Map<String,Object> row : jdbc.queryForList(
+                "SELECT item_key, display_name FROM item_definition WHERE item_key IN (" + places + ")",
+                itemKeys.toArray()))
+            named.put((String) row.get("item_key"), ((String) row.get("display_name")).toLowerCase(java.util.Locale.ROOT));
+        return itemKeys.stream().map(k -> named.getOrDefault(k, k.replace('_', ' '))).toList();
+    }
+
+    /**
+     * Tease a fine, dry nest that can catch an ember — from plant fibre, or from cattail down or tinder
+     * fungus, both of which take a spark as well or better (#75 real-world tinders) — and say WHICH (#898).
+     *
+     * <p>This method accepts eight different tinder stocks and returned a boolean, so the one line that
+     * reports it said "You tease plant fiber apart" whichever of them was consumed. A Chronicle who gathered
+     * three dry twigs and made a nest from one was taught that plant fibre is what tinder comes from, while
+     * two bark fibre bundles sat untouched in the pack. The act was right; the sentence taught the wrong
+     * material, and a player learns this world from its sentences.
+     *
+     * @return the item key consumed, or null if nothing to hand was fine and dry enough
+     */
     @Transactional
-    public boolean craftTinder(Instant at) {
+    public String tinderFrom(Instant at) {
         UUID chronicle=activeChronicle();
-        if(capacityHeadroomUnits(chronicle,"tinder_nest")<=0) return false;
+        if(capacityHeadroomUnits(chronicle,"tinder_nest")<=0) return null;
         String from = null;
         // Bare-hand tinder stock (#192): dry leaf litter, dry twigs, and a tuft of shed fur all take a spark.
         for (String k : new String[]{"cattail_fluff","birch_polypore","fatwood_stick","wood_shaving","plant_fiber","fallen_leaf_litter","dry_twig","shed_fur_tuft"})
             if (hasAtLeast(chronicle, k, 1)) { from = k; break; }
-        if(from==null || !consumeOne(chronicle,from,at)) return false;
+        if(from==null || !consumeOne(chronicle,from,at)) return null;
         createCarriedItem(chronicle,"tinder_nest","Tinder nest",at,"CRAFTED");
-        return true;
+        return from;
     }
 
     @Transactional
