@@ -10,7 +10,7 @@ const previewBody = [
 type BodySnapshot = { health: string; condition: string; hunger: string; thirst: string; energy: string; temperature: string; wetness: string; bladder: string; bowel: string; hygiene: string };
 type ActionResult = { actionId: string; intent: string; outcome: string; durationMinutes: number; resolvedAt: string; perception: string; body: BodySnapshot | null; died?: boolean };
 type LocationSnapshot = { biome: string; presentationKey: string };
-type BackdropSnapshot = { key: string; candidates: string[]; fingerprint: string | null };
+type BackdropSnapshot = { key: string; candidates: string[]; fingerprint: string | null; biome?: string | null };
 type EnvironmentSnapshot = { simulatedAt: string; weatherKind: string; ambientTemperatureC: number | null; windSpeedKph: number | null };
 type ItemState = { carried: { id: string; displayName: string; itemKey: string; containerId: string | null }[]; equipped: { id: string; displayName: string; bodyPosition: string; layer: string }[]; load: { massGrams: number; bulkMl: number; heaviestObjectGrams: number; sustainedMassCapacityGrams: number; directBulkCapacityMl: number; maximumSingleLiftGrams: number }; containers: { id: string; displayName: string; maxMassGrams: number; maxVolumeMl: number; usedMassGrams: number; usedVolumeMl: number }[] };
 type Panel = 'none' | 'chronicle' | 'equipment' | 'load' | 'storage' | 'crafting' | 'construction' | 'knowledge' | 'map' | 'literature';
@@ -95,7 +95,13 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
   const [actionError, setActionError] = useState<string | null>(null);
   // #238: the scene comes from the manifest, loaded lazily. Until the first one has decoded there is no art, and the
   // screen shows its own dark ground rather than a wrong picture.
-  const [location, setLocation] = useState<{ art: string | null; label: string }>({ art: null, label: 'Uncharted forest' });
+  // `terrain` is the authoritative ground; `label` names the SCENE standing on it (#878). They are different
+  // questions and were answered by one string: the scene's own label was shown as the heading, so an open
+  // grassland tile was headed "Forest" while look-around said "open grass runs to every horizon". The opening
+  // value claims no terrain at all rather than guessing one — "Uncharted forest" was a guess, and it was the
+  // guess the player saw on grassland.
+  const [location, setLocation] = useState<{ art: string | null; label: string; terrain: string | null }>(
+    { art: null, label: 'Uncharted ground', terrain: null });
   // #239: the scene a new one fades in over. The new art has already decoded before setLocation (#237), so the
   // fade never starts on a blank frame; the old scene stays as the ground underneath until it is fully covered.
   // Someone who has asked for reduced motion gets the change at once, with no fade at all.
@@ -142,27 +148,41 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
    * the registry can actually show. The browser only reads what it was sent — it never works out a place for itself.
    * A backend without the backdrop endpoint still answers from the location's presentation key.
    */
-  async function candidatesHere(): Promise<string[]> {
-    if (!apiUrl) return ['world.default'];
+  /** "TEMPERATE_FOREST" as a person reads it. The world's own word for the ground, never the picture's. */
+  function groundNamed(biome: string | null | undefined): string | null {
+    if (!biome) return null;
+    return biome.toLowerCase().replace(/_/g, ' ').replace(/(^|\s)\w/g, letter => letter.toUpperCase());
+  }
+
+  async function candidatesHere(): Promise<{ candidates: string[]; terrain: string | null }> {
+    if (!apiUrl) return { candidates: ['world.default'], terrain: null };
     try {
       const backdrop = await fetch(`${apiUrl}/api/visual-context/v1/backdrop`);
       if (backdrop.ok) {
         const snapshot = await backdrop.json() as BackdropSnapshot;
-        if (snapshot?.candidates?.length) return [...snapshot.candidates, 'world.default'];
+        if (snapshot?.candidates?.length)
+          return { candidates: [...snapshot.candidates, 'world.default'], terrain: groundNamed(snapshot.biome) };
       }
     } catch { /* fall through to the location endpoint */ }
     const located = await fetch(`${apiUrl}/api/chronicles/active/location`);
     const snapshot = located.ok ? await located.json() as LocationSnapshot | null : null;
-    return snapshot ? [snapshot.presentationKey, snapshot.biome, 'world.default'] : ['world.default'];
+    return snapshot
+      ? { candidates: [snapshot.presentationKey, snapshot.biome, 'world.default'], terrain: groundNamed(snapshot.biome) }
+      : { candidates: ['world.default'], terrain: null };
   }
 
   function refreshLocation() {
     const tickets = locationTickets.current, ticket = tickets.next();
-    candidatesHere().then(async candidates => {
+    candidatesHere().then(async ({ candidates, terrain }) => {
       if (!tickets.current(ticket)) return;
       // The last valid scene stays up until the new one has decoded; one that will not load is skipped for the next.
       const scene = await loadScene(candidates);
-      if (scene && tickets.current(ticket)) setLocation({ art: scene.art, label: scene.label });
+      if (!tickets.current(ticket)) return;
+      // The GROUND is taken whether or not a scene could be shown. A backdrop that fails to load must never
+      // leave the heading describing the last place the Chronicle stood — that is how "Forest" survived a walk
+      // onto open grassland and back.
+      if (scene) setLocation({ art: scene.art, label: scene.label, terrain });
+      else setLocation(previous => ({ ...previous, terrain }));
     }).catch(() => undefined);
   }
 
@@ -362,14 +382,16 @@ export function PlaythroughScreen({ apiUrl, onReturnToMainMenu }: { apiUrl?: str
     <div className="playthrough-vignette" />
     {/* #239: what a sighted player reads off the picture, said for a screen reader. Built only from the general
         place label, the time and the weather — never a site the Chronicle has not been told about. */}
-    <p className="sr-only" aria-live="polite">{`Your surroundings: ${location.label}, ${environment.time.toLowerCase()}, ${environment.weather.toLowerCase()}.`}</p>
+    <p className="sr-only" aria-live="polite">{`Your surroundings: ${location.terrain ?? location.label}${location.terrain && location.label !== location.terrain ? `, ${location.label}` : ''}, ${environment.time.toLowerCase()}, ${environment.weather.toLowerCase()}.`}</p>
     {showOverlay && (
       <div className="resolving-overlay" role="status" aria-live="polite" aria-label="The world is resolving your action">
         <div className="resolving-hourglass" aria-hidden="true">⏳</div>
       </div>
     )}
     <header className="world-header">
-      <div><p className="eyebrow">{location.label}</p><strong>{environment.time}</strong></div>
+      <div><p className="eyebrow">{location.terrain ?? location.label}</p><strong>{environment.time}</strong>
+        {location.terrain && location.label && location.label !== location.terrain
+          && <p className="locality">{location.label}</p>}</div>
       <div className="world-signs" aria-label="Environmental conditions"><span title="Daylight">{environment.time}</span><span title="Weather">{environment.weather}</span><span title="Environment">{environment.season}</span></div>
       <div className="header-controls"><button className="quiet-body" aria-label="Open body awareness" aria-expanded={bodyOpen} onClick={() => { setBodyOpen(!bodyOpen); setMenuOpen(false); setPanel('none'); }}>🧍</button><button className="quiet-menu" aria-label="Open menus" aria-expanded={menuOpen} onClick={() => { setMenuOpen(!menuOpen); setBodyOpen(false); setPanel('none'); }}>☰</button></div>
     </header>
