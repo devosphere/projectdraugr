@@ -162,6 +162,43 @@ class ACrayfishTrapIsSetNotRebuiltIntegrationTest {
         assertEquals(0, standing(), "nothing stands");
     }
 
+    /**
+     * A SET crayfish trap fishes for crayfish (#908's remainder). Before: the check drew uniformly from every water
+     * species of the biome, so a crayfish trap at a wetland came up with carp, pike and sturgeon. Now its throat
+     * admits only crayfish-sized and small fish, and crayfish are at least half of what it takes.
+     */
+    @Test
+    void aSetCrayfishTrapTakesCrayfishAndNothingTooBigForItsThroat() {
+        UUID water = atCrayfishWater();
+        items.createCarriedItem(me, "crayfish_trap", "Crayfish trap", now, "TEST_SEED");
+        java.util.Random rnd = new java.util.Random(9080);
+        int catches = 0, crayfish = 0;
+        for (int i = 0; i < 60; i++) {
+            jdbc.update("UPDATE placed_trap SET sprung=true WHERE NOT sprung AND chunk_id=?", water);
+            var set = wildlife.setTrap(me, water, now, "set a crayfish trap");
+            assertEquals("SUCCEEDED", set.outcome(), () -> "the crayfish trap must set again after each check: " + set.narration());
+            UUID trap = jdbc.queryForObject("SELECT object_id FROM placed_trap WHERE set_by=? AND NOT sprung", UUID.class, me);
+            var checked = wildlife.checkTrap(me, water, new UUID(rnd.nextLong(), rnd.nextLong()), now.plusSeconds(12 * 3600));
+            String caught = jdbc.queryForObject("SELECT caught_species FROM placed_trap WHERE object_id=?", String.class, trap);
+            if (caught == null) {
+                // An empty check leaves the trap standing; take it back so the next round sets the same one.
+                wildlife.liftTrap(me, water, now);
+                continue;
+            }
+            catches++;
+            if (caught.equals("crayfish")) crayfish++;
+            String tier = jdbc.queryForObject("SELECT size_tier FROM wildlife_species WHERE species_key=?", String.class, caught);
+            assertTrue(tier.equals("TINY") || tier.equals("SMALL"),
+                () -> "a crayfish trap's throat takes nothing bigger than a small fish, but held a " + caught + " (" + tier + "): " + checked.narration());
+            assertTrue(checked.narration().contains(caught.replace('_', ' ')),
+                () -> "the check names what was in it: " + checked.narration());
+        }
+        final int took = catches, cray = crayfish;
+        assertTrue(took >= 20, () -> "a crayfish trap left twelve hours should take something most times, took " + took + " of 60");
+        assertTrue(cray * 10 >= took * 4, () -> "crayfish should be most of what a crayfish trap takes, were " + cray + " of " + took);
+        assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
+
     @Test
     void fishingForCrayfishCatchesCrayfishOrSaysItCannot() {
         UUID water = atCrayfishWater();
