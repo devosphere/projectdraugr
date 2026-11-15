@@ -1921,8 +1921,30 @@ public class WildlifeEncounterService {
         // which consumes and remembers in one step — the branches below short-circuit, so whichever recipe
         // succeeds is the only one that writes here.
         java.util.List<String> spent = new java.util.ArrayList<>();
+        // A WATER TRAP WANTS WATER (#923). A fish trap set on dry ground was accepted and then sat there forever,
+        // because the check reads the aquatic species of this ground and found none. Say so now, before anything
+        // is spent — the same list the check will read, so the two can never disagree.
+        if (kind.equals("FISH_TRAP") && aquaticSpeciesAt(chunk).isEmpty())
+            return new EncounterResult("FAILED", "There is no water here that holds anything a trap could take. A fish trap wants a stream, a pool or a shore.");
+        // A TRAP ALREADY MADE IS SET, NOT REBUILT (#923). `set a crayfish trap` with a crafted Crayfish trap in the
+        // pack answered "you do not have what a trap of that kind needs", because setting only knew how to build
+        // a trap on the spot from rods. A made trap is the whole reason to make one: it is lowered in as it is.
+        String whole = null;
+        if (kind.equals("FISH_TRAP")) {
+            String named = null;
+            for (String key : WHOLE_WATER_TRAPS)
+                if (com.devosphere.draugr.narration.Words.names(v, key)) { named = key; break; }
+            // "fish trap" is also the family word a trap is BUILT under (`build a fish trap` weaves one from rods
+            // on the spot), so only a distinctly named made trap is refused for want of carrying one.
+            boolean building = v.matches(".*\\b(build|weave|make)\\b.*");
+            if (named != null && items.hasAtLeast(chronicle, named, 1) && !(building && named.equals("fish_trap"))) whole = named;
+            else if (named != null && !named.equals("fish_trap"))
+                return new EncounterResult("FAILED", "You carry no " + key2name(named).toLowerCase(java.util.Locale.ROOT)
+                    + " to set. Make one first, or set one you have.");
+            else if (!building) for (String key : WHOLE_WATER_TRAPS) if (items.hasAtLeast(chronicle, key, 1)) { whole = key; break; }
+        }
         // Every trap costs real material to build.
-        boolean built = switch (kind) {
+        boolean built = whole != null ? spend(chronicle, whole, at, spent) : switch (kind) {
             // Raw stone + branch, OR a pre-made weight stone paired with a carved trigger (#93 deadfall components).
             case "DEADFALL" -> (items.hasAtLeast(chronicle,"field_stone",1) && items.hasAtLeast(chronicle,"dry_branch",1)
                     && spend(chronicle,"field_stone",at,spent) && spend(chronicle,"dry_branch",at,spent))
@@ -1954,7 +1976,8 @@ public class WildlifeEncounterService {
             }
         }
         UUID trap = UUID.randomUUID();
-        String label = switch (kind) { case "DEADFALL" -> "Deadfall trap"; case "PIT" -> "Covered pit"; case "FISH_TRAP" -> "Woven fish trap"; case "CAGE" -> "Woven cage trap"; default -> "Set snare"; };
+        String label = whole != null ? key2name(whole)
+            : switch (kind) { case "DEADFALL" -> "Deadfall trap"; case "PIT" -> "Covered pit"; case "FISH_TRAP" -> "Woven fish trap"; case "CAGE" -> "Woven cage trap"; default -> "Set snare"; };
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'TRAP',?,?)", trap, label, chunk);
         // WRITE DOWN WHAT IT WAS BUILT FROM (#37, V418), so lifting it can give those back and nothing else.
         // A SNARE can be built three ways — two plant fibre, one pre-made loop, or wire and a trigger — so a
@@ -1964,7 +1987,46 @@ public class WildlifeEncounterService {
             trap, chunk, kind, chronicle, Timestamp.from(at), bait,
             spent.isEmpty() ? null : spent.toArray(new String[0]));
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'TRAP_SET',jsonb_build_object('kind',?))", trap, Timestamp.from(at), kind);
+        if (whole != null)
+            return new EncounterResult("SUCCEEDED","You lower the " + label.toLowerCase() + " into the water" + (bait != null ? ", baited," : "")
+                + " and weight it where the bottom is still. It is out of your pack and in the water now, and will fish while you are gone.");
         return new EncounterResult("SUCCEEDED","You build the " + label.toLowerCase() + " and set it across the run" + (bait != null ? ", baited" : "") + ". It stands there after you have gone. What comes to it is not yours to decide.");
+    }
+
+    /**
+     * Water traps that are made whole elsewhere and carried to the water (#923), most specific first so a named
+     * one is found before the family word. Set as they are, emptied when checked, and lifted out whole — a woven
+     * funnel is not cut out of the run like a snare.
+     */
+    static final java.util.List<String> WHOLE_WATER_TRAPS = java.util.List.of("crayfish_trap", "basket_fish_trap", "fish_trap");
+
+    private String key2name(String key) {
+        String name = jdbc.query("SELECT display_name FROM item_definition WHERE item_key=?", rs -> rs.next() ? rs.getString(1) : null, key);
+        return name != null ? name : key.replace('_', ' ');
+    }
+
+    /** The water life this ground holds — the one list fishing, setting a water trap and checking one all read. */
+    private java.util.List<String> aquaticSpeciesAt(UUID chunk) {
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, chunk);
+        return jdbc.queryForList("SELECT species_key FROM wildlife_species WHERE movement_class='AQUATIC' AND biome_affinity ILIKE ? ORDER BY species_key", String.class, "%"+biome+"%");
+    }
+
+    /**
+     * The water species the words name (#908), read through the one species-name reader so plurals and the last
+     * word of a two-word key ("trout" for river_trout) are heard. "fish" itself names no species, so `fish for
+     * crayfish` names crayfish and only crayfish. Empty when nothing is named — fish for whatever is there.
+     */
+    private java.util.List<String> namedAquaticSpecies(String v) {
+        java.util.List<String> named = new java.util.ArrayList<>();
+        for (String key : jdbc.queryForList("SELECT species_key FROM wildlife_species WHERE movement_class='AQUATIC' ORDER BY species_key", String.class))
+            if (PhysicalItemService.saidAsASpeciesName(v, key)) named.add(key);
+        return named;
+    }
+
+    /** A whole made trap the set was built from, if it was one (#923) — it comes back whole, not frayed. */
+    private static String wholeTrapIn(String[] built) {
+        if (built == null || built.length != 1) return null;
+        return WHOLE_WATER_TRAPS.contains(built[0]) ? built[0] : null;
     }
 
     /** Consume one of an item AND remember that it went into the set, so the lift can give it back (#37, V418). */
@@ -2116,6 +2178,14 @@ public class WildlifeEncounterService {
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) "
             + "VALUES (?,?,'TRAP_LIFTED',jsonb_build_object('kind',?))", trapId, Timestamp.from(at), kind);
 
+        // A made water trap is lifted out whole (#923): there is no cordage to cut, so nothing is worn away by it.
+        String wholeTrap = wholeTrapIn(built);
+        if (wholeTrap != null) {
+            String name = key2name(wholeTrap);
+            items.createCarriedItem(chronicle, wholeTrap, name, at, "RECOVERED_FROM_TRAP");
+            return new EncounterResult("SUCCEEDED", "You haul the " + name.toLowerCase(java.util.Locale.ROOT)
+                + " up out of the water, streaming, and take it back into your pack whole.");
+        }
         if (built == null || built.length == 0)
             return new EncounterResult("SUCCEEDED", "You cut the " + kind + " out of the run and coil what is "
                 + "left of it. Nothing of it is worth carrying — you set this one before you were keeping count "
@@ -2147,8 +2217,15 @@ public class WildlifeEncounterService {
     @Transactional
     public EncounterResult checkTrap(UUID chronicle, UUID chunk, UUID action, Instant at) {
         java.util.Map<String,Object> trap = jdbc.query(
-            "SELECT object_id,trap_kind,set_at,baited_with FROM placed_trap WHERE chunk_id=? AND NOT sprung ORDER BY set_at LIMIT 1 FOR UPDATE",
-            rs -> rs.next() ? java.util.Map.of("id",rs.getObject(1,UUID.class),"kind",rs.getString(2),"set_at",rs.getTimestamp(3).toInstant()) : null, chunk);
+            "SELECT object_id,trap_kind,set_at,baited_with,built_from FROM placed_trap WHERE chunk_id=? AND NOT sprung ORDER BY set_at LIMIT 1 FOR UPDATE",
+            rs -> {
+                if (!rs.next()) return null;
+                java.util.Map<String,Object> m = new java.util.HashMap<>();
+                m.put("id", rs.getObject(1, UUID.class)); m.put("kind", rs.getString(2)); m.put("set_at", rs.getTimestamp(3).toInstant());
+                java.sql.Array a = rs.getArray(5);
+                m.put("whole", a == null ? null : wholeTrapIn((String[]) a.getArray()));
+                return m;
+            }, chunk);
         if (trap == null) {
             // "Nothing standing here" is TRUE OF HERE and was being offered as the whole answer, to a trapper
             // whose line might be spread over half a valley. If anything of theirs stands anywhere else, say so
@@ -2186,6 +2263,14 @@ public class WildlifeEncounterService {
         jdbc.update("UPDATE placed_trap SET sprung=true,checked_at=?,caught_species=? WHERE object_id=?", Timestamp.from(at), caught, trapId);
         jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED',destroyed_at=?,destroyed_location_id=current_location_id,destroyed_cause='TRAP_SPRUNG',current_location_id=NULL WHERE id=?", Timestamp.from(at), trapId);
         jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'TRAP_SPRUNG',jsonb_build_object('species',?))", trapId, Timestamp.from(at), caught);
+        // A made funnel trap is emptied, not spent (#923): the catch comes out and the trap comes back with it.
+        String wholeTrap = (String) trap.get("whole");
+        if (wholeTrap != null) {
+            String name = key2name(wholeTrap);
+            items.createCarriedItem(chronicle, wholeTrap, name, at, "RECOVERED_FROM_TRAP");
+            return new EncounterResult("SUCCEEDED","You haul the " + name.toLowerCase(java.util.Locale.ROOT) + " up. A " + display(caught)
+                + " is inside it. You shake it out and take the trap back, whole, to set again.");
+        }
         return new EncounterResult("SUCCEEDED","The trap has done its work. A " + display(caught) + " lies in it, long still by the time you reach it.");
     }
 
@@ -2246,6 +2331,20 @@ public class WildlifeEncounterService {
     public EncounterResult fish(UUID chronicle, UUID chunk, UUID action, Instant at, String actionText) {
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, chunk);
         String v = actionText.toLowerCase(java.util.Locale.ROOT);
+        // THE FISH YOU NAMED IS THE FISH YOU FISH FOR (#908). `fish for crayfish with my crayfish trap` landed a
+        // carp: the catch was drawn from everything this water holds, and the words were read only for the gear.
+        // A named quarry narrows the draw to itself; a named quarry this water does not hold is refused by name
+        // here, before any bait is spent on it, rather than answered with something else.
+        java.util.List<String> species = aquaticSpeciesAt(chunk);
+        java.util.List<String> named = namedAquaticSpecies(v);
+        if (!named.isEmpty() && !species.isEmpty()) {
+            java.util.List<String> here = new java.util.ArrayList<>(named);
+            here.retainAll(species);
+            if (here.isEmpty())
+                return new EncounterResult("FAILED", "You watch the water a while for " + display(named.get(0))
+                    + ", but this water holds none to take.");
+            species = here;
+        }
         String method; int chance;
         // Explicit trap/spear/line intent is honoured first; otherwise the Chronicle reaches for the best
         // fishing gear it carries, most effective first. A woven fish trap or cast/gill net (#36/#43) is a real
@@ -2307,7 +2406,6 @@ public class WildlifeEncounterService {
             };
             chance = Math.max(5, Math.min(90, chance + shift));
         }
-        java.util.List<String> species = jdbc.queryForList("SELECT species_key FROM wildlife_species WHERE movement_class='AQUATIC' AND biome_affinity ILIKE ? ORDER BY species_key", String.class, "%"+biome+"%");
         if (species.isEmpty()) return new EncounterResult("FAILED","You watch the ground a while. There is no water here that holds anything worth taking.");
         // #181/#36 finite water: a stretch fished relentlessly thins until it is fished out here, and needs rest to
         // come back. A stretch not yet worked is lazily full, so ordinary angling never meets the ceiling.

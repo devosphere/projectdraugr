@@ -33,6 +33,8 @@ public class SimulationNarrator {
         - Do not advise, suggest, warn, or hint at what the player should do.
         - Do not name game stats or Body HUD fields (hunger, thirst, energy, blood loss, etc.).
         - Do not explain why anything happened, and do not invent events or objects not in the context.
+        - If the action MADE something, it was made and nothing more: do not narrate it being set, \
+          placed, submerged, baited, worn, lit, or put to any use.
         - No moral judgement, humour, surprise, or address to the player as "player".
         - Output only the single sentence, with no preamble, quotes, or labels.""";
 
@@ -73,6 +75,7 @@ public class SimulationNarrator {
                 .filter(extra -> !extra.isBlank())
                 .filter(extra -> !claimsWhatIsNotThere(extra, frame, backendNarration))
                 .filter(extra -> !claimsAFireThatIsNotLit(extra, frame, backendNarration))
+                .filter(extra -> !claimsUseOfWhatWasMade(extra, frame, backendNarration))
                 .map(extra -> backendNarration + " " + extra)
                 .orElse(backendNarration);
     }
@@ -120,6 +123,34 @@ public class SimulationNarrator {
         String receipt = backendNarration == null ? "" : backendNarration.toLowerCase(Locale.ROOT);
         String said = extra.toLowerCase(Locale.ROOT);
         for (String word : FIRE_WORDS)
+            if (said.contains(word) && !receipt.contains(word)) return true;
+        return false;
+    }
+
+    /** The intents that MAKE a thing, where a sentence about USING it is a claim about an act never taken (#922). */
+    private static boolean isMaking(String intent) {
+        return intent != null && (intent.startsWith("CRAFT_") || intent.equals("PROCESS_MATERIAL")
+            || intent.equals("REFINE") || intent.equals("REWORK"));
+    }
+
+    /** Words for putting a thing to work in the world — each an act with its own action and its own record. */
+    private static final java.util.List<String> USE_WORDS = java.util.List.of(
+        "submerge", "sink the", "sinking the", "sank the", "lower the", "lowering the", "lowered the",
+        "baited", "baiting", "set the trap", "setting the trap", "sets the trap", "set it in", "set it across",
+        "into the water", "in the stream", "cast the", "casting the", "staked out");
+
+    /**
+     * Whether a sentence added to a MAKING act narrates the made thing being put to use (#922). Crafting a
+     * crayfish trap came back with "...as you submerge the trap": nothing was submerged, the trap was in the
+     * pack, and a player reading the prose had every reason to think a trap was now fishing. Making and using
+     * are separate acts, each with its own record; the narrator may describe only the one that happened. A word
+     * the deterministic prose itself already used may be used again.
+     */
+    boolean claimsUseOfWhatWasMade(String extra, PerceptionFrame frame, String backendNarration) {
+        if (frame == null || !isMaking(frame.intent())) return false;
+        String receipt = backendNarration == null ? "" : backendNarration.toLowerCase(Locale.ROOT);
+        String said = extra.toLowerCase(Locale.ROOT);
+        for (String word : USE_WORDS)
             if (said.contains(word) && !receipt.contains(word)) return true;
         return false;
     }

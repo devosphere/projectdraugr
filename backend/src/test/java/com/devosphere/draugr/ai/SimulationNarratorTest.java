@@ -169,4 +169,43 @@ class SimulationNarratorTest {
         narrator.refine(frame("You lie down."), "You lie down.");
         assertTrue(asked.get().contains("Hearth on this ground: none built here"), asked.get());
     }
+
+    private static PerceptionFrame frameFor(String intent, String backend) {
+        return new PerceptionFrame(intent, "SUCCEEDED", null, "morning", null, "HIGH", null, null, List.of(), backend, null);
+    }
+
+    /**
+     * #922: crafting a crayfish trap came back with "...as you submerge the trap". Nothing was submerged — the
+     * trap was in the pack. A sentence that puts a just-made thing to use claims an act that has its own action
+     * and its own record, and was never taken.
+     */
+    @Test
+    void aThingJustMadeIsNotNarratedIntoUse() {
+        String made = "You weave a small withy funnel trap. The Crayfish trap is in your pack.";
+        LanguageModel invents = (model, system, user) -> Optional.of(
+            "The morning sun glints off the water as you submerge the trap, your shoulders heavy with the effort of the work.");
+        SimulationNarrator narrator = new SimulationNarrator(invents, props(true, "test-key"), java.util.Set::of);
+
+        assertEquals(made, narrator.refine(frameFor("PROCESS_MATERIAL", made), made),
+            "a sentence that uses what was only made is refused, and the deterministic prose stands alone");
+        assertEquals(made, narrator.refine(frameFor("CRAFT_NET", made), made), "for every making intent");
+
+        // Atmosphere about the making is still welcome.
+        LanguageModel atmosphere = (model, system, user) -> Optional.of("The cut withies smell green and sharp.");
+        assertTrue(new SimulationNarrator(atmosphere, props(true, "test-key"), java.util.Set::of)
+            .refine(frameFor("PROCESS_MATERIAL", made), made).endsWith("The cut withies smell green and sharp."));
+
+        // And SETTING the trap may be narrated as setting it — that act happened.
+        String set = "You lower the crayfish trap into the water and weight it where the bottom is still.";
+        assertTrue(narrator.refine(frameFor("SET_TRAP", set), set).endsWith("your shoulders heavy with the effort of the work."),
+            "the guard is about making, not about the act of setting a trap");
+    }
+
+    @Test
+    void theNarratorIsToldThatAMadeThingIsOnlyMade() {
+        AtomicReference<String> sys = new AtomicReference<>();
+        LanguageModel capture = (model, system, user) -> { sys.set(system); return Optional.empty(); };
+        new SimulationNarrator(capture, props(true, "test-key"), java.util.Set::of).refine(frame("You look around."), "You look around.");
+        assertTrue(sys.get().contains("MADE something"), sys.get());
+    }
 }
