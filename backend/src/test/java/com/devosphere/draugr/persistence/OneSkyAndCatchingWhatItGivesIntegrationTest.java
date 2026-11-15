@@ -156,11 +156,22 @@ class OneSkyAndCatchingWhatItGivesIntegrationTest {
         return id;
     }
 
+    /**
+     * Measures of water this Chronicle has — loose in the hands, or INSIDE a vessel they carry.
+     *
+     * <p>This asked only for water whose owner IS the Chronicle, which was every measure in the world until
+     * #918 put the water in the vessel: the owner of a filled measure is now the waterskin. So the count read
+     * 0 before and 0 after while the answer said the skin had filled, and the test failed the fix it was
+     * written to protect. It was measuring the world as it stood before the thing under test.
+     */
     private int waterInHand(UUID me) {
         Integer n = jdbc.queryForObject(
-            "SELECT count(*) FROM item_instance i JOIN world_object w ON w.id=i.object_id "
-            + "WHERE w.current_owner_id=? AND i.item_key IN ('raw_water','filtered_water','clean_water') "
-            + "AND w.lifecycle_state='ACTIVE'", Integer.class, me);
+            "WITH RECURSIVE mine(id) AS ("
+            + " SELECT id FROM world_object WHERE current_owner_id=? AND lifecycle_state='ACTIVE'"
+            + " UNION ALL SELECT ic.item_id FROM item_containment ic JOIN mine m ON m.id=ic.container_id"
+            + "   JOIN world_object nested ON nested.id=ic.item_id WHERE nested.lifecycle_state='ACTIVE') "
+            + "SELECT count(*) FROM mine JOIN item_instance i ON i.object_id=mine.id "
+            + "WHERE i.item_key IN ('raw_water','filtered_water','clean_water')", Integer.class, me);
         assertNotNull(n);
         return n;
     }

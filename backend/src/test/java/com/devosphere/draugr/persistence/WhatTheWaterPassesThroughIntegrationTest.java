@@ -87,7 +87,28 @@ class WhatTheWaterPassesThroughIntegrationTest {
                     "  AND i.item_key IN ('raw_water','clean_water','filtered_water','water_ladle','silver_cup')", elsewhere, chronicle, chunk);
     }
 
+    /**
+     * The risk the Chronicle takes drinking from the water named in {@code phrase}.
+     *
+     * <p>EMPTY THE PACK FIRST, because a drink takes what you carry before it touches the ground: with any
+     * measure in a vessel, {@code drink from the spring} drinks the vessel and this reads the risk of the
+     * water you drew somewhere else. That was invisible while collecting into a vessel quietly failed (#918);
+     * the moment it worked, the sand-bed method left a filtered measure in the pack and the walled-spring
+     * method measured it twice — "open 3, walled 3", the spring never tasted at all.
+     *
+     * <p>The containment rows go before the destruction: a containment row pointing at a destroyed object is
+     * an Auditor violation in its own right, and this method is called in a world the test audits at the end.
+     */
     private int drinkRisk(UUID chronicle, String phrase) {
+        String carried =
+            "SELECT w.id FROM world_object w JOIN item_instance i ON i.object_id=w.id "
+            + "WHERE i.item_key IN ('raw_water','filtered_water','clean_water') AND w.lifecycle_state='ACTIVE' "
+            + "  AND (w.current_owner_id=? OR w.current_owner_id IN "
+            + "       (SELECT v.id FROM world_object v WHERE v.current_owner_id=?))";
+        jdbc.update("DELETE FROM item_containment WHERE item_id IN (" + carried + ")", chronicle, chronicle);
+        jdbc.update("UPDATE world_object SET lifecycle_state='DESTROYED', destroyed_at=now(), "
+                    + "destroyed_cause='TEST_TEARDOWN', current_owner_id=NULL, current_location_id=NULL "
+                    + "WHERE id IN (" + carried + ")", chronicle, chronicle);
         jdbc.update("UPDATE chronicle_physiology SET illness_severity=0, hours_without_water=8 WHERE chronicle_id=?", chronicle);
         var drink = actions.resolve(phrase);
         assertEquals("SUCCEEDED", drink.outcome(), () -> "there is water here to drink: " + drink.perception());
