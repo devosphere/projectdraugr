@@ -115,7 +115,10 @@ class FouledGroundFoulsTheWaterIntegrationTest {
         int before = illness(chronicle);
         var clean = actions.resolve("drink from the river");
         assertEquals("SUCCEEDED", clean.outcome(), () -> "there is running water here: " + clean.perception());
-        assertEquals(before, illness(chronicle),
+        // NO RISK, which is not the same as NO CHANGE (#909). Illness can now fall as well as rise: an
+        // action takes time, and a Chronicle who is warm, dry and clean throws a little of it off while that
+        // time passes. What this test is about is whether the DRAW carried risk, so it asks that.
+        assertTrue(illness(chronicle) <= before,
             () -> "clean running water must carry no risk: " + clean.perception());
 
         // The camp is choked with refuse — their own leavings and the stock's muck.
@@ -132,7 +135,7 @@ class FouledGroundFoulsTheWaterIntegrationTest {
         refuse(bank, 0);
         int beforeClean = illness(chronicle);
         var recovered = actions.resolve("drink from the river");
-        assertEquals(beforeClean, illness(chronicle),
+        assertTrue(illness(chronicle) <= beforeClean,
             () -> "a cleaned camp gets its clean water back: " + recovered.perception());
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());

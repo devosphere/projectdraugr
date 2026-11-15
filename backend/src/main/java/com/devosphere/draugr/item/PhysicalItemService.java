@@ -4974,6 +4974,31 @@ public class PhysicalItemService {
         return false;
     }
 
+    /**
+     * Whether this ground carries a named mineral at all — the question {@code gatherMineral} answers with a
+     * ROLL (#887).
+     *
+     * <p>Searching is a search: {@code gatherMineral} multiplies the mineral's rarity by 0.75 when it was
+     * asked for by name, so a failed attempt means "you did not find a patch", not "there is none". A caller
+     * that reads a failure as absence tells the player the ground is empty when the survey has just named a
+     * material on it, which is the whole of #887. Ask this first, and the refusal can say which it was.
+     *
+     * <p>Affinity and province, exactly as the gather applies them: a province NARROWS, so a mineral with one
+     * is here only if its site is here too, and a mineral without one is gated by affinity alone.
+     */
+    @Transactional(readOnly = true)
+    public boolean mineralLiesHere(UUID location, String mineralKey) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS (SELECT 1 FROM mineral_definition md, world_chunk c WHERE c.id=? AND md.mineral_key=? " +
+            "  AND (md.biome_affinity ILIKE '%' || c.biome || '%' " +
+            "       OR EXISTS (SELECT 1 FROM ecology_site s WHERE s.chunk_id=c.id AND s.site_category='RESOURCE' " +
+            "                    AND lower(s.site_kind) LIKE '%clay%' AND md.biome_affinity ILIKE '%CLAY_DEPOSIT%')) " +
+            "  AND (NOT EXISTS (SELECT 1 FROM mineral_province p WHERE p.mineral_key = md.mineral_key) " +
+            "       OR EXISTS (SELECT 1 FROM mineral_province p JOIN ecology_site s ON s.site_kind = p.site_kind " +
+            "                    WHERE p.mineral_key = md.mineral_key AND s.chunk_id = c.id)))",
+            Boolean.class, location, mineralKey));
+    }
+
     @Transactional
     public String[] gatherMineral(UUID chronicle, UUID location, String actionText, Instant occurredAt) {
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);

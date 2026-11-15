@@ -158,29 +158,33 @@ public class ChronicleActionService {
         boolean replay = alreadyRecorded(stepKey(idempotencyKey, "step", 0));
         // Writing a new procedure is moving on from whatever was set aside before it.
         if (!replay) endOpenRemainder("REPLACED");
-        return workThrough(steps, idempotencyKey, "step", replay, "");
+        return workThrough(steps, idempotencyKey, "step", replay, "", text);
     }
+
+    /** A set-aside remainder: its row, its undone steps, and the submission they were cut out of (#892). */
+    private record Remainder(UUID id, List<String> steps, String submission) { }
 
     /** The steps of a set-aside plan, worked again from where they stopped; null when nothing was set aside. */
     private ActionResult takeUpWhatWasSetAside(UUID idempotencyKey) {
         UUID chronicle = jdbc.query("SELECT id FROM chronicle WHERE life_state='LIVING'", rs -> rs.next() ? rs.getObject(1, UUID.class) : null);
         if (chronicle == null) return null;
-        org.springframework.jdbc.core.RowMapper<java.util.Map.Entry<UUID, List<String>>> row = (rs, n) ->
-            java.util.Map.entry(rs.getObject(1, UUID.class), List.of((String[]) rs.getArray(2).getArray()));
+        org.springframework.jdbc.core.RowMapper<Remainder> row = (rs, n) ->
+            new Remainder(rs.getObject(1, UUID.class), List.of((String[]) rs.getArray(2).getArray()), rs.getString(3));
         // The same resume submitted twice is one resume: find the plan it already took up, and replay it.
-        java.util.Map.Entry<UUID, List<String>> plan = idempotencyKey == null ? null : jdbc.query(
-            "SELECT id, steps FROM chronicle_plan_remainder WHERE resume_key = ?", row, idempotencyKey).stream().findFirst().orElse(null);
+        Remainder plan = idempotencyKey == null ? null : jdbc.query(
+            "SELECT id, steps, submission_text FROM chronicle_plan_remainder WHERE resume_key = ?", row, idempotencyKey).stream().findFirst().orElse(null);
         boolean replay = plan != null;
         if (plan == null) plan = jdbc.query(
-            "SELECT id, steps FROM chronicle_plan_remainder WHERE chronicle_id = ? AND state = 'OPEN'", row, chronicle).stream().findFirst().orElse(null);
+            "SELECT id, steps, submission_text FROM chronicle_plan_remainder WHERE chronicle_id = ? AND state = 'OPEN'", row, chronicle).stream().findFirst().orElse(null);
         if (plan == null) return null;
         if (!replay) jdbc.update("UPDATE chronicle_plan_remainder SET state='RESUMED', resume_key=?, resumed_at=? WHERE id=?",
-                idempotencyKey, java.sql.Timestamp.from(ticks.current().simulatedAt()), plan.getKey());
-        return workThrough(plan.getValue(), idempotencyKey, "resume", replay, "You take up what you set aside.");
+                idempotencyKey, java.sql.Timestamp.from(ticks.current().simulatedAt()), plan.id());
+        return workThrough(plan.steps(), idempotencyKey, "resume", replay, "You take up what you set aside.", plan.submission());
     }
 
     /** Work the steps in order, stopping where one fails; keep what was not done unless this is a replay. */
-    private ActionResult workThrough(List<String> steps, UUID idempotencyKey, String tag, boolean replay, String opening) {
+    private ActionResult workThrough(List<String> steps, UUID idempotencyKey, String tag, boolean replay, String opening,
+                                     String submission) {
         List<String> attempted = steps.size() > ActionPlan.MAX_STEPS ? steps.subList(0, ActionPlan.MAX_STEPS) : steps;
         StringBuilder told = new StringBuilder(opening);
         ActionResult last = null;
@@ -189,7 +193,7 @@ public class ChronicleActionService {
         List<String> undone = List.of();
         String stoppedBecause = null;
         for (int i = 0; i < attempted.size(); i++) {
-            ActionResult step = resolve(attempted.get(i), stepKey(idempotencyKey, tag, i));
+            ActionResult step = resolve(attempted.get(i), stepKey(idempotencyKey, tag, i), submission);
             last = step;
             if (told.length() > 0) told.append(" ");
             told.append(step.perception());
@@ -217,7 +221,7 @@ public class ChronicleActionService {
         }
         if (!replay) {
             if (last.died()) endOpenRemainder("ENDED");
-            else if (!undone.isEmpty()) setAside(undone, stoppedBecause, last, idempotencyKey, tag);
+            else if (!undone.isEmpty()) setAside(undone, stoppedBecause, last, idempotencyKey, tag, submission);
         }
         // The plan reports as the last step that actually ran: its identity, its clock, and the body as it stands.
         return new ActionResult(last.actionId(), last.intent(), outcome, last.durationMinutes(), last.resolvedAt(),
@@ -270,27 +274,41 @@ public class ChronicleActionService {
                     "AND chronicle_id IN (SELECT id FROM chronicle WHERE life_state = 'LIVING')", state);
     }
 
-    private void setAside(List<String> undone, String stoppedBecause, ActionResult last, UUID idempotencyKey, String tag) {
+    private void setAside(List<String> undone, String stoppedBecause, ActionResult last, UUID idempotencyKey, String tag,
+                          String submission) {
         UUID chronicle = jdbc.query("SELECT id FROM chronicle WHERE life_state='LIVING'", rs -> rs.next() ? rs.getObject(1, UUID.class) : null);
         if (chronicle == null) return;
         UUID id = idempotencyKey == null ? UUID.randomUUID()
             : UUID.nameUUIDFromBytes((idempotencyKey + ":" + tag + ":remainder").getBytes(java.nio.charset.StandardCharsets.UTF_8));
         jdbc.update(con -> {
             java.sql.PreparedStatement ps = con.prepareStatement(
-                "INSERT INTO chronicle_plan_remainder (id, chronicle_id, steps, stopped_because, set_aside_at, source_action_id) " +
-                "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING");
+                "INSERT INTO chronicle_plan_remainder (id, chronicle_id, steps, stopped_because, set_aside_at, source_action_id, submission_text) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING");
             ps.setObject(1, id);
             ps.setObject(2, chronicle);
             ps.setArray(3, con.createArrayOf("text", undone.toArray()));
             ps.setString(4, stoppedBecause);
             ps.setTimestamp(5, java.sql.Timestamp.from(last.resolvedAt()));
             ps.setObject(6, last.actionId());
+            // The undone steps were cut from this sentence; a "carry on" must record the same words (#892).
+            ps.setString(7, submission == null ? null : submission.trim());
             return ps;
         });
     }
 
     @Transactional
     public ActionResult resolve(String text, UUID idempotencyKey) {
+        // An action submitted on its own IS its own submission; a step of a procedure is not (#892).
+        return resolve(text, idempotencyKey, text);
+    }
+
+    /**
+     * @param submission the whole text the player wrote, which for a step of a procedure is the sentence it was
+     *                   cut out of. The ledger records one row per STEP, so without this a procedure came back
+     *                   after a relaunch as its pieces and the timeline disagreed with itself about the
+     *                   player's own words. #873 recorded that as its known gap; this closes it.
+     */
+    public ActionResult resolve(String text, UUID idempotencyKey, String submission) {
         if (text == null || text.trim().isEmpty() || text.length() > 2500) throw new IllegalArgumentException("An action must contain 1 to 2500 characters.");
         if (idempotencyKey != null) {
             // A duplicate submission returns the original outcome without resolving
@@ -665,7 +683,33 @@ public class ChronicleActionService {
             int stones=items.gatherFieldStones(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())+quarry); outcome=stones>0?"SUCCEEDED":"FAILED"; perception=stones>0?(metalPick?"You drive the pick into the ground and lever out a good load of stone, far more than bare hands could win.":"You work loose a few stones from the ground and carry them with you.")+tally(stones,"stone","stones"):"You turn over the ground for a while, then leave it undisturbed."; gatherEffectType="FIELD_STONE_GATHERED"; gatherPayloadKey="stones"; gatherCount=stones; }
         else if (intent == Intent.GATHER_BERRIES) { int berries=items.gatherWildBerries(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())); outcome=berries>0?"SUCCEEDED":"FAILED"; perception=berries>0?"You gather ripe berries from the living growth."+tally(berries,"berry","berries"):"You search the low growth carefully, then let it settle back into place."; gatherEffectType="WILD_BERRIES_GATHERED"; gatherPayloadKey="berries"; gatherCount=berries; }
         else if (intent == Intent.GATHER_BRANCHES) { int branches=items.gatherDryBranches(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())); outcome=branches>0?"SUCCEEDED":"FAILED"; perception=branches>0?(standingTreesHere(chronicle.location())?"You gather dry branches from beneath the trees.":"You work along the low scrub and the wind-broken ground, and gather what dry wood it has to give.")+tally(branches,"branch","branches"):"You search the leaf litter for dry wood, then leave with empty hands."; gatherEffectType="DRY_BRANCH_GATHERED"; gatherPayloadKey="branches"; gatherCount=branches; }
-        else if (intent == Intent.GATHER_CLAY) { boolean shovel=items.hasAtLeast(chronicle.id(),"wooden_shovel",1); boolean stick=!shovel&&items.hasAtLeast(chronicle.id(),"digging_stick",1); int dig=shovel?2:(stick?1:0); int lumps=items.gatherClay(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())+dig); outcome=lumps>0?"SUCCEEDED":"FAILED"; perception=lumps>0?(shovel?"You bite the shovel deep into the bank and turn out heavy lumps of wet clay by the load.":stick?"You lever the earth open with the digging stick and prise free dense lumps of wet clay.":"You work the earth with your hands and pull free dense lumps of wet clay.")+tally(lumps,"lump","lumps"):"You search the ground for workable clay, but the earth here holds nothing useful."; gatherEffectType="CLAY_GATHERED"; gatherPayloadKey="lumps"; gatherCount=lumps; }
+        else if (intent == Intent.GATHER_CLAY) { boolean shovel=items.hasAtLeast(chronicle.id(),"wooden_shovel",1); boolean stick=!shovel&&items.hasAtLeast(chronicle.id(),"digging_stick",1); int dig=shovel?2:(stick?1:0); int lumps=items.gatherClay(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())+dig); outcome=lumps>0?"SUCCEEDED":"FAILED"; perception=lumps>0?(shovel?"You bite the shovel deep into the bank and turn out heavy lumps of wet clay by the load.":stick?"You lever the earth open with the digging stick and prise free dense lumps of wet clay.":"You work the earth with your hands and pull free dense lumps of wet clay.")+tally(lumps,"lump","lumps"):"You search the ground for workable clay, but the earth here holds nothing useful."; gatherEffectType="CLAY_GATHERED"; gatherPayloadKey="lumps"; gatherCount=lumps;
+            // THE GROUND IS NOT EMPTY WHEN THE SURVEY JUST NAMED A MATERIAL ON IT (#887). This dug for a clay
+            // DEPOSIT — CLAY_DEPOSIT, RIVER_BANK, WETLAND and nothing else — and answered "the earth here
+            // holds nothing useful" everywhere else. But SURFACE CLAY is a catalogued mineral of grassland,
+            // highland and temperate forest, scraped by hand (V116), and `look around` on that same forest
+            // tile had just named it. The survey and the act disagreed about one piece of ground, and the
+            // player was blocked from a smoke vent by a refusal that was false where they stood.
+            //
+            // So the dug deposit is tried first, as it always was, and the ground's own scrapings answer for
+            // it when there is no bank to cut. Said as what it is: grittier stuff that wants cleaning before
+            // it will throw, which is exactly what clean_surface_clay is for.
+            // Presence is asked SEPARATELY from the attempt, because scraping is a search and a lost search
+            // is not an empty ground. Reading one as the other is how this refusal came to contradict the
+            // survey in the first place.
+            if (lumps == 0 && items.mineralLiesHere(chronicle.location(), "clay_lump_surface")) {
+                String[] scraped = items.gatherMineral(chronicle.id(), chronicle.location(), "surface clay", resolvedAt);
+                gatherEffectType = null; gatherPayloadKey = null; gatherCount = 0;
+                if ("SUCCEEDED".equals(scraped[0])) {
+                    outcome = "SUCCEEDED";
+                    perception = "There is no bank here to cut, but the soft ground gives up surface clay to the "
+                               + "hands — grittier than a dug deposit, and wanting cleaning before it will throw.";
+                } else {
+                    perception = "There is no bank here to cut. There IS clay in this ground — surface clay, "
+                               + "thin and gritty under the leaf litter — but you work over it without turning "
+                               + "up a patch worth scraping. It wants looking for again, or softer ground.";
+                }
+            } }
         else if (intent == Intent.GATHER_STONE_SLAB) { int slabs=items.gatherStoneSlab(chronicle.id(),chronicle.location(),resolvedAt); outcome=slabs>0?"SUCCEEDED":"FAILED"; perception=slabs>0?"You work broad, flat slabs of stone free from the rock and take up their considerable weight."+tally(slabs,"slab","slabs"):"You search the rock for a slab flat enough to work, but nothing here breaks away clean."; gatherEffectType="STONE_SLAB_GATHERED"; gatherPayloadKey="slabs"; gatherCount=slabs; }
         else if (intent == Intent.GATHER_PLANT) { String[] r=items.gatherPlant(chronicle.id(),chronicle.location(),text,resolvedAt); outcome=r[0]; perception=r[1]; }
         else if (intent == Intent.PLANT_TREE) { String[] r=items.plantTree(chronicle.id(),chronicle.location(),resolvedAt); outcome=r[0]; perception=r[1]; }
@@ -873,7 +917,11 @@ public class ChronicleActionService {
             if (!clay && !bark) { outcome = "FAILED"; perception = "You have no water filter to pour through — a bark-and-charcoal filter, or a fired clay one, must be made first."; }
             else { int n = items.convertWater(chronicle.id(), "raw_water", "filtered_water", "Filtered water", 3, resolvedAt); outcome = n > 0 ? "SUCCEEDED" : "FAILED"; perception = n > 0 ? (clay ? "You pour the raw water slowly through the clay filter; it comes out the other side notably clearer." : "You pour the raw water slowly through the bark-and-charcoal cone; it drips out the bottom clearer and less foul than it went in.") : "You have no raw water to pour through the filter."; }
         }
-        else if (intent == Intent.WASH) { if(waterInReach(chronicle.location())){boolean soap=items.hasAtLeast(chronicle.id(),"soap",1)&&items.consumeOne(chronicle.id(),"soap",resolvedAt);physiology.wash(chronicle.id(),soap);perception=soap?"You work the soap into a lather and scrub down; the water carries off far more than it would alone, and you come up clean.":"Cold water runs over your hands and skin, carrying away some of the dirt.";}else{outcome="FAILED";perception="You look for water to wash in, but there is none here — the ground is dry, and nothing runs or stands within reach.";} }
+        else if (intent == Intent.WASH) { if(waterInReach(chronicle.location())){boolean soap=items.hasAtLeast(chronicle.id(),"soap",1)&&items.consumeOne(chronicle.id(),"soap",resolvedAt);physiology.wash(chronicle.id(),soap);perception=soap?"You work the soap into a lather and scrub down; the water carries off far more than it would alone, and you come up clean.":"Cold water runs over your hands and skin, carrying away some of the dirt.";}
+            // #911: the sea is no water to drink, but a body can wash in it. Soap will not lather in salt water, so it
+            // is kept rather than spent. The wetting is the same as any wash, so the cold of a night sea still tells.
+            else if(seaInReach(chronicle.location())){boolean soapHeld=items.hasAtLeast(chronicle.id(),"soap",1);physiology.wash(chronicle.id(),false);perception="You wade into the edge of the sea and scrub down in it. The salt water is bitterly cold and stings in every scratch, but the dirt comes away, and you come out wet through and stiff with salt."+(soapHeld?" Your soap will not raise a lather in sea water, so you keep it for fresh.":"");}
+            else{outcome="FAILED";perception="You look for water to wash in, but there is none here — the ground is dry, and nothing runs or stands within reach.";} }
         else if (intent == Intent.WARM_BODY) { if(fireInReach(chronicle.location())){physiology.warmByFire(chronicle.id());perception="You crouch close to the fire and hold out your hands, letting its heat soak in until the chill loosens its grip.";}else{outcome="FAILED";perception="You cast about for warmth, but there is no fire burning within reach — only the cold air and colder ground.";} }
         else if (intent == Intent.DRY_BODY) { if(fireInReach(chronicle.location())||shelterInReach(chronicle.location())){physiology.dryOff(chronicle.id());perception="Out of the wet, you work the damp from your skin and clothes until you are drier than you were.";}else{outcome="FAILED";perception="You try to dry off, but with no fire and no cover here the damp only clings the harder.";} }
         else if (intent == Intent.COOL_BODY) { if(shelterInReach(chronicle.location())||waterInReach(chronicle.location())){physiology.coolOff(chronicle.id());perception="You get out of the sun and let the heat bleed off you until your head clears a little.";}else{outcome="FAILED";perception="You look for shade or water to cool in, but there is none here — the heat has nowhere to go.";} }
@@ -1138,6 +1186,16 @@ public class ChronicleActionService {
         physiology.applyLabor(chronicle.id(), items, failed ? (labor.energy() + 1) / 2 : labor.energy(), failed ? labor.hygiene() / 2 : labor.hygiene());
         if (energyEntering != null && energyEntering < 20) {
             physiology.applyStrain(chronicle.id(), 6, actionId, resolvedAt);
+            // AND THE PLAYER IS TOLD (#920). Ten of these landed in one Chronicle — three stone-gatherings, a
+            // debris hut, a fire pit, a feeding, two clay digs, a firing and a cordage — each one a real
+            // injury of 3, carrying them to 30/100, and NOT ONE of them was mentioned in the narration of the
+            // action that caused it. The player found out by reading the backend's own history afterwards.
+            //
+            // Appended to the step's OWN prose, so in a procedure it is plain which step cost what. No body
+            // part, because no body part is recorded for a strain and inventing one is the defect #921 is
+            // about. The task still succeeded; this is what it cost.
+            perception = perception + " The work pulls something as you finish it — not a cut, a strain, deep "
+                       + "in the muscle, and it will want rest before it eases.";
         }
         // Bucket B — the narration contract: wrap the deterministic core in a clause of setting, so the
         // world is present in the prose and not just the act. Success and failure alike are grounded;
@@ -1161,7 +1219,7 @@ public class ChronicleActionService {
         // token is spent, so a DB failure — or a retry of one — costs nothing.
         narration.validate(perception);
         String deterministicNarration = perception; // the durable source of truth, before coda/AI
-        jdbc.update("INSERT INTO chronicle_action (id, chronicle_id, resolved_at, action_text, intent_type, outcome, duration_minutes, narration, idempotency_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", actionId, chronicle.id(), resolvedTs, text.trim(), intent.name(), outcome, minutes, perception, idempotencyKey);
+        jdbc.update("INSERT INTO chronicle_action (id, chronicle_id, resolved_at, action_text, intent_type, outcome, duration_minutes, narration, idempotency_key, submission_text) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", actionId, chronicle.id(), resolvedTs, text.trim(), intent.name(), outcome, minutes, perception, idempotencyKey, submission == null ? null : submission.trim());
         jdbc.update("INSERT INTO chronicle_action_effect (action_id, effect_domain, effect_type, payload) VALUES (?, 'TIME', 'TIME_ADVANCED', jsonb_build_object('minutes', ?))", actionId, minutes);
         if (gatherEffectType != null) jdbc.update("INSERT INTO chronicle_action_effect (action_id, effect_domain, effect_type, payload) VALUES (?, 'ITEM', ?, jsonb_build_object(?, ?))", actionId, gatherEffectType, gatherPayloadKey, gatherCount);
         jdbc.update("INSERT INTO chronicle_event (chronicle_id, occurred_at, event_type, payload) VALUES (?, ?, 'CHRONICLE_ACTION_RESOLVED', jsonb_build_object('actionId', ?::text, 'intent', ?, 'outcome', ?))", chronicle.id(), resolvedTs, actionId.toString(), intent.name(), outcome);
@@ -1235,11 +1293,14 @@ public class ChronicleActionService {
         // but scroll-back and a reload do not, so without `action_text` the timeline loses every command the
         // moment the page is refreshed. `submitted_at` rides along because it is the only thing that marks the
         // steps of one multi-step submission as belonging together.
-        String columns = "SELECT ca.id, ca.resolved_at, COALESCE(can.narration, ca.narration), ca.action_text, ca.submitted_at "
+        // `submission_text` is the sentence the player wrote; `action_text` is the step it was cut into (#892).
+        // A reader shows the submission once per group and the steps beneath it, so the timeline reads the same
+        // before and after a relaunch. Null for rows written before V464, and there the step text stands.
+        String columns = "SELECT ca.id, ca.resolved_at, COALESCE(can.narration, ca.narration), ca.action_text, ca.submitted_at, ca.submission_text "
                 + "FROM chronicle_action ca LEFT JOIN chronicle_action_narration can ON can.action_id = ca.id ";
         org.springframework.jdbc.core.RowMapper<NarrationEntry> asEntry = (rs, row) -> new NarrationEntry(
                 rs.getObject(1, UUID.class), rs.getTimestamp(2).toInstant(), rs.getString(3), rs.getString(4),
-                rs.getTimestamp(5) == null ? null : rs.getTimestamp(5).toInstant());
+                rs.getTimestamp(5) == null ? null : rs.getTimestamp(5).toInstant(), rs.getString(6));
         List<NarrationEntry> entries = before == null
                 ? jdbc.query(columns + "WHERE ca.chronicle_id = ? AND ca.narration IS NOT NULL ORDER BY ca.resolved_at DESC, ca.id DESC LIMIT ?", asEntry, chronicle, limit + 1)
                 : jdbc.query(columns + "WHERE ca.chronicle_id = ? AND ca.narration IS NOT NULL AND (ca.resolved_at, ca.id) < (?, ?) ORDER BY ca.resolved_at DESC, ca.id DESC LIMIT ?", asEntry, chronicle, java.sql.Timestamp.from(before), beforeId, limit + 1);
@@ -7136,13 +7197,25 @@ public class ChronicleActionService {
         // injury severity was plainly above zero was told nothing was wrong with it. One authority for
         // one fact; this project's recurring defect is two readers of the same question.
         boolean carryingAHurt = physiology.carriesAnInjury(me);
+        ChroniclePhysiologyService.Ailments ails = physiology.ailments(me);
+        // ASKED ABOUT THE WOUNDS THEMSELVES (#921). `check my wounds` named no part, so it fell to the
+        // whole-body reading and came back word for word identical to `check myself` — both answering a
+        // Chronicle with ten unplaceable strains and a fever with the same generic line. A player asking
+        // after their wounds wants every place that hurts, in one answer, and the truth when there is no
+        // place to name.
+        if (asked == null && asksAboutTheWounds(text)) return theWoundsSaid(hurts, ails);
         if (asked == null) {
             String where = "";
             if (!hurts.isEmpty()) {
                 List<String> parts = hurts.stream().map(h -> "your " + spokenPart((String) h.get("part"))).distinct().toList();
                 where = " The hurt sits in " + joinAnd(parts) + ".";
+            } else if (ails.injury() > 0) {
+                // UNPLACEABLE, AND SAID SO. Ten overexertion strains carry no body part — the condition
+                // history records none — so a reading that only ever says "the hurt sits in..." says nothing
+                // at all here, and a guessed limb would be worse than silence.
+                where = " It is spread through you rather than sitting anywhere: strain, not a wound you could dress.";
             }
-            return bodyReading(b) + where;
+            return bodyReading(b, ails) + where;
         }
         java.util.Map<String, Object> here = hurts.stream()
             .filter(h -> asked.equals(h.get("part"))).findFirst().orElse(null);
@@ -7165,14 +7238,93 @@ public class ChronicleActionService {
         return subject + " sound. Nothing is wrong with it.";
     }
 
-    private String bodyReading(ChroniclePhysiologyService.BodyHudSnapshot b) {
+    /**
+     * What the body tells you, read from WHAT IS WRONG rather than from the word the HUD puts on it
+     * (#886, #914, #921).
+     *
+     * <p>This opened with a switch on {@code health()}, which is one word derived from three numbers — so an
+     * illness-only Chronicle (illness 64, injury 0, nothing bleeding) was described as carrying "a hurt in you
+     * that has not closed", and the bandaging action, which reads the scalars, then correctly answered that
+     * nothing was open. Two readers of one question, disagreeing in the same breath.
+     *
+     * <p>Worse at the top of the range: "something in you is badly wrong and will not wait" told a Chronicle
+     * at illness 93 with ten unplaceable strains nothing they could act on at all. A player deciding what to
+     * treat needs to know WHICH of the things that can kill them is doing it.
+     *
+     * <p>Sensation, never the HUD's vocabulary — {@link com.devosphere.draugr.narration.NarrationPolicy}
+     * rejects "your injury is high", and rightly.
+     */
+    /** Whether the question is about wounds rather than about the whole body (#921). */
+    private static boolean asksAboutTheWounds(String text) {
+        String said = normalisedQuestion(text);
+        return word(said, "wound") || word(said, "wounds") || word(said, "injury") || word(said, "injuries")
+            || word(said, "cut") || word(said, "cuts") || word(said, "gash") || word(said, "gashes")
+            || word(said, "bleeding") || (word(said, "hurt") && !word(said, "hurts"));
+    }
+
+    /**
+     * Every place that hurts, in one answer, and the truth when there is no place to name (#921).
+     *
+     * <p>The three cases are the whole of it: wounds the history can place, a body carrying damage it cannot
+     * place — ten overexertion strains, none with a recorded part — and a body with nothing open at all, which
+     * must say so plainly rather than leave the player hunting limb by limb. Bleeding is stated either way,
+     * because "nothing is bleeding" is an answer a player acts on.
+     */
+    private String theWoundsSaid(List<java.util.Map<String, Object>> hurts, ChroniclePhysiologyService.Ailments a) {
+        StringBuilder b = new StringBuilder("You go over yourself for what is open. ");
+        if (!hurts.isEmpty()) {
+            List<String> each = hurts.stream().map(h -> {
+                int severity = ((Number) h.get("severity")).intValue();
+                String how = severity >= 40 ? "a bad one, nowhere near closed"
+                           : severity >= 20 ? "open still and tender"
+                           : "small, and already closing";
+                return "your " + spokenPart((String) h.get("part")) + " (" + how + ")";
+            }).distinct().toList();
+            b.append(each.size() == 1 ? "There is one: " : "There are " + each.size() + ": ")
+             .append(joinAnd(each)).append(". ");
+        } else if (a.injury() > 0) {
+            b.append("Nothing is open. What you carry is strain — the whole of you worked past what it had, ")
+             .append("spread through you with no one place to dress. Rest is what it wants, not a binding. ");
+        } else {
+            b.append("Nothing is open and nothing is torn. ");
+        }
+        b.append(a.bloodLoss() > 400 ? "You are still losing blood."
+               : a.bloodLoss() > 0 ? "There has been blood, but it has stopped."
+               : "Nothing is bleeding.");
+        // A SICKNESS IS NOT A WOUND, and a player who asked after wounds while burning with fever should be
+        // told where to look instead of being left to conclude they are well (#914).
+        if (a.illness() > 35)
+            b.append(" What ails you is not a wound: a sickness is working in you, and no binding touches it.");
+        return b.toString();
+    }
+
+    private String bodyReading(ChroniclePhysiologyService.BodyHudSnapshot b, ChroniclePhysiologyService.Ailments a) {
         if (b == null) return "You take stock of yourself, and find nothing you can put a name to.";
         List<String> said = new java.util.ArrayList<>();
-        switch (b.health()) {
-            case "Critical" -> said.add("something in you is badly wrong and will not wait");
-            case "Injured" -> said.add("there is a hurt in you that has not closed");
-            default -> { }
-        }
+        if (a == null) a = new ChroniclePhysiologyService.Ailments(0, 0, 0, 0);
+        // BLEEDING FIRST: it is the fastest of the three and the one with an answer in hand.
+        if (a.bloodLoss() > 1500) said.add("you have bled more than a body can spare and it has not stopped");
+        else if (a.bloodLoss() > 400) said.add("you are losing blood, and it is still coming");
+        // THE HURT, by how bad it is rather than by a threshold label.
+        if (a.injury() > 80) said.add("your body is broken past what it can carry, and every movement costs");
+        else if (a.injury() > 35) said.add("there is a hurt in you that has not closed");
+        else if (a.injury() > 0) said.add("your body aches with work it was driven too far through");
+        // AND THE SICKNESS, which is a different thing and was never once said.
+        if (a.illness() > 80) said.add("a sickness has hold of you and is winning — you are hot, wrung out, and it is getting worse");
+        else if (a.illness() > 35) said.add("a sickness is working in you: your skin is hot and your strength is going out of you");
+        else if (a.illness() > 10) said.add("something is not right in you, not enough to name yet");
+        // WHICH WAY IT IS GOING. "How sick am I" and "am I getting better" are two questions, and a player
+        // who has just washed, dried off and dressed the wound needs the second one answered or they cannot
+        // tell whether any of it worked. Repeated from what the physiology tick measured, never worked out
+        // again here — the tick is the only code that sees the smoke, the refuse and the sodden clothes.
+        if (a.illness() > 10)
+            said.add(a.illnessTrend() > 0 ? "and it is getting worse, not better — something in how you are living is feeding it"
+                   : a.illnessTrend() < 0 ? "and it is easing, slowly, now that you are keeping yourself"
+                   : "and it is holding where it is");
+        // The derived label only speaks where the scalars cannot explain it — so "badly wrong" never again
+        // stands in for an answer the world was holding all along.
+        if ("Critical".equals(b.health()) && said.isEmpty())
+            said.add("something in you is badly wrong and will not wait");
         switch (b.temperature()) {
             case "Hypothermic" -> said.add("the cold has got past shivering and into the middle of you");
             case "Cold" -> said.add("the chill has worked in under your skin");
@@ -7404,6 +7556,13 @@ public class ChronicleActionService {
             "SELECT COUNT(*) FROM ecology_site WHERE chunk_id=? AND (" + com.devosphere.draugr.ecology.FreshWater.sites() + ")",
             Integer.class, location);
         return sites != null && sites > 0;
+    }
+    /** Sea water the Chronicle can reach (#911): a shore or open water. It is salt, so it never counts in
+     *  {@link #waterInReach} (which drinking also reads), but a body can wash in it. A separate question so drinking
+     *  keeps its freshwater rule while washing stops reporting "dry ground" to someone standing in the sea. */
+    private boolean seaInReach(UUID location) {
+        String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
+        return "OCEAN".equals(biome) || "COAST".equals(biome);
     }
 
     /** A completed rainwater catchment OR well standing here, to fill a vessel from (#77). A well is the same
@@ -8192,6 +8351,7 @@ public class ChronicleActionService {
      * <p>{@code actionText} is the player's own words. {@code submittedAt} is shared by every step of one
      * multi-step submission, so a reader can present six resolved steps as the one procedure they were.
      */
-    public record NarrationEntry(UUID id, Instant occurredAt, String narration, String actionText, Instant submittedAt) { }
+    public record NarrationEntry(UUID id, Instant occurredAt, String narration, String actionText, Instant submittedAt,
+                                 String submissionText) { }
     public record NarrationPage(List<NarrationEntry> entries, boolean hasMore) { }
 }

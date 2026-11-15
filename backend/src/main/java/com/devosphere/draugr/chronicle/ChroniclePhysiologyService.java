@@ -172,7 +172,29 @@ public class ChroniclePhysiologyService {
                 Integer.class, id);
             int refusePressure = refuse >= 60 ? (int) Math.ceil(hours * .5) : 0;
             int illnessPressure = (hygiene <= 10 ? (int) Math.ceil(hours * .4) : 0) + (wetness >= 70 && core < 36.0 ? (int) Math.ceil(hours * .6) : 0) + (injury >= 60 ? (int) Math.ceil(hours * .15) : 0) + smokePressure + refusePressure;
-            illness = clamp(illness + illnessPressure);
+            // AND THE BODY MENDS (#909). Illness only ever rose. Every source of it above is answerable —
+            // wash, get dry, get warm, vent the hearth, dig a latrine, dress the wound that is feeding it —
+            // and answering every one of them left the Chronicle exactly as sick as before, with illness
+            // above 80 meaning Critical and 100 meaning death. A Chronicle who had put right everything the
+            // simulation held against them still had nowhere to go but down. That is not a survival game;
+            // it is a countdown with chores.
+            //
+            // Mending only when NOTHING is still driving it — a body does not fight off a sickness while
+            // sitting soaked in a smoke-filled hut — and then at a rate set by how well it is being kept.
+            // Warm, dry, clean, fed and watered, rested: three of those to mend at all, and all five to mend
+            // at the speed the worst single pressure above would have raised it. Deliberately slow. Getting
+            // out of this is days of looking after yourself, which is the point.
+            int mending = illnessPressure > 0 || illness <= 0 ? 0
+                        : illnessMended(hours, howWellKept(core, wetness, hygiene, food, water, sleepDebt));
+            // WHICH WAY IT IS GOING, written down by the one piece of code that knows (#909). The reading
+            // repeats this rather than working it out a second time against a partial view of the world.
+            int illnessTrend = illnessPressure - mending;
+            // A tick in which no time passed measured nothing, so it must not overwrite what the last real one
+            // measured. Every resolved action ticks the body to the world clock first — including `check
+            // myself`, the act that READS this — and a zero-hour tick computes zero pressure and zero mending,
+            // so it reported a sickness being fed by filth as "holding where it is" (CI, #909). The update
+            // below keeps the stored trend unless hours > 0.
+            illness = clamp(illness + illnessPressure - mending);
             // Every physiological death vector terminates here. Trauma (injury_severity
             // at its ceiling) is the path a grievous mauling or an accumulation of
             // untreated wounds takes: without it, a chronicle savaged to the limit
@@ -189,7 +211,7 @@ public class ChroniclePhysiologyService {
                 jdbc.update("INSERT INTO chronicle_event (chronicle_id, occurred_at, event_type, payload) VALUES (?, ?, 'CHRONICLE_DIED', jsonb_build_object('cause', ?))", id, ts, cause);
                 jdbc.update("INSERT INTO world_event (occurred_at, event_type, aggregate_id, payload) VALUES (?, 'CHRONICLE_DIED', ?, jsonb_build_object('cause', ?))", ts, id, cause);
             } else {
-                jdbc.update("UPDATE chronicle_physiology SET last_metabolic_update = ?, hours_without_food = ?, hours_without_water = ?, energy_level = ?, core_temperature_c=?, wetness_level = ?, bladder_level = ?, bowel_level = ?, hygiene_level = ?, sleep_debt_hours=?, pain_level=?, stress_level=?, injury_severity=?, illness_severity=?, blood_loss_ml=? WHERE chronicle_id = ?", ts, BigDecimal.valueOf(food), BigDecimal.valueOf(water), energy, BigDecimal.valueOf(core), wetness, bladder, bowel, hygiene, BigDecimal.valueOf(sleepDebt), pain, stress, injury, illness, bloodLoss, id);
+                jdbc.update("UPDATE chronicle_physiology SET last_metabolic_update = ?, hours_without_food = ?, hours_without_water = ?, energy_level = ?, core_temperature_c=?, wetness_level = ?, bladder_level = ?, bowel_level = ?, hygiene_level = ?, sleep_debt_hours=?, pain_level=?, stress_level=?, injury_severity=?, illness_severity=?, blood_loss_ml=?, illness_trend=CASE WHEN ? THEN ? ELSE illness_trend END WHERE chronicle_id = ?", ts, BigDecimal.valueOf(food), BigDecimal.valueOf(water), energy, BigDecimal.valueOf(core), wetness, bladder, bowel, hygiene, BigDecimal.valueOf(sleepDebt), pain, stress, injury, illness, bloodLoss, hours > 0, illnessTrend, id);
                 BodyHudSnapshot body = snapshot(health(injury, illness, bloodLoss), condition(rs.getString(12), pain, stress, sleepDebt), food, water, energy, core, wetness, bladder, bowel, hygiene);
                 jdbc.update("UPDATE chronicle_body SET hunger = ?, thirst = ?, energy = ?, temperature = ?, wetness = ?, bladder = ?, bowel = ?, hygiene = ? WHERE chronicle_id = ?", body.hunger(), body.thirst(), body.energy(), body.temperature(), body.wetness(), body.bladder(), body.bowel(), body.hygiene(), id);
             }
@@ -499,6 +521,34 @@ public class ChroniclePhysiologyService {
      * DERIVED: it is refreshed from the scalars and can be a step behind them. One authority for one fact, or
      * the two drift and the prose confidently says a body is whole while its injury severity says otherwise.
      */
+    /**
+     * What is actually wrong with this body, as numbers (#886, #914, #921).
+     *
+     * <p>The Body HUD's one-word {@code health} is DERIVED from these three, and every reader that asked the
+     * label instead of the scalars inherited whatever the label could not say. That is this project's
+     * recurring defect, and it produced the plainest contradiction a player has reported: "am I sick?"
+     * answering with an unclosed hurt, and "bandage my wound" answering, correctly, that nothing was open.
+     *
+     * @param injury    tissue damage, 0-100 — a cut, a bite, or an accumulation of strains
+     * @param illness   sickness, 0-100 — above 80 is Critical and 100 is Systemic Illness
+     * @param bloodLoss millilitres lost and not yet made up
+     * @param illnessTrend what the last tick did to the illness: positive is worsening, negative is mending,
+     *                     zero is holding. Written by {@link #advanceTo}, because that is the only code that
+     *                     sees the whole of what drives it — the filth, the wet and the cold, the wound that
+     *                     will not close, the unvented hearth, the refuse at the camp.
+     */
+    public record Ailments(int injury, int illness, int bloodLoss, int illnessTrend) { }
+
+    @Transactional(readOnly = true)
+    public Ailments ailments(UUID chronicleId) {
+        Ailments none = new Ailments(0, 0, 0, 0);
+        if (chronicleId == null) return none;
+        Ailments read = jdbc.query(
+            "SELECT injury_severity, illness_severity, blood_loss_ml, illness_trend FROM chronicle_physiology WHERE chronicle_id=?",
+            rs -> rs.next() ? new Ailments(rs.getInt(1), rs.getInt(2), rs.getInt(3), rs.getInt(4)) : null, chronicleId);
+        return read == null ? none : read;
+    }
+
     @Transactional(readOnly = true)
     public boolean carriesAnInjury(UUID chronicleId) {
         Integer severity = jdbc.queryForObject(
@@ -624,6 +674,33 @@ public class ChroniclePhysiologyService {
     public static BodyHudSnapshot snapshot(String health, String condition, double foodHours, double waterHours, int energy, double temperature, int wetness, int bladder, int bowel, int hygiene) {
         return new BodyHudSnapshot(health, condition, hunger(foodHours), thirst(waterHours), energy(energy), temperature(temperature), wetness(wetness), bladder(bladder), bowel(bowel), hygiene(hygiene));
     }
+    /**
+     * How well this body is being kept, 0-5 (#909).
+     *
+     * <p>The five things a person can actually DO about a sickness, and every one of them is already
+     * simulated: get warm, get dry, get clean, eat and drink, sleep. Counted rather than weighted, because
+     * the point is breadth — a Chronicle who has put right four of the five is looking after themselves and
+     * a Chronicle who has put right one is not.
+     */
+    static int howWellKept(double core, int wetness, int hygiene, double food, double water, double sleepDebt) {
+        return (core >= 36.0 ? 1 : 0) + (wetness < 40 ? 1 : 0) + (hygiene > 25 ? 1 : 0)
+             + (food < 168 && water < 24 ? 1 : 0) + (sleepDebt < 24 ? 1 : 0);
+    }
+
+    /**
+     * How much illness a well-kept body throws off in this many hours (#909).
+     *
+     * <p>Nothing below three, because a body half looked-after holds its ground and no more. At five it mends
+     * at .6 an hour, which is the rate the worst single pressure above RAISES it — so a Chronicle doing
+     * everything right exactly outruns the sickest camp they could have been living in. Deliberately slow:
+     * climbing out of illness 99 takes about a day and a half of being properly kept, which is the point.
+     *
+     * <p>Pure and static so the rate is written once and can be read without a database or a world.
+     */
+    static int illnessMended(double hours, int howWellKept) {
+        return howWellKept < 3 ? 0 : (int) Math.ceil(hours * .2 * (howWellKept - 2));
+    }
+
     private static String hunger(double hours) { return hours >= 720 ? "Critical Starvation" : hours >= 336 ? "Starving" : hours >= 168 ? "Very Hungry" : hours >= 72 ? "Hungry" : "Satisfied"; }
     private static String thirst(double hours) { return hours >= 72 ? "Critical Dehydration" : hours >= 48 ? "Dehydrated" : hours >= 24 ? "Thirsty" : "Hydrated"; }
     private static String energy(int value) { return value >= 90 ? "Energetic" : value >= 70 ? "Rested" : value >= 50 ? "Tired" : value >= 30 ? "Fatigued" : value >= 10 ? "Exhausted" : "Collapsing"; }
@@ -633,7 +710,21 @@ public class ChroniclePhysiologyService {
     private static String bowel(int value) { return value >= 90 ? "Critical" : value >= 70 ? "Urgent" : value >= 45 ? "Need Relief" : value <= 5 ? "Empty" : "Normal"; }
     private static String hygiene(int value) { return value >= 80 ? "Clean" : value >= 55 ? "Normal" : value >= 30 ? "Dirty" : value >= 10 ? "Filthy" : "Hazardous"; }
     private static int clamp(int value) { return Math.max(0, Math.min(100, value)); }
-    private static String health(int injury,int illness,int bloodLoss) { return bloodLoss > 2800 || illness > 80 || injury > 80 ? "Critical" : injury > 35 || illness > 35 ? "Injured" : "Healthy"; }
+    /**
+     * The one-word state of the body (#913).
+     *
+     * <p><b>A sickness is not a wound.</b> This returned "Injured" for either, so Chronicle 41 — illness 64,
+     * injury 0, no blood lost — was labelled Injured, and every reader that trusted the label went on to
+     * describe an open hurt to someone who had none. The player asked "am I sick?" and was told there was a
+     * hurt in them that had not closed; they then asked to bandage it and were told nothing was open.
+     *
+     * <p>Four states now, because that is how many there are. "Ailing" is the honest word for both at once.
+     */
+    static String health(int injury,int illness,int bloodLoss) {
+        if (bloodLoss > 2800 || illness > 80 || injury > 80) return "Critical";
+        boolean hurt = injury > 35, sick = illness > 35;
+        return hurt && sick ? "Ailing" : hurt ? "Injured" : sick ? "Sick" : "Healthy";
+    }
     private static String condition(String existing,int pain,int stress,double sleepDebt) { if (pain > 70) return "In pain"; if (stress > 75) return "Distressed"; if (sleepDebt > 28) return "Sleep deprived"; return existing; }
     private record Environment(String kind,int intensity,double ambient,int wind,int fuelMinutes,boolean shelter,boolean windbreak,boolean rainCover,boolean sunShade,boolean enclosed,boolean vented,boolean smokeWrap) { }
     public record BodyHudSnapshot(String health, String condition, String hunger, String thirst, String energy, String temperature, String wetness, String bladder, String bowel, String hygiene) { }
