@@ -330,7 +330,7 @@ public class FireService {
         // whose lean-to is quietly losing 4% an hour to their own hearth was told nothing at all.
         if (!banked && fuel >= ROARING_ENOUGH_TO_THROW_EMBERS) {
             String dryEnough = jdbc.query(
-                "SELECT ww.weather_kind FROM world_weather ww JOIN world_chunk wc ON wc.world_id=ww.world_id WHERE wc.id=?",
+                "SELECT local_weather_kind(?)",
                 rs -> rs.next() ? rs.getString(1) : null, location);
             boolean embersCatch = "CLEAR".equals(dryEnough) || "OVERCAST".equals(dryEnough);
             java.util.List<String> atRisk = jdbc.queryForList(
@@ -399,7 +399,7 @@ public class FireService {
         UUID chunk = jdbc.query("SELECT current_location_id FROM world_object WHERE id=?", rs -> rs.next() ? rs.getObject(1, UUID.class) : null, pit);
         if (chunk == null) return;
         String weather = jdbc.query(
-            "SELECT ww.weather_kind FROM world_weather ww JOIN world_chunk wc ON wc.world_id=ww.world_id WHERE wc.id=?",
+            "SELECT local_weather_kind(?)",
             rs -> rs.next() ? rs.getString(1) : null, chunk);
         if (!("CLEAR".equals(weather) || "OVERCAST".equals(weather))) return; // wet or unknown sky: the embers do not catch
         int scorch = (int) Math.min(100, hours * 4);

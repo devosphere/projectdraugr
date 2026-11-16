@@ -14,6 +14,11 @@ import java.util.UUID;
  * world's weather into the weather HERE. That distinction was the whole point of #778 — before it, the reason
  * given for a refusal came from the global front rather than the ground underfoot.
  *
+ * <p>Since #912 the front also has EDGES, and whether this chunk is under it is {@code local_sky(chunk)}'s
+ * answer (V469) — one SQL rule, asked by the statements that read {@code world_weather} directly as well as
+ * by this class, so there is no second copy of it to drift. What this class adds on top is unchanged: the
+ * geography the chunk brings to whatever sky is over it.
+ *
  * <p><b>Why this class exists.</b> The environment query that feeds {@code BiomeClimate.at} was written out
  * longhand at six separate call sites, each with its own COALESCE defaults. Six copies of one query is the
  * shape that produced the unwearable-garment defect (a catalogue and a CHECK constraint keeping two separate
@@ -50,12 +55,11 @@ public class LocalWeatherService {
         Map<String, Object> env = jdbc.queryForMap(
             "SELECT wc.biome, COALESCE(wc.elevation,0) AS elevation, COALESCE(wc.moisture,500) AS moisture, " +
             "COALESCE(wc.grid_y,0) AS grid_y, COALESCE(wg.height_chunks,1) AS height_chunks, " +
-            "COALESCE(ww.weather_kind,'CLEAR') AS weather_kind, COALESCE(ww.ambient_temperature_c,18.0) AS t, " +
-            "COALESCE(ww.wind_speed_kph,6) AS w, " +
+            "(local_sky(wc.id)).weather_kind AS weather_kind, (local_sky(wc.id)).ambient_temperature_c AS t, " +
+            "(local_sky(wc.id)).wind_speed_kph AS w, " +
             "COALESCE((SELECT TRUE FROM world_chunk n WHERE n.world_id=wc.world_id AND n.grid_x=wc.grid_x " +
             "          AND n.grid_y=wc.grid_y-1 AND n.elevation > wc.elevation + 40 LIMIT 1), FALSE) AS sun_warmed " +
-            "FROM world_chunk wc LEFT JOIN world_genesis wg ON wg.world_id=wc.world_id " +
-            "LEFT JOIN world_weather ww ON ww.world_id=wc.world_id WHERE wc.id=?", location);
+            "FROM world_chunk wc LEFT JOIN world_genesis wg ON wg.world_id=wc.world_id WHERE wc.id=?", location);
         return BiomeClimate.at(
             (String) env.get("biome"), ((Number) env.get("elevation")).intValue(),
             ((Number) env.get("moisture")).intValue(), ((Number) env.get("grid_y")).intValue(),
