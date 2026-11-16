@@ -3404,7 +3404,14 @@ public class ChronicleActionService {
            // by nobody without this, and limestone — never in the list at all — has been undiggable by name
            // since it was catalogued. Asking the table instead is the same fix this codebase has needed
            // everywhere else a capability was declared in data and named as literals in code.
-           ||items.namesADugMineral(value))) return Intent.GATHER_MINERAL;
+           ||items.namesADugMineral(value))
+           // AND THE SEARCHING VERB MUST BE ABOUT THE MINERAL (#897). "Split the end of my dry branch and
+           // seat the keen edge of the precision tool stone in it" was answered "you work over the ground
+           // looking for precision tool stone": the verb was "split", which belongs to the branch, and the
+           // mineral was named as a thing already in the hand. Asked properly, nothing in that sentence is
+           // prospecting — while "split a quartz", "dig for flint" and "search the rocks for pyrite" all
+           // still are.
+           && !aMakingGovernsThisSentence(value)) return Intent.GATHER_MINERAL;
         // Fire management (#71): put out, bank, or tend a fire — checked before the ignition rules so "put out
         // the fire" is not read as making one.
         // "smother it" and "kick it out" reached nothing (#37): the rule wanted the word "fire" beside the verb,
@@ -4243,10 +4250,22 @@ public class ChronicleActionService {
         // Everyday hand-gathered stock (#68 gather aliases): the specific gathers used to accept only gather/
         // collect; forage/harvest/take-all/gather-up now reach them too. A named material takes precedence over
         // a generic "gather".
-        if(gatherVerb&&(value.contains("fiber")||value.contains("fibre"))) return Intent.GATHER_FIBER;
-        if(gatherVerb&&(value.contains("branch")||value.contains("stick")||value.contains("deadwood")||value.contains("firewood")||value.contains("kindling"))) return Intent.GATHER_BRANCHES;
-        if(gatherVerb&&(value.contains("berry")||value.contains("berries"))) return Intent.GATHER_BERRIES;
-        if(gatherVerb&&(value.contains("stone")||value.contains("rock")||value.contains("pebble"))&&!value.contains("slab")&&!items.actionMatchesProcess(action)) return Intent.GATHER_STONE;
+        // THE VERB MUST GOVERN THE MATERIAL, not merely share a sentence with it (#897, #889).
+        //
+        // These asked two questions at once — is there a gathering word anywhere, and is the material named
+        // anywhere — and a long, well-written command answers yes to both by accident. "I lash three short
+        // pieces CUT from a single dry branch with one bundle of plant FIBER into a low triangular cup
+        // stand" was read as a request to gather fibre and went off and gathered some, because "cut" is a
+        // gathering verb and "fiber" is a material. The player was describing what they were building out of
+        // the fibre they already had.
+        //
+        // So the verb has to stand before the material with nothing between them but the words that decorate
+        // a noun. "gather plant fiber", "cut long dry grass" and "pick a few more berries" all pass; a verb
+        // that belongs to some other noun nine words away does not.
+        if(gatherVerb&&gatheringGoverns(value,"fiber","fibre")) return Intent.GATHER_FIBER;
+        if(gatherVerb&&gatheringGoverns(value,"branch","branches","stick","sticks","deadwood","firewood","kindling")) return Intent.GATHER_BRANCHES;
+        if(gatherVerb&&gatheringGoverns(value,"berry","berries")) return Intent.GATHER_BERRIES;
+        if(gatherVerb&&gatheringGoverns(value,"stone","stones","rock","rocks","pebble","pebbles")&&!value.contains("slab")&&!items.actionMatchesProcess(action)) return Intent.GATHER_STONE;
         // WASH is BODY washing (#32) — scoped to the self so "wash the sediment / rinse the fleece / pan the
         // gravel" (#68 material prep) falls through to the process catalogue instead of being heard as bathing.
         if(value.contains("wash the blood")||value.contains("wash blood")||value.contains("rinse the blood")
@@ -5183,7 +5202,19 @@ public class ChronicleActionService {
         // somebody asks for when they picture the pit rather than the product.
         if(value.contains("charcoal")&&(value.contains("make")||value.contains("take")||value.contains("gather")||value.contains("get")||value.contains("collect")
             ||value.contains("build")||value.contains("dig")||value.contains("burn"))&&!items.actionMatchesProcess(value)) return Intent.MAKE_CHARCOAL;
-        if(value.contains("bark")&&!value.contains("loose")&&(gatherVerb||value.contains("strip")||value.contains("peel")||value.contains("take"))) return Intent.STRIP_BARK;
+        // Bark too, and for the same reason (#897): "Lash the split shut with the bark fibre bundle so the
+        // stone cannot rock, forming a small handheld cutting blade" names bark as the thing already in the
+        // hand doing the lashing, and this read it as a request to go and strip some off a tree.
+        //
+        // The guard here is the MAKING one rather than the governing one the gathers use, because bark is
+        // named in more ways than a rule about word order can hold: "gather willow bark" is a compound,
+        // "strip the birchbark" is one word, and "take off the bark" and "take the bark off this birch" put
+        // the verb and its particle either side of it. A governing test refused a third of those — CI said
+        // so, in the two suites that assert them.
+        // What all the wrong ones have in common is that they are plainly about MAKING something, so that is
+        // what is asked — and a purpose clause ("strip bark to make a container") is not a making.
+        if(value.contains("bark")&&!value.contains("loose")&&(gatherVerb||value.contains("strip")||value.contains("peel")||value.contains("take"))
+           &&!aMakingGovernsThisSentence(value)) return Intent.STRIP_BARK;
         // Ambient ground scavenge (#133): search the forest floor / under a log for small survival materials — the
         // bare-hand pickup of the #192 litter (twigs, leaf litter/tinder, loose bark, shed feather/fur, driftwood,
         // reeds). Placed after the specific gathers (branches/strip-bark/tinder) and before the generic SEARCH, so a
@@ -5716,7 +5747,20 @@ public class ChronicleActionService {
 
     private static final java.util.Set<String> DECORATES_A_NOUN = java.util.Set.of(
         "a", "an", "the", "some", "my", "more", "another", "one", "two", "three", "up", "out", "into", "of",
-        "dry", "fine", "loose", "new", "fresh", "good", "proper", "small", "little", "bit", "handful", "wad", "bundle");
+        "dry", "fine", "loose", "new", "fresh", "good", "proper", "small", "little", "bit", "handful", "wad", "bundle",
+        // THE WORDS THAT DECORATE A MATERIAL, added when this test was put in front of the gather rules
+        // (#897). "gather plant fiber", "cut long dry grass" and "pull up flexible roots" are the sentences
+        // that must keep working, and in every one of them the verb reaches its noun across words like
+        // these. Each is a word that can only qualify the thing named after it — never a thing in itself,
+        // which is what would let a verb govern across a noun it was not talking about.
+        "plant", "green", "wild", "soft", "long", "short", "thin", "flat", "flexible", "inner", "outer",
+        "raw", "spare", "few", "several", "plenty", "enough", "any", "all", "that", "this", "those", "these",
+        // "for" is how a taking verb reaches its object — forage FOR plant fibre, dig FOR clay, search FOR
+        // flint. It was the single phrase of the 147 already held that this rule moved, which is as precise
+        // a signpost as a missing word ever gets. "with" and "from" are deliberately NOT here: they are what
+        // a sentence uses to name the material it is building something OUT of, which is the case this whole
+        // rule exists to stop claiming.
+        "for");
 
     /**
      * Whether one of these verbs GOVERNS this word, rather than merely sharing a sentence with it.
@@ -5737,6 +5781,45 @@ public class ChronicleActionService {
      * @param noun  the word the verb must govern
      * @param verbs the verbs that count as governing it
      */
+    /** The verbs that mean a person is taking a material, for {@link #gatheringGoverns}. */
+    private static final String[] GATHERING_VERBS = {
+        "gather", "gathers", "gathering", "collect", "collects", "collecting", "forage", "forages", "foraging",
+        "harvest", "harvests", "harvesting", "pick", "picks", "picking", "pull", "pulls", "pulling",
+        "cut", "cuts", "cutting", "snip", "snips", "snipping", "mow", "mows", "mowing", "scythe", "scythes",
+        "scything", "reap", "reaps", "reaping", "take", "takes", "taking", "get", "gets", "getting",
+        "dig", "digs", "digging", "fetch", "fetches", "fetching", "grab", "grabs", "grabbing" };
+
+    /**
+     * Whether a gathering verb governs any of these material words (#897, #889).
+     *
+     * <p>The same question {@link #makingGoverns} asks, with the taking verbs instead of the making ones.
+     * Several nouns because a material is named several ways and any of them will do: a sentence is a
+     * gather if a taking verb reaches ANY of the words that name the thing.
+     */
+    static boolean gatheringGoverns(String value, String... nouns) {
+        for (String noun : nouns) if (makingGoverns(value, noun, GATHERING_VERBS)) return true;
+        return false;
+    }
+
+    /**
+     * Whether this sentence is plainly about MAKING a thing — a making verb standing in front of a noun.
+     *
+     * <p>Used to keep prospecting off a sentence that names a mineral it already has (#897). Deliberately
+     * not a bare "contains a making word": `dig for flint to make an axe` carries one in a purpose clause
+     * and is still a request to dig.
+     */
+    static boolean aMakingGovernsThisSentence(String value) {
+        if (value == null) return false;
+        String[] said = value.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim().split(" ");
+        for (int at = 0; at < said.length - 1; at++)
+            if (MAKING_SOMETHING.matcher(said[at]).matches()) {
+                // ...and the word it governs is not the start of a purpose clause ("to make an axe").
+                if (at > 0 && said[at - 1].equals("to")) continue;
+                return true;
+            }
+        return false;
+    }
+
     static boolean makingGoverns(String value, String noun, String... verbs) {
         if (value == null) return false;
         String[] said = value.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim().split(" ");
