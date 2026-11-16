@@ -141,7 +141,7 @@ class ShelterRegistryDriftIntegrationTest {
 
         clearBuilds(chunk);
         raise(chunk, "BARK_DOOR", "Bark door");
-        assertTrue(!physiology.sleep(chronicle, 60),
+        assertTrue(!physiology.sleep(chronicle, 60).sheltered(),
             "a bark door lying on open grassland is not a roof — sleep under it must still be the exposed kind");
 
         String[] vent = construction.buildSmokeVent(chronicle, chunk, Instant.now());
@@ -156,11 +156,11 @@ class ShelterRegistryDriftIntegrationTest {
         assertNotNull(chunk);
 
         clearBuilds(chunk);
-        assertTrue(!physiology.sleep(chronicle, 60),
+        assertTrue(!physiology.sleep(chronicle, 60).sheltered(),
             "with nothing built, sleep must be the shallow, exposed kind — otherwise this test proves nothing");
 
         raise(chunk, "PIT_HOUSE", "Pit house");
-        assertTrue(physiology.sleep(chronicle, 60),
+        assertTrue(physiology.sleep(chronicle, 60).sheltered(),
             "a completed pit house is a shelter in the catalogue, so sleeping in one must be sheltered sleep");
 
         // Rest has no return value; it reads the same predicate, so assert it runs clean against the same ground

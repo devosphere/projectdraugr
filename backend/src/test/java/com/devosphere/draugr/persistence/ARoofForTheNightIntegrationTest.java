@@ -98,7 +98,7 @@ class ARoofForTheNightIntegrationTest {
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", isle, chronicle);
 
         // A stranger they have never spoken to sleeps in the weather, in the middle of their village.
-        assertFalse(physiology.sleep(chronicle, 60), "their houses are not a stranger's shelter");
+        assertFalse(physiology.sleep(chronicle, 60).sheltered(), "their houses are not a stranger's shelter");
 
         // Known, and welcome: a door is stood aside from.
         jdbc.update("INSERT INTO community_relation (community_id, chronicle_id, standing, understanding, first_contact_at) VALUES (?,?,20,40,?)",
@@ -106,14 +106,14 @@ class ARoofForTheNightIntegrationTest {
         var asked = actions.resolve("ask for shelter");
         assertEquals("JOIN_PEOPLE", asked.intent(), asked::perception);
         assertEquals("SUCCEEDED", asked.outcome(), asked::perception);
-        assertTrue(physiology.sleep(chronicle, 60), "their roof keeps the weather off a guest exactly as one you built would");
+        assertTrue(physiology.sleep(chronicle, 60).sheltered(), "their roof keeps the weather off a guest exactly as one you built would");
 
         // The welcome is for a night, not for a season.
         // A welcome that ran out: shortened to a second, and the world moved a day past it. Both halves matter —
         // the welcome is measured against the world clock, so moving only one of them changes nothing.
         jdbc.update("UPDATE native_guest_right SET welcome_until=granted_at + interval '1 second' WHERE community_id=? AND chronicle_id=?", community, chronicle);
         at("2031-06-11T20:00:00Z");
-        assertFalse(physiology.sleep(chronicle, 60), "a welcome that has run out is not a roof");
+        assertFalse(physiology.sleep(chronicle, 60).sheltered(), "a welcome that has run out is not a roof");
 
         // Hospitality has a limit: three nights in ten days.
         for (int night = 0; night < 2; night++) assertEquals("SUCCEEDED", actions.resolve("ask for shelter").outcome());
