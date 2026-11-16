@@ -190,6 +190,12 @@ class ActNineAnswersIntegrationTest {
             jdbc.update("UPDATE simulation_clock SET simulated_at = " +
                 "(SELECT MIN(ce.occurred_at) FROM chronicle_event ce WHERE ce.chronicle_id=? AND ce.event_type='CHRONICLE_AWAKENED') " +
                 "+ interval '6 days 3 hours' WHERE id=1", chronicle);
+            // ...and the body is brought along with it, watered. Six days of thirst landing in one span used to kill
+            // the Chronicle AFTER the answer was given; since #884 a body that dies in the span does not do the act,
+            // so the question would be answered "your body gives out". This test measures the calendar, not thirst:
+            // the body's own clock is set to the world's, so the span charges only the act itself.
+            jdbc.update("UPDATE chronicle_physiology SET last_metabolic_update=(SELECT simulated_at FROM simulation_clock WHERE id=1), "
+                      + "hours_without_food=0, hours_without_water=0, sleep_debt_hours=0 WHERE chronicle_id=?", chronicle);
 
             ChronicleActionService.ActionResult days = actions.resolve("count the days since I woke");
             assertEquals("SUCCEEDED", days.outcome(), () -> "the question has an answer: " + days.perception());

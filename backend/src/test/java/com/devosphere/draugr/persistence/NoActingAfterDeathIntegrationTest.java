@@ -84,7 +84,7 @@ class NoActingAfterDeathIntegrationTest {
     }
 
     private int gatherEffects(UUID actionId) {
-        Integer n = jdbc.queryForObject("SELECT COUNT(*) FROM chronicle_action_effect WHERE action_id=?", Integer.class, actionId);
+        Integer n = jdbc.queryForObject("SELECT COUNT(*) FROM chronicle_action_effect WHERE action_id=? AND effect_domain='ITEM'", Integer.class, actionId);
         return n == null ? 0 : n;
     }
 
@@ -114,7 +114,8 @@ class NoActingAfterDeathIntegrationTest {
         assertFalse(gathered.died(), "a watered Chronicle survives a gather: " + gathered.perception());
         assertFalse(gathered.perception().toLowerCase(Locale.ROOT).contains("unfinished"),
             "a gather lived through is told as itself: " + gathered.perception());
-        // The instrument the death test reads: a gather that ran writes its effect row, found stones or not, so
+        // The instrument the death test reads: a gather that ran writes its ITEM effect row, found stones or not (every
+        // action also writes a TIME_ADVANCED row, which is why the count is scoped to ITEM), so
         // the 0 there means the branch did not run rather than that it found nothing.
         assertEquals(1, gatherEffects(gathered.actionId()), "a gather that ran records itself");
     }
