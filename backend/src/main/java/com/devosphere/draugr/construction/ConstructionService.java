@@ -20,6 +20,26 @@ public class ConstructionService {
     @Transactional public boolean resumeLeanTo(UUID location, Instant at) { UUID id=jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='LEAN_TO' AND cp.state='ABANDONED' ORDER BY w.created_at LIMIT 1 FOR UPDATE",rs->rs.next()?rs.getObject(1,UUID.class):null,location); if(id==null)return false; jdbc.update("UPDATE construction_project SET state='IN_PROGRESS' WHERE object_id=?",id); Timestamp ts=Timestamp.from(at); jdbc.update("UPDATE world_object SET display_name='Lean-to frame',updated_at=? WHERE id=?",ts,id); jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'CONSTRUCTION_RESUMED','{}'::jsonb)",id,ts); return true; }
     @Transactional public boolean workLeanTo(UUID chronicle, UUID location, Instant at) { UUID id=jdbc.query("SELECT cp.object_id FROM construction_project cp JOIN world_object w ON w.id=cp.object_id WHERE w.current_location_id=? AND cp.project_kind='LEAN_TO' AND cp.state IN ('PLANNED','IN_PROGRESS') ORDER BY w.created_at LIMIT 1 FOR UPDATE",rs->rs.next()?rs.getObject(1,UUID.class):null,location); if(id==null || !items.hasAtLeast(chronicle,"dry_branch",1) || !items.hasAtLeast(chronicle,"plant_fiber",1))return false; if(!items.consumeOne(chronicle,"dry_branch",at) || !items.consumeOne(chronicle,"plant_fiber",at)) throw new IllegalStateException("Reachable construction materials changed during the action."); Integer prior=jdbc.queryForObject("SELECT progress_percent FROM construction_project WHERE object_id=?",Integer.class,id); int progress=Math.min(100,(prior==null?0:prior)+25); jdbc.update("UPDATE construction_project SET state=?,progress_percent=?,completed_at=? WHERE object_id=?",progress==100?"COMPLETED":"IN_PROGRESS",progress,progress==100?Timestamp.from(at):null,id); jdbc.update("UPDATE world_object SET display_name=? WHERE id=?",progress==100?"Lean-to":"Lean-to frame",id); return true; }
     /**
+     * Does a FINISHED lean-to stand here (#870)?
+     *
+     * <p>{@code workLeanTo} works out whether its course was the last one — it sets the project COMPLETED and
+     * renames the object from "Lean-to frame" to "Lean-to" — and then returns a bare true, the same true it
+     * returns for the first course of four. So the fourth bind was reported as "you bind the shelter frame a
+     * little further into place", and the atmosphere beside it went on calling a finished shelter a half-built
+     * frame while the player was already able to get under it.
+     *
+     * <p>A separate question rather than a wider return type, because the work and the state of the thing are
+     * two questions and only one caller has ever wanted the second.
+     */
+    @Transactional(readOnly = true) public boolean finishedLeanToHere(UUID location) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+            "WHERE w.current_location_id=? AND cp.project_kind='LEAN_TO' AND cp.state='COMPLETED' " +
+            "AND w.lifecycle_state='ACTIVE')",
+            Boolean.class, location));
+    }
+
+    /**
      * Is there an unfinished lean-to frame standing here (#37)?
      *
      * <p>{@code workLeanTo} returns false for three unrelated reasons — no frame, no branches, no fibre — and the

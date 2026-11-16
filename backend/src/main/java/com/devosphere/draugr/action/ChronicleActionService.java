@@ -1010,7 +1010,14 @@ public class ChronicleActionService {
                 else { outcome = "FAILED"; perception = "The ground here already holds a frame you have not finished."; }
             }
             else if (construction.workLeanTo(chronicle.id(), chronicle.location(), resolvedAt))
-                perception = "You bind the shelter frame a little further into place.";
+                // THE COURSE THAT FINISHES IT SAYS SO (#870). The work knows — it is the step that sets the
+                // project COMPLETED and renames the thing from frame to shelter — and said "a little further
+                // into place" anyway, so a player who could already get under their lean-to was told four
+                // times that they had a half-built frame.
+                perception = construction.finishedLeanToHere(chronicle.location())
+                    ? "You bind the last course home. The frame stops being a frame: the lean-to stands finished, "
+                      + "low and close, with room beneath it to get out of the weather."
+                    : "You bind the shelter frame a little further into place.";
             else { outcome = "FAILED"; perception = "The frame stands waiting, but binding another course into it takes branches and fibre, and you have not both to hand."; }
         }
         else if (intent == Intent.ABANDON_LEAN_TO) { if (construction.abandonLeanTo(chronicle.location(),resolvedAt)) perception="You leave the unfinished frame where it stands."; else { outcome="FAILED"; perception="There is no unfinished frame here to leave behind."; } }
@@ -1021,7 +1028,7 @@ public class ChronicleActionService {
         // letting that throw reach the shared transaction would mark it
         // rollback-only even though we catch it, turning an ordinary failed
         // attempt into a hard rollback. Prechecking keeps failed attempts graceful.
-        else if (intent == Intent.CRAFT_BASKET) { if (items.basketWeaveUnitsInReach(chronicle.id()) >= 8) { items.craftBasket(); perception="Flexible lengths — withies, rush, fibre, vine, or cordage — tighten row on row beneath your hands until a rough basket holds its shape."; } else { outcome="FAILED"; perception="You have too little flexible stock within reach to weave a basket — it wants eight lengths of split withy, reed, rush, fibre, vine, or cordage, and the loose few you hold fall away from one another."; } }
+        else if (intent == Intent.CRAFT_BASKET) { if (items.basketWeaveUnitsInReach(chronicle.id()) >= 8) { perception="Flexible lengths — withies, rush, fibre, vine, or cordage — tighten row on row beneath your hands until a rough basket holds its shape." + whereItEndedUp(items.craftBasket()); } else { outcome="FAILED"; perception="You have too little flexible stock within reach to weave a basket — it wants eight lengths of split withy, reed, rush, fibre, vine, or cordage, and the loose few you hold fall away from one another."; } }
         else if (intent == Intent.CRAFT_SPEAR) { if (items.hasAtLeast(chronicle.id(),"dry_branch",1) && items.hasAtLeast(chronicle.id(),"field_stone",1) && items.hasAtLeast(chronicle.id(),"plant_fiber",1)) { items.craftPrimitiveSpear(resolvedAt); perception="You lash the shaped stone hard against the straight branch, working the binding tight until it will not shift. A crude spear rests in your hand — rough in the balance, but real in the point."; } else { outcome="FAILED"; perception="The pieces refuse to hold together long enough to become a usable tool. Stone slides against wood, the binding slips, and what you meant to make comes apart in your hands."; } }
         else if (intent == Intent.CRAFT_KNIFE) { if (items.hasAtLeast(chronicle.id(),"field_stone",1) && items.hasAtLeast(chronicle.id(),"plant_fiber",1)) { items.craftPrimitiveTool("stone_knife","Stone knife",false,resolvedAt); perception="You strike a working edge into the stone, patient blow after blow, then bind it firm into a haft that fills the palm. It is small and plain, but it will cut."; } else { outcome="FAILED"; perception="The stone and loose fiber never settle into a usable edge. Each strike takes off the wrong flake, and what is left is a lump, not a blade."; } }
         else if (intent == Intent.CRAFT_HAMMER) { if (items.hasAtLeast(chronicle.id(),"field_stone",1) && items.hasAtLeast(chronicle.id(),"plant_fiber",1) && items.hasAtLeast(chronicle.id(),"dry_branch",1)) { items.craftPrimitiveTool("stone_hammer","Stone hammer",true,resolvedAt); perception="You seat the heavy stone into the split of a branch and bind it down, turn on turn, until the head holds without any play. It sits in the hand with a solid, purposeful weight."; } else { outcome="FAILED"; perception="The head shifts loose before the tool can hold together. Every test-swing works the binding a little looser, until you are left with a stone and a stick again."; } }
@@ -1064,14 +1071,14 @@ public class ChronicleActionService {
             if (!items.hasCuttingTool(chronicle.id())) { outcome = "FAILED"; perception = "You gather the cordage to knot a net, but with no blade to cut and start it, the mesh will not begin."; }
             else if (!items.hasAtLeast(chronicle.id(), "fiber_cordage", need)) { outcome = "FAILED"; perception = "A net wants far more cordage than you have twisted. What you hold would not reach across a corner of the mesh, let alone the whole of it."; }
             else if (landing && !items.hasAtLeast(chronicle.id(), "dry_branch", 2)) { outcome = "FAILED"; perception = "You have the cordage for the mesh, but nothing in reach will bend into a hoop for it: what you turn over in your hands is either too brittle to curve or too slight to hold a shape."; }
-            else { items.craftFishingNet(landing, resolvedAt); perception = landing ? "You bend a branch into a hoop and knot the cordage across it, row by row, until a landing net hangs ready in your hand." : "You knot the cordage row on row, working the mesh even and true, until a fishing net lies finished across your knees."; }
+            else { String wentTo = whereItEndedUp(items.craftFishingNet(landing, resolvedAt)); perception = landing ? "You bend a branch into a hoop and knot the cordage across it, row by row, until a landing net hangs ready in your hand." : "You knot the cordage row on row, working the mesh even and true, until a fishing net lies finished across your knees." + wentTo; }
         }
         else if (intent == Intent.CRAFT_BELT) {
             // The primitive utility belt (#35): a fibre strap with tool loops. Cordage for the strap, plant
             // fibre for the loops, a blade to cut and fit them; it equips to the waist once made.
             if (!items.hasCuttingTool(chronicle.id())) { outcome = "FAILED"; perception = "You lay out the fibre to make a belt, but with no blade to cut and fit the strap, it will not come together."; }
             else if (!items.hasAtLeast(chronicle.id(), "fiber_cordage", 2) || !items.hasAtLeast(chronicle.id(), "plant_fiber", 2)) { outcome = "FAILED"; perception = "A belt wants a length of twisted cordage for the strap and plant fibre for the loops, and you have not both to hand. Twist cordage and gather fibre first."; }
-            else { items.craftUtilityBelt(resolvedAt); perception = "You cut and fit a length of cordage into a waist strap and work plant fibre into a row of loops along it. A rough but real utility belt, ready to carry what your hands use most."; }
+            else { String wentTo = whereItEndedUp(items.craftUtilityBelt(resolvedAt)); perception = "You cut and fit a length of cordage into a waist strap and work plant fibre into a row of loops along it. A rough but real utility belt, ready to carry what your hands use most." + wentTo; }
         }
         else if (intent == Intent.BUILD_FIRE_PIT) {
             if (construction.buildFirePit(chronicle.id(), chronicle.location(), actionId, resolvedAt))
@@ -5618,6 +5625,21 @@ public class ChronicleActionService {
     private static boolean word(String haystack, String w) { return com.devosphere.draugr.narration.Words.word(haystack, w); }
 
     /** The words that may stand between a verb and the noun it governs without breaking the grip. */
+    /**
+     * One clause saying where a thing you have just made actually went (#904).
+     *
+     * <p>A making never fails for want of carrying room — the thing is set on the ground in front instead
+     * (#19) — and until now nothing said so. A player who wove a basket with a full pack was told only that
+     * "a rough basket holds its shape", and then that they were carrying nothing by that name when they
+     * tried to put it down. The act was right and the sentence was silent about it.
+     *
+     * <p>Empty when the thing is in hand, which is the ordinary case and wants no words.
+     */
+    private static String whereItEndedUp(PhysicalItemService.ItemView made) {
+        return made == null || made.ownerId() != null ? ""
+            : " It is more than you can carry as you stand, so it rests on the ground where you made it.";
+    }
+
     private static final java.util.Set<String> DECORATES_A_NOUN = java.util.Set.of(
         "a", "an", "the", "some", "my", "more", "another", "one", "two", "three", "up", "out", "into", "of",
         "dry", "fine", "loose", "new", "fresh", "good", "proper", "small", "little", "bit", "handful", "wad", "bundle");

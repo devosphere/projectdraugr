@@ -6098,8 +6098,14 @@ public class PhysicalItemService {
         // A crafted thing goes to the carried load if it fits, not onto the body — the Chronicle
         // decides what to wear or wield ("sling the basket on my back" equips it). If there is no
         // room to carry it, it is set on the ground in front rather than failing (GitHub #19).
-        if (!withinCarryCapacity(chronicle)) jdbc.update("UPDATE world_object SET current_owner_id=NULL, current_location_id=? WHERE id=?", chronicleLocation(chronicle), basket);
-        return new ItemView(basket,"Woven basket","woven_basket",chronicle,null);
+        // AND SAY WHERE IT WENT (#904). This returned the Chronicle as the owner whatever had just happened,
+        // so a basket set on the ground for want of carrying room came back described as carried — and the
+        // player, told only that "a rough basket holds its shape", found `drop the woven basket` answering
+        // that they carried nothing by that name. A null owner here means it is on the ground, which is what
+        // every other reader of an ItemView already understands.
+        boolean carried = withinCarryCapacity(chronicle);
+        if (!carried) jdbc.update("UPDATE world_object SET current_owner_id=NULL, current_location_id=? WHERE id=?", chronicleLocation(chronicle), basket);
+        return new ItemView(basket,"Woven basket","woven_basket",carried ? chronicle : null,null);
     }
     @Transactional public ItemView craftPrimitiveSpear(Instant at) { UUID chronicle=activeChronicle(); if(!hasAtLeast(chronicle,"dry_branch",1)||!hasAtLeast(chronicle,"field_stone",1)||!hasAtLeast(chronicle,"plant_fiber",1))throw new IllegalStateException("Insufficient physical material."); if(!consumeOne(chronicle,"dry_branch",at)||!consumeOne(chronicle,"field_stone",at)||!consumeOne(chronicle,"plant_fiber",at))throw new IllegalStateException("Material changed."); UUID spear=UUID.randomUUID(); createCraftedItem(chronicle,chronicleLocation(chronicle),spear,"primitive_spear","Primitive spear",at,"CRAFTED",QualityGrade.SOUND); return new ItemView(spear,"Primitive spear","primitive_spear",chronicle,null); }
     @Transactional public ItemView craftPrimitiveTool(String itemKey, String displayName, boolean needsBranch, Instant at) { UUID chronicle=activeChronicle(); if(!hasAtLeast(chronicle,"field_stone",1)||!hasAtLeast(chronicle,"plant_fiber",1)||(needsBranch&&!hasAtLeast(chronicle,"dry_branch",1)))throw new IllegalStateException("Insufficient physical material."); if(!consumeOne(chronicle,"field_stone",at)||!consumeOne(chronicle,"plant_fiber",at)||(needsBranch&&!consumeOne(chronicle,"dry_branch",at)))throw new IllegalStateException("Material changed."); UUID tool=UUID.randomUUID(); createCraftedItem(chronicle,chronicleLocation(chronicle),tool,itemKey,displayName,at,"CRAFTED",QualityGrade.SOUND); return new ItemView(tool,displayName,itemKey,chronicle,null); }
@@ -6415,7 +6421,7 @@ public class PhysicalItemService {
         String name = landing ? "Hoop landing net" : "Woven fishing net";
         UUID net = UUID.randomUUID();
         createCraftedItem(chronicle, chronicleLocation(chronicle), net, key, name, at, "CRAFTED", QualityGrade.SOUND);
-        return new ItemView(net, name, key, chronicle, null);
+        return new ItemView(net, name, key, withinCarryCapacity(chronicle) ? chronicle : null, null);
     }
 
     /**
@@ -6432,7 +6438,7 @@ public class PhysicalItemService {
         for (int i = 0; i < 2; i++) if (!consumeOne(chronicle, "plant_fiber", at)) throw new IllegalStateException("Material changed.");
         UUID belt = UUID.randomUUID();
         createCraftedItem(chronicle, chronicleLocation(chronicle), belt, "utility_belt", "Primitive utility belt", at, "CRAFTED", QualityGrade.SOUND);
-        return new ItemView(belt, "Primitive utility belt", "utility_belt", chronicle, null);
+        return new ItemView(belt, "Primitive utility belt", "utility_belt", withinCarryCapacity(chronicle) ? chronicle : null, null);
     }
 
     /**
