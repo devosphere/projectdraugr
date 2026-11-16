@@ -655,13 +655,19 @@ public class ChronicleActionService {
             perception = "You remain still for " + exactSpan(minutes) + ", and the place goes on around you without you.";
             perception += bittenWhileStill(chronicle, resolvedAt, minutes);
         }
+        else if (intent == Intent.SLEEP && physiology.activeBody() == null) {
+            // A SLEEP THE CHRONICLE DID NOT WAKE FROM (#900). The clock is advanced over the whole span BEFORE
+            // this branch runs (ticks.advanceBy above), so a body the cold was going to kill in those hours is
+            // already dead by the time the sleep is narrated. This branch used to say "you wake to a changed
+            // sky, the deep tiredness lifted" and then the death coda attributed the death to cold: the
+            // player was told they woke rested and died, in that order, in one response. Nothing here
+            // recovers a body that no longer lives, raids stock it will never count, or wakes anyone; the
+            // coda below says what took them.
+            perception = sleepNarration(false, false, exactSpan(minutes));
+        }
         else if (intent == Intent.SLEEP) {
             boolean safe = physiology.sleep(chronicle.id(), minutes); items.restDraftBeasts(chronicle.id());
-            perception = safe
-                ? "You lie down under cover and let sleep take you for " + exactSpan(minutes)
-                  + ". You wake to a changed sky, the deep tiredness lifted from your limbs."
-                : "You settle onto the bare ground and drift through " + exactSpan(minutes)
-                  + " of broken, shallow sleep, waking stiff and only half-rested as the light shifts.";
+            perception = sleepNarration(true, safe, exactSpan(minutes));
             perception += bittenWhileStill(chronicle, resolvedAt, minutes);
             // Stock left loose overnight are what predators come for (#108). A sleep spans the dark hours, so this
             // is where an unpenned herd is thinned — and waking to a gap in the flock is how a keeper learns of it.
@@ -8399,6 +8405,19 @@ public class ChronicleActionService {
     }
     public record ActionResult(UUID actionId, String intent, String outcome, int durationMinutes, Instant resolvedAt, String perception, ChroniclePhysiologyService.BodyHudSnapshot body, PerceptionFrame frame, boolean died) { }
 
+    /**
+     * What a sleep says (#900). Waking is said only of a body that lived through the span: a sleep the
+     * Chronicle died in ends as the sleep closing over them, and the death coda names the cause after it.
+     */
+    static String sleepNarration(boolean survived, boolean sheltered, String span) {
+        if (!survived) return "You lie down and let sleep close over you, and somewhere within " + span
+            + " you slip beyond waking.";
+        return sheltered
+            ? "You lie down under cover and let sleep take you for " + span
+              + ". You wake to a changed sky, the deep tiredness lifted from your limbs."
+            : "You settle onto the bare ground and drift through " + span
+              + " of broken, shallow sleep, waking stiff and only half-rested as the light shifts.";
+    }
     /** A witnessed closing line for a chronicle that died this action, by cause. */
     private static String deathCoda(String cause) {
         String c = cause == null ? null : switch (cause) {
