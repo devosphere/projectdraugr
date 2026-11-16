@@ -182,4 +182,100 @@ class WhatYouSleepOnIntegrationTest {
         assertTrue(!onAPallet.sheltered(), "with nothing over it — which is the pair #893 could not tell apart");
         clearTheGround(chronicle);
     }
+
+    /**
+     * #919: MORE COMFORTABLE BEDDING RESTORES MORE. V470 made every catalogued bedding count and left them
+     * all worth exactly the same — a groundsheet, a thick reed pallet and a built sleeping bench each took
+     * the same off a night, so going to the trouble of raising a platform bought nothing over throwing down
+     * a bark sheet. The grades are the catalogue's (V471) and this walks them in order.
+     */
+    @Test
+    void aBetterBedRestsABodyBetter() {
+        UUID chronicle = chronicle();
+        clearTheGround(chronicle);
+        double onBareGround = debtAfterSleeping(chronicle);
+
+        // Every grade the catalogue declares, worst first, each one better than the last.
+        List<Integer> grades = jdbc.queryForList(
+            "SELECT DISTINCT bedding_comfort FROM construction_kind WHERE is_bedding ORDER BY bedding_comfort",
+            Integer.class);
+        assertTrue(grades.size() >= 3, () -> "bedding should come in grades, found " + grades);
+
+        double previous = onBareGround;
+        for (int grade : grades) {
+            String kind = jdbc.queryForObject(
+                "SELECT project_kind FROM construction_kind WHERE is_bedding AND bedding_comfort=? ORDER BY project_kind LIMIT 1",
+                String.class, grade);
+            clearTheGround(chronicle);
+            raise(chronicle, kind, kind);
+            double left = debtAfterSleeping(chronicle);
+            final double was = previous;
+            assertTrue(left < was,
+                () -> "grade " + grade + " (" + kind + ") must rest a body better than the grade below it: "
+                      + "left " + left + "h of debt against " + was + "h");
+            previous = left;
+        }
+        clearTheGround(chronicle);
+    }
+
+    /**
+     * #919: THE COLD COMES UP OUT OF THE GROUND. Measured in isolation, because the metabolic tick's own
+     * drift over a night is several degrees and would drown a term this size — a bed is a bed and not a
+     * fire. Two sleeps from the identical starting core, nothing ticking in between.
+     */
+    @Test
+    void aBedKeepsTheGroundsColdOutOfASleepingBody() {
+        UUID chronicle = chronicle();
+
+        clearTheGround(chronicle);
+        readyToSleep(chronicle);
+        jdbc.update("UPDATE chronicle_physiology SET core_temperature_c=34.5 WHERE chronicle_id=?", chronicle);
+        physiology.sleep(chronicle, 480);
+        double onBareGround = jdbc.queryForObject(
+            "SELECT core_temperature_c FROM chronicle_physiology WHERE chronicle_id=?", Double.class, chronicle);
+
+        clearTheGround(chronicle);
+        raise(chronicle, "SLEEPING_BENCH", "Sleeping bench");
+        readyToSleep(chronicle);
+        jdbc.update("UPDATE chronicle_physiology SET core_temperature_c=34.5 WHERE chronicle_id=?", chronicle);
+        physiology.sleep(chronicle, 480);
+        double onABed = jdbc.queryForObject(
+            "SELECT core_temperature_c FROM chronicle_physiology WHERE chronicle_id=?", Double.class, chronicle);
+
+        assertTrue(onABed > onBareGround,
+            () -> "a night off the cold ground must leave a body warmer: bare " + onBareGround
+                  + "C against bedded " + onABed + "C");
+        assertTrue(onABed <= 37.0, () -> "and never warmer than a body gets: " + onABed + "C");
+        clearTheGround(chronicle);
+    }
+
+    /**
+     * #919's last ask: bedding that is missing, ruined or not finished yet buys nothing. The conditions have
+     * always been in the query; nothing held them, so nothing would have noticed them going.
+     */
+    @Test
+    void beddingNotFitToLieOnBuysNothing() {
+        UUID chronicle = chronicle();
+        clearTheGround(chronicle);
+        double onBareGround = debtAfterSleeping(chronicle);
+
+        clearTheGround(chronicle);
+        raiseAs(chronicle, "SLEEPING_BENCH", "Half-built bench", "IN_PROGRESS", 100);
+        assertEquals(onBareGround, debtAfterSleeping(chronicle), 0.001,
+            "a bench nobody has finished is not somewhere to sleep");
+
+        clearTheGround(chronicle);
+        raiseAs(chronicle, "SLEEPING_BENCH", "Ruined bench", "COMPLETED", 0);
+        assertEquals(onBareGround, debtAfterSleeping(chronicle), 0.001,
+            "and neither is one worn through to nothing");
+        clearTheGround(chronicle);
+    }
+
+    private void raiseAs(UUID chronicle, String kind, String name, String state, int integrity) {
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) " +
+                    "SELECT ?,'CONSTRUCTION',?,current_location_id FROM world_object WHERE id=?", id, name, chronicle);
+        jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at,integrity_percent) " +
+                    "VALUES (?,?,?,100,now(),?)", id, kind, state, integrity);
+    }
 }

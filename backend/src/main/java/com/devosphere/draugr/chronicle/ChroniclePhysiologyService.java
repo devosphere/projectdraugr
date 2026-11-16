@@ -416,14 +416,29 @@ public class ChroniclePhysiologyService {
      * the literals could not grow when the catalogue did. V470 puts the answer in {@code is_bedding} and this
      * asks for it, so the next bed anyone adds works the day it is catalogued.
      */
-    private boolean beddedAt(UUID chronicleId) {
-        return Boolean.TRUE.equals(jdbc.queryForObject(
-            "SELECT EXISTS(SELECT 1 FROM construction_project cp " +
+    private boolean beddedAt(UUID chronicleId) { return comfortOfTheBedAt(chronicleId) > 0; }
+
+    /**
+     * How good a night the best bedding on this ground makes, or 0 for the bare earth (#919).
+     *
+     * <p>V470 made every catalogued bedding count and left them all worth the same, so a Chronicle who
+     * raised a platform slept no better than one who threw down a bark sheet. The grade is the catalogue's
+     * ({@code bedding_comfort}: 1 barely off the wet ground, 2 a thick dry pallet, 3 up off the ground
+     * altogether) and the BEST one on the ground is the one you lie on — nobody sleeps on the worse of two
+     * beds they own.
+     *
+     * <p>Unfinished, ruined and destroyed bedding answers 0 by the same conditions that have always applied:
+     * the project must be COMPLETED, its integrity above nothing, and the thing itself still standing.
+     */
+    private int comfortOfTheBedAt(UUID chronicleId) {
+        Integer best = jdbc.queryForObject(
+            "SELECT COALESCE(MAX(ck.bedding_comfort), 0) FROM construction_project cp " +
             "JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
             "JOIN world_object bed ON bed.id = cp.object_id " +
             "JOIN world_object body ON body.current_location_id = bed.current_location_id " +
             "WHERE body.id = ? AND ck.is_bedding AND cp.state = 'COMPLETED' " +
-            "  AND cp.integrity_percent > 0 AND bed.lifecycle_state = 'ACTIVE')", Boolean.class, chronicleId));
+            "  AND cp.integrity_percent > 0 AND bed.lifecycle_state = 'ACTIVE'", Integer.class, chronicleId);
+        return best == null ? 0 : best;
     }
     /**
      * Whether a built seat — the wooden chair a Chronicle can craft (CRAFT_CHAIR) — stands on this ground. A seat
@@ -463,7 +478,8 @@ public class ChroniclePhysiologyService {
         double hours = minutes / 60.0;
         Boolean sheltered = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object shelter ON shelter.id=cp.object_id JOIN world_object body ON body.current_location_id=shelter.current_location_id WHERE body.id=? AND " + com.devosphere.draugr.construction.Shelters.ENCLOSING + " AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND shelter.lifecycle_state='ACTIVE') OR " + com.devosphere.draugr.construction.Shelters.lentByAPeople("?"), Boolean.class, chronicleId, chronicleId);
         boolean safe = Boolean.TRUE.equals(sheltered);
-        boolean bed = beddedAt(chronicleId);
+        int comfort = comfortOfTheBedAt(chronicleId);
+        boolean bed = comfort > 0;
         // Sheltered sleep is deep and restorative; a bed off the cold, wet ground makes exposed sleep far
         // less broken than lying on bare earth, though it turns no weather.
         //
@@ -475,10 +491,23 @@ public class ChroniclePhysiologyService {
         //
         // The three combinations that existed before keep the numbers they had, so nothing a player has
         // already felt changes; only the fourth — a bed UNDER cover, which was unreachable — is new.
-        double recovery = 0.7 + (safe ? 0.8 : 0) + (bed ? 0.3 : 0);
+        // ONE BED IS BETTER THAN ANOTHER (#919). A groundsheet is barely off the mud and a built platform is
+        // off the ground altogether, and until V471 both bought exactly the same night. The middle grade
+        // keeps the 0.3 it shipped with, so nothing a player has already slept on changes.
+        double recovery = 0.7 + (safe ? 0.8 : 0) + (bed ? 0.2 + 0.05 * comfort : 0);
         int drying = (safe ? Math.max(1, (int) Math.round(hours * 9)) : 0)
                    + (bed ? Math.max(1, (int) Math.round(hours * (safe ? 3 : 4))) : 0);
-        jdbc.update("UPDATE chronicle_physiology SET sleep_debt_hours=GREATEST(0,sleep_debt_hours-?),energy_level=LEAST(100,energy_level+?),pain_level=GREATEST(0,pain_level-?),stress_level=GREATEST(0,stress_level-?),wetness_level=GREATEST(0,wetness_level-?) WHERE chronicle_id=?", hours * 1.1 * recovery, Math.max(1, (int)Math.round(hours * 12 * recovery)), Math.max(0, (int)Math.round(hours * 1.5 * recovery)), Math.max(0, (int)Math.round(hours * 3 * recovery)), drying, chronicleId);
+        // THE COLD COMES UP OUT OF THE GROUND, and a bed is what closes that path (#919). The metabolic tick
+        // models the air, the wind and what is worn; the ground it has never modelled at all, so a raised bed
+        // inside a hut kept a body no warmer than the hut's bare floor. This is the one place a bed is
+        // unambiguously IN USE — a body asleep on it for the whole span — so the term lives here rather than
+        // in the tick, where a bed at camp would be insulating a Chronicle who is out chopping wood.
+        //
+        // It only ever warms toward 37 and never past it: a body already warm gains nothing, and a cold one
+        // climbs out faster on a better bed. Bounded at two thirds of a degree a night, because a bed is a
+        // bed and not a fire.
+        double groundWarmth = Math.min(0.66, hours * 0.02 * comfort);
+        jdbc.update("UPDATE chronicle_physiology SET sleep_debt_hours=GREATEST(0,sleep_debt_hours-?),energy_level=LEAST(100,energy_level+?),pain_level=GREATEST(0,pain_level-?),stress_level=GREATEST(0,stress_level-?),wetness_level=GREATEST(0,wetness_level-?),core_temperature_c=LEAST(37.0,core_temperature_c+?) WHERE chronicle_id=?", hours * 1.1 * recovery, Math.max(1, (int)Math.round(hours * 12 * recovery)), Math.max(0, (int)Math.round(hours * 1.5 * recovery)), Math.max(0, (int)Math.round(hours * 3 * recovery)), drying, java.math.BigDecimal.valueOf(groundWarmth), chronicleId);
         refreshBody(chronicleId);
         return new Slept(safe, bed);
     }
