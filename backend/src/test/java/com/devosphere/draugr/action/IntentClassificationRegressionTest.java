@@ -850,6 +850,20 @@ class IntentClassificationRegressionTest {
         for (String named : new String[]{"drink from the spring", "drink from the river", "drink at the well",
                 "drink from the catchment", "drink from the walled spring head", "drink from the pool"})
             assertEquals("DRINK", classify(named), named);
+
+        // #889: MAKING A THING TO PUT A DRINK ON IS NOT DRINKING. The DRINK rule has always yielded to a
+        // sentence that is plainly about making something — but only for the making words it happened to
+        // know, and "fashion" was not among them. So a player describing a coaster in their own words was
+        // answered "there is no water here fit to drink", about a sentence that asked for no water at all.
+        for (String making : new String[]{
+                "Fashion a triangular drinking-vessel cradle from three forked twigs, using the forks as "
+                    + "interlocks to keep the vessel level on soft ground",
+                "whittle a drinking cup from a block of birch",
+                "shape a drinking horn from the aurochs horn",
+                "fasten a drinking vessel cradle together with cord"})
+            assertNotEquals("DRINK", classify(making), making);
+        // And the plain request is untouched by that: a sentence with no making in it is still a drink.
+        assertEquals("DRINK", classify("drink from the cup"));
     }
 
     /** Workstations (V69) claim their words before the generic desk/table rule; a plain table is still a desk. */
