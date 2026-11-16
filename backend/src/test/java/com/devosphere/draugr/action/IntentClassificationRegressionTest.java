@@ -4302,4 +4302,38 @@ class IntentClassificationRegressionTest {
         assertEquals("GATHER_MINERAL", classify("search the rocks for quartz", false));
         assertEquals("GATHER_MINERAL", classify("split a quartz", false));
     }
+
+    /**
+     * EVERY WAY A PERSON NAMES BARK, held here where it costs a second rather than an hour.
+     *
+     * <p>The first cut of #897 put the governing test on the bark rule along with the gathers, and CI came
+     * back with two failures — `gather willow bark` and `take off the bark` — from integration suites that
+     * SKIP on a machine without Docker. The local run was green and wrong for eighty-five minutes.
+     *
+     * <p>Bark is named in more ways than a rule about word order can hold: a compound ("willow bark"), one
+     * word ("birchbark"), and a verb with its particle either side of it ("take the bark OFF this birch").
+     * So the rule guards on MAKING instead — and these are the sentences that say what that has to mean.
+     * They are classifier phrases, so they belong in this file, where they run without a database.
+     */
+    @Test void everyWayAPersonNamesBark() throws Exception {
+        for (String stripping : new String[]{
+                "gather bark", "gather willow bark", "harvest bark", "strip bark", "strip the bark",
+                "strip bark from a tree", "strip bark from the birch", "strip the birchbark",
+                "peel the bark", "peel the bark off the birch", "take off the bark", "take the bark off",
+                "take the bark off this birch", "cut the bark off this birch", "take bark from the birch",
+                "take bark from the willow"})
+            assertEquals("STRIP_BARK", classify(stripping, false), stripping);
+
+        // And the sentences that name bark as a MATERIAL must not send anyone off to a tree for more.
+        for (String notStripping : new String[]{
+                "make a bark container", "make a bark comb", "tan the deer hide with oak bark",
+                "ret the willow bark", "leach a tannin mordant from the bark", "collect loose bark",
+                "Split the end of my dry branch and seat the keen edge of the precision tool stone in it, "
+                  + "leaving its edge exposed. Lash the split shut with the bark fibre bundle so the stone "
+                  + "cannot rock, forming a small handheld cutting blade."})
+            assertNotEquals("STRIP_BARK", classify(notStripping, false), notStripping);
+
+        // A purpose clause is not a making: this is still a request to strip bark.
+        assertEquals("STRIP_BARK", classify("strip bark from a tree to make a container", false));
+    }
 }

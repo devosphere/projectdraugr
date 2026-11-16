@@ -5195,11 +5195,18 @@ public class ChronicleActionService {
         if(value.contains("charcoal")&&(value.contains("make")||value.contains("take")||value.contains("gather")||value.contains("get")||value.contains("collect")
             ||value.contains("build")||value.contains("dig")||value.contains("burn"))&&!items.actionMatchesProcess(value)) return Intent.MAKE_CHARCOAL;
         // Bark too, and for the same reason (#897): "Lash the split shut with the bark fibre bundle so the
-        // stone cannot rock" names bark as the thing in the hand doing the lashing, and this read it as a
-        // request to go and strip some. The verb has to be about the bark.
-        if(value.contains("bark")&&!value.contains("loose")
-           &&gatheringGoverns(value,"bark")||value.contains("bark")&&!value.contains("loose")
-           &&(makingGoverns(value,"bark","strip","strips","stripping","peel","peels","peeling"))) return Intent.STRIP_BARK;
+        // stone cannot rock, forming a small handheld cutting blade" names bark as the thing already in the
+        // hand doing the lashing, and this read it as a request to go and strip some off a tree.
+        //
+        // The guard here is the MAKING one rather than the governing one the gathers use, because bark is
+        // named in more ways than a rule about word order can hold: "gather willow bark" is a compound,
+        // "strip the birchbark" is one word, and "take off the bark" and "take the bark off this birch" put
+        // the verb and its particle either side of it. A governing test refused a third of those — CI said
+        // so, in the two suites that assert them.
+        // What all the wrong ones have in common is that they are plainly about MAKING something, so that is
+        // what is asked — and a purpose clause ("strip bark to make a container") is not a making.
+        if(value.contains("bark")&&!value.contains("loose")&&(gatherVerb||value.contains("strip")||value.contains("peel")||value.contains("take"))
+           &&!aMakingGovernsThisSentence(value)) return Intent.STRIP_BARK;
         // Ambient ground scavenge (#133): search the forest floor / under a log for small survival materials — the
         // bare-hand pickup of the #192 litter (twigs, leaf litter/tinder, loose bark, shed feather/fur, driftwood,
         // reeds). Placed after the specific gathers (branches/strip-bark/tinder) and before the generic SEARCH, so a
