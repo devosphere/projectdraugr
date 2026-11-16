@@ -498,6 +498,15 @@ public class ChronicleActionService {
         // the one reading the body is already charged against. Null-safe: localClimate COALESCEs to CLEAR.
         String beforeWeather = localClimate(chronicle.location()).kind();
         Instant resolvedAt = ticks.advanceBy(Duration.ofMinutes(minutes)).simulatedAt();
+        // A BODY THAT DID NOT LIVE THROUGH THE SPAN DOES NOT DO THE ACT (#884). The clock has just run the whole
+        // span, and the physiology tick at its end is where every death lands — and where a dead Chronicle's
+        // possessions are laid down on the ground (relocatePossessions). Every branch below used to run anyway,
+        // against a body that was gone and a pack that was no longer theirs: a fully kitted bow-drill retry was
+        // answered "your hands raise no heat from bare wood alone", because the kit had been put down by the
+        // death and LIGHT_FIRE looked for it afterwards. A refusal read off a dead body's inventory is a lie
+        // about why they failed, and a branch that DID find what it wanted would have changed the world on
+        // behalf of nobody. So nothing acts; the act is told as not finished, and the coda names the cause.
+        boolean diedInTheSpan = beforeBody != null && physiology.activeBody() == null;
         java.sql.Timestamp resolvedTs = java.sql.Timestamp.from(resolvedAt);
         UUID actionId = UUID.randomUUID(); String outcome = "SUCCEEDED"; String perception;
         // WHAT THIS ACTION TAUGHT, if anything (#37/#99). A completed process or a finished build carries
@@ -511,7 +520,13 @@ public class ChronicleActionService {
         // Light (#75): fine sight-work — reading, writing, sketching, close examination, measuring — cannot be
         // done in the dark by feel alone. A fire in reach lights it for free; otherwise a portable light (a
         // rushlight, a tallow candle, or an oil lamp burning fish oil) is lit and spent to see the work.
-        if (isSightWork(intent, text) && tooDarkForFineWork(chronicle.location(), resolvedAt) && !fireInReach(chronicle.location()) && !items.consumePortableLight(chronicle.id(), resolvedAt)) {
+        if (diedInTheSpan) {
+            // A sleep keeps its own telling (#900): it closes over them. Anything else was begun and not finished.
+            // Neither names a cause — the coda below does, and death in the middle of a task is not always cold.
+            outcome = "FAILED";
+            perception = intent == Intent.SLEEP ? sleepNarration(false, false, exactSpan(minutes)) : diedBeforeItWasDone(exactSpan(minutes));
+        }
+        else if (isSightWork(intent, text) && tooDarkForFineWork(chronicle.location(), resolvedAt) && !fireInReach(chronicle.location()) && !items.consumePortableLight(chronicle.id(), resolvedAt)) {
             outcome = "FAILED";
             // Say which of the two it was. A Chronicle standing in a gale with a pouch full of candles is not
             // short of light — the weather is taking it — and being told so is what points at the lantern cover.
@@ -655,16 +670,9 @@ public class ChronicleActionService {
             perception = "You remain still for " + exactSpan(minutes) + ", and the place goes on around you without you.";
             perception += bittenWhileStill(chronicle, resolvedAt, minutes);
         }
-        else if (intent == Intent.SLEEP && physiology.activeBody() == null) {
-            // A SLEEP THE CHRONICLE DID NOT WAKE FROM (#900). The clock is advanced over the whole span BEFORE
-            // this branch runs (ticks.advanceBy above), so a body the cold was going to kill in those hours is
-            // already dead by the time the sleep is narrated. This branch used to say "you wake to a changed
-            // sky, the deep tiredness lifted" and then the death coda attributed the death to cold: the
-            // player was told they woke rested and died, in that order, in one response. Nothing here
-            // recovers a body that no longer lives, raids stock it will never count, or wakes anyone; the
-            // coda below says what took them.
-            perception = sleepNarration(false, false, exactSpan(minutes));
-        }
+        // A SLEEP THE CHRONICLE DID NOT WAKE FROM (#900) is answered by the diedInTheSpan branch at the head of
+        // this chain (#884), which generalised it: this branch used to say "you wake to a changed sky, the deep
+        // tiredness lifted" to a body the cold had already killed, and the coda then blamed the cold.
         else if (intent == Intent.SLEEP) {
             boolean safe = physiology.sleep(chronicle.id(), minutes); items.restDraftBeasts(chronicle.id());
             perception = sleepNarration(true, safe, exactSpan(minutes));
@@ -1195,7 +1203,8 @@ public class ChronicleActionService {
         // take real time and leave the body exposed — not for a moment's equipping,
         // and never after an encounter the chronicle already fought through.
         String attention = attentionLevel(text, intent);
-        if (exposesToWildlife(intent) && minutes >= 10) {
+        // Nothing hunts, and no labour is charged to, a body that died in the span (#884).
+        if (!diedInTheSpan && exposesToWildlife(intent) && minutes >= 10) {
             // A disengage this turn is an active break from contact; hiding/going to ground is a concealed one.
             boolean breakingContact = intent == Intent.DISENGAGE;
             String lower = text.toLowerCase(Locale.ROOT);
@@ -1217,7 +1226,7 @@ public class ChronicleActionService {
         // vector, and a failed half-effort attempt does not overexert. The read runs only for heavy labour.
         boolean heavyLabour = !failed && labor.energy() >= 12 && intent != Intent.CONFRONT_WILDLIFE;
         Integer energyEntering = heavyLabour ? jdbc.queryForObject("SELECT energy_level FROM chronicle_physiology WHERE chronicle_id=?", Integer.class, chronicle.id()) : null;
-        physiology.applyLabor(chronicle.id(), items, failed ? (labor.energy() + 1) / 2 : labor.energy(), failed ? labor.hygiene() / 2 : labor.hygiene());
+        if (!diedInTheSpan) physiology.applyLabor(chronicle.id(), items, failed ? (labor.energy() + 1) / 2 : labor.energy(), failed ? labor.hygiene() / 2 : labor.hygiene());
         if (energyEntering != null && energyEntering < 20) {
             physiology.applyStrain(chronicle.id(), 6, actionId, resolvedAt);
             // AND THE PLAYER IS TOLD (#920). Ten of these landed in one Chronicle — three stone-gatherings, a
@@ -8417,6 +8426,15 @@ public class ChronicleActionService {
               + ". You wake to a changed sky, the deep tiredness lifted from your limbs."
             : "You settle onto the bare ground and drift through " + span
               + " of broken, shallow sleep, waking stiff and only half-rested as the light shifts.";
+    }
+    /**
+     * What an act the Chronicle died in the middle of says (#884): it was begun and not finished, and it says
+     * nothing of what the hands found or failed to find, because what they found was read off a body already
+     * gone. No cause — the death coda names it.
+     */
+    static String diedBeforeItWasDone(String span) {
+        return "You set your hands to it, but somewhere within " + span
+            + " your body gives out, and the work is left where it lies, unfinished.";
     }
     /** A witnessed closing line for a chronicle that died this action, by cause. */
     private static String deathCoda(String cause) {
