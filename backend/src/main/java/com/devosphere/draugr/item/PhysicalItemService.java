@@ -2356,6 +2356,18 @@ public class PhysicalItemService {
                 growingThings = java.util.Set.copyOf(jdbc.queryForList(
                     "SELECT DISTINCT phrase FROM (" +
                     "  SELECT replace(flora_key,'_',' ') AS phrase FROM flora_definition WHERE organism_type <> 'TREE' " +
+                    // AND THE PLANT'S OWN NAME, without the head noun its key happens to carry (#877). The
+                    // catalogue calls it woundwort_plant, so the phrase set held "woundwort plant" and
+                    // "woundwort leaf" but never "woundwort" — and `gather woundwort`, standing in front of the
+                    // plant, fell past this to the poultice process, which answered "you have not got enough
+                    // woundwort leaf within reach". A player names a plant by its name.
+                    //
+                    // Only plant/bush/shrub/herb are stripped, because those are the words that say nothing: the
+                    // other head nouns carry the meaning. `meadow_grass` must not become "meadow" and
+                    // `climbing_vine` must not become "climbing". Twenty-seven plants gain their bare name by
+                    // this, and none of them collides with anything but itself.
+                    "  UNION ALL SELECT regexp_replace(replace(flora_key,'_',' '), ' (plant|bush|shrub|herb)$', '') " +
+                    "    FROM flora_definition WHERE organism_type <> 'TREE' " +
                     "  UNION ALL SELECT regexp_replace(replace(d.item_key,'_',' '), ' (bundle|tuft|head|piece|strip|sprig|handful)$', '') FROM flora_drop d JOIN flora_definition f ON f.flora_key=d.flora_key AND f.organism_type <> 'TREE' " +
                     "  UNION ALL SELECT lower(i.display_name) FROM flora_drop d JOIN item_definition i ON i.item_key=d.item_key JOIN flora_definition f2 ON f2.flora_key=d.flora_key AND f2.organism_type <> 'TREE'" +
                     ") named WHERE length(phrase) >= 4", String.class));
