@@ -80,6 +80,10 @@ class BitingInsectsIntegrationTest {
         assertNotNull(chunk, "the approved world must contain a " + biome + " chunk");
         jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", chunk, summary.id());
         jdbc.update("UPDATE simulation_clock SET simulated_at=?", Timestamp.from(Instant.parse(isoInstant)));
+        // The body keeps pace with the clock it is moved to (#900): moving the shared clock months away without this
+        // ran the metabolism over the whole gap, and the night's sleep was one the Chronicle died of thirst in.
+        jdbc.update("UPDATE chronicle_physiology SET last_metabolic_update=?, hours_without_food=0, hours_without_water=0, sleep_debt_hours=0 WHERE chronicle_id=?",
+            Timestamp.from(Instant.parse(isoInstant)), summary.id());
         return summary.id();
     }
 
