@@ -404,10 +404,26 @@ public class ChroniclePhysiologyService {
      * A bed the chronicle can lie on here (#71): a laid pallet or a raised platform, off the cold, wet ground.
      * Not shelter — it turns no weather — but it makes rest and even exposed sleep markedly less broken.
      */
+    /**
+     * Is there somewhere to sleep on this ground that is not the ground (#919)?
+     *
+     * <p>A bark/grass groundsheet (#195) is the humblest of these — it turns no weather, but like any bed it
+     * gets the sleeper off the cold, wet earth, so it counts here for rest and drying.
+     *
+     * <p><b>THE CATALOGUE SAYS WHICH, NOT A LIST IN THIS FILE.</b> This named three project kinds, and the
+     * world had grown two more it never learned: a Chronicle who built a RAISED_BED_PLATFORM or a
+     * SLEEPING_BENCH — both catalogued, both buildable — lay down on it and was warmed by nothing, because
+     * the literals could not grow when the catalogue did. V470 puts the answer in {@code is_bedding} and this
+     * asks for it, so the next bed anyone adds works the day it is catalogued.
+     */
     private boolean beddedAt(UUID chronicleId) {
-        // A bark/grass groundsheet (#195) is the humblest of these — it turns no weather, but like any bed it gets
-        // the sleeper off the cold, wet ground, so it counts here for rest and drying.
-        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object bed ON bed.id=cp.object_id JOIN world_object body ON body.current_location_id=bed.current_location_id WHERE body.id=? AND cp.project_kind IN ('GROUND_BED','RAISED_SLEEPING_PLATFORM','GROUNDSHEET') AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND bed.lifecycle_state='ACTIVE')", Boolean.class, chronicleId));
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM construction_project cp " +
+            "JOIN construction_kind ck ON ck.project_kind = cp.project_kind " +
+            "JOIN world_object bed ON bed.id = cp.object_id " +
+            "JOIN world_object body ON body.current_location_id = bed.current_location_id " +
+            "WHERE body.id = ? AND ck.is_bedding AND cp.state = 'COMPLETED' " +
+            "  AND cp.integrity_percent > 0 AND bed.lifecycle_state = 'ACTIVE')", Boolean.class, chronicleId));
     }
     /**
      * Whether a built seat — the wooden chair a Chronicle can craft (CRAFT_CHAIR) — stands on this ground. A seat
@@ -433,18 +449,38 @@ public class ChroniclePhysiologyService {
     }
     /** Deep sleep — a fuller recovery than a brief rest. Shelter makes it restful; sleeping exposed is possible but shallow. Returns whether the chronicle was sheltered. */
     @Transactional
-    public boolean sleep(UUID chronicleId, int minutes) {
+    /**
+     * What a sleep was slept on and under (#893) — so the sentence that reports it can say.
+     *
+     * <p>{@code sleep} returned a bare "was it sheltered", and the narration had nothing else to go on: a
+     * Chronicle who had gathered reeds, laid a pallet and lain down on it at an open camp was told they
+     * settled onto the bare ground. The bed was in the recovery arithmetic the whole time and in none of
+     * the words.
+     */
+    public record Slept(boolean sheltered, boolean bedded) { }
+
+    public Slept sleep(UUID chronicleId, int minutes) {
         double hours = minutes / 60.0;
         Boolean sheltered = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM construction_project cp JOIN world_object shelter ON shelter.id=cp.object_id JOIN world_object body ON body.current_location_id=shelter.current_location_id WHERE body.id=? AND " + com.devosphere.draugr.construction.Shelters.ENCLOSING + " AND cp.state='COMPLETED' AND cp.integrity_percent>0 AND shelter.lifecycle_state='ACTIVE') OR " + com.devosphere.draugr.construction.Shelters.lentByAPeople("?"), Boolean.class, chronicleId, chronicleId);
         boolean safe = Boolean.TRUE.equals(sheltered);
         boolean bed = beddedAt(chronicleId);
-        // Sheltered sleep is deep and restorative; a bed off the cold, wet ground makes
-        // exposed sleep far less broken than lying on bare earth, though it turns no weather.
-        double recovery = safe ? 1.5 : (bed ? 1.0 : 0.7);
-        int drying = safe ? Math.max(1, (int)Math.round(hours * 9)) : (bed ? Math.max(1, (int)Math.round(hours * 4)) : 0);
+        // Sheltered sleep is deep and restorative; a bed off the cold, wet ground makes exposed sleep far
+        // less broken than lying on bare earth, though it turns no weather.
+        //
+        // THE TWO ARE SEPARATE GOODS AND USED TO BE ONE CHOICE (#919). This read
+        // `safe ? 1.5 : (bed ? 1.0 : 0.7)`, so the moment a roof was overhead the bed beneath counted for
+        // nothing: a raised bed inside a debris hut rested a body exactly as well as its bare floor did,
+        // and nothing a player built to sleep on could show itself. A roof turns the weather and a bed
+        // keeps the ground's cold out of you — neither does the other's work.
+        //
+        // The three combinations that existed before keep the numbers they had, so nothing a player has
+        // already felt changes; only the fourth — a bed UNDER cover, which was unreachable — is new.
+        double recovery = 0.7 + (safe ? 0.8 : 0) + (bed ? 0.3 : 0);
+        int drying = (safe ? Math.max(1, (int) Math.round(hours * 9)) : 0)
+                   + (bed ? Math.max(1, (int) Math.round(hours * (safe ? 3 : 4))) : 0);
         jdbc.update("UPDATE chronicle_physiology SET sleep_debt_hours=GREATEST(0,sleep_debt_hours-?),energy_level=LEAST(100,energy_level+?),pain_level=GREATEST(0,pain_level-?),stress_level=GREATEST(0,stress_level-?),wetness_level=GREATEST(0,wetness_level-?) WHERE chronicle_id=?", hours * 1.1 * recovery, Math.max(1, (int)Math.round(hours * 12 * recovery)), Math.max(0, (int)Math.round(hours * 1.5 * recovery)), Math.max(0, (int)Math.round(hours * 3 * recovery)), drying, chronicleId);
         refreshBody(chronicleId);
-        return safe;
+        return new Slept(safe, bed);
     }
     /**
      * WHERE AN INJURY LANDED (#37). The ticket's complaint was that "how is my leg" and "how are my feet"
