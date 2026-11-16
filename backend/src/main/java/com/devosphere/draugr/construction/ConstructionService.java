@@ -375,7 +375,7 @@ public class ConstructionService {
             jdbc.update("INSERT INTO object_transition (object_id,occurred_at,transition_type,payload) VALUES (?,?,'LATRINE_MENDED',jsonb_build_object('projectKind','LATRINE'))", existing, ts);
             return new String[]{"SUCCEEDED", "You clear and re-screen the pit until it is decent and sound again."};
         }
-        if (!items.hasAtLeast(chronicle, "digging_stick", 1) && !items.hasAtLeast(chronicle, "wooden_shovel", 1))
+        if (items.diggingTool(chronicle) == null)
             return new String[]{"FAILED", "A latrine wants a pit dug, and your bare hands will not break this ground deep enough."};
         String screen = null; for (String s : LATRINE_SCREEN) if (items.hasAtLeast(chronicle, s, 2)) { screen = s; break; }
         if (screen == null) return new String[]{"FAILED", "You can dig the pit, but have nothing to screen it with; it would stand open to anyone passing."};
