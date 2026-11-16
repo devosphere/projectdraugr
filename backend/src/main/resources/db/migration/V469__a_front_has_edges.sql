@@ -109,6 +109,42 @@ CREATE FUNCTION local_weather_kind(chunk UUID) RETURNS TEXT AS $$
     SELECT (local_sky(chunk)).weather_kind;
 $$ LANGUAGE sql STABLE;
 
+-- A SKY SET WITHOUT A FOOTPRINT MEANS THE WHOLE WORLD.
+--
+-- Twenty-two places — all of them test fixtures, but the shape is what matters — say
+-- `UPDATE world_weather SET weather_kind='RAIN'`, or set a temperature, and say nothing about where. Before
+-- this migration that meant "it is raining", full stop. After it, with a footprint already written by the
+-- last tick, it would mean "it is raining in whatever patch the LAST front happened to occupy" — so a test
+-- that stands a body in the rain to watch it get wet stands it in yesterday's clear air instead, and says
+-- nothing about why. Two of them caught exactly that on the first CI round, and they were right to.
+--
+-- Whoever changes the sky and leaves the footprint alone is not talking about a region; they mean the sky.
+-- So the footprint is cleared for them, which is the pre-#912 reading and the honest one.
+--
+-- The simulation's own writer is untouched: it sets the footprint on every tick, and on a tick where it
+-- would not have moved, nothing about the sky has changed either.
+CREATE FUNCTION a_new_sky_has_no_old_footprint() RETURNS TRIGGER AS $$
+BEGIN
+    IF (NEW.weather_kind          IS DISTINCT FROM OLD.weather_kind
+        OR NEW.intensity             IS DISTINCT FROM OLD.intensity
+        OR NEW.ambient_temperature_c IS DISTINCT FROM OLD.ambient_temperature_c
+        OR NEW.wind_speed_kph        IS DISTINCT FROM OLD.wind_speed_kph)
+       AND NEW.front_centre_x      IS NOT DISTINCT FROM OLD.front_centre_x
+       AND NEW.front_centre_y      IS NOT DISTINCT FROM OLD.front_centre_y
+       AND NEW.front_radius_chunks IS NOT DISTINCT FROM OLD.front_radius_chunks
+    THEN
+        NEW.front_centre_x      := NULL;
+        NEW.front_centre_y      := NULL;
+        NEW.front_radius_chunks := NULL;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER world_weather_a_new_sky_has_no_old_footprint
+    BEFORE UPDATE ON world_weather
+    FOR EACH ROW EXECUTE FUNCTION a_new_sky_has_no_old_footprint();
+
 DO $$
 DECLARE
     world  UUID;

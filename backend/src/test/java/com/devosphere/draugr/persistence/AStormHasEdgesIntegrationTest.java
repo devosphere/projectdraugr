@@ -18,6 +18,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -98,11 +99,18 @@ class AStormHasEdgesIntegrationTest {
      * reach every suite that runs afterwards.
      */
     private Map<String, Object> theSkyAsItWas(UUID world) {
-        return jdbc.queryForMap("SELECT weather_kind, intensity, ambient_temperature_c, wind_speed_kph, " +
+        // queryForList, not queryForMap: world_weather is EMPTY until something ticks the simulation, and
+        // whether that has happened by the time this suite runs is a question about the order 925 tests
+        // happened to be scheduled in. A null here means "there was no sky", which putTheSkyBack honours by
+        // taking the row away again.
+        List<Map<String, Object>> rows = jdbc.queryForList(
+            "SELECT weather_kind, intensity, ambient_temperature_c, wind_speed_kph, " +
             "front_centre_x, front_centre_y, front_radius_chunks FROM world_weather WHERE world_id=?", world);
+        return rows.isEmpty() ? null : rows.get(0);
     }
 
     private void putTheSkyBack(UUID world, Map<String, Object> was) {
+        if (was == null) { jdbc.update("DELETE FROM world_weather WHERE world_id=?", world); return; }
         jdbc.update("UPDATE world_weather SET weather_kind=?, intensity=?, ambient_temperature_c=?, wind_speed_kph=?, " +
             "front_centre_x=?, front_centre_y=?, front_radius_chunks=? WHERE world_id=?",
             was.get("weather_kind"), was.get("intensity"), was.get("ambient_temperature_c"), was.get("wind_speed_kph"),
