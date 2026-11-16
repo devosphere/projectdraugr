@@ -125,4 +125,47 @@ class LatrineHygieneIntegrationTest {
 
         assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
+
+    /**
+     * #905: a fire-hardened digging stick digs a latrine. The game told the player the hardened stick "will bite
+     * earth", then refused the latrine for bare hands, because the latrine's tool list held only the plain stick and
+     * the shovel. The refusal is asserted first, so the test cannot pass on a digging tool it never gave.
+     */
+    @Test
+    void aFireHardenedDiggingStickDigsALatrine() {
+        if (worldGenesis.current() == null) {
+            worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
+            ecology.seed();
+        }
+        ChronicleService.ChronicleSummary summary = chronicles.awaken();
+        assertNotNull(summary, "awakening must produce a living Chronicle");
+        UUID chronicle = summary.id();
+        // Ground with no latrine of its own, so the act digs one rather than mending another test's.
+        UUID chunk = jdbc.queryForObject(
+                "SELECT c.id FROM world_chunk c WHERE c.biome='TEMPERATE_FOREST' AND NOT EXISTS (" +
+                "  SELECT 1 FROM construction_project cp JOIN world_object w ON w.id=cp.object_id " +
+                "  WHERE w.current_location_id=c.id AND cp.project_kind='LATRINE' AND w.lifecycle_state='ACTIVE') " +
+                "ORDER BY c.grid_y DESC, c.grid_x DESC LIMIT 1", UUID.class);
+        jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", chunk, chronicle);
+        Instant base = ticks.current().simulatedAt();
+        jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
+        for (int i = 0; i < 2; i++) items.createCarriedItem(chronicle, "reed_bundle", "Reed bundle", base, "TEST_SEED");
+        // awaken() rejoins the one living Chronicle, which the other test in this class handed a digging stick:
+        // set every digging tool it carries, or that lies here, down on other ground.
+        UUID elsewhere = jdbc.queryForObject("SELECT id FROM world_chunk WHERE id<>? ORDER BY grid_y, grid_x LIMIT 1", UUID.class, chunk);
+        jdbc.update("UPDATE world_object SET current_owner_id=NULL, current_location_id=? WHERE (current_owner_id=? OR current_location_id=?) " +
+                "AND id IN (SELECT object_id FROM item_instance WHERE item_key = ANY(?))",
+                elsewhere, chronicle, chunk, PhysicalItemService.DIGGING_TOOLS.toArray(new String[0]));
+
+        assertEquals(null, items.diggingTool(chronicle), "the Chronicle must start with nothing to dig with, or this proves nothing");
+        String[] bare = construction.buildLatrine(chronicle, chunk, base);
+        assertEquals("FAILED", bare[0], () -> "bare hands must not dig a latrine: " + bare[1]);
+
+        items.createCarriedItem(chronicle, "fire_hardened_digging_stick", "Fire-hardened digging stick", base, "TEST_SEED");
+        assertEquals("fire_hardened_digging_stick", items.diggingTool(chronicle));
+        String[] built = construction.buildLatrine(chronicle, chunk, base);
+        assertEquals("SUCCEEDED", built[0], () -> "a fire-hardened digging stick must dig a latrine (#905): " + built[1]);
+
+        assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
 }

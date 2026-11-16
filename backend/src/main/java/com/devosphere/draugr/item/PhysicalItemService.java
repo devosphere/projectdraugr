@@ -2896,6 +2896,22 @@ public class PhysicalItemService {
         return new String[]{"SUCCEEDED", "You press the " + seed + " into the turned earth and firm the soil over it — a sapling that, given years and left to stand, will grow into a " + species + " where none was."};
     }
 
+    /**
+     * Every made thing that breaks ground, best first (#905). Three acts dig: tillage, a latrine pit and clay from a
+     * bank. Each kept its own list of digging tools, and the latrine's and the clay bank's had never heard of the
+     * fire-hardened digging stick. So a Chronicle could harden one, be told it would bite earth, and then be refused
+     * a latrine for having only bare hands. This is the one list all three read.
+     */
+    public static final java.util.List<String> DIGGING_TOOLS =
+        java.util.List.of("wooden_shovel", "fire_hardened_digging_stick", "digging_stick");
+
+    /** The best digging tool the Chronicle can reach, or null when it has only its hands (#905). */
+    @Transactional(readOnly = true)
+    public String diggingTool(UUID chronicle) {
+        for (String key : DIGGING_TOOLS) if (hasAtLeast(chronicle, key, 1)) return key;
+        return null;
+    }
+
     @Transactional(readOnly = true)
     public boolean hasAtLeast(UUID chronicle, String itemKey, int required) {
         return reachCount(chronicle, chronicleLocation(chronicle), itemKey) >= required;
@@ -3920,8 +3936,7 @@ public class PhysicalItemService {
     public String[] tillGround(UUID chronicle, UUID location, Instant at) {
         if (!isArable(location))
             return new String[]{"FAILED", "Tillage wants open, workable ground — a grassland clearing, wooded ground you have first cleared, or the dry silt of a floodplain — and this ground is not it."};
-        if (!hasAtLeast(chronicle, "digging_stick", 1) && !hasAtLeast(chronicle, "wooden_shovel", 1)
-                && !hasAtLeast(chronicle, "fire_hardened_digging_stick", 1))
+        if (diggingTool(chronicle) == null)
             return new String[]{"FAILED", "Breaking ground wants a tool — a digging stick or a shovel — and you have none to hand."};
         Integer growing = jdbc.queryForObject("SELECT COUNT(*) FROM crop_stand WHERE chunk_id=? AND harvested=false", Integer.class, location);
         if (growing != null && growing > 0)

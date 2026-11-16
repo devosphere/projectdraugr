@@ -145,7 +145,10 @@ class OneSkyAndCatchingWhatItGivesIntegrationTest {
 
     /** The weather in one word, taken from the game's own sky reading — the sky as a PLAYER is told it. */
     private String theSkyAsTold() {
-        String sky = said("read the sky");
+        return theSkyIn(said("read the sky"));
+    }
+
+    private static String theSkyIn(String sky) {
         if (sky.contains("rain is falling")) return "RAIN";
         if (sky.contains("snow is coming down")) return "SNOW";
         if (sky.contains("closed over")) return "OVERCAST";
@@ -229,10 +232,15 @@ class OneSkyAndCatchingWhatItGivesIntegrationTest {
     @Test
     void theFrameShowsTheSkyThatTheProseDescribes() {
         // The HUD had the same split: the panel showed the front while the paragraph described the local fall.
+        //
+        // ONE action, not two. Every act advances the clock, and the weather moves with it: reading the sky and
+        // then looking around compared the sky of one minute with the HUD of the next, and failed in CI whenever
+        // the rain stopped in between ("reading said RAIN, frame said CLEAR"). The paragraph and the panel of the
+        // SAME answer are what the player sees side by side, so that is the pair this holds together.
         aLivingChronicle();
-        String told = theSkyAsTold();
-        var r = actions.resolve("look around", UUID.randomUUID());
+        var r = actions.resolve("read the sky", UUID.randomUUID());
         assertNotNull(r);
+        String told = theSkyIn(r.perception() == null ? "" : r.perception().toLowerCase(Locale.ROOT));
         assertNotNull(r.frame(), "the frame carries the weather the client shows");
         assertNotNull(r.frame().weather(), "the frame must report a sky");
         String shown = wetOrDry(r.frame().weather().kind());
