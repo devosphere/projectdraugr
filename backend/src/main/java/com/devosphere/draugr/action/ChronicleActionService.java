@@ -663,11 +663,11 @@ public class ChronicleActionService {
             // player was told they woke rested and died, in that order, in one response. Nothing here
             // recovers a body that no longer lives, raids stock it will never count, or wakes anyone; the
             // coda below says what took them.
-            perception = sleepNarration(false, false, exactSpan(minutes));
+            perception = sleepNarration(false, false, false, exactSpan(minutes));
         }
         else if (intent == Intent.SLEEP) {
-            boolean safe = physiology.sleep(chronicle.id(), minutes); items.restDraftBeasts(chronicle.id());
-            perception = sleepNarration(true, safe, exactSpan(minutes));
+            ChroniclePhysiologyService.Slept slept = physiology.sleep(chronicle.id(), minutes); items.restDraftBeasts(chronicle.id());
+            perception = sleepNarration(true, slept.sheltered(), slept.bedded(), exactSpan(minutes));
             perception += bittenWhileStill(chronicle, resolvedAt, minutes);
             // Stock left loose overnight are what predators come for (#108). A sleep spans the dark hours, so this
             // is where an unpenned herd is thinned — and waking to a gap in the flock is how a keeper learns of it.
@@ -8409,14 +8409,26 @@ public class ChronicleActionService {
      * What a sleep says (#900). Waking is said only of a body that lived through the span: a sleep the
      * Chronicle died in ends as the sleep closing over them, and the death coda names the cause after it.
      */
-    static String sleepNarration(boolean survived, boolean sheltered, String span) {
+    /**
+     * What a night reads as (#893). FOUR KINDS OF NIGHT, NOT TWO.
+     *
+     * <p>This took one boolean — was there a roof — and a Chronicle who had gathered reeds, worked them into
+     * a pallet and lain down on it at an open camp was told they "settled onto the bare ground". The bedding
+     * was in the recovery arithmetic the whole time and in none of the words, so nothing a player built to
+     * sleep on could be seen to have helped. A roof and a bed are separate goods and the sentence says which
+     * of them the night had.
+     */
+    static String sleepNarration(boolean survived, boolean sheltered, boolean bedded, String span) {
         if (!survived) return "You lie down and let sleep close over you, and somewhere within " + span
             + " you slip beyond waking.";
-        return sheltered
-            ? "You lie down under cover and let sleep take you for " + span
-              + ". You wake to a changed sky, the deep tiredness lifted from your limbs."
-            : "You settle onto the bare ground and drift through " + span
-              + " of broken, shallow sleep, waking stiff and only half-rested as the light shifts.";
+        if (sheltered && bedded) return "You lie down under cover, up off the cold ground, and let sleep take you for "
+            + span + ". You wake to a changed sky, warm through, the deep tiredness gone out of your limbs.";
+        if (sheltered) return "You lie down under cover and let sleep take you for " + span
+            + ". You wake to a changed sky, the deep tiredness lifted from your limbs.";
+        if (bedded) return "You stretch out on your bedding, up off the cold earth though there is nothing over you, "
+            + "and sleep through " + span + ". You wake with the weather on your face and the rest of you rested.";
+        return "You settle onto the bare ground and drift through " + span
+            + " of broken, shallow sleep, waking stiff and only half-rested as the light shifts.";
     }
     /** A witnessed closing line for a chronicle that died this action, by cause. */
     private static String deathCoda(String cause) {
