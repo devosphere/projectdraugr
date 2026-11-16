@@ -4245,4 +4245,61 @@ class IntentClassificationRegressionTest {
         assertNotEquals("TAKE_UP_AGAIN", classify("continue building the wall"));
         assertNotEquals("TAKE_UP_AGAIN", classify("resume the lean-to"));
     }
+
+    /**
+     * #897 / #889 — A GATHERING OR PROSPECTING VERB MUST BE ABOUT THE MATERIAL IT IS NEAR.
+     *
+     * <p>These rules asked two questions at once — is there a taking word anywhere in the sentence, and is
+     * the material named anywhere — and a long, well-written command answers yes to both by accident:
+     *
+     * <ul>
+     *   <li>"I lash three short pieces CUT from a single dry branch with one bundle of plant FIBER into a low
+     *       triangular cup stand" went off and gathered fibre, because "cut" is a gathering verb;</li>
+     *   <li>"SPLIT the end of my dry branch and seat the keen edge of the precision tool STONE in it" was
+     *       answered "you work over the ground looking for precision tool stone", about a stone the sentence
+     *       says is already in the hand;</li>
+     *   <li>and once those were fixed, the same sentence's "bark fibre bundle" made it a request to go and
+     *       strip bark off a tree.</li>
+     * </ul>
+     *
+     * <p>Each is a player describing what they are MAKING out of what they already carry. The verb has to
+     * stand before the material with nothing between them but the words that decorate a noun.
+     */
+    @Test void aTakingVerbMustBeAboutTheMaterialItIsNear() throws Exception {
+        // The three sentences from the reports. Each falls through to the process catalogue now, which is
+        // the honest destination for a making — it either holds a recipe or says it does not.
+        for (String making : new String[]{
+                "I lash three short pieces cut from a single dry branch with one bundle of plant fiber into a "
+                    + "low triangular cup stand that keeps a cup upright on the soft marsh ground",
+                "Split the end of my dry branch and seat the keen edge of the precision tool stone in it, "
+                    + "leaving its edge exposed. Lash the split shut with the bark fibre bundle so the stone "
+                    + "cannot rock, forming a small handheld cutting blade."}) {
+            String got = classify(making, false);
+            assertNotEquals("GATHER_FIBER", got, making);
+            assertNotEquals("GATHER_MINERAL", got, making);
+            assertNotEquals("STRIP_BARK", got, making);
+        }
+
+        // AND THE ORDINARY SENTENCES KEEP WORKING, which is the half that makes this safe to do at all.
+        assertEquals("GATHER_FIBER", classify("gather plant fiber", false));
+        assertEquals("GATHER_FIBER", classify("forage for plant fiber", false));
+        assertEquals("GATHER_BRANCHES", classify("gather up the dry branches", false));
+        assertEquals("GATHER_STONE", classify("take all the loose stones", false));
+        assertEquals("STRIP_BARK", classify("strip bark from a tree", false));
+        assertEquals("STRIP_BARK", classify("peel the bark off the birch", false));
+        assertEquals("STRIP_BARK", classify("gather bark", false));
+        assertEquals("STRIP_BARK", classify("take bark from the willow", false));
+    }
+
+    /**
+     * A making word in a PURPOSE clause is not a making (#897). "dig for flint to make an axe" says why the
+     * flint is wanted, and it is still a request to dig for flint — the mistake a blanket
+     * "does the sentence contain a making word" guard would have made.
+     */
+    @Test void aPurposeClauseDoesNotStopAGather() throws Exception {
+        assertEquals("GATHER_MINERAL", classify("dig for flint", false));
+        assertEquals("GATHER_MINERAL", classify("dig for flint to make an axe", false));
+        assertEquals("GATHER_MINERAL", classify("search the rocks for quartz", false));
+        assertEquals("GATHER_MINERAL", classify("split a quartz", false));
+    }
 }
