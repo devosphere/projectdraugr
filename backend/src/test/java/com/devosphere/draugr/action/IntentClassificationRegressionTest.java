@@ -1016,6 +1016,32 @@ class IntentClassificationRegressionTest {
         assertEquals("UNKNOWN", classify("salt the meat down for winter"));
     }
 
+    /**
+     * #897: "split" and "break" are working verbs. They mean prospecting only when they govern the mineral.
+     * The live report: the first verb "Split" was about the branch, the precision tool stone was already in
+     * hand, and the game answered that no tool-stone exposure was nearby.
+     */
+    @Test void splittingABranchToSeatAStoneIsNotProspecting() throws Exception {
+        String haft = "split the end of my dry branch and seat the keen edge of the precision tool stone in it, "
+            + "leaving its edge exposed. lash the split shut with the bark fibre bundle so the stone cannot rock, "
+            + "forming a small handheld cutting blade.";
+        // UNKNOWN hands it to the material matcher and the custom-action path. Before, "cutting blade" was also
+        // read as cutting the fibre and the branch the sentence already held (GATHER_FIBER, then GATHER_BRANCHES).
+        assertEquals("UNKNOWN", classify(haft));
+        assertEquals("GATHER_FIBER", classify("cut some plant fiber"));
+        assertEquals("GATHER_BRANCHES", classify("cut a few dry branches"));
+        assertNotEquals("GATHER_MINERAL", classify("break the stick and wedge the flint into the gap"));
+        assertNotEquals("GATHER_MINERAL", classify("split a branch to haft my limestone scraper"));
+        // ...and where the verb does govern the mineral, it is still prospecting, by the literal list or the catalogue.
+        assertEquals("GATHER_MINERAL", classify("split flint from the outcrop"));
+        assertEquals("GATHER_MINERAL", classify("break off a flake of chert"));
+        assertEquals("GATHER_MINERAL", classify("break some obsidian loose"));
+        assertEquals("GATHER_MINERAL", classify("split the precision tool stone out of the face"));
+        assertEquals("GATHER_MINERAL", classify("break out a lump of limestone"));
+        // A searching verb keeps its whole-sentence reach, with a phrase between it and the mineral.
+        assertEquals("GATHER_MINERAL", classify("search the cliff face for flint"));
+    }
+
     /** "forest" contains "ore" — a word-boundary bug that stole plant gathering. */
     @Test void oreDoesNotMatchInsideForest() throws Exception {
         assertEquals("GATHER_PLANT", classify("gather mushrooms from the forest floor"));

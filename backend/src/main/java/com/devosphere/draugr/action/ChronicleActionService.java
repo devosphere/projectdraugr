@@ -3385,13 +3385,20 @@ public class ChronicleActionService {
         // Prospecting before the ignition rules, so "search the rocks for pyrite" is
         // heard as looking for the mineral rather than as trying to strike a light
         // with one the chronicle does not yet have.
-        if((value.contains("search")||value.contains("look for")||value.contains("prospect")||value.contains("dig for")||value.contains("find")||value.contains("gather")||value.contains("collect")||value.contains("split")||value.contains("break"))
+        // "split" and "break" are working verbs before they are prospecting ones (#897). When they could appear
+        // anywhere in the sentence, `Split the end of my dry branch and seat ... the precision tool stone in it`
+        // was taken as a search for a tool-stone exposure, although "split" was about the branch and the stone
+        // was already carried. Those two verbs now count only when they GOVERN the mineral (`split flint`,
+        // `break off a flake of chert`). The searching verbs keep their old reach, because
+        // `search the rocks for pyrite` has a whole phrase between the verb and the mineral.
+        if((value.contains("search")||value.contains("look for")||value.contains("prospect")||value.contains("dig for")||value.contains("find")||value.contains("gather")||value.contains("collect")
+            ||breaksOutAMineral(value))
            // "ore" needs a word boundary — without it "forest" matches, and gathering
            // mushrooms in a forest was being heard as prospecting for ore.
            // "salt" makes rock/sea salt reachable by phrasing (gather sea salt, dig for rock salt);
            // it can't steal "salt the fish/meat" — that carries no gathering verb and falls through
            // to the preservation process.
-           &&(value.contains("flint")||value.contains("chert")||value.contains("obsidian")||value.contains("pyrite")||value.contains("quartz")||value.contains("crystal")||value.contains("mineral")||value.contains("salt")||value.contains("ochre")||value.contains("soapstone")||value.contains("sandstone")||value.contains("pumice")||value.contains("granite")||value.contains("basalt")||value.contains("slate")||value.contains("hammerstone")||value.contains("cobble")||value.contains("gravel")||value.contains("river sand")||value.contains("sand bar")||value.matches("(?s).*\\bore\\b.*")||value.contains("tool stone")
+           &&(namesAMineralLiterally(value)
            // ...or the catalogue itself knows the name. The literals above are a hand-kept copy of part of
            // mineral_definition, and a copy goes stale the moment a mineral is added: V305's fire clay is dug
            // by nobody without this, and limestone — never in the list at all — has been undiggable by name
@@ -3520,7 +3527,7 @@ public class ChronicleActionService {
         // Held as a WORD: "wood" sits inside "wooden", "woodland" and "deadwood", and gathering a wooden
         // component is a different act from picking up sticks. Found by a test written for the fire.
         if((value.contains("gather")||value.contains("collect")||value.contains("fetch")||value.contains("bring")
-            ||value.contains("get ")||value.contains("pick up")||GATHERING_VERB.matcher(value).find())
+            ||value.contains("get ")||value.contains("pick up")||cutsPicksOrPulls(value))
            &&(word(value,"wood")||word(value,"fuel")||word(value,"firewood")||value.contains("more wood"))
            &&!value.contains("wooden")&&!value.contains("woodland")
            // The questions about fuel are CHECK_FIRE's, above, and the making verbs are the crafts'.
@@ -4178,7 +4185,7 @@ public class ChronicleActionService {
         // down" and "cut rods" above, so those stay theirs.
         boolean gatherVerb = value.contains("gather")||value.contains("collect")||value.contains("forage")
             ||value.contains("harvest")||value.contains("take all")||value.contains("gather up")
-            ||GATHERING_VERB.matcher(value).find()||value.contains("dig up")
+            ||value.contains("dig up")
             // "get dry grass" reached nothing while "gather dry grass" worked — and "get" is the commonest verb
             // in English for fetching a thing. Safe here because gatherVerb only decides anything once a plant,
             // stone or mineral is NAMED beside it: "get water" and "get a fire going" name neither and keep
@@ -4187,7 +4194,8 @@ public class ChronicleActionService {
             // "crop" as the VERB — to cut something back — which "crop the watercress" means and the crop-as-a-
             // FIELD rules above do not. Held to the transitive form so "the crop is dry" and "harvest the crop"
             // are untouched: those are the field, and they are answered before this.
-            ||value.contains("crop the ")||value.contains("crop some ");
+            ||value.contains("crop the ")||value.contains("crop some ")
+            ||cutsPicksOrPulls(value);
         // A tree named in the singular (#37). The nouns had "a tree" and "trees" but nothing for "an apple
         // tree", which contains neither. plantTree grows oak from an acorn and pine from a pine nut and nothing
         // else, and its refusal says so -- which is a far better answer to a Chronicle asking for an apple tree
@@ -5653,6 +5661,57 @@ public class ChronicleActionService {
     private static String whereItEndedUp(PhysicalItemService.ItemView made) {
         return made == null || made.ownerId() != null ? ""
             : " It is more than you can carry as you stand, so it rests on the ground where you made it.";
+    }
+
+    /**
+     * "cutting" used as an adjective for a tool: a cutting blade, edge or flake. That describes a thing and
+     * gathers nothing (#897).
+     */
+    private static final java.util.regex.Pattern A_CUTTING_THING = java.util.regex.Pattern.compile(
+        "(?<!\\w)cutting (blade|blades|edge|edges|tool|tools|flake|flakes|stone|stones|implement|implements|knife|board)(?!\\w)");
+
+    /**
+     * Whether a cut/pick/pull gathering verb is said, leaving out "cutting" used as an adjective (#897). In
+     * "lash the split shut with the bark fibre bundle ... forming a small handheld cutting blade", "cutting" named
+     * the blade being made. The gather rules then read it as cutting the fibre and the branch the sentence already
+     * held.
+     */
+    static boolean cutsPicksOrPulls(String value) {
+        return GATHERING_VERB.matcher(A_CUTTING_THING.matcher(value).replaceAll(" ")).find();
+    }
+
+    /** The mineral words the GATHER_MINERAL rule keeps in code. The catalogue supplies the rest. */
+    static boolean namesAMineralLiterally(String value) {
+        return value.contains("flint")||value.contains("chert")||value.contains("obsidian")||value.contains("pyrite")||value.contains("quartz")||value.contains("crystal")||value.contains("mineral")||value.contains("salt")||value.contains("ochre")||value.contains("soapstone")||value.contains("sandstone")||value.contains("pumice")||value.contains("granite")||value.contains("basalt")||value.contains("slate")||value.contains("hammerstone")||value.contains("cobble")||value.contains("gravel")||value.contains("river sand")||value.contains("sand bar")||value.matches("(?s).*\\bore\\b.*")||value.contains("tool stone");
+    }
+
+    /** Words allowed between "split"/"break" and the mineral: those that decorate a noun or name the piece taken. */
+    private static final java.util.Set<String> A_PIECE_OF = java.util.Set.of(
+        "off", "away", "loose", "free", "piece", "pieces", "chunk", "chunks", "lump", "lumps", "flake", "flakes",
+        "nodule", "nodules", "shard", "shards", "slab", "slabs", "block", "blocks", "spall", "spalls");
+
+    /**
+     * Whether "split" or "break" GOVERNS a mineral here, rather than just sharing a sentence with one (#897).
+     *
+     * <p>This asks the same question as {@link #makingGoverns} (#902), with extra words allowed in between for
+     * the piece being taken ({@code break off a flake of flint}). The mineral must be named within the three
+     * words where the walk stops, so a mineral named later, after some other noun, does not count. The catalogue
+     * is checked as well, so a mineral missing from the literal list is governed the same way.
+     */
+    private boolean breaksOutAMineral(String value) {
+        String[] said = value.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim().split(" ");
+        for (int at = 0; at < said.length; at++) {
+            if (!said[at].startsWith("split") && !said[at].startsWith("break") && !said[at].startsWith("broke")) continue;
+            int next = at + 1;
+            while (next < said.length && next - at <= 5
+                   && (DECORATES_A_NOUN.contains(said[next]) || A_PIECE_OF.contains(said[next]))) next++;
+            if (next >= said.length) continue;
+            // The three words where the walk stops: enough for "precision tool stone", where the hand-kept list
+            // knows only its last two words. Not enough to reach past another noun to a mineral beyond it.
+            String head = String.join(" ", java.util.Arrays.copyOfRange(said, next, Math.min(said.length, next + 3)));
+            if (namesAMineralLiterally(head) || items.namesADugMineral(head)) return true;
+        }
+        return false;
     }
 
     private static final java.util.Set<String> DECORATES_A_NOUN = java.util.Set.of(
