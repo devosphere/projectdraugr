@@ -6504,6 +6504,14 @@ public class ChronicleActionService {
     private static final java.util.regex.Pattern MAKING_SOMETHING = java.util.regex.Pattern.compile(
             "(?<!\\w)(make|makes|making|build|builds|building|craft|crafts|crafting|carve|carves|carving"
           + "|assemble|assembles|assembling|weave|weaves|weaving|lash|lashes|lashing|haft|hafts|hafting"
+          // THE WORDS PEOPLE ACTUALLY USE FOR MAKING A THING (#889). "Fashion a triangular drinking-vessel
+          // cradle from three forked twigs" was read as a request to DRINK and answered "there is no water
+          // here fit to drink" — because the only word in it this pattern knew was none of them. Fashion,
+          // whittle, shape and fasten are as plainly about making as craft is, and a player describing their
+          // own work reaches for them. Each is bounded by \\w the same way, so "fashioned" and "shapes" come
+          // with it while "shaped stone" as a noun phrase does not carry a verb of its own.
+          + "|fashion|fashions|fashioning|fashioned|whittle|whittles|whittling|whittled"
+          + "|shape|shapes|shaping|fasten|fastens|fastening|fastened"
           + "|repair|repairs|repairing|mend|mends|mending|dismantle|dismantles|dismantling)(?!\\w)");
     /**
      * Asking for the water the sky is giving (#37).
