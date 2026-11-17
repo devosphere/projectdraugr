@@ -113,7 +113,8 @@ class FireHazardWarningIntegrationTest {
         setWeather(world, "CLEAR");
         setFire(pit, 960);
         String warned = survey(chronicle, chunk);
-        String actualWeather = jdbc.queryForObject("SELECT weather_kind FROM world_weather WHERE world_id=?", String.class, world);
+        // The front has edges (#912/V469): ask the sky over THIS chunk, as groundFireHazard does, not the front.
+        String actualWeather = jdbc.queryForObject("SELECT local_weather_kind(?)", String.class, chunk);
         boolean dry = "CLEAR".equals(actualWeather) || "OVERCAST".equals(actualWeather);
         if (dry) assertTrue(warned.contains("burns high") && warned.contains("lean-to"),
             () -> "a survey must warn of a roaring fire beside the thatch in dry weather before it catches (#219): " + warned);
