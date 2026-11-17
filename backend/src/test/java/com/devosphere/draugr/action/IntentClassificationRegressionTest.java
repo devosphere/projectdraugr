@@ -4362,4 +4362,25 @@ class IntentClassificationRegressionTest {
         // A purpose clause is not a making: this is still a request to strip bark.
         assertEquals("STRIP_BARK", classify("strip bark from a tree to make a container", false));
     }
+
+    /**
+     * #897's second sentence. "Abrade" is a sharpening word, and nothing in the mend rule knew that SHAPING A
+     * hearth board is making one — so the player was told they had nothing by that name within reach to mend.
+     * The edge, point and bevel stay with the mend: shaping a new edge on a knife is putting it back.
+     */
+    @Test void shapingANewThingIsNotAMend() throws Exception {
+        for (String making : new String[]{
+                "Abrade a shallow socket and a dust notch into a dry stick with the keen stone I carry, "
+                  + "shaping a hearth board for a friction drill.",
+                "abrade a dry stick, shaping a spindle",
+                "sharpen a twig and whittle a peg from it",
+                "abrade a groove into the stone, fashioning a sinker"})
+            assertNotEquals("REPAIR_ITEM", classify(making, false), making);
+
+        for (String mending : new String[]{
+                "sharpen my knife", "abrade the blade", "hone the blade",
+                "abrade the knife, shaping a new edge on it", "sharpen the spear, shaping a point",
+                "repair my stone knife", "mend the woven basket"})
+            assertEquals("REPAIR_ITEM", classify(mending, false), mending);
+    }
 }

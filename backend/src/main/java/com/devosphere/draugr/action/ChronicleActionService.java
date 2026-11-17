@@ -3770,7 +3770,15 @@ public class ChronicleActionService {
         // routing regression caught at once. The lesson is to read what a shared predicate MEANS before reusing
         // it: its name said making, its body said working.
         boolean buildingOne = value.contains("assemble")||value.contains("craft")||value.contains("make ")
-            ||value.contains("build")||value.contains("put together");
+            ||value.contains("build")||value.contains("put together")
+            // ...and the words people use when they describe the making in their own hands (#897). "Abrade a
+            // shallow socket and a dust notch into a dry stick with the keen stone I carry, shaping a hearth
+            // board for a friction drill" was answered "You have nothing by that name within reach to mend":
+            // "abrade" is a sharpening word, and nothing here knew that SHAPING A board is making one.
+            // Fashion and whittle are making whatever follows them. Shape counts only before an indefinite
+            // article — a NEW thing — and never before the edge, point or bevel, because "shape a new edge on
+            // the knife" is still putting the edge back on a tool.
+            ||SHAPING_A_NEW_THING.matcher(value).find();
         if((mendsSomething&&!buildingOne&&!namesAnAssembly(value) || fixesSomething)
            &&!value.contains("shelter")&&!value.contains("frame")&&!value.contains("lean")) return Intent.REPAIR_ITEM;
         // "fishing net" / "weave a fish net" contain "fish" but are CRAFTING a net, not angling (#36/#43/#44).
@@ -6680,6 +6688,10 @@ public class ChronicleActionService {
      * "make" sits inside nothing useful but "carve" sits inside "carved" and a past participle names a thing
      * that already exists rather than asking for another.
      */
+    /** Making a new thing by hand, for the mend rule (#897): see where {@code buildingOne} reads it. */
+    private static final java.util.regex.Pattern SHAPING_A_NEW_THING = java.util.regex.Pattern.compile(
+            "(?<!\\w)(?:fashion|fashions|fashioning|whittle|whittles|whittling)(?!\\w)"
+          + "|(?<!\\w)(?:shape|shapes|shaping)\\s+(?:a|an)\\s+(?!(?:new\\s+|fresh\\s+|keen\\s+|sharp\\s+)?(?:edge|point|bevel)(?!\\w))");
     private static final java.util.regex.Pattern MAKING_SOMETHING = java.util.regex.Pattern.compile(
             "(?<!\\w)(make|makes|making|build|builds|building|craft|crafts|crafting|carve|carves|carving"
           + "|assemble|assembles|assembling|weave|weaves|weaving|lash|lashes|lashing|haft|hafts|hafting"
