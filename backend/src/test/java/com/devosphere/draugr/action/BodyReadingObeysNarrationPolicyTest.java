@@ -50,7 +50,7 @@ class BodyReadingObeysNarrationPolicyTest {
         Method m = ChronicleActionService.class.getDeclaredMethod("bodyReading", BodyHudSnapshot.class, Ailments.class);
         m.setAccessible(true);
         // bodyReading is pure over the snapshot — it touches no collaborator, so none is needed here.
-        ChronicleActionService svc = new ChronicleActionService(null, null, null, null, null, null, null, null, null, null, null, null,
+        ChronicleActionService svc = new ChronicleActionService(null, null, null, null, null, null, null, null, null, null, null, null, null,
             new com.devosphere.draugr.narration.ActionInputClassifier(), null, null, null,
             new com.devosphere.draugr.narration.NarrationEngine(), (com.devosphere.draugr.ai.RuntimeAuthoringService) null,
             (ExaminationService) null, (com.devosphere.draugr.people.ContactService) null,

@@ -101,7 +101,7 @@ public class ChronicleActionService {
         "You turn it over and try it two or three ways. Each one stops at the same place, and you set it down again.",
         "The stuff of it is willing enough; it is the working that will not come. You leave it as you found it.",
         "You get your hands properly into it and still cannot find the step that would take it further."};
-    private final JdbcTemplate jdbc; private final SimulationTickService ticks; private final ChroniclePhysiologyService physiology; private final NarrationPolicy narration; private final PhysicalItemService items; private final CapabilityAdaptationService capability; private final ConstructionService construction; private final ChronicleDiscoveryService discoveries; private final WildlifeEncounterService wildlife; private final FireService fire; private final LiteratureService literature; private final FoodPreservationService food; private final ActionInputClassifier inputClassifier; private final AssemblyService assembly; private final NarrationRouter narrationRouter; private final SimulationNarrator simulationNarrator; private final com.devosphere.draugr.narration.NarrationEngine narrationEngine; private final com.devosphere.draugr.ai.RuntimeAuthoringService authoring; private final ExaminationService examination;
+    private final JdbcTemplate jdbc; private final SimulationTickService ticks; private final ChroniclePhysiologyService physiology; private final NarrationPolicy narration; private final PhysicalItemService items; private final CapabilityAdaptationService capability; private final com.devosphere.draugr.skill.SkillProgressionService skills; private final ConstructionService construction; private final ChronicleDiscoveryService discoveries; private final WildlifeEncounterService wildlife; private final FireService fire; private final LiteratureService literature; private final FoodPreservationService food; private final ActionInputClassifier inputClassifier; private final AssemblyService assembly; private final NarrationRouter narrationRouter; private final SimulationNarrator simulationNarrator; private final com.devosphere.draugr.narration.NarrationEngine narrationEngine; private final com.devosphere.draugr.ai.RuntimeAuthoringService authoring; private final ExaminationService examination;
     private final com.devosphere.draugr.people.ContactService contact;
     private final com.devosphere.draugr.people.TradeService trade;
     private final com.devosphere.draugr.people.ConductService conduct;
@@ -110,7 +110,7 @@ public class ChronicleActionService {
     private final com.devosphere.draugr.people.AudienceService audience;
     private final com.devosphere.draugr.people.MembershipService membership;
     private final com.devosphere.draugr.people.ClaimService claims;
-    public ChronicleActionService(JdbcTemplate jdbc, SimulationTickService ticks, ChroniclePhysiologyService physiology, NarrationPolicy narration, PhysicalItemService items, CapabilityAdaptationService capability, ConstructionService construction, ChronicleDiscoveryService discoveries, WildlifeEncounterService wildlife, FireService fire, LiteratureService literature, FoodPreservationService food, ActionInputClassifier inputClassifier, AssemblyService assembly, NarrationRouter narrationRouter, SimulationNarrator simulationNarrator, com.devosphere.draugr.narration.NarrationEngine narrationEngine, com.devosphere.draugr.ai.RuntimeAuthoringService authoring, ExaminationService examination, com.devosphere.draugr.people.ContactService contact, com.devosphere.draugr.people.TradeService trade, com.devosphere.draugr.people.ConductService conduct, com.devosphere.draugr.people.AgreementService agreement, com.devosphere.draugr.people.CompanionService companions, com.devosphere.draugr.people.AudienceService audience, com.devosphere.draugr.people.MembershipService membership, com.devosphere.draugr.people.ClaimService claims) { this.claims = claims; this.membership = membership; this.audience = audience; this.companions = companions; this.agreement = agreement; this.conduct = conduct; this.trade = trade; this.contact = contact; this.jdbc = jdbc; this.ticks = ticks; this.physiology = physiology; this.narration = narration; this.items=items; this.capability=capability; this.construction=construction; this.discoveries=discoveries; this.wildlife=wildlife; this.fire=fire; this.literature=literature; this.food=food; this.inputClassifier=inputClassifier; this.assembly=assembly; this.narrationRouter=narrationRouter; this.simulationNarrator=simulationNarrator; this.narrationEngine=narrationEngine; this.authoring=authoring; this.examination=examination; }
+    public ChronicleActionService(JdbcTemplate jdbc, SimulationTickService ticks, ChroniclePhysiologyService physiology, NarrationPolicy narration, PhysicalItemService items, CapabilityAdaptationService capability, com.devosphere.draugr.skill.SkillProgressionService skills, ConstructionService construction, ChronicleDiscoveryService discoveries, WildlifeEncounterService wildlife, FireService fire, LiteratureService literature, FoodPreservationService food, ActionInputClassifier inputClassifier, AssemblyService assembly, NarrationRouter narrationRouter, SimulationNarrator simulationNarrator, com.devosphere.draugr.narration.NarrationEngine narrationEngine, com.devosphere.draugr.ai.RuntimeAuthoringService authoring, ExaminationService examination, com.devosphere.draugr.people.ContactService contact, com.devosphere.draugr.people.TradeService trade, com.devosphere.draugr.people.ConductService conduct, com.devosphere.draugr.people.AgreementService agreement, com.devosphere.draugr.people.CompanionService companions, com.devosphere.draugr.people.AudienceService audience, com.devosphere.draugr.people.MembershipService membership, com.devosphere.draugr.people.ClaimService claims) { this.claims = claims; this.membership = membership; this.audience = audience; this.companions = companions; this.agreement = agreement; this.conduct = conduct; this.trade = trade; this.contact = contact; this.jdbc = jdbc; this.ticks = ticks; this.physiology = physiology; this.narration = narration; this.items=items; this.capability=capability; this.skills=skills; this.construction=construction; this.discoveries=discoveries; this.wildlife=wildlife; this.fire=fire; this.literature=literature; this.food=food; this.inputClassifier=inputClassifier; this.assembly=assembly; this.narrationRouter=narrationRouter; this.simulationNarrator=simulationNarrator; this.narrationEngine=narrationEngine; this.authoring=authoring; this.examination=examination; }
 
     @Transactional
     public ActionResult resolve(String text) { return resolve(text, null); }
@@ -974,7 +974,18 @@ public class ChronicleActionService {
                 ? "You have nothing to bind it with — no poultice, no roll of bandage, not so much as a length of plant fibre. The blood keeps its own time."
                 : "You go over yourself and find nothing open and nothing bleeding."; } }
         else if (intent == Intent.EDIT_DOCUMENT) { try { reviseDocument(chronicle.id(), actionId, resolvedAt, text); perception="Your marks remain on the physical page."; } catch (IllegalArgumentException | IllegalStateException ignored) { outcome="FAILED"; perception="You handle the page for a while, then set it aside unchanged."; } }
-        else if (intent == Intent.CONFRONT_WILDLIFE) { double spec=SuccessModel.specificity(text,HUNT_SIGNALS); double fam=capability.familiarity(chronicle.id(),"AIM"); int tactic=(int)Math.round(spec*30 + Math.min(0.20,fam*3.0)*100)
+        else if (intent == Intent.CONFRONT_WILDLIFE) { double spec=SuccessModel.specificity(text,HUNT_SIGNALS); double fam=capability.familiarity(chronicle.id(),"AIM");
+            // WHICH DISCIPLINE THIS FIGHT ACTUALLY ASKS FOR (#954). fam is AIM, shared by seven intents and
+            // blind to what is in your hands: it treated a drawn bow, a thrust spear and bare fists as one
+            // skill. The weapon decides the discipline -- archery, the spear, the knife, the axe, the club,
+            // the javelin, the sling or a thrown stone -- and HUNTING and TRACKING assist whatever it is,
+            // since #954 asks that a hunt account for the tracking and the weapon both. Bare-handed, the hunt
+            // IS the discipline. Added on top of fam, so an unpractised chronicle fights exactly as before.
+            String armed = skills.weaponInHand(chronicle.id());
+            double trained = 0.60 * skills.competence(chronicle.id(), armed == null ? "HUNTING" : armed)
+                           + 0.25 * skills.competence(chronicle.id(), "HUNTING")
+                           + 0.15 * skills.competence(chronicle.id(), "TRACKING");
+            int tactic=(int)Math.round(spec*30 + Math.min(0.20,fam*3.0)*100 + Math.min(15.0, trained*20.0))
             // ...AND WHAT KEEPS YOU UNSEEN (#37/#93). The camouflage cloak and the hide screen — whose own
             // keywords include "stalking screen" — were read by the ambush odds and by nothing else, so the
             // gear made expressly for closing with an animal did nothing for closing with an animal. It is
@@ -998,7 +1009,13 @@ public class ChronicleActionService {
             String method = fire.detectMethod(chronicle.id(), text);
             FireService.MethodProfile mp = fire.profile(chronicle.id(), method);
             double base = Math.max(0.05, 1.0 - mp.difficulty() / 100.0);
-            double prob = base + 0.35 * spec + Math.min(0.30, fam * 3.0);
+            // AND WHAT THIS PARTICULAR HAND HAS LEARNED ABOUT FIRE (#954). fam above is FINE_MOTOR, which
+            // sixty-seven intents share: carrying a basket and tying a knot build the same number that lights
+            // this fire. FIRECRAFT is the discipline itself. It is ADDED rather than substituted, because
+            // #954 asks that existing capability behaviour be preserved — at zero proficiency this line is
+            // worth nothing and the odds are exactly what they were before.
+            double honed = skills.competence(chronicle.id(), "FIRECRAFT");
+            double prob = base + 0.35 * spec + Math.min(0.30, fam * 3.0) + Math.min(0.20, honed * 0.8);
             // Daylight methods are worthless in the dark, and most ignition fails in rain.
             int hourOfDay = resolvedAt.atZone(java.time.ZoneOffset.UTC).getHour();
             if (mp.requiresDaylight() && (hourOfDay < 7 || hourOfDay > 18)) prob = 0;
@@ -1280,6 +1297,25 @@ public class ChronicleActionService {
             // hand-work of crafting/processing/writing builds FINE_MOTOR — no longer all lumped together.
             String domain = capabilityDomainOf(intent);
             capability.record(chronicle.id(), actionId, domain, minutes, "LOAD".equals(domain) ? .18 : .05, "RECOVERY".equals(domain) ? .75 : .45, resolvedAt);
+            // ...AND THE SPECIFIC DISCIPLINE IT REHEARSED (#954). The line above grows one of eight broad
+            // numbers; sixty-seven intents share FINE_MOTOR and forty-seven share ATTENTION, so on its own it
+            // cannot tell a weaver from a cook. This asks the data what was actually practised — the weapon in
+            // hand if this was a fight, else the process that ran, else the intent own card — and credits that
+            // skill strongly and its supporting aptitudes slowly, from this one event.
+            //
+            // Here, beside the capability write, deliberately: this block runs only on a SUCCEEDED action that
+            // actually resolved, and a replayed idempotency key returns long before it. Practice therefore
+            // cannot be awarded twice for one intended act, and chronicle_skill_practice_event unique index
+            // makes that a guarantee rather than a consequence of where the call sits.
+            String ranProcess = learned != null && learned.startsWith("PROCESS:") ? learned.substring("PROCESS:".length()) : null;
+            String weapon = intent == Intent.CONFRONT_WILDLIFE ? skills.weaponInHand(chronicle.id()) : null;
+            String discipline = skills.disciplineOf(intent.name(), ranProcess, weapon);
+            com.devosphere.draugr.skill.SkillProgressionService.Practice practised = skills.practise(
+                chronicle.id(), actionId, discipline, minutes, skills.difficultyOf(intent.name(), ranProcess), resolvedAt);
+            // What the player is told about it is never a number: only, on the few acts that cross a
+            // threshold, a sentence about their own hands.
+            String better = skills.improvementSentence(practised);
+            if (better != null) perception = perception + better;
         }
         // The base row is now durable. Everything below shapes the DISPLAYED narration (death coda,
         // AI sentence). It is written only to the separate overlay table — never back to the base row —
