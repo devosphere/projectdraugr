@@ -2971,6 +2971,31 @@ public class PhysicalItemService {
         return c != null && (c.equals("PROCESS") || c.equals("ACQUIRE") || c.equals("CRAFT") || c.equals("CONSTRUCT") || c.equals("MAINTAIN"));
     }
 
+    /**
+     * Why not one more of an item can be carried, in the player's words, or {@code null} when it fits (#896).
+     *
+     * <p>Every gather asks {@link #capacityHeadroomUnits} before it looks at the ground, and a full load came back as
+     * the same zero as an empty wood. A player at 26.5 of 27.0 L of bulk, with ample weight to spare, was told they
+     * "search the leaf litter for dry wood, then leave with empty hands" — a sentence about the ground, when the
+     * ground was never searched. This names which limit it was (bulk, weight, or the one thing being too heavy to
+     * lift at all), because only then does the player know that setting something down is the fix.
+     */
+    @Transactional(readOnly = true)
+    public String noRoomToCarry(UUID chronicle, String itemKey, String what) {
+        LoadState s = loadState(chronicle);
+        int[] dims = jdbc.query("SELECT unit_mass_grams,unit_volume_ml FROM item_definition WHERE item_key=?", rs -> rs.next() ? new int[]{rs.getInt(1), rs.getInt(2)} : new int[]{0, 0}, itemKey);
+        int unitMass = dims[0], unitVol = dims[1];
+        if (unitMass > 0 && unitMass > s.maximumSingleLiftGrams())
+            return "You cannot take up the " + what + " at all — a single piece is more than you can lift.";
+        boolean massFull = unitMass > 0 && s.sustainedMassCapacityGrams() - s.massGrams() < unitMass;
+        boolean bulkFull = unitVol > 0 && s.directBulkCapacityMl() - s.bulkMl() < unitVol;
+        if (!massFull && !bulkFull) return null;
+        String limit = massFull && bulkFull ? "at its limit in both bulk and weight"
+                     : bulkFull ? "at its bulk already, though not its weight" : "as heavy as you can bear, though there is space in it";
+        return "You leave the " + what + " where it lies: your load is " + limit
+             + ", and there is no room about you for even one more. Set something down and there will be.";
+    }
+
     /** Whether the chronicle could carry one more of an item without breaking capacity. */
     @Transactional(readOnly = true)
     public boolean hasCarryRoomFor(UUID chronicle, String itemKey) {

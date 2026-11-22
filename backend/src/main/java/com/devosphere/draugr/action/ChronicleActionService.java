@@ -686,7 +686,7 @@ public class ChronicleActionService {
             if (strayed != null) perception += " One " + strayed.replace('_', ' ') + " is gone from the herd by morning, with no blood anywhere: only tracks"
                 + " going out across the ground, where nothing sound stood to hold them in.";
         }
-        else if (intent == Intent.GATHER_FIBER) { int bundles=items.gatherPlantFiber(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())); outcome=bundles>0?"SUCCEEDED":"FAILED"; perception=bundles>0?"You patiently separate usable plant fiber from the living growth around you."+tally(bundles,"bundle","bundles"):"You search through the growth, but leave it as it is."; gatherEffectType="PLANT_FIBER_GATHERED"; gatherPayloadKey="bundles"; gatherCount=bundles; }
+        else if (intent == Intent.GATHER_FIBER) { int bundles=items.gatherPlantFiber(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())); outcome=bundles>0?"SUCCEEDED":"FAILED"; perception=bundles>0?"You patiently separate usable plant fiber from the living growth around you."+tally(bundles,"bundle","bundles"):emptyHanded(chronicle.id(),"plant_fiber","plant fiber","You search through the growth, but leave it as it is."); gatherEffectType="PLANT_FIBER_GATHERED"; gatherPayloadKey="bundles"; gatherCount=bundles; }
         else if (intent == Intent.GATHER_STONE) {
             // A pick breaks stone out of the ground far faster than bare hands prising at it — a proper metal pick
             // (bronze/iron) quarries a real load, a knapped hammer or wooden pick rather less (#183). The metal a
@@ -694,9 +694,9 @@ public class ChronicleActionService {
             boolean metalPick = items.hasAtLeast(chronicle.id(),"bronze_pickaxe",1) || items.hasAtLeast(chronicle.id(),"iron_pickaxe",1);
             boolean stonePick = !metalPick && (items.hasAtLeast(chronicle.id(),"primitive_pickaxe",1) || items.hasAtLeast(chronicle.id(),"stone_hammer",1));
             int quarry = metalPick ? 3 : stonePick ? 1 : 0;
-            int stones=items.gatherFieldStones(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())+quarry); outcome=stones>0?"SUCCEEDED":"FAILED"; perception=stones>0?(metalPick?"You drive the pick into the ground and lever out a good load of stone, far more than bare hands could win.":"You work loose a few stones from the ground and carry them with you.")+tally(stones,"stone","stones"):"You turn over the ground for a while, then leave it undisturbed."; gatherEffectType="FIELD_STONE_GATHERED"; gatherPayloadKey="stones"; gatherCount=stones; }
-        else if (intent == Intent.GATHER_BERRIES) { int berries=items.gatherWildBerries(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())); outcome=berries>0?"SUCCEEDED":"FAILED"; perception=berries>0?"You gather ripe berries from the living growth."+tally(berries,"berry","berries"):"You search the low growth carefully, then let it settle back into place."; gatherEffectType="WILD_BERRIES_GATHERED"; gatherPayloadKey="berries"; gatherCount=berries; }
-        else if (intent == Intent.GATHER_BRANCHES) { int branches=items.gatherDryBranches(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())); outcome=branches>0?"SUCCEEDED":"FAILED"; perception=branches>0?(standingTreesHere(chronicle.location())?"You gather dry branches from beneath the trees.":"You work along the low scrub and the wind-broken ground, and gather what dry wood it has to give.")+tally(branches,"branch","branches"):"You search the leaf litter for dry wood, then leave with empty hands."; gatherEffectType="DRY_BRANCH_GATHERED"; gatherPayloadKey="branches"; gatherCount=branches; }
+            int stones=items.gatherFieldStones(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())+quarry); outcome=stones>0?"SUCCEEDED":"FAILED"; perception=stones>0?(metalPick?"You drive the pick into the ground and lever out a good load of stone, far more than bare hands could win.":"You work loose a few stones from the ground and carry them with you.")+tally(stones,"stone","stones"):emptyHanded(chronicle.id(),"field_stone","stones","You turn over the ground for a while, then leave it undisturbed."); gatherEffectType="FIELD_STONE_GATHERED"; gatherPayloadKey="stones"; gatherCount=stones; }
+        else if (intent == Intent.GATHER_BERRIES) { int berries=items.gatherWildBerries(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())); outcome=berries>0?"SUCCEEDED":"FAILED"; perception=berries>0?"You gather ripe berries from the living growth."+tally(berries,"berry","berries"):emptyHanded(chronicle.id(),"wild_berries","berries","You search the low growth carefully, then let it settle back into place."); gatherEffectType="WILD_BERRIES_GATHERED"; gatherPayloadKey="berries"; gatherCount=berries; }
+        else if (intent == Intent.GATHER_BRANCHES) { int branches=items.gatherDryBranches(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())); outcome=branches>0?"SUCCEEDED":"FAILED"; perception=branches>0?(standingTreesHere(chronicle.location())?"You gather dry branches from beneath the trees.":"You work along the low scrub and the wind-broken ground, and gather what dry wood it has to give.")+tally(branches,"branch","branches"):emptyHanded(chronicle.id(),"dry_branch","dry wood","You search the leaf litter for dry wood, then leave with empty hands."); gatherEffectType="DRY_BRANCH_GATHERED"; gatherPayloadKey="branches"; gatherCount=branches; }
         else if (intent == Intent.GATHER_CLAY) { String digger=items.diggingTool(chronicle.id()); boolean shovel="wooden_shovel".equals(digger); boolean stick=digger!=null&&!shovel; int dig=shovel?2:(stick?1:0); int lumps=items.gatherClay(chronicle.id(),chronicle.location(),resolvedAt,gatherBonus(text,chronicle.id())+dig); outcome=lumps>0?"SUCCEEDED":"FAILED"; perception=lumps>0?(shovel?"You bite the shovel deep into the bank and turn out heavy lumps of wet clay by the load.":stick?"You lever the earth open with the digging stick and prise free dense lumps of wet clay.":"You work the earth with your hands and pull free dense lumps of wet clay.")+tally(lumps,"lump","lumps"):"You search the ground for workable clay, but the earth here holds nothing useful."; gatherEffectType="CLAY_GATHERED"; gatherPayloadKey="lumps"; gatherCount=lumps;
             // THE GROUND IS NOT EMPTY WHEN THE SURVEY JUST NAMED A MATERIAL ON IT (#887). This dug for a clay
             // DEPOSIT — CLAY_DEPOSIT, RIVER_BANK, WETLAND and nothing else — and answered "the earth here
@@ -1891,6 +1891,16 @@ public class ChronicleActionService {
         if (drivingTheStock) return "You travel " + direction.description + wayItWalked(destination) + "."
             + stockCameToo(chronicle.id(), stockWantsWater(said));
         return "You travel " + direction.description + wayItWalked(destination) + ".";
+    }
+    /**
+     * The sentence for a gather that came back empty (#896). A gather takes only what the load has room for, so a
+     * full load and an empty ground both returned zero, and both were told as the ground's line. The load is asked
+     * first: when it is the reason, say so (and which limit), because setting something down is then the remedy and
+     * searching another tile is not. Otherwise the ground's own line stands.
+     */
+    private String emptyHanded(UUID chronicle, String itemKey, String what, String groundLine) {
+        String full = items.noRoomToCarry(chronicle, itemKey, what);
+        return full != null ? full : groundLine;
     }
     /**
      * What the hands actually came away with (#30).
