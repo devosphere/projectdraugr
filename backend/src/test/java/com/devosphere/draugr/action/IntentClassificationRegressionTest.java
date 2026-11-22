@@ -4544,4 +4544,22 @@ class IntentClassificationRegressionTest {
         assertNotEquals("COPPICE", classify("cut willow branches", true), "a sentence that is a process keeps it");
         assertEquals("FELL_TREE", classify("fell a willow tree"), "felling is still felling");
     }
+
+    /**
+     * #966 — EVERY STEP OF THE BRONZE SWORD REACHES THE PROCESS MATCHER. The four recipes (mould, cast, edges, hilt)
+     * live in V477, and a Java intent that claims one of their sentences first leaves that step unreachable. The
+     * traps are real: "cast" is fishing ("cast a line", or with a net), "hammer" beside "make" is CRAFT_HAMMER, and
+     * "sharpen" or "grind" beside "blade" is mending. None of the sword's own keywords uses those, and this holds it.
+     */
+    @Test void everyStepOfTheBronzeSwordReachesTheProcessMatcher() throws Exception {
+        for (String step : new String[]{
+                "make a sword mould", "carve a sword mould", "make a clay sword mold",
+                "cast a bronze sword", "cast the sword blade", "pour the sword",
+                "forge the edges", "forge the sword edges", "hammer out the edges", "finish the sword casting",
+                "hilt the sword", "fit a hilt to the blade", "haft the sword blade",
+                "forge a bronze sword", "make a bronze short sword"})
+            assertEquals("UNKNOWN", classify(step, true), step);
+        // And the mending words keep their meaning: putting an edge back on a sword you own is still a repair.
+        assertEquals("REPAIR_ITEM", classify("sharpen my bronze sword"));
+    }
 }
