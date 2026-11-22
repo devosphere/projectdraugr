@@ -82,11 +82,18 @@ public class ChronicleService {
         // reader can therefore show six steps as one submission without the backend guessing where a plan began.
         List<JourneyEntry> entries = jdbc.query(
             "SELECT ca.resolved_at, ca.intent_type, ca.outcome, COALESCE(can.narration, ca.narration), " +
-            "       ca.action_text, ca.submitted_at, ca.submission_text " +
+            "       ca.action_text, ca.submitted_at, ca.submission_text, " +
+            "       r.steps, r.stopped_because, r.state " +
             "FROM chronicle_action ca LEFT JOIN chronicle_action_narration can ON can.action_id = ca.id " +
+            // AND THE STEPS NEVER ATTEMPTED (#873). The same remainder the live timeline now reads, so the
+            // archive and the PDF agree with the screen about what a Chronicle actually did and did not do.
+            "LEFT JOIN LATERAL (SELECT steps, stopped_because, state FROM chronicle_plan_remainder " +
+            "                    WHERE source_action_id = ca.id ORDER BY set_aside_at LIMIT 1) r ON true " +
             "WHERE ca.chronicle_id=? AND ca.narration IS NOT NULL ORDER BY ca.resolved_at, ca.id",
             (rs, row) -> new JourneyEntry(rs.getTimestamp(1).toInstant(), rs.getString(2), rs.getString(3), rs.getString(4),
-                rs.getString(5), rs.getTimestamp(6) == null ? null : rs.getTimestamp(6).toInstant(), rs.getString(7)),
+                rs.getString(5), rs.getTimestamp(6) == null ? null : rs.getTimestamp(6).toInstant(), rs.getString(7),
+                com.devosphere.draugr.action.ChronicleActionService.stepsSetAside(rs.getArray(8)),
+                rs.getString(9), "RESUMED".equals(rs.getString(10))),
             chronicleId);
 
         String finalBody = jdbc.query("SELECT body_snapshot::text FROM chronicle_death_snapshot WHERE chronicle_id=?",
@@ -183,7 +190,8 @@ public class ChronicleService {
      * written before V464.
      */
     public record JourneyEntry(Instant at, String intent, String outcome, String narration,
-                               String actionText, Instant submittedAt, String submissionText) { }
+                               String actionText, Instant submittedAt, String submissionText,
+                               List<String> stepsSetAside, String setAsideBecause, boolean takenUpLater) { }
     /** A whole life, readable after its end. {@code finalBody} is null while the chronicle still lives. */
     public record ChronicleJourney(ChronicleSummary summary, List<JourneyEntry> entries, String finalBody, int discoveries, int placesNamed) { }
     public record ChronicleLocation(UUID chronicleId, UUID locationId, String biome, String presentationKey) { }

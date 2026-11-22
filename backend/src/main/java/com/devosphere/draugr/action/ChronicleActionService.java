@@ -1375,11 +1375,25 @@ public class ChronicleActionService {
         // `submission_text` is the sentence the player wrote; `action_text` is the step it was cut into (#892).
         // A reader shows the submission once per group and the steps beneath it, so the timeline reads the same
         // before and after a relaunch. Null for rows written before V464, and there the step text stands.
-        String columns = "SELECT ca.id, ca.resolved_at, COALESCE(can.narration, ca.narration), ca.action_text, ca.submitted_at, ca.submission_text "
-                + "FROM chronicle_action ca LEFT JOIN chronicle_action_narration can ON can.action_id = ca.id ";
+        // AND THE STEPS THE CHRONICLE NEVER GOT TO (#873). When a plan stops partway the undone steps go to
+        // chronicle_plan_remainder, which nothing but this service ever read — so the timeline showed four
+        // steps of a six-step procedure and said nothing about the other two. The player could not tell a
+        // plan that finished from one that was cut short. The remainder names the action it stopped on, so
+        // the skipped steps hang off that row and read directly beneath the step that failed, which is where
+        // somebody reconstructing a death actually looks.
+        //
+        // LATERAL with LIMIT 1 rather than a plain join: this read is paginated, and a row that multiplied
+        // would silently shorten the page. One remainder per stopping action is what the writer produces, and
+        // this makes the read safe whether or not that stays true.
+        String columns = "SELECT ca.id, ca.resolved_at, COALESCE(can.narration, ca.narration), ca.action_text, ca.submitted_at, ca.submission_text, "
+                + "       r.steps, r.stopped_because, r.state "
+                + "FROM chronicle_action ca LEFT JOIN chronicle_action_narration can ON can.action_id = ca.id "
+                + "LEFT JOIN LATERAL (SELECT steps, stopped_because, state FROM chronicle_plan_remainder "
+                + "                    WHERE source_action_id = ca.id ORDER BY set_aside_at LIMIT 1) r ON true ";
         org.springframework.jdbc.core.RowMapper<NarrationEntry> asEntry = (rs, row) -> new NarrationEntry(
                 rs.getObject(1, UUID.class), rs.getTimestamp(2).toInstant(), rs.getString(3), rs.getString(4),
-                rs.getTimestamp(5) == null ? null : rs.getTimestamp(5).toInstant(), rs.getString(6));
+                rs.getTimestamp(5) == null ? null : rs.getTimestamp(5).toInstant(), rs.getString(6),
+                stepsSetAside(rs.getArray(7)), rs.getString(8), "RESUMED".equals(rs.getString(9)));
         List<NarrationEntry> entries = before == null
                 ? jdbc.query(columns + "WHERE ca.chronicle_id = ? AND ca.narration IS NOT NULL ORDER BY ca.resolved_at DESC, ca.id DESC LIMIT ?", asEntry, chronicle, limit + 1)
                 : jdbc.query(columns + "WHERE ca.chronicle_id = ? AND ca.narration IS NOT NULL AND (ca.resolved_at, ca.id) < (?, ?) ORDER BY ca.resolved_at DESC, ca.id DESC LIMIT ?", asEntry, chronicle, java.sql.Timestamp.from(before), beforeId, limit + 1);
@@ -3144,6 +3158,18 @@ public class ChronicleActionService {
         // PhysicalItemService.aRecipesOwnNameTheCatalogueCanAnswer, which also explains why the bare verbs
         // `fix`, `dress`, `carve` and `reinforce` keep their intents here with no list of exceptions.
         if(items.aRecipesOwnNameTheCatalogueCanAnswer(action)) return Intent.UNKNOWN;
+        // WHAT A JOURNAL ENTRY SAYS IS NOT WHAT THE PLAYER DOES (#891). The write rules sat two thousand lines
+        // down this chain, so every rule above them read the ENTRY as well as the request. Live:
+        //
+        //   "Write a field journal: The oak stand is two tiles east of camp across grassland, ..."
+        //
+        // moved the Chronicle a tile east — a direction and a biome name together are how a player asks to
+        // cross country — and the ticket's own control, "...two beside the felled oak", was FELL_TREE.
+        //
+        // Settled here, the #897 way: a write verb that OPENS the sentence and governs a writing noun decides
+        // it, and nothing the entry mentions gets a vote. Opening, not anywhere, so "head east across the
+        // grassland and write a note there" is still the walk it begins with.
+        if(aWriteOpensTheSentence(value)) return Intent.WRITE;
         if((value.contains("craft")||value.contains("make"))&&value.contains("spear")) return Intent.CRAFT_SPEAR;
         if((value.contains("craft")||value.contains("make"))&&value.contains("knife")) return Intent.CRAFT_KNIFE;
         if((value.contains("craft")||value.contains("make"))&&value.contains("hammer")) return Intent.CRAFT_HAMMER;
@@ -5874,6 +5900,50 @@ public class ChronicleActionService {
         return false;
     }
 
+    private static final java.util.Set<String> OPENS_A_REQUEST = java.util.Set.of(
+        "i", "ll", "will", "please", "now", "then", "so", "let", "me", "carefully", "quickly", "neatly", "slowly");
+    private static final java.util.Set<String> WRITING_VERBS = java.util.Set.of(
+        "write", "jot", "inscribe", "scribble", "scrawl", "pen", "record");
+    /** "log" and "account" are left out on purpose: a log is firewood here, and an account is settled. */
+    private static final java.util.Set<String> WRITTEN_THINGS = java.util.Set.of(
+        "journal", "journals", "note", "notes", "entry", "entries", "diary", "record", "records", "memo", "list");
+
+    /**
+     * Whether the sentence is a request to WRITE something down (#891): after the words that only open a
+     * request, its first word is a writing verb, and a writing noun follows within four words of it — "write a
+     * field journal", "jot down a note", "write in my journal". Only the words before any colon are read,
+     * because everything after it is the entry.
+     */
+    static boolean aWriteOpensTheSentence(String value) {
+        if (value == null) return false;
+        int colon = value.indexOf(':');
+        String opening = (colon >= 0 ? value.substring(0, colon) : value).toLowerCase(Locale.ROOT);
+        String[] said = opening.replaceAll("[^a-z]+", " ").trim().split(" ");
+        int at = 0;
+        while (at < said.length && OPENS_A_REQUEST.contains(said[at])) at++;
+        if (at >= said.length || !WRITING_VERBS.contains(said[at])) return false;
+        for (int next = at + 1; next < said.length && next - at <= 4; next++)
+            if (WRITTEN_THINGS.contains(said[next])) return true;
+        return false;
+    }
+
+    private static final Pattern ENTRY_AFTER_A_WORD = Pattern.compile("(?is)\\b(?:about|that)\\s+(.+)$");
+
+    /**
+     * What a write sets down (#891): everything after the colon, or — when the player wrote no colon — after the
+     * first "about" or "that", so "write a field journal about the oak stand" records the oak stand rather than
+     * nothing. Null when the sentence carries no entry at all.
+     */
+    static String entryBody(String text) {
+        if (text == null) return null;
+        Matcher m = WRITE_CONTENT.matcher(text);
+        boolean found = m.find();
+        if (!found) { m = ENTRY_AFTER_A_WORD.matcher(text); found = m.find(); }
+        if (!found) return null;
+        String body = m.group(1).trim();
+        return body.isEmpty() ? null : body;
+    }
+
     static boolean makingGoverns(String value, String noun, String... verbs) {
         if (value == null) return false;
         String[] said = value.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim().split(" ");
@@ -6995,9 +7065,8 @@ public class ChronicleActionService {
         return "You eat what you foraged. It is plain, but there is something in it worth the chewing.";
     }
     private String[] writeOrDraw(ActiveChronicle chronicle, String text, UUID actionId, Instant at) {
-        Matcher m = WRITE_CONTENT.matcher(text);
-        if (!m.find() || m.group(1).trim().isEmpty()) return new String[]{"FAILED", "You hold the charcoal a moment, then set nothing down."};
-        String content = m.group(1).trim();
+        String content = entryBody(text);
+        if (content == null) return new String[]{"FAILED", "You hold the charcoal a moment, then set nothing down."};
         String value = text.toLowerCase(Locale.ROOT);
         String kind = value.contains("map") ? "MAP" : "LITERATURE";
         if (!items.hasAtLeast(chronicle.id(), "charcoal", 1)) return new String[]{"FAILED", "Without anything that leaves a mark, the surface stays blank."};
@@ -8682,6 +8751,23 @@ public class ChronicleActionService {
      * multi-step submission, so a reader can present six resolved steps as the one procedure they were.
      */
     public record NarrationEntry(UUID id, Instant occurredAt, String narration, String actionText, Instant submittedAt,
-                                 String submissionText) { }
+                                 String submissionText, List<String> stepsSetAside, String setAsideBecause,
+                                 boolean takenUpLater) { }
+
+    /**
+     * The undone steps of a plan that stopped on this action, or an empty list — never null, so no reader
+     * has to guard it. A TEXT[] that cannot be read is treated as no remainder rather than failing a page of
+     * history: the steps are a courtesy to someone reading back, and losing them must not lose the prose.
+     */
+    public static List<String> stepsSetAside(java.sql.Array steps) {
+        if (steps == null) return List.of();
+        try {
+            Object[] raw = (Object[]) steps.getArray();
+            if (raw == null) return List.of();
+            List<String> out = new java.util.ArrayList<>(raw.length);
+            for (Object s : raw) if (s != null && !s.toString().isBlank()) out.add(s.toString());
+            return List.copyOf(out);
+        } catch (java.sql.SQLException unreadable) { return List.of(); }
+    }
     public record NarrationPage(List<NarrationEntry> entries, boolean hasMore) { }
 }

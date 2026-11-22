@@ -114,6 +114,24 @@ public class ChronicleNarrationExporter {
                     Paragraph n = new Paragraph(e.narration() == null ? "" : e.narration(), body);
                     n.setLeading(15.5f);
                     doc.add(n);
+                    // AND THE STEPS NEVER ATTEMPTED (#873). Beneath the step the plan stopped on, because
+                    // that is where someone reconstructing a death reads. Distinguished from the steps the
+                    // Chronicle actually did by sitting apart, in the aside face, and by saying so plainly.
+                    String setAside = setAsideFor(e.stepsSetAside(), e.setAsideBecause(), e.takenUpLater());
+                    if (setAside != null) {
+                        Paragraph untried = new Paragraph(setAside, marker);
+                        untried.setIndentationLeft(18f);
+                        untried.setSpacingBefore(3f);
+                        untried.setSpacingAfter(1f);
+                        untried.setLeading(12.5f);
+                        doc.add(untried);
+                        for (String step : e.stepsSetAside()) {
+                            Paragraph one = new Paragraph("not attempted: " + step, marker);
+                            one.setIndentationLeft(30f);
+                            one.setLeading(12.5f);
+                            doc.add(one);
+                        }
+                    }
                 }
             }
 
@@ -263,5 +281,21 @@ public class ChronicleNarrationExporter {
         Paragraph p = new Paragraph(" ");
         p.setSpacingBefore(height);
         return p;
+    }
+
+    /**
+     * The heading above the untried steps, or null when nothing was set aside (#873).
+     *
+     * <p>The twin of {@code playerWords.ts setAsideLine}, and the two must say the same thing: the archive,
+     * the live timeline and this PDF are three readers of one ledger, and a player who sees three different
+     * accounts of their own life trusts none of them.
+     */
+    static String setAsideFor(java.util.List<String> steps, String because, boolean takenUpLater) {
+        if (steps == null || steps.isEmpty()) return null;
+        String count = steps.size() == 1 ? "One step" : steps.size() + " steps";
+        String why = "STEP_LIMIT".equals(because)
+            ? "the plan ran longer than one stretch of work"
+            : "the work before it did not succeed";
+        return count + " left untried — " + why + "." + (takenUpLater ? " You took them up later." : "");
     }
 }

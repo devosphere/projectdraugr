@@ -38,3 +38,42 @@ export function playerWords(row: SaidWords, continues: boolean): string | null {
   // exactly what those rows have always shown.
   return whole || step || null;
 }
+
+/**
+ * THE STEPS A CHRONICLE NEVER GOT TO (#873).
+ *
+ * <p>When a plan stops partway the undone steps are set aside, and until now they appeared nowhere: the
+ * timeline showed four steps of a six-step procedure and said nothing about the other two, so a player
+ * reading back could not tell a plan that finished from one that was cut short. That matters most at a
+ * death, where the last thing attempted and the thing that killed them are usually different.
+ *
+ * <p>The line has to say three things and no more: that these were NOT attempted, why the plan stopped,
+ * and whether they were taken up later. Anything longer competes with the prose it sits beneath.
+ *
+ * <p>The backend twin is `ChronicleNarrationExporter.setAsideFor`, and the two must say the same thing.
+ */
+export type SetAside = {
+  stepsSetAside?: string[] | null;
+  setAsideBecause?: string | null;
+  takenUpLater?: boolean;
+};
+
+/** The heading above the untried steps, or null when this row set nothing aside. */
+export function setAsideLine(row: SetAside): string | null {
+  const steps = (row.stepsSetAside ?? []).filter((s) => s && s.trim());
+  if (!steps.length) return null;
+  const count = steps.length === 1 ? 'One step' : `${steps.length} steps`;
+  // STEP_LIMIT and FAILED_STEP are the only two reasons the writer records, and they are different
+  // stories: one is a plan that broke, the other a plan that was simply longer than one sitting.
+  const why =
+    row.setAsideBecause === 'STEP_LIMIT'
+      ? 'the plan ran longer than one stretch of work'
+      : 'the work before it did not succeed';
+  const after = row.takenUpLater ? ' You took them up later.' : '';
+  return `${count} left untried — ${why}.${after}`;
+}
+
+/** The untried steps themselves, in the order they were written. Empty when there are none. */
+export function setAsideSteps(row: SetAside): string[] {
+  return (row.stepsSetAside ?? []).filter((s) => s && s.trim()).map((s) => s.trim());
+}
