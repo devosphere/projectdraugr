@@ -155,16 +155,13 @@ public class SkillProgressionService {
         // The supporting aptitudes take a fixed share of THIS gain, split by their catalogued weights.
         // Normalised by the weights' own total, so a drift in the data cannot widen the share.
         Map<String, Double> shares = new LinkedHashMap<>();
+        Map<String, Double> creditByColumn = new LinkedHashMap<>();
         StringBuilder sharesJson = new StringBuilder("{");
         jdbc.query("SELECT a.aptitude_key, a.adaptation_column, s.weight FROM skill_aptitude_support s " +
                    "JOIN aptitude a ON a.aptitude_key = s.aptitude_key WHERE s.skill_key = ? ORDER BY s.weight DESC",
             rs -> {
                 double credit = APTITUDE_SHARE_OF_GAIN * gain * (rs.getDouble(3) / weightTotal);
-                String column = rs.getString(2);
-                // The column name comes from the aptitude catalogue, whose adaptation_column is UNIQUE and
-                // written in this migration — never from anything a player typed.
-                jdbc.update("UPDATE chronicle_capability_adaptation SET " + column + " = LEAST(1, " + column + " + ?) " +
-                            "WHERE chronicle_id = ?", credit, chronicle);
+                creditByColumn.put(rs.getString(2), credit);
                 shares.put(rs.getString(1), credit);
                 if (sharesJson.length() > 1) sharesJson.append(',');
                 sharesJson.append('"').append(rs.getString(1)).append("\":").append(credit);
@@ -180,6 +177,14 @@ public class SkillProgressionService {
             "VALUES (?,?,?,?,?,?,?,?,?::jsonb) ON CONFLICT DO NOTHING",
             chronicle, action, Timestamp.from(at), skill, minutes, diff, before, after, sharesJson.toString());
         if (wrote == 0) return null;                                   // already credited for this action
+
+        // Only now, with the award proven new, do the aptitudes move. Crediting them before the evidence
+        // insert let a replayed action raise strength a second time while the skill itself stood still.
+        // The column name comes from the aptitude catalogue, whose adaptation_column is UNIQUE and written
+        // in V472 -- never from anything a player typed.
+        creditByColumn.forEach((column, credit) ->
+            jdbc.update("UPDATE chronicle_capability_adaptation SET " + column + " = LEAST(1, " + column + " + ?) " +
+                        "WHERE chronicle_id = ?", credit, chronicle));
 
         jdbc.update("UPDATE chronicle_skill_practice SET proficiency = ?, practice_events = practice_events + 1, " +
                     "practised_minutes = practised_minutes + ?, last_practised_at = ? " +

@@ -144,11 +144,15 @@ class WhatYourHandsHaveLearnedIntegrationTest {
         SkillProgressionService.Practice first = skills.practise(me, oneAction, "KNAPPING", 30, 0.8, Instant.now());
         assertNotNull(first, "the first award happens");
         double afterFirst = skills.proficiency(me, "KNAPPING");
+        String strengthSql = "SELECT load_conditioning FROM chronicle_capability_adaptation WHERE chronicle_id = ?";
+        double strengthAfterFirst = jdbc.queryForObject(strengthSql, Double.class, me);
 
         assertNull(skills.practise(me, oneAction, "KNAPPING", 30, 0.8, Instant.now()),
             "the same action must not be credited a second time");
         assertEquals(afterFirst, skills.proficiency(me, "KNAPPING"), 1e-9,
             "and the proficiency must not have moved");
+        assertEquals(strengthAfterFirst, jdbc.queryForObject(strengthSql, Double.class, me), 1e-12,
+            "nor the aptitudes it supports: knapping leans on strength, and a replay must not raise it again");
         assertEquals(1, (int) jdbc.queryForObject(
             "SELECT count(*) FROM chronicle_skill_practice_event WHERE action_id = ? AND skill_key = 'KNAPPING'",
             Integer.class, oneAction));
@@ -178,7 +182,7 @@ class WhatYourHandsHaveLearnedIntegrationTest {
     @Test void hardWorkTeachesMoreThanEasyWorkOfTheSameLength() {
         UUID easyHand = chronicle();
         SkillProgressionService.Practice easy = skills.practise(easyHand, UUID.randomUUID(), "FARMING", 30, 0.05, Instant.now());
-        jdbc.update("UPDATE chronicle SET life_state='DEAD', death_cause='test' WHERE id=?", easyHand);
+        jdbc.update("UPDATE chronicle SET life_state='DEAD', died_at=now(), death_cause='test' WHERE id=?", easyHand);
 
         UUID hardHand = chronicle();
         SkillProgressionService.Practice hard = skills.practise(hardHand, UUID.randomUUID(), "FARMING", 30, 1.0, Instant.now());
@@ -244,7 +248,7 @@ class WhatYourHandsHaveLearnedIntegrationTest {
 
         assertEquals(1, (int) jdbc.queryForObject(
             "SELECT count(*) FROM chronicle_skill_practice_event WHERE action_id = ? AND skill_key = 'FORGING' " +
-            "  AND proficiency_after > proficiency_before AND aptitude_shares ? 'STRENGTH_ENDURANCE'",
+            "  AND proficiency_after > proficiency_before AND aptitude_shares -> 'STRENGTH_ENDURANCE' IS NOT NULL",
             Integer.class, action));
 
         try {
