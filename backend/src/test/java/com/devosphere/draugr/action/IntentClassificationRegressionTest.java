@@ -4529,4 +4529,19 @@ class IntentClassificationRegressionTest {
                 "carve a practice sword"})
             assertNotEquals("PRACTISE_WEAPON", classify(making, false), making);
     }
+
+    /**
+     * #879: a willow's branches are cut from the living tree. "gather willow branches" went to the plant gatherer,
+     * which excludes trees, and answered "the wrong ground for it" standing in a willow stand. Coppicing is the act
+     * that cuts withies from a named willow; bark stays with bark-stripping, and a process keeps its process.
+     */
+    @Test void gatheringWillowBranchesCutsThemFromTheStand() throws Exception {
+        for (String cut : new String[]{"gather willow branches", "gather some willow branches", "cut willow branches",
+                "collect willow withies", "cut some willow rods", "get some willow branches", "harvest willow poles"})
+            assertEquals("COPPICE", classify(cut), cut);
+        assertEquals("STRIP_BARK", classify("strip bark from a tree"), "bark is still bark");
+        assertNotEquals("COPPICE", classify("gather willow bark"), "willow bark is bark-stripping, not withies");
+        assertNotEquals("COPPICE", classify("cut willow branches", true), "a sentence that is a process keeps it");
+        assertEquals("FELL_TREE", classify("fell a willow tree"), "felling is still felling");
+    }
 }
