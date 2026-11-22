@@ -8,6 +8,9 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Method;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -192,5 +195,33 @@ class BodyReadingObeysNarrationPolicyTest {
         // And a body with no sickness is told nothing about a direction it has not got.
         String well = read(contented(), new Ailments(0, 0, 0, -4));
         assertTrue(!well.contains("easing") && !well.contains("holding"), () -> "no sickness, no trend: " + well);
+    }
+
+    /**
+     * #957 — "AND AND". The clause join puts ", and " before the last part, and some parts carry their own
+     * leading "and" because they read as a continuation of the one above. Live, in a self-check on a sick
+     * and bleeding body:
+     *
+     * <pre>
+     *   "...a sickness is working in you: your skin is hot and your strength is going out of you,
+     *    and and it is getting worse, not better"
+     * </pre>
+     *
+     * <p>Two sentences of the player's own body, in the most-read text in the game. Every combination that
+     * can put the trend clause second-to-last is swept, because one hand-picked case would not have caught
+     * it either.
+     */
+    @Test
+    void theReadingNeverSaysAndAnd() throws Exception {
+        BodyHudSnapshot c = contented();
+        for (int illness : new int[]{0, 15, 40, 60, 90})
+            for (int injury : new int[]{0, 20, 50, 90})
+                for (int blood : new int[]{0, 500, 1800, 3000})
+                    for (int trend : new int[]{-1, 0, 1}) {
+                        String read = read(c, new Ailments(injury, illness, blood, trend));
+                        assertFalse(read.contains("and and"), () -> "doubled conjunction: " + read);
+                        assertFalse(read.contains(", and , and"), () -> "doubled join: " + read);
+                        assertFalse(read.contains("  "), () -> "doubled space: " + read);
+                    }
     }
 }

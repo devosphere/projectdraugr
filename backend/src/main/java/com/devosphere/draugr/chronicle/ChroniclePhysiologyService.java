@@ -21,7 +21,7 @@ public class ChroniclePhysiologyService {
 
     @Transactional(readOnly = true)
     public BodyHudSnapshot activeBody() {
-        return jdbc.query("SELECT b.condition_summary, p.hours_without_food, p.hours_without_water, p.energy_level, p.core_temperature_c, p.wetness_level, p.bladder_level, p.bowel_level, p.hygiene_level, p.sleep_debt_hours, p.pain_level, p.stress_level, p.injury_severity, p.illness_severity, p.blood_loss_ml FROM chronicle c JOIN chronicle_body b ON b.chronicle_id = c.id JOIN chronicle_physiology p ON p.chronicle_id = c.id WHERE c.life_state = 'LIVING'", rs -> rs.next() ? snapshot(health(rs.getInt(13), rs.getInt(14), rs.getInt(15)), condition(rs.getString(1), rs.getInt(11), rs.getInt(12), rs.getBigDecimal(10).doubleValue()), rs.getBigDecimal(2).doubleValue(), rs.getBigDecimal(3).doubleValue(), rs.getInt(4), rs.getBigDecimal(5).doubleValue(), rs.getInt(6), rs.getInt(7), rs.getInt(8), rs.getInt(9)) : null);
+        return jdbc.query("SELECT b.condition_summary, p.hours_without_food, p.hours_without_water, p.energy_level, p.core_temperature_c, p.wetness_level, p.bladder_level, p.bowel_level, p.hygiene_level, p.sleep_debt_hours, p.pain_level, p.stress_level, p.injury_severity, p.illness_severity, p.blood_loss_ml FROM chronicle c JOIN chronicle_body b ON b.chronicle_id = c.id JOIN chronicle_physiology p ON p.chronicle_id = c.id WHERE c.life_state = 'LIVING'", rs -> { if (!rs.next()) return null; return snapshot(vitalsOf(rs)); });
     }
 
     @Transactional
@@ -204,17 +204,23 @@ public class ChroniclePhysiologyService {
             // exsanguination threshold on its own.
             if (food > STARVATION_DEATH_HOURS || water > DEHYDRATION_DEATH_HOURS || bloodLoss > 3500 || injury >= 100 || illness >= 100 || core < 28.0 || core > 42.0) {
                 String cause = water > DEHYDRATION_DEATH_HOURS ? "Critical Dehydration" : food > STARVATION_DEATH_HOURS ? "Critical Starvation" : bloodLoss > 3500 ? "Critical Blood Loss" : injury >= 100 ? "Fatal Trauma" : core < 28.0 ? "Severe Hypothermia" : core > 42.0 ? "Severe Hyperthermia" : "Systemic Illness";
+                // The body as it was at the moment it stopped, recorded whole (#957): the snapshot used to
+                // label a Chronicle who died of cold with a health read from injury and illness alone.
+                Vitals dying = new Vitals(injury, illness, bloodLoss, core, food, water, energy, sleepDebt, wetness, hygiene, bladder, bowel, pain, stress);
                 UUID deathLocation = jdbc.query("SELECT current_location_id FROM world_object WHERE id=?", result -> result.next() ? result.getObject(1, UUID.class) : null, id);
                 relocatePossessions(id, deathLocation, now);
                 releaseTheirStock(id, ts);
-                jdbc.update("INSERT INTO chronicle_death_snapshot (chronicle_id,died_at,death_location_id,cause,body_snapshot) VALUES (?,?,?,?,jsonb_build_object('health',?,'condition',?,'hunger',?,'thirst',?,'energy',?,'temperature',?,'wetness',?,'bladder',?,'bowel',?,'hygiene',?))",id,ts,deathLocation,cause,health(injury,illness,bloodLoss),condition(rs.getString(12),pain,stress,sleepDebt),hunger(food),thirst(water),energy(energy),temperature(core),wetness(wetness),bladder(bladder),bowel(bowel),hygiene(hygiene));
+                jdbc.update("INSERT INTO chronicle_death_snapshot (chronicle_id,died_at,death_location_id,cause,body_snapshot) VALUES (?,?,?,?,jsonb_build_object('health',?,'condition',?,'hunger',?,'thirst',?,'energy',?,'temperature',?,'wetness',?,'bladder',?,'bowel',?,'hygiene',?))",id,ts,deathLocation,cause,health(dying),conditionSummary(dying),hunger(food),thirst(water),energy(energy),temperature(core),wetness(wetness),bladder(bladder),bowel(bowel),hygiene(hygiene));
                 jdbc.update("UPDATE chronicle SET life_state = 'DEAD', died_at = ?, death_cause = ? WHERE id = ?", ts, cause, id);
                 jdbc.update("UPDATE chronicle_body SET health = 'Dying', condition_summary = ? WHERE chronicle_id = ?", cause, id);
                 jdbc.update("INSERT INTO chronicle_event (chronicle_id, occurred_at, event_type, payload) VALUES (?, ?, 'CHRONICLE_DIED', jsonb_build_object('cause', ?))", id, ts, cause);
                 jdbc.update("INSERT INTO world_event (occurred_at, event_type, aggregate_id, payload) VALUES (?, 'CHRONICLE_DIED', ?, jsonb_build_object('cause', ?))", ts, id, cause);
             } else {
                 jdbc.update("UPDATE chronicle_physiology SET last_metabolic_update = ?, hours_without_food = ?, hours_without_water = ?, energy_level = ?, core_temperature_c=?, wetness_level = ?, bladder_level = ?, bowel_level = ?, hygiene_level = ?, sleep_debt_hours=?, pain_level=?, stress_level=?, injury_severity=?, illness_severity=?, blood_loss_ml=?, illness_trend=CASE WHEN ? THEN ? ELSE illness_trend END WHERE chronicle_id = ?", ts, BigDecimal.valueOf(food), BigDecimal.valueOf(water), energy, BigDecimal.valueOf(core), wetness, bladder, bowel, hygiene, BigDecimal.valueOf(sleepDebt), pain, stress, injury, illness, bloodLoss, hours > 0, illnessTrend, id);
-                BodyHudSnapshot body = snapshot(health(injury, illness, bloodLoss), condition(rs.getString(12), pain, stress, sleepDebt), food, water, energy, core, wetness, bladder, bowel, hygiene);
+                // ONE BODY, ONE READING (#957). These locals are the body as this tick leaves it, so the label and the
+                // death check above are now looking at the same fourteen numbers rather than three and seven.
+                Vitals ticked = new Vitals(injury, illness, bloodLoss, core, food, water, energy, sleepDebt, wetness, hygiene, bladder, bowel, pain, stress);
+                BodyHudSnapshot body = snapshot(ticked);
                 jdbc.update("UPDATE chronicle_body SET hunger = ?, thirst = ?, energy = ?, temperature = ?, wetness = ?, bladder = ?, bowel = ?, hygiene = ? WHERE chronicle_id = ?", body.hunger(), body.thirst(), body.energy(), body.temperature(), body.wetness(), body.bladder(), body.bowel(), body.hygiene(), id);
             }
             return null;
@@ -696,7 +702,7 @@ public class ChroniclePhysiologyService {
         return true;
     }
     private void refreshBody(UUID chronicleId) {
-        jdbc.query("SELECT b.condition_summary,p.hours_without_food,p.hours_without_water,p.energy_level,p.core_temperature_c,p.wetness_level,p.bladder_level,p.bowel_level,p.hygiene_level,p.sleep_debt_hours,p.pain_level,p.stress_level,p.injury_severity,p.illness_severity,p.blood_loss_ml FROM chronicle_body b JOIN chronicle_physiology p ON p.chronicle_id=b.chronicle_id WHERE b.chronicle_id=?",rs->{if(rs.next()){String health=health(rs.getInt(13),rs.getInt(14),rs.getInt(15));String condition=condition(rs.getString(1),rs.getInt(11),rs.getInt(12),rs.getBigDecimal(10).doubleValue());BodyHudSnapshot body=snapshot(health,condition,rs.getBigDecimal(2).doubleValue(),rs.getBigDecimal(3).doubleValue(),rs.getInt(4),rs.getBigDecimal(5).doubleValue(),rs.getInt(6),rs.getInt(7),rs.getInt(8),rs.getInt(9));jdbc.update("UPDATE chronicle_body SET health=?,condition_summary=?,hunger=?,thirst=?,energy=?,temperature=?,wetness=?,bladder=?,bowel=?,hygiene=? WHERE chronicle_id=?",health,condition,body.hunger(),body.thirst(),body.energy(),body.temperature(),body.wetness(),body.bladder(),body.bowel(),body.hygiene(),chronicleId);}return null;},chronicleId);
+        jdbc.query("SELECT b.condition_summary,p.hours_without_food,p.hours_without_water,p.energy_level,p.core_temperature_c,p.wetness_level,p.bladder_level,p.bowel_level,p.hygiene_level,p.sleep_debt_hours,p.pain_level,p.stress_level,p.injury_severity,p.illness_severity,p.blood_loss_ml FROM chronicle_body b JOIN chronicle_physiology p ON p.chronicle_id=b.chronicle_id WHERE b.chronicle_id=?",rs->{if(rs.next()){Vitals v=vitalsOf(rs);String health=health(v);String condition=conditionSummary(v);BodyHudSnapshot body=snapshot(health,condition,rs.getBigDecimal(2).doubleValue(),rs.getBigDecimal(3).doubleValue(),rs.getInt(4),rs.getBigDecimal(5).doubleValue(),rs.getInt(6),rs.getInt(7),rs.getInt(8),rs.getInt(9));jdbc.update("UPDATE chronicle_body SET health=?,condition_summary=?,hunger=?,thirst=?,energy=?,temperature=?,wetness=?,bladder=?,bowel=?,hygiene=? WHERE chronicle_id=?",health,condition,body.hunger(),body.thirst(),body.energy(),body.temperature(),body.wetness(),body.bladder(),body.bowel(),body.hygiene(),chronicleId);}return null;},chronicleId);
     }
     /**
      * A keeper's death ends the keeping, and the animals go on living (#108).
@@ -738,6 +744,7 @@ public class ChroniclePhysiologyService {
         jdbc.update("UPDATE world_object SET current_owner_id=NULL,current_location_id=?,updated_at=? WHERE current_owner_id=? AND lifecycle_state='ACTIVE'", locationId, occurred, chronicleId);
     }
 
+    /** The HUD from a body already read. Prefer {@link #snapshot(Vitals)}, which carries the real list. */
     public static BodyHudSnapshot snapshot(String health, String condition, double foodHours, double waterHours, int energy, double temperature, int wetness, int bladder, int bowel, int hygiene) {
         return new BodyHudSnapshot(health, condition, hunger(foodHours), thirst(waterHours), energy(energy), temperature(temperature), wetness(wetness), bladder(bladder), bowel(bowel), hygiene(hygiene));
     }
@@ -768,6 +775,18 @@ public class ChroniclePhysiologyService {
         return howWellKept < 3 ? 0 : (int) Math.ceil(hours * .2 * (howWellKept - 2));
     }
 
+
+    /**
+     * The body, read out of the fifteen-column row both the HUD query and the stored-body refresh select
+     * (#957). Written once because two readers of one body is how {@code health} came to see three numbers
+     * while the death check saw seven.
+     */
+    private static Vitals vitalsOf(java.sql.ResultSet rs) throws java.sql.SQLException {
+        return new Vitals(rs.getInt(13), rs.getInt(14), rs.getInt(15), rs.getBigDecimal(5).doubleValue(),
+            rs.getBigDecimal(2).doubleValue(), rs.getBigDecimal(3).doubleValue(), rs.getInt(4),
+            rs.getBigDecimal(10).doubleValue(), rs.getInt(6), rs.getInt(9), rs.getInt(7), rs.getInt(8),
+            rs.getInt(11), rs.getInt(12));
+    }
     private static String hunger(double hours) { return hours >= 720 ? "Critical Starvation" : hours >= 336 ? "Starving" : hours >= 168 ? "Very Hungry" : hours >= 72 ? "Hungry" : "Satisfied"; }
     private static String thirst(double hours) { return hours >= 72 ? "Critical Dehydration" : hours >= 48 ? "Dehydrated" : hours >= 24 ? "Thirsty" : "Hydrated"; }
     private static String energy(int value) { return value >= 90 ? "Energetic" : value >= 70 ? "Rested" : value >= 50 ? "Tired" : value >= 30 ? "Fatigued" : value >= 10 ? "Exhausted" : "Collapsing"; }
@@ -787,12 +806,175 @@ public class ChroniclePhysiologyService {
      *
      * <p>Four states now, because that is how many there are. "Ailing" is the honest word for both at once.
      */
-    static String health(int injury,int illness,int bloodLoss) {
-        if (bloodLoss > 2800 || illness > 80 || injury > 80) return "Critical";
-        boolean hurt = injury > 35, sick = illness > 35;
-        return hurt && sick ? "Ailing" : hurt ? "Injured" : sick ? "Sick" : "Healthy";
+    /**
+     * EVERYTHING THE BODY'S STATE IS READ FROM (#957).
+     *
+     * <p>{@code health} saw three numbers — injury, illness, blood loss — while the death check twenty lines
+     * away saw temperature, food and water as well. So a Chronicle at 29 °C core, four degrees from dying of
+     * cold, read "Healthy", and every reader that trusted the label passed it on. One record now, so the
+     * label and the death threshold cannot see different bodies.
+     */
+    public record Vitals(int injury, int illness, int bloodLoss, double core, double hoursWithoutFood,
+                         double hoursWithoutWater, int energy, double sleepDebt, int wetness, int hygiene,
+                         int bladder, int bowel, int pain, int stress) { }
+
+    /**
+     * How hard one system is pressing on this body, 0..100, where 100 is the threshold that kills, and the
+     * severity from which it is worth NAMING.
+     *
+     * <p>Those are two different bars, and conflating them made the body contradict itself: the self-check
+     * says "you are losing blood, and it is still coming" from 400 ml, while 900 ml is only a severity of
+     * twenty — so the prose reported a wound the Condition list stayed silent about. A bleed is a FACT at a
+     * low bar and a DANGER at a high one. #957 asks for consistency across the HUD and the self-assessment,
+     * and this is where the two were disagreeing.
+     */
+    record Strain(int severity, String condition, int sayFrom) { }
+
+    /** Below this a system is a deviation rather than a complaint, and goes unmentioned. */
+    private static final int WORTH_SAYING = 25;
+    /**
+     * The medical complaints — a wound, a bleed, a sickness — are named as soon as they are real, because
+     * the self-check already speaks of them at that point and the two must not disagree.
+     */
+    private static final int WORTH_SAYING_MEDICAL = 10;
+    /**
+     * The most a system that CANNOT kill may contribute. Exhaustion, filth, a full bladder and distress are
+     * real and are felt, and none of them is a medical crisis — #957: "A minor deviation need not imply
+     * medical crisis." Capping them below the Critical band is how that is guaranteed rather than hoped.
+     */
+    private static final int NOT_LETHAL = 55;
+
+    private static int band(double value, double harmless, double fatal) {
+        if (fatal == harmless) return 0;
+        return (int) Math.max(0, Math.min(100, Math.round((value - harmless) / (fatal - harmless) * 100)));
     }
-    private static String condition(String existing,int pain,int stress,double sleepDebt) { if (pain > 70) return "In pain"; if (stress > 75) return "Distressed"; if (sleepDebt > 28) return "Sleep deprived"; return existing; }
+
+    private static String worst(int severity, String grave, String bad, String slight) {
+        return severity >= 70 ? grave : severity >= 40 ? bad : slight;
+    }
+
+    /**
+     * WHAT IS PRESSING ON THIS BODY, worst first (#957, #958).
+     *
+     * <p>Each system is measured against the threshold that actually kills, taken from the same constants
+     * the death check uses: 73 hours without water, 721 without food, 3.5 litres of blood, 100 injury,
+     * 28 °C and 42 °C core. A system at its threshold reads 100, so Health cannot say "Healthy" about a body
+     * that is about to die of one thing while the rest of it is fine.
+     */
+    static java.util.List<Strain> strains(Vitals v) {
+        java.util.List<Strain> all = new java.util.ArrayList<>();
+        // The lethal systems, each able to reach 100 on its own.
+        add(all, band(v.hoursWithoutWater(), 12, DEHYDRATION_DEATH_HOURS), "Dangerously dehydrated", "Dehydrated", "Thirsty");
+        add(all, band(v.hoursWithoutFood(), 72, STARVATION_DEATH_HOURS), "Starving", "Underfed", "Hungry");
+        // The three the self-check speaks of, named from the moment they are real.
+        medical(all, band(v.bloodLoss(), 250, 3500), "Bleeding badly", "Bleeding", "Grazed and bleeding");
+        medical(all, band(v.injury(), 8, 100), "Badly injured", "Injured", "Hurt");
+        medical(all, band(v.illness(), 8, 100), "Gravely sick", "Sick", "Unwell");
+        add(all, band(v.core(), 36.5, 28.0), "Hypothermic", "Chilled through", "Cold");
+        add(all, band(v.core(), 37.5, 42.0), "Dangerously overheated", "Overheating", "Too warm");
+        // And the ones that are felt but do not kill, held below Critical by construction.
+        add(all, Math.min(NOT_LETHAL, band(100 - v.energy(), 50, 100)), "Collapsing from exhaustion", "Exhausted", "Worn down");
+        add(all, Math.min(NOT_LETHAL, band(v.sleepDebt(), 24, 72)), "Sleepless", "Sleep deprived", "Short of sleep");
+        add(all, Math.min(NOT_LETHAL, band(v.pain(), 40, 100)), "In great pain", "In pain", "Aching");
+        add(all, Math.min(NOT_LETHAL, band(v.stress(), 50, 100)), "Distraught", "Distressed", "Unsettled");
+        add(all, Math.min(NOT_LETHAL, band(v.wetness(), 40, 100)), "Soaked through", "Soaked", "Damp and cooling");
+        add(all, Math.min(NOT_LETHAL, band(100 - v.hygiene(), 60, 100)), "Filthy and at risk of infection", "Filthy", "Dirty");
+        add(all, Math.min(NOT_LETHAL, band(Math.max(v.bladder(), v.bowel()), 70, 100)), "In urgent need of relief", "Needing relief", "Uncomfortable");
+        all.sort((a, b) -> Integer.compare(b.severity(), a.severity()));
+        return java.util.List.copyOf(all);
+    }
+
+    private static void add(java.util.List<Strain> all, int severity, String grave, String bad, String slight) {
+        if (severity > 0) all.add(new Strain(severity, worst(severity, grave, bad, slight), WORTH_SAYING));
+    }
+
+    private static void medical(java.util.List<Strain> all, int severity, String grave, String bad, String slight) {
+        if (severity > 0) all.add(new Strain(severity, worst(severity, grave, bad, slight), WORTH_SAYING_MEDICAL));
+    }
+
+    /**
+     * THE AGGREGATE STATE OF THE BODY (#957).
+     *
+     * <p>The WORST system decides it, never an average: #957 asks that "a life-threatening system makes
+     * overall Health Critical even if other systems are normal" and that an average must not conceal a
+     * lethal condition. An average is exactly what would conceal it — one system at 95 and nine at 0
+     * averages to a comfortable 9.5.
+     *
+     * <p>The words no longer name an ailment. "Injured" and "Sick" were doing two jobs — saying how bad the
+     * body was AND what was wrong with it — and could only ever report one complaint. What is wrong is now
+     * {@link #conditions}, which can report all of them; this says only how bad it is.
+     */
+    static String health(Vitals v) {
+        int severity = strains(v).stream().mapToInt(Strain::severity).max().orElse(0);
+        return severity >= 80 ? "Critical"
+             : severity >= 60 ? "Failing"
+             : severity >= 40 ? "Ailing"
+             : severity >= 20 ? "Weakened"
+             : "Healthy";
+    }
+
+    /**
+     * EVERY COMPLAINT THIS BODY HAS, the most urgent first (#958).
+     *
+     * <p>Condition was one string whose precedence suppressed everything behind it: a Chronicle who was
+     * injured, bleeding and sick was told one of those three and left to guess at the rest. Clearing one
+     * complaint now leaves the others standing, because each is derived from its own system rather than
+     * from a chain of if-returns.
+     *
+     * <p>Systems below {@link #WORTH_SAYING} are left out. A body is never perfectly comfortable and a list
+     * that says so every tick is a list nobody reads.
+     */
+    static java.util.List<String> conditions(Vitals v) {
+        return strains(v).stream().filter(s -> s.severity() >= s.sayFrom()).map(Strain::condition)
+            .distinct().toList();
+    }
+
+    /** The complaints as one line, for the single-string field the HUD and the death snapshot already hold. */
+    static String conditionSummary(Vitals v) {
+        java.util.List<String> said = conditions(v);
+        return said.isEmpty() ? "Comfortable" : String.join(", ", said);
+    }
     private record Environment(String kind,int intensity,double ambient,int wind,int fuelMinutes,boolean shelter,boolean windbreak,boolean rainCover,boolean sunShade,boolean enclosed,boolean vented,boolean smokeWrap) { }
-    public record BodyHudSnapshot(String health, String condition, String hunger, String thirst, String energy, String temperature, String wetness, String bladder, String bowel, String hygiene) { }
+    /**
+     * What the player is shown of their own body.
+     *
+     * <p>{@code conditions} is the list #958 asks for: Condition was one string whose precedence suppressed
+     * everything behind it, so a Chronicle who was injured, bleeding and sick was told one of the three.
+     * {@code condition} remains as those entries joined, because the stored body, the death snapshot and
+     * twenty call sites all hold a single string, and a player reading one line should see the same
+     * complaints as a player reading the list.
+     *
+     * <p>Nothing hidden appears here — no severity number, no conditioning, no proficiency. The entries are
+     * words for what is wrong, which is what a person knows about their own body.
+     */
+    public record BodyHudSnapshot(String health, String condition, java.util.List<String> conditions,
+                                  String hunger, String thirst, String energy, String temperature,
+                                  String wetness, String bladder, String bowel, String hygiene) {
+        /**
+         * The shape this record had before #958, kept so every existing caller and test still reads. The
+         * entries are recovered from the joined line, which is all such a caller has.
+         */
+        public BodyHudSnapshot(String health, String condition, String hunger, String thirst, String energy,
+                              String temperature, String wetness, String bladder, String bowel, String hygiene) {
+            this(health, condition, splitConditions(condition), hunger, thirst, energy, temperature, wetness,
+                 bladder, bowel, hygiene);
+        }
+
+        private static java.util.List<String> splitConditions(String joined) {
+            if (joined == null || joined.isBlank() || "Comfortable".equals(joined)) return java.util.List.of();
+            return java.util.Arrays.stream(joined.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
+        }
+    }
+
+    /**
+     * The HUD for a body, with its complaints as the list they are (#958) rather than a line to be split
+     * apart again later.
+     */
+    public static BodyHudSnapshot snapshot(Vitals v) {
+        BodyHudSnapshot plain = snapshot(health(v), conditionSummary(v), v.hoursWithoutFood(),
+            v.hoursWithoutWater(), v.energy(), v.core(), v.wetness(), v.bladder(), v.bowel(), v.hygiene());
+        return new BodyHudSnapshot(plain.health(), plain.condition(), conditions(v), plain.hunger(),
+            plain.thirst(), plain.energy(), plain.temperature(), plain.wetness(), plain.bladder(),
+            plain.bowel(), plain.hygiene());
+    }
 }
