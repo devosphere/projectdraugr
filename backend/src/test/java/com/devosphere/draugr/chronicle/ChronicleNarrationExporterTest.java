@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -47,7 +48,7 @@ class ChronicleNarrationExporterTest {
             if (i == count - 1) narration = narration + " CLOSING_SENTINEL_Z3.";
             entries.add(new ChronicleService.JourneyEntry(
                     arrival.plusSeconds(i * 1800L), "OBSERVE", "SUCCEEDED", narration,
-                    "look around", arrival.plusSeconds(i * 1800L), "look around"));
+                    "look around", arrival.plusSeconds(i * 1800L), "look around", List.of(), null, false));
         }
         ChronicleService.ChronicleSummary summary = new ChronicleService.ChronicleSummary(
                 UUID.randomUUID(), 7, "LIVING", arrival, null, null, UUID.randomUUID());
@@ -123,17 +124,17 @@ class ChronicleNarrationExporterTest {
         List<ChronicleService.JourneyEntry> entries = List.of(
                 new ChronicleService.JourneyEntry(arrival.plusSeconds(60), "OBSERVE", "SUCCEEDED",
                         "Tall trees close overhead. " + paragraph(1), "look around", arrival.plusSeconds(60),
-                        "look around"),
+                        "look around", List.of(), null, false),
                 // Two steps of ONE multi-step submission: same submittedAt, their own words each.
                 new ChronicleService.JourneyEntry(oneSubmission, "GATHER_FIBER", "SUCCEEDED",
                         "You separate usable plant fiber. " + paragraph(2), "gather plant fiber", oneSubmission,
-                        WHOLE_SUBMISSION),
+                        WHOLE_SUBMISSION, List.of(), null, false),
                 new ChronicleService.JourneyEntry(oneSubmission.plusSeconds(1), "CRAFT_TINDER", "SUCCEEDED",
                         "You tease the fiber into a nest. " + paragraph(3), "prepare a tinder nest", oneSubmission,
-                        WHOLE_SUBMISSION),
+                        WHOLE_SUBMISSION, List.of(), null, false),
                 // A row from before the readers carried the command: it must still export, narration alone.
                 new ChronicleService.JourneyEntry(arrival.plusSeconds(1800), "REST", "SUCCEEDED",
-                        "WITHOUT_A_COMMAND_SENTINEL. " + paragraph(4), null, null, null));
+                        "WITHOUT_A_COMMAND_SENTINEL. " + paragraph(4), null, null, null, List.of(), null, false));
         ChronicleService.ChronicleSummary summary = new ChronicleService.ChronicleSummary(
                 UUID.randomUUID(), 13, "DEAD", arrival, arrival.plusSeconds(3600), "Systemic Illness", UUID.randomUUID());
 
@@ -195,6 +196,65 @@ class ChronicleNarrationExporterTest {
             return new PdfReader(pdf);
         } catch (Exception e) {
             throw new AssertionError("the exporter must produce a valid, readable PDF", e);
+        }
+    }
+
+    /**
+     * #873 — THE BACKEND TWIN OF {@code playerWords.ts setAsideLine} MUST SAY THE SAME THING.
+     *
+     * <p>The live timeline, the Chronicle Archive and this PDF are three readers of one ledger. A player
+     * who sees three different accounts of their own life trusts none of them, so the sentence about the
+     * steps a plan never got to is asserted here character for character against the frontend rule, which
+     * {@code playerWords.test.ts} pins from its side.
+     */
+    @Test
+    void theStepsNeverAttemptedReadTheSameHereAsOnScreen() {
+        assertEquals("2 steps left untried \u2014 the work before it did not succeed.",
+                ChronicleNarrationExporter.setAsideFor(List.of("light the fire", "boil the water"), "FAILED_STEP", false));
+        // A plan that broke and a plan that was merely long are different stories.
+        assertEquals("One step left untried \u2014 the plan ran longer than one stretch of work.",
+                ChronicleNarrationExporter.setAsideFor(List.of("rest"), "STEP_LIMIT", false));
+        assertEquals("One step left untried \u2014 the work before it did not succeed. You took them up later.",
+                ChronicleNarrationExporter.setAsideFor(List.of("boil the water"), "FAILED_STEP", true));
+        // Almost every row set nothing aside, and must render exactly as it always has.
+        assertNull(ChronicleNarrationExporter.setAsideFor(List.of(), "FAILED_STEP", false));
+        assertNull(ChronicleNarrationExporter.setAsideFor(null, null, false));
+    }
+
+    /**
+     * AND THEY REACH THE PAGE. A six-step procedure that managed four exported four lines and said nothing
+     * about the other two, so the record of a death could not be reconstructed from it — which is the whole
+     * reason #873 exists.
+     */
+    @Test
+    void theExportNamesTheStepsTheChronicleNeverGotTo() throws java.io.IOException {
+        Instant arrival = Instant.parse("2026-08-02T00:00:00Z");
+        Instant stopped = arrival.plusSeconds(900);
+        List<ChronicleService.JourneyEntry> entries = List.of(
+                new ChronicleService.JourneyEntry(stopped, "GATHER_FIBER", "PARTIAL",
+                        "You separate usable plant fiber. " + paragraph(1), "gather plant fiber", stopped,
+                        "gather plant fiber, then light the fire, then boil the water",
+                        List.of("light the fire", "boil the water"), "FAILED_STEP", false));
+        ChronicleService.ChronicleSummary summary = new ChronicleService.ChronicleSummary(
+                UUID.randomUUID(), 14, "DEAD", arrival, stopped, "Hypothermia", UUID.randomUUID());
+        byte[] pdf = new ChronicleNarrationExporter().toPdf(
+                new ChronicleService.ChronicleJourney(summary, entries, null, 0, 0));
+
+        PdfReader reader = readable(pdf);
+        try {
+            StringBuilder collected = new StringBuilder();
+            PdfTextExtractor extractor = new PdfTextExtractor(reader);
+            for (int page = 1; page <= reader.getNumberOfPages(); page++) collected.append(extractor.getTextFromPage(page));
+            String read = collected.toString();
+            assertTrue(read.contains("left untried"),
+                    () -> "the export must say steps were left untried: " + read);
+            for (String never : List.of("light the fire", "boil the water"))
+                assertTrue(read.contains(never), () -> "and must name it: " + read);
+            // Beneath the prose, not above it: the answer the player got comes first, then what was skipped.
+            assertTrue(read.indexOf("You separate usable plant fiber") < read.indexOf("left untried"),
+                    "the untried steps must read beneath the narration, not in front of it");
+        } finally {
+            reader.close();
         }
     }
 }

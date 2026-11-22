@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CARRIES_ON, playerWords } from './playerWords';
+import { CARRIES_ON, playerWords, setAsideLine, setAsideSteps } from './playerWords';
 
 /**
  * The live timeline, the Chronicle Archive and the PDF export are three readers of one ledger, and the ledger
@@ -33,5 +33,48 @@ describe('the player\'s own line for a ledger row', () => {
     // than an empty quote, which would read as the player having submitted a blank line.
     expect(playerWords({ action: null, submission: null }, false)).toBeNull();
     expect(playerWords({}, true)).toBeNull();
+  });
+});
+
+/**
+ * #873 — THE STEPS A CHRONICLE NEVER GOT TO.
+ *
+ * A six-step procedure that managed four showed four lines and said nothing about the other two, so a
+ * player reading back could not tell a plan that finished from one cut short. These hold the line that
+ * fixes it, and hold it to being short: it sits under the prose, not in front of it.
+ */
+describe('the steps a plan never got to', () => {
+  it('says how many were left, and why the plan stopped', () => {
+    expect(setAsideLine({ stepsSetAside: ['light the fire', 'boil the water'], setAsideBecause: 'FAILED_STEP' }))
+      .toBe('2 steps left untried — the work before it did not succeed.');
+  });
+
+  it('tells a plan that broke apart from a plan that was simply too long', () => {
+    // These are different stories and a player deserves to know which one happened to them.
+    expect(setAsideLine({ stepsSetAside: ['rest'], setAsideBecause: 'STEP_LIMIT' }))
+      .toBe('One step left untried — the plan ran longer than one stretch of work.');
+    expect(setAsideLine({ stepsSetAside: ['rest'], setAsideBecause: 'FAILED_STEP' }))
+      .not.toContain('longer than one stretch');
+  });
+
+  it('adds that they were taken up later, when they were', () => {
+    expect(setAsideLine({ stepsSetAside: ['boil the water'], setAsideBecause: 'FAILED_STEP', takenUpLater: true }))
+      .toContain('You took them up later.');
+    expect(setAsideLine({ stepsSetAside: ['boil the water'], setAsideBecause: 'FAILED_STEP', takenUpLater: false }))
+      .not.toContain('later');
+  });
+
+  it('says nothing at all for a row that set nothing aside, which is almost all of them', () => {
+    expect(setAsideLine({})).toBeNull();
+    expect(setAsideLine({ stepsSetAside: [] })).toBeNull();
+    expect(setAsideLine({ stepsSetAside: null })).toBeNull();
+    // A remainder whose steps are all blank is no remainder: it must not render an empty list.
+    expect(setAsideLine({ stepsSetAside: ['', '   '] })).toBeNull();
+    expect(setAsideSteps({ stepsSetAside: ['', '   '] })).toEqual([]);
+  });
+
+  it('keeps the untried steps in the order they were written, trimmed', () => {
+    expect(setAsideSteps({ stepsSetAside: ['  light the fire ', 'boil the water'] }))
+      .toEqual(['light the fire', 'boil the water']);
   });
 });

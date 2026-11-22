@@ -1339,11 +1339,25 @@ public class ChronicleActionService {
         // `submission_text` is the sentence the player wrote; `action_text` is the step it was cut into (#892).
         // A reader shows the submission once per group and the steps beneath it, so the timeline reads the same
         // before and after a relaunch. Null for rows written before V464, and there the step text stands.
-        String columns = "SELECT ca.id, ca.resolved_at, COALESCE(can.narration, ca.narration), ca.action_text, ca.submitted_at, ca.submission_text "
-                + "FROM chronicle_action ca LEFT JOIN chronicle_action_narration can ON can.action_id = ca.id ";
+        // AND THE STEPS THE CHRONICLE NEVER GOT TO (#873). When a plan stops partway the undone steps go to
+        // chronicle_plan_remainder, which nothing but this service ever read — so the timeline showed four
+        // steps of a six-step procedure and said nothing about the other two. The player could not tell a
+        // plan that finished from one that was cut short. The remainder names the action it stopped on, so
+        // the skipped steps hang off that row and read directly beneath the step that failed, which is where
+        // somebody reconstructing a death actually looks.
+        //
+        // LATERAL with LIMIT 1 rather than a plain join: this read is paginated, and a row that multiplied
+        // would silently shorten the page. One remainder per stopping action is what the writer produces, and
+        // this makes the read safe whether or not that stays true.
+        String columns = "SELECT ca.id, ca.resolved_at, COALESCE(can.narration, ca.narration), ca.action_text, ca.submitted_at, ca.submission_text, "
+                + "       r.steps, r.stopped_because, r.state "
+                + "FROM chronicle_action ca LEFT JOIN chronicle_action_narration can ON can.action_id = ca.id "
+                + "LEFT JOIN LATERAL (SELECT steps, stopped_because, state FROM chronicle_plan_remainder "
+                + "                    WHERE source_action_id = ca.id ORDER BY set_aside_at LIMIT 1) r ON true ";
         org.springframework.jdbc.core.RowMapper<NarrationEntry> asEntry = (rs, row) -> new NarrationEntry(
                 rs.getObject(1, UUID.class), rs.getTimestamp(2).toInstant(), rs.getString(3), rs.getString(4),
-                rs.getTimestamp(5) == null ? null : rs.getTimestamp(5).toInstant(), rs.getString(6));
+                rs.getTimestamp(5) == null ? null : rs.getTimestamp(5).toInstant(), rs.getString(6),
+                stepsSetAside(rs.getArray(7)), rs.getString(8), "RESUMED".equals(rs.getString(9)));
         List<NarrationEntry> entries = before == null
                 ? jdbc.query(columns + "WHERE ca.chronicle_id = ? AND ca.narration IS NOT NULL ORDER BY ca.resolved_at DESC, ca.id DESC LIMIT ?", asEntry, chronicle, limit + 1)
                 : jdbc.query(columns + "WHERE ca.chronicle_id = ? AND ca.narration IS NOT NULL AND (ca.resolved_at, ca.id) < (?, ?) ORDER BY ca.resolved_at DESC, ca.id DESC LIMIT ?", asEntry, chronicle, java.sql.Timestamp.from(before), beforeId, limit + 1);
@@ -8646,6 +8660,23 @@ public class ChronicleActionService {
      * multi-step submission, so a reader can present six resolved steps as the one procedure they were.
      */
     public record NarrationEntry(UUID id, Instant occurredAt, String narration, String actionText, Instant submittedAt,
-                                 String submissionText) { }
+                                 String submissionText, List<String> stepsSetAside, String setAsideBecause,
+                                 boolean takenUpLater) { }
+
+    /**
+     * The undone steps of a plan that stopped on this action, or an empty list — never null, so no reader
+     * has to guard it. A TEXT[] that cannot be read is treated as no remainder rather than failing a page of
+     * history: the steps are a courtesy to someone reading back, and losing them must not lose the prose.
+     */
+    public static List<String> stepsSetAside(java.sql.Array steps) {
+        if (steps == null) return List.of();
+        try {
+            Object[] raw = (Object[]) steps.getArray();
+            if (raw == null) return List.of();
+            List<String> out = new java.util.ArrayList<>(raw.length);
+            for (Object s : raw) if (s != null && !s.toString().isBlank()) out.add(s.toString());
+            return List.copyOf(out);
+        } catch (java.sql.SQLException unreadable) { return List.of(); }
+    }
     public record NarrationPage(List<NarrationEntry> entries, boolean hasMore) { }
 }

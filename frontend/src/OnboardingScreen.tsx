@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import forestArt from './assets/onboarding-forest-v1.png';
-import { playerWords } from './playerWords';
+import { playerWords, setAsideLine, setAsideSteps } from './playerWords';
 
 type Panel = 'none' | 'archive' | 'settings' | 'crossing' | 'exit';
 
@@ -9,7 +9,7 @@ type ChronicleSummary = { id: string; sequenceNumber: number; lifeState: string;
 // shared by every step of one submission. The archive used to hold the world's answers alone, so a reader
 // could not tell what the Chronicle had ATTEMPTED before it died — and after a death that is the question
 // (#888).
-type JourneyEntry = { at: string; intent: string; outcome: string; narration: string; actionText?: string | null; submittedAt?: string | null; submissionText?: string | null };
+type JourneyEntry = { at: string; intent: string; outcome: string; narration: string; actionText?: string | null; submittedAt?: string | null; submissionText?: string | null; stepsSetAside?: string[] | null; setAsideBecause?: string | null; takenUpLater?: boolean };
 type ChronicleJourney = { summary: ChronicleSummary; entries: JourneyEntry[]; finalBody: string | null; discoveries: number; placesNamed: number };
 
 /** How long a life lasted, in the world's own reckoning. */
@@ -119,10 +119,17 @@ export function OnboardingScreen({ hasLivingChronicle, onAwaken, entryError, api
                     const previous = journey.entries[i - 1];
                     const continues = Boolean(e.submittedAt) && e.submittedAt === previous?.submittedAt;
                     const said = playerWords({ action: e.actionText, submission: e.submissionText }, continues);
+                    // And the steps never attempted (#873) — the archive agrees with the screen and the PDF.
+                    const untriedHeading = setAsideLine(e);
+                    const untried = setAsideSteps(e);
                     return <li key={i}>
                       <span className="archive-entry-time">{new Date(e.at).toISOString().slice(0, 16).replace('T', ' ')}</span>
                       {said && <span className={continues ? 'archive-entry-said continues' : 'archive-entry-said'}>{said}</span>}
                       <span className="archive-entry-text">{e.narration}</span>
+                      {untriedHeading && <span className="archive-entry-untried">
+                        {untriedHeading}
+                        <ul>{untried.map((step, s) => <li key={s}>{step}</li>)}</ul>
+                      </span>}
                     </li>;
                   })}
                 </ol>}
