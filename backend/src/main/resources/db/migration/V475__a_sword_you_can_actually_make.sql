@@ -159,7 +159,13 @@ INSERT INTO process_subject (process_key, subject_term) VALUES
  ('edge_wooden_sword', 'stone edged wooden sword'),
  ('edge_wooden_sword', 'stone-edged wooden sword'),
  ('edge_wooden_sword', 'edge stone'),
- ('edge_wooden_sword', 'stone edges')
+ ('edge_wooden_sword', 'stone edges'),
+ -- AND THE BARE NOUN, for the "inset stone" keyword. EveryPhraseKeywordNamesItsOwnMaterialTest refused
+ -- the build without it, and rightly: the matcher wants category AND keyword AND a subject term, all
+ -- whole-word, so "inset stone" carried the keyword and nothing to satisfy the gate behind it -- a phrase
+ -- the recipe advertised and could never answer. V462 fixed 111 keywords of exactly this shape by giving
+ -- each its own content words as subjects, which is what this is.
+ ('edge_wooden_sword', 'stone')
 ON CONFLICT DO NOTHING;
 
 -- ---------------------------------------------------------------------------------------------------
