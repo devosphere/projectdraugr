@@ -7738,6 +7738,12 @@ public class ChronicleActionService {
         StringBuilder sb = new StringBuilder("You take stock of yourself. ");
         for (int i = 0; i < said.size(); i++) {
             String part = said.get(i);
+            // "AND AND". The join puts ", and " before the last clause, and some clauses carry their own
+            // leading "and" because they read as a continuation of the one above — the illness trend is one.
+            // Live, in a self-check: "...your strength is going out of you, and and it is getting worse".
+            // A clause that already conjoins does not need the join to do it again.
+            boolean conjoined = sb.length() > 0 && sb.toString().endsWith(", and ");
+            if (conjoined && part.startsWith("and ")) part = part.substring(4);
             sb.append(i == 0 ? Character.toUpperCase(part.charAt(0)) + part.substring(1) : part);
             sb.append(i == said.size() - 1 ? "." : i == said.size() - 2 ? ", and " : ", ");
         }

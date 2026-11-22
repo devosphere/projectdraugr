@@ -2,7 +2,9 @@ package com.devosphere.draugr.chronicle;
 
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -64,19 +66,146 @@ class TheBodyMendsTest {
         assertEquals(0, ChroniclePhysiologyService.howWellKept(34.0, 90, 5, 300, 60, 40));
     }
 
-    @Test
-    void theLabelTellsASicknessFromAWound() {
-        // Chronicle 41, word for word: illness 64, injury 0, no blood lost.
-        assertEquals("Sick", ChroniclePhysiologyService.health(0, 64, 0));
-        assertEquals("Injured", ChroniclePhysiologyService.health(50, 0, 0));
-        assertEquals("Ailing", ChroniclePhysiologyService.health(50, 64, 0));
-        assertEquals("Healthy", ChroniclePhysiologyService.health(0, 0, 0));
-        assertEquals("Healthy", ChroniclePhysiologyService.health(30, 30, 100));
+    /** A body with nothing wrong with it, to vary one system at a time from. */
+    private static ChroniclePhysiologyService.Vitals well() {
+        return new ChroniclePhysiologyService.Vitals(0, 0, 0, 37.0, 0, 0, 100, 0, 0, 100, 0, 0, 0, 0);
+    }
 
-        // Critical is still Critical, by any of its three roads — the distinction is below that line, where
-        // there is still something to be done about it.
-        assertEquals("Critical", ChroniclePhysiologyService.health(0, 95, 0));
-        assertEquals("Critical", ChroniclePhysiologyService.health(95, 0, 0));
-        assertEquals("Critical", ChroniclePhysiologyService.health(0, 0, 3000));
+    private static ChroniclePhysiologyService.Vitals with(java.util.function.UnaryOperator<ChroniclePhysiologyService.Vitals> change) {
+        return change.apply(well());
+    }
+
+    /**
+     * #957 — HEALTH IS THE WORST SYSTEM, NEVER AN AVERAGE.
+     *
+     * <p>The old label read three numbers — injury, illness, blood loss — while the death check twenty lines
+     * away read temperature, food and water as well. So a Chronicle at 29 °C core, a degree from dying of
+     * cold, was "Healthy". Each case below is one of the ones #957 names.
+     */
+    @Test
+    void healthIsTheWorstSystemAndNoSystemCanHideBehindTheRest() {
+        assertEquals("Healthy", ChroniclePhysiologyService.health(well()));
+
+        // THE REPORTED DEFECT: freezing to death while reading Healthy.
+        ChroniclePhysiologyService.Vitals freezing = new ChroniclePhysiologyService.Vitals(
+            0, 0, 0, 29.0, 0, 0, 100, 0, 0, 100, 0, 0, 0, 0);
+        assertEquals("Critical", ChroniclePhysiologyService.health(freezing),
+            "a body four degrees from hypothermic death is not Healthy");
+
+        // Severe dehydration: dead at 73 hours.
+        assertEquals("Critical", ChroniclePhysiologyService.health(new ChroniclePhysiologyService.Vitals(
+            0, 0, 0, 37.0, 0, 70, 100, 0, 0, 100, 0, 0, 0, 0)));
+        // Starvation: dead at 721 hours.
+        assertEquals("Critical", ChroniclePhysiologyService.health(new ChroniclePhysiologyService.Vitals(
+            0, 0, 0, 37.0, 700, 0, 100, 0, 0, 100, 0, 0, 0, 0)));
+        // And the three roads that were already Critical stay Critical.
+        assertEquals("Critical", ChroniclePhysiologyService.health(new ChroniclePhysiologyService.Vitals(
+            0, 95, 0, 37.0, 0, 0, 100, 0, 0, 100, 0, 0, 0, 0)));
+        assertEquals("Critical", ChroniclePhysiologyService.health(new ChroniclePhysiologyService.Vitals(
+            95, 0, 0, 37.0, 0, 0, 100, 0, 0, 100, 0, 0, 0, 0)));
+        assertEquals("Critical", ChroniclePhysiologyService.health(new ChroniclePhysiologyService.Vitals(
+            0, 0, 3000, 37.0, 0, 0, 100, 0, 0, 100, 0, 0, 0, 0)));
+
+        // NO AVERAGING. One lethal system among nine healthy ones must still read Critical — an average
+        // would put this body at a comfortable nine out of a hundred.
+        ChroniclePhysiologyService.Vitals oneLethalRestFine = new ChroniclePhysiologyService.Vitals(
+            0, 97, 0, 37.0, 0, 0, 100, 0, 0, 100, 0, 0, 0, 0);
+        assertEquals("Critical", ChroniclePhysiologyService.health(oneLethalRestFine));
+    }
+
+    /**
+     * #957 — "A minor deviation need not imply medical crisis." The systems that cannot kill are capped
+     * below Critical by construction, so no amount of being tired, wet, filthy and bursting adds up to a
+     * body that is about to die.
+     */
+    @Test
+    void theThingsThatCannotKillYouCannotMakeYouCritical() {
+        ChroniclePhysiologyService.Vitals wretched = new ChroniclePhysiologyService.Vitals(
+            0, 0, 0, 37.0, 0, 0, 0, 72, 100, 0, 100, 100, 100, 100);
+        String health = ChroniclePhysiologyService.health(wretched);
+        assertNotEquals("Critical", health,
+            "exhausted, sleepless, soaked, filthy and desperate is miserable, not dying: " + health);
+        assertNotEquals("Healthy", health, "nor is it nothing: " + health);
+        // But it IS all reported, which is the other half (#958).
+        java.util.List<String> said = ChroniclePhysiologyService.conditions(wretched);
+        assertTrue(said.size() >= 4, "every one of those should be named: " + said);
+    }
+
+    /**
+     * #958 — CONDITION IS A LIST, AND CLEARING ONE LEAVES THE OTHERS.
+     *
+     * <p>Condition was a single string whose precedence suppressed everything behind it, so a Chronicle who
+     * was injured, bleeding and sick was told one of the three and left to guess. The ticket's own example
+     * is the first assertion here.
+     */
+    @Test
+    void everyComplaintIsNamedAndTheUrgentOneComesFirst() {
+        ChroniclePhysiologyService.Vitals hurtSickBleedingSpent = new ChroniclePhysiologyService.Vitals(
+            85, 60, 1800, 37.0, 0, 0, 5, 0, 0, 100, 0, 0, 0, 0);
+        java.util.List<String> said = ChroniclePhysiologyService.conditions(hurtSickBleedingSpent);
+
+        assertTrue(said.stream().anyMatch(s -> s.contains("injured")), "the injury: " + said);
+        assertTrue(said.stream().anyMatch(s -> s.contains("Bleeding")), "the bleeding: " + said);
+        assertTrue(said.stream().anyMatch(s -> s.contains("ick") || s.contains("Unwell")), "the sickness: " + said);
+        assertTrue(said.stream().anyMatch(s -> s.contains("xhaust") || s.contains("Collaps")), "the exhaustion: " + said);
+        assertEquals("Critical", ChroniclePhysiologyService.health(hurtSickBleedingSpent));
+        // Worst first, so a reader who sees only the head of the list sees the thing that matters.
+        assertTrue(said.get(0).contains("injured"), "the gravest should lead: " + said);
+
+        // CLEARING ONE LEAVES THE OTHERS. Heal the wound; the sickness and the bleeding stand.
+        ChroniclePhysiologyService.Vitals healed = new ChroniclePhysiologyService.Vitals(
+            0, 60, 1800, 37.0, 0, 0, 5, 0, 0, 100, 0, 0, 0, 0);
+        java.util.List<String> after = ChroniclePhysiologyService.conditions(healed);
+        assertTrue(after.stream().noneMatch(s -> s.contains("injured")), "the wound is closed: " + after);
+        assertTrue(after.stream().anyMatch(s -> s.contains("Bleeding")), "the bleeding is not: " + after);
+        assertTrue(after.stream().anyMatch(s -> s.contains("ick")), "nor the sickness: " + after);
+    }
+
+    /** A body with nothing wrong with it says so, rather than listing nothing. */
+    @Test
+    void aWellBodyHasNoComplaints() {
+        assertTrue(ChroniclePhysiologyService.conditions(well()).isEmpty());
+        assertEquals("Comfortable", ChroniclePhysiologyService.conditionSummary(well()));
+    }
+
+    /** The joined line and the list must say the same thing, since both are shown. */
+    @Test
+    void theLineAndTheListAgree() {
+        ChroniclePhysiologyService.Vitals v = new ChroniclePhysiologyService.Vitals(
+            70, 50, 0, 33.0, 0, 0, 20, 0, 0, 100, 0, 0, 0, 0);
+        assertEquals(String.join(", ", ChroniclePhysiologyService.conditions(v)),
+                     ChroniclePhysiologyService.conditionSummary(v));
+        // And the HUD built from that body carries the same entries, not a re-split string.
+        assertEquals(ChroniclePhysiologyService.conditions(v),
+                     ChroniclePhysiologyService.snapshot(v).conditions());
+    }
+
+    /**
+     * #957 — THE CONDITION LIST AND THE SELF-CHECK MUST NOT CONTRADICT EACH OTHER.
+     *
+     * <p>The self-check says "you are losing blood, and it is still coming" from 400 ml. A 900 ml bleed is
+     * only a severity of twenty, so the Condition list stayed silent about a wound the prose was reporting —
+     * the player was told two different things about their own body in one screen. A bleed is a FACT at a low
+     * bar and a DANGER at a high one, and the list now names it from the lower.
+     */
+    @Test
+    void aBleedTheProseReportsIsNamedInTheConditionsToo() {
+        ChroniclePhysiologyService.Vitals bleeding = new ChroniclePhysiologyService.Vitals(
+            0, 0, 900, 37.0, 0, 0, 100, 0, 0, 100, 0, 0, 0, 0);
+        assertTrue(ChroniclePhysiologyService.conditions(bleeding).stream().anyMatch(s -> s.contains("bleeding") || s.contains("Bleeding")),
+            "a 900 ml bleed must be named: " + ChroniclePhysiologyService.conditions(bleeding));
+
+        // The same for a wound and a sickness that the self-check speaks of but that are not yet dangerous.
+        ChroniclePhysiologyService.Vitals mildlyHurt = new ChroniclePhysiologyService.Vitals(
+            20, 0, 0, 37.0, 0, 0, 100, 0, 0, 100, 0, 0, 0, 0);
+        assertFalse(ChroniclePhysiologyService.conditions(mildlyHurt).isEmpty(), "a real wound is named");
+        ChroniclePhysiologyService.Vitals mildlySick = new ChroniclePhysiologyService.Vitals(
+            0, 20, 0, 37.0, 0, 0, 100, 0, 0, 100, 0, 0, 0, 0);
+        assertFalse(ChroniclePhysiologyService.conditions(mildlySick).isEmpty(), "a real sickness is named");
+
+        // And naming it is not calling it a crisis: a graze is not Critical.
+        assertNotEquals("Critical", ChroniclePhysiologyService.health(bleeding));
+        // While a body with genuinely nothing wrong still says nothing.
+        assertTrue(ChroniclePhysiologyService.conditions(well()).isEmpty());
     }
 }

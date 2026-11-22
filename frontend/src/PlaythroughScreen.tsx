@@ -8,7 +8,7 @@ const previewBody = [
   ['Energy', 'Rested'], ['Temperature', 'Comfortable'], ['Wetness', 'Damp'], ['Bladder', 'Comfortable'], ['Bowel', 'Comfortable'], ['Hygiene', 'Normal'],
 ];
 
-type BodySnapshot = { health: string; condition: string; hunger: string; thirst: string; energy: string; temperature: string; wetness: string; bladder: string; bowel: string; hygiene: string };
+type BodySnapshot = { health: string; condition: string; conditions?: string[]; hunger: string; thirst: string; energy: string; temperature: string; wetness: string; bladder: string; bowel: string; hygiene: string };
 type ActionResult = { actionId: string; intent: string; outcome: string; durationMinutes: number; resolvedAt: string; perception: string; body: BodySnapshot | null; died?: boolean };
 type LocationSnapshot = { biome: string; presentationKey: string };
 type BackdropSnapshot = { key: string; candidates: string[]; fingerprint: string | null; biome?: string | null };
@@ -33,7 +33,13 @@ const olderNarrationPages = [[
 
 function toBodyRows(snapshot: BodySnapshot | null) {
   if (!snapshot) return [] as string[][];
-  return [['Health', snapshot.health], ['Condition', snapshot.condition], ['Hunger', snapshot.hunger], ['Thirst', snapshot.thirst], ['Energy', snapshot.energy], ['Temperature', snapshot.temperature], ['Wetness', snapshot.wetness], ['Bladder', snapshot.bladder], ['Bowel', snapshot.bowel], ['Hygiene', snapshot.hygiene]];
+  // EVERY COMPLAINT, NOT THE FIRST ONE (#958). Condition was a single summary whose precedence suppressed
+  // the rest, so a Chronicle who was injured, bleeding and sick was shown one of the three. The backend now
+  // sends the list; older payloads carry only the joined line, and that still reads.
+  const complaints = snapshot.conditions && snapshot.conditions.length
+    ? snapshot.conditions.join(' · ')
+    : snapshot.condition;
+  return [['Health', snapshot.health], ['Condition', complaints], ['Hunger', snapshot.hunger], ['Thirst', snapshot.thirst], ['Energy', snapshot.energy], ['Temperature', snapshot.temperature], ['Wetness', snapshot.wetness], ['Bladder', snapshot.bladder], ['Bowel', snapshot.bowel], ['Hygiene', snapshot.hygiene]];
 }
 
 function seasonAt(instant: string) {
