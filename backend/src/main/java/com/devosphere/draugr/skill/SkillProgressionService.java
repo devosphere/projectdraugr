@@ -1,5 +1,6 @@
 package com.devosphere.draugr.skill;
 
+import com.devosphere.draugr.capability.CausalMetricService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,8 +45,12 @@ public class SkillProgressionService {
     private static final double BASE_GAIN = 0.010;
 
     private final JdbcTemplate jdbc;
+    private final CausalMetricService metrics;
 
-    public SkillProgressionService(JdbcTemplate jdbc) { this.jdbc = jdbc; }
+    public SkillProgressionService(JdbcTemplate jdbc, CausalMetricService metrics) {
+        this.jdbc = jdbc;
+        this.metrics = metrics;
+    }
 
     /**
      * What one practice event did, for the narration and for the causal record.
@@ -155,13 +160,18 @@ public class SkillProgressionService {
         // The supporting aptitudes take a fixed share of THIS gain, split by their catalogued weights.
         // Normalised by the weights' own total, so a drift in the data cannot widen the share.
         Map<String, Double> shares = new LinkedHashMap<>();
-        Map<String, Double> creditByColumn = new LinkedHashMap<>();
+        Map<String, Double> creditByMetric = new LinkedHashMap<>();
         StringBuilder sharesJson = new StringBuilder("{");
-        jdbc.query("SELECT a.aptitude_key, a.adaptation_column, s.weight FROM skill_aptitude_support s " +
-                   "JOIN aptitude a ON a.aptitude_key = s.aptitude_key WHERE s.skill_key = ? ORDER BY s.weight DESC",
+        // Each aptitude's column is one of metric_subject's tracked numbers (#953), so the credit is a
+        // metric move like any other and lands in the causal ledger with this action as its cause.
+        jdbc.query("SELECT a.aptitude_key, m.metric_key, s.weight FROM skill_aptitude_support s " +
+                   "JOIN aptitude a ON a.aptitude_key = s.aptitude_key " +
+                   "JOIN metric_subject m ON m.source_table = 'chronicle_capability_adaptation' " +
+                   "                     AND m.source_column = a.adaptation_column " +
+                   "WHERE s.skill_key = ? ORDER BY s.weight DESC",
             rs -> {
                 double credit = APTITUDE_SHARE_OF_GAIN * gain * (rs.getDouble(3) / weightTotal);
-                creditByColumn.put(rs.getString(2), credit);
+                creditByMetric.put(rs.getString(2), credit);
                 shares.put(rs.getString(1), credit);
                 if (sharesJson.length() > 1) sharesJson.append(',');
                 sharesJson.append('"').append(rs.getString(1)).append("\":").append(credit);
@@ -180,11 +190,11 @@ public class SkillProgressionService {
 
         // Only now, with the award proven new, do the aptitudes move. Crediting them before the evidence
         // insert let a replayed action raise strength a second time while the skill itself stood still.
-        // The column name comes from the aptitude catalogue, whose adaptation_column is UNIQUE and written
-        // in V472 -- never from anything a player typed.
-        creditByColumn.forEach((column, credit) ->
-            jdbc.update("UPDATE chronicle_capability_adaptation SET " + column + " = LEAST(1, " + column + " + ?) " +
-                        "WHERE chronicle_id = ?", credit, chronicle));
+        // They move through CausalMetricService (#953) rather than a blind UPDATE, so what the skill did to
+        // the body is on the ledger with its cause, and counts as practice against neglect.
+        creditByMetric.forEach((metric, credit) ->
+            metrics.move(chronicle, metric, credit, "PRACTICE", action, "practising " + skill,
+                         minutes, null, at));
 
         jdbc.update("UPDATE chronicle_skill_practice SET proficiency = ?, practice_events = practice_events + 1, " +
                     "practised_minutes = practised_minutes + ?, last_practised_at = ? " +
