@@ -112,6 +112,9 @@ class AFullLoadIsNotAnEmptyWoodIntegrationTest {
         Integer branchMl = jdbc.queryForObject("SELECT unit_volume_ml FROM item_definition WHERE item_key='dry_branch'", Integer.class);
         assertNotNull(branchMl);
         jdbc.update("UPDATE chronicle_carry_capacity SET direct_bulk_ml=? WHERE chronicle_id=?", carriedBulkMl(chronicle) + branchMl - 1, chronicle);
+        // The shared world may hand back a Chronicle that already gathered here (the control test, run first), so
+        // "nothing was taken" is a delta against what it held before, not an absolute zero.
+        int branchesBefore = carriedBranches(chronicle);
 
         ChronicleActionService.ActionResult gathered = actions.resolve("gather dry branches");
 
@@ -121,7 +124,7 @@ class AFullLoadIsNotAnEmptyWoodIntegrationTest {
         assertTrue(said.contains("your load is at its bulk"), "the limit must be named as bulk: " + gathered.perception());
         assertTrue(said.contains("though not its weight"), "and as not weight, which had room: " + gathered.perception());
         assertTrue(said.contains("set something down"), "the remedy must be said: " + gathered.perception());
-        assertEquals(0, carriedBranches(chronicle), "nothing was taken");
+        assertEquals(branchesBefore, carriedBranches(chronicle), "nothing was taken");
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
@@ -130,12 +133,13 @@ class AFullLoadIsNotAnEmptyWoodIntegrationTest {
     void theSameGatherWithRoomTakesTheWood() {
         UUID chronicle = awakenInTheWood();
         jdbc.update("UPDATE chronicle_carry_capacity SET direct_bulk_ml=? WHERE chronicle_id=?", carriedBulkMl(chronicle) + 50_000, chronicle);
+        int branchesBefore = carriedBranches(chronicle);
 
         ChronicleActionService.ActionResult gathered = actions.resolve("gather dry branches");
 
         assertEquals("SUCCEEDED", gathered.outcome(), gathered.perception());
         assertFalse(gathered.perception().toLowerCase(Locale.ROOT).contains("your load is"),
             "a gather with room is told as the gather: " + gathered.perception());
-        assertTrue(carriedBranches(chronicle) > 0, "the wood is taken");
+        assertTrue(carriedBranches(chronicle) > branchesBefore, "the wood is taken");
     }
 }
