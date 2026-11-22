@@ -6132,8 +6132,40 @@ public class PhysicalItemService {
         if (!carried) jdbc.update("UPDATE world_object SET current_owner_id=NULL, current_location_id=? WHERE id=?", chronicleLocation(chronicle), basket);
         return new ItemView(basket,"Woven basket","woven_basket",carried ? chronicle : null,null);
     }
-    @Transactional public ItemView craftPrimitiveSpear(Instant at) { UUID chronicle=activeChronicle(); if(!hasAtLeast(chronicle,"dry_branch",1)||!hasAtLeast(chronicle,"field_stone",1)||!hasAtLeast(chronicle,"plant_fiber",1))throw new IllegalStateException("Insufficient physical material."); if(!consumeOne(chronicle,"dry_branch",at)||!consumeOne(chronicle,"field_stone",at)||!consumeOne(chronicle,"plant_fiber",at))throw new IllegalStateException("Material changed."); UUID spear=UUID.randomUUID(); createCraftedItem(chronicle,chronicleLocation(chronicle),spear,"primitive_spear","Primitive spear",at,"CRAFTED",QualityGrade.SOUND); return new ItemView(spear,"Primitive spear","primitive_spear",chronicle,null); }
-    @Transactional public ItemView craftPrimitiveTool(String itemKey, String displayName, boolean needsBranch, Instant at) { UUID chronicle=activeChronicle(); if(!hasAtLeast(chronicle,"field_stone",1)||!hasAtLeast(chronicle,"plant_fiber",1)||(needsBranch&&!hasAtLeast(chronicle,"dry_branch",1)))throw new IllegalStateException("Insufficient physical material."); if(!consumeOne(chronicle,"field_stone",at)||!consumeOne(chronicle,"plant_fiber",at)||(needsBranch&&!consumeOne(chronicle,"dry_branch",at)))throw new IllegalStateException("Material changed."); UUID tool=UUID.randomUUID(); createCraftedItem(chronicle,chronicleLocation(chronicle),tool,itemKey,displayName,at,"CRAFTED",QualityGrade.SOUND); return new ItemView(tool,displayName,itemKey,chronicle,null); }
+    /**
+     * THE BEST THING THIS CHRONICLE HAS TO LASH WITH, or null if they have nothing (#899).
+     *
+     * <p>Five tool recipes each asked "have I got a binding" by naming {@code plant_fiber} as a literal, so a
+     * Chronicle holding retted soft bast -- a BETTER lashing, and the one the documented hafting method uses --
+     * could haft nothing at all, and was told "the stone and loose fiber never settle into a usable edge"
+     * about fiber they were not using. This is the one place that question is answered now, from the
+     * {@code binding_material} catalogue, so a new binding joins by being inserted.
+     *
+     * <p>Best first, by {@code holds_fast}: sinew over tarred cordage over cordage over withy over bast over
+     * loose fibre. A Chronicle with sinew and loose fibre uses the sinew, because that is what a person does.
+     */
+    @Transactional(readOnly = true) public String aBindingInReach(UUID chronicle) {
+        return jdbc.query(
+            "SELECT b.item_key FROM binding_material b " +
+            " WHERE EXISTS (SELECT 1 FROM item_instance i JOIN world_object w ON w.id = i.object_id " +
+            "                WHERE i.item_key = b.item_key AND w.current_owner_id = ? " +
+            "                  AND w.lifecycle_state = 'ACTIVE') " +
+            " ORDER BY b.holds_fast DESC, b.item_key LIMIT 1",
+            rs -> rs.next() ? rs.getString(1) : null, chronicle);
+    }
+
+    /** What to call a binding in a sentence: "soft bast strip", not "soft_bast_strip". */
+    public String bindingNamed(String bindingKey) {
+        if (bindingKey == null) return "cordage";
+        return bindingKey.replace('_', ' ').replaceAll("\\s+(bundle|tuft|strip|handful|wad)$", "");
+    }
+
+    @Transactional public ItemView craftPrimitiveSpear(Instant at) { return craftPrimitiveSpear(aBindingInReach(activeChronicle()), at); }
+
+    @Transactional public ItemView craftPrimitiveSpear(String binding, Instant at) { UUID chronicle=activeChronicle(); if(binding==null)throw new IllegalStateException("Insufficient physical material."); if(!hasAtLeast(chronicle,"dry_branch",1)||!hasAtLeast(chronicle,"field_stone",1)||!hasAtLeast(chronicle,binding,1))throw new IllegalStateException("Insufficient physical material."); if(!consumeOne(chronicle,"dry_branch",at)||!consumeOne(chronicle,"field_stone",at)||!consumeOne(chronicle,binding,at))throw new IllegalStateException("Material changed."); UUID spear=UUID.randomUUID(); createCraftedItem(chronicle,chronicleLocation(chronicle),spear,"primitive_spear","Primitive spear",at,"CRAFTED",QualityGrade.SOUND); return new ItemView(spear,"Primitive spear","primitive_spear",chronicle,null); }
+    @Transactional public ItemView craftPrimitiveTool(String itemKey, String displayName, boolean needsBranch, Instant at) { return craftPrimitiveTool(itemKey, displayName, needsBranch, aBindingInReach(activeChronicle()), at); }
+
+    @Transactional public ItemView craftPrimitiveTool(String itemKey, String displayName, boolean needsBranch, String binding, Instant at) { UUID chronicle=activeChronicle(); if(binding==null)throw new IllegalStateException("Insufficient physical material."); if(!hasAtLeast(chronicle,"field_stone",1)||!hasAtLeast(chronicle,binding,1)||(needsBranch&&!hasAtLeast(chronicle,"dry_branch",1)))throw new IllegalStateException("Insufficient physical material."); if(!consumeOne(chronicle,"field_stone",at)||!consumeOne(chronicle,binding,at)||(needsBranch&&!consumeOne(chronicle,"dry_branch",at)))throw new IllegalStateException("Material changed."); UUID tool=UUID.randomUUID(); createCraftedItem(chronicle,chronicleLocation(chronicle),tool,itemKey,displayName,at,"CRAFTED",QualityGrade.SOUND); return new ItemView(tool,displayName,itemKey,chronicle,null); }
 
     /**
      * What a thing takes, and what a material is for (#37).

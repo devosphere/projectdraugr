@@ -1043,11 +1043,17 @@ public class ChronicleActionService {
         // rollback-only even though we catch it, turning an ordinary failed
         // attempt into a hard rollback. Prechecking keeps failed attempts graceful.
         else if (intent == Intent.CRAFT_BASKET) { if (items.basketWeaveUnitsInReach(chronicle.id()) >= 8) { perception="Flexible lengths — withies, rush, fibre, vine, or cordage — tighten row on row beneath your hands until a rough basket holds its shape." + whereItEndedUp(items.craftBasket()); } else { outcome="FAILED"; perception="You have too little flexible stock within reach to weave a basket — it wants eight lengths of split withy, reed, rush, fibre, vine, or cordage, and the loose few you hold fall away from one another."; } }
-        else if (intent == Intent.CRAFT_SPEAR) { if (items.hasAtLeast(chronicle.id(),"dry_branch",1) && items.hasAtLeast(chronicle.id(),"field_stone",1) && items.hasAtLeast(chronicle.id(),"plant_fiber",1)) { items.craftPrimitiveSpear(resolvedAt); perception="You lash the shaped stone hard against the straight branch, working the binding tight until it will not shift. A crude spear rests in your hand — rough in the balance, but real in the point."; } else { outcome="FAILED"; perception="The pieces refuse to hold together long enough to become a usable tool. Stone slides against wood, the binding slips, and what you meant to make comes apart in your hands."; } }
-        else if (intent == Intent.CRAFT_KNIFE) { if (items.hasAtLeast(chronicle.id(),"field_stone",1) && items.hasAtLeast(chronicle.id(),"plant_fiber",1)) { items.craftPrimitiveTool("stone_knife","Stone knife",false,resolvedAt); perception="You strike a working edge into the stone, patient blow after blow, then bind it firm into a haft that fills the palm. It is small and plain, but it will cut."; } else { outcome="FAILED"; perception="The stone and loose fiber never settle into a usable edge. Each strike takes off the wrong flake, and what is left is a lump, not a blade."; } }
-        else if (intent == Intent.CRAFT_HAMMER) { if (items.hasAtLeast(chronicle.id(),"field_stone",1) && items.hasAtLeast(chronicle.id(),"plant_fiber",1) && items.hasAtLeast(chronicle.id(),"dry_branch",1)) { items.craftPrimitiveTool("stone_hammer","Stone hammer",true,resolvedAt); perception="You seat the heavy stone into the split of a branch and bind it down, turn on turn, until the head holds without any play. It sits in the hand with a solid, purposeful weight."; } else { outcome="FAILED"; perception="The head shifts loose before the tool can hold together. Every test-swing works the binding a little looser, until you are left with a stone and a stick again."; } }
-        else if (intent == Intent.CRAFT_PICKAXE) { if (items.hasAtLeast(chronicle.id(),"field_stone",1) && items.hasAtLeast(chronicle.id(),"plant_fiber",1) && items.hasAtLeast(chronicle.id(),"dry_branch",1)) { items.craftPrimitiveTool("primitive_pickaxe","Primitive pickaxe",true,resolvedAt); perception="You lash a shaped stone crosswise to the branch and swing it through the air to test it. The weight pulls true at the end of the arc — a tool made for breaking hard ground."; } else { outcome="FAILED"; perception="The pieces refuse to hold in a form that can work the ground. The head lolls sideways on every swing, and no amount of binding sets it straight."; } }
-        else if (intent == Intent.CRAFT_HATCHET) { if (items.hasAtLeast(chronicle.id(),"field_stone",1) && items.hasAtLeast(chronicle.id(),"plant_fiber",1) && items.hasAtLeast(chronicle.id(),"dry_branch",1)) { items.craftPrimitiveTool("stone_hatchet","Stone hatchet",true,resolvedAt); perception="You knap a stone down to a broad, biting edge and lash it into the split of a branch, wedging and binding until it is one thing. It is heavy in the head and rough in the haft, but the edge bites — a hatchet, enough to bring a tree down."; } else { outcome="FAILED"; perception="Without a stone edge, a branch, and cordage to bind them, the head never seats. It rocks in the split and tears free the moment you put any force behind it."; } }
+        // SOMETHING TO LASH IT WITH (#899). These five recipes each asked "have I got a binding" by naming
+        // plant_fiber as a literal, so a Chronicle who had retted a loose bark strip into soft bast -- a
+        // BETTER lashing, and the one the documented hafting method uses -- could haft nothing at all, and
+        // was told "the stone and loose fiber never settle into a usable edge" about fiber they did not have.
+        // The question is the binding_material catalogue's to answer now, in one place, and the sentence says
+        // which binding the hands actually used instead of always claiming fibre.
+        else if (intent == Intent.CRAFT_SPEAR) { String lash = items.aBindingInReach(chronicle.id()); if (items.hasAtLeast(chronicle.id(),"dry_branch",1) && items.hasAtLeast(chronicle.id(),"field_stone",1) && lash != null) { items.craftPrimitiveSpear(lash, resolvedAt); perception="You lash the shaped stone hard against the straight branch with " + items.bindingNamed(lash) + ", turn by turn, until it will not shift. The spear has reach and a point that will hold."; } else { outcome="FAILED"; perception=noLashing(lash, "a spear wants a straight branch, a stone for the point"); } }
+        else if (intent == Intent.CRAFT_KNIFE) { String lash = items.aBindingInReach(chronicle.id()); if (items.hasAtLeast(chronicle.id(),"field_stone",1) && lash != null) { items.craftPrimitiveTool("stone_knife","Stone knife",false,lash,resolvedAt); perception="You strike a working edge into the stone, patient blow after blow, then bind it firm into a haft that fills the palm with " + items.bindingNamed(lash) + ". It is small and plain, but it will cut."; } else { outcome="FAILED"; perception=noLashing(lash, "a knife wants a stone that will take an edge"); } }
+        else if (intent == Intent.CRAFT_HAMMER) { String lash = items.aBindingInReach(chronicle.id()); if (items.hasAtLeast(chronicle.id(),"field_stone",1) && items.hasAtLeast(chronicle.id(),"dry_branch",1) && lash != null) { items.craftPrimitiveTool("stone_hammer","Stone hammer",true,lash,resolvedAt); perception="You seat the heavy stone into a split haft and bind it round with " + items.bindingNamed(lash) + " until it sits dead still. It is crude and it will drive anything you need driven."; } else { outcome="FAILED"; perception=noLashing(lash, "a hammer wants a heavy stone and a haft to swing it on"); } }
+        else if (intent == Intent.CRAFT_PICKAXE) { String lash = items.aBindingInReach(chronicle.id()); if (items.hasAtLeast(chronicle.id(),"field_stone",1) && items.hasAtLeast(chronicle.id(),"dry_branch",1) && lash != null) { items.craftPrimitiveTool("primitive_pickaxe","Primitive pickaxe",true,lash,resolvedAt); perception="You lash a worked stone point crosswise to a stout handle with " + items.bindingNamed(lash) + " and test the swing. It will bite into ground that turned your hands."; } else { outcome="FAILED"; perception=noLashing(lash, "a pick wants a stone worked to a point and a stout handle"); } }
+        else if (intent == Intent.CRAFT_HATCHET) { String lash = items.aBindingInReach(chronicle.id()); if (items.hasAtLeast(chronicle.id(),"field_stone",1) && items.hasAtLeast(chronicle.id(),"dry_branch",1) && lash != null) { items.craftPrimitiveTool("stone_hatchet","Stone hatchet",true,lash,resolvedAt); perception="You knap a stone down to a cutting bit, seat it in the split end of a haft and bind it hard with " + items.bindingNamed(lash) + ". It is an axe, after a fashion, and it will take wood."; } else { outcome="FAILED"; perception=noLashing(lash, "an axe wants a stone that will hold a bit and a haft to carry it"); } }
         else if (intent == Intent.CRAFT_FIRE_KIT) { if (items.craftFireKit(resolvedAt)) perception="You carve a flat notched board and a straight spindle from dry wood — the makings of a friction fire."; else { outcome="FAILED"; perception="Without a blade and sound dry wood, your hands shape nothing that would raise an ember."; } }
         else if (intent == Intent.CRAFT_TINDER) {
             // NAME WHAT WAS ACTUALLY TEASED APART (#898). craftTinder takes eight different stocks — cattail
@@ -5096,12 +5102,25 @@ public class ChronicleActionService {
         // Stuff or line a garment already being worn (#37). Gated on a lining VERB plus a garment word, so
         // "gather dry grass" still gathers and "make a fur cloak" still makes one — the difference is that this
         // one is done TO something you have on.
+        //
+        // THE GARMENT WORD WAS THIRTEEN LITERALS AND THE CHRONICLE WEARS A SHIRT (#901). The catalogue holds a
+        // hundred and forty-four insulating wearables; this gate knew boot, shoe, mitten, glove, hood, cap,
+        // cloak, coat, jerkin, vest, legging, sock and the word "garment" itself — and not shirt, tunic,
+        // trousers, shift, kilt, skirt, shawl, cape, hat, bracer, gaiter or sandal, every one of which a
+        // Chronicle starts the game wearing or can make. So "line my shirt with shed fur" fell through to the
+        // process catalogue, matched the separate "Line a garment with fur" recipe, and was refused for want
+        // of a cutting edge — while "pack the soft tuft into the everyday shirt garment I am wearing" did the
+        // very same thing successfully, because it happened to contain the word "garment".
+        //
+        // lineGarment already answered this question correctly all along: it reads what the Chronicle is
+        // ACTUALLY WEARING out of equipment_attachment and matches the word the player used against it. The
+        // method knew; the gate never asked it. classify() is a pure static and cannot query, so the gate
+        // keeps a vocabulary — but of the words a person uses for clothes, held to the catalogue by
+        // ALiningReachesWhatIsWorn, and matched as WHOLE WORDS. That last part is not optional: this
+        // classifier uses raw contains(), and contains("hat") matches "what" and "that".
         if((value.contains("stuff")||value.contains("pack")||value.contains("line ")||value.contains("line my")
             ||value.contains("insulate")||value.contains("wad"))
-           &&(value.contains("boot")||value.contains("shoe")||value.contains("mitten")||value.contains("glove")
-              ||value.contains("hood")||value.contains("cap")||value.contains("cloak")||value.contains("coat")
-              ||value.contains("jerkin")||value.contains("vest")||value.contains("legging")||value.contains("sock")
-              ||value.contains("garment")||value.contains("what i am wearing")||value.contains("my clothes"))
+           &&(namesSomethingWorn(value)||value.contains("what i am wearing")||value.contains("my clothes"))
            &&!value.contains("make ")&&!value.contains("sew ")&&!value.contains("craft ")) return Intent.LINE_GARMENT;
         if((value.contains("tidy")||value.contains("arrange")||value.contains("straighten")||value.contains("set in order")||value.contains("order the")||value.contains("clean up")||value.contains("maintain")||value.contains("look after")||value.contains("protect"))&&(value.contains("camp")||value.contains("campsite")||value.contains("supplies")||value.contains("shelter site"))) return Intent.MAINTAIN_CAMP;
         // Mucking out is the SAME WORK on the SAME counter (#106). maintainCamp carries off `chunk_refuse`, which
@@ -8734,4 +8753,55 @@ public class ChronicleActionService {
         } catch (java.sql.SQLException unreadable) { return List.of(); }
     }
     public record NarrationPage(List<NarrationEntry> entries, boolean hasMore) { }
+
+    /**
+     * WHY THE HAFTING DID NOT HAPPEN, naming the part that was actually missing (#899).
+     *
+     * <p>The old sentence for all five tools said "the stone and loose fiber never settle into a usable edge"
+     * whatever was wrong -- including to a Chronicle holding good retted bast, who had the binding and was
+     * told they did not. If the lashing is the missing piece this says so and says what would serve; if the
+     * lashing is in hand then something else is short, and it says that instead.
+     */
+    private String noLashing(String lash, String wants) {
+        return lash == null
+            ? "You have nothing to bind it with. " + Character.toUpperCase(wants.charAt(0)) + wants.substring(1)
+              + ", and something to lash the two together \u2014 fibre, retted bast, twisted cordage or sinew."
+            : Character.toUpperCase(wants.charAt(0)) + wants.substring(1)
+              + ", and you have not got it. The lashing you carry is sound enough.";
+    }
+
+    /**
+     * The words people use for clothes they have on (#901).
+     *
+     * <p>Drawn from the display names of the catalogue's insulating wearables, which is where the Chronicle's
+     * own starting shirt, trousers and shoes come from. Deliberately NOT every worn thing: a quiver, a
+     * backpack, a carry sling and a splint all have an insulation value and none of them is a garment you
+     * stuff, so they are left out and the omission is the point rather than an oversight.
+     *
+     * <p>Singular and plural both, because a person says "my boots" and the catalogue says "fur boot (left)".
+     */
+    private static final java.util.Set<String> WORDS_FOR_CLOTHES = java.util.Set.of(
+        "boot", "boots", "shoe", "shoes", "sandal", "sandals", "snowshoe", "snowshoes", "sock", "socks",
+        "mitten", "mittens", "glove", "gloves", "bracer", "bracers", "gaiter", "gaiters",
+        "hood", "hoods", "hat", "hats", "cap", "caps", "headband", "headbands",
+        "cloak", "cloaks", "cape", "capes", "shawl", "shawls", "coat", "coats",
+        "jerkin", "jerkins", "vest", "vests", "cuirass", "armour", "armor",
+        "shirt", "shirts", "tunic", "tunics", "shift", "shifts",
+        "kilt", "kilts", "skirt", "skirts", "trousers", "breeches", "legging", "leggings",
+        "garment", "garments", "clothes", "clothing");
+
+    /**
+     * Whether the sentence names a garment, as a WHOLE WORD.
+     *
+     * <p>Whole words because {@code classify()} matches with raw {@code contains}, which is where every
+     * collision this project has found came from: {@code contains("hat")} is true of "what" and "that",
+     * {@code contains("cap")} of "escape", {@code contains("vest")} of "harvest". Splitting on non-letters
+     * and comparing whole tokens costs nothing and cannot do that.
+     */
+    static boolean namesSomethingWorn(String value) {
+        if (value == null) return false;
+        for (String word : value.toLowerCase(Locale.ROOT).split("[^a-z]+"))
+            if (WORDS_FOR_CLOTHES.contains(word)) return true;
+        return false;
+    }
 }
