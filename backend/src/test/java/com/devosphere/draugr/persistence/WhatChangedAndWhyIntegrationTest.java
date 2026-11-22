@@ -81,6 +81,15 @@ class WhatChangedAndWhyIntegrationTest {
         return id;
     }
 
+    /**
+     * THE SUITE SHARES ONE LIVING CHRONICLE, so other tests (this class's own among them) leave changes in its
+     * ledger that were never told. A test that counts what is felt must start from a ledger with nothing
+     * waiting, or it measures its neighbours' work rather than its own.
+     */
+    private void nothingWaitingToBeTold(UUID me) {
+        jdbc.update("UPDATE chronicle_metric_change SET told = TRUE WHERE chronicle_id = ? AND NOT told", me);
+    }
+
     /** Every metric must point at a column that exists, or a recorded change writes nowhere. */
     @Test void everyTrackedMetricNamesARealColumn() {
         List<String> dangling = jdbc.queryForList(
@@ -181,6 +190,10 @@ class WhatChangedAndWhyIntegrationTest {
      */
     @Test void nothingIsSaidUntilTheChangeWouldActuallyBeFelt() {
         UUID me = chronicle();
+        nothingWaitingToBeTold(me);
+        // Pinned mid-range: a shared chronicle may already have hands near 1.0, where the clamp would swallow
+        // the step this test needs to be felt.
+        jdbc.update("UPDATE chronicle_capability_adaptation SET fine_motor_familiarity = 0.30 WHERE chronicle_id = ?", me);
         metrics.move(me, "FINE_MOTOR_FAMILIARITY", 0.002, "PRACTICE", UUID.randomUUID(), null, 30, 0.5, Instant.now());
         assertTrue(metrics.whatIsFelt(me).isEmpty(), "one session of work is not a felt change");
 
@@ -200,6 +213,7 @@ class WhatChangedAndWhyIntegrationTest {
     /** A decline is narrated too, and differently. Strengthening and slackening are not one sentence. */
     @Test void aDeclineIsFeltAsADeclineAndNotAsAGain() {
         UUID me = chronicle();
+        nothingWaitingToBeTold(me);
         jdbc.update("UPDATE chronicle_capability_adaptation SET load_conditioning = 0.50 WHERE chronicle_id = ?", me);
         metrics.move(me, "LOAD_CONDITIONING", -0.08, "NEGLECT", null, "a test", null, null, Instant.now());
         List<String> felt = metrics.whatIsFelt(me);
