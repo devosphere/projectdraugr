@@ -4478,4 +4478,55 @@ class IntentClassificationRegressionTest {
         for (String word : new String[]{"my shirt", "the boots", "a hat", "those leggings"})
             assertTrue(ChronicleActionService.namesSomethingWorn(word), word);
     }
+
+    /**
+     * #965 — DRILLING IS NOT FIGHTING, AND NOT MAKING EITHER.
+     *
+     * <p>A practice sword with no way to practise is a token: V472 credits a discipline only on a SUCCEEDED
+     * act, and the only act that exercised a sword was the hunt. Measured live, a fresh Chronicle holding
+     * the stone-edged sword on ground carrying twenty-four red deer, body reset between attempts: ten hunts,
+     * ten PARTIAL, SWORD_FIGHTING never recorded. You could not win without practice and could not practise
+     * without winning.
+     */
+    @Test void drillingWithAWeaponIsItsOwnAct() throws Exception {
+        for (String drilling : new String[]{
+                "practise with my sword", "practice with my sword", "practise with the spear",
+                "practise my swordplay", "practice my guards", "practise the cuts",
+                "drill with the sword", "drill with my axe", "shadow drill", "sword drill",
+                "train with the sword", "training with my spear", "spar with the practice sword",
+                "sparring with a wooden sword", "work the guards", "swing at a post", "swing at the post"})
+            assertEquals("PRACTISE_WEAPON", classify(drilling, false), drilling);
+    }
+
+    /**
+     * #965 — AND EVERY TRIGGER IS A PAIR, NOT A BARE WORD.
+     *
+     * <p>The first cut of the rule used {@code contains("spar")} and {@code contains("drill ")}. The suite
+     * caught both inside a minute: <b>"shoo the SPARrows off the seedlings"</b> became weapon practice, and
+     * so did <b>"work the hand DRILL between my palms"</b> — which is how you light a fire. This classifier
+     * matches with raw {@code contains}, and a four-letter token sits inside a dozen innocent words.
+     */
+    @Test void aDrillTriggerNeverStealsAnInnocentSentence() throws Exception {
+        assertEquals("SCARE_BIRDS", classify("shoo the sparrows off the seedlings", false));
+        assertEquals("LIGHT_FIRE", classify("work the hand drill between my palms", false));
+        assertEquals("LIGHT_FIRE", classify("spin the bow drill", false));
+        assertEquals("LIGHT_FIRE", classify("light a fire with the bow drill", false));
+        assertEquals("CRAFT_FIRE_KIT", classify("carve a fire drill", false));
+        for (String innocent : new String[]{
+                "shoo the sparrows off the seedlings", "work the hand drill between my palms",
+                "spin the bow drill", "light a fire with the bow drill", "carve a fire drill",
+                "scare the birds off the crop", "hunt the sparrowhawk"})
+            assertNotEquals("PRACTISE_WEAPON", classify(innocent, false), innocent);
+    }
+
+    /**
+     * #965 — MAKING A PRACTICE SWORD IS MAKING, NOT PRACTISING. The item is called a "practice sword", so
+     * its own name contains the trigger word; the rule stands aside for make, craft and carve.
+     */
+    @Test void makingAPracticeSwordIsNotPractisingWithOne() throws Exception {
+        for (String making : new String[]{
+                "carve a wooden practice sword", "make a practice sword", "craft a practice sword",
+                "carve a practice sword"})
+            assertNotEquals("PRACTISE_WEAPON", classify(making, false), making);
+    }
 }
