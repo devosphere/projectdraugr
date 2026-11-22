@@ -974,6 +974,19 @@ public class ChronicleActionService {
                 ? "You have nothing to bind it with — no poultice, no roll of bandage, not so much as a length of plant fibre. The blood keeps its own time."
                 : "You go over yourself and find nothing open and nothing bleeding."; } }
         else if (intent == Intent.EDIT_DOCUMENT) { try { reviseDocument(chronicle.id(), actionId, resolvedAt, text); perception="Your marks remain on the physical page."; } catch (IllegalArgumentException | IllegalStateException ignored) { outcome="FAILED"; perception="You handle the page for a while, then set it aside unchanged."; } }
+        else if (intent == Intent.PRACTISE_WEAPON) {
+            // DRILLING, WHICH IS NOT FIGHTING (#965). V472 credits a discipline only on a SUCCEEDED act, and
+            // the only act that exercised a sword was the hunt -- so a Chronicle with a practice sword could
+            // not practise, measurably: ten hunts of a twenty-four-head deer herd came back PARTIAL every
+            // time and SWORD_FIGHTING never appeared. You could not win without practice and could not
+            // practise without winning. This is the way out, and it is the ordinary one: repetition.
+            String drilled = skills.weaponInHand(chronicle.id());
+            double already = skills.competence(chronicle.id(), drilled == null ? "ATHLETICS" : drilled);
+            physiology.applyMinorExertion(chronicle.id(), 6);
+            perception = drilled == null
+                ? "You work through it with empty hands — step, turn, the same guard again and again until your legs know it without asking. It is not fighting and it is not nothing."
+                : drillNarration(items.plainNamesOf(java.util.List.of(heldWeaponKey(chronicle.id()))).get(0), already);
+        }
         else if (intent == Intent.CONFRONT_WILDLIFE) { double spec=SuccessModel.specificity(text,HUNT_SIGNALS); double fam=capability.familiarity(chronicle.id(),"AIM");
             // WHICH DISCIPLINE THIS FIGHT ACTUALLY ASKS FOR (#954). fam is AIM, shared by seven intents and
             // blind to what is in your hands: it treated a drawn bow, a thrust spear and bare fists as one
@@ -1314,7 +1327,9 @@ public class ChronicleActionService {
             // cannot be awarded twice for one intended act, and chronicle_skill_practice_event unique index
             // makes that a guarantee rather than a consequence of where the call sits.
             String ranProcess = learned != null && learned.startsWith("PROCESS:") ? learned.substring("PROCESS:".length()) : null;
-            String weapon = intent == Intent.CONFRONT_WILDLIFE ? skills.weaponInHand(chronicle.id()) : null;
+            // A DRILL IS ABOUT THE WEAPON TOO (#965), which is the whole point of it.
+            String weapon = intent == Intent.CONFRONT_WILDLIFE || intent == Intent.PRACTISE_WEAPON
+                ? skills.weaponInHand(chronicle.id()) : null;
             String discipline = skills.disciplineOf(intent.name(), ranProcess, weapon);
             com.devosphere.draugr.skill.SkillProgressionService.Practice practised = skills.practise(
                 chronicle.id(), actionId, discipline, minutes, skills.difficultyOf(intent.name(), ranProcess), resolvedAt);
@@ -3185,6 +3200,27 @@ public class ChronicleActionService {
         // grassland and write a note there" is still the walk it begins with.
         if(aWriteOpensTheSentence(value)) return Intent.WRITE;
         if((value.contains("craft")||value.contains("make"))&&value.contains("spear")) return Intent.CRAFT_SPEAR;
+        // DRILLING WITH A WEAPON (#965). Deliberately a VERB-first rule and deliberately above the craft
+        // rules, because "practise with my stone knife" is not a request to make one. A weapon word is not
+        // required: the act reads what is in the hand, and bare-handed drill is footwork.
+        // EVERY TRIGGER IS A PAIR, not a bare word. The first cut of this rule used contains("spar") and
+        // contains("drill "), and the suite caught both within the minute: "shoo the SPARrows off the
+        // seedlings" became weapon practice, and so did "work the hand DRILL between my palms" -- a
+        // fire-making technique. This classifier matches with raw contains(), and a four-letter token is
+        // inside a dozen innocent words.
+        if ((value.contains("practis with") || value.contains("practise with") || value.contains("practice with")
+             || value.contains("practise my") || value.contains("practice my")
+             || value.contains("practise the") || value.contains("practice the")
+             || value.contains("practising with") || value.contains("practicing with")
+             || value.contains("practise swordplay") || value.contains("practice swordplay")
+             || value.contains("drill with") || value.contains("drill the guards")
+             || value.contains("shadow drill") || value.contains("sword drill")
+             || value.contains("train with") || value.contains("training with")
+             || value.contains("spar with") || value.contains("sparring")
+             || value.contains("work the guards") || value.contains("swing at a post")
+             || value.contains("swing at the post"))
+            && !value.contains("make ") && !value.contains("craft ") && !value.contains("carve "))
+            return Intent.PRACTISE_WEAPON;
         if((value.contains("craft")||value.contains("make"))&&value.contains("knife")) return Intent.CRAFT_KNIFE;
         if((value.contains("craft")||value.contains("make"))&&value.contains("hammer")) return Intent.CRAFT_HAMMER;
         if((value.contains("craft")||value.contains("make"))&&(value.contains("pickaxe")||value.contains("pick axe"))) return Intent.CRAFT_PICKAXE;
@@ -7430,7 +7466,7 @@ public class ChronicleActionService {
             || (word(v, "fix") && !v.contains("memory") && !v.contains("mind"));
     }
 
-    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, JUDGE_CLOTHING, JUDGE_PLACE, JUDGE_WORK_IN_HAND, JUDGE_LEARNING, JUDGE_FLORA, JUDGE_RAISING, JUDGE_CAMP_GROUND, JUDGE_TOOLS, JUDGE_UNSEEN, TURN_OUT_STOCK, BRING_IN_STOCK, SLAUGHTER_STOCK, JUDGE_WHERE_TO_GO, PARE_HOOVES, TAKE_UP_AGAIN, UNKNOWN }
+    private record ActiveChronicle(UUID id, UUID location) { } private record TravelPlan(UUID destination, int distance, String reason, int minutesPerChunk) { } private enum Intent { OBSERVE, MOVE, TRAVEL, MARK, REST, SLEEP, GATHER_FIBER, GATHER_STONE, GATHER_BERRIES, GATHER_BRANCHES, GATHER_CLAY, GATHER_STONE_SLAB, GATHER_PLANT, FELL_TREE, PLANT_TREE, COPPICE, TILL_GROUND, SOW, HARVEST_CROP, WEED_CROP, JUDGE_CROSSING, HIDE_TRAIL, TAKE_STOCK_OF_CAMP, READ_THE_SKY, WHICH_WAY, CHECK_FIRE, CHECK_STANDING, CHECK_CROP, TAKE_STOCK_OF_GEAR, TAKE_STOCK_OF_FOOD, JUDGE_WATER, WATER_CROP, SCARE_BIRDS, LINE_GARMENT, CLEAR_LAND, FEED_ANIMAL, RAID_HIVE, RAID_NEST, COLLECT_INSECTS, FISH, SNARE, TRACK, SCOUT, TAME, LURE, SET_TRAP, CHECK_TRAP, CRAFT_GARMENT, GATHER_MINERAL, CRAFT_FIRE_TOOL, PROCESS_MATERIAL, SKETCH_MAP, EAT, DRINK, COLLECT_WATER, BOIL_WATER, FILTER_WATER, WASH, WARM_BODY, DRY_BODY, COOL_BODY, SHELTER_BODY, STRETCH, TREAT_WOUND, EDIT_DOCUMENT, WRITE, STRIP_BARK, MAKE_CHARCOAL, LIGHT_FIRE, FEED_FIRE, EXTINGUISH_FIRE, BANK_FIRE, COOK_MEAT, CONFRONT_WILDLIFE, HARVEST_CARCASS, DISENGAGE, CRAFT_BASKET, CRAFT_SPEAR, CRAFT_KNIFE, CRAFT_HAMMER, CRAFT_PICKAXE, CRAFT_HATCHET, CRAFT_FIRE_KIT, CRAFT_TINDER, CRAFT_DESK, CRAFT_CHAIR, CRAFT_SHELF, CRAFT_WORKSTATION, CRAFT_NET, CRAFT_BELT, BUILD_FIRE_PIT, BUILD_ALARM, BUILD_FENCE, BUILD_PEN, BUILD_LOOKOUT, BUILD_FUEL_RACK, BUILD_LATRINE, BUILD_TOOL_SHED, BUILD_SMOKE_VENT, BUILD_STORAGE_AREA, RESTORE_HABITAT, START_LEAN_TO, WORK_LEAN_TO, ABANDON_LEAN_TO, RESUME_LEAN_TO, REPAIR_LEAN_TO, REPAIR_ITEM, REPAIR_STRUCTURE, DISMANTLE, EQUIP, UNEQUIP, DROP, PICK_UP, STORE, OPEN_CONTAINER, CLOSE_CONTAINER, DESIGNATE, REFINE, ADVANCE_ASSEMBLY, INSPECT, EXAMINE, ANALYZE, INVESTIGATE, SEARCH, LISTEN, SMELL, FEEL, READ, MEASURE, REWORK, URINATE, DEFECATE, PERSONAL_ACT, AGGRESSION_WILDLIFE, AGGRESSION_INANIMATE, MAKE_BED, MAINTAIN_CAMP, PLACE_WINDBREAK, PLACE_COVER, FORAGE_GROUND, TAKE_ANIMAL_YIELD, TEND_ANIMAL, GROOM_ANIMAL, CHECK_STOCK, SENSE_BODY, BREEDING_PROSPECTS, CONTACT_PEOPLE, TRADE_WITH_PEOPLE, CONDUCT_TOWARD_PEOPLE, AGREE_WITH_PEOPLE, WORK_FOR_PEOPLE, COMPANION_PEOPLE, ADDRESS_PEOPLE, JOIN_PEOPLE, SETTLE_CLAIM, EMPTY_CONTAINER, JUDGE_HAULAGE, JUDGE_FOOD, JUDGE_LIGHT, JUDGE_MAKING, JUDGE_CLOTHING, JUDGE_PLACE, JUDGE_WORK_IN_HAND, JUDGE_LEARNING, JUDGE_FLORA, JUDGE_RAISING, JUDGE_CAMP_GROUND, JUDGE_TOOLS, JUDGE_UNSEEN, TURN_OUT_STOCK, BRING_IN_STOCK, SLAUGHTER_STOCK, JUDGE_WHERE_TO_GO, PARE_HOOVES, TAKE_UP_AGAIN, PRACTISE_WEAPON, UNKNOWN }
     private enum Direction { NORTH(0,-1,"north"), SOUTH(0,1,"south"), EAST(1,0,"east"), WEST(-1,0,"west"); final int dx; final int dy; final String description; Direction(int dx,int dy,String description){this.dx=dx;this.dy=dy;this.description=description;} static Direction from(String action){String value=action.toLowerCase(Locale.ROOT); for(Direction direction:values()) if(value.matches(".*\\b"+direction.description+"\\b.*")) return direction; return null;}
         /** The cardinal for a grid offset, for when the WORLD names the direction rather than the player (#37). */
         static Direction of(int dx,int dy){ for(Direction d:values()) if(d.dx==dx&&d.dy==dy) return d; return null; } }    /**     * The structured perception frame — the seam every future Simulation Agent reads
@@ -8853,5 +8889,44 @@ public class ChronicleActionService {
         for (String word : value.toLowerCase(Locale.ROOT).split("[^a-z]+"))
             if (WORDS_FOR_CLOTHES.contains(word)) return true;
         return false;
+    }
+
+    /** The item key of the weapon this Chronicle would drill with, or a bare-hands marker. */
+    private String heldWeaponKey(UUID chronicle) {
+        String key = jdbc.query(
+            "SELECT i.item_key FROM world_object o JOIN item_instance i ON i.object_id = o.id " +
+            "  JOIN weapon_profile w ON w.item_key = i.item_key " +
+            "  LEFT JOIN equipment_attachment e ON e.item_id = o.id AND e.chronicle_id = ? " +
+            " WHERE o.current_owner_id = ? AND o.lifecycle_state = 'ACTIVE' AND w.combat_role <> 'ARROW' " +
+            " ORDER BY (e.item_id IS NOT NULL) DESC, " +
+            "          CASE w.edge_tier WHEN 'STEEL' THEN 5 WHEN 'IRON' THEN 4 WHEN 'BRONZE' THEN 3 " +
+            "                           WHEN 'HARDENED' THEN 2 ELSE 1 END DESC LIMIT 1",
+            rs -> rs.next() ? rs.getString(1) : null, chronicle, chronicle);
+        return key == null ? "your own hands" : key;
+    }
+
+    /**
+     * What half an hour of drill feels like, which depends on how much of it you have already done (#965).
+     *
+     * <p>No number reaches the player — this is the same rule the rest of the progression follows. A novice
+     * is told their arms ache and the thing feels wrong in their hand; a practised one is told the motion
+     * has stopped being a decision.
+     */
+    private String drillNarration(String weapon, double competence) {
+        if (competence < 0.08)
+            return "You set up a post and go at it with the " + weapon + ". The weight is wrong in your hand, "
+                 + "the blows land flat as often as true, and your shoulders are burning before the light has "
+                 + "moved. Nothing about it is comfortable yet.";
+        if (competence < 0.30)
+            return "You work the " + weapon + " against the post: the same cut, the same recovery, over and "
+                 + "over. It is coming truer than it was, and you are starting to feel the difference between "
+                 + "a blow that lands and one that only arrives.";
+        if (competence < 0.60)
+            return "You drill with the " + weapon + " until the motion stops being a decision. Step, cut, "
+                 + "recover, and the post takes it in the same place each time. You stop because the light "
+                 + "has gone, not because you were tired.";
+        return "You take the " + weapon + " through its work the way someone does who no longer has to think "
+             + "about it. The post is marked in one place and one place only. There is nothing here you are "
+             + "still trying to get right; you are keeping what you have.";
     }
 }
