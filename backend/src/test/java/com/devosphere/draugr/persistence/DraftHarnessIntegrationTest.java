@@ -87,6 +87,8 @@ class DraftHarnessIntegrationTest {
         resetDraft(chronicle);
         for (int i = 0; i < bouts; i++) items.workDraftBeasts(chronicle);
         jdbc.update("UPDATE wildlife_bond SET draft_conditioning=0 WHERE chronicle_id=?", chronicle);
+        // ...and the keeper's own: making the yoke is practice that credits strength a hair (#954).
+        jdbc.update("UPDATE chronicle_capability_adaptation SET load_conditioning=0 WHERE chronicle_id=?", chronicle);
         return items.sustainedMassCapacity(chronicle);
     }
 

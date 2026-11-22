@@ -267,10 +267,15 @@ class PlaytestBugFixesIntegrationTest {
     void carryingAidRaisesCapacityWhileEquipped() {
         UUID chronicle = chronicle();
         int baseline = items.sustainedMassCapacity(chronicle);
+        Double strengthAtBaseline = jdbc.queryForObject(
+            "SELECT COALESCE((SELECT load_conditioning FROM chronicle_capability_adaptation WHERE chronicle_id=?), 0)", Double.class, chronicle);
         for (int i = 0; i < 3; i++) items.createCarriedItem(chronicle, "dry_branch", "Dry branch", now(), "TEST_SEED");
         for (int i = 0; i < 2; i++) items.createCarriedItem(chronicle, "fiber_cordage", "Processed fiber cordage", now(), "TEST_SEED");
         ChronicleActionService.ActionResult made = actions.resolve("I lash a burden frame.");
         assertEquals("SUCCEEDED", made.outcome(), () -> "lashing a burden frame must succeed: " + made.perception());
+        // Lashing the frame is construction practice, which credits strength a hair (#954). This test reads
+        // the AID's effect, so the body's conditioning is put back where the baseline read it.
+        jdbc.update("UPDATE chronicle_capability_adaptation SET load_conditioning=? WHERE chronicle_id=?", strengthAtBaseline, chronicle);
         // Not equipped yet -> capacity unchanged.
         assertEquals(baseline, items.sustainedMassCapacity(chronicle), "an unequipped aid does not raise capacity");
         ChronicleActionService.ActionResult worn = actions.resolve("I sling the burden frame on my back.");

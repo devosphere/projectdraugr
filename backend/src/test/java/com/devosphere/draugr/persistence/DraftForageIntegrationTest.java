@@ -112,6 +112,9 @@ class DraftForageIntegrationTest {
         items.createCarriedItem(chronicle, "dry_grass_bundle", "Dry grass bundle", now, "TEST");
         ChronicleActionService.ActionResult feed = actions.resolve("feed the animals");
         assertEquals("SUCCEEDED", feed.outcome(), () -> "feeding fodder must succeed: " + feed.perception());
+        // Feeding is husbandry practice, which credits the keeper's own strength a hair (#954). This test
+        // reads the BEAST's haul, so the keeper's conditioning is held at nothing.
+        jdbc.update("UPDATE chronicle_capability_adaptation SET load_conditioning=0 WHERE chronicle_id=?", chronicle);
         assertEquals(base + 150000, items.sustainedMassCapacity(chronicle), "a fed beast hauls again (hunger 100 - 60 feed = 40)");
         Integer fodderLeft = jdbc.queryForObject("SELECT COUNT(*) FROM item_instance i JOIN world_object w ON w.id=i.object_id WHERE i.item_key='dry_grass_bundle' AND w.current_owner_id=? AND w.lifecycle_state='ACTIVE'", Integer.class, chronicle);
         assertEquals(0, fodderLeft, "the fodder is consumed by the feed");
