@@ -2262,7 +2262,15 @@ public class PhysicalItemService {
     @Transactional
     public int stripBark(UUID chronicle, UUID location, Instant occurredAt) {
         String biome = jdbc.queryForObject("SELECT biome FROM world_chunk WHERE id=?", String.class, location);
-        if (!"TEMPERATE_FOREST".equals(biome)) return 0; // No trees with workable bark here.
+        // A broadleaf with workable bark: the temperate wood, the willow of the wet ground (#879), or any broadleaf
+        // stand the chunk records. A wetland whose survey reports a full willow stand used to answer that no tree
+        // here had workable bark. Conifers stay out, as they do for coppicing.
+        boolean broadleafHere = "TEMPERATE_FOREST".equals(biome) || "WETLAND".equals(biome) || "RIVER_BANK".equals(biome)
+            || Boolean.TRUE.equals(jdbc.query(
+                "SELECT EXISTS (SELECT 1 FROM chunk_flora cf JOIN flora_definition fd ON fd.flora_key=cf.flora_key " +
+                "WHERE cf.chunk_id=? AND fd.organism_type='TREE' AND cf.quantity>0 AND cf.flora_key NOT IN ('pine','spruce'))",
+                rs -> rs.next() && rs.getBoolean(1), location));
+        if (!broadleafHere) return 0; // No trees with workable bark here.
         if (capacityHeadroomUnits(chronicle, "bark_sheet") <= 0) return 0;
         UUID id = UUID.randomUUID();
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_owner_id) VALUES (?,'ITEM','Bark sheet',?)", id, chronicle);
@@ -2660,6 +2668,20 @@ public class PhysicalItemService {
      */
     @Transactional
     public String[] fellTree(UUID chronicle, UUID location, Instant occurredAt) {
+        return fellTree(chronicle, location, null, occurredAt);
+    }
+
+    /**
+     * Fell the tree the player NAMED, when it stands here (#879). The stand query took whichever tree the chunk
+     * listed first, so "fell a willow" on ground holding willow and alder cut what came first. A named tree is
+     * preferred; an unnamed or absent one falls back to the old order.
+     */
+    @Transactional
+    public String[] fellTree(UUID chronicle, UUID location, String actionText, Instant occurredAt) {
+        String named = null;
+        if (actionText != null && !actionText.isBlank())
+            for (String key : jdbc.queryForList("SELECT flora_key FROM flora_definition WHERE organism_type='TREE' ORDER BY length(flora_key) DESC", String.class))
+                if (namesTheTree(actionText, key)) { named = key; break; }
         // Axe-class tool: stone_axe, stone_hatchet, or any future axe item. Pick the soundest one in reach, so a
         // spare good axe is used before a worn one; a tool wears with the work (V139), and a broken axe will not
         // bite until it is mended.
@@ -2686,9 +2708,11 @@ public class PhysicalItemService {
         java.util.Map<String,Object> tree = jdbc.query(
             "SELECT cf.flora_key, fd.organism_type FROM chunk_flora cf " +
             "JOIN flora_definition fd ON fd.flora_key=cf.flora_key " +
-            "WHERE cf.chunk_id=? AND fd.organism_type='TREE' AND cf.quantity>0 LIMIT 1",
+            "WHERE cf.chunk_id=? AND fd.organism_type='TREE' AND cf.quantity>0 " +
+            // Only a named tree reorders the stand; unnamed felling keeps the order it always had.
+            (named != null ? "ORDER BY (cf.flora_key = ?) DESC " : "") + "LIMIT 1",
             rs -> rs.next() ? java.util.Map.of("flora_key", rs.getString(1), "organism_type", rs.getString(2)) : null,
-            location);
+            named != null ? new Object[]{location, named} : new Object[]{location});
 
         if (tree == null) {
             // Fall back: biome has trees by nature even without chunk_flora rows
