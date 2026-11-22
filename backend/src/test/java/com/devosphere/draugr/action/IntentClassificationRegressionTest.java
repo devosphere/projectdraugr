@@ -4383,4 +4383,42 @@ class IntentClassificationRegressionTest {
                 "repair my stone knife", "mend the woven basket"})
             assertEquals("REPAIR_ITEM", classify(mending, false), mending);
     }
+
+    /**
+     * #891 — WHAT A JOURNAL ENTRY SAYS IS NOT WHAT THE PLAYER DOES. "east ... across grassland" is exactly how a
+     * player asks to cross country, so the travel rule is right in itself; what was wrong is that it beat an
+     * explicit write. The ticket's control sentence was just as fragile: "the felled oak" made it FELL_TREE.
+     */
+    @Test void whatAJournalEntrySaysIsNotWhatThePlayerDoes() throws Exception {
+        for (String writing : new String[]{
+                "Write a field journal: The oak stand is two tiles east of camp across grassland, and two planks "
+                  + "remain at the stand with one plank stored at camp",
+                "Write a field journal: One plank at camp and two beside the felled oak",
+                "Write a field journal about the oak stand two tiles east of camp across grassland",
+                "write a note: two tiles east of camp across forest",
+                "jot down a note: walk north across the wetland to the reeds",
+                "I write in my journal that the river can be forded east across the marsh",
+                "write an entry in my journal: gather reeds, then fell the willow"})
+            assertEquals("WRITE", classify(writing, false), writing);
+
+        // The entry mentioning travel must not steal travel itself, nor a write named later in a sentence that
+        // opens with another act.
+        for (String travelling : new String[]{
+                "walk two tiles east of camp across grassland",
+                "head east across the grassland and write a note there"})
+            assertNotEquals("WRITE", classify(travelling, false), travelling);
+        assertEquals("FELL_TREE", classify("fell the oak tree", false));
+        assertEquals("READ", classify("read my journal", false));
+    }
+
+    /** #891: a write with no colon still has a body — what follows "about" or "that" is what is set down. */
+    @Test void anEntryWithoutAColonStillHasABody() {
+        assertEquals("the oak stand two tiles east of camp across grassland",
+            ChronicleActionService.entryBody("Write a field journal about the oak stand two tiles east of camp across grassland"));
+        assertEquals("the river can be forded east",
+            ChronicleActionService.entryBody("I write in my journal that the river can be forded east"));
+        assertEquals("One plank at camp",
+            ChronicleActionService.entryBody("Write a field journal: One plank at camp"));
+        assertEquals(null, ChronicleActionService.entryBody("write a note"));
+    }
 }
