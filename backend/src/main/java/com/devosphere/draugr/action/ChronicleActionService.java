@@ -3108,6 +3108,18 @@ public class ChronicleActionService {
         // PhysicalItemService.aRecipesOwnNameTheCatalogueCanAnswer, which also explains why the bare verbs
         // `fix`, `dress`, `carve` and `reinforce` keep their intents here with no list of exceptions.
         if(items.aRecipesOwnNameTheCatalogueCanAnswer(action)) return Intent.UNKNOWN;
+        // WHAT A JOURNAL ENTRY SAYS IS NOT WHAT THE PLAYER DOES (#891). The write rules sat two thousand lines
+        // down this chain, so every rule above them read the ENTRY as well as the request. Live:
+        //
+        //   "Write a field journal: The oak stand is two tiles east of camp across grassland, ..."
+        //
+        // moved the Chronicle a tile east — a direction and a biome name together are how a player asks to
+        // cross country — and the ticket's own control, "...two beside the felled oak", was FELL_TREE.
+        //
+        // Settled here, the #897 way: a write verb that OPENS the sentence and governs a writing noun decides
+        // it, and nothing the entry mentions gets a vote. Opening, not anywhere, so "head east across the
+        // grassland and write a note there" is still the walk it begins with.
+        if(aWriteOpensTheSentence(value)) return Intent.WRITE;
         if((value.contains("craft")||value.contains("make"))&&value.contains("spear")) return Intent.CRAFT_SPEAR;
         if((value.contains("craft")||value.contains("make"))&&value.contains("knife")) return Intent.CRAFT_KNIFE;
         if((value.contains("craft")||value.contains("make"))&&value.contains("hammer")) return Intent.CRAFT_HAMMER;
@@ -5838,6 +5850,50 @@ public class ChronicleActionService {
         return false;
     }
 
+    private static final java.util.Set<String> OPENS_A_REQUEST = java.util.Set.of(
+        "i", "ll", "will", "please", "now", "then", "so", "let", "me", "carefully", "quickly", "neatly", "slowly");
+    private static final java.util.Set<String> WRITING_VERBS = java.util.Set.of(
+        "write", "jot", "inscribe", "scribble", "scrawl", "pen", "record");
+    /** "log" and "account" are left out on purpose: a log is firewood here, and an account is settled. */
+    private static final java.util.Set<String> WRITTEN_THINGS = java.util.Set.of(
+        "journal", "journals", "note", "notes", "entry", "entries", "diary", "record", "records", "memo", "list");
+
+    /**
+     * Whether the sentence is a request to WRITE something down (#891): after the words that only open a
+     * request, its first word is a writing verb, and a writing noun follows within four words of it — "write a
+     * field journal", "jot down a note", "write in my journal". Only the words before any colon are read,
+     * because everything after it is the entry.
+     */
+    static boolean aWriteOpensTheSentence(String value) {
+        if (value == null) return false;
+        int colon = value.indexOf(':');
+        String opening = (colon >= 0 ? value.substring(0, colon) : value).toLowerCase(Locale.ROOT);
+        String[] said = opening.replaceAll("[^a-z]+", " ").trim().split(" ");
+        int at = 0;
+        while (at < said.length && OPENS_A_REQUEST.contains(said[at])) at++;
+        if (at >= said.length || !WRITING_VERBS.contains(said[at])) return false;
+        for (int next = at + 1; next < said.length && next - at <= 4; next++)
+            if (WRITTEN_THINGS.contains(said[next])) return true;
+        return false;
+    }
+
+    private static final Pattern ENTRY_AFTER_A_WORD = Pattern.compile("(?is)\\b(?:about|that)\\s+(.+)$");
+
+    /**
+     * What a write sets down (#891): everything after the colon, or — when the player wrote no colon — after the
+     * first "about" or "that", so "write a field journal about the oak stand" records the oak stand rather than
+     * nothing. Null when the sentence carries no entry at all.
+     */
+    static String entryBody(String text) {
+        if (text == null) return null;
+        Matcher m = WRITE_CONTENT.matcher(text);
+        boolean found = m.find();
+        if (!found) { m = ENTRY_AFTER_A_WORD.matcher(text); found = m.find(); }
+        if (!found) return null;
+        String body = m.group(1).trim();
+        return body.isEmpty() ? null : body;
+    }
+
     static boolean makingGoverns(String value, String noun, String... verbs) {
         if (value == null) return false;
         String[] said = value.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim().split(" ");
@@ -6959,9 +7015,8 @@ public class ChronicleActionService {
         return "You eat what you foraged. It is plain, but there is something in it worth the chewing.";
     }
     private String[] writeOrDraw(ActiveChronicle chronicle, String text, UUID actionId, Instant at) {
-        Matcher m = WRITE_CONTENT.matcher(text);
-        if (!m.find() || m.group(1).trim().isEmpty()) return new String[]{"FAILED", "You hold the charcoal a moment, then set nothing down."};
-        String content = m.group(1).trim();
+        String content = entryBody(text);
+        if (content == null) return new String[]{"FAILED", "You hold the charcoal a moment, then set nothing down."};
         String value = text.toLowerCase(Locale.ROOT);
         String kind = value.contains("map") ? "MAP" : "LITERATURE";
         if (!items.hasAtLeast(chronicle.id(), "charcoal", 1)) return new String[]{"FAILED", "Without anything that leaves a mark, the surface stays blank."};
