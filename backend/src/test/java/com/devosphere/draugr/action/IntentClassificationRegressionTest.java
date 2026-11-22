@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Method;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 /**
@@ -4420,5 +4422,60 @@ class IntentClassificationRegressionTest {
         assertEquals("One plank at camp",
             ChronicleActionService.entryBody("Write a field journal: One plank at camp"));
         assertEquals(null, ChronicleActionService.entryBody("write a note"));
+    }
+
+    /**
+     * #901 — THE CHRONICLE WEARS A SHIRT AND THE GATE HAD NEVER HEARD OF ONE.
+     *
+     * <p>The lining gate kept thirteen literal garment words. The catalogue holds a hundred and forty-four
+     * insulating wearables, and the Chronicle starts the game in an everyday shirt, everyday trousers and
+     * everyday shoes — of which the gate knew only the shoes. So the reported sentence fell through to the
+     * process catalogue, matched the separate "Line a garment with fur" recipe and was refused for want of a
+     * blade, while the player's own workaround did the same job successfully because it happened to contain
+     * the word "garment".
+     *
+     * <p>{@code lineGarment} had answered this correctly all along, reading what the Chronicle actually has
+     * on. The method knew and the gate never asked it.
+     */
+    @Test void aLiningReachesTheClothesAPersonActuallyWears() throws Exception {
+        // The sentence from the report, and the workaround that already worked. Both must now be the same act.
+        assertEquals("LINE_GARMENT", classify("line my shirt with shed fur", false));
+        assertEquals("LINE_GARMENT",
+            classify("Pack the soft tuft into the everyday shirt garment I am wearing.", false));
+
+        // Every garment the Chronicle starts in, and the ones the catalogue lets them make.
+        for (String garment : new String[]{
+                "stuff my shirt with dry grass", "line my tunic with moss", "pack my trousers with wool",
+                "stuff my boots with shed fur", "line my shift with fur", "pack my kilt with grass",
+                "stuff my skirt with moss", "line my shawl with wool", "pack my cape with fur",
+                "stuff my hat with moss", "line my cap with wool", "pack my hood with grass",
+                "stuff my gaiters with moss", "line my bracers with fur", "pack my sandals with grass",
+                "insulate my leggings with moss", "wad my socks with wool", "stuff my mittens with fur"})
+            assertEquals("LINE_GARMENT", classify(garment, false), garment);
+
+        // AND MAKING ONE IS STILL MAKING ONE. The gate must not steal the recipe it sits next to.
+        for (String making : new String[]{
+                "make a fur cloak", "sew a lining into my coat", "craft a fur-lined hood"})
+            assertNotEquals("LINE_GARMENT", classify(making, false), making);
+    }
+
+    /**
+     * #901 — AND THE GARMENT WORD IS A WHOLE WORD.
+     *
+     * <p>{@code classify()} matches with raw {@code contains}, which is where every collision this project has
+     * found came from. "hat" is inside "what" and "that"; "cap" inside "escape"; "vest" inside "harvest";
+     * "coat" inside "overcoat" harmlessly but "sock" inside nothing useful. Adding those words to the gate
+     * without a word boundary would have been the same defect in a new place, so this fails if it ever is.
+     */
+    @Test void aGarmentWordMustBeAWholeWord() throws Exception {
+        for (String innocent : new String[]{
+                "what is in my pack", "stuff that in the basket", "pack up what is on the ground",
+                "harvest the wheat and pack it", "escape the wolf", "stuff the fish with herbs"})
+            assertNotEquals("LINE_GARMENT", classify(innocent, false), innocent);
+        // The guard itself, directly: these contain the letters and not the word.
+        for (String letters : new String[]{"what", "that", "escape", "harvest", "overcapped"})
+            assertFalse(ChronicleActionService.namesSomethingWorn(letters), letters);
+        for (String word : new String[]{"my shirt", "the boots", "a hat", "those leggings"})
+            assertTrue(ChronicleActionService.namesSomethingWorn(word), word);
     }
 }
