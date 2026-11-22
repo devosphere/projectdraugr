@@ -124,6 +124,7 @@ public class ProcessMatcher {
 
     public static Result resolve(String text, String category, List<Candidate> candidates) {
         String v = ActivityClassifier.normalise(text);
+        String worked = outsideTheInputs(text);
         int bestLen = -1; List<Candidate> best = new ArrayList<>();
         String nearKey = null; String gate = "NONE"; int nearShared = 0;
         for (Candidate c : candidates) {
@@ -150,8 +151,19 @@ public class ProcessMatcher {
                 }
                 continue;
             }
+            // The subject must be named where the sentence says what it is WORKING, not only where it lists what it
+            // starts FROM (#889). "Whittle and lash a coaster from a dry twig and cord" names cord as an input to a
+            // coaster; read as cordage's subject, it twisted new cord out of the Chronicle's fibre. With no input
+            // clause in the sentence, `worked` is the whole sentence and this is the comparison it always was.
+            //
+            // Two readings keep a material named after "from" as the process's own, because in subtractive work the
+            // source IS what is worked: the catalogue's own keyword spells the clause out ("strike a flake from the
+            // chert", "pick grit from the clay"), or the sentence names what this process makes outside it ("knap a
+            // flake from the chert" names the flake). The coaster sentence does neither for cordage or for armour.
             boolean subject = false;
-            for (String s : c.subjects()) if (ActivityClassifier.containsSubject(v, s)) { subject = true; break; }
+            for (String s : c.subjects()) if (ActivityClassifier.containsSubject(worked, s)) { subject = true; break; }
+            if (!subject && (keywordSpellsTheInput(v, c) || namedOutputWords(worked, c.outputKey()) > 0))
+                for (String s : c.subjects()) if (ActivityClassifier.containsSubject(v, s)) { subject = true; break; }
             if (!subject) {
                 // Right work, right verb, wrong material — the closest kind of miss.
                 if (!"KEYWORD".equals(gate)) { gate = "KEYWORD"; nearKey = c.processKey(); nearShared = Integer.MAX_VALUE; }
@@ -209,6 +221,56 @@ public class ProcessMatcher {
         }
         java.util.Collections.sort(tied);
         return new Result(tied.get(0), gate, nearKey, tied.size() > 1 ? List.copyOf(tied) : List.of());
+    }
+
+    /** Words that open an input clause: what follows is what the work is made FROM. */
+    private static final java.util.Set<String> OPENS_AN_INPUT = java.util.Set.of("from", "using");
+    /** Words that close one: the sentence has moved on to purpose, result or sequence. */
+    private static final java.util.Set<String> CLOSES_AN_INPUT = java.util.Set.of(
+        "into", "to", "for", "so", "then", "until", "while", "that", "which", "where", "when");
+
+    /** Whether a keyword this candidate matched itself carries an input clause — the catalogue saying "from" is its own. */
+    private static boolean keywordSpellsTheInput(String normalised, Candidate c) {
+        for (String kw : c.keywords()) {
+            if (!ActivityClassifier.containsTerm(normalised, kw)) continue;
+            String k = ActivityClassifier.normalise(kw);
+            for (String opener : OPENS_AN_INPUT) if (k.contains(" " + opener + " ")) return true;
+            if (k.contains(" out of ")) return true;
+        }
+        return false;
+    }
+
+    /**
+     * The sentence, normalised, with its input clauses taken out (#889) — "from a dry twig and cord", "using the
+     * antler", "out of birch bark". A clause runs from its opening word to the next punctuation mark or to a word
+     * that closes it ("into", "to", "for"…), so "from the fibre into a cord" keeps the cord. A sentence with no
+     * input clause comes back exactly as {@link ActivityClassifier#normalise} would return it.
+     */
+    static String outsideTheInputs(String text) {
+        if (text == null) return " ";
+        StringBuilder kept = new StringBuilder(" ");
+        boolean cut = false;
+        for (String segment : text.toLowerCase(java.util.Locale.ROOT).split("[,.;:!?()\\[\\]]")) {
+            String[] w = segment.replaceAll("[^a-z0-9]+", " ").trim().split(" ");
+            boolean input = false;
+            for (int i = 0; i < w.length; i++) {
+                if (w[i].isEmpty()) continue;
+                boolean opens = OPENS_AN_INPUT.contains(w[i]);
+                if ("out".equals(w[i]) && i + 1 < w.length && "of".equals(w[i + 1])) { opens = true; i++; }
+                if (opens) input = true;
+                else if (CLOSES_AN_INPUT.contains(w[i])) input = false;
+                if (input) {
+                    // Mark the cut once, so the words either side of it cannot weld into a phrase neither
+                    // half of the sentence said: "|" is a token no keyword or subject contains.
+                    if (!cut) kept.append("| ");
+                    cut = true;
+                } else {
+                    kept.append(w[i]).append(' ');
+                    cut = false;
+                }
+            }
+        }
+        return kept.toString();
     }
 
     /**
