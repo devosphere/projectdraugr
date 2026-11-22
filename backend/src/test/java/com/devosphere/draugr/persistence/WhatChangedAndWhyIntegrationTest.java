@@ -81,6 +81,15 @@ class WhatChangedAndWhyIntegrationTest {
         return id;
     }
 
+    /**
+     * THE SUITE SHARES ONE LIVING CHRONICLE, so other tests (this class's own among them) leave changes in its
+     * ledger that were never told. A test that counts what is felt must start from a ledger with nothing
+     * waiting, or it measures its neighbours' work rather than its own.
+     */
+    private void nothingWaitingToBeTold(UUID me) {
+        jdbc.update("UPDATE chronicle_metric_change SET told = TRUE WHERE chronicle_id = ? AND NOT told", me);
+    }
+
     /** Every metric must point at a column that exists, or a recorded change writes nowhere. */
     @Test void everyTrackedMetricNamesARealColumn() {
         List<String> dangling = jdbc.queryForList(
@@ -181,6 +190,10 @@ class WhatChangedAndWhyIntegrationTest {
      */
     @Test void nothingIsSaidUntilTheChangeWouldActuallyBeFelt() {
         UUID me = chronicle();
+        nothingWaitingToBeTold(me);
+        // Pinned mid-range: a shared chronicle may already have hands near 1.0, where the clamp would swallow
+        // the step this test needs to be felt.
+        jdbc.update("UPDATE chronicle_capability_adaptation SET fine_motor_familiarity = 0.30 WHERE chronicle_id = ?", me);
         metrics.move(me, "FINE_MOTOR_FAMILIARITY", 0.002, "PRACTICE", UUID.randomUUID(), null, 30, 0.5, Instant.now());
         assertTrue(metrics.whatIsFelt(me).isEmpty(), "one session of work is not a felt change");
 
@@ -200,6 +213,7 @@ class WhatChangedAndWhyIntegrationTest {
     /** A decline is narrated too, and differently. Strengthening and slackening are not one sentence. */
     @Test void aDeclineIsFeltAsADeclineAndNotAsAGain() {
         UUID me = chronicle();
+        nothingWaitingToBeTold(me);
         jdbc.update("UPDATE chronicle_capability_adaptation SET load_conditioning = 0.50 WHERE chronicle_id = ?", me);
         metrics.move(me, "LOAD_CONDITIONING", -0.08, "NEGLECT", null, "a test", null, null, Instant.now());
         List<String> felt = metrics.whatIsFelt(me);
@@ -210,6 +224,60 @@ class WhatChangedAndWhyIntegrationTest {
 
         assertNotEquals(CausalMetricService.sentenceFor("LOAD_CONDITIONING", true),
                         CausalMetricService.sentenceFor("LOAD_CONDITIONING", false));
+    }
+
+    /**
+     * A SPAN OF NEGLECT IS PAID FOR ONCE. The slip is asked on every resolved action, and it measured the idle
+     * span from the last practice — the same span each time — so ten acts in one afternoon took ten times the
+     * decline. Run far in the future, on a metric no other test here slips, so neither this test's rows nor
+     * another's can reach the other's window.
+     */
+    @Test void aSpanOfNeglectIsChargedOnceHoweverOftenTheWorldLooks() {
+        UUID me = chronicle();
+        Instant base = Instant.now().plus(400, ChronoUnit.DAYS);
+        jdbc.update("UPDATE chronicle_capability_adaptation SET insight_familiarity = 0.40 WHERE chronicle_id = ?", me);
+        jdbc.update("INSERT INTO chronicle_metric_change (chronicle_id, metric_key, occurred_at, before_value, " +
+                    " after_value, delta, cause, source_event) VALUES (?,?,?,?,?,?,'PRACTICE','set up by a test')",
+            me, "INSIGHT_FAMILIARITY", java.sql.Timestamp.from(base.minus(42, ChronoUnit.DAYS)), 0.39, 0.40, 0.01);
+
+        metrics.letTheUnpractisedSlip(me, base);
+        double afterFirst = insight(me);
+        assertTrue(afterFirst < 0.40, "five weeks past the grace should cost something: " + afterFirst);
+
+        // The same afternoon, looked at twice more: nothing more is owed.
+        metrics.letTheUnpractisedSlip(me, base.plus(1, ChronoUnit.HOURS));
+        metrics.letTheUnpractisedSlip(me, base.plus(2, ChronoUnit.HOURS));
+        assertEquals(afterFirst, insight(me), 1e-9, "the same idle span must not be charged again");
+
+        // Three more days of idleness are owed three days of slip — a fraction of the first charge.
+        metrics.letTheUnpractisedSlip(me, base.plus(3, ChronoUnit.DAYS));
+        double afterThreeDays = insight(me);
+        double firstCharge = 0.40 - afterFirst, laterCharge = afterFirst - afterThreeDays;
+        assertTrue(laterCharge > 0, "three more idle days should cost something");
+        assertTrue(laterCharge < firstCharge, "but only three days' worth: first " + firstCharge + ", later " + laterCharge);
+        assertEquals(2, (int) jdbc.queryForObject(
+            "SELECT count(*) FROM chronicle_metric_change WHERE chronicle_id = ? AND cause = 'NEGLECT' " +
+            "  AND metric_key = 'INSIGHT_FAMILIARITY' AND occurred_at >= ?", Integer.class,
+            me, java.sql.Timestamp.from(base)));
+    }
+
+    private double insight(UUID me) {
+        return jdbc.queryForObject(
+            "SELECT insight_familiarity FROM chronicle_capability_adaptation WHERE chronicle_id = ?", Double.class, me);
+    }
+
+    /** What the action narration asks for: one run of prose when a change is ripe, then nothing for it again. */
+    @Test void theFeltChangeIsToldOnceToTheNarration() {
+        UUID me = chronicle();
+        metrics.whatIsFelt(me); // whatever another test here left ripe is not this test's to hear
+        jdbc.update("UPDATE chronicle_capability_adaptation SET locomotion_familiarity = 0.20 WHERE chronicle_id = ?", me);
+        metrics.move(me, "LOCOMOTION_FAMILIARITY", 0.06, "PRACTICE", UUID.randomUUID(), null, 60, 0.5, Instant.now());
+
+        String felt = capability.whatIsFelt(me);
+        assertNotNull(felt, "a felt step of practice over bad ground should be told");
+        assertTrue(felt.contains("feet"), "and told about the feet: " + felt);
+        assertFalse(felt.matches(".*\\d.*"), "with no figures in it: " + felt);
+        assertNull(capability.whatIsFelt(me), "and never told again");
     }
 
     /** Recorded evidence cannot be rewritten; only the fact that a notice was given may be set, once. */

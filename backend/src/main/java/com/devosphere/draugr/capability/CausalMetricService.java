@@ -39,6 +39,9 @@ public class CausalMetricService {
     /** How long a metric may go unpractised before neglect starts to tell. */
     private static final Duration GRACE = Duration.ofDays(7);
 
+    /** Neglect is settled at most this often, so one idle day is one ledger row, not one per action. */
+    private static final Duration SETTLES_EVERY = Duration.ofDays(1);
+
     private final JdbcTemplate jdbc;
 
     public CausalMetricService(JdbcTemplate jdbc) { this.jdbc = jdbc; }
@@ -111,8 +114,10 @@ public class CausalMetricService {
             "SELECT m.metric_key, m.slips_per_idle_week, " +
             "       COALESCE((SELECT max(c.occurred_at) FROM chronicle_metric_change c " +
             "                  WHERE c.chronicle_id = ? AND c.metric_key = m.metric_key AND c.cause = 'PRACTICE'), " +
-            "                (SELECT ch.arrived_at FROM chronicle ch WHERE ch.id = ?)) AS last_worked " +
-            "  FROM metric_subject m WHERE m.slips_per_idle_week > 0", chronicle, chronicle);
+            "                (SELECT ch.arrived_at FROM chronicle ch WHERE ch.id = ?)) AS last_worked, " +
+            "       (SELECT max(c.occurred_at) FROM chronicle_metric_change c " +
+            "         WHERE c.chronicle_id = ? AND c.metric_key = m.metric_key AND c.cause = 'NEGLECT') AS last_slipped " +
+            "  FROM metric_subject m WHERE m.slips_per_idle_week > 0", chronicle, chronicle, chronicle);
 
         for (java.util.Map<String, Object> row : idle) {
             Object when = row.get("last_worked");
@@ -123,7 +128,22 @@ public class CausalMetricService {
 
             // Only the time BEYOND the grace counts, so the slip starts gently rather than all at once on
             // the eighth day.
-            double weeks = (unpractised.minus(GRACE).toMinutes()) / (7.0 * 24 * 60);
+            //
+            // AND ONLY THE TIME NOT ALREADY CHARGED. This is asked on every resolved action, and the idle span
+            // measured from the last practice is the same span each time it is asked — so ten acts in one
+            // afternoon, a fortnight after the bow was last drawn, took ten fortnights off the aim. A NEGLECT
+            // row is the record that a stretch of idleness has been paid for; the slip runs from the later of
+            // the grace's end and the last time it was charged, so a week of neglect costs a week of slip
+            // however often the world looks. It settles at most once a simulated day, so the ledger holds one
+            // neglect row per metric per idle day rather than one per action.
+            Instant chargedFrom = lastWorked.plus(GRACE);
+            Object slippedAt = row.get("last_slipped");
+            if (slippedAt != null) {
+                Instant lastSlipped = ((Timestamp) slippedAt).toInstant();
+                if (lastSlipped.isAfter(chargedFrom)) chargedFrom = lastSlipped;
+            }
+            if (Duration.between(chargedFrom, now).compareTo(SETTLES_EVERY) < 0) continue;
+            double weeks = Duration.between(chargedFrom, now).toMinutes() / (7.0 * 24 * 60);
             double rate = ((Number) row.get("slips_per_idle_week")).doubleValue();
             Change change = move(chronicle, (String) row.get("metric_key"), -rate * weeks, "NEGLECT",
                 null, "unpractised for " + unpractised.toDays() + " days", null, null, now);

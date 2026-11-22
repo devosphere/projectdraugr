@@ -1322,6 +1322,14 @@ public class ChronicleActionService {
             // threshold, a sentence about their own hands.
             String better = skills.improvementSentence(practised);
             if (better != null) perception = perception + better;
+            // ...AND WHAT THE BODY ITSELF HAS NOTICED (#953): a hidden number that has moved far enough, up
+            // or down, to be felt. Never a figure, never on a tiny change, never twice for the same change.
+            // Not on an act that already spoke about the hands: one such sentence per act is plenty, and a
+            // ripe change that waits is told on the next act instead — the ledger keeps it until then.
+            else {
+                String felt = capability.whatIsFelt(chronicle.id());
+                if (felt != null) perception = perception + felt;
+            }
         }
         // The base row is now durable. Everything below shapes the DISPLAYED narration (death coda,
         // AI sentence). It is written only to the separate overlay table — never back to the base row —

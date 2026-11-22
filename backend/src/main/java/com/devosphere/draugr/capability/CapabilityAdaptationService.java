@@ -37,6 +37,15 @@ import java.time.Instant; import java.sql.Timestamp; import java.util.UUID;
   // ledger says when each metric last saw real practice, so the cost is one query and nothing drifts.
   metrics.letTheUnpractisedSlip(chronicle, at);
  }
+ /**
+  * WHAT THE BODY HAS NOTICED SINCE IT WAS LAST TOLD (#953), as one run of prose, or null — the usual answer.
+  * Drawn from the ledger, so it speaks only of a change that really happened and only once that change has
+  * grown large enough to be felt. Telling marks the rows told, so the same change is never narrated twice.
+  */
+ @Transactional public String whatIsFelt(UUID chronicle){
+  java.util.List<String> felt=metrics.whatIsFelt(chronicle);
+  return felt.isEmpty()?null:String.join("",felt);
+ }
  /** The chronicle's accumulated familiarity (0..1) in a domain — the passive-knowledge layer that lets a practiced hand succeed on a terse command. 0 when never practiced. */
  @Transactional(readOnly=true) public double familiarity(UUID chronicle, String domain){
   // The column is metric_subject's to name, in one place, so this reader cannot drift from the writer.
