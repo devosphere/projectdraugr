@@ -95,6 +95,36 @@ public class CausalMetricService {
     }
 
     /**
+     * RECORD A CHANGE SOMEBODY ELSE APPLIED (#960).
+     *
+     * <p>{@link #move} is the one place that both moves a metric and accounts for it, and it stays that way.
+     * But the physiology tick computes a whole body in one pass and writes it in one statement -- digestion,
+     * expenditure, the cold, the fever and what they did to the store, all together -- and it cannot
+     * sensibly hand each of those to a read-modify-write of its own. It has the before and the after; what
+     * it needs is somewhere to put the account.
+     *
+     * <p>So this writes the ledger row and touches no column. Nothing is recorded if the value did not move.
+     *
+     * @return what was recorded, or null if nothing moved or the metric is not tracked
+     */
+    @Transactional
+    public Change recordApplied(UUID chronicle, String metricKey, double before, double after, String cause,
+                               UUID sourceAction, String sourceEvent, Integer exposureMinutes, Instant at) {
+        if (chronicle == null || metricKey == null || Math.abs(after - before) < 1e-9) return null;
+        Boolean tracked = jdbc.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM metric_subject WHERE metric_key = ?)", Boolean.class, metricKey);
+        if (!Boolean.TRUE.equals(tracked)) return null;
+        jdbc.update(
+            "INSERT INTO chronicle_metric_change (chronicle_id, metric_key, occurred_at, before_value, " +
+            " after_value, delta, cause, source_action_id, source_event, exposure_minutes) " +
+            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+            chronicle, metricKey, Timestamp.from(at), before, after, after - before, cause,
+            sourceAction, sourceAction == null && sourceEvent == null ? "the passing of time" : sourceEvent,
+            exposureMinutes);
+        return new Change(metricKey, before, after, cause);
+    }
+
+    /**
      * WHAT IS NOT USED FADES (#953).
      *
      * <p>Each metric's own catalogue row says how fast it slips per idle week, and the ledger says when it
@@ -213,6 +243,15 @@ public class CausalMetricService {
             case "KNOWLEDGE_FAMILIARITY" -> rose
                 ? " What you know is sitting closer to hand. Something half-remembered came back to you whole."
                 : " Something you knew would not come when you reached for it.";
+            case "ENERGY_RESERVES" -> rose
+                ? " There is something behind you again when you set yourself to a thing, instead of only the will to start it."
+                : " You are running on less than you were. The work takes what it takes and there is not much left over.";
+            case "NUTRITION" -> rose
+                ? " Whatever you have been eating has been the right of it. Your hair and your nails and the healing of small cuts all say so."
+                : " What you have been living on is not enough, and it is beginning to show in your skin and your gums and how slowly the smallest scratch closes.";
+            case "STARVATION_SEVERITY" -> rose
+                ? " Your body has begun taking itself apart to keep going. You can feel where it is taking it from."
+                : " Something deep is coming back. You are a long way from well, and you are further along than you were.";
             case "RECOVERY_READINESS" -> rose
                 ? " Rest is doing more for you than it was. You wake further ahead than you lay down behind."
                 : " Rest is not giving you back what it used to.";
