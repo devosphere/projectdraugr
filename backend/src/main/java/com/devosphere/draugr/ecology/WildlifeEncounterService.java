@@ -354,12 +354,7 @@ public class WildlifeEncounterService {
         //
         // top of the hand-weapon count — bronze +18 over copper, iron +25, steel +35. So the ordering runs
         // stone(+35) < copper(+45) < bronze(+53) < iron(+60) < steel(+70), the terminal payoff of the extraction chain.
-        int capability = body.energy()/3 - body.injury()/2 - body.pain()/3 + body.handWeapon()*35 + (body.hardened()>0?10:0) + (body.bronze()>0?18:0) + (body.iron()>0?25:0) + (body.steel()>0?35:0) + (body.blunt()>0?22:0) + (body.javelin()>0?25:0) + (body.atlatl()>0&&body.javelin()>0?12:0) + (archery?40:0) + thrownStones + Math.min(20,body.poison()*20) + tacticBonus + fireEdge
-            // AND HOW FAR IT LETS YOU STRIKE (#968/V480). A spear at two metres gets its blow in before the
-            // animal is on you; a knife at twenty centimetres means it already is. Deliberately small -- the
-            // edge on a weapon still matters far more than its length -- and additive, so nothing that
-            // out-fought something before out-fights it less now.
-            + Math.min(6, body.reach() / 35);
+        int capability = body.energy()/3 - body.injury()/2 - body.pain()/3 + body.handWeapon()*35 + (body.hardened()>0?10:0) + (body.bronze()>0?18:0) + (body.iron()>0?25:0) + (body.steel()>0?35:0) + (body.blunt()>0?22:0) + (body.javelin()>0?25:0) + (body.atlatl()>0&&body.javelin()>0?12:0) + (archery?40:0) + thrownStones + Math.min(20,body.poison()*20) + tacticBonus + fireEdge;
         // Registry resistance is authoritative when catalogued; the old role-based
         // bands remain the fallback. Registry values are species-scaled, so they are
         // lifted onto the same footing as the bands they replace.
@@ -473,7 +468,19 @@ public class WildlifeEncounterService {
         // steel sword is holding it, not fighting with it. Capped at the weapon's own parry, so a fresh body
         // with a knife still guards like a knife.
         int guard = body.energy() >= 25 ? body.parry() : body.parry() / 3;
-        int blunted = body.protection() + guard;
+        // AND LENGTH KEEPS IT OFF YOU (#968/V480). A spear at two metres means the animal is fighting the
+        // point; a knife at eighteen centimetres means it is already on you.
+        //
+        // REACH WAS A BONUS TO THE BLOW IN THE FIRST CUT OF THIS, AND THAT WAS WRONG. Added to the contest
+        // it inflated every melee weapon at once, and the suite said so: BronzeAxeIntegrationTest runs 120
+        // fights with a copper axe and 120 with a bronze one and compares the kills, and with a flat bonus
+        // on top BOTH won all 120 -- the battery stopped measuring the edge at all. Damage is the edge
+        // tier's job and #968 says as much ("damage is already there and already data"); what length
+        // actually buys you is not being reached, which is a defensive fact and lives here. Moving it back
+        // also leaves the kill arithmetic identical to what it was before this branch, which is why no test
+        // of the metal ladder needed touching.
+        int standoff = Math.min(5, body.reach() / 45);
+        int blunted = body.protection() + guard + standoff;
         if (blunted > 0) severity = Math.max(1, severity - blunted);
         // AND WHERE IT REACHED (#37), read from the catalogue's own size tier rather than invented — the same
         // move base_resistance already made for how badly it hurts.
