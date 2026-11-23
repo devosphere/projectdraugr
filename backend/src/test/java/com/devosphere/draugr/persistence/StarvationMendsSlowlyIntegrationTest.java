@@ -66,11 +66,33 @@ class StarvationMendsSlowlyIntegrationTest {
     @Autowired SimulationTickService ticks;
     @Autowired JdbcTemplate jdbc;
 
+    /**
+     * THE ONLY LIVING CHRONICLE IN THE WORLD, which a test that TICKS has to be.
+     *
+     * <p>{@code advanceTo} takes the first living Chronicle and no others — {@code if (!rs.next()) return} —
+     * so a body left alive by an earlier test is the one every tick in this class would advance, and the
+     * body under test would never move at all. Measured in CI, where this class runs after some nine
+     * hundred others: five of its seven tests failed, and the shapes were exactly what that implies —
+     * energy still at the 100 the test had set, and a death by DEHYDRATION in a test about starvation,
+     * because the body being ticked was a stranger's.
+     *
+     * <p>The suite shares one world, so a test that ticks must own the only body in it.
+     */
     private UUID chronicle() {
         if (worldGenesis.current() == null) {
             worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
             ecology.seed();
         }
+        // AND A RETIRED BODY LETS GO OF ITS GEAR. The Auditor counts an equipment_attachment on a dead
+        // Chronicle as a violation, and nearly every integration test in the suite asserts the Auditor is
+        // consistent — so retiring equipped bodies without unequipping them turned one failure into some
+        // three hundred. Measured: "452 equipment attachment(s) reference an inactive item or dead
+        // Chronicle", from tests that have nothing to do with food.
+        jdbc.update("DELETE FROM equipment_attachment WHERE chronicle_id IN " +
+                    " (SELECT id FROM chronicle WHERE life_state='LIVING')");
+        jdbc.update("UPDATE chronicle SET life_state='DEAD', died_at=now(), " +
+                    " death_cause=COALESCE(death_cause,'retired by a test that needs the tick to itself') " +
+                    " WHERE life_state='LIVING'");
         ChronicleService.ChronicleSummary summary = chronicles.awaken();
         assertNotNull(summary);
         return summary.id();
@@ -83,8 +105,19 @@ class StarvationMendsSlowlyIntegrationTest {
                     " starvation_severity=?, hours_without_food=?, hours_without_water=0, " +
                     " core_temperature_c=37.0, illness_severity=0, injury_severity=0, blood_loss_ml=0, " +
                     " sleep_debt_hours=0, energy_level=70, " +
-                    " last_metabolic_update = now() - make_interval(hours => ?) WHERE chronicle_id=?",
+                    " last_metabolic_update = (SELECT simulated_at FROM simulation_clock WHERE id=1) - make_interval(hours => ?) WHERE chronicle_id=?",
             fullness, reserves, nutrition, starvation, hoursSinceFood, hoursAgo, me);
+    }
+
+    /**
+     * Hand the body back. A test that ticks must leave no living stranger behind for the next one, and a
+     * retired body has to let go of its gear or the Auditor counts the attachment as a violation — and
+     * nearly every integration test in this suite asserts the Auditor is consistent.
+     */
+    private void retire(UUID me) {
+        jdbc.update("DELETE FROM equipment_attachment WHERE chronicle_id=?", me);
+        jdbc.update("UPDATE chronicle SET life_state='DEAD', died_at=now(), " +
+                    " death_cause=COALESCE(death_cause,'test') WHERE id=?", me);
     }
 
     private int guts(UUID me, String column) {
@@ -107,6 +140,7 @@ class StarvationMendsSlowlyIntegrationTest {
         // And the label agrees: hours are history.
         assertEquals("Healthy", jdbc.queryForObject(
             "SELECT health FROM chronicle_body WHERE chronicle_id=?", String.class, me));
+        retire(me);
     }
 
     /** And the damage does. Death is named for starvation because starvation is what it was. */
@@ -122,33 +156,39 @@ class StarvationMendsSlowlyIntegrationTest {
     }
 
     /**
-     * #960: "Severe deprivation should take longer to recover from than a short deficit." Two bodies, the
-     * same meal and the same hours; the deeper one gets less of it back.
-     */
-    /**
-     * SUSTAINED intake, which is what the ticket means and what I got wrong twice before measuring.
+     * SUSTAINED intake on FOOD THAT IS WORTH EATING, which is what the ticket means and what took three
+     * measurements to get right.
      *
-     * <p>One stomachful does not feed a body for forty hours: 1200 ml digests out in about thirteen, and the
-     * remaining twenty-seven are a body with nothing going in — so a single long tick made BOTH bodies
-     * worse (shallow 12 → 13, deep 90 → 99) and read as though mending did not work at all. Over ten hours
-     * instead, the deep rate is real but rounds to zero, which reads as stuck rather than slow.
+     * <p>One stomachful does not feed a body for forty hours: 1200 ml digests out in about thirteen, so a
+     * single long tick made BOTH bodies worse and read as though mending did not work at all. And a
+     * stomachful of ORDINARY food does not feed one for sixteen hours either, in the world this suite runs in:
+     * the canonical world is cold, a chilled body spends up to 1.6 reserve points an hour keeping warm on
+     * top of its basal 0.85, and a watery 1200 ml is worth about 17. Measured: shallow 12 -> 33.
      *
-     * <p>Four fed ten-hour stretches is what "adequate sustained intake" actually looks like, and it is the
-     * only shape in which the comparison is a statement about the RATE.
+     * <p>So the stomach is filled to its 1200 ml at the start of every stretch, and the stretch is sixteen
+     * hours — the longest that stays inside the thirst and sleep thresholds mending also depends on, and
+     * about as long as a full stomach lasts at 90 ml an hour. That is what "adequate sustained intake" has
+     * to mean somewhere cold, and it is the only shape in which the comparison below is a statement about
+     * the RATE of mending rather than about the weather.
      */
     private int mendedOverFourFedStretches(int startingStarvation) {
         UUID me = chronicle();
         jdbc.update("UPDATE chronicle_physiology SET starvation_severity=?, energy_reserves=60, nutrition=60 " +
                     " WHERE chronicle_id=?", startingStarvation, me);
         for (int stretch = 0; stretch < 4; stretch++) {
-            jdbc.update("UPDATE chronicle_physiology SET stomach_fullness_ml=1200, hours_without_food=0, " +
-                        " hours_without_water=0, sleep_debt_hours=0, core_temperature_c=37.0, " +
-                        " illness_severity=0, injury_severity=0, blood_loss_ml=0, " +
-                        " last_metabolic_update = now() - make_interval(hours => 10) WHERE chronicle_id=?", me);
-            ticks.advanceBy(java.time.Duration.ofHours(10));
+            // THE STORE IS SET BACK EACH STRETCH TOO, because this measures the mending RATE and nothing
+            // else. A full 1200 ml stomach is worth about 13 reserve points and sixteen cold hours cost
+            // nearer 38, so a body left to run its store down mends for two stretches and then starves for
+            // two: measured, the shallow deficit came out at -3, which says only that the world is cold.
+            jdbc.update("UPDATE chronicle_physiology SET stomach_fullness_ml=1200, energy_reserves=60, " +
+                        " illness_severity=0, injury_severity=0, blood_loss_ml=0 WHERE chronicle_id=?", me);
+            jdbc.update("UPDATE chronicle_physiology SET hours_without_water=0, sleep_debt_hours=0, " +
+                        " last_metabolic_update = (SELECT simulated_at FROM simulation_clock WHERE id=1)" +
+                        " WHERE chronicle_id=?", me);
+            ticks.advanceBy(java.time.Duration.ofHours(FED_STRETCH_HOURS));
         }
         int mended = startingStarvation - guts(me, "starvation_severity");
-        jdbc.update("UPDATE chronicle SET life_state='DEAD', died_at=now(), death_cause='test' WHERE id=?", me);
+        retire(me);
         return mended;
     }
 
@@ -162,23 +202,48 @@ class StarvationMendsSlowlyIntegrationTest {
             "the same fed hours should mend less of a deep deficit: shallow=" + shallowMended + " deep=" + deepMended);
     }
 
-    /** #960: mending wants water and rest too, not only food. */
+    /**
+     * #960: mending wants water and rest too, not only food. Fed identically, so the only
+     * difference between the two bodies is the thirst and the sleep they were kept from.
+     */
     @Test void aBodyMendsOnFoodAndWaterAndRestTogether() {
-        UUID kept = chronicle();
-        body(kept, 1200, 60, 60, 40, 0, 10);
-        ticks.advanceBy(java.time.Duration.ofHours(10));
-        int keptMended = 40 - guts(kept, "starvation_severity");
-        jdbc.update("UPDATE chronicle SET life_state='DEAD', died_at=now(), death_cause='test' WHERE id=?", kept);
+        int keptMended = mendedOverTenFedHours(40, false);
+        int parchedMended = mendedOverTenFedHours(40, true);
 
-        UUID parched = chronicle();
-        body(parched, 1200, 60, 60, 40, 0, 10);
-        jdbc.update("UPDATE chronicle_physiology SET hours_without_water=40, sleep_debt_hours=40 WHERE chronicle_id=?", parched);
-        ticks.advanceBy(java.time.Duration.ofHours(10));
-        int parchedMended = 40 - guts(parched, "starvation_severity");
-
+        assertTrue(keptMended > 0, "a fed, watered, rested body should mend: " + keptMended);
         assertTrue(keptMended > parchedMended,
-            "a fed body that is also watered and rested should mend faster: kept=" + keptMended
+            "and faster than one kept from water and sleep: kept=" + keptMended
                 + " parched and sleepless=" + parchedMended);
+    }
+
+    /**
+     * HOW LONG A FED STRETCH CAN BE, and it is not a free choice.
+     *
+     * <p>Mending wants food AND water AND rest (#960), and the tick reads thirst and sleep as they stand at
+     * the END of the span: {@code water < 18} and {@code sleepDebt < 20} are the thresholds. So a stretch of
+     * twenty hours starts a rested, watered body and finishes a parched, sleepless one, and the mending it
+     * was measuring is cancelled by the span measuring it. Measured: a 20-hour stretch mends 0 where a
+     * 16-hour stretch mends 1, with everything else identical.
+     *
+     * <p>Sixteen is the longest stretch that stays inside both thresholds, and a 1200 ml stomachful
+     * at 90 ml an hour is just over sixteen hours of food — so the body is fed for the whole of it.
+     */
+    private static final int FED_STRETCH_HOURS = 16;
+
+    /** Sixteen genuinely fed hours, with or without water and rest. */
+    private int mendedOverTenFedHours(int startingStarvation, boolean parchedAndSleepless) {
+        UUID me = chronicle();
+        jdbc.update("UPDATE chronicle_physiology SET starvation_severity=?, energy_reserves=60, nutrition=60, " +
+                    " stomach_fullness_ml=1200, illness_severity=0, injury_severity=0, " +
+                    " blood_loss_ml=0 WHERE chronicle_id=?", startingStarvation, me);
+        jdbc.update("UPDATE chronicle_physiology SET hours_without_water=?, sleep_debt_hours=?, " +
+                    " last_metabolic_update = (SELECT simulated_at FROM simulation_clock WHERE id=1)" +
+                    " WHERE chronicle_id=?",
+            parchedAndSleepless ? 40 : 0, parchedAndSleepless ? 40 : 0, me);
+        ticks.advanceBy(java.time.Duration.ofHours(FED_STRETCH_HOURS));
+        int mended = startingStarvation - guts(me, "starvation_severity");
+        retire(me);
+        return mended;
     }
 
     /**
@@ -192,6 +257,7 @@ class StarvationMendsSlowlyIntegrationTest {
         ticks.advanceBy(java.time.Duration.ofHours(1));
 
         int energy = guts(me, "energy_level");
+        retire(me);
         assertTrue(energy <= 30, "an empty store cannot support a full tank: " + energy);
         assertTrue(energy > 0, "but a starving body can still stand up: " + energy);
     }
@@ -213,6 +279,7 @@ class StarvationMendsSlowlyIntegrationTest {
         String why = jdbc.queryForObject(
             "SELECT source_event FROM chronicle_metric_change WHERE chronicle_id=? " +
             " AND metric_key='STARVATION_SEVERITY' ORDER BY occurred_at DESC LIMIT 1", String.class, me);
+        retire(me);
         assertNotNull(why, "and it should say so in words");
         assertTrue(why.length() > 8, "words, not a code: " + why);
     }

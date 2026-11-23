@@ -216,4 +216,23 @@ class TheBodyMendsTest {
         // While a body with genuinely nothing wrong still says nothing.
         assertTrue(ChroniclePhysiologyService.conditions(well()).isEmpty());
     }
+
+    /**
+     * #960 — THE ONE-LINE SUMMARY FITS ITS COLUMN. chronicle_body.condition_summary is VARCHAR(100), and a
+     * body with everything wrong at once joined to more than that: in CI the latrine journey died on a
+     * DataIntegrityViolation. The list stays whole; the line keeps whole entries, worst first.
+     */
+    @Test
+    void aBodyWithEverythingWrongStillFitsOnItsLine() {
+        ChroniclePhysiologyService.Vitals wrecked = new ChroniclePhysiologyService.Vitals(
+            70, 70, 2500, 33.0, 200, 60, 5, 40, 95, 3, 95, 95, 90, 90, 0, 0, 5, 80);
+        java.util.List<String> all = ChroniclePhysiologyService.conditions(wrecked);
+        String line = ChroniclePhysiologyService.conditionSummary(wrecked);
+        assertTrue(String.join(", ", all).length() > 100,
+            "the case must actually overflow the column, or it proves nothing: " + all);
+        assertTrue(line.length() <= ChroniclePhysiologyService.CONDITION_SUMMARY_WIDTH, line);
+        assertTrue(line.startsWith(all.get(0)), "the worst complaint leads: " + line);
+        for (String said : line.split(", "))
+            assertTrue(all.contains(said), "every entry kept is a whole one: " + said);
+    }
 }

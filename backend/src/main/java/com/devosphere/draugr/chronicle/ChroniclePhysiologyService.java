@@ -1146,8 +1146,24 @@ public class ChroniclePhysiologyService {
     /** The complaints as one line, for the single-string field the HUD and the death snapshot already hold. */
     static String conditionSummary(Vitals v) {
         java.util.List<String> said = conditions(v);
-        return said.isEmpty() ? "Comfortable" : String.join(", ", said);
+        if (said.isEmpty()) return "Comfortable";
+        // The stored line is chronicle_body.condition_summary, VARCHAR(100) since V4, and a body with
+        // enough wrong with it at once says more than that: the latrine journey overflowed it and the
+        // whole act failed on a DataIntegrityViolation. The LIST is never cut -- the HUD reads
+        // conditions(v) whole. Only this one-line summary keeps the entries that fit, in the order
+        // strains() ranks them, so the lethal ones lead and a complaint is dropped whole, never mid-word.
+        StringBuilder line = new StringBuilder();
+        for (String c : said) {
+            int need = (line.length() == 0 ? 0 : 2) + c.length();
+            if (line.length() + need > CONDITION_SUMMARY_WIDTH) break;
+            if (line.length() > 0) line.append(", ");
+            line.append(c);
+        }
+        if (line.length() == 0) return said.get(0).substring(0, Math.min(said.get(0).length(), CONDITION_SUMMARY_WIDTH));
+        return line.toString();
     }
+    /** chronicle_body.condition_summary is VARCHAR(100) (V4). */
+    static final int CONDITION_SUMMARY_WIDTH = 100;
     private record Environment(String kind,int intensity,double ambient,int wind,int fuelMinutes,boolean shelter,boolean windbreak,boolean rainCover,boolean sunShade,boolean enclosed,boolean vented,boolean smokeWrap) { }
     /**
      * What the player is shown of their own body.
