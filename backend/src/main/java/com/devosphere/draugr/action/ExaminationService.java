@@ -824,6 +824,10 @@ public class ExaminationService {
         String cond = condition((String) it.get("condition_state"));
         StringBuilder b = new StringBuilder("You take up the ").append(name.toLowerCase(Locale.ROOT)).append(" and look it over. ").append(cond);
         b.append(features(it.get("object_id")));
+        // AND WHAT IT IS AS A WEAPON (#968). The ticket asks that mechanical facts be preserved through
+        // narration: V480 gives every weapon a reach, a guard and a hand requirement, and a player who
+        // cannot find that out by looking at the thing in their own hand is being kept from it.
+        b.append(weaponLine((String) it.get("item_key")));
         if (tier >= 2) b.append(" ").append(heftLine(number(it.get("unit_mass_grams"))));
         if (tier >= 3) b.append(" ").append(gradeLine((String) it.get("quality_grade")));
         return b.toString();
@@ -976,4 +980,49 @@ public class ExaminationService {
         };
     }
     private static int number(Object o) { return o instanceof Number n ? n.intValue() : 0; }
+
+    /**
+     * What a thing is as a weapon, in words rather than numbers, or "" for anything that is not one (#968).
+     *
+     * <p>Reach is said as a comparison a person can act on -- a spear keeps an animal off you and a knife
+     * means it is already on you -- and the guard likewise. Neither figure is printed: the facts are
+     * mechanical and the telling is not.
+     */
+    private String weaponLine(String itemKey) {
+        if (itemKey == null) return "";
+        java.util.Map<String, Object> w = jdbc.query(
+            "SELECT reach_cm, parry, hands_required, fights_per_wear_step, combat_role " +
+            "  FROM weapon_profile WHERE item_key = ?",
+            rs -> rs.next() ? java.util.Map.of("reach", rs.getObject(1) == null ? -1 : rs.getInt(1),
+                                               "parry", rs.getObject(2) == null ? -1 : rs.getInt(2),
+                                               "hands", rs.getInt(3),
+                                               "span",  rs.getObject(4) == null ? -1 : rs.getInt(4),
+                                               "role",  rs.getString(5)) : null,
+            itemKey);
+        if (w == null) return "";
+
+        StringBuilder s = new StringBuilder();
+        int hands = ((Number) w.get("hands")).intValue();
+        int reach = ((Number) w.get("reach")).intValue();
+        int parry = ((Number) w.get("parry")).intValue();
+        int span  = ((Number) w.get("span")).intValue();
+
+        s.append(hands == 2 ? " It wants both hands." : " It can be used in one hand, leaving the other free.");
+        if (reach < 0) return s.toString();            // a ranged weapon: the rest are facts about close work
+
+        s.append(reach >= 150 ? " Its length would keep an animal off you before it closed."
+               : reach >= 70  ? " It has enough length to strike with before a thing is on top of you."
+               : reach >= 35  ? " You would have to be close to use it."
+                              : " You would have to be close enough to touch.");
+        s.append(parry >= 7 ? " It is balanced well enough to turn a blow aside as well as land one."
+               : parry >= 4 ? " It would answer a blow, after a fashion."
+                            : " It is no guard at all; it only strikes.");
+        // "Nothing on it to blunt" is true of a club and false of a steel sword, and the steel sword reaches
+        // this band too (22 fights a step). Said of the USE rather than the thing, it is true of both.
+        s.append(span >= 18 ? " It would take a great deal of hard use before it wanted any attention."
+               : span >= 12 ? " An edge like that will stand a great deal of use."
+               : span >= 6  ? " The edge will want seeing to before long, used hard."
+                            : " The edge is keen and will not stay that way for many fights.");
+        return s.toString();
+    }
 }
