@@ -3617,7 +3617,14 @@ public class PhysicalItemService {
         boolean bronzeKnife = (key.equals("skin_fish") || key.equals("fillet_fish") || key.equals("gut_fish")
                 || key.equals("cut_lamellae") || key.equals("cut_boot_soles"))
             && hasAtLeast(chronicle, "bronze_knife", 1);
-        if (atStation || sewingKit || flaker || woolComb || stirringSpoon || seasonedStock || copperChisel || bronzeKnife) attempt = attempt.up();
+        // Finishing a cast sword is hammering AND grinding (#966): the hammer draws the edges, and an abrasive stone
+        // takes off the file marks and sets the bevel true. The hammer is the gate (tool_class STRIKING); the stone
+        // is the bounded one-grade lift, capped by the casting's own grade like every assist here. It is read here
+        // rather than written as a keyword because "sharpen" and "grind ... blade" belong to mending (REPAIR_ITEM).
+        boolean abrasiveFinish = key.equals("forge_sword_edges")
+            && (hasAtLeast(chronicle, "whetstone", 1) || hasAtLeast(chronicle, "stone_whetstone", 1)
+                || hasAtLeast(chronicle, "sandstone_piece", 1));
+        if (atStation || sewingKit || flaker || woolComb || stirringSpoon || seasonedStock || copperChisel || bronzeKnife || abrasiveFinish) attempt = attempt.up();
         QualityGrade grade = QualityGrade.worst(worstGradeAmong(chronicle, inputKeys), attempt);
 
         for (java.util.Map<String,Object> in : fixed)
@@ -4885,7 +4892,10 @@ public class PhysicalItemService {
         "take", "takes", "taking", "put", "puts", "putting", "wear", "wears", "wearing", "equip", "equips",
         "wield", "wields", "wielding", "hold", "holds", "holding", "carry", "carries", "drop", "drops",
         "remove", "removes", "doff", "don", "grab", "pick", "use", "improve", "refine", "rework", "better",
-        "settle", "sling", "stow", "leave", "set", "lay", "get", "give", "me", "i", "want", "would", "like");
+        "settle", "sling", "stow", "leave", "set", "lay", "get", "give", "me", "i", "want", "would", "like",
+        // The mending verbs (#966): "sharpen sword" puts the verb straight in front of the head noun, and a verb
+        // is not a qualifier that names some other sword.
+        "mend", "repair", "fix", "sharpen", "hone", "whet", "strop", "reinforce", "rebind");
 
     /**
      * Said as a whole word, in either number - {@code take off my shoes} must find a Left everyday shoe.
@@ -6994,11 +7004,20 @@ public class PhysicalItemService {
     public String[] repairNamedItem(UUID chronicle, UUID location, String text, Instant at) {
         String lower = text.toLowerCase(java.util.Locale.ROOT);
         java.util.List<java.util.Map<String,Object>> items = jdbc.query(REACHABLE_CTE +
-            "SELECT w.id, w.display_name, i.condition_state FROM reachable r JOIN world_object w ON w.id=r.id JOIN item_instance i ON i.object_id=w.id ORDER BY length(w.display_name) DESC",
-            (rs,row) -> java.util.Map.of("id", rs.getObject(1,UUID.class), "name", rs.getString(2), "cond", rs.getString(3)), chronicle, location);
+            "SELECT w.id, w.display_name, i.condition_state, i.item_key FROM reachable r JOIN world_object w ON w.id=r.id JOIN item_instance i ON i.object_id=w.id ORDER BY length(w.display_name) DESC",
+            (rs,row) -> java.util.Map.of("id", rs.getObject(1,UUID.class), "name", rs.getString(2), "cond", rs.getString(3), "key", rs.getString(4)), chronicle, location);
         if (items.isEmpty()) return new String[]{"FAILED", "You have nothing within reach in need of mending."};
+        // WHICH THING WAS NAMED is howWellNamed's question, not lower.contains(displayName) (#966). The backwards
+        // reading needed the catalogue's whole spelling, so with a WORN Bronze short sword in hand "sharpen my
+        // bronze sword" and "hone the sword" both answered "You have nothing by that name within reach to mend" --
+        // the same refusal the drop/equip/refine readers gave before #37 moved them. Best-named first; between
+        // equally named things, the one that actually needs the work, because "sharpen my sword" with two swords
+        // and one of them dull means the dull one.
         java.util.Map<String,Object> item = items.stream()
-            .filter(c -> lower.contains(((String)c.get("name")).toLowerCase(java.util.Locale.ROOT))).findFirst().orElse(null);
+            .filter(c -> howWellNamed(lower, (String) c.get("name"), (String) c.get("key")) > 0)
+            .max(java.util.Comparator.<java.util.Map<String,Object>>comparingInt(c -> howWellNamed(lower, (String) c.get("name"), (String) c.get("key")))
+                .thenComparingInt(c -> "SOUND".equals(c.get("cond")) ? 0 : 1))
+            .orElse(null);
         if (item == null) return new String[]{"FAILED", "You have nothing by that name within reach to mend."};
         String name = ((String) item.get("name")).toLowerCase(java.util.Locale.ROOT); String cond = (String) item.get("cond");
         if ("SOUND".equals(cond)) return new String[]{"SUCCEEDED", "You look the " + name + " over, but it is sound and whole — it needs no mending yet."};

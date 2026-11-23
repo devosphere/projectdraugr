@@ -105,4 +105,19 @@ class BelongingsNamedAloudTest {
         assertEquals(0, PhysicalItemService.howWellNamed("cover my head", "Woven basket", "woven_basket"));
         assertEquals(0, PhysicalItemService.howWellNamed(null, "Woven basket", "woven_basket"));
     }
+
+    /**
+     * #966: the mending reader moved onto this ladder. With a WORN Bronze short sword in hand, "sharpen my bronze
+     * sword" and "hone the sword" were refused as "nothing by that name", because repair asked contains(displayName).
+     * A mending verb straight before the head noun is a verb, not a qualifier naming some other sword.
+     */
+    @Test
+    void aSwordIsNamedTheWayItsOwnerSharpensIt() {
+        assertEquals(1, PhysicalItemService.howWellNamed("sharpen my bronze sword", "Bronze short sword", "bronze_short_sword"));
+        assertEquals(1, PhysicalItemService.howWellNamed("hone the sword", "Bronze short sword", "bronze_short_sword"));
+        assertEquals(1, PhysicalItemService.howWellNamed("sharpen sword", "Bronze short sword", "bronze_short_sword"));
+        assertEquals(3, PhysicalItemService.howWellNamed("sharpen the bronze short sword", "Bronze short sword", "bronze_short_sword"));
+        // and the qualifier guard still holds: a wooden sword is not the bronze one
+        assertEquals(0, PhysicalItemService.howWellNamed("sharpen the wooden sword", "Bronze short sword", "bronze_short_sword"));
+    }
 }
