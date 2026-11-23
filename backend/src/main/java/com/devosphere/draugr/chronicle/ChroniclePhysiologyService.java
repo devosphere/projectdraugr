@@ -14,10 +14,18 @@ import java.util.UUID;
 /** Authoritative physiology runtime. The HUD receives only qualitative states. */
 @Service
 public class ChroniclePhysiologyService {
-    private static final double STARVATION_DEATH_HOURS = 721.0;
+    // STARVATION_DEATH_HOURS is gone with it (#960): death follows starvation_severity now, and nothing
+    // else asked the clock. A constant no one reads is a claim about the world that the world has stopped
+    // making.
     private static final double DEHYDRATION_DEATH_HOURS = 73.0;
     private final JdbcTemplate jdbc;
-    public ChroniclePhysiologyService(JdbcTemplate jdbc) { this.jdbc = jdbc; }
+    /** #953's causal ledger, so the tick can account for what it does to the body and not only leave it. */
+    private final com.devosphere.draugr.capability.CausalMetricService metrics;
+    public ChroniclePhysiologyService(JdbcTemplate jdbc,
+                                     com.devosphere.draugr.capability.CausalMetricService metrics) {
+        this.jdbc = jdbc;
+        this.metrics = metrics;
+    }
 
     @Transactional(readOnly = true)
     public BodyHudSnapshot activeBody() {
@@ -35,6 +43,15 @@ public class ChroniclePhysiologyService {
             double food = rs.getBigDecimal(3).doubleValue() + hours;
             double water = rs.getBigDecimal(4).doubleValue() + hours;
             int energy = clamp((int) Math.round(rs.getInt(5) - hours * 0.5));
+            // The nutrition four, read here with the rest of the raw state (#959/#960). Thermoregulation
+            // below asks what there is to burn, so it needs them as they stand at the START of the tick --
+            // the same footing as food, water and energy.
+            int fullness   = rs.getInt(19);
+            int reserves   = rs.getInt(20);
+            int nutrition  = rs.getInt(21);
+            int starvation = rs.getInt(22);
+            // Kept so the tick can account for what it changed, rather than only leaving the result (#960).
+            final int reservesAtStart = reserves, starvationAtStart = starvation;
 
             // Passive baselines only. Actions, food, water, weather, illness, and sanitation
             // will apply additional physiological consequences through the simulation agent.
@@ -140,7 +157,11 @@ public class ChroniclePhysiologyService {
             // Fuel matters: a starving or exhausted body thermoregulates poorly, which
             // is why cold takes the hungry first — and why food, fire, and clothing all
             // have to fail together before a chronicle freezes.
-            double metabolicVigour = (food > STARVATION_DEATH_HOURS * .6 || energy < 15) ? .35 : 1.0;
+            // WHAT THERE IS TO BURN, not how long since a meal (#960). This asked the clock -- a Chronicle
+            // who had eaten an hour ago had full metabolic vigour however empty their reserves were, and one
+            // who had eaten nothing for three weeks but had just had a berry was treated the same. It is the
+            // store and the damage that decide whether a body can keep itself warm.
+            double metabolicVigour = (reserves <= 2 || starvation >= 55 || energy < 15) ? .35 : 1.0;
             exposure += (37.0 - core) * Math.min(.40, hours * .07) * metabolicVigour;
             // Fire warming scales with fuel level: dying embers (1-30 min) = low, steady (31-90) = moderate, well-fed (91+) = good.
             // A primitive open fire pit is less effective than an enclosed hearth — capped accordingly.
@@ -202,11 +223,6 @@ public class ChroniclePhysiologyService {
             // Four things, because there are four things, and one counter was doing all of them. A stomach
             // empties into a store; the store is spent by living; when the store is gone the body begins
             // taking itself apart, and that damage is not undone by the next mouthful.
-            int fullness   = rs.getInt(19);
-            int reserves   = rs.getInt(20);
-            int nutrition  = rs.getInt(21);
-            int starvation = rs.getInt(22);
-
             // DIGESTION: the stomach empties at a steady rate, and what leaves it becomes reserve. A full
             // stomach (1200 ml) takes about thirteen hours to clear, which is why a meal carries you
             // through a night and not through a week.
@@ -233,9 +249,18 @@ public class ChroniclePhysiologyService {
                 starvation = clamp((int) Math.round(starvation + Math.min(-store, hours * 0.9) * 0.5));
                 store = 0;
             } else if (store > 0 && digested > 0 && starvation > 0) {
-                // AND IT MENDS, slowly, only while genuinely fed -- #960 carries this further. A mouthful
-                // cannot buy it back: the rate is per HOUR of being fed, not per meal.
-                starvation = clamp((int) Math.round(starvation - Math.min(hours * 0.12, 3)));
+                // AND IT MENDS, slowly, only while genuinely fed, and SLOWER THE DEEPER IT IS (#960: "Severe
+                // deprivation should take longer to recover from than a short deficit"). A body that has
+                // spent weeks taking itself apart has to put itself back together, and the putting back is
+                // not the same work as the taking apart.
+                //
+                // Hydration and rest have to be there too, which is #960's "consistent nutrition, hydration,
+                // rest and reduced exertion gradually reverse starvation damage" -- a body mending on no
+                // water and no sleep is not mending.
+                double depth = 1.0 - Math.min(0.75, starvation / 140.0);
+                double kept = (water < 18 ? 1.0 : 0.45) * (sleepDebt < 20 ? 1.0 : 0.6);
+                double mend = hours * 0.11 * depth * kept;
+                starvation = clamp((int) Math.round(starvation - Math.min(mend, 4)));
             }
             reserves = clamp((int) Math.round(Math.min(100, store)));
 
@@ -245,13 +270,51 @@ public class ChroniclePhysiologyService {
             double dietDrift = digested > 0 ? hours * 0.09 : -hours * 0.055;
             if (reserves == 0) dietDrift -= hours * 0.05;
             nutrition = clamp((int) Math.round(nutrition + dietDrift));
+
+            // AND ENERGY CANNOT EXCEED WHAT THERE IS TO SPEND (#960: starvation "must influence Health,
+            // Energy, Condition..."). Energy is what a body can do right now and reserves are what it has to
+            // do it with, so a Chronicle with an empty store cannot be Rested however long they have lain
+            // down -- they can be less exhausted, and that is all. The floor of 20 is deliberate: a starving
+            // body can still get up, which is why starvation takes weeks to kill rather than hours.
+            // AND THE ACCOUNT OF IT (#960: "Record why starvation worsens or improves"). The cause is named
+            // from what actually drove the deficit, which the tick is the only thing that knows: a fever
+            // burning the store, the cold burning it, or simply nothing going in. It goes to #953's ledger,
+            // so a Chronicle's starvation can be reconstructed afterwards rather than merely observed.
+            if (starvation != starvationAtStart) {
+                String why = fever > chill && fever > 0 ? "ILLNESS"
+                           : chill > 0 ? "EXPOSURE"
+                           : "NOURISHMENT";
+                metrics.recordApplied(id, "STARVATION_SEVERITY", starvationAtStart, starvation,
+                    starvation > starvationAtStart ? why : "NOURISHMENT", null,
+                    starvation > starvationAtStart
+                        ? (fever > chill && fever > 0 ? "a sickness burning through the store"
+                           : chill > 0 ? "the cold burning through the store" : "nothing going in")
+                        : "being fed, watered and rested",
+                    (int) Math.max(1, Math.round(hours * 60)), now);
+            }
+            if (reserves != reservesAtStart)
+                metrics.recordApplied(id, "ENERGY_RESERVES", reservesAtStart, reserves,
+                    reserves > reservesAtStart ? "NOURISHMENT" : "EXPOSURE", null,
+                    reserves > reservesAtStart ? "food digesting" : "the cost of being alive",
+                    (int) Math.max(1, Math.round(hours * 60)), now);
+
+            int energyCeiling = 20 + (int) Math.round(reserves * 0.8);
+            if (energy > energyCeiling) energy = energyCeiling;
+            // Deep starvation takes the ceiling down further: a body this far gone has nothing to give.
+            if (starvation >= 60) energy = Math.min(energy, 35);
             // Every physiological death vector terminates here. Trauma (injury_severity
             // at its ceiling) is the path a grievous mauling or an accumulation of
             // untreated wounds takes: without it, a chronicle savaged to the limit
             // would live on indefinitely, since a single wound rarely bleeds past the
             // exsanguination threshold on its own.
-            if (food > STARVATION_DEATH_HOURS || water > DEHYDRATION_DEATH_HOURS || bloodLoss > 3500 || injury >= 100 || illness >= 100 || core < 28.0 || core > 42.0) {
-                String cause = water > DEHYDRATION_DEATH_HOURS ? "Critical Dehydration" : food > STARVATION_DEATH_HOURS ? "Critical Starvation" : bloodLoss > 3500 ? "Critical Blood Loss" : injury >= 100 ? "Fatal Trauma" : core < 28.0 ? "Severe Hypothermia" : core > 42.0 ? "Severe Hyperthermia" : "Systemic Illness";
+            // STARVATION KILLS, NOT THE CLOCK (#960). The old rule was "721 hours since eating", which meant
+            // a Chronicle who had eaten well every other day for a month died on the same schedule as one who
+            // had eaten nothing, because the counter was reset by a mouthful and the threshold never asked
+            // what the mouthful had done. starvation_severity is the damage itself, so death now follows the
+            // damage. The elapsed-hours clause is GONE from this condition, which is what #960 asks for:
+            // "Replace the fixed elapsed-food death rule with the implemented starvation model."
+            if (starvation >= 100 || water > DEHYDRATION_DEATH_HOURS || bloodLoss > 3500 || injury >= 100 || illness >= 100 || core < 28.0 || core > 42.0) {
+                String cause = water > DEHYDRATION_DEATH_HOURS ? "Critical Dehydration" : starvation >= 100 ? "Critical Starvation" : bloodLoss > 3500 ? "Critical Blood Loss" : injury >= 100 ? "Fatal Trauma" : core < 28.0 ? "Severe Hypothermia" : core > 42.0 ? "Severe Hyperthermia" : "Systemic Illness";
                 // The body as it was at the moment it stopped, recorded whole (#957): the snapshot used to
                 // label a Chronicle who died of cold with a health read from injury and illness alone.
                 Vitals dying = new Vitals(injury, illness, bloodLoss, core, food, water, energy, sleepDebt, wetness, hygiene, bladder, bowel, pain, stress, fullness, reserves, nutrition, starvation);
@@ -999,7 +1062,10 @@ public class ChroniclePhysiologyService {
         java.util.List<Strain> all = new java.util.ArrayList<>();
         // The lethal systems, each able to reach 100 on its own.
         add(all, band(v.hoursWithoutWater(), 12, DEHYDRATION_DEATH_HOURS), "Dangerously dehydrated", "Dehydrated", "Thirsty");
-        add(all, band(v.hoursWithoutFood(), 72, STARVATION_DEATH_HOURS), "Starving", "Underfed", "Hungry");
+        // THE HOURS-BASED STARVATION STRAIN IS GONE (#960). I wrote it in #957 because the clock was all
+        // there was, and it carries the very defect #959 fixed: a Chronicle three hundred hours since their
+        // last meal but with a full stomach and reserves read "Underfed" off the clock. starvation_severity
+        // is the fact now, and it has its own strain a few lines down. One question, one answer.
         // STARVATION IS A LETHAL SYSTEM OF ITS OWN (#959/#960). It used to be read off the clock -- a
         // Chronicle was "Starving" at 336 hours whatever they had eaten since -- and it is its own measured
         // damage now, so a body can be Critical from it while the stomach is not empty.
@@ -1080,8 +1146,24 @@ public class ChroniclePhysiologyService {
     /** The complaints as one line, for the single-string field the HUD and the death snapshot already hold. */
     static String conditionSummary(Vitals v) {
         java.util.List<String> said = conditions(v);
-        return said.isEmpty() ? "Comfortable" : String.join(", ", said);
+        if (said.isEmpty()) return "Comfortable";
+        // The stored line is chronicle_body.condition_summary, VARCHAR(100) since V4, and a body with
+        // enough wrong with it at once says more than that: the latrine journey overflowed it and the
+        // whole act failed on a DataIntegrityViolation. The LIST is never cut -- the HUD reads
+        // conditions(v) whole. Only this one-line summary keeps the entries that fit, in the order
+        // strains() ranks them, so the lethal ones lead and a complaint is dropped whole, never mid-word.
+        StringBuilder line = new StringBuilder();
+        for (String c : said) {
+            int need = (line.length() == 0 ? 0 : 2) + c.length();
+            if (line.length() + need > CONDITION_SUMMARY_WIDTH) break;
+            if (line.length() > 0) line.append(", ");
+            line.append(c);
+        }
+        if (line.length() == 0) return said.get(0).substring(0, Math.min(said.get(0).length(), CONDITION_SUMMARY_WIDTH));
+        return line.toString();
     }
+    /** chronicle_body.condition_summary is VARCHAR(100) (V4). */
+    static final int CONDITION_SUMMARY_WIDTH = 100;
     private record Environment(String kind,int intensity,double ambient,int wind,int fuelMinutes,boolean shelter,boolean windbreak,boolean rainCover,boolean sunShade,boolean enclosed,boolean vented,boolean smokeWrap) { }
     /**
      * What the player is shown of their own body.
