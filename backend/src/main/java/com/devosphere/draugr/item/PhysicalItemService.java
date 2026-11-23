@@ -314,6 +314,21 @@ public class PhysicalItemService {
         + "WHERE fdp.item_key = i.item_key AND fd.is_poisonous)";
 
     /**
+     * WATER IS NOT A MEAL (#962). The fallback below takes the first FOOD in reach by item key, and the
+     * water a Chronicle carries is category FOOD -- so {@code clean_water} and {@code filtered_water} both
+     * sort ahead of {@code cooked_game_meat}, and a bare {@code eat} with a full skin and a roast haunch in
+     * the pack ATE THE WATER and reported a meal. It cost the player nothing before, because every food
+     * nourished the same flat amount; now that the catalogue says what a food is worth, the same sentence
+     * would fill a fifth of a stomach with nought kilocalories and reset the hours since eating.
+     *
+     * <p>Read from the declared worth rather than from a list of water keys, so a drink added later is
+     * covered by having its nourishment written down -- which V482 requires of every food anyway.
+     * {@code eat the boiled water} still does exactly what it says: naming a thing is the player's choice.
+     */
+    private static final String NOTHING_IN_IT_TO_EAT =
+        "EXISTS (SELECT 1 FROM food_nourishment fn WHERE fn.item_key = i.item_key AND fn.kcal_per_100g = 0)";
+
+    /**
      * Whatever is to hand to eat, and NOT a thing the catalogue knows will poison you (#37).
      *
      * <p>This is the fallback a bare {@code eat} reaches, and it took the first row of `reachableFoods` ordered
@@ -326,11 +341,34 @@ public class PhysicalItemService {
      * player wrote on purpose would be a different kind of lie.
      */
     @Transactional(readOnly = true)
+
+    /**
+     * A DRINK THE SENTENCE NAMES AND THE CHRONICLE IS CARRYING, or null (#962).
+     *
+     * <p>Measured on a booted stack: a Chronicle holding a hot herbal infusion, told to {@code drink the
+     * herbal infusion}, was answered "there is no water here fit to drink — no stream, no spring, only dry
+     * ground". The drink action only ever looked for WATER, so every other drinkable in the catalogue --
+     * the infusion, goat milk, maple sap -- could be reached by {@code eat} and by nothing else. The player
+     * had brewed the thing and then been told it did not exist.
+     *
+     * <p>Read from the declared water content rather than a list of keys, and deliberately NOT matching the
+     * plain waters (nought kilocalories), which have their own path and their own prose about boiling,
+     * filtering and the risk of a careless gulp.
+     */
+    public String aNamedDrinkInReach(UUID chronicle, String lowerText) {
+        String named = namedFoodInReach(chronicle, lowerText);
+        if (named == null) return null;
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+            "SELECT EXISTS (SELECT 1 FROM food_nourishment WHERE item_key = ? "
+            + "  AND water_percent >= 80 AND kcal_per_100g > 0)", Boolean.class, named)) ? named : null;
+    }
+
     public String anyFoodInReach(UUID chronicle) {
         return jdbc.query(REACHABLE_CTE
             + "SELECT i.item_key FROM reachable r JOIN item_instance i ON i.object_id=r.id "
             + "JOIN item_definition d ON d.item_key=i.item_key "
             + "WHERE d.category='FOOD' AND NOT " + THE_YIELD_OF_A_POISONOUS_PLANT + " "
+            + "  AND NOT " + NOTHING_IN_IT_TO_EAT + " "
             + "ORDER BY i.item_key LIMIT 1",
             rs -> rs.next() ? rs.getString(1) : null, chronicle, chronicleLocation(chronicle));
     }
