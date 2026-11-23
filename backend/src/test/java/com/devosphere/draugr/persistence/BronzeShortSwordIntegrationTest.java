@@ -124,4 +124,45 @@ class BronzeShortSwordIntegrationTest {
 
         assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
+
+    /**
+     * V479: a worn bronze sword is not a dead end. One sword (760 g) cannot honestly fill a 900 g ingot, so it takes
+     * two; the hilts and the dross are the loss.
+     */
+    @Test
+    void twoBronzeSwordsMeltDownIntoOneIngot() {
+        if (worldGenesis.current() == null) {
+            worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
+            ecology.seed();
+        }
+        ChronicleService.ChronicleSummary summary = chronicles.awaken();
+        assertNotNull(summary, "awakening must produce a living Chronicle");
+        UUID chronicle = summary.id();
+        UUID chunk = jdbc.queryForObject("SELECT id FROM world_chunk WHERE biome='TEMPERATE_FOREST' ORDER BY grid_y, grid_x LIMIT 1", UUID.class);
+        jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", chunk, chronicle);
+        jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
+        Instant now = ticks.current().simulatedAt();
+        Timestamp ts = Timestamp.from(now);
+
+        UUID pit = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CONSTRUCTION','Stone fire pit',?)", pit, chunk);
+        jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at) VALUES (?,'STONE_FIRE_PIT','COMPLETED',100,?)", pit, ts);
+        jdbc.update("INSERT INTO fire_state (construction_id,active,fuel_minutes,last_updated_at) VALUES (?,true,480,?)", pit, ts);
+
+        // One sword is not enough metal for an ingot: the melt is refused rather than inventing bronze.
+        items.createCarriedItem(chronicle, "bronze_short_sword", "Bronze short sword", now, "TEST_SEED");
+        String[] tooLittle = items.runProcess(chronicle, chunk, "melt down the bronze sword", now);
+        assertFalse("SUCCEEDED".equals(tooLittle[0]), () -> "one sword must not make a whole ingot: " + tooLittle[1]);
+        assertFalse(items.hasAtLeast(chronicle, "bronze_ingot", 1), "no ingot from a single sword");
+        assertTrue(items.hasAtLeast(chronicle, "bronze_short_sword", 1), "the refused melt must leave the sword alone");
+
+        // Two swords fill the crucible.
+        items.createCarriedItem(chronicle, "bronze_short_sword", "Bronze short sword", now, "TEST_SEED");
+        String[] melt = items.runProcess(chronicle, chunk, "melt down the bronze swords", now);
+        assertEquals("SUCCEEDED", melt[0], () -> "two swords must melt down: " + melt[1]);
+        assertTrue(items.hasAtLeast(chronicle, "bronze_ingot", 1), "the swords' metal must be recovered as an ingot");
+        assertFalse(items.hasAtLeast(chronicle, "bronze_short_sword", 1), "both swords went into the melt");
+
+        assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
 }
