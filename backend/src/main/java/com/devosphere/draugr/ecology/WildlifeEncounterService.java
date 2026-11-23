@@ -283,7 +283,11 @@ public class WildlifeEncounterService {
         // held stock (stones, sling, javelin, bow, arrows) counts from what the chronicle owns and carries.
         Combatant body=jdbc.query(
             "SELECT p.energy_level,p.injury_severity,p.pain_level,eq.hand_weapon,own.stones,eq.poison," +
-            "eq.blunt,own.sling,own.javelin,own.bow,own.arrows,eq.hardened,eq.bronze,eq.iron,eq.steel,eq.protection,own.atlatl " +
+            "eq.blunt,own.sling,own.javelin,own.bow,own.arrows,eq.hardened,eq.bronze,eq.iron,eq.steel,eq.protection,own.atlatl," +
+            // columns 18 and 19 (#968/V480). Adding them to the eq subquery alone was not enough: the OUTER
+            // list decides what the ResultSet holds, and a live fight answered 500 with
+            // "The column index is out of range: 18, number of columns: 17".
+            "eq.parry,eq.reach " +
             "FROM chronicle_physiology p " +
             "LEFT JOIN LATERAL (SELECT " +
             // Weapon capability is data-driven (#93): a HAND-position item with a weapon_profile of role HAND counts
@@ -296,7 +300,11 @@ public class WildlifeEncounterService {
             "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND wp.combat_role='HAND' AND wp.edge_tier='BRONZE' THEN 1 ELSE 0 END),0) bronze," +
             "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND wp.combat_role='HAND' AND wp.edge_tier='IRON' THEN 1 ELSE 0 END),0) iron," +
             "  COALESCE(SUM(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') AND wp.combat_role='HAND' AND wp.edge_tier='STEEL' THEN 1 ELSE 0 END),0) steel," +
-            "  COALESCE(SUM(ap.blunting),0) protection" +
+            "  COALESCE(SUM(ap.blunting),0) protection," +
+            // WHAT THE WEAPON ITSELF IS, not just how keen it is (#968/V480). MAX, not SUM: a Chronicle with a
+            // sword and a knife guards with the sword, and holding two does not double the guard.
+            "  COALESCE(MAX(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') THEN wp.parry END),0) parry," +
+            "  COALESCE(MAX(CASE WHEN e.body_position IN ('HAND_LEFT','HAND_RIGHT') THEN wp.reach_cm END),0) reach" +
             "  FROM equipment_attachment e JOIN item_instance i ON i.object_id=e.item_id LEFT JOIN weapon_profile wp ON wp.item_key=i.item_key LEFT JOIN armour_protection ap ON ap.item_key=i.item_key WHERE e.chronicle_id=p.chronicle_id) eq ON true " +
             "LEFT JOIN LATERAL (SELECT " +
             "  COALESCE(SUM(CASE WHEN wp.combat_role='THROWN_STONE' THEN 1 ELSE 0 END),0) stones," +
@@ -308,7 +316,7 @@ public class WildlifeEncounterService {
             "  COALESCE(SUM(CASE WHEN i.item_key='atlatl' THEN 1 ELSE 0 END),0) atlatl" +
             "  FROM world_object w JOIN item_instance i ON i.object_id=w.id LEFT JOIN weapon_profile wp ON wp.item_key=i.item_key WHERE w.current_owner_id=p.chronicle_id AND w.lifecycle_state='ACTIVE') own ON true " +
             "WHERE p.chronicle_id=?",
-            rs->rs.next()?new Combatant(rs.getInt(1),rs.getInt(2),rs.getInt(3),rs.getInt(4),rs.getInt(5),rs.getInt(6),rs.getInt(7),rs.getInt(8),rs.getInt(9),rs.getInt(10),rs.getInt(11),rs.getInt(12),rs.getInt(13),rs.getInt(14),rs.getInt(15),rs.getInt(16),rs.getInt(17)):new Combatant(0,100,100,0,0,0,0,0,0,0,0,0,0,0,0,0,0),chronicle);
+            rs->rs.next()?new Combatant(rs.getInt(1),rs.getInt(2),rs.getInt(3),rs.getInt(4),rs.getInt(5),rs.getInt(6),rs.getInt(7),rs.getInt(8),rs.getInt(9),rs.getInt(10),rs.getInt(11),rs.getInt(12),rs.getInt(13),rs.getInt(14),rs.getInt(15),rs.getInt(16),rs.getInt(17),rs.getInt(18),rs.getInt(19)):new Combatant(0,100,100,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),chronicle);
         // A creature on the wing cannot be reached by a hand weapon. Throwing stones
         // is the only contact a chronicle has with it. The narrator witnesses the
         // futility without naming what would be needed.
@@ -346,7 +354,12 @@ public class WildlifeEncounterService {
         //
         // top of the hand-weapon count — bronze +18 over copper, iron +25, steel +35. So the ordering runs
         // stone(+35) < copper(+45) < bronze(+53) < iron(+60) < steel(+70), the terminal payoff of the extraction chain.
-        int capability = body.energy()/3 - body.injury()/2 - body.pain()/3 + body.handWeapon()*35 + (body.hardened()>0?10:0) + (body.bronze()>0?18:0) + (body.iron()>0?25:0) + (body.steel()>0?35:0) + (body.blunt()>0?22:0) + (body.javelin()>0?25:0) + (body.atlatl()>0&&body.javelin()>0?12:0) + (archery?40:0) + thrownStones + Math.min(20,body.poison()*20) + tacticBonus + fireEdge;
+        int capability = body.energy()/3 - body.injury()/2 - body.pain()/3 + body.handWeapon()*35 + (body.hardened()>0?10:0) + (body.bronze()>0?18:0) + (body.iron()>0?25:0) + (body.steel()>0?35:0) + (body.blunt()>0?22:0) + (body.javelin()>0?25:0) + (body.atlatl()>0&&body.javelin()>0?12:0) + (archery?40:0) + thrownStones + Math.min(20,body.poison()*20) + tacticBonus + fireEdge
+            // AND HOW FAR IT LETS YOU STRIKE (#968/V480). A spear at two metres gets its blow in before the
+            // animal is on you; a knife at twenty centimetres means it already is. Deliberately small -- the
+            // edge on a weapon still matters far more than its length -- and additive, so nothing that
+            // out-fought something before out-fights it less now.
+            + Math.min(6, body.reach() / 35);
         // Registry resistance is authoritative when catalogued; the old role-based
         // bands remain the fallback. Registry values are species-scaled, so they are
         // lifted onto the same footing as the bands they replace.
@@ -355,6 +368,12 @@ public class WildlifeEncounterService {
         if("HUNTING".equals(candidate.behavior())||"PACK_HUNT".equals(candidate.behavior())) resistance += 10;
         if("SHELTERING".equals(candidate.behavior())) resistance -= 12;
         int roll = Math.floorMod(action.hashCode(), 100);
+        // AND THE WEAPON TAKES SOMETHING FROM IT (#968/V480). Armour and shields have always taken part of
+        // every blow, a restraint strains when an animal pulls against it, and a tool wears by use -- while
+        // the thing you actually swing was the one piece of equipment a fight never touched. A steel sword and
+        // a bone knife came out of a hundred fights in identical condition. Here, not inside a branch,
+        // because the blow was struck whichever way the contest went.
+        bluntTheWeapon(chronicle, at);
         if (capability + roll >= resistance + 40) {
             // The one that comes at you is the one that leads (#121). A social group that is hunting, standing its
             // ground or holding a territory is doing it behind somebody, and killing that animal is not the same as
@@ -449,7 +468,12 @@ public class WildlifeEncounterService {
         // cuirasses 12/20/28, scale, shell helm and war shield 7, rawhide shield 6, light shields and soft leather 4.
         // Before that table this line named eleven items, and a crafted leather cuirass, pauldrons and bracers turned
         // nothing — most of them could not even be put on, until V313 widened the attachment CHECKs.
-        int blunted = body.protection();
+        // AND THE WEAPON TURNS SOME OF IT TOO (#968/V480). Armour is passive and a parry is not, so the guard
+        // is worth something only if the body still has the energy to make it -- a spent Chronicle holding a
+        // steel sword is holding it, not fighting with it. Capped at the weapon's own parry, so a fresh body
+        // with a knife still guards like a knife.
+        int guard = body.energy() >= 25 ? body.parry() : body.parry() / 3;
+        int blunted = body.protection() + guard;
         if (blunted > 0) severity = Math.max(1, severity - blunted);
         // AND WHERE IT REACHED (#37), read from the catalogue's own size tier rather than invented — the same
         // move base_resistance already made for how badly it hurts.
@@ -2732,7 +2756,12 @@ public class WildlifeEncounterService {
 
     private String display(String species) { return species.replace('_',' '); }
     private record Encounter(UUID populationId,String species,String role,String behavior,int population,String movementClass,Integer baseResistance,boolean ambushHunter){}
-    private record Combatant(int energy,int injury,int pain,int handWeapon,int stones,int poison,int blunt,int sling,int javelin,int bow,int arrows,int hardened,int bronze,int iron,int steel,int protection,int atlatl){}
+    /**
+     * @param parry how well the weapon in hand turns a blow, 0..10 from weapon_profile (#968). A sword guards,
+     *              a knife barely does, a bow not at all.
+     * @param reach the weapon's length in centimetres, which decides whether you strike before it closes.
+     */
+    private record Combatant(int energy,int injury,int pain,int handWeapon,int stones,int poison,int blunt,int sling,int javelin,int bow,int arrows,int hardened,int bronze,int iron,int steel,int protection,int atlatl,int parry,int reach){}
     private record Carcass(UUID id,String species,int meat,boolean hide){}
     public record EncounterResult(String outcome,String narration){}
     public record HarvestResult(String outcome,String narration){}
@@ -2754,4 +2783,52 @@ public class WildlifeEncounterService {
         return unseen;
     }
 
+
+    /**
+     * WEAR THE WEAPON THAT WAS USED, a step at a time: SOUND to WORN to BROKEN (#968).
+     *
+     * <p>How many fights a weapon takes before it steps down is {@code weapon_profile.fights_per_wear_step},
+     * which is the material's own story: obsidian is the keenest edge in the catalogue and the most brittle
+     * (2), bone and flake chip (2-3), bronze holds (9), iron longer (14), steel longest (22), and a club has
+     * nothing on it to blunt at all (18-25). So the extraction chain pays twice — a steel sword both bites
+     * deeper and survives eleven times as many fights as a flake knife.
+     *
+     * <p>It counts in {@code use_count} and steps the condition only when the count is reached, which is the
+     * same mechanism tools already use; and the existing repair and honing paths already reset both, so a
+     * worn sword can be put right without anything new. A BROKEN weapon is left alone — it has stopped being
+     * a weapon, which the combat query's own joins already reflect.
+     *
+     * <p>Only HAND and BLUNT weapons wear this way. A loosed arrow is consumed rather than blunted, which is
+     * the right model for ammunition and is why V480 leaves the ranged roles NULL.
+     */
+    private void bluntTheWeapon(UUID chronicle, Instant at) {
+        java.util.Map<String, Object> used = jdbc.query(
+            "SELECT w.id AS id, i.use_count AS uses, i.condition_state AS cond, wp.fights_per_wear_step AS span " +
+            "  FROM equipment_attachment e " +
+            "  JOIN world_object w ON w.id = e.item_id " +
+            "  JOIN item_instance i ON i.object_id = w.id " +
+            "  JOIN weapon_profile wp ON wp.item_key = i.item_key " +
+            " WHERE e.chronicle_id = ? AND e.body_position IN ('HAND_LEFT','HAND_RIGHT') " +
+            "   AND w.lifecycle_state = 'ACTIVE' AND wp.combat_role IN ('HAND','BLUNT') " +
+            "   AND i.condition_state IN ('SOUND','WORN') " +
+            // The one they actually fought with: the best guard, then the longest reach.
+            " ORDER BY wp.parry DESC, wp.reach_cm DESC LIMIT 1",
+            rs -> rs.next() ? java.util.Map.of("id", rs.getObject("id"), "uses", rs.getInt("uses"),
+                                               "cond", rs.getString("cond"), "span", rs.getInt("span"))
+                            : null, chronicle);
+        if (used == null) return;                       // bare hands, or nothing left worth wearing
+
+        int uses = ((Number) used.get("uses")).intValue() + 1;
+        int span = ((Number) used.get("span")).intValue();
+        if (uses < span) {
+            jdbc.update("UPDATE item_instance SET use_count = ? WHERE object_id = ?", uses, used.get("id"));
+            return;
+        }
+        String next = "WORN".equals(used.get("cond")) ? "BROKEN" : "WORN";
+        jdbc.update("UPDATE item_instance SET condition_state = ?, use_count = 0 WHERE object_id = ?",
+            next, used.get("id"));
+        jdbc.update("INSERT INTO object_transition (object_id, occurred_at, transition_type, payload) " +
+                    "VALUES (?, ?, 'BLUNTED', jsonb_build_object('to', ?))",
+            used.get("id"), Timestamp.from(at), next);
+    }
 }
