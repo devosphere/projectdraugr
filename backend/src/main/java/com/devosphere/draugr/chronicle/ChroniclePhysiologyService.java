@@ -21,12 +21,12 @@ public class ChroniclePhysiologyService {
 
     @Transactional(readOnly = true)
     public BodyHudSnapshot activeBody() {
-        return jdbc.query("SELECT b.condition_summary, p.hours_without_food, p.hours_without_water, p.energy_level, p.core_temperature_c, p.wetness_level, p.bladder_level, p.bowel_level, p.hygiene_level, p.sleep_debt_hours, p.pain_level, p.stress_level, p.injury_severity, p.illness_severity, p.blood_loss_ml FROM chronicle c JOIN chronicle_body b ON b.chronicle_id = c.id JOIN chronicle_physiology p ON p.chronicle_id = c.id WHERE c.life_state = 'LIVING'", rs -> { if (!rs.next()) return null; return snapshot(vitalsOf(rs)); });
+        return jdbc.query("SELECT b.condition_summary, p.hours_without_food, p.hours_without_water, p.energy_level, p.core_temperature_c, p.wetness_level, p.bladder_level, p.bowel_level, p.hygiene_level, p.sleep_debt_hours, p.pain_level, p.stress_level, p.injury_severity, p.illness_severity, p.blood_loss_ml, p.stomach_fullness_ml, p.energy_reserves, p.nutrition, p.starvation_severity FROM chronicle c JOIN chronicle_body b ON b.chronicle_id = c.id JOIN chronicle_physiology p ON p.chronicle_id = c.id WHERE c.life_state = 'LIVING'", rs -> { if (!rs.next()) return null; return snapshot(vitalsOf(rs)); });
     }
 
     @Transactional
     public void advanceTo(Instant now) {
-        jdbc.query("SELECT c.id, p.last_metabolic_update, p.hours_without_food, p.hours_without_water, p.energy_level, p.core_temperature_c, p.wetness_level, p.bladder_level, p.bowel_level, p.hygiene_level, b.health, b.condition_summary, p.sleep_debt_hours, p.pain_level, p.stress_level, p.injury_severity, p.illness_severity, p.blood_loss_ml FROM chronicle c JOIN chronicle_physiology p ON p.chronicle_id = c.id JOIN chronicle_body b ON b.chronicle_id = c.id WHERE c.life_state = 'LIVING' FOR UPDATE", rs -> {
+        jdbc.query("SELECT c.id, p.last_metabolic_update, p.hours_without_food, p.hours_without_water, p.energy_level, p.core_temperature_c, p.wetness_level, p.bladder_level, p.bowel_level, p.hygiene_level, b.health, b.condition_summary, p.sleep_debt_hours, p.pain_level, p.stress_level, p.injury_severity, p.illness_severity, p.blood_loss_ml, p.stomach_fullness_ml, p.energy_reserves, p.nutrition, p.starvation_severity FROM chronicle c JOIN chronicle_physiology p ON p.chronicle_id = c.id JOIN chronicle_body b ON b.chronicle_id = c.id WHERE c.life_state = 'LIVING' FOR UPDATE", rs -> {
             if (!rs.next()) return null;
             UUID id = rs.getObject(1, UUID.class);
             Timestamp ts = Timestamp.from(now);
@@ -35,6 +35,7 @@ public class ChroniclePhysiologyService {
             double food = rs.getBigDecimal(3).doubleValue() + hours;
             double water = rs.getBigDecimal(4).doubleValue() + hours;
             int energy = clamp((int) Math.round(rs.getInt(5) - hours * 0.5));
+
             // Passive baselines only. Actions, food, water, weather, illness, and sanitation
             // will apply additional physiological consequences through the simulation agent.
             int wetness = clamp((int) Math.round(rs.getInt(7) - hours * 4));
@@ -197,6 +198,53 @@ public class ChroniclePhysiologyService {
             // so it reported a sickness being fed by filth as "holding where it is" (CI, #909). The update
             // below keeps the stored trend unless hours > 0.
             illness = clamp(illness + illnessPressure - mending);
+            // ============ WHAT A BODY ACTUALLY DOES WITH FOOD (#959) ============
+            // Four things, because there are four things, and one counter was doing all of them. A stomach
+            // empties into a store; the store is spent by living; when the store is gone the body begins
+            // taking itself apart, and that damage is not undone by the next mouthful.
+            int fullness   = rs.getInt(19);
+            int reserves   = rs.getInt(20);
+            int nutrition  = rs.getInt(21);
+            int starvation = rs.getInt(22);
+
+            // DIGESTION: the stomach empties at a steady rate, and what leaves it becomes reserve. A full
+            // stomach (1200 ml) takes about thirteen hours to clear, which is why a meal carries you
+            // through a night and not through a week.
+            int digested = (int) Math.min(fullness, Math.round(hours * 90));
+            fullness -= digested;
+            // Nutrition decides how much good the food does: the same bulk of lean scraps is worth less
+            // than the same bulk of a proper meal. Bounded well away from zero so a poorly fed body still
+            // gets something from what it eats -- it has to, or it could never climb out.
+            double worth = 0.55 + 0.45 * (nutrition / 100.0);
+            double gained = digested / 100.0 * 1.3 * worth;
+
+            // EXPENDITURE: basal cost, plus the cold, plus being ill. Work is charged separately by the act
+            // that did it, as it always has been.
+            double basal = hours * 0.85;
+            double chill = core < 36.5 ? hours * Math.min(1.6, (36.5 - core) * 0.35) : 0;
+            double fever = illness > 35 ? hours * 0.45 : 0;
+            double spent = basal + chill + fever;
+
+            double store = reserves + gained - spent;
+            // STARVATION: only once the store is gone. A body with reserves is hungry; a body without them
+            // is starving, and that is a different thing -- which is the distinction #959 asks for and the
+            // old single counter could not make.
+            if (store < 0) {
+                starvation = clamp((int) Math.round(starvation + Math.min(-store, hours * 0.9) * 0.5));
+                store = 0;
+            } else if (store > 0 && digested > 0 && starvation > 0) {
+                // AND IT MENDS, slowly, only while genuinely fed -- #960 carries this further. A mouthful
+                // cannot buy it back: the rate is per HOUR of being fed, not per meal.
+                starvation = clamp((int) Math.round(starvation - Math.min(hours * 0.12, 3)));
+            }
+            reserves = clamp((int) Math.round(Math.min(100, store)));
+
+            // NUTRITION follows what has actually been going in, over weeks rather than hours. Fed, it
+            // climbs; unfed, it slips; and it moves slowly enough that a single good meal does not make a
+            // well-nourished body of a starved one.
+            double dietDrift = digested > 0 ? hours * 0.09 : -hours * 0.055;
+            if (reserves == 0) dietDrift -= hours * 0.05;
+            nutrition = clamp((int) Math.round(nutrition + dietDrift));
             // Every physiological death vector terminates here. Trauma (injury_severity
             // at its ceiling) is the path a grievous mauling or an accumulation of
             // untreated wounds takes: without it, a chronicle savaged to the limit
@@ -206,20 +254,20 @@ public class ChroniclePhysiologyService {
                 String cause = water > DEHYDRATION_DEATH_HOURS ? "Critical Dehydration" : food > STARVATION_DEATH_HOURS ? "Critical Starvation" : bloodLoss > 3500 ? "Critical Blood Loss" : injury >= 100 ? "Fatal Trauma" : core < 28.0 ? "Severe Hypothermia" : core > 42.0 ? "Severe Hyperthermia" : "Systemic Illness";
                 // The body as it was at the moment it stopped, recorded whole (#957): the snapshot used to
                 // label a Chronicle who died of cold with a health read from injury and illness alone.
-                Vitals dying = new Vitals(injury, illness, bloodLoss, core, food, water, energy, sleepDebt, wetness, hygiene, bladder, bowel, pain, stress);
+                Vitals dying = new Vitals(injury, illness, bloodLoss, core, food, water, energy, sleepDebt, wetness, hygiene, bladder, bowel, pain, stress, fullness, reserves, nutrition, starvation);
                 UUID deathLocation = jdbc.query("SELECT current_location_id FROM world_object WHERE id=?", result -> result.next() ? result.getObject(1, UUID.class) : null, id);
                 relocatePossessions(id, deathLocation, now);
                 releaseTheirStock(id, ts);
-                jdbc.update("INSERT INTO chronicle_death_snapshot (chronicle_id,died_at,death_location_id,cause,body_snapshot) VALUES (?,?,?,?,jsonb_build_object('health',?,'condition',?,'hunger',?,'thirst',?,'energy',?,'temperature',?,'wetness',?,'bladder',?,'bowel',?,'hygiene',?))",id,ts,deathLocation,cause,health(dying),conditionSummary(dying),hunger(food),thirst(water),energy(energy),temperature(core),wetness(wetness),bladder(bladder),bowel(bowel),hygiene(hygiene));
+                jdbc.update("INSERT INTO chronicle_death_snapshot (chronicle_id,died_at,death_location_id,cause,body_snapshot) VALUES (?,?,?,?,jsonb_build_object('health',?,'condition',?,'hunger',?,'thirst',?,'energy',?,'temperature',?,'wetness',?,'bladder',?,'bowel',?,'hygiene',?))",id,ts,deathLocation,cause,health(dying),conditionSummary(dying),hungerFromHours(food),thirst(water),energy(energy),temperature(core),wetness(wetness),bladder(bladder),bowel(bowel),hygiene(hygiene));
                 jdbc.update("UPDATE chronicle SET life_state = 'DEAD', died_at = ?, death_cause = ? WHERE id = ?", ts, cause, id);
                 jdbc.update("UPDATE chronicle_body SET health = 'Dying', condition_summary = ? WHERE chronicle_id = ?", cause, id);
                 jdbc.update("INSERT INTO chronicle_event (chronicle_id, occurred_at, event_type, payload) VALUES (?, ?, 'CHRONICLE_DIED', jsonb_build_object('cause', ?))", id, ts, cause);
                 jdbc.update("INSERT INTO world_event (occurred_at, event_type, aggregate_id, payload) VALUES (?, 'CHRONICLE_DIED', ?, jsonb_build_object('cause', ?))", ts, id, cause);
             } else {
-                jdbc.update("UPDATE chronicle_physiology SET last_metabolic_update = ?, hours_without_food = ?, hours_without_water = ?, energy_level = ?, core_temperature_c=?, wetness_level = ?, bladder_level = ?, bowel_level = ?, hygiene_level = ?, sleep_debt_hours=?, pain_level=?, stress_level=?, injury_severity=?, illness_severity=?, blood_loss_ml=?, illness_trend=CASE WHEN ? THEN ? ELSE illness_trend END WHERE chronicle_id = ?", ts, BigDecimal.valueOf(food), BigDecimal.valueOf(water), energy, BigDecimal.valueOf(core), wetness, bladder, bowel, hygiene, BigDecimal.valueOf(sleepDebt), pain, stress, injury, illness, bloodLoss, hours > 0, illnessTrend, id);
+                jdbc.update("UPDATE chronicle_physiology SET last_metabolic_update = ?, hours_without_food = ?, hours_without_water = ?, energy_level = ?, core_temperature_c=?, wetness_level = ?, bladder_level = ?, bowel_level = ?, hygiene_level = ?, sleep_debt_hours=?, pain_level=?, stress_level=?, injury_severity=?, illness_severity=?, blood_loss_ml=?, illness_trend=CASE WHEN ? THEN ? ELSE illness_trend END, stomach_fullness_ml=?, energy_reserves=?, nutrition=?, starvation_severity=? WHERE chronicle_id = ?", ts, BigDecimal.valueOf(food), BigDecimal.valueOf(water), energy, BigDecimal.valueOf(core), wetness, bladder, bowel, hygiene, BigDecimal.valueOf(sleepDebt), pain, stress, injury, illness, bloodLoss, hours > 0, illnessTrend, fullness, reserves, nutrition, starvation, id);
                 // ONE BODY, ONE READING (#957). These locals are the body as this tick leaves it, so the label and the
                 // death check above are now looking at the same fourteen numbers rather than three and seven.
-                Vitals ticked = new Vitals(injury, illness, bloodLoss, core, food, water, energy, sleepDebt, wetness, hygiene, bladder, bowel, pain, stress);
+                Vitals ticked = new Vitals(injury, illness, bloodLoss, core, food, water, energy, sleepDebt, wetness, hygiene, bladder, bowel, pain, stress, fullness, reserves, nutrition, starvation);
                 BodyHudSnapshot body = snapshot(ticked);
                 jdbc.update("UPDATE chronicle_body SET hunger = ?, thirst = ?, energy = ?, temperature = ?, wetness = ?, bladder = ?, bowel = ?, hygiene = ? WHERE chronicle_id = ?", body.hunger(), body.thirst(), body.energy(), body.temperature(), body.wetness(), body.bladder(), body.bowel(), body.hygiene(), id);
             }
@@ -308,18 +356,53 @@ public class ChroniclePhysiologyService {
      *  hunger and a fine one is only modestly better (#271); grade is a benefit, never a gate. */
     @Transactional
     public void eat(UUID chronicleId, com.devosphere.draugr.quality.QualityGrade grade) {
+        eatPortion(chronicleId, ORDINARY_PORTION_ML, grade, 0);
+    }
+
+    /** An unremarkable helping: what "eat" means when nothing says how much. #962 gives foods their own. */
+    static final int ORDINARY_PORTION_ML = 320;
+    /** A prepared meal is a bigger thing than a handful of something. */
+    static final int COOKED_MEAL_ML = 700;
+
+    /**
+     * EATING FILLS A STOMACH (#959).
+     *
+     * <p>It used to subtract eight from the hours-since-eating counter, which is why clearing "Starving"
+     * took forty-two helpings and why a blackberry relieved exactly as much as a roast fish: the counter
+     * knew nothing about portions and the Hunger label was read from the same counter a meal reduced.
+     *
+     * <p>A portion goes in, bounded by {@link #STOMACH_CAPACITY_ML}. What will not fit does not go in, so
+     * eating again immediately achieves nothing -- which is #960's "prevent instant recovery through
+     * repeated eating commands", enforced by the stomach rather than by a rule about commands. Digestion
+     * turns what is in there into reserves over hours.
+     *
+     * <p>The hours counter is still written, because it is still true that they have just eaten. It is
+     * history now rather than a debt, which is exactly what #959 asks for.
+     *
+     * <p>AND A MEAL DOES NOT TOUCH {@code starvation_severity}. That is the damage going without has done,
+     * and it mends through sustained feeding (#960), not through a mouthful. A Chronicle can finish a large
+     * meal, read Hunger "Full", and still be Critical with starvation -- which is #956's own example of the
+     * thing the old model could not express.
+     */
+    @Transactional
+    public void eatPortion(UUID chronicleId, int portionMl, com.devosphere.draugr.quality.QualityGrade grade, int stressRelief) {
         double m = nourishmentFactor(grade);
-        int food = (int)Math.round(8*m), energy = (int)Math.round(6*m);
-        jdbc.update("UPDATE chronicle_physiology SET hours_without_food=GREATEST(0,hours_without_food-?), energy_level=LEAST(100,energy_level+?) WHERE chronicle_id=?", food, energy, chronicleId);
+        int offered = (int) Math.round(Math.max(0, portionMl) * m);
+        jdbc.update(
+            "UPDATE chronicle_physiology SET " +
+            "  stomach_fullness_ml = LEAST(?, stomach_fullness_ml + ?), " +
+            "  hours_without_food = 0, " +
+            "  energy_level = LEAST(100, energy_level + ?), " +
+            "  stress_level = GREATEST(0, stress_level - ?) " +
+            " WHERE chronicle_id = ?",
+            STOMACH_CAPACITY_ML, offered, Math.min(8, offered / 90), stressRelief, chronicleId);
         refreshBody(chronicleId);
     }
     public void eatCookedMeal(UUID chronicleId) { eatCookedMeal(chronicleId, com.devosphere.draugr.quality.QualityGrade.SOUND); }
     @Transactional
+    /** A prepared meal: a bigger portion, and it settles the nerves as it always did (#959). */
     public void eatCookedMeal(UUID chronicleId, com.devosphere.draugr.quality.QualityGrade grade) {
-        double m = nourishmentFactor(grade);
-        int food = (int)Math.round(16*m), energy = (int)Math.round(14*m);
-        jdbc.update("UPDATE chronicle_physiology SET hours_without_food=GREATEST(0,hours_without_food-?), energy_level=LEAST(100,energy_level+?),stress_level=GREATEST(0,stress_level-2) WHERE chronicle_id=?", food, energy, chronicleId);
-        refreshBody(chronicleId);
+        eatPortion(chronicleId, COOKED_MEAL_ML, grade, 2);
     }
     /** SOUND is the baseline (×1.0); a defective meal nourishes a little less, a fine one a little more. */
     private static double nourishmentFactor(com.devosphere.draugr.quality.QualityGrade grade) {
@@ -701,8 +784,12 @@ public class ChroniclePhysiologyService {
         refreshBody(chronicleId);
         return true;
     }
-    private void refreshBody(UUID chronicleId) {
-        jdbc.query("SELECT b.condition_summary,p.hours_without_food,p.hours_without_water,p.energy_level,p.core_temperature_c,p.wetness_level,p.bladder_level,p.bowel_level,p.hygiene_level,p.sleep_debt_hours,p.pain_level,p.stress_level,p.injury_severity,p.illness_severity,p.blood_loss_ml FROM chronicle_body b JOIN chronicle_physiology p ON p.chronicle_id=b.chronicle_id WHERE b.chronicle_id=?",rs->{if(rs.next()){Vitals v=vitalsOf(rs);String health=health(v);String condition=conditionSummary(v);BodyHudSnapshot body=snapshot(health,condition,rs.getBigDecimal(2).doubleValue(),rs.getBigDecimal(3).doubleValue(),rs.getInt(4),rs.getBigDecimal(5).doubleValue(),rs.getInt(6),rs.getInt(7),rs.getInt(8),rs.getInt(9));jdbc.update("UPDATE chronicle_body SET health=?,condition_summary=?,hunger=?,thirst=?,energy=?,temperature=?,wetness=?,bladder=?,bowel=?,hygiene=? WHERE chronicle_id=?",health,condition,body.hunger(),body.thirst(),body.energy(),body.temperature(),body.wetness(),body.bladder(),body.bowel(),body.hygiene(),chronicleId);}return null;},chronicleId);
+    public void refreshBody(UUID chronicleId) {
+        jdbc.query("SELECT b.condition_summary,p.hours_without_food,p.hours_without_water,p.energy_level,p.core_temperature_c,p.wetness_level,p.bladder_level,p.bowel_level,p.hygiene_level,p.sleep_debt_hours,p.pain_level,p.stress_level,p.injury_severity,p.illness_severity,p.blood_loss_ml,p.stomach_fullness_ml,p.energy_reserves,p.nutrition,p.starvation_severity FROM chronicle_body b JOIN chronicle_physiology p ON p.chronicle_id=b.chronicle_id WHERE b.chronicle_id=?",rs->{if(rs.next()){Vitals v=vitalsOf(rs);String health=health(v);String condition=conditionSummary(v);
+            // THE STORED ROW READS THE STOMACH TOO (#957/#959). Built from the ten-argument form it took its
+            // Hunger from the CLOCK, so a Chronicle whose stomach was full read "Full" on screen and
+            // "Satisfied" after a reload -- the two accounts of one body that #957 exists to stop.
+            BodyHudSnapshot body=snapshot(v);jdbc.update("UPDATE chronicle_body SET health=?,condition_summary=?,hunger=?,thirst=?,energy=?,temperature=?,wetness=?,bladder=?,bowel=?,hygiene=? WHERE chronicle_id=?",health,condition,body.hunger(),body.thirst(),body.energy(),body.temperature(),body.wetness(),body.bladder(),body.bowel(),body.hygiene(),chronicleId);}return null;},chronicleId);
     }
     /**
      * A keeper's death ends the keeping, and the animals go on living (#108).
@@ -746,7 +833,7 @@ public class ChroniclePhysiologyService {
 
     /** The HUD from a body already read. Prefer {@link #snapshot(Vitals)}, which carries the real list. */
     public static BodyHudSnapshot snapshot(String health, String condition, double foodHours, double waterHours, int energy, double temperature, int wetness, int bladder, int bowel, int hygiene) {
-        return new BodyHudSnapshot(health, condition, hunger(foodHours), thirst(waterHours), energy(energy), temperature(temperature), wetness(wetness), bladder(bladder), bowel(bowel), hygiene(hygiene));
+        return new BodyHudSnapshot(health, condition, hungerFromHours(foodHours), thirst(waterHours), energy(energy), temperature(temperature), wetness(wetness), bladder(bladder), bowel(bowel), hygiene(hygiene));
     }
     /**
      * How well this body is being kept, 0-5 (#909).
@@ -785,9 +872,38 @@ public class ChroniclePhysiologyService {
         return new Vitals(rs.getInt(13), rs.getInt(14), rs.getInt(15), rs.getBigDecimal(5).doubleValue(),
             rs.getBigDecimal(2).doubleValue(), rs.getBigDecimal(3).doubleValue(), rs.getInt(4),
             rs.getBigDecimal(10).doubleValue(), rs.getInt(6), rs.getInt(9), rs.getInt(7), rs.getInt(8),
-            rs.getInt(11), rs.getInt(12));
+            rs.getInt(11), rs.getInt(12),
+            // columns 16-19 (#959): the stomach, the store, the diet and the damage.
+            rs.getInt(16), rs.getInt(17), rs.getInt(18), rs.getInt(19));
     }
-    private static String hunger(double hours) { return hours >= 720 ? "Critical Starvation" : hours >= 336 ? "Starving" : hours >= 168 ? "Very Hungry" : hours >= 72 ? "Hungry" : "Satisfied"; }
+    /**
+     * The hunger label for a caller that holds only the old clock, and nothing better to say.
+     *
+     * <p>Kept because {@code snapshot(...)}'s ten-argument form is called from twenty places that have a
+     * number of hours and no stomach -- tests, the death snapshot of a pre-#959 Chronicle. The REAL path is
+     * {@link #snapshot(Vitals)}, which has the stomach and overrides this with it.
+     */
+    private static String hungerFromHours(double hours) {
+        return hours >= 720 ? "Critical Starvation" : hours >= 336 ? "Starving"
+             : hours >= 168 ? "Very Hungry" : hours >= 72 ? "Hungry" : "Satisfied";
+    }
+
+    /**
+     * HUNGER IS WHAT IS IN THE STOMACH (#959), which is what the word means and what a meal relieves.
+     *
+     * <p>It used to be the clock: 336 hours since eating read "Starving" however much had been eaten since,
+     * because the counter a meal reduced by eight was the same counter the label was read from. So forty-two
+     * berries read Satisfied and a whole roast fish after a fortnight read Starving. What going without has
+     * actually DONE to a body is starvation_severity now, and it reports through Condition and Health --
+     * where a Chronicle can be Critical with a full stomach, which is #956's own example.
+     */
+    private static String hunger(int fullnessMl) {
+        return fullnessMl >= 900 ? "Full"
+             : fullnessMl >= 500 ? "Satisfied"
+             : fullnessMl >= 220 ? "Peckish"
+             : fullnessMl >=  60 ? "Hungry"
+             : "Empty";
+    }
     private static String thirst(double hours) { return hours >= 72 ? "Critical Dehydration" : hours >= 48 ? "Dehydrated" : hours >= 24 ? "Thirsty" : "Hydrated"; }
     private static String energy(int value) { return value >= 90 ? "Energetic" : value >= 70 ? "Rested" : value >= 50 ? "Tired" : value >= 30 ? "Fatigued" : value >= 10 ? "Exhausted" : "Collapsing"; }
     private static String temperature(double value) { return value < 35 ? "Hypothermic" : value < 36.5 ? "Cold" : value <= 37.5 ? "Comfortable" : value <= 38.5 ? "Warm" : value <= 40 ? "Hot" : "Hyperthermic"; }
@@ -816,7 +932,25 @@ public class ChroniclePhysiologyService {
      */
     public record Vitals(int injury, int illness, int bloodLoss, double core, double hoursWithoutFood,
                          double hoursWithoutWater, int energy, double sleepDebt, int wetness, int hygiene,
-                         int bladder, int bowel, int pain, int stress) { }
+                         int bladder, int bowel, int pain, int stress,
+                         int fullnessMl, int reserves, int nutrition, int starvation) {
+        /**
+         * The shape this record had before #959, kept so every existing caller and test still reads. A body
+         * described without the nutrition four is described as an ordinarily fed one, which is what those
+         * callers were implicitly asserting when there was nothing else to say.
+         */
+        public Vitals(int injury, int illness, int bloodLoss, double core, double hoursWithoutFood,
+                      double hoursWithoutWater, int energy, double sleepDebt, int wetness, int hygiene,
+                      int bladder, int bowel, int pain, int stress) {
+            this(injury, illness, bloodLoss, core, hoursWithoutFood, hoursWithoutWater, energy, sleepDebt,
+                 wetness, hygiene, bladder, bowel, pain, stress, FED_STOMACH, 70, 70, 0);
+        }
+    }
+
+    /** A stomach holds about this much; a big meal fills it and anything more will not go in (#959). */
+    public static final int STOMACH_CAPACITY_ML = 1200;
+    /** What "an ordinary unremarkable amount in the stomach" means, for the compatibility constructor. */
+    private static final int FED_STOMACH = 600;
 
     /**
      * How hard one system is pressing on this body, 0..100, where 100 is the threshold that kills, and the
@@ -866,6 +1000,20 @@ public class ChroniclePhysiologyService {
         // The lethal systems, each able to reach 100 on its own.
         add(all, band(v.hoursWithoutWater(), 12, DEHYDRATION_DEATH_HOURS), "Dangerously dehydrated", "Dehydrated", "Thirsty");
         add(all, band(v.hoursWithoutFood(), 72, STARVATION_DEATH_HOURS), "Starving", "Underfed", "Hungry");
+        // STARVATION IS A LETHAL SYSTEM OF ITS OWN (#959/#960). It used to be read off the clock -- a
+        // Chronicle was "Starving" at 336 hours whatever they had eaten since -- and it is its own measured
+        // damage now, so a body can be Critical from it while the stomach is not empty.
+        // Measured from nothing, not from a threshold: starvation_severity IS the distance travelled
+        // toward death by it, so 40 of 100 is a body half way there and must not read as "going short".
+        add(all, band(v.starvation(), 0, 100), "Starving", "Badly underfed", "Going short");
+        // AND MALNOURISHMENT, WHICH DOES NOT KILL AND IS NOT NOTHING. #958's own example asks for
+        // "Malnourished" beside a Hunger of Full, and it could not be given then because nothing modelled
+        // it; nutrition does now, so the condition is derived rather than invented. Capped below Critical
+        // because a poor diet makes you ill and weak over months, it does not kill you this afternoon --
+        // starvation above is the thing that does.
+        add(all, Math.min(NOT_LETHAL, band(100 - v.nutrition(), 45, 100)), "Severely malnourished", "Malnourished", "Poorly fed");
+        // Spent reserves are felt as weakness long before starvation begins.
+        add(all, Math.min(NOT_LETHAL, band(100 - v.reserves(), 70, 100)), "Running on nothing", "Weak with hunger", "Flagging");
         // The three the self-check speaks of, named from the moment they are real.
         medical(all, band(v.bloodLoss(), 250, 3500), "Bleeding badly", "Bleeding", "Grazed and bleeding");
         medical(all, band(v.injury(), 8, 100), "Badly injured", "Injured", "Hurt");
@@ -973,7 +1121,9 @@ public class ChroniclePhysiologyService {
     public static BodyHudSnapshot snapshot(Vitals v) {
         BodyHudSnapshot plain = snapshot(health(v), conditionSummary(v), v.hoursWithoutFood(),
             v.hoursWithoutWater(), v.energy(), v.core(), v.wetness(), v.bladder(), v.bowel(), v.hygiene());
-        return new BodyHudSnapshot(plain.health(), plain.condition(), conditions(v), plain.hunger(),
+        // Hunger is overridden with the stomach (#959). The ten-argument form above only had the clock, and
+        // the clock is history now rather than the thing a meal has to erase.
+        return new BodyHudSnapshot(plain.health(), plain.condition(), conditions(v), hunger(v.fullnessMl()),
             plain.thirst(), plain.energy(), plain.temperature(), plain.wetness(), plain.bladder(),
             plain.bowel(), plain.hygiene());
     }
