@@ -9,7 +9,10 @@ import com.devosphere.draugr.world.genesis.WorldGenesisService;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -35,8 +38,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>The Chronicle is given its OWN materials rather than asking the shared world for them, so the test owns what it
  * measures. Skips gracefully without Docker.
+ *
+ * <p>Both tests share ONE living Chronicle ({@code awaken()} rejoins it), so what one leaves in the pack the other
+ * can reach. The melt runs first, while nobody yet holds bronze, so its one-sword refusal is real; the cast runs
+ * second and measures the ingot it was given as a change in count, not as "none left" -- the melt's own ingot is
+ * still in the pack.
  */
 @SpringBootTest
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class BronzeShortSwordIntegrationTest {
 
     private static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
@@ -67,6 +76,7 @@ class BronzeShortSwordIntegrationTest {
     @Autowired JdbcTemplate jdbc;
 
     @Test
+    @Order(2)
     void aBronzeSwordIsMouldedCastEdgedAndHilted() {
         if (worldGenesis.current() == null) {
             worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
@@ -97,6 +107,7 @@ class BronzeShortSwordIntegrationTest {
 
         // 2. The pour. Said with the shared family words: holding an ingot, a mould and charcoal, "forge a bronze
         // sword" can only mean the cast -- the edging and hilting have nothing in reach to work on.
+        int ingotsBefore = carried(chronicle, "bronze_ingot");
         items.createCarriedItem(chronicle, "bronze_ingot", "Bronze ingot", now, "TEST_SEED");
         items.createCarriedItem(chronicle, "charcoal", "Charcoal", now, "TEST_SEED");
         items.createCarriedItem(chronicle, "charcoal", "Charcoal", now, "TEST_SEED");
@@ -104,7 +115,7 @@ class BronzeShortSwordIntegrationTest {
         assertEquals("SUCCEEDED", cast[0], () -> "the pour must succeed: " + cast[1]);
         assertTrue(items.hasAtLeast(chronicle, "bronze_sword_casting", 1), "the pour must yield a casting");
         assertFalse(items.hasAtLeast(chronicle, "sword_mould", 1), "the mould is broken open to free the casting");
-        assertFalse(items.hasAtLeast(chronicle, "bronze_ingot", 1), "the ingot went into the mould");
+        assertEquals(ingotsBefore, carried(chronicle, "bronze_ingot"), "the ingot went into the mould");
 
         // 3. The same words again now take the next step: the casting is in hand, so its edges are forged.
         String[] edges = items.runProcess(chronicle, chunk, "forge a bronze sword", now);
@@ -123,5 +134,55 @@ class BronzeShortSwordIntegrationTest {
         assertEquals("SWORD_FIGHTING", jdbc.queryForObject("SELECT combat_skill_key FROM weapon_profile WHERE item_key='bronze_short_sword'", String.class));
 
         assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
+
+    /**
+     * V479: a worn bronze sword is not a dead end. One sword (760 g) cannot honestly fill a 900 g ingot, so it takes
+     * two; the hilts and the dross are the loss.
+     */
+    @Test
+    @Order(1)
+    void twoBronzeSwordsMeltDownIntoOneIngot() {
+        if (worldGenesis.current() == null) {
+            worldGenesis.generate(WorldGenesisService.GenesisRequest.mvpDefault());
+            ecology.seed();
+        }
+        ChronicleService.ChronicleSummary summary = chronicles.awaken();
+        assertNotNull(summary, "awakening must produce a living Chronicle");
+        UUID chronicle = summary.id();
+        UUID chunk = jdbc.queryForObject("SELECT id FROM world_chunk WHERE biome='TEMPERATE_FOREST' ORDER BY grid_y, grid_x LIMIT 1", UUID.class);
+        jdbc.update("UPDATE world_object SET current_location_id=? WHERE id=?", chunk, chronicle);
+        jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
+        Instant now = ticks.current().simulatedAt();
+        Timestamp ts = Timestamp.from(now);
+
+        UUID pit = UUID.randomUUID();
+        jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CONSTRUCTION','Stone fire pit',?)", pit, chunk);
+        jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at) VALUES (?,'STONE_FIRE_PIT','COMPLETED',100,?)", pit, ts);
+        jdbc.update("INSERT INTO fire_state (construction_id,active,fuel_minutes,last_updated_at) VALUES (?,true,480,?)", pit, ts);
+
+        // One sword is not enough metal for an ingot: the melt is refused rather than inventing bronze.
+        int ingotsBefore = carried(chronicle, "bronze_ingot");
+        assertEquals(0, carried(chronicle, "bronze_short_sword"), "the melt must start with no sword of its own in hand");
+        items.createCarriedItem(chronicle, "bronze_short_sword", "Bronze short sword", now, "TEST_SEED");
+        String[] tooLittle = items.runProcess(chronicle, chunk, "melt down the bronze sword", now);
+        assertFalse("SUCCEEDED".equals(tooLittle[0]), () -> "one sword must not make a whole ingot: " + tooLittle[1]);
+        assertEquals(ingotsBefore, carried(chronicle, "bronze_ingot"), "no ingot from a single sword");
+        assertTrue(items.hasAtLeast(chronicle, "bronze_short_sword", 1), "the refused melt must leave the sword alone");
+
+        // Two swords fill the crucible.
+        items.createCarriedItem(chronicle, "bronze_short_sword", "Bronze short sword", now, "TEST_SEED");
+        String[] melt = items.runProcess(chronicle, chunk, "melt down the bronze swords", now);
+        assertEquals("SUCCEEDED", melt[0], () -> "two swords must melt down: " + melt[1]);
+        assertEquals(ingotsBefore + 1, carried(chronicle, "bronze_ingot"), "the swords' metal must be recovered as an ingot");
+        assertFalse(items.hasAtLeast(chronicle, "bronze_short_sword", 1), "both swords went into the melt");
+
+        assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
+    }
+
+    private int carried(UUID chronicle, String itemKey) {
+        return jdbc.queryForObject(
+            "SELECT COUNT(*) FROM item_instance i JOIN world_object w ON w.id=i.object_id " +
+            "WHERE w.current_owner_id=? AND w.lifecycle_state='ACTIVE' AND i.item_key=?", Integer.class, chronicle, itemKey);
     }
 }
