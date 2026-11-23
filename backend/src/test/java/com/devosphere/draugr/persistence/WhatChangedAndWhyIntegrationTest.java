@@ -98,7 +98,12 @@ class WhatChangedAndWhyIntegrationTest {
             "                    WHERE table_name = m.source_table AND column_name = m.source_column) ORDER BY 1",
             String.class);
         assertTrue(dangling.isEmpty(), "metrics pointing at columns that do not exist: " + dangling);
-        assertEquals(8, (int) jdbc.queryForObject("SELECT count(*) FROM metric_subject", Integer.class));
+        // MY OWN ASSERTION WAS THE BRITTLE PART. I wrote assertEquals(8, ...) in #953, which forbids ever
+        // tracking another metric -- and #959 immediately added three (ENERGY_RESERVES, NUTRITION,
+        // STARVATION_SEVERITY), so it broke on the very next slice. A catalogue that is expected to GROW is
+        // asserted with >=, which is what the registry tests in this project already do.
+        assertTrue(jdbc.queryForObject("SELECT count(*) FROM metric_subject", Integer.class) >= 11,
+            "the catalogue should not have shrunk");
     }
 
     /** A change carries its whole account: before, after, delta, cause and what caused it. */

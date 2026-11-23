@@ -70,18 +70,23 @@ class NutritionByGradeIntegrationTest {
     @Autowired PersistentStateAuditor auditor;
     @Autowired JdbcTemplate jdbc;
 
-    private double hunger(UUID chronicle) {
-        return jdbc.queryForObject("SELECT hours_without_food FROM chronicle_physiology WHERE chronicle_id=?", Double.class, chronicle);
+    /**
+     * What is in the stomach, in ml (#959). Since V481 a meal FILLS the stomach and resets the hours-since-eating
+     * clock to zero for every grade alike, so the clock can no longer tell a fine meal from a poor one; how much
+     * actually went in is where the grade is read now.
+     */
+    private double stomach(UUID chronicle) {
+        return jdbc.queryForObject("SELECT stomach_fullness_ml FROM chronicle_physiology WHERE chronicle_id=?", Double.class, chronicle);
     }
 
-    /** Eat one dried mushroom of the given grade from a fixed baseline hunger; return the hunger left afterward. */
+    /** Eat one dried mushroom of the given grade from an empty stomach; return how full it is afterward. */
     private double eatOneOfGrade(UUID chronicle, QualityGrade grade, double baseline, Instant now) {
-        jdbc.update("UPDATE chronicle_physiology SET hours_without_food=?, last_metabolic_update=? WHERE chronicle_id=?",
+        jdbc.update("UPDATE chronicle_physiology SET hours_without_food=?, stomach_fullness_ml=0, last_metabolic_update=? WHERE chronicle_id=?",
                 baseline, Timestamp.from(ticks.current().simulatedAt()), chronicle);
         items.createCarriedItem(chronicle, "dried_mushroom", "Dried mushroom", now, "TEST_SEED", grade);
         ChronicleActionService.ActionResult r = actions.resolve("I eat the dried mushroom.");
         assertEquals("SUCCEEDED", r.outcome(), () -> "eating a dried mushroom must succeed: " + r.perception());
-        return hunger(chronicle);
+        return stomach(chronicle);
     }
 
     @Test
@@ -103,12 +108,12 @@ class NutritionByGradeIntegrationTest {
         double afterFine = eatOneOfGrade(chronicle, QualityGrade.FINE, baseline, now);
         double afterPoor = eatOneOfGrade(chronicle, QualityGrade.POOR, baseline, now);
 
-        // Each meal spans the same short EAT tick (equal metabolic drift), so the only difference is the relief.
-        assertTrue(afterPoor < baseline,
-                () -> "a POOR meal must still relieve hunger (after=" + afterPoor + ", baseline=" + baseline + ") — grade is a benefit, never a gate (#271)");
-        assertTrue(afterFine < afterPoor,
-                () -> "a FINE meal must leave a Chronicle less hungry than a POOR one from the same start " +
-                      "(fine=" + afterFine + ", poor=" + afterPoor + ") — food grade must be READ (#271)");
+        // Each meal spans the same short EAT tick (equal digestion), so the only difference is how much went in.
+        assertTrue(afterPoor > 0,
+                () -> "a POOR meal must still fill the stomach (after=" + afterPoor + " ml from empty) — grade is a benefit, never a gate (#271/#959)");
+        assertTrue(afterFine > afterPoor,
+                () -> "a FINE meal must leave a Chronicle fuller than a POOR one from the same empty start " +
+                      "(fine=" + afterFine + " ml, poor=" + afterPoor + " ml) — food grade must be READ (#271/#959)");
 
         assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
     }
