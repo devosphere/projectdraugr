@@ -3621,7 +3621,10 @@ public class PhysicalItemService {
         // takes off the file marks and sets the bevel true. The hammer is the gate (tool_class STRIKING); the stone
         // is the bounded one-grade lift, capped by the casting's own grade like every assist here. It is read here
         // rather than written as a keyword because "sharpen" and "grind ... blade" belong to mending (REPAIR_ITEM).
-        boolean abrasiveFinish = key.equals("forge_sword_edges")
+        // The iron blade is filed and ground true after the hammer, and a hardened steel blade is ground bright
+        // before it is tempered (#967), so the same stone lifts those two finishes the same bounded grade.
+        boolean abrasiveFinish = (key.equals("forge_sword_edges") || key.equals("forge_iron_sword_blade")
+                || key.equals("harden_steel_sword_blade"))
             && (hasAtLeast(chronicle, "whetstone", 1) || hasAtLeast(chronicle, "stone_whetstone", 1)
                 || hasAtLeast(chronicle, "sandstone_piece", 1));
         if (atStation || sewingKit || flaker || woolComb || stirringSpoon || seasonedStock || copperChisel || bronzeKnife || abrasiveFinish) attempt = attempt.up();

@@ -4562,4 +4562,23 @@ class IntentClassificationRegressionTest {
         // And the mending words keep their meaning: putting an edge back on a sword you own is still a repair.
         assertEquals("REPAIR_ITEM", classify("sharpen my bronze sword"));
     }
+
+    /**
+     * #967 — EVERY STEP OF THE IRON AND STEEL SWORDS REACHES THE PROCESS MATCHER (V478). The hazards are the bronze
+     * sword's, plus two of the steel road's own: "quench" anywhere in a sentence is DRINK, so no keyword uses it, and
+     * "draw the ..." is hauling, so the blade is forged, never drawn. "harden", "temper" and "carburise" must reach
+     * the matcher, and "quench my thirst" must still be drinking.
+     */
+    @Test void everyStepOfTheIronAndSteelSwordsReachesTheProcessMatcher() throws Exception {
+        for (String step : new String[]{
+                "forge the bloom into a bar", "forge an iron billet", "forge the iron bloom",
+                "forge an iron sword blade", "forge the iron blade", "forge an iron sword",
+                "hilt the iron sword", "fit a hilt to the iron blade",
+                "carburise the sword blade", "carburize the iron blade", "case-harden the sword blade",
+                "harden the steel blade", "temper the sword blade", "harden and temper the blade",
+                "hilt the steel sword", "make a steel sword"})
+            assertEquals("UNKNOWN", classify(step, true), step);
+        assertEquals("DRINK", classify("quench my thirst"));
+        assertEquals("REPAIR_ITEM", classify("sharpen my iron sword"));
+    }
 }
