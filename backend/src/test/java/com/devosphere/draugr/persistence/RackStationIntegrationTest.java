@@ -73,13 +73,14 @@ class RackStationIntegrationTest {
     /**
      * How many times each cohort dries, and why it is this many.
      *
-     * <p>The yield is a roll over 2..4: unassisted it is one roll (mean 3.0), at a station the better of two (mean
-     * 3.44). Forty rounds separated those means by only about two and a half standard deviations — roughly a one in
-     * two hundred failure, which duly happened twice in CI and read as a flake rather than as a test that was asking
-     * too little. A hundred and fifty rounds puts the separation past five, which is a margin a coin toss does not
-     * reach. Kept as a named constant because it is a statistical decision, not a magic number.
+     * <p>The yield is a roll over 1..2 ({@code dry_herbs}): unassisted it is one roll (mean 1.5), at a station the
+     * better of two (mean 1.75). This test dried mushrooms over 2..4 until V482 (#962) settled every preserved FOOD
+     * at one unit out — a haunch dries to one piece of meat — which left the rack no range to bias there; herbs still
+     * have one. Forty rounds of the old roll separated the means by only about two and a half standard deviations and
+     * failed twice in CI as a "flake". Three hundred rounds of this roll put the cohort means more than six standard
+     * errors apart. Kept as a named constant because it is a statistical decision, not a magic number.
      */
-    private static final int ROUNDS = 150;
+    private static final int ROUNDS = 300;
 
     private int carried(UUID chronicle, String key) {
         Integer n = jdbc.queryForObject(
@@ -89,7 +90,7 @@ class RackStationIntegrationTest {
     }
 
     /**
-     * Dry the same mushrooms the same number of times, and count what comes off — and how many of the rounds
+     * Dry the same herbs the same number of times, and count what comes off — and how many of the rounds
      * actually dried anything. The yield per SUCCESSFUL round is the thing this test reasons about, so a round that
      * failed for some unrelated reason must not be counted as a round that yielded nothing: that would drag both
      * averages down and make the bands below lie about what the roll did.
@@ -97,10 +98,10 @@ class RackStationIntegrationTest {
     private Drying dryRepeatedly(UUID chronicle, UUID chunk, Instant now, int rounds) {
         int made = 0, dried = 0;
         for (int i = 0; i < rounds; i++) {
-            for (int j = 0; j < 4; j++) items.createCarriedItem(chronicle, "oyster_mushroom", "Oyster mushroom", now, "TEST_SEED");
-            int before = carried(chronicle, "dried_mushroom");
-            String[] r = items.runProcess(chronicle, chunk, "dry the mushrooms", now);
-            if ("SUCCEEDED".equals(r[0])) { made += carried(chronicle, "dried_mushroom") - before; dried++; }
+            for (int j = 0; j < 6; j++) items.createCarriedItem(chronicle, "mint_sprig", "Mint sprig", now, "TEST_SEED");
+            int before = carried(chronicle, "dried_herb_bundle");
+            String[] r = items.runProcess(chronicle, chunk, "dry the herbs", now);
+            if ("SUCCEEDED".equals(r[0])) { made += carried(chronicle, "dried_herb_bundle") - before; dried++; }
         }
         return new Drying(made, dried);
     }
@@ -143,7 +144,7 @@ class RackStationIntegrationTest {
         // Bare ground, no rack standing.
         jdbc.update("DELETE FROM construction_project cp USING world_object w WHERE w.id=cp.object_id AND w.current_location_id=?", chunk);
 
-        // Control the OTHER thing that skews this same yield. A drying mat in reach biases `dry_mushrooms` exactly
+        // Control the OTHER thing that skews this same yield. A drying mat in reach biases `dry_herbs` exactly
         // as a rack does (`atStation || toolAssist`), so one lying here — carried or set down — would give the bare
         // ground the rack's own advantage and this test would compare two identical cohorts and pass or fail on a
         // coin toss. Nothing in the fixture makes one; that is the point of saying so out loud and clearing it.
@@ -173,14 +174,14 @@ class RackStationIntegrationTest {
         // Each cohort is also checked against the yield it should HAVE, not only against the other. A comparison
         // alone cannot tell "the rack did nothing" from "both cohorts had the rack's advantage" — which is exactly
         // how this test failed twice in CI with the two totals a hair apart, and it named neither cause. The bare
-        // ground rolls once over 2..4 (mean 3.0); at a station it takes the better of two rolls (mean 3.44).
+        // ground rolls once over 1..2 (mean 1.5); at a station it takes the better of two rolls (mean 1.75).
         double bare = bareGround.perRound(), racked = onTheRack.perRound();
-        assertTrue(bare < 3.25,
+        assertTrue(bare < 1.63,
             () -> "the bare ground is yielding as though a station stood on it (" + bare + " a round against an "
-                + "unassisted 3.0) — something else in reach is biasing this roll, and the comparison below proves "
+                + "unassisted 1.5) — something else in reach is biasing this roll, and the comparison below proves "
                 + "nothing until it is found");
-        assertTrue(racked > 3.2,
-            () -> "a drying rack must actually bias the roll high (" + racked + " a round against an assisted 3.44)");
+        assertTrue(racked > 1.62,
+            () -> "a drying rack must actually bias the roll high (" + racked + " a round against an assisted 1.75)");
         assertTrue(racked > bare,
             () -> "a drying rack must be worth raising — it skews the yield high, so a round on it must out-yield a "
                 + "round on the bare ground (" + racked + " against " + bare + "; totals " + withRack + " and "

@@ -89,14 +89,14 @@ class GrainFlatbreadIntegrationTest {
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CONSTRUCTION','Stone fire pit',?)", pit, chunk);
         jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at) VALUES (?,'STONE_FIRE_PIT','COMPLETED',100,?)", pit, ts);
         jdbc.update("INSERT INTO fire_state (construction_id,active,fuel_minutes,last_updated_at) VALUES (?,true,240,?)", pit, ts);
-        for (int i = 0; i < 2; i++) items.createCarriedItem(chronicle, "grain_flour", "Grain flour", now, "TEST_SEED");
+        for (int i = 0; i < 14; i++) items.createCarriedItem(chronicle, "grain_flour", "Grain flour", now, "TEST_SEED");
         items.createCarriedItem(chronicle, "clean_water", "Boiled water", now, "TEST_SEED");
         assertEquals(0, count(chronicle, "grain_flatbread"), "start with no bread");
 
         String[] bake = items.runProcess(chronicle, chunk, "bake grain flatbread", now);
         assertEquals("SUCCEEDED", bake[0], () -> "baking grain flatbread must succeed through the router: " + bake[1]);
         assertTrue(count(chronicle, "grain_flatbread") >= 1, "the flour and water must have baked into bread");
-        assertEquals(0, count(chronicle, "grain_flour"), "the two measures of flour must be consumed");
+        assertEquals(0, count(chronicle, "grain_flour"), "the fourteen measures of flour (V482: a loaf is made of flour) must be consumed");
         assertEquals(0, count(chronicle, "acorn_flatbread"), "the grain recipe must not resolve to acorn bread");
 
         assertTrue(auditor.inspect().consistent(), () -> "the world must stay Auditor-consistent: " + auditor.inspect().violations());

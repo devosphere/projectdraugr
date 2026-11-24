@@ -32,8 +32,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * and below, less spoils and more is preserved. The mat suits the drying processes only (fish, meat,
  * mushrooms, herbs), the same targeted assist a workstation gives.
  *
- * <p>Proven over many dryings: with a drying mat a Chronicle preserves more dried mushroom from the same
- * mushrooms than by hand. Skips gracefully without Docker.
+ * <p>Proven over many dryings: with a drying mat a Chronicle preserves more dried herbs from the same herbs than
+ * by hand. Herbs, because V482 (#962) settled the preserved FOODS (fish, meat, mushrooms) at one unit out, so only
+ * the herb drying still has a yield range for the mat to bias. Skips gracefully without Docker.
  */
 @SpringBootTest
 class DryingMatIntegrationTest {
@@ -68,15 +69,15 @@ class DryingMatIntegrationTest {
     private int driedCount(UUID chronicle) {
         return jdbc.queryForObject(
                 "SELECT COUNT(*) FROM item_instance i JOIN world_object w ON w.id=i.object_id " +
-                "WHERE i.item_key='dried_mushroom' AND w.current_owner_id=? AND w.lifecycle_state='ACTIVE'", Integer.class, chronicle);
+                "WHERE i.item_key='dried_herb_bundle' AND w.current_owner_id=? AND w.lifecycle_state='ACTIVE'", Integer.class, chronicle);
     }
 
-    /** Dry {@code runs} times, seeding four chanterelles each time; returns the dried mushrooms produced. */
+    /** Dry {@code runs} times, seeding six mint sprigs each time; returns the dried herb bundles produced. */
     private int dry(UUID chronicle, UUID chunk, Instant now, int runs) {
         int before = driedCount(chronicle);
         for (int i = 0; i < runs; i++) {
-            for (int m = 0; m < 4; m++) items.createCarriedItem(chronicle, "chanterelle", "Chanterelle", now, "TEST_SEED");
-            items.executeProcess(chronicle, chunk, "dry_mushrooms", "dry the mushrooms", now);
+            for (int m = 0; m < 6; m++) items.createCarriedItem(chronicle, "mint_sprig", "Mint sprig", now, "TEST_SEED");
+            items.executeProcess(chronicle, chunk, "dry_herbs", "dry the herbs", now);
         }
         return driedCount(chronicle) - before;
     }
@@ -96,8 +97,8 @@ class DryingMatIntegrationTest {
         Instant now = ticks.current().simulatedAt();
         jdbc.update("UPDATE chronicle_carry_capacity SET sustained_mass_grams=100000000, direct_bulk_ml=100000000, maximum_single_lift_grams=100000000 WHERE chronicle_id=?", chronicle);
 
-        int runs = 120;
-        // Dried by hand — the baseline yield (2..4 per drying, averaging near 3).
+        int runs = 300;
+        // Dried by hand — the baseline yield (1..2 per drying, averaging 1.5; with the mat the better of two rolls, 1.75).
         int byHand = dry(chronicle, chunk, now, runs);
 
         // With a drying mat, the yield biases toward its high end.

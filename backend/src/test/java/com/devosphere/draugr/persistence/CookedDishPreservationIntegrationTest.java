@@ -89,8 +89,8 @@ class CookedDishPreservationIntegrationTest {
         jdbc.update("INSERT INTO world_object (id,object_type,display_name,current_location_id) VALUES (?,'CONSTRUCTION','Stone fire pit',?)", pit, chunk);
         jdbc.update("INSERT INTO construction_project (object_id,project_kind,state,progress_percent,completed_at) VALUES (?,'STONE_FIRE_PIT','COMPLETED',100,?)", pit, ts);
         jdbc.update("INSERT INTO fire_state (construction_id,active,fuel_minutes,last_updated_at) VALUES (?,true,480,?)", pit, ts);
-        for (int i = 0; i < 2; i++) items.createCarriedItem(chronicle, "grain_flour", "Grain flour", now, "TEST_SEED");
-        for (int i = 0; i < 2; i++) items.createCarriedItem(chronicle, "wild_grain", "Wild grain", now, "TEST_SEED");
+        for (int i = 0; i < 14; i++) items.createCarriedItem(chronicle, "grain_flour", "Grain flour", now, "TEST_SEED");
+        for (int i = 0; i < 12; i++) items.createCarriedItem(chronicle, "wild_grain", "Wild grain", now, "TEST_SEED");
         for (int i = 0; i < 2; i++) items.createCarriedItem(chronicle, "clean_water", "Boiled water", now, "TEST_SEED");
 
         // A dense baked bread keeps as dried.
