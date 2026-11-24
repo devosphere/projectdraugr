@@ -59,11 +59,40 @@ class TheBodyMendsTest {
     @Test
     void everyThingPutRightIsCounted() {
         // Warm, dry, clean, fed and watered, rested.
-        assertEquals(5, ChroniclePhysiologyService.howWellKept(37.0, 10, 80, 10, 2, 1));
+        assertEquals(5, ChroniclePhysiologyService.howWellKept(37.0, 10, 80, 70, 70, 0, 2, 1));
         // Soaked and filthy, and two of the five are gone.
-        assertEquals(3, ChroniclePhysiologyService.howWellKept(37.0, 90, 5, 10, 2, 1));
+        assertEquals(3, ChroniclePhysiologyService.howWellKept(37.0, 90, 5, 70, 70, 0, 2, 1));
         // Cold, soaked, filthy, starving, sleepless: nothing is being done about any of it.
-        assertEquals(0, ChroniclePhysiologyService.howWellKept(34.0, 90, 5, 300, 60, 40));
+        assertEquals(0, ChroniclePhysiologyService.howWellKept(34.0, 90, 5, 0, 20, 70, 60, 40));
+    }
+
+    /**
+     * #962 — A FULL STOMACH OF LEAVES IS NOT A FED BODY, FOR A SICKNESS EITHER. The food term asked whether
+     * anything had been eaten this week, so a Chronicle living on watercress mended as fast as one on meat.
+     * It reads the store, the diet and the damage now.
+     */
+    @Test
+    void aSickBodyLivingOnGreensMendsSlowerThanOneProperlyFed() {
+        // Warm, dry, clean, watered, rested -- and properly fed: reserves in hand, a sustained diet, no damage.
+        int wellFed = ChroniclePhysiologyService.howWellKept(37.0, 10, 80, 60, 70, 0, 2, 1);
+        // Everything the same, but weeks of greens: something in the store, the diet run down.
+        int bulkFed = ChroniclePhysiologyService.howWellKept(37.0, 10, 80, 20, 30, 0, 2, 1);
+        assertEquals(5, wellFed);
+        assertEquals(4, bulkFed);
+        assertTrue(ChroniclePhysiologyService.illnessMended(24, bulkFed) < ChroniclePhysiologyService.illnessMended(24, wellFed),
+            "a day of greens must mend less sickness than a day of proper meals");
+    }
+
+    @Test
+    void fedEnoughToMendIsTheStoreTheDietAndTheDamage() {
+        assertTrue(ChroniclePhysiologyService.isFedEnoughToMend(60, 70, 0));
+        // An empty store: spending itself, whatever the diet was.
+        assertFalse(ChroniclePhysiologyService.isFedEnoughToMend(0, 70, 0));
+        // Not sustained: a good last meal on a run-down body.
+        assertFalse(ChroniclePhysiologyService.isFedEnoughToMend(90, 39, 0));
+        // Still taking itself apart, however full the store now is.
+        assertFalse(ChroniclePhysiologyService.isFedEnoughToMend(60, 70, 55));
+        assertTrue(ChroniclePhysiologyService.isFedEnoughToMend(1, 40, 54));
     }
 
     /** A body with nothing wrong with it, to vary one system at a time from. */
