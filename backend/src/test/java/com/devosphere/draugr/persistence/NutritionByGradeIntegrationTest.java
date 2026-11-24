@@ -71,17 +71,20 @@ class NutritionByGradeIntegrationTest {
     @Autowired JdbcTemplate jdbc;
 
     /**
-     * What is in the stomach, in ml (#959). Since V481 a meal FILLS the stomach and resets the hours-since-eating
-     * clock to zero for every grade alike, so the clock can no longer tell a fine meal from a poor one; how much
-     * actually went in is where the grade is read now.
+     * WHAT THE MEAL WAS WORTH, in kilocalories (#962).
+     *
+     * <p>This asked the hours-since-eating clock until V481, which a meal zeroes whatever its grade; then it
+     * asked how many MILLILITRES went in, which worked only while the grade scaled the portion. A fine fish
+     * is not a BIGGER fish — it is a better one, so since #962 the grade scales the nourishment and leaves
+     * the bulk alone, and the nourishment is where the grade has to be read.
      */
     private double stomach(UUID chronicle) {
-        return jdbc.queryForObject("SELECT stomach_fullness_ml FROM chronicle_physiology WHERE chronicle_id=?", Double.class, chronicle);
+        return jdbc.queryForObject("SELECT stomach_kcal FROM chronicle_physiology WHERE chronicle_id=?", Double.class, chronicle);
     }
 
     /** Eat one dried mushroom of the given grade from an empty stomach; return how full it is afterward. */
     private double eatOneOfGrade(UUID chronicle, QualityGrade grade, double baseline, Instant now) {
-        jdbc.update("UPDATE chronicle_physiology SET hours_without_food=?, stomach_fullness_ml=0, last_metabolic_update=? WHERE chronicle_id=?",
+        jdbc.update("UPDATE chronicle_physiology SET hours_without_food=?, stomach_fullness_ml=0, stomach_kcal=0, last_metabolic_update=? WHERE chronicle_id=?",
                 baseline, Timestamp.from(ticks.current().simulatedAt()), chronicle);
         items.createCarriedItem(chronicle, "dried_mushroom", "Dried mushroom", now, "TEST_SEED", grade);
         ChronicleActionService.ActionResult r = actions.resolve("I eat the dried mushroom.");
@@ -110,10 +113,10 @@ class NutritionByGradeIntegrationTest {
 
         // Each meal spans the same short EAT tick (equal digestion), so the only difference is how much went in.
         assertTrue(afterPoor > 0,
-                () -> "a POOR meal must still fill the stomach (after=" + afterPoor + " ml from empty) — grade is a benefit, never a gate (#271/#959)");
+                () -> "a POOR meal must still nourish (after=" + afterPoor + " kcal from empty) — grade is a benefit, never a gate (#271/#959)");
         assertTrue(afterFine > afterPoor,
-                () -> "a FINE meal must leave a Chronicle fuller than a POOR one from the same empty start " +
-                      "(fine=" + afterFine + " ml, poor=" + afterPoor + " ml) — food grade must be READ (#271/#959)");
+                () -> "a FINE meal must nourish more than a POOR one from the same empty start " +
+                      "(fine=" + afterFine + " kcal, poor=" + afterPoor + " kcal) — food grade must be READ (#271/#959/#962)");
 
         assertTrue(auditor.inspect().consistent(), () -> "world must stay Auditor-consistent: " + auditor.inspect().violations());
     }

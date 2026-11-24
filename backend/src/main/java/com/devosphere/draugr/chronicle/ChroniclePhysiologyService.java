@@ -34,7 +34,7 @@ public class ChroniclePhysiologyService {
 
     @Transactional
     public void advanceTo(Instant now) {
-        jdbc.query("SELECT c.id, p.last_metabolic_update, p.hours_without_food, p.hours_without_water, p.energy_level, p.core_temperature_c, p.wetness_level, p.bladder_level, p.bowel_level, p.hygiene_level, b.health, b.condition_summary, p.sleep_debt_hours, p.pain_level, p.stress_level, p.injury_severity, p.illness_severity, p.blood_loss_ml, p.stomach_fullness_ml, p.energy_reserves, p.nutrition, p.starvation_severity FROM chronicle c JOIN chronicle_physiology p ON p.chronicle_id = c.id JOIN chronicle_body b ON b.chronicle_id = c.id WHERE c.life_state = 'LIVING' FOR UPDATE", rs -> {
+        jdbc.query("SELECT c.id, p.last_metabolic_update, p.hours_without_food, p.hours_without_water, p.energy_level, p.core_temperature_c, p.wetness_level, p.bladder_level, p.bowel_level, p.hygiene_level, b.health, b.condition_summary, p.sleep_debt_hours, p.pain_level, p.stress_level, p.injury_severity, p.illness_severity, p.blood_loss_ml, p.stomach_fullness_ml, p.energy_reserves, p.nutrition, p.starvation_severity, p.stomach_kcal, p.stomach_digest_ml_per_hour FROM chronicle c JOIN chronicle_physiology p ON p.chronicle_id = c.id JOIN chronicle_body b ON b.chronicle_id = c.id WHERE c.life_state = 'LIVING' FOR UPDATE", rs -> {
             if (!rs.next()) return null;
             UUID id = rs.getObject(1, UUID.class);
             Timestamp ts = Timestamp.from(now);
@@ -50,6 +50,10 @@ public class ChroniclePhysiologyService {
             int reserves   = rs.getInt(20);
             int nutrition  = rs.getInt(21);
             int starvation = rs.getInt(22);
+            // WHAT THE BULK IS MADE OF (#962). Before this, digestion could only see millilitres, so a
+            // stomachful of watercress fed a body as well as a stomachful of pemmican.
+            int stomachKcal = rs.getInt(23);
+            int digestRate  = Math.max(20, rs.getInt(24));
             // Kept so the tick can account for what it changed, rather than only leaving the result (#960).
             final int reservesAtStart = reserves, starvationAtStart = starvation;
 
@@ -226,13 +230,23 @@ public class ChroniclePhysiologyService {
             // DIGESTION: the stomach empties at a steady rate, and what leaves it becomes reserve. A full
             // stomach (1200 ml) takes about thirteen hours to clear, which is why a meal carries you
             // through a night and not through a week.
-            int digested = (int) Math.min(fullness, Math.round(hours * 90));
+            // AT THE RATE OF WHAT IS IN THERE (#962). The flat 90 ml/h treated a skin of water and a
+            // slab of pemmican as the same job of work. digest_ml_per_hour is the bulk-weighted mean of
+            // the foods actually swallowed, so water is gone in minutes and fat sits for half a day.
+            int digested = (int) Math.min(fullness, Math.round(hours * digestRate));
+            // AND THE NOURISHMENT LEAVES IN STEP WITH THE BULK IT CAME IN WITH. Pro rata rather than
+            // per-item, because a stomach is a mixture and tracking every mouthful in it would be a
+            // second account of the same thing -- the exact mistake #959 took apart.
+            int kcalReleased = fullness > 0 ? (int) Math.round(stomachKcal * (digested / (double) fullness)) : 0;
             fullness -= digested;
-            // Nutrition decides how much good the food does: the same bulk of lean scraps is worth less
-            // than the same bulk of a proper meal. Bounded well away from zero so a poorly fed body still
-            // gets something from what it eats -- it has to, or it could never climb out.
+            stomachKcal = fullness == 0 ? 0 : Math.max(0, stomachKcal - kcalReleased);
+            // Nutrition decides how much good the food does: a poorly nourished gut takes up less of what
+            // passes through it. Bounded well away from zero so a poorly fed body still gets something
+            // from what it eats -- it has to, or it could never climb out.
             double worth = 0.55 + 0.45 * (nutrition / 100.0);
-            double gained = digested / 100.0 * 1.3 * worth;
+            // KCAL_PER_RESERVE_POINT is the whole bridge between the catalogue's real numbers and the
+            // body's store. See its javadoc for why 110 leaves the staple diet worth what it was.
+            double gained = kcalReleased / (double) KCAL_PER_RESERVE_POINT * worth;
 
             // EXPENDITURE: basal cost, plus the cold, plus being ill. Work is charged separately by the act
             // that did it, as it always has been.
@@ -267,7 +281,14 @@ public class ChroniclePhysiologyService {
             // NUTRITION follows what has actually been going in, over weeks rather than hours. Fed, it
             // climbs; unfed, it slips; and it moves slowly enough that a single good meal does not make a
             // well-nourished body of a starved one.
-            double dietDrift = digested > 0 ? hours * 0.09 : -hours * 0.055;
+            // AND IT FOLLOWS WHAT THE FOOD ACTUALLY WAS (#962). `digested > 0` was true of a stomach
+            // full of leaves, so a body could live on watercress and grow better nourished every day.
+            // Energy density is the whole difference: about 1.4 kcal/ml for a mixed diet, 0.1 for greens.
+            double density = digested > 0 ? kcalReleased / (double) digested : 0;
+            double dietDrift = digested == 0 ? -hours * 0.055
+                             : density >= 0.80 ? hours * 0.09
+                             : density >= 0.35 ? hours * 0.02
+                             :                  -hours * 0.03;
             if (reserves == 0) dietDrift -= hours * 0.05;
             nutrition = clamp((int) Math.round(nutrition + dietDrift));
 
@@ -327,7 +348,7 @@ public class ChroniclePhysiologyService {
                 jdbc.update("INSERT INTO chronicle_event (chronicle_id, occurred_at, event_type, payload) VALUES (?, ?, 'CHRONICLE_DIED', jsonb_build_object('cause', ?))", id, ts, cause);
                 jdbc.update("INSERT INTO world_event (occurred_at, event_type, aggregate_id, payload) VALUES (?, 'CHRONICLE_DIED', ?, jsonb_build_object('cause', ?))", ts, id, cause);
             } else {
-                jdbc.update("UPDATE chronicle_physiology SET last_metabolic_update = ?, hours_without_food = ?, hours_without_water = ?, energy_level = ?, core_temperature_c=?, wetness_level = ?, bladder_level = ?, bowel_level = ?, hygiene_level = ?, sleep_debt_hours=?, pain_level=?, stress_level=?, injury_severity=?, illness_severity=?, blood_loss_ml=?, illness_trend=CASE WHEN ? THEN ? ELSE illness_trend END, stomach_fullness_ml=?, energy_reserves=?, nutrition=?, starvation_severity=? WHERE chronicle_id = ?", ts, BigDecimal.valueOf(food), BigDecimal.valueOf(water), energy, BigDecimal.valueOf(core), wetness, bladder, bowel, hygiene, BigDecimal.valueOf(sleepDebt), pain, stress, injury, illness, bloodLoss, hours > 0, illnessTrend, fullness, reserves, nutrition, starvation, id);
+                jdbc.update("UPDATE chronicle_physiology SET last_metabolic_update = ?, hours_without_food = ?, hours_without_water = ?, energy_level = ?, core_temperature_c=?, wetness_level = ?, bladder_level = ?, bowel_level = ?, hygiene_level = ?, sleep_debt_hours=?, pain_level=?, stress_level=?, injury_severity=?, illness_severity=?, blood_loss_ml=?, illness_trend=CASE WHEN ? THEN ? ELSE illness_trend END, stomach_fullness_ml=?, stomach_kcal=?, energy_reserves=?, nutrition=?, starvation_severity=? WHERE chronicle_id = ?", ts, BigDecimal.valueOf(food), BigDecimal.valueOf(water), energy, BigDecimal.valueOf(core), wetness, bladder, bowel, hygiene, BigDecimal.valueOf(sleepDebt), pain, stress, injury, illness, bloodLoss, hours > 0, illnessTrend, fullness, stomachKcal, reserves, nutrition, starvation, id);
                 // ONE BODY, ONE READING (#957). These locals are the body as this tick leaves it, so the label and the
                 // death check above are now looking at the same fourteen numbers rather than three and seven.
                 Vitals ticked = new Vitals(injury, illness, bloodLoss, core, food, water, energy, sleepDebt, wetness, hygiene, bladder, bowel, pain, stress, fullness, reserves, nutrition, starvation);
@@ -449,16 +470,100 @@ public class ChroniclePhysiologyService {
      */
     @Transactional
     public void eatPortion(UUID chronicleId, int portionMl, com.devosphere.draugr.quality.QualityGrade grade, int stressRelief) {
+        // A PORTION WITH NOTHING SAID ABOUT WHAT IT WAS is an ordinary one, at the density the flat model
+        // implied (#962): 1.58 kcal/ml is what made a 1200 ml stomachful worth 15.6 reserve points. So every
+        // caller that has not yet named its food behaves exactly as it did before.
+        swallow(chronicleId, portionMl, (int) Math.round(Math.max(0, portionMl) * 1.58), 0, 90, grade, stressRelief);
+    }
+
+    /**
+     * EAT ONE UNIT OF A NAMED FOOD (#962).
+     *
+     * <p>This is the method the game should be calling, and the reason the ticket exists. Everything before
+     * it put a flat 320 ml of nothing-in-particular into the stomach, so one bilberry (3 g) filled a quarter
+     * of a body and fed it as well as a roast haunch, and a skin of boiled water -- which is category FOOD,
+     * and which a bare {@code eat} would happily take -- nourished as much as the haunch.
+     *
+     * <p>THREE THINGS COME OUT OF THE CATALOGUE, and none of them is invented here:
+     * <ul>
+     *   <li>bulk: {@code item_definition.unit_volume_ml}, the same number the carry weight reads;</li>
+     *   <li>nourishment: {@code kcal_per_100g} over the unit's own mass;</li>
+     *   <li>water, emptying rate and comfort: the food's own, from {@code food_nourishment} (V482).</li>
+     * </ul>
+     *
+     * <p>A food with no row is treated as a middling one rather than as poison or as a feast. The migration
+     * refuses to apply if a catalogued food lacks a row, and a test holds the same line, so the fallback is
+     * for an item invented at runtime -- not a quiet guess standing in for data nobody wrote.
+     */
+    @Transactional
+    public void eatOneOf(UUID chronicleId, String itemKey, com.devosphere.draugr.quality.QualityGrade grade) {
+        var worth = jdbc.query(
+            "SELECT d.unit_volume_ml, d.unit_mass_grams, f.kcal_per_100g, f.water_percent, " +
+            "       f.digestion_ml_per_hour, f.settles_the_nerves " +
+            "  FROM item_definition d LEFT JOIN food_nourishment f ON f.item_key = d.item_key " +
+            " WHERE d.item_key = ?", rs -> {
+                if (!rs.next()) return null;
+                int bulk = rs.getInt(1), mass = rs.getInt(2);
+                int kcalPer100 = rs.getInt(3);
+                if (rs.getObject(3) == null) return new int[]{ bulk > 0 ? bulk : ORDINARY_PORTION_ML,
+                    (int) Math.round((bulk > 0 ? bulk : ORDINARY_PORTION_ML) * 1.58), 0, 90, 0 };
+                return new int[]{ Math.max(1, bulk), (int) Math.round(mass * kcalPer100 / 100.0),
+                    (int) Math.round(mass * rs.getInt(4) / 100.0), Math.max(20, rs.getInt(5)), rs.getInt(6) };
+            }, itemKey);
+        if (worth == null) { eatPortion(chronicleId, ORDINARY_PORTION_ML, grade, 0); return; }
+        swallow(chronicleId, worth[0], worth[1], worth[2], worth[3], grade, worth[4]);
+    }
+
+    /** How many real kilocalories one point of {@code energy_reserves} stands for. See V482's header: a
+     *  point costs 0.85/hour to live, so a day is 20.4 points, and at 110 kcal to the point a stomachful of
+     *  cooked game meat is worth 16.0 points where the old flat model gave a stomachful 15.6. The staple diet
+     *  is worth what it was worth; it is the berry, the leaf and the water that change. */
+    static final int KCAL_PER_RESERVE_POINT = 110;
+
+    /**
+     * THE ONE PLACE FOOD GOES IN.
+     *
+     * <p>Bulk is capped by the stomach, and {@code kcal} is admitted in the SAME PROPORTION as the bulk that
+     * fitted -- so half a meal is half the nourishment, and a body that forces down a second helping on a
+     * full stomach gains nothing from it. Getting this wrong in either direction is #962's "no nourishment
+     * duplication", and doing it in one place is why it can only be got wrong once.
+     *
+     * <p>The emptying rate becomes the bulk-weighted mean of what the stomach now holds, which is the only
+     * honest answer for a mixture and needs no record of the individual mouthfuls.
+     *
+     * <p>Thirst goes at 50 ml to the hour -- the rate {@code drink()}'s long-standing ten hours for a 500 ml
+     * skin already implied, read out of it rather than chosen again here.
+     */
+    private void swallow(UUID chronicleId, int bulkMl, int kcal, int waterMl, int rate,
+                         com.devosphere.draugr.quality.QualityGrade grade, int stressRelief) {
         double m = nourishmentFactor(grade);
-        int offered = (int) Math.round(Math.max(0, portionMl) * m);
+        int bulk = Math.max(0, bulkMl);
+        int offeredKcal = (int) Math.round(Math.max(0, kcal) * m);
         jdbc.update(
+            // `got` is how much of the portion the stomach had room for. Everything else is in step with it.
+            "WITH room AS (SELECT LEAST(?, GREATEST(0, ? - stomach_fullness_ml)) AS got, " +
+            "                     stomach_fullness_ml AS was, stomach_digest_ml_per_hour AS at_rate " +
+            "                FROM chronicle_physiology WHERE chronicle_id = ?) " +
             "UPDATE chronicle_physiology SET " +
-            "  stomach_fullness_ml = LEAST(?, stomach_fullness_ml + ?), " +
+            // Nourishment in the SAME PROPORTION as the bulk that fitted: half a meal is half the good.
+            "  stomach_kcal = stomach_kcal + CASE WHEN ? > 0 THEN ROUND(? * room.got / ?::numeric) ELSE 0 END, " +
+            // The stomach's emptying rate is the bulk-weighted mean of what is now in it.
+            "  stomach_digest_ml_per_hour = CASE WHEN room.was + room.got > 0 " +
+            "      THEN GREATEST(20, ROUND((room.was * room.at_rate + room.got * ?) / (room.was + room.got)::numeric)) " +
+            "      ELSE stomach_digest_ml_per_hour END, " +
+            "  stomach_fullness_ml = stomach_fullness_ml + room.got, " +
             "  hours_without_food = 0, " +
+            // Thirst too, for the water the food carried -- and only for the part that went down.
+            "  hours_without_water = GREATEST(0, hours_without_water - CASE WHEN ? > 0 " +
+            "      THEN (? * room.got / ?::numeric) / 50 ELSE 0 END), " +
             "  energy_level = LEAST(100, energy_level + ?), " +
             "  stress_level = GREATEST(0, stress_level - ?) " +
-            " WHERE chronicle_id = ?",
-            STOMACH_CAPACITY_ML, offered, Math.min(8, offered / 90), stressRelief, chronicleId);
+            " FROM room WHERE chronicle_id = ?",
+            bulk, STOMACH_CAPACITY_ML, chronicleId,
+            bulk, offeredKcal, bulk,
+            Math.max(20, rate),
+            bulk, Math.max(0, waterMl), bulk,
+            Math.min(8, offeredKcal / 140), stressRelief, chronicleId);
         refreshBody(chronicleId);
     }
     public void eatCookedMeal(UUID chronicleId) { eatCookedMeal(chronicleId, com.devosphere.draugr.quality.QualityGrade.SOUND); }
@@ -473,8 +578,22 @@ public class ChroniclePhysiologyService {
             case DEFECTIVE -> 0.75; case POOR -> 0.90; case SOUND -> 1.00; case FINE -> 1.20; };
     }
     @Transactional
-    public void drink(UUID chronicleId) {
-        jdbc.update("UPDATE chronicle_physiology SET hours_without_water=GREATEST(0,hours_without_water-10) WHERE chronicle_id=?", chronicleId);
+    public void drink(UUID chronicleId) { drink(chronicleId, null); }
+    /**
+     * Drink. Ten hours of thirst eased is what this has always been worth, and at 50 ml to the hour that
+     * is a 500 ml draught -- which is exactly what every water item in the catalogue holds. So when the
+     * drink is a NAMED thing the amount comes off its own water content (#962) and the flat ten hours is
+     * kept only for drinking straight from a stream, where there is no vessel to ask.
+     */
+    @Transactional
+    public void drink(UUID chronicleId, String itemKey) {
+        Double ml = itemKey == null ? null : jdbc.query(
+            "SELECT d.unit_mass_grams * f.water_percent / 100.0 FROM item_definition d " +
+            "  JOIN food_nourishment f ON f.item_key = d.item_key WHERE d.item_key = ?",
+            rs -> rs.next() ? rs.getDouble(1) : null, itemKey);
+        double hours = ml == null ? 10 : ml / 50.0;
+        jdbc.update("UPDATE chronicle_physiology SET hours_without_water=GREATEST(0,hours_without_water-?) WHERE chronicle_id=?",
+            java.math.BigDecimal.valueOf(hours).setScale(2, java.math.RoundingMode.HALF_UP), chronicleId);
         refreshBody(chronicleId);
     }
     /** Gut-illness load from drinking untreated water (#71/#59): a small rise in illness that accumulates —
@@ -517,9 +636,17 @@ public class ChroniclePhysiologyService {
      *  mint, elder) settles the mind, and the cupful quenches a little. A small warming, calming, and partial
      *  hydration that eating it as plain food never gave — milder than a fire, for a cup is not a hearth. */
     @Transactional
+    /**
+     * ONLY THE WARMTH NOW (#962). A hot infusion carried three effects, and two of them -- the water in it
+     * and the calm the steeped herb brings -- are properties of the drink, so they are declared on it in
+     * {@code food_nourishment} (300 ml of water, and the strongest comfort of any food in the catalogue)
+     * and applied by {@link #eatOneOf}. Leaving them here as well would pay for the same cup twice, which
+     * is the nourishment duplication #962 asks to be verified against. What is left is what is genuinely
+     * about the HEAT rather than the liquid: a cup of something hot warms a cold body.
+     */
     public void drinkWarmInfusion(UUID chronicleId) {
-        jdbc.update("UPDATE chronicle_physiology SET core_temperature_c=LEAST(37.3, core_temperature_c+0.4), " +
-                "hours_without_water=GREATEST(0, hours_without_water-4), stress_level=GREATEST(0,stress_level-6) WHERE chronicle_id=?", chronicleId);
+        jdbc.update("UPDATE chronicle_physiology SET core_temperature_c=LEAST(37.3, core_temperature_c+0.4) " +
+                " WHERE chronicle_id=?", chronicleId);
         refreshBody(chronicleId);
     }
     /** Dry off by a fire or under cover (#66): wetness falls markedly. */

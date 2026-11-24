@@ -76,13 +76,19 @@ class AFullStomachIsNotAFedBodyIntegrationTest {
         return summary.id();
     }
 
-    /** Put this body in a known state, so the test owns what it measures. */
+    /**
+     * Put this body in a known state, so the test owns what it measures.
+     *
+     * <p>#962 gave the stomach a second total — what the bulk is MADE of — so a fixture that sets only
+     * the millilitres is now describing a stomachful of water. 1.58 kcal/ml is the density at which the
+     * flat model valued a stomachful, so these tests go on measuring exactly what they were written to.
+     */
     private void setGuts(UUID me, int fullness, int reserves, int nutrition, int starvation) {
-        jdbc.update("UPDATE chronicle_physiology SET stomach_fullness_ml=?, energy_reserves=?, nutrition=?, " +
+        jdbc.update("UPDATE chronicle_physiology SET stomach_fullness_ml=?, stomach_kcal=ROUND(?*1.58), energy_reserves=?, nutrition=?, " +
                     " starvation_severity=?, core_temperature_c=37.0, hours_without_water=0, " +
                     " hours_without_food=0, illness_severity=0, injury_severity=0, blood_loss_ml=0, " +
                     " last_metabolic_update=now() WHERE chronicle_id=?",
-            fullness, reserves, nutrition, starvation, me);
+            fullness, fullness, reserves, nutrition, starvation, me);
     }
 
     private int guts(UUID me, String column) {

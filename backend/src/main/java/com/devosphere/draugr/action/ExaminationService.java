@@ -828,6 +828,10 @@ public class ExaminationService {
         // narration: V480 gives every weapon a reach, a guard and a hand requirement, and a player who
         // cannot find that out by looking at the thing in their own hand is being kept from it.
         b.append(weaponLine((String) it.get("item_key")));
+        // AND WHAT IT IS AS A MEAL (#962). Same reasoning as the weapon line: V482 says what one unit of
+        // every food is worth, and a player deciding whether to carry the puffball or the dried meat is
+        // entitled to the difference. A handful of leaves and a block of pemmican are not one question.
+        b.append(foodLine((String) it.get("item_key")));
         if (tier >= 2) b.append(" ").append(heftLine(number(it.get("unit_mass_grams"))));
         if (tier >= 3) b.append(" ").append(gradeLine((String) it.get("quality_grade")));
         return b.toString();
@@ -988,6 +992,51 @@ public class ExaminationService {
      * means it is already on you -- and the guard likewise. Neither figure is printed: the facts are
      * mechanical and the telling is not.
      */
+    /**
+     * What a thing is as a meal, in words rather than numbers, or "" for anything that is not food (#962).
+     *
+     * <p>Said as the two decisions a person actually makes about food: how much of me will it fill, and how
+     * far will it carry me. Both are read from the catalogue -- bulk from the unit's own volume, substance
+     * from its mass and declared kilocalories against the 20.4 reserve points a day of living costs -- so
+     * the words can never drift from what eating it will do. No figure is printed.
+     */
+    private String foodLine(String itemKey) {
+        if (itemKey == null) return "";
+        double[] f = jdbc.query(
+            "SELECT d.unit_volume_ml, d.unit_mass_grams * fn.kcal_per_100g / 100.0, " +
+            "       d.unit_mass_grams * fn.water_percent / 100.0, fn.digestion_ml_per_hour, fn.settles_the_nerves " +
+            "  FROM item_definition d JOIN food_nourishment fn ON fn.item_key = d.item_key " +
+            " WHERE d.item_key = ?",
+            rs -> rs.next() ? new double[]{ rs.getDouble(1), rs.getDouble(2), rs.getDouble(3),
+                                            rs.getDouble(4), rs.getDouble(5) } : null,
+            itemKey);
+        if (f == null) return "";
+        // A day of simply staying alive costs 20.4 reserve points at 110 kcal to the point: 2,244 kcal.
+        double daysOfLiving = f[1] / (110.0 * 20.4);
+        double shareOfStomach = f[0] / (double) com.devosphere.draugr.chronicle.ChroniclePhysiologyService.STOMACH_CAPACITY_ML;
+        StringBuilder s = new StringBuilder();
+        s.append(shareOfStomach >= 0.55 ? " It is a meal on its own, and would fill you."
+               : shareOfStomach >= 0.22 ? " It would make a fair helping."
+               : shareOfStomach >= 0.06 ? " It is a mouthful or two, no more."
+                                        : " It is barely a bite.");
+        s.append(daysOfLiving >= 0.9  ? " There is a full day of living in it."
+               : daysOfLiving >= 0.35 ? " There is real substance in it - most of a day's strength."
+               : daysOfLiving >= 0.12 ? " It carries you a few hours."
+               : daysOfLiving >= 0.02 ? " There is little in it to live on."
+                                      : " There is next to nothing in it to live on.");
+        // The thing that catches a forager out: bulk without substance. Say so plainly -- but not of a
+        // DRINK, which never claimed to be a meal. Said of a hot infusion it read as a rebuke for
+        // brewing one, and the infusion is worth having for its warmth and its water.
+        boolean mostlyWater = f[0] > 0 && f[2] / f[0] >= 0.85;
+        if (shareOfStomach >= 0.22 && daysOfLiving < 0.12 && !mostlyWater)
+            s.append(" It would fill the stomach and leave the body no better for it.");
+        if (f[2] >= 250) s.append(" There is enough water in it to take the edge off thirst.");
+        if (f[3] <= 70) s.append(" It is heavy going, and would sit in you a long while.");
+        else if (f[3] >= 250) s.append(" It would pass through you almost at once.");
+        if (f[4] >= 3) s.append(" Taken slowly, it would settle the mind as much as the stomach.");
+        return s.toString();
+    }
+
     private String weaponLine(String itemKey) {
         if (itemKey == null) return "";
         java.util.Map<String, Object> w = jdbc.query(

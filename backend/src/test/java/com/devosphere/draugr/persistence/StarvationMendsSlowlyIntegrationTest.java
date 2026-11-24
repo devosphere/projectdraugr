@@ -101,12 +101,14 @@ class StarvationMendsSlowlyIntegrationTest {
     /** Set the body, and put the metabolic clock back by `hoursAgo` so the next tick spans that long. */
     private void body(UUID me, int fullness, int reserves, int nutrition, int starvation,
                       double hoursSinceFood, int hoursAgo) {
-        jdbc.update("UPDATE chronicle_physiology SET stomach_fullness_ml=?, energy_reserves=?, nutrition=?, " +
+        // stomach_kcal at 1.58 kcal/ml is what the flat model valued this bulk at (#962), so what these
+        // tests measure is unchanged by foods having been given their own worth.
+        jdbc.update("UPDATE chronicle_physiology SET stomach_fullness_ml=?, stomach_kcal=ROUND(?*1.58), energy_reserves=?, nutrition=?, " +
                     " starvation_severity=?, hours_without_food=?, hours_without_water=0, " +
                     " core_temperature_c=37.0, illness_severity=0, injury_severity=0, blood_loss_ml=0, " +
                     " sleep_debt_hours=0, energy_level=70, " +
                     " last_metabolic_update = (SELECT simulated_at FROM simulation_clock WHERE id=1) - make_interval(hours => ?) WHERE chronicle_id=?",
-            fullness, reserves, nutrition, starvation, hoursSinceFood, hoursAgo, me);
+            fullness, fullness, reserves, nutrition, starvation, hoursSinceFood, hoursAgo, me);
     }
 
     /**
@@ -165,23 +167,22 @@ class StarvationMendsSlowlyIntegrationTest {
      * the canonical world is cold, a chilled body spends up to 1.6 reserve points an hour keeping warm on
      * top of its basal 0.85, and a watery 1200 ml is worth about 17. Measured: shallow 12 -> 33.
      *
-     * <p>So the stomach is filled to its 1200 ml at the start of every stretch, and the stretch is sixteen
-     * hours — the longest that stays inside the thirst and sleep thresholds mending also depends on, and
-     * about as long as a full stomach lasts at 90 ml an hour. That is what "adequate sustained intake" has
-     * to mean somewhere cold, and it is the only shape in which the comparison below is a statement about
-     * the RATE of mending rather than about the weather.
+     * <p>So the body is fed on PEMMICAN, through the real {@link ChroniclePhysiologyService#eatOneOf} path
+     * (#962) — a day of living in 380 ml, which is what the stuff is for. That is what "adequate sustained
+     * intake" has to mean somewhere cold, and it is the only shape in which the comparison below is a
+     * statement about the RATE of mending rather than about the weather.
      */
     private int mendedOverFourFedStretches(int startingStarvation) {
         UUID me = chronicle();
         jdbc.update("UPDATE chronicle_physiology SET starvation_severity=?, energy_reserves=60, nutrition=60 " +
                     " WHERE chronicle_id=?", startingStarvation, me);
         for (int stretch = 0; stretch < 4; stretch++) {
-            // THE STORE IS SET BACK EACH STRETCH TOO, because this measures the mending RATE and nothing
-            // else. A full 1200 ml stomach is worth about 13 reserve points and sixteen cold hours cost
-            // nearer 38, so a body left to run its store down mends for two stretches and then starves for
-            // two: measured, the shallow deficit came out at -3, which says only that the world is cold.
-            jdbc.update("UPDATE chronicle_physiology SET stomach_fullness_ml=1200, energy_reserves=60, " +
+            jdbc.update("UPDATE chronicle_physiology SET stomach_fullness_ml=0, stomach_kcal=0, " +
+                        " hours_without_water=0, sleep_debt_hours=0, " +
                         " illness_severity=0, injury_severity=0, blood_loss_ml=0 WHERE chronicle_id=?", me);
+            physiology.eatOneOf(me, "pemmican", null);
+            physiology.eatOneOf(me, "pemmican", null);
+            physiology.eatOneOf(me, "pemmican", null);
             jdbc.update("UPDATE chronicle_physiology SET hours_without_water=0, sleep_debt_hours=0, " +
                         " last_metabolic_update = (SELECT simulated_at FROM simulation_clock WHERE id=1)" +
                         " WHERE chronicle_id=?", me);
@@ -203,7 +204,7 @@ class StarvationMendsSlowlyIntegrationTest {
     }
 
     /**
-     * #960: mending wants water and rest too, not only food. Fed identically, so the only
+     * #960: mending wants water and rest too, not only food. Fed identically on pemmican, so the only
      * difference between the two bodies is the thirst and the sleep they were kept from.
      */
     @Test void aBodyMendsOnFoodAndWaterAndRestTogether() {
@@ -225,8 +226,8 @@ class StarvationMendsSlowlyIntegrationTest {
      * was measuring is cancelled by the span measuring it. Measured: a 20-hour stretch mends 0 where a
      * 16-hour stretch mends 1, with everything else identical.
      *
-     * <p>Sixteen is the longest stretch that stays inside both thresholds, and a 1200 ml stomachful
-     * at 90 ml an hour is just over sixteen hours of food — so the body is fed for the whole of it.
+     * <p>Sixteen is the longest stretch that stays inside both thresholds, and three blocks of pemmican
+     * (1140 ml at 65 ml/h) is just over sixteen hours of food — so the body is fed for the whole of it.
      */
     private static final int FED_STRETCH_HOURS = 16;
 
@@ -234,8 +235,11 @@ class StarvationMendsSlowlyIntegrationTest {
     private int mendedOverTenFedHours(int startingStarvation, boolean parchedAndSleepless) {
         UUID me = chronicle();
         jdbc.update("UPDATE chronicle_physiology SET starvation_severity=?, energy_reserves=60, nutrition=60, " +
-                    " stomach_fullness_ml=1200, illness_severity=0, injury_severity=0, " +
+                    " stomach_fullness_ml=0, stomach_kcal=0, illness_severity=0, injury_severity=0, " +
                     " blood_loss_ml=0 WHERE chronicle_id=?", startingStarvation, me);
+        physiology.eatOneOf(me, "pemmican", null);
+        physiology.eatOneOf(me, "pemmican", null);
+        physiology.eatOneOf(me, "pemmican", null);
         jdbc.update("UPDATE chronicle_physiology SET hours_without_water=?, sleep_debt_hours=?, " +
                     " last_metabolic_update = (SELECT simulated_at FROM simulation_clock WHERE id=1)" +
                     " WHERE chronicle_id=?",

@@ -98,8 +98,8 @@ class WoodenSpoonStirringIntegrationTest {
         jdbc.update("INSERT INTO fire_state (construction_id,active,fuel_minutes,last_updated_at) VALUES (?,true,240,?)", pit, ts);
 
         // FINE grain and water so the workmanship — not the stock — is what caps the porridge.
-        items.createCarriedItem(chronicle, "wild_grain", "Wild grain", now, "TEST_SEED", QualityGrade.FINE);
-        items.createCarriedItem(chronicle, "wild_grain", "Wild grain", now, "TEST_SEED", QualityGrade.FINE);
+        // V482: a pot of porridge is twelve measures of grain, not two.
+        for (int i = 0; i < 12; i++) items.createCarriedItem(chronicle, "wild_grain", "Wild grain", now, "TEST_SEED", QualityGrade.FINE);
         items.createCarriedItem(chronicle, "clean_water", "Boiled water", now, "TEST_SEED", QualityGrade.FINE);
 
         // A plain boil, no spoon: the workmanship is only SOUND, so the FINE stock is capped to SOUND porridge.
@@ -108,8 +108,7 @@ class WoodenSpoonStirringIntegrationTest {
         assertEquals("SOUND", newestPorridgeGrade(chronicle), "a plain boil of FINE stock yields SOUND porridge");
 
         // The same stock and the same words, but a wooden spoon to hand: the even stirring lifts it to FINE.
-        items.createCarriedItem(chronicle, "wild_grain", "Wild grain", now, "TEST_SEED", QualityGrade.FINE);
-        items.createCarriedItem(chronicle, "wild_grain", "Wild grain", now, "TEST_SEED", QualityGrade.FINE);
+        for (int i = 0; i < 12; i++) items.createCarriedItem(chronicle, "wild_grain", "Wild grain", now, "TEST_SEED", QualityGrade.FINE);
         items.createCarriedItem(chronicle, "clean_water", "Boiled water", now, "TEST_SEED", QualityGrade.FINE);
         items.createCarriedItem(chronicle, "wooden_spoon", "Wooden spoon", now, "TEST_SEED");
         String[] withSpoon = items.executeProcess(chronicle, chunk, "cook_porridge", "boil grain porridge", now);

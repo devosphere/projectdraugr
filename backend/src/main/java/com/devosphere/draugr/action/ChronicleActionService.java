@@ -834,6 +834,15 @@ public class ChronicleActionService {
                 : "There is no fire burning here to cook anything over.";}
             if(cooked>=1) wildlife.recordRefuse(chronicle.location(),4,resolvedAt); }
         else if (intent == Intent.DRINK) {
+            // A DRINK THAT IS NOT WATER IS STILL A DRINK (#962). This branch looked for water and nothing
+            // else, so `drink the herbal infusion` with one in the pack was answered "there is no water here
+            // fit to drink". Only when the sentence NAMES it -- a bare `drink` still means water, and still
+            // takes the safest measure carried, which is what a thirsty person means.
+            String drinkable = items.aNamedDrinkInReach(chronicle.id(), text.toLowerCase(Locale.ROOT));
+            if (drinkable != null) {
+                String[] r = eatItem(chronicle.id(), drinkable, actionId, resolvedAt);
+                outcome = r[0]; perception = r[1];
+            } else {
             // The safest water you carry first (boiled > filtered > raw), else raw from a source in reach. Raw and
             // standing water carry a gut-illness risk that accumulates; boiled water and a clean moving source do not (#71).
             // A water ladle (#78) draws the clearer water off the top instead of dipping the whole vessel into the
@@ -851,7 +860,7 @@ public class ChronicleActionService {
             boolean namedSource = namesAWaterSource(text.toLowerCase(Locale.ROOT));
             String carried = namedSource ? null : items.bestWaterCarried(chronicle.id());
             if (carried != null) {
-                items.consumeOne(chronicle.id(), carried, resolvedAt); physiology.drink(chronicle.id());
+                items.consumeOne(chronicle.id(), carried, resolvedAt); physiology.drink(chronicle.id(), carried);
                 if ("clean_water".equals(carried)) perception = "You drink your fill of the boiled water — clean, flat, and safe.";
                 else if ("filtered_water".equals(carried)) {
                     // A fired clay filter (charcoal and sand packed in a hard-fired vessel, #59/#78) clarifies better
@@ -878,6 +887,7 @@ public class ChronicleActionService {
                 // Named water that is not here is refused, never quietly swapped for the pack (#931) — but the
                 // player is told the pack is still an answer, since that is the next thing they will want.
                 + (namedSource && items.bestWaterCarried(chronicle.id()) != null ? " The water you carry is still with you, if you mean to drink that." : ""); }
+            }
         }
         else if (intent == Intent.COLLECT_WATER) {
             // THE SKY IS A SOURCE (#37). Standing in a downpour with a vessel on your arm and being told "there
@@ -4002,7 +4012,15 @@ public class ChronicleActionService {
         // rinsing a fleece is washing it, not taking it off an animal. So a fleece needs a taking verb.
         // "wool" is what a keeper calls a fleece once it is off the animal (#106), and the rule knew only
         // "fleece": `shear the sheep` worked and `take the wool` reached nothing, over the same mechanism.
-        if(word(value,"milk")||value.contains("shear")
+        // AND MILK IS A NOUN AS WELL AS A VERB (#962). Goat milk is in the FOOD catalogue, and because
+        // `milk` here is a trigger wherever it appears, BOTH `drink the goat milk` and `eat the goat milk`
+        // were answered "you have nothing to milk into" -- so a food the game can produce could not be
+        // consumed by any sentence at all. A catalogue token, and the plainest kind.
+        //
+        // The grammar settles it rather than a list: in a MILKING sentence `milk` is the verb and comes
+        // first, and in a DRINKING one a consumption verb comes before it. `milk the goat and drink it`
+        // is still milking, which is right, because that is the order the words are in.
+        if((word(value,"milk") && !saidBeforeMilking(value))||value.contains("shear")
            ||((value.contains("fleece")||word(value,"wool"))&&(value.contains("take")||value.contains("clip")||value.contains("cut")||value.contains("pull")))
            ||((value.contains("collect")||value.contains("gather")||value.contains("take")||value.contains("check"))
               &&(word(value,"egg")||word(value,"eggs")))) return Intent.TAKE_ANIMAL_YIELD;
@@ -5832,6 +5850,24 @@ public class ChronicleActionService {
     /** Whole-word containment, delegating to the one definition of it — see {@link com.devosphere.draugr.narration.Words}. */
     private static boolean word(String haystack, String w) { return com.devosphere.draugr.narration.Words.word(haystack, w); }
 
+    /**
+     * Does a consumption verb come BEFORE the word "milk" (#962)? Then the sentence is about drinking it,
+     * not about taking it off an animal, and the milk is a noun. Position, not presence: a rule that only
+     * asked whether "drink" appeared anywhere would take `milk the goat and drink it` away from milking.
+     */
+    private static boolean saidBeforeMilking(String value) {
+        int at = -1;
+        for (int i = value.indexOf("milk"); i >= 0; i = value.indexOf("milk", i + 1)) {
+            boolean leftIsEdge  = i == 0 || !Character.isLetterOrDigit(value.charAt(i - 1));
+            boolean rightIsEdge = i + 4 >= value.length() || !Character.isLetterOrDigit(value.charAt(i + 4));
+            if (leftIsEdge && rightIsEdge) { at = i; break; }
+        }
+        if (at < 0) return false;
+        String before = value.substring(0, at);
+        return word(before, "drink") || word(before, "eat") || word(before, "sip")
+            || word(before, "swallow") || word(before, "taste");
+    }
+
     /** The words that may stand between a verb and the noun it governs without breaking the grip. */
     /**
      * One clause saying where a thing you have just made actually went (#904).
@@ -7071,9 +7107,9 @@ public class ChronicleActionService {
             }
         }
         FoodPreservationService.Consumption cooked = food.consume(chronicle, "cooked_game_meat", at);
-        if (cooked.consumed()) { physiology.eatCookedMeal(chronicle, cooked.grade()); if (cooked.spoiled()) physiology.applyFoodborneIllness(chronicle, actionId, at); return new String[]{"SUCCEEDED", "The cooked meat is warm and dense, and the meal settles heavily but well."}; }
+        if (cooked.consumed()) { physiology.eatOneOf(chronicle, "cooked_game_meat", cooked.grade()); if (cooked.spoiled()) physiology.applyFoodborneIllness(chronicle, actionId, at); return new String[]{"SUCCEEDED", "The cooked meat is warm and dense, and the meal settles heavily but well."}; }
         FoodPreservationService.Consumption raw = food.consume(chronicle, "raw_game_meat", at);
-        if (raw.consumed()) { physiology.eat(chronicle, raw.grade()); if (raw.spoiled()) physiology.applyFoodborneIllness(chronicle, actionId, at); return new String[]{"SUCCEEDED", "The raw meat is cold and difficult to swallow, but it settles the immediate emptiness."}; }
+        if (raw.consumed()) { physiology.eatOneOf(chronicle, "raw_game_meat", raw.grade()); if (raw.spoiled()) physiology.applyFoodborneIllness(chronicle, actionId, at); return new String[]{"SUCCEEDED", "The raw meat is cold and difficult to swallow, but it settles the immediate emptiness."}; }
         String any = named != null ? named : items.anyFoodInReach(chronicle);
         if (any != null) return eatItem(chronicle, any, actionId, at);
         // AND IF THE ONLY THING LEFT TO EAT IS POISON, SAY SO (#37). The fallback above now steps over a food
@@ -7115,7 +7151,11 @@ public class ChronicleActionService {
             items.consumeOne(chronicle, itemKey, at);
             spoiled = false;
         }
-        physiology.eat(chronicle, grade);
+        // WHAT WAS EATEN, NOT A FLAT PORTION (#962). This one line fed a bilberry and a roast haunch
+        // alike, and it is why `eat` on a skin of boiled water nourished a body: the catalogue knew the
+        // difference all along and nothing asked it. Bulk, nourishment, water, how fast it digests and
+        // whether it is a comfort all come from the food now -- not from which branch of code took it.
+        physiology.eatOneOf(chronicle, itemKey, grade);
         // A hot herbal infusion is barely a meal — its worth is the warmth it carries and the calm the steeped herb
         // brings; this applies however it was made, tracked or not.
         boolean infusion = itemKey.equals("herbal_infusion");
@@ -7136,6 +7176,14 @@ public class ChronicleActionService {
         if (itemKey.contains("mushroom") || itemKey.contains("porcini") || itemKey.contains("chanterelle")) return "The mushroom is earthy and dense on the tongue, and you chew it down slowly.";
         if (itemKey.contains("honey")) return "The honey is thick and over-sweet, and a brief warmth follows it down.";
         if (itemKey.contains("meat") || itemKey.contains("pemmican")) return "You work the food down slowly, and the immediate emptiness eases.";
+        if (itemKey.contains("fish")) return "The fish is soft and faintly sweet, and it goes down easily.";
+        // A DRINK IS NOT CHEWED (#962). The fallback said "there is something in it worth the chewing" of
+        // goat milk and of maple sap, which the player cannot have been chewing. Read from the declared
+        // water content rather than a list of keys, so the next drink added is covered by its own data.
+        if (Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM food_nourishment WHERE item_key=? AND water_percent >= 85)",
+                Boolean.class, itemKey)))
+            return "You drink it down steadily; it is thin going but it sits easy and takes the edge off.";
         return "You eat what you foraged. It is plain, but there is something in it worth the chewing.";
     }
     private String[] writeOrDraw(ActiveChronicle chronicle, String text, UUID actionId, Instant at) {
