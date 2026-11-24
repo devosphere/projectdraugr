@@ -213,7 +213,7 @@ public class ChroniclePhysiologyService {
             // at the speed the worst single pressure above would have raised it. Deliberately slow. Getting
             // out of this is days of looking after yourself, which is the point.
             int mending = illnessPressure > 0 || illness <= 0 ? 0
-                        : illnessMended(hours, howWellKept(core, wetness, hygiene, food, water, sleepDebt));
+                        : illnessMended(hours, howWellKept(core, wetness, hygiene, reserves, nutrition, starvation, water, sleepDebt));
             // WHICH WAY IT IS GOING, written down by the one piece of code that knows (#909). The reading
             // repeats this rather than working it out a second time against a partial view of the world.
             int illnessTrend = illnessPressure - mending;
@@ -1033,9 +1033,29 @@ public class ChroniclePhysiologyService {
      * the point is breadth — a Chronicle who has put right four of the five is looking after themselves and
      * a Chronicle who has put right one is not.
      */
-    static int howWellKept(double core, int wetness, int hygiene, double food, double water, double sleepDebt) {
+    static int howWellKept(double core, int wetness, int hygiene, int reserves, int nutrition, int starvation,
+                           double water, double sleepDebt) {
         return (core >= 36.0 ? 1 : 0) + (wetness < 40 ? 1 : 0) + (hygiene > 25 ? 1 : 0)
-             + (food < 168 && water < 24 ? 1 : 0) + (sleepDebt < 24 ? 1 : 0);
+             + (isFedEnoughToMend(reserves, nutrition, starvation) && water < 24 ? 1 : 0) + (sleepDebt < 24 ? 1 : 0);
+    }
+
+    /**
+     * FED, AS A BODY FIGHTING A SICKNESS MEANS IT (#962). This asked {@code hours_without_food < 168} -- had
+     * anything been eaten this week -- so a body living on watercress mended exactly as well as one living on
+     * meat, and a mouthful of leaves after six days of nothing counted the same as a week of proper meals.
+     *
+     * <p>Three things the tick already keeps, each the reason the clock was the wrong question:
+     * <ul>
+     *   <li>{@code reserves > 0} -- there is something to burn now. An empty store is a body spending itself,
+     *       with nothing to spare for a fever.</li>
+     *   <li>{@code nutrition >= 40} -- it has been SUSTAINED. Nutrition follows the energy density of what has
+     *       gone in over weeks, so a diet of greens walks it down and one good meal does not walk it back.</li>
+     *   <li>{@code starvation < 55} -- not still taking itself apart. 55 is the same line thermoregulation draws
+     *       for a body too damaged to keep itself warm.</li>
+     * </ul>
+     */
+    static boolean isFedEnoughToMend(int reserves, int nutrition, int starvation) {
+        return reserves > 0 && nutrition >= 40 && starvation < 55;
     }
 
     /**

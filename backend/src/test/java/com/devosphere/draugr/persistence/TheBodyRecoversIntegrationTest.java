@@ -107,7 +107,8 @@ class TheBodyRecoversIntegrationTest {
         // rested, and no wound severe enough to feed it. The only thing left is the sickness itself.
         jdbc.update("UPDATE chronicle_physiology SET illness_severity=90, injury_severity=0, blood_loss_ml=0, " +
                     "hygiene_level=90, wetness_level=0, core_temperature_c=37.0, hours_without_food=4, " +
-                    "hours_without_water=2, sleep_debt_hours=0, energy_level=90, last_metabolic_update=? " +
+                    "hours_without_water=2, sleep_debt_hours=0, energy_level=90, energy_reserves=70, nutrition=70, " +
+                    "starvation_severity=0, last_metabolic_update=? " +
                     "WHERE chronicle_id=?", java.sql.Timestamp.from(now), chronicle);
         assertEquals("Critical", healthOf(), "illness above 80 is Critical, and that part is unchanged");
 
@@ -122,7 +123,8 @@ class TheBodyRecoversIntegrationTest {
         Instant later = now;
         for (int kept = 0; kept < 12; kept++) {
             jdbc.update("UPDATE chronicle_physiology SET hygiene_level=90, wetness_level=0, core_temperature_c=37.0, " +
-                        "hours_without_food=4, hours_without_water=2, sleep_debt_hours=0, last_metabolic_update=? " +
+                        "hours_without_food=4, hours_without_water=2, sleep_debt_hours=0, energy_reserves=70, nutrition=70, " +
+                        "starvation_severity=0, last_metabolic_update=? " +
                         "WHERE chronicle_id=?", java.sql.Timestamp.from(later), chronicle);
             later = later.plus(Duration.ofHours(3));
             physiology.advanceTo(later);
