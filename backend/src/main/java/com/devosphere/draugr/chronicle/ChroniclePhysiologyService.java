@@ -339,10 +339,19 @@ public class ChroniclePhysiologyService {
                 // The body as it was at the moment it stopped, recorded whole (#957): the snapshot used to
                 // label a Chronicle who died of cold with a health read from injury and illness alone.
                 Vitals dying = new Vitals(injury, illness, bloodLoss, core, food, water, energy, sleepDebt, wetness, hygiene, bladder, bowel, pain, stress, fullness, reserves, nutrition, starvation);
+                // AND THE BODY THEY ARE REMEMBERED BY IS THE BODY THEY HAD (#984). This wrote the death
+                // snapshot's Hunger from the CLOCK while the living HUD had been reading it from the stomach
+                // since #959, and the two do not even share a vocabulary: a remembered body could never read
+                // "Full", "Peckish" or "Empty", and could still read "Starving" -- the label #959 retired,
+                // because what going without actually does is starvation_severity, and that reports through
+                // Condition and Health. Since #962 made the clock history rather than a debt, ONE BILBERRY
+                // resets it, so a Chronicle who nibbled a berry and was then killed by a bear was recorded
+                // as "Satisfied" with four millilitres in them. `dying` is built on the line above and has
+                // held the stomach all along.
                 UUID deathLocation = jdbc.query("SELECT current_location_id FROM world_object WHERE id=?", result -> result.next() ? result.getObject(1, UUID.class) : null, id);
                 relocatePossessions(id, deathLocation, now);
                 releaseTheirStock(id, ts);
-                jdbc.update("INSERT INTO chronicle_death_snapshot (chronicle_id,died_at,death_location_id,cause,body_snapshot) VALUES (?,?,?,?,jsonb_build_object('health',?,'condition',?,'hunger',?,'thirst',?,'energy',?,'temperature',?,'wetness',?,'bladder',?,'bowel',?,'hygiene',?))",id,ts,deathLocation,cause,health(dying),conditionSummary(dying),hungerFromHours(food),thirst(water),energy(energy),temperature(core),wetness(wetness),bladder(bladder),bowel(bowel),hygiene(hygiene));
+                jdbc.update("INSERT INTO chronicle_death_snapshot (chronicle_id,died_at,death_location_id,cause,body_snapshot) VALUES (?,?,?,?,jsonb_build_object('health',?,'condition',?,'hunger',?,'thirst',?,'energy',?,'temperature',?,'wetness',?,'bladder',?,'bowel',?,'hygiene',?))",id,ts,deathLocation,cause,health(dying),conditionSummary(dying),hunger(dying.fullnessMl()),thirst(water),energy(energy),temperature(core),wetness(wetness),bladder(bladder),bowel(bowel),hygiene(hygiene));
                 jdbc.update("UPDATE chronicle SET life_state = 'DEAD', died_at = ?, death_cause = ? WHERE id = ?", ts, cause, id);
                 jdbc.update("UPDATE chronicle_body SET health = 'Dying', condition_summary = ? WHERE chronicle_id = ?", cause, id);
                 jdbc.update("INSERT INTO chronicle_event (chronicle_id, occurred_at, event_type, payload) VALUES (?, ?, 'CHRONICLE_DIED', jsonb_build_object('cause', ?))", id, ts, cause);
@@ -1089,9 +1098,14 @@ public class ChroniclePhysiologyService {
     /**
      * The hunger label for a caller that holds only the old clock, and nothing better to say.
      *
-     * <p>Kept because {@code snapshot(...)}'s ten-argument form is called from twenty places that have a
-     * number of hours and no stomach -- tests, the death snapshot of a pre-#959 Chronicle. The REAL path is
-     * {@link #snapshot(Vitals)}, which has the stomach and overrides this with it.
+     * <p>Kept because {@code snapshot(...)}'s ten-argument form is called from the tests, which pass a number
+     * of hours and no stomach. The REAL path is {@link #snapshot(Vitals)}, which has the stomach and
+     * overrides this with it.
+     *
+     * <p>⚠ IT HAS ITS OWN VOCABULARY, and that is the whole reason #984 was a defect rather than a rounding
+     * difference: this says Satisfied / Hungry / Very Hungry / Starving / Critical Starvation, while
+     * {@link #hunger(int)} says Full / Satisfied / Peckish / Hungry / Empty. Anything that reaches a player
+     * must come from {@code hunger(int)}; there is no live caller of this one left.
      */
     private static String hungerFromHours(double hours) {
         return hours >= 720 ? "Critical Starvation" : hours >= 336 ? "Starving"

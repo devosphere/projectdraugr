@@ -158,6 +158,51 @@ class StarvationMendsSlowlyIntegrationTest {
     }
 
     /**
+     * #984 — A CHRONICLE IS REMEMBERED BY THE BODY THEY HAD.
+     *
+     * <p>The death snapshot wrote its Hunger from the CLOCK while the living HUD had read it from the stomach
+     * since #959, and the two do not share a vocabulary: the clock says Satisfied / Hungry / Very Hungry /
+     * Starving / Critical Starvation, the stomach says Full / Satisfied / Peckish / Hungry / Empty. So a
+     * remembered body could never read "Full" — and since #962 made the clock history rather than a debt, one
+     * bilberry resets it, so a Chronicle who nibbled a berry and was then killed was recorded "Satisfied"
+     * with four millilitres in them.
+     *
+     * <p>The row is read back: {@code ChronicleService} serves it as the journey's {@code finalBody}.
+     */
+    @Test void theRememberedBodyReadsItsHungerFromTheStomach() {
+        UUID me = chronicle();
+        // A full belly, and a death that has nothing to do with food: thirst past DEHYDRATION_DEATH_HOURS.
+        // One hour, because a stomach digests while the tick runs — four hours of it takes 1200 ml down to
+        // 840, which is honestly "Satisfied" and would be testing the wrong thing.
+        body(me, 1200, 60, 60, 0, 300, 0);
+        jdbc.update("UPDATE chronicle_physiology SET hours_without_water=200 WHERE chronicle_id=?", me);
+        ticks.advanceBy(java.time.Duration.ofHours(1));
+
+        assertEquals("Critical Dehydration", jdbc.queryForObject(
+            "SELECT death_cause FROM chronicle WHERE id=?", String.class, me));
+        String remembered = jdbc.queryForObject(
+            "SELECT body_snapshot->>'hunger' FROM chronicle_death_snapshot WHERE chronicle_id=?",
+            String.class, me);
+        assertEquals("Full", remembered,
+            "a body that died with a full stomach must be remembered as full, not read off a clock that says "
+                + "it had not eaten for three hundred hours");
+    }
+
+    /** And the other way about: a berry an hour ago is not a fed body, and must not be remembered as one. */
+    @Test void aBerryAnHourAgoIsNotRememberedAsAMeal() {
+        UUID me = chronicle();
+        body(me, 4, 60, 60, 0, 0, 2);              // 4 ml in them, clock freshly reset by the berry
+        jdbc.update("UPDATE chronicle_physiology SET hours_without_water=200 WHERE chronicle_id=?", me);
+        ticks.advanceBy(java.time.Duration.ofHours(2));
+
+        String remembered = jdbc.queryForObject(
+            "SELECT body_snapshot->>'hunger' FROM chronicle_death_snapshot WHERE chronicle_id=?",
+            String.class, me);
+        assertEquals("Empty", remembered,
+            "the clock said nought hours since eating and would have recorded Satisfied: " + remembered);
+    }
+
+    /**
      * SUSTAINED intake on FOOD THAT IS WORTH EATING, which is what the ticket means and what took three
      * measurements to get right.
      *
